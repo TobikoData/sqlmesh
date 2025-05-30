@@ -28,9 +28,13 @@ Below is a diagram of the components along with their description.
 
 ![tobiko_cloud_hybrid_deployment](./tcloud_hybrid_deployment.png){ width=80% height=60% style="display: block; margin: 0 auto" }
 
-
-- **Helm Chart**: For production environements, we provide a [Helm chart](/cloud/features/scheduler/hybrid_executors_helm.md) that includes robust configurability, secret management, and scaling options.
-- **Docker Compose**: For simpler environments or testing, we offer a [Docker Compose setup](/scheduler/hybrid_executors_docker_compose) to quickly deploy executors on any machine with Docker.
+- **Scheduler**: Orchestrates schedule cadence and hosts state metadata(code versions, logs, cost). Never **pushes** instructions to executor.
+- **Executor**: Appplies code changes and runs SQL queries and python models in proper DAG order (actual data processing in SQL Engine)
+- **Gateway**: Stores authentication to SQL Engine. Secured through your secrets manager or Kubernetes Secrets.
+- **SQL Engine**: Processes and stores data based on the above instructions
+- **Executor -> Scheduler**: This is a pull-only mechanism as stated abvoe. 
+- **Helm Chart**: For production environements, we provide a [Helm chart](../scheduler/hybrid_executors_helm.md) that includes robust configurability, secret management, and scaling options.
+- **Docker Compose**: For simpler environments or testing, we offer a [Docker Compose setup](../scheduler/hybrid_executors_docker_compose) to quickly deploy executors on any machine with Docker.
 
 
 
@@ -38,7 +42,7 @@ Below is a diagram of the components along with their description.
 
 Our coding standards are guidelines we enforce throughout the organization to write, maintain, and collaborate on code effectively. These practice ensure consistency, maintainability, reliability, and most importantly, trust. 
 
-Below you will find a few examples of our interal code requirements. 
+Below you will find a few examples of our internal code requirements. 
 
 - We used signed commits, required approvers, and signed Docker artifacts.
 - Each commit to main must be approved by someone other than the author.
@@ -49,7 +53,7 @@ Below you will find a few examples of our interal code requirements.
 - We back up each state database nightly and before upgrades. These backups are stored indefinitely.
  
 
-## Physical Property 
+## Asset and Access Management 
 
 ### How do we protect PGP keys?
 
