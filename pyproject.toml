@@ -77,6 +77,7 @@ dev = [
     "pydantic",
     "PyAthena[Pandas]",
     "PyGithub~=2.5.0",
+    "pyperf",
     "pyspark~=3.5.0",
     "pytest",
     "pytest-asyncio",
