@@ -602,6 +602,27 @@ def test_duckdb_attach_catalog(make_config):
     assert not config.is_recommended_for_state_sync
 
 
+def test_duckdb_attach_ducklake_catalog_with_data_path(make_config):
+    config = make_config(
+        type="duckdb",
+        catalogs={
+            "ducklake": DuckDBAttachOptions(
+                type="ducklake",
+                path="catalog.ducklake",
+                data_path="/tmp/ducklake_data",
+            ),
+        },
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+    ducklake_catalog = config.catalogs.get("ducklake")
+    assert ducklake_catalog is not None
+    assert ducklake_catalog.type == "ducklake"
+    assert ducklake_catalog.path == "catalog.ducklake"
+    assert ducklake_catalog.data_path == "/tmp/ducklake_data"
+    # Check that the generated SQL includes DATA_PATH
+    assert "DATA_PATH '/tmp/ducklake_data'" in ducklake_catalog.to_sql("ducklake")
+
+
 def test_duckdb_attach_options():
     options = DuckDBAttachOptions(
         type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
