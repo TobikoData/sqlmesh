@@ -130,10 +130,18 @@ SQLMesh provides additional predefined variables used to modify model behavior b
     * 'auditing' - The audit is being run.
     * 'testing' - The model query logic is being evaluated in the context of a unit test.
 * @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).
-* @this_model - A string value containing the name of the physical table the model view selects from. Typically used to create [generic audits](../audits.md#generic-audits). In the case of [on_virtual_update statements](../models/sql_models.md#optional-on-virtual-update-statements) it contains the qualified view name instead.
-    * Can be used in model definitions when SQLGlot cannot fully parse a statement and you need to reference the model's underlying physical table directly.
-    * Can be passed as an argument to macros that access or interact with the underlying physical table.
+* @this_model - The physical table name that the model's view selects from. Typically used to create [generic audits](../audits.md#generic-audits). In the case of [on_virtual_update statements](../models/sql_models.md#optional-on-virtual-update-statements), it contains the qualified view name instead.
 * @model_kind_name - A string value containing the name of the current model kind. Intended to be used in scenarios where you need to control the [physical properties in model defaults](../../reference/model_configuration.md#model-defaults).
+
+!!! note
+
+    The `@{variable}` syntax serves a different purpose from the `@variable` syntax.
+
+    In the former, `@{variable}` is replaced by the variable's value and the resulting expression is treated as an identifier, whereas the latter is simply replaced by the expression stored in the variable.
+
+    For example, if `variable` is defined as `@DEF(`variable`, foo.bar)`, then `@variable` produces `foo.bar`, while `@{variable}` produces `"foo.bar"`, because `foo.bar` is treated converted into an identifier, making it necessary to add quotes due to the `.` character.
+
+    In practice, `@{variable}` is most commonly used to interpolate a value within an identifier, e.g., `@{variable}_suffix`, whereas `@variable` is used to do plain substitutions.
 
 #### Before all and after all variables
 
