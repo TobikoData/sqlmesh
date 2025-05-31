@@ -16,6 +16,7 @@ from sqlmesh.core.model import update_model_schemas
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.git import GitClient
+from sqlmesh.utils.errors import SQLMeshError
 
 
 if t.TYPE_CHECKING:
@@ -111,7 +112,16 @@ class Selector:
         def get_model(fqn: str) -> t.Optional[Model]:
             if fqn not in all_selected_models and fqn in env_models:
                 # Unselected modified or added model.
-                return env_models[fqn]
+                model_from_env = env_models[fqn]
+                try:
+                    # this triggers a render_query() which can throw an exception
+                    model_from_env.depends_on
+                    return model_from_env
+                except Exception as e:
+                    raise SQLMeshError(
+                        f"Model '{model_from_env.name}' sourced from state cannot be rendered "
+                        f"in the local environment due to:\n> {str(e)}"
+                    ) from e
             if fqn in all_selected_models and fqn in self._models:
                 # Selected modified or removed model.
                 return self._models[fqn]
