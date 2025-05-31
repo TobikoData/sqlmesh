@@ -64,6 +64,50 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
     )
     ```
 
+#### DuckLake Catalog Example
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      my_gateway:
+        connection:
+          type: duckdb
+          catalogs:
+            ducklake:
+              type: ducklake
+              path: 'catalog.ducklake'
+              data_path: data/ducklake
+    ```
+    
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        DuckDBConnectionConfig
+    )
+    from sqlmesh.core.config.connection import DuckDBAttachOptions
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        gateways={
+            "my_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    catalogs={
+                        "ducklake": DuckDBAttachOptions(
+                            type="ducklake",
+                            path="catalog.ducklake",
+                            data_path="data/ducklake"
+                        ),
+                    }
+                )
+            ),
+        }
+    )
+    ```
+
 #### Other Connection Catalogs Example
 
 Catalogs can also be defined to connect to anything that [DuckDB can be attached to](https://duckdb.org/docs/sql/statements/attach.html).
