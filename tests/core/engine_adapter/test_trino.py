@@ -442,8 +442,8 @@ def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: M
     # rather than explicitly telling it to create an Iceberg table. So this is testing that `FORMAT='ORC'` is output
     # instead of `FORMAT='ICEBERG'` which would be invalid
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (FORMAT=\'ORC\')',
-        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (FORMAT=\'ORC\') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"',
+        """CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (format='orc')""",
+        '''CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (format='orc') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"''',
     ]
 
 
