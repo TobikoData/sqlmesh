@@ -68,9 +68,96 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
+        self._macro_evaluator: t.Optional[MacroEvaluator] = None
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
+
+    @property
+    def macro_evaluator(self) -> t.Optional[MacroEvaluator]:
+        """Returns the cached macro evaluator from the last render operation."""
+        return self._macro_evaluator
+
+    def _create_macro_evaluator(
+        self,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        environment_naming_info: t.Optional[t.Any] = None,
+        render_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        variables: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> MacroEvaluator:
+        """Creates a MacroEvaluator instance with the configured settings.
+
+        Args:
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            runtime_stage: Indicates the current runtime stage.
+            start: The start datetime to render.
+            end: The end datetime to render.
+            execution_time: The date/time time reference to use for execution time.
+            environment_naming_info: Environment naming information.
+            render_kwargs: Additional render kwargs to update locals with.
+            variables: Variables to add to the SQLMESH_VARS in locals.
+
+        Returns:
+            A configured MacroEvaluator instance.
+        """
+
+        def _resolve_table(table: str | exp.Table) -> str:
+            return self._resolve_table(
+                d.normalize_model_name(table, self._default_catalog, self._dialect),
+                snapshots=snapshots,
+                table_mapping=table_mapping,
+                deployability_index=deployability_index,
+            ).sql(dialect=self._dialect, identify=True, comments=False)
+
+        macro_evaluator = MacroEvaluator(
+            self._dialect,
+            python_env=self._python_env,
+            schema=self.schema,
+            runtime_stage=runtime_stage,
+            resolve_table=_resolve_table,
+            resolve_tables=lambda e: self._resolve_tables(
+                e,
+                snapshots=snapshots,
+                table_mapping=table_mapping,
+                deployability_index=deployability_index,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                runtime_stage=runtime_stage,
+            ),
+            snapshots=snapshots,
+            default_catalog=self._default_catalog,
+            path=self._path,
+            environment_naming_info=environment_naming_info,
+            model_fqn=self._model_fqn,
+        )
+
+        # Update locals with render_kwargs if provided
+        if render_kwargs:
+            macro_evaluator.locals.update(render_kwargs)
+
+        # Update variables if provided
+        if variables:
+            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
+
+        # Evaluate macro definitions
+        for definition in self._macro_definitions:
+            try:
+                macro_evaluator.evaluate(definition)
+            except Exception as ex:
+                raise_config_error(
+                    f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
+                )
+
+        return macro_evaluator
 
     def _render(
         self,
@@ -141,37 +228,6 @@ class BaseExpressionRenderer:
         if this_snapshot and (kind := this_snapshot.model_kind_name):
             kwargs["model_kind_name"] = kind.name
 
-        def _resolve_table(table: str | exp.Table) -> str:
-            return self._resolve_table(
-                d.normalize_model_name(table, self._default_catalog, self._dialect),
-                snapshots=snapshots,
-                table_mapping=table_mapping,
-                deployability_index=deployability_index,
-            ).sql(dialect=self._dialect, identify=True, comments=False)
-
-        macro_evaluator = MacroEvaluator(
-            self._dialect,
-            python_env=self._python_env,
-            schema=self.schema,
-            runtime_stage=runtime_stage,
-            resolve_table=_resolve_table,
-            resolve_tables=lambda e: self._resolve_tables(
-                e,
-                snapshots=snapshots,
-                table_mapping=table_mapping,
-                deployability_index=deployability_index,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                runtime_stage=runtime_stage,
-            ),
-            snapshots=snapshots,
-            default_catalog=self._default_catalog,
-            path=self._path,
-            environment_naming_info=environment_naming_info,
-            model_fqn=self._model_fqn,
-        )
-
         start_time, end_time = (
             make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
             if not self._only_execution_time
@@ -188,6 +244,23 @@ class BaseExpressionRenderer:
         }
 
         variables = kwargs.pop("variables", {})
+
+        if this_model:
+            render_kwargs["this_model"] = this_model
+
+        macro_evaluator = self._create_macro_evaluator(
+            snapshots=snapshots,
+            table_mapping=table_mapping,
+            deployability_index=deployability_index,
+            runtime_stage=runtime_stage,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            environment_naming_info=environment_naming_info,
+            render_kwargs=render_kwargs,
+            variables=variables,
+        )
+        self._macro_evaluator = macro_evaluator
         jinja_env_kwargs = {
             **{
                 **render_kwargs,
@@ -199,10 +272,9 @@ class BaseExpressionRenderer:
             "deployability_index": deployability_index,
             "default_catalog": self._default_catalog,
             "runtime_stage": runtime_stage.value,
-            "resolve_table": _resolve_table,
+            "resolve_table": macro_evaluator.resolve_table,
         }
         if this_model:
-            render_kwargs["this_model"] = this_model
             jinja_env_kwargs["this_model"] = this_model.sql(
                 dialect=self._dialect, identify=True, comments=False
             )
@@ -225,19 +297,6 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
-
-        macro_evaluator.locals.update(render_kwargs)
-
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
-
-        for definition in self._macro_definitions:
-            try:
-                macro_evaluator.evaluate(definition)
-            except Exception as ex:
-                raise_config_error(
-                    f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
-                )
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
