@@ -26,7 +26,7 @@ def test_get_sql_completions_with_context_no_file_uri():
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
 
-    completions = get_sql_completions(lsp_context, None)
+    completions = lsp_context.get_autocomplete(None)
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" in completions.models
     assert "sushi.customers" in completions.models
@@ -38,6 +38,6 @@ def test_get_sql_completions_with_context_and_file_uri():
     lsp_context = LSPContext(context)
 
     file_uri = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
-    completions = get_sql_completions(lsp_context, URI.from_path(file_uri))
+    completions = lsp_context.get_autocomplete(URI.from_path(file_uri))
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" not in completions.models

@@ -20,7 +20,6 @@ from sqlmesh.lsp.api import (
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
-from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
     ModelTarget,
@@ -115,9 +114,11 @@ class SQLMeshLanguageServer:
             uri = URI(params.textDocument.uri)
             try:
                 context = self._context_get_or_load(uri)
-                return get_sql_completions(context, uri)
+                return context.get_autocomplete(uri)
             except Exception as e:
-                return get_sql_completions(None, uri)
+                from sqlmesh.lsp.completions import get_sql_completions
+
+                return get_sql_completions(None, URI(params.textDocument.uri))
 
         @self.server.feature(RENDER_MODEL_FEATURE)
         def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
