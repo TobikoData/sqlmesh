@@ -83,6 +83,10 @@ def get_references(
     macro_references = get_macro_definitions_for_a_path(lint_context, document_uri)
     references.extend(macro_references)
 
+    # Get single variable references
+    variable_references = get_macro_variables_definitions(lint_context, document_uri)
+    references.extend(variable_references)
+
     filtered_references = list(filter(by_position(position), references))
     return filtered_references
 
@@ -478,3 +482,41 @@ def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optio
         ),
         markdown_description=func.__doc__ if func.__doc__ else None,
     )
+
+
+def get_macro_variables_definitions(
+    lsp_context: LSPContext, document_uri: URI
+) -> t.List[Reference]:
+    """
+    Get references to all macro variables.
+
+    This function returns a list of references to all macro variables defined in the SQLMesh
+    environment. It is used for autocompletion and hover information in the LSP.
+    """
+    references: t.List[Reference] = []
+    path = document_uri.to_path()
+
+    file_info = lsp_context.map[path]
+    # Process based on whether it's a model or standalone audit
+    if isinstance(file_info, ModelTarget):
+        # It's a model
+        target: t.Optional[t.Union[Model, StandaloneAudit]] = lsp_context.context.get_model(
+            model_or_snapshot=file_info.names[0], raise_if_missing=False
+        )
+        if target is None or not isinstance(target, SqlModel):
+            return []
+        query = target.query
+        file_path = target._path
+    elif isinstance(file_info, AuditTarget):
+        # It's a standalone audit
+        target = lsp_context.context.standalone_audits.get(file_info.name)
+        if target is None:
+            return []
+        query = target.query
+        file_path = target._path
+    else:
+        return []
+
+
+
+    return references
