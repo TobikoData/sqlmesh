@@ -65,6 +65,7 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
     ```
 
 #### DuckLake Catalog Example
+
 === "YAML"
 
     ```yaml linenums="1"

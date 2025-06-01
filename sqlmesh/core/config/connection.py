@@ -235,10 +235,11 @@ class DuckDBAttachOptions(BaseConfig):
             options.append("READ_ONLY")
 
         # DuckLake specific options
-        if self.type == "ducklake" and self.data_path:
-            options.append(f"DATA_PATH '{self.data_path}'")
-        if self.type == "ducklake" and self.encrypted:
-            options.append("ENCRYPTED")
+        if self.type == "ducklake":
+            if self.data_path:
+                options.append(f"DATA_PATH '{self.data_path}'")
+            if self.encrypted:
+                options.append("ENCRYPTED")
 
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
