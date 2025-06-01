@@ -21,6 +21,16 @@ export class LSPClient implements Disposable {
     this.client = undefined
   }
 
+  public hasCompletionCapability(): boolean {
+    if (!this.client) {
+      traceError('LSP client is not initialized')
+      return false
+    }
+    const capabilities = this.client.initializeResult?.capabilities
+    const completion = capabilities?.completionProvider
+    return completion !== undefined
+  }
+
   public async start(): Promise<Result<undefined, ErrorType>> {
     if (!outputChannel) {
       outputChannel = window.createOutputChannel('sqlmesh-lsp')

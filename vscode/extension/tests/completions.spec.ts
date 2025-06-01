@@ -38,13 +38,15 @@ test('Autocomplete for model names', async () => {
     await window.keyboard.press('Enter')
 
     // Type the beginning of sushi.customers to trigger autocomplete
-    await window.keyboard.type('sushi.cus')
+    await window.keyboard.type('sushi.waiter_as_customer')
 
     // Wait a moment for autocomplete to appear
     await window.waitForTimeout(500)
 
     // Check if the autocomplete suggestion for sushi.customers is visible
-    await expect(window.locator('text=sushi.customers')).toBeVisible()
+    expect(
+      await window.locator('text=sushi.waiter_as_customer_by_day').count(),
+    ).toBe(1)
 
     await close()
   } finally {

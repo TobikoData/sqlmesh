@@ -20,6 +20,7 @@ from sqlmesh.lsp.api import (
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
+from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
     ModelTarget,
@@ -455,6 +456,47 @@ class SQLMeshLanguageServer:
                     f"Error getting workspace diagnostics: {e}", types.MessageType.Error
                 )
                 return types.WorkspaceDiagnosticReport(items=[])
+
+        @self.server.feature(types.TEXT_DOCUMENT_COMPLETION)
+        def completion(
+            ls: LanguageServer, params: types.CompletionParams
+        ) -> t.Optional[types.CompletionList]:
+            """Handle completion requests from the client."""
+            try:
+                uri = URI(params.text_document.uri)
+                context = self._context_get_or_load(uri)
+
+                # Get completions using the existing completions module
+                completion_response = context.get_autocomplete(uri)
+
+                completion_items = []
+                # Add model completions
+                for model in completion_response.models:
+                    completion_items.append(
+                        types.CompletionItem(
+                            label=model,
+                            kind=types.CompletionItemKind.Reference,
+                            detail="SQLMesh Model",
+                        )
+                    )
+                # Add keyword completions
+                for keyword in completion_response.keywords:
+                    completion_items.append(
+                        types.CompletionItem(
+                            label=keyword,
+                            kind=types.CompletionItemKind.Keyword,
+                            detail="SQL Keyword",
+                        )
+                    )
+
+                return types.CompletionList(
+                    is_incomplete=False,
+                    items=completion_items,
+                )
+
+            except Exception as e:
+                get_sql_completions(None, URI(params.text_document.uri))
+                return None
 
     def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
         """Get diagnostics for a specific URI, returning (diagnostics, result_id).
