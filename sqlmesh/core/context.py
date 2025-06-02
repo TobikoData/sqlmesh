@@ -1448,12 +1448,18 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = model_selector.select_models(
-                select_models,
-                environment,
-                fallback_env_name=create_from or c.PROD,
-                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            )
+            try:
+                models_override = model_selector.select_models(
+                    select_models,
+                    environment,
+                    fallback_env_name=create_from or c.PROD,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+                )
+            except SQLMeshError as e:
+                logger.exception(e)  # ensure the full stack trace is logged
+                raise PlanError(
+                    f"{e}\nCheck the SQLMesh log file for the full stack trace.\nIf the model has been fixed locally, please ensure that the --select-model expression includes it."
+                )
             if not backfill_models:
                 # Only backfill selected models unless explicitly specified.
                 backfill_models = model_selector.expand_model_selections(select_models)
