@@ -32,6 +32,7 @@ export const startVSCode = async (workspaceDir: string): Promise<{
       `--extensionDevelopmentPath=${EXT_PATH}`,
       '--disable-workspace-trust',
       '--disable-telemetry',
+      '--install-extension=ms-python.python',
       `--user-data-dir=${userDataDir}`,
       workspaceDir,
     ];
