@@ -11,7 +11,7 @@ Below is a diagram of the components along with their descriptions.
 
 ![tobiko_cloud_standard_deployment](./tcloud_standard_deployment.png){ width=80% height=60% style="display: block; margin: 0 auto" }
 
-- **Scheduler**: Orchestrates schedule cadence and hosts state metadata(code versions, logs, cost)
+- **Scheduler**: Orchestrates schedule cadence and hosts state metadata (code versions, logs, cost)
 - **Executor**: Applies code changes and runs SQL queries (actual data processing in SQL Engine) and python models in proper DAG order.
 - **Gateway**: Stores authentication to SQL Engine. Secured through encryption.
 - **SQL Engine**: Processes and stores data based on the above instructions within the **customer’s** environment.
