@@ -24,7 +24,6 @@ from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
     ModelTarget,
-    render_model as render_model_context,
 )
 from sqlmesh.lsp.custom import (
     ALL_MODELS_FEATURE,
@@ -57,10 +56,6 @@ class SQLMeshLanguageServer:
         self.server = LanguageServer(server_name, version)
         self.context_class = context_class
         self.lsp_context: t.Optional[LSPContext] = None
-
-        # Cache stores tuples of (diagnostics, diagnostic_version)
-        self.lint_cache: t.Dict[URI, t.Tuple[t.List[AnnotatedRuleViolation], int]] = {}
-        self._diagnostic_version_counter: int = 0
 
         self.client_supports_pull_diagnostics = False
         # Register LSP features (e.g., formatting, hover, etc.)
@@ -120,7 +115,7 @@ class SQLMeshLanguageServer:
         def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
             uri = URI(params.textDocumentUri)
             context = self._context_get_or_load(uri)
-            return RenderModelResponse(models=list(render_model_context(context, uri)))
+            return RenderModelResponse(models=context.render_model(uri))
 
         @self.server.feature(API_FEATURE)
         def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
@@ -173,17 +168,11 @@ class SQLMeshLanguageServer:
             if models is None or not isinstance(models, ModelTarget):
                 return
 
-            if self.lint_cache.get(uri) is None:
-                diagnostics = context.context.lint_models(
-                    models.names,
-                    raise_on_error=False,
-                )
-                self._diagnostic_version_counter += 1
-                self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+            # Get diagnostics from context (which handles caching)
+            diagnostics = context.lint_model(uri)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
-                diagnostics, _ = self.lint_cache[uri]
                 ls.publish_diagnostics(
                     params.text_document.uri,
                     SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
@@ -197,13 +186,8 @@ class SQLMeshLanguageServer:
             if models is None or not isinstance(models, ModelTarget):
                 return
 
-            # Always update the cache
-            diagnostics = context.context.lint_models(
-                models.names,
-                raise_on_error=False,
-            )
-            self._diagnostic_version_counter += 1
-            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+            # Get diagnostics from context (which handles caching)
+            diagnostics = context.lint_model(uri)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
@@ -220,13 +204,8 @@ class SQLMeshLanguageServer:
             if models is None or not isinstance(models, ModelTarget):
                 return
 
-            # Always update the cache
-            diagnostics = context.context.lint_models(
-                models.names,
-                raise_on_error=False,
-            )
-            self._diagnostic_version_counter += 1
-            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
+            # Get diagnostics from context (which handles caching)
+            diagnostics = context.lint_model(uri)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
@@ -445,31 +424,16 @@ class SQLMeshLanguageServer:
                 return types.WorkspaceDiagnosticReport(items=[])
 
     def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
-        """Get diagnostics for a specific URI, returning (diagnostics, result_id)."""
-        # Check if we have cached diagnostics
-        if uri in self.lint_cache:
-            diagnostics, result_id = self.lint_cache[uri]
-            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics), result_id
+        """Get diagnostics for a specific URI, returning (diagnostics, result_id).
 
-        # Try to get diagnostics by loading context and linting
+        Since we no longer track version numbers, we always return 0 as the result_id.
+        This means pull diagnostics will always fetch fresh results.
+        """
         try:
             context = self._context_get_or_load(uri)
-            models = context.map[uri.to_path()]
-            if models is None or not isinstance(models, ModelTarget):
-                return [], 0
-
-            # Lint the models and cache the results
-            diagnostics = context.context.lint_models(
-                models.names,
-                raise_on_error=False,
-            )
-            self._diagnostic_version_counter += 1
-            self.lint_cache[uri] = (diagnostics, self._diagnostic_version_counter)
-            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(
-                diagnostics
-            ), self._diagnostic_version_counter
+            diagnostics = context.lint_model(uri)
+            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics), 0
         except Exception:
-            # If we can't get diagnostics, return empty list with no result ID
             return [], 0
 
     def _context_get_or_load(self, document_uri: URI) -> LSPContext:
@@ -523,7 +487,7 @@ class SQLMeshLanguageServer:
                         created_context = self.context_class(paths=[path])
                         self.lsp_context = LSPContext(created_context)
                         loaded = True
-                        # Re-check context for document now that it's loaded
+                        # Re-check context for the document now that it's loaded
                         return self._ensure_context_for_document(document_uri)
                     except Exception as e:
                         self.server.show_message(
