@@ -3,7 +3,7 @@ import typing as t
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from helper import iter_dates  # type: ignore
 from sqlglot import exp
 from sqlglot.expressions import to_column

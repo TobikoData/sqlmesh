@@ -11,9 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
-import pandas as pd
 from io import StringIO
-from pandas.api.types import is_object_dtype
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -29,6 +27,8 @@ from sqlmesh.utils.errors import ConfigError, TestError
 from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlglot.dialects.dialect import DialectType
 
     Row = t.Dict[str, t.Any]
@@ -207,6 +207,9 @@ class ModelTest(unittest.TestCase):
         partial: t.Optional[bool] = False,
     ) -> None:
         """Compare two DataFrames"""
+        import pandas as pd
+        from pandas.api.types import is_object_dtype
+
         if partial:
             intersection = actual[actual.columns.intersection(expected.columns)]
             if len(intersection.columns) > 0:
@@ -385,6 +388,8 @@ class ModelTest(unittest.TestCase):
             partial: bool = False,
             dialect: DialectType = None,
         ) -> t.Dict:
+            import pandas as pd
+
             if not isinstance(values, dict):
                 values = {"rows": values}
 
@@ -557,6 +562,8 @@ class ModelTest(unittest.TestCase):
         columns: t.Optional[t.Collection] = None,
         partial: t.Optional[bool] = False,
     ) -> pd.DataFrame:
+        import pandas as pd
+
         query = values.get("query")
         if query:
             if not partial:
@@ -725,6 +732,8 @@ class PythonModelTest(ModelTest):
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
+        import pandas as pd
+
         with self._concurrent_render_context():
             variables = self.body.get("vars", {}).copy()
             time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
@@ -893,6 +902,8 @@ def _raise_if_unexpected_columns(
 
 def _row_difference(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
     """Returns all rows in `left` that don't appear in `right`."""
+    import pandas as pd
+
     rows_missing_from_right = []
 
     # `None` replaces `np.nan` because `np.nan != np.nan` and this would affect the mapping lookup

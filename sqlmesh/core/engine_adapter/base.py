@@ -16,7 +16,6 @@ import sys
 import typing as t
 from functools import partial
 
-import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
@@ -51,6 +50,8 @@ from sqlmesh.utils.errors import (
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
         BigframeSession,
@@ -217,6 +218,8 @@ class EngineAdapter:
         *,
         batch_size: t.Optional[int] = None,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Query, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
@@ -244,6 +247,8 @@ class EngineAdapter:
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+
         assert isinstance(df, pd.DataFrame)
         num_rows = len(df.index)
         batch_size = sys.maxsize if batch_size == 0 else batch_size
@@ -257,7 +262,7 @@ class EngineAdapter:
             SourceQuery(
                 query_factory=partial(
                     self._values_to_sql,
-                    values=values,
+                    values=values,  # type: ignore
                     columns_to_types=columns_to_types,
                     batch_start=i,
                     batch_end=min(i + batch_size, num_rows),
@@ -295,6 +300,8 @@ class EngineAdapter:
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        import pandas as pd
+
         if columns_to_types:
             return columns_to_types
         if isinstance(query_or_df, pd.DataFrame):
@@ -1006,6 +1013,8 @@ class EngineAdapter:
             view_properties: Optional view properties to add to the view.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
+        import pandas as pd
+
         if materialized_properties and not materialized:
             raise SQLMeshError("Materialized properties are only supported for materialized views")
 
@@ -2012,6 +2021,8 @@ class EngineAdapter:
         """
         Take a "native" DataFrame (eg Pyspark, Bigframe, Snowpark etc) and convert it to Pandas
         """
+        import pandas as pd
+
         if isinstance(query_or_df, (exp.Query, exp.DerivedTable, pd.DataFrame)):
             return query_or_df
 
@@ -2022,6 +2033,8 @@ class EngineAdapter:
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
+        import pandas as pd
+
         df = self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if not isinstance(df, pd.DataFrame):
             raise NotImplementedError(

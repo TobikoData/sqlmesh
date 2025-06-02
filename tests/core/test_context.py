@@ -8,7 +8,7 @@ from unittest.mock import PropertyMock, call, patch
 
 import time_machine
 import pytest
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import ParseError, exp, parse_one, Dialect

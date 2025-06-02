@@ -15,7 +15,7 @@ import os
 import shutil
 
 import duckdb
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, maybe_parse, parse_one

@@ -3,7 +3,7 @@ import typing as t
 from datetime import date
 from unittest import mock
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp

@@ -1,11 +1,11 @@
 import typing as t
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils import optional_import
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     import pyspark
     import pyspark.sql.connect.dataframe
     from bigframes.session import Session as BigframeSession  # noqa

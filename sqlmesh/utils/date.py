@@ -8,15 +8,15 @@ import warnings
 from datetime import date, datetime, timedelta, timezone, tzinfo
 
 import dateparser
-import pandas as pd
 from dateparser import freshness_date_parser as freshness_date_parser_module
 from dateparser.freshness_date_parser import freshness_date_parser
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.utils import ttl_cache
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlglot.dialects.dialect import DialectType
 
 UTC = timezone.utc
@@ -323,6 +323,8 @@ def make_inclusive(
 
 
 def make_inclusive_end(end: TimeLike, dialect: t.Optional[DialectType] = "") -> datetime:
+    import pandas as pd
+
     exclusive_end = make_exclusive(end)
     if dialect == "tsql":
         return to_utc_timestamp(exclusive_end) - pd.Timedelta(1, unit="ns")
@@ -337,6 +339,8 @@ def make_exclusive(time: TimeLike) -> datetime:
 
 
 def to_utc_timestamp(time: datetime) -> pd.Timestamp:
+    import pandas as pd
+
     if time.tzinfo is not None:
         return pd.Timestamp(time).tz_convert("utc")
     return pd.Timestamp(time, tz="utc")
@@ -420,6 +424,9 @@ def to_time_column(
 def pandas_timestamp_to_pydatetime(
     df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
 ) -> pd.DataFrame:
+    import pandas as pd
+    from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
     for column in df.columns:
         if is_datetime64_any_dtype(df.dtypes[column]):
             # We must use `pd.Series` and dtype or pandas will convert it back to pd.Timestamp during assignment

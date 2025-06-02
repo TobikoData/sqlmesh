@@ -5,7 +5,7 @@ from pathlib import Path
 from tenacity import retry, stop_after_attempt
 
 import re
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 import sqlglot
 from pytest_mock.plugin import MockerFixture

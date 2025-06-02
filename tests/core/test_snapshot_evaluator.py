@@ -5,7 +5,7 @@ from unittest.mock import call, patch
 import re
 import logging
 import pytest
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import json
 from pydantic import model_validator
 from pathlib import Path
@@ -1427,7 +1427,7 @@ def test_snapshot_evaluator_yield_pd(adapter_mock, make_snapshot, input_dfs, out
                     name="python_func",
                     alias="python_func",
                     path="test_snapshot_evaluator.py",
-                    payload=f"""import pandas as pd
+                    payload=f"""import pandas as pd  # noqa: TID253
 def python_func(**kwargs):
     for df in [
         {input_dfs}

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-import pandas as pd
 import json
 import logging
 from sqlglot import exp
@@ -16,6 +15,9 @@ from sqlmesh.core.environment import Environment, EnvironmentStatements, Environ
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 
 logger = logging.getLogger(__name__)
@@ -330,6 +332,8 @@ class EnvironmentState:
 
 
 def _environment_to_df(environment: Environment) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {
@@ -364,6 +368,8 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
 def _environment_statements_to_df(
     environment_name: str, plan_id: str, environment_statements: t.List[EnvironmentStatements]
 ) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {

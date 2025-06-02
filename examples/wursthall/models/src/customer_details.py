@@ -3,7 +3,7 @@ import typing as t
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from faker import Faker
 from models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed  # type: ignore
 

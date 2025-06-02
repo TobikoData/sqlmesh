@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-import pandas as pd
 import json
 import logging
 from pathlib import Path
@@ -39,6 +38,8 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core.state_sync.db.interval import IntervalState
 
 
@@ -674,6 +675,8 @@ def _snapshot_to_json(snapshot: Snapshot) -> str:
 
 
 def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {
@@ -693,6 +696,8 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
 
 
 def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             {

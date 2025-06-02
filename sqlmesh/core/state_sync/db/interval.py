@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 import logging
-import pandas as pd
 
 from sqlglot import exp
 
@@ -26,6 +25,9 @@ from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.utils.migration import index_text_type
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now_timestamp
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 
 logger = logging.getLogger(__name__)
@@ -205,6 +207,8 @@ class IntervalState:
         snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]],
         is_compacted: bool = False,
     ) -> None:
+        import pandas as pd
+
         new_intervals = []
         for snapshot in snapshots:
             logger.info("Pushing intervals for snapshot %s", snapshot.snapshot_id)
@@ -430,6 +434,8 @@ def _intervals_to_df(
     is_dev: bool,
     is_removed: bool,
 ) -> pd.DataFrame:
+    import pandas as pd
+
     return pd.DataFrame(
         [
             _interval_to_df(

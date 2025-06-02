@@ -6,7 +6,6 @@ import io
 import typing as t
 from pathlib import Path, PurePath
 
-import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
@@ -17,6 +16,9 @@ from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_settings
 from sqlmesh.utils.windows import IS_WINDOWS
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 R = t.TypeVar("R")
 

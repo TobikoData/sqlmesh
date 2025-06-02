@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
 import time_machine
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -8679,7 +8679,7 @@ def identity(evaluator, value):
     blueprint_pydf.parent.mkdir(parents=True, exist_ok=True)
     blueprint_pydf.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 
@@ -9105,7 +9105,7 @@ def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixt
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
     blueprint_variables.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlglot import exp
 from sqlmesh import model
 
@@ -9167,7 +9167,7 @@ def test_python_model_depends_on_blueprints(tmp_path: Path) -> None:
     py_model.parent.mkdir(parents=True, exist_ok=True)
     py_model.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 @model(

@@ -4,7 +4,6 @@ import asyncio
 import io
 import typing as t
 
-import pandas as pd
 from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 from sqlmesh.core.console import Verbosity
@@ -66,6 +65,8 @@ async def evaluate(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
+    import pandas as pd
+
     try:
         df = context.evaluate(
             options.model,
