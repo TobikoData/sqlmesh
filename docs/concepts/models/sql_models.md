@@ -95,7 +95,7 @@ Note that the SQL command `UNCACHE TABLE countries` inside the `@IF()` macro doe
 
 The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
 
-These can be used, for example, to grant privileges on views of the virtual layer. 
+These can be used, for example, to grant privileges on views of the virtual layer.
 
 These SQL statements must be enclosed within an `ON_VIRTUAL_UPDATE_BEGIN;` ...; `ON_VIRTUAL_UPDATE_END;` block like this:
 
@@ -109,11 +109,11 @@ SELECT
   r.id::INT
 FROM raw.restaurants AS r;
 
-ON_VIRTUAL_UPDATE_BEGIN; 
+ON_VIRTUAL_UPDATE_BEGIN;
 GRANT SELECT ON VIEW @this_model TO ROLE role_name;
-JINJA_STATEMENT_BEGIN;     
+JINJA_STATEMENT_BEGIN;
 GRANT SELECT ON VIEW {{ this_model }} TO ROLE admin;
-JINJA_END;  
+JINJA_END;
 ON_VIRTUAL_UPDATE_END;
 ```
 
@@ -174,6 +174,10 @@ SELECT
   w AS field_b
 FROM customer2.some_source
 ```
+
+Note the use of curly brace syntax `@{field_b} AS field_b` in the model query above. It is used to tell SQLMesh that the rendered variable value should be treated as a SQL identifier instead of a string literal.
+
+You can see the different behavior in the first rendered model. `@field_a` is resolved to the string literal `'x'` (with single quotes) and `@{field_b}` is resolved to the identifier `y` (without quotes). Learn more about the curly brace syntax [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings).
 
 Blueprint variable mappings can also be constructed dynamically, e.g., by using a macro: `blueprints @gen_blueprints()`. This is useful in cases where the `blueprints` list needs to be sourced from external sources, such as CSV files.
 
@@ -249,7 +253,7 @@ One could also define this model by simply returning a string that contained the
 
 The `@model` decorator is the Python equivalent of the `MODEL` DDL.
 
-In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements`, `post_statements` and `on_virtual_update` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements and on-virtual-update-statements of the model, respectively. 
+In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements`, `post_statements` and `on_virtual_update` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements and on-virtual-update-statements of the model, respectively.
 
 !!! note
 

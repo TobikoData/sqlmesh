@@ -130,18 +130,20 @@ SQLMesh provides additional predefined variables used to modify model behavior b
     * 'auditing' - The audit is being run.
     * 'testing' - The model query logic is being evaluated in the context of a unit test.
 * @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).
-* @this_model - The physical table name that the model's view selects from. Typically used to create [generic audits](../audits.md#generic-audits). In the case of [on_virtual_update statements](../models/sql_models.md#optional-on-virtual-update-statements), it contains the qualified view name instead.
+* @this_model - The physical table name that the model's view selects from. Typically used to create [generic audits](../audits.md#generic-audits). When used in [on_virtual_update statements](../models/sql_models.md#optional-on-virtual-update-statements), it contains the qualified view name instead.
 * @model_kind_name - A string value containing the name of the current model kind. Intended to be used in scenarios where you need to control the [physical properties in model defaults](../../reference/model_configuration.md#model-defaults).
 
-!!! note
+!!! note "Embedding variables in strings"
 
-    The `@{variable}` syntax serves a different purpose from the `@variable` syntax.
+    Macro variable references sometimes use the curly brace syntax `@{variable}`, which serves a different purpose than the regular `@variable` syntax.
 
-    In the former, `@{variable}` is replaced by the variable's value and the resulting expression is treated as an identifier, whereas the latter is simply replaced by the expression stored in the variable.
+    The curly brace syntax tells SQLMesh that the rendered string should be treated as an identifier, instead of simply replacing the macro variable value.
 
-    For example, if `variable` is defined as `@DEF(`variable`, foo.bar)`, then `@variable` produces `foo.bar`, while `@{variable}` produces `"foo.bar"`, because `foo.bar` is treated converted into an identifier, making it necessary to add quotes due to the `.` character.
+    For example, if `variable` is defined as `@DEF(`variable`, foo.bar)`, then `@variable` produces `foo.bar`, while `@{variable}` produces `"foo.bar"`. This is because SQLMesh converts `foo.bar` into an identifier, using double quotes to correctly include the `.` character in the identifier name.
 
-    In practice, `@{variable}` is most commonly used to interpolate a value within an identifier, e.g., `@{variable}_suffix`, whereas `@variable` is used to do plain substitutions.
+    In practice, `@{variable}` is most commonly used to interpolate a value within an identifier, e.g., `@{variable}_suffix`, whereas `@variable` is used to do plain substitutions for string literals.
+
+    Learn more [above](#embedding-variables-in-strings).
 
 #### Before all and after all variables
 
