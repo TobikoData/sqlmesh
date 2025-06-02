@@ -238,7 +238,7 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="get_where_subquery"))
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
-            sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+            sql = node.raw_code if DBT_VERSION >= (1, 3, 0) else node.raw_sql  # type: ignore
             dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
             dependencies = dependencies.union(
                 self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
@@ -278,7 +278,7 @@ class ManifestHelper:
                 node_name = f"{node_name}_v{node_version}"
 
             if node.resource_type in {"model", "snapshot"}:
-                sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+                sql = node.raw_code if DBT_VERSION >= (1, 3, 0) else node.raw_sql  # type: ignore
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)
                 )
@@ -305,7 +305,7 @@ class ManifestHelper:
             if node.resource_type == "operation" and (
                 set(node.tags) & {"on-run-start", "on-run-end"}
             ):
-                sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+                sql = node.raw_code if DBT_VERSION >= (1, 3, 0) else node.raw_sql  # type: ignore
                 node_name = node.name
                 node_path = Path(node.original_file_path)
 
@@ -339,7 +339,7 @@ class ManifestHelper:
 
         variables = (
             self.variable_overrides
-            if DBT_VERSION >= (1, 5)
+            if DBT_VERSION >= (1, 5, 0)
             else json.dumps(self.variable_overrides)
         )
 
@@ -354,7 +354,7 @@ class ManifestHelper:
         )
         flags.set_from_args(args, None)
 
-        if DBT_VERSION >= (1, 8):
+        if DBT_VERSION >= (1, 8, 0):
             from dbt_common.context import set_invocation_context  # type: ignore
 
             set_invocation_context(os.environ)
@@ -371,7 +371,7 @@ class ManifestHelper:
 
         self._project_name = project.project_name
 
-        if DBT_VERSION >= (1, 8):
+        if DBT_VERSION >= (1, 8, 0):
             from dbt.mp_context import get_mp_context  # type: ignore
 
             register_adapter(runtime_config, get_mp_context())  # type: ignore
@@ -546,7 +546,7 @@ def _macro_references(
 
 
 def _refs(node: ManifestNode) -> t.Set[str]:
-    if DBT_VERSION >= (1, 5):
+    if DBT_VERSION >= (1, 5, 0):
         result = set()
         for r in node.refs:
             ref_name = f"{r.package}.{r.name}" if r.package else r.name
