@@ -23,7 +23,7 @@ vscode/extension/.vscode-test/
 
 sqlmesh
 docs
-tests
+/tests/**
 examples
 posts
 .circleci
