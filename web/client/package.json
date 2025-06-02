@@ -22,7 +22,7 @@
     "@codemirror/language": "^6.11.0",
     "@codemirror/legacy-modes": "^6.5.1",
     "@codemirror/state": "^6.5.2",
-    "@codemirror/view": "^6.36.8",
+    "@codemirror/view": "^6.37.1",
     "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.2.0",
     "@lit/react": "^1.0.7",
