@@ -46,9 +46,9 @@ A few key components of our internal code requirements:
 
 - We used signed Git commits, required approvers, and signed Docker artifacts.
 - Each commit to a `main` branch must be approved by someone other than the author.
-- We sign commits and register the key with GitHub ([Github Docs](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits))
-- Binaries are signed using cosign and OIDC for keyless ([Signing docs](https://docs.sigstore.dev/cosign/signing/overview/)
-- Attestations are created to certify an image, enforced with GCP Binary Authorization ([Attestation docs](https://cloud.google.com/binary-authorization/docs/key-concepts#attestations))
+- We sign commits and register the key with GitHub ([Github Docs](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits)).
+- Binaries are signed using cosign and OIDC for keyless ([Signing docs](https://docs.sigstore.dev/cosign/signing/overview/)).
+- Attestations are created to certify an image, enforced with GCP Binary Authorization ([Attestation docs](https://cloud.google.com/binary-authorization/docs/key-concepts#attestations)).
 - Encryption is a key feature of our security posture and is enforced at each stage of access. For example, the state database automatically encrypts all data. Credentials are also securely encrypted and stored. 
 - We back up each state database nightly and before upgrades. These backups are stored for 14 days.
 
@@ -67,7 +67,7 @@ We use GitHub to sign code commits. At the time the code was committed, the PGP 
 
 ### How do we invalidate PGP keys if someone did steal it and could potentially use it?
 
-Revoke access for the GitHub user account associated with the compromised key and not give them access again until the old PGP key is deprecated and a new key issued.
+We would revoke access for the GitHub user account associated with the compromised key and not give it access again until the old PGP key is deprecated and a new key issued.
 
 ### If someone steals a laptop, what's our continuity plan in protecting code?
 
