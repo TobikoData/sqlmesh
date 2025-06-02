@@ -181,3 +181,6 @@ vscode-generate-openapi:
 	python3 web/server/openapi.py --output vscode/openapi.json
 	pnpm run fmt
 	cd vscode/react && pnpm run generate:api
+
+benchmark-ci:
+	python benchmarks/lsp_render_model_bench.py --debug-single-value
