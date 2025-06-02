@@ -159,7 +159,7 @@ def execute(
 
     with pytest.raises(
         ConfigError,
-        match=r"Failed to load model definition at '.*'.\n  Duplicate name: 'test_schema.test_model'.",
+        match=r"Failed to load model from file '.*'.\n\n  Duplicate name: 'test_schema.test_model'.",
     ):
         Context(paths=tmp_path, config=config)
 
