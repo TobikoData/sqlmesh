@@ -199,6 +199,17 @@ class SQLMeshLanguageServer:
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
+
+            # Reload the entire context and create a new LSPContext
+            if self.lsp_context is not None:
+                try:
+                    new_context = Context(paths=list(self.lsp_context.context.configs))
+                    new_full_context = LSPContext(new_context)
+                    self.lsp_context = new_full_context
+                    return
+                except Exception as e:
+                    pass
+
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
             if models is None or not isinstance(models, ModelTarget):
