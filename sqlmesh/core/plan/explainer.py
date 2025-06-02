@@ -107,10 +107,11 @@ class PlanExplainer(PlanEvaluator):
             steps.append(AuditOnlyRunStep(snapshots=list(audit_only_snapshots.values())))
 
         if plan.restatements and not plan.is_dev:
-            snapshot_intervals_to_restate = {
-                snapshots_by_name[name].table_info: intervals
-                for name, intervals in plan.restatements.items()
-            }
+            snapshot_intervals_to_restate = {}
+            for name, interval in plan.restatements.items():
+                restated_snapshot = snapshots_by_name[name]
+                restated_snapshot.remove_interval(interval)
+                snapshot_intervals_to_restate[restated_snapshot.table_info] = interval
             steps.append(RestatementStep(snapshot_intervals=snapshot_intervals_to_restate))
 
         if before_promote_snapshots and not plan.empty_backfill and not plan.skip_backfill:
@@ -393,12 +394,21 @@ class RichExplainerConsole(ExplainerConsole):
                     model_tree.add("Run pre-statements")
 
                 if snapshot.is_incremental:
-                    formatted_range = SnapshotIntervals(
-                        snapshot_id=snapshot.snapshot_id, intervals=intervals
-                    ).format_intervals(snapshot.node.interval_unit)
-                    model_tree.add(
-                        f"Incrementally insert records within the range [{formatted_range}]"
+                    current_intervals = (
+                        snapshot.intervals
+                        if step.deployability_index.is_deployable(snapshot)
+                        else snapshot.dev_intervals
                     )
+                    if current_intervals:
+                        formatted_range = SnapshotIntervals(
+                            snapshot_id=snapshot.snapshot_id, intervals=intervals
+                        ).format_intervals(snapshot.node.interval_unit)
+                        model_tree.add(
+                            f"Incrementally insert records within the range [{formatted_range}]"
+                        )
+                    else:
+                        # If there are no intervals, the table will be fully refreshed
+                        model_tree.add("Fully refresh table")
                 elif snapshot.is_view:
                     model_tree.add("Recreate view")
                 else:
