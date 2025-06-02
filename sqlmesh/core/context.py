@@ -2534,7 +2534,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._test_connection_config = self.config.get_test_connection(
                 self.gateway,
                 self.default_catalog,
-                default_catalog_dialect=self.engine_adapter.DIALECT,
+                default_catalog_dialect=self.config.dialect,
             )
         return self._test_connection_config
 
