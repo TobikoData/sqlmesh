@@ -107,8 +107,6 @@
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run compile",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test:e2e": "playwright test",
