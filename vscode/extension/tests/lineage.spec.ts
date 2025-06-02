@@ -1,4 +1,4 @@
-import { test, _electron as electron, expect, ElectronApplication, Page } from '@playwright/test';
+import { test,  expect, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs-extra';
 import os from 'os';
