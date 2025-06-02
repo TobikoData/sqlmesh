@@ -576,7 +576,7 @@ def test_no_model_statement(tmp_path: Path):
     expressions = d.parse("SELECT 1 AS x")
     with pytest.raises(
         ConfigError,
-        match="Please add a required MODEL block at top of the file. Example:",
+        match="Please add a MODEL block at the top of the file. Example:",
     ):
         load_sql_based_model(expressions)
 
@@ -613,7 +613,7 @@ def test_unordered_model_statements():
 
     with pytest.raises(ConfigError) as ex:
         load_sql_based_model(expressions)
-    assert "Please add a required MODEL block at top of the file. Example:" in str(ex.value)
+    assert "Please add a MODEL block at the top of the file. Example:" in str(ex.value)
 
 
 def test_no_query():

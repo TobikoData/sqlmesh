@@ -2036,7 +2036,7 @@ def load_sql_based_model(
         variables: The variables to pass to the model.
         kwargs: Additional kwargs to pass to the loader.
     """
-    missing_model_msg = f"""Please add a required MODEL block at top of the file. Example:
+    missing_model_msg = f"""Please add a MODEL block at the top of the file. Example:
 
 MODEL (
   name sqlmesh_example.full_model, --model name
