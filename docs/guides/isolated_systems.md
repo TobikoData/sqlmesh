@@ -70,13 +70,15 @@ MODEL (
 )
 ```
 
-To embed the gateway name directly in the schema name, use the `@{gateway}` syntax:
+To embed the gateway name directly in the schema name, use the curly brace `@{gateway}` syntax:
 
 ```sql linenums="1"
 MODEL (
   name @{gateway}_schema.my_model
 )
 ```
+
+Learn more about the curly brace `@{}` syntax [here](../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings).
 
 ## Workflow
 

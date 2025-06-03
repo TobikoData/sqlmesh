@@ -70,7 +70,9 @@ FROM
   @{gateway}_db.external_table;
 ```
 
-This table will be named differently depending on which `--gateway` SQLMesh is run with. For example:
+This table will be named differently depending on which `--gateway` SQLMesh is run with (learn more about the curly brace `@{gateway}` syntax [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings)).
+
+For example:
 
 - `sqlmesh --gateway dev plan` - SQLMesh will try to query `dev_db.external_table`
 - `sqlmesh --gateway prod plan` - SQLMesh will try to query `prod_db.external_table`
