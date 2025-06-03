@@ -1,4 +1,5 @@
 import pytest
+import typing as t
 from sqlglot import parse_one
 from pytest_mock.plugin import MockerFixture
 
@@ -7,6 +8,7 @@ from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.plan.stages import (
     build_plan_stages,
     AfterAllStage,
+    AuditOnlyRunStage,
     PhysicalLayerUpdateStage,
     BeforeAllStage,
     BackfillStage,
@@ -15,7 +17,12 @@ from sqlmesh.core.plan.stages import (
     RestatementStage,
     MigrateSchemasStage,
 )
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, DeployabilityIndex, Snapshot
+from sqlmesh.core.snapshot.definition import (
+    SnapshotChangeCategory,
+    DeployabilityIndex,
+    Snapshot,
+    SnapshotId,
+)
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.utils.date import to_timestamp
@@ -501,7 +508,6 @@ def test_build_plan_stages_forward_only(
     new_snapshot_b.previous_versions = snapshot_b.all_versions
     new_snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
-    # Mock state reader to return existing snapshots and environment
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {}
     existing_environment = Environment(
@@ -620,7 +626,6 @@ def test_build_plan_stages_forward_only_dev(
     new_snapshot_b.previous_versions = snapshot_b.all_versions
     new_snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
-    # Mock state reader to return existing snapshots and environment
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {}
     state_reader.get_environment.return_value = None
@@ -699,6 +704,110 @@ def test_build_plan_stages_forward_only_dev(
 
     # Verify VirtualLayerUpdateStage
     virtual_stage = stages[3]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
+
+
+def test_build_plan_stages_audit_only(
+    snapshot_a: Snapshot, snapshot_b: Snapshot, make_snapshot, mocker: MockerFixture
+) -> None:
+    # Categorize snapshot_a as forward-only
+    new_snapshot_a = make_snapshot(
+        snapshot_a.model.copy(update={"audits": [("not_null", {})]}),
+    )
+    new_snapshot_a.previous_versions = snapshot_a.all_versions
+    new_snapshot_a.categorize_as(SnapshotChangeCategory.METADATA)
+    new_snapshot_a.add_interval("2023-01-01", "2023-01-02")
+
+    new_snapshot_b = make_snapshot(
+        snapshot_b.model.copy(),
+        nodes={'"a"': new_snapshot_a.model},
+    )
+    new_snapshot_b.previous_versions = snapshot_b.all_versions
+    new_snapshot_b.categorize_as(SnapshotChangeCategory.METADATA)
+    new_snapshot_b.add_interval("2023-01-01", "2023-01-02")
+
+    def _get_snapshots(snapshot_ids: t.List[SnapshotId]) -> t.Dict[SnapshotId, Snapshot]:
+        if snapshot_a.snapshot_id in snapshot_ids and snapshot_b.snapshot_id in snapshot_ids:
+            return {
+                snapshot_a.snapshot_id: snapshot_a,
+                snapshot_b.snapshot_id: snapshot_b,
+            }
+        return {}
+
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.get_snapshots.side_effect = _get_snapshots
+    state_reader.get_environment.return_value = None
+
+    # Create environment
+    environment = Environment(
+        name="dev",
+        snapshots=[new_snapshot_a.table_info, new_snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[new_snapshot_a.snapshot_id, new_snapshot_b.snapshot_id],
+    )
+
+    # Create evaluatable plan
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[new_snapshot_a, new_snapshot_b],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=True,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[new_snapshot_a.snapshot_id],
+        indirectly_modified_snapshots={
+            new_snapshot_a.name: [new_snapshot_b.snapshot_id],
+        },
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        interval_end_per_model=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
+
+    # Verify stages
+    assert len(stages) == 5
+
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 0
+
+    # Verify AuditOnlyRunStage
+    audit_only_stage = stages[1]
+    assert isinstance(audit_only_stage, AuditOnlyRunStage)
+    assert len(audit_only_stage.snapshots) == 1
+    assert audit_only_stage.snapshots[0].snapshot_id == new_snapshot_a.snapshot_id
+
+    # Verify BackfillStage
+    backfill_stage = stages[2]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 0
+
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[3], EnvironmentRecordUpdateStage)
+
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[4]
     assert isinstance(virtual_stage, VirtualLayerUpdateStage)
     assert len(virtual_stage.promoted_snapshots) == 2
     assert len(virtual_stage.demoted_snapshots) == 0
