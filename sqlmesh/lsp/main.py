@@ -11,6 +11,7 @@ from lsprotocol import types
 from pygls.server import LanguageServer
 
 from sqlmesh._version import __version__
+from sqlmesh.core.config.loader import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.api import (
@@ -469,12 +470,14 @@ class SQLMeshLanguageServer:
                     self.server.show_message(f"Error loading context: {e}", types.MessageType.Error)
 
     def _ensure_context_for_document(
+
         self,
         document_uri: URI,
     ) -> None:
         """
         Ensure that a context exists for the given document if applicable by searching
-        for a config.py or config.yml file in the parent directories.
+        for a config.py or config.yml file in the parent directories. For multi-repo
+        setups, scan sibling directories for additional configs when one is found.
         """
         if self.lsp_context is not None:
             context = self.lsp_context
@@ -488,25 +491,101 @@ class SQLMeshLanguageServer:
             return
 
         loaded = False
+
         # Ascend directories to look for config
         while path.parents and not loaded:
-            for ext in ("py", "yml", "yaml"):
-                config_path = path / f"config.{ext}"
-                if config_path.exists():
-                    try:
-                        # Use user-provided instantiator to build the context
+            config_found, config_path = self._find_config_in_directory(path)
+
+            if config_found:
+                try:
+                    # Load the found config to check if it has project key
+                    temp_configs = self._load_and_check_config(config_path, path)
+
+                    if self._has_project_key(temp_configs):
+                        # Multi-repo setup detected - scan sibling directories
+                        all_repo_paths = self._scan_sibling_directories_for_configs(path.parent)
+
+                        # Create context with all found repo paths
+                        created_context = self.context_class(paths=all_repo_paths)
+                    else:
+                        # Single repo setup
                         created_context = self.context_class(paths=[path])
-                        self.lsp_context = LSPContext(created_context)
-                        loaded = True
-                        # Re-check context for the document now that it's loaded
-                        return self._ensure_context_for_document(document_uri)
-                    except Exception as e:
-                        self.server.show_message(
-                            f"Error loading context: {e}", types.MessageType.Error
-                        )
+
+                    self.lsp_context = LSPContext(created_context)
+                    loaded = True
+
+                    # Re-check context for the document now that it's loaded
+                    return self._ensure_context_for_document(document_uri)
+
+                except Exception as e:
+                    self.server.show_message(
+                        f"Error loading context: {e}", types.MessageType.Error
+                    )
+
             path = path.parent
 
         return
+
+    def _find_config_in_directory(self, path: Path) -> tuple[bool, Path]:
+        """Find config file in the given directory."""
+        for ext in ("py", "yml", "yaml"):
+            config_path = path / f"config.{ext}"
+            if config_path.exists():
+                return True, config_path
+        return False, None
+
+    def _load_and_check_config(self, config_path: Path, base_path: Path) -> dict:
+        """Load config using the load_configs function."""
+        # Use your existing load_configs function
+        configs = load_configs(config_path, self.CONFIG_TYPE, [base_path])
+        return configs if isinstance(configs, dict) else {}
+
+    def _has_project_key(self, configs: dict) -> bool:
+        """Check if the loaded config contains a project key indicating multi-repo setup."""
+        # Check if configs is a dictionary with Path keys (multi-repo indicator)
+        if isinstance(configs, dict):
+            # Check if any keys are Path objects or if there's explicit project structure
+            for key in configs.keys():
+                if isinstance(key, Path):
+                    return True
+
+            # Alternative: check for specific project-related keys in config
+            project_indicators = ['project', 'projects', 'multi_repo', 'repositories']
+            return any(indicator in configs for indicator in project_indicators)
+
+        return False
+
+    def _scan_sibling_directories_for_configs(self, parent_dir: Path) -> list[Path]:
+        """
+        Scan sibling directories (going one level back) for other directories
+        that might contain configs in a multi-repo setup.
+        """
+        repo_paths = []
+
+        # Go one level back to scan for other potential repos
+        grandparent = parent_dir.parent if parent_dir.parent != parent_dir else parent_dir
+
+        try:
+            # Scan all subdirectories in the grandparent directory
+            for potential_repo in grandparent.iterdir():
+                if potential_repo.is_dir() and potential_repo != parent_dir:
+                    # Check if this directory contains a config
+                    config_found, _ = self._find_config_in_directory(potential_repo)
+                    if config_found:
+                        repo_paths.append(potential_repo)
+
+            # Always include the original directory where we found the first config
+            repo_paths.append(parent_dir)
+
+        except (PermissionError, OSError) as e:
+            # If we can't scan the parent directory, fall back to single repo
+            self.server.show_message(
+                f"Warning: Could not scan parent directory for multi-repo setup: {e}",
+                types.MessageType.Warning
+            )
+            repo_paths = [parent_dir]
+
+        return repo_paths
 
     @staticmethod
     def _diagnostic_to_lsp_diagnostic(
