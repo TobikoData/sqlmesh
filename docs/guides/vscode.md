@@ -113,7 +113,7 @@ See auto-completion suggestions when writing SQL models, keywords, or model name
 
 Hovering over a model name shows a tooltip with the model description. 
 
-In addition to hover information, you can go do to a definition of the following objects in a SQL file by either right-clicking and choosing "Go to definition" or by `Command/Control + Click` on the respective reference. This currently works for:
+In addition to hover information, you can go to a definition of the following objects in a SQL file by either right-clicking and choosing "Go to definition" or by `Command/Control + Click` on the respective reference. This currently works for:
 
 - Model references in a SQL file like `FROM my_model`
 - CTE reference in a SQL file like `WITH my_cte AS (...) ... FROM my_cte` 
