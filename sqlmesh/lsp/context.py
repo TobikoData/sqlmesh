@@ -5,7 +5,7 @@ import typing as t
 
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.custom import RenderModelEntry
+from sqlmesh.lsp.custom import RenderModelEntry, ModelForRendering
 from sqlmesh.lsp.uri import URI
 
 
@@ -148,3 +148,29 @@ class LSPContext:
         # Store in cache
         self._lint_cache[path] = diagnostics
         return diagnostics
+
+    def list_of_models_for_rendering(self) -> t.List[ModelForRendering]:
+        """Get a list of models for rendering.
+
+        Returns:
+            List of ModelForRendering objects.
+        """
+        return [
+            ModelForRendering(
+                name=model.name,
+                fqn=model.fqn,
+                description=model.description,
+                uri=URI.from_path(model._path).value,
+            )
+            for model in self.context.models.values()
+            if isinstance(model, SqlModel) and model._path is not None
+        ] + [
+            ModelForRendering(
+                name=audit.name,
+                fqn=audit.fqn,
+                description=audit.description,
+                uri=URI.from_path(audit._path).value,
+            )
+            for audit in self.context.standalone_audits.values()
+            if audit._path is not None
+        ]

@@ -27,9 +27,12 @@ from sqlmesh.lsp.context import (
 )
 from sqlmesh.lsp.custom import (
     ALL_MODELS_FEATURE,
+    ALL_MODELS_FOR_RENDER_FEATURE,
     RENDER_MODEL_FEATURE,
     AllModelsRequest,
     AllModelsResponse,
+    AllModelsForRenderRequest,
+    AllModelsForRenderResponse,
     RenderModelRequest,
     RenderModelResponse,
 )
@@ -121,6 +124,19 @@ class SQLMeshLanguageServer:
             uri = URI(params.textDocumentUri)
             context = self._context_get_or_load(uri)
             return RenderModelResponse(models=context.render_model(uri))
+
+        @self.server.feature(ALL_MODELS_FOR_RENDER_FEATURE)
+        def all_models_for_render(
+            ls: LanguageServer, params: AllModelsForRenderRequest
+        ) -> AllModelsForRenderResponse:
+            if self.lsp_context is None:
+                current_path = Path.cwd()
+                self._ensure_context_in_folder(current_path)
+            if self.lsp_context is None:
+                raise RuntimeError("No context found")
+            return AllModelsForRenderResponse(
+                models=self.lsp_context.list_of_models_for_rendering()
+            )
 
         @self.server.feature(API_FEATURE)
         def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
