@@ -7,6 +7,7 @@ import unittest
 import uuid
 import logging
 import textwrap
+from itertools import zip_longest
 from pathlib import Path
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -26,6 +27,7 @@ from rich.table import Table
 from rich.tree import Tree
 from sqlglot import exp
 
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
@@ -46,6 +48,7 @@ from sqlmesh.utils.errors import (
     NodeAuditsErrors,
     format_destructive_change_msg,
 )
+from sqlmesh.utils.rich import strip_ansi_codes
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -316,6 +319,12 @@ class PlanBuilderConsole(BaseConsole, abc.ABC):
         """Display a destructive change error or warning to the user."""
 
 
+class UnitTestConsole(abc.ABC):
+    @abc.abstractmethod
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        """Display the test result and output."""
+
+
 class Console(
     PlanBuilderConsole,
     LinterConsole,
@@ -327,6 +336,7 @@ class Console(
     DifferenceConsole,
     TableDiffConsole,
     BaseConsole,
+    UnitTestConsole,
     abc.ABC,
 ):
     """Abstract base class for defining classes used for displaying information to the user and also interact
@@ -461,9 +471,7 @@ class Console(
         """
 
     @abc.abstractmethod
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         """Display the test result and output.
 
         Args:
@@ -495,6 +503,10 @@ class Console(
     @abc.abstractmethod
     def loading_stop(self, id: uuid.UUID) -> None:
         """Stop loading for the given id."""
+
+    @abc.abstractmethod
+    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
+        """Print the unit test results."""
 
 
 class NoopConsole(Console):
@@ -668,9 +680,7 @@ class NoopConsole(Console):
         if auto_apply:
             plan_builder.apply()
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         pass
 
     def show_sql(self, sql: str) -> None:
@@ -775,6 +785,9 @@ class NoopConsole(Console):
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
+        pass
+
+    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
         pass
 
 
@@ -1952,10 +1965,12 @@ class TerminalConsole(Console):
         ):
             plan_builder.apply()
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         divider_length = 70
+
+        self.log_unit_test_results(result)
+        self._print("\n")
+
         if result.wasSuccessful():
             self._print("=" * divider_length)
             self._print(
@@ -1972,9 +1987,13 @@ class TerminalConsole(Console):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"Failure Test: {test.model.name} {test.test_name}")
+                    self._print(f"Failure Test: {test.path}::{test.test_name}")
             self._print("=" * divider_length)
-            self._print(output)
+
+    def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
+        with self.console.capture() as capture:
+            self.log_unit_test_results(result)
+        return strip_ansi_codes(capture.get())
 
     def show_sql(self, sql: str) -> None:
         self._print(Syntax(sql, "sql", word_wrap=True), crop=False)
@@ -2492,6 +2511,56 @@ class TerminalConsole(Console):
         else:
             self.log_warning(msg)
 
+    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
+        tests_run = result.testsRun
+        errors = result.errors
+        failures = result.failures
+        skipped = result.skipped
+        is_success = not (errors or failures)
+
+        infos = []
+        if failures:
+            infos.append(f"failures={len(failures)}")
+        if errors:
+            infos.append(f"errors={len(errors)}")
+        if skipped:
+            infos.append(f"skipped={skipped}")
+
+        self._print("\n", end="")
+
+        for (test_case, failure), test_failure_tables in zip_longest(  # type: ignore
+            failures, result.failure_tables
+        ):
+            self._print(unittest.TextTestResult.separator1)
+            self._print(f"FAIL: {test_case}")
+
+            if test_description := test_case.shortDescription():
+                self._print(test_description)
+            self._print(f"{unittest.TextTestResult.separator2}")
+
+            if not test_failure_tables:
+                self._print(failure)
+            else:
+                for failure_table in test_failure_tables:
+                    self._print(failure_table)
+                    self._print("\n", end="")
+
+        for test_case, error in errors:
+            self._print(unittest.TextTestResult.separator1)
+            self._print(f"ERROR: {test_case}")
+            self._print(f"{unittest.TextTestResult.separator2}")
+            self._print(error)
+
+        # Output final report
+        self._print(unittest.TextTestResult.separator2)
+        test_duration_msg = f" in {result.duration:.3f}s" if result.duration else ""
+        self._print(
+            f"\nRan {tests_run} {'tests' if tests_run > 1 else 'test'}{test_duration_msg} \n"
+        )
+        self._print(
+            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
+        )
+
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
     """Helper function to compare two cells and returns true if they're equal, handling array objects."""
@@ -2763,9 +2832,7 @@ class NotebookMagicConsole(TerminalConsole):
         )
         self.display(radio)
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         import ipywidgets as widgets
 
         divider_length = 70
@@ -2781,12 +2848,14 @@ class NotebookMagicConsole(TerminalConsole):
                 h(
                     "span",
                     {"style": {**shared_style, **success_color}},
-                    f"Successfully Ran {str(result.testsRun)} Tests Against {target_dialect}",
+                    f"Successfully Ran {str(result.testsRun)} tests against {target_dialect}",
                 )
             )
             footer = str(h("span", {"style": shared_style}, "=" * divider_length))
             self.display(widgets.HTML("<br>".join([header, message, footer])))
         else:
+            output = self._captured_unit_test_results(result)
+
             fail_color = {"color": "#db3737"}
             fail_shared_style = {**shared_style, **fail_color}
             header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
@@ -3137,21 +3206,22 @@ class MarkdownConsole(CaptureTerminalConsole):
     def log_success(self, message: str) -> None:
         self._print(message)
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         if result.wasSuccessful():
             self._print(
                 f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
             )
         else:
+            self._print("```")
+            self.log_unit_test_results(result)
+            self._print("```\n\n")
+
             self._print(
                 f"**Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}**\n\n"
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
                     self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
-            self._print(f"```{output}```\n\n")
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
@@ -3530,9 +3600,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         for modified in context_diff.modified_snapshots:
             self._write(f"  Modified: {modified}")
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         self._write("Test Results:", result)
 
     def show_sql(self, sql: str) -> None:

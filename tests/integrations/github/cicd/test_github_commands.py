@@ -9,6 +9,7 @@ from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
@@ -448,11 +449,11 @@ def test_run_all_test_failed(
         github_client,
         bot_config=GithubCICDBotConfig(merge_method=MergeMethod.MERGE),
     )
-    test_result = TestResult()
+    test_result = ModelTextTestResult(stream=None, descriptions=True, verbosity=0)
     test_result.testsRun += 1
-    test_result.addFailure(TestCase(), (None, None, None))
+    test_result.addFailure(TestCase(), (TestError, TestError("some error"), None))
     controller._context._run_tests = mocker.MagicMock(
-        side_effect=lambda **kwargs: (test_result, "some error")
+        side_effect=lambda **kwargs: (test_result, "")
     )
     controller._context.users = [
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
@@ -473,16 +474,11 @@ def test_run_all_test_failed(
     assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_failure
     assert test_checks_runs[2]["output"]["title"] == "Tests Failed"
-    assert (
-        test_checks_runs[2]["output"]["summary"]
-        == """**Num Successful Tests: 0**
-
-
-```some error```
-
-
-"""
-    )
+    assert """FAIL: runTest (unittest.case.TestCase.runTest)
+No test
+----------------------------------------------------------------------
+sqlmesh.utils.errors.TestError: some error""" in test_checks_runs[2]["output"]["summary"]
+    assert """**Num Successful Tests: 0**""" in test_checks_runs[2]["output"]["summary"]
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[

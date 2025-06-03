@@ -31,6 +31,7 @@ from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
@@ -2218,6 +2219,7 @@ test_resolve_template_macro:
     _check_successful_or_raise(context.test())
 
 
+@use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
@@ -2243,8 +2245,8 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
-      - item_id: 2
-        num_orders: 2 
+      - item_id: 4
+        num_orders: 3
         """
     )
 
@@ -2255,40 +2257,71 @@ test_example_full_model:
     )
     context = Context(paths=tmp_path, config=config)
 
-    # Case 1: Assert the log report is structured correctly
-    with capture_output() as output:
+    # Case 1: Ensure the log report is structured correctly
+    with capture_output() as captured_output:
         context.test()
 
-    # Order may change due to concurrent execution
-    assert "F." in output.stderr or ".F" in output.stderr
-    assert (
-        f"""======================================================================
-FAIL: test_example_full_model ({new_test_file})
-This is a test
-----------------------------------------------------------------------
-AssertionError: Data mismatch (exp: expected, act: actual)
+    output = captured_output.stdout
 
-  num_orders     
-         exp  act
-1        2.0  1.0
+    # Order may change due to concurrent execution
+    assert "F." in output or ".F" in output
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃     ┃ item_id:        ┃                 ┃ num_orders:     ┃ num_orders:      ┃
+┃ Row ┃ Expected        ┃ item_id: Actual ┃ Expected        ┃ Actual           ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│  0  │       4.0       │       2.0       │       3.0       │       1.0        │
+└─────┴─────────────────┴─────────────────┴─────────────────┴──────────────────┘
 
 ----------------------------------------------------------------------"""
-        in output.stderr
+        in output
     )
 
-    assert "Ran 2 tests" in output.stderr
-    assert "FAILED (failures=1)" in output.stderr
+    assert "Ran 2 tests" in output
+    assert "FAILED (failures=1)" in output
 
-    # Case 2: Assert that concurrent execution is working properly
+    # Case 2: Ensure that the verbose log report is structured correctly
+    with capture_output() as captured_output:
+        context.test(verbosity=Verbosity.VERBOSE)
+
+    output = captured_output.stdout
+
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                 Column 'item_id' mismatch                  
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      0      │          4.0           │        2.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+                Column 'num_orders' mismatch                
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      0      │          3.0           │        1.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+----------------------------------------------------------------------"""
+        in output
+    )
+
+    # Case 3: Assert that concurrent execution is working properly
     for i in range(50):
         copyfile(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml")
         copyfile(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml")
 
-    with capture_output() as output:
+    with capture_output() as captured_output:
         context.test()
 
-    assert "Ran 102 tests" in output.stderr
-    assert "FAILED (failures=51)" in output.stderr
+    output = captured_output.stdout
+
+    assert "Ran 102 tests" in output
+    assert "FAILED (failures=51)" in output
 
 
 @use_terminal_console
@@ -2330,15 +2363,15 @@ test_example_full_model:
         with capture_output() as output:
             context.test()
 
-        assert (
-            f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
-            in mock_logger.call_args[0][0]
-        )
-        assert (
-            ".\n----------------------------------------------------------------------\nRan 1 test in"
-            in output.stderr
-        )
-        assert "OK" in output.stderr
+    assert (
+        f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
+        in mock_logger.call_args[0][0]
+    )
+    assert (
+        ".\n----------------------------------------------------------------------\n\nRan 1 test in"
+        in output.stdout
+    )
+    assert "OK" in output.stdout
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
@@ -2553,6 +2586,7 @@ test_test_upstream_table_python:
     )
 
 
+@use_terminal_console
 @pytest.mark.parametrize("is_error", [True, False])
 def test_model_test_text_result_reporting_no_traceback(
     sushi_context: Context, full_model_with_two_ctes: SqlModel, is_error: bool
@@ -2596,12 +2630,12 @@ test_foo:
         else:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
-    result.log_test_report(0)
+    with capture_output() as captured_output:
+        result.log_test_report()
 
-    stream.seek(0)
-    output = stream.read()
+    output = captured_output.stdout
 
-    # Make sure that the traceback is not printed
+    # Make sure that the traceback is not ed
     assert "Traceback" not in output
     assert "File" not in output
     assert "line" not in output
