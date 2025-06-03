@@ -4531,6 +4531,81 @@ def test_model_session_properties(sushi_context):
         )
 
 
+def test_session_properties_authorization_validation():
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                authorization = 'test_user'
+            )
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="trino",
+        )
+    )
+    assert model.session_properties == {"authorization": "test_user"}
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = 123
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = some_column
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = CONCAT('user', '_suffix')
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+
 def test_model_jinja_macro_rendering():
     expressions = d.parse(
         """

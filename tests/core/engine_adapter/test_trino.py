@@ -591,3 +591,49 @@ def test_create_schema_sets_location(make_mocked_engine_adapter: t.Callable, moc
             'CREATE SCHEMA IF NOT EXISTS "landing"."transactions" WITH (LOCATION=\'s3://raw-data/landing/transactions\')',  # match '^landing\..*$'
         ]
     )
+
+
+def test_session_authorization(trino_mocked_engine_adapter: TrinoEngineAdapter):
+    adapter = trino_mocked_engine_adapter
+
+    # Test 1: No authorization property - should not execute any authorization commands
+    with adapter.session({}):
+        pass
+
+    assert to_sql_calls(adapter) == []
+
+    # Test 2: String authorization
+    with adapter.session({"authorization": "test_user"}):
+        adapter.execute("SELECT 1")
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'test_user'",
+        "SELECT 1",
+        "RESET SESSION AUTHORIZATION",
+    ]
+
+    # Test 3: Expression authorization
+    adapter.cursor.execute.reset_mock()
+    with adapter.session({"authorization": exp.Literal.string("another_user")}):
+        adapter.execute("SELECT 2")
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'another_user'",
+        "SELECT 2",
+        "RESET SESSION AUTHORIZATION",
+    ]
+
+    # Test 4: RESET is called even if exception occurs during session
+    adapter.cursor.execute.reset_mock()
+    try:
+        with adapter.session({"authorization": "test_user"}):
+            adapter.execute("SELECT 1")
+            raise RuntimeError("Test exception")
+    except RuntimeError:
+        pass
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'test_user'",
+        "SELECT 1",
+        "RESET SESSION AUTHORIZATION",
+    ]
