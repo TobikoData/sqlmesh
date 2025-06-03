@@ -79,6 +79,7 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
               path: 'catalog.ducklake'
               data_path: data/ducklake
               encrypted: True
+              data_inlining_row_limit: 10
     ```
     
 === "Python"
@@ -102,7 +103,8 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
                             type="ducklake",
                             path="catalog.ducklake",
                             data_path="data/ducklake",
-                            encrypted=True
+                            encrypted=True,
+                            data_inlining_row_limit=10,
                         ),
                     }
                 )

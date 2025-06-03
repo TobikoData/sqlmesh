@@ -611,6 +611,7 @@ def test_duckdb_attach_ducklake_catalog(make_config):
                 path="catalog.ducklake",
                 data_path="/tmp/ducklake_data",
                 encrypted=True,
+                data_inlining_row_limit=10,
             ),
         },
     )
@@ -621,9 +622,11 @@ def test_duckdb_attach_ducklake_catalog(make_config):
     assert ducklake_catalog.path == "catalog.ducklake"
     assert ducklake_catalog.data_path == "/tmp/ducklake_data"
     assert ducklake_catalog.encrypted is True
+    assert ducklake_catalog.data_inlining_row_limit == 10
     # Check that the generated SQL includes DATA_PATH
     assert "DATA_PATH '/tmp/ducklake_data'" in ducklake_catalog.to_sql("ducklake")
     assert "ENCRYPTED" in ducklake_catalog.to_sql("ducklake")
+    assert "DATA_INLINING_ROW_LIMIT 10" in ducklake_catalog.to_sql("ducklake")
 
 
 def test_duckdb_attach_options():

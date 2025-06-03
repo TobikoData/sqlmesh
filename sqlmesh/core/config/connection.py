@@ -224,6 +224,7 @@ class DuckDBAttachOptions(BaseConfig):
     # DuckLake specific options
     data_path: t.Optional[str] = None
     encrypted: bool = False
+    data_inlining_row_limit: t.Optional[int] = None
 
     def to_sql(self, alias: str) -> str:
         options = []
@@ -236,10 +237,12 @@ class DuckDBAttachOptions(BaseConfig):
 
         # DuckLake specific options
         if self.type == "ducklake":
-            if self.data_path:
+            if self.data_path is not None:
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
                 options.append("ENCRYPTED")
+            if self.data_inlining_row_limit is not None:
+                options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
 
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
