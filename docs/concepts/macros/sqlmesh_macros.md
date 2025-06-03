@@ -38,6 +38,59 @@ It uses the following five step approach to accomplish this:
 
 5. Modify the semantic representation of the SQL query with the substituted variable values from (3) and functions from (4).
 
+### Embedding variables in strings
+
+SQLMesh always incorporates macro variable values into the semantic representation of a SQL query (step 5 above). To do that, it infers the role each macro variable value plays in the query.
+
+For context, two commonly used types of string in SQL are:
+
+- String literals, which represent text values and are surrounded by single quotes, such as `'the_string'`
+- Identifiers, which reference database objects like column, table, alias, and function names
+    - They may be unquoted or quoted with double quotes, backticks, or brackets, depending on the SQL dialect
+
+In a normal query, SQLMesh can easily determine which role a given string is playing. However, it is more difficult if a macro variable is embedded directly into a string - especially if the string is in the `MODEL` block (and not the query itself).
+
+For example, consider a project that defines a [gateway variable](#gateway-variables) named `gateway_var`. The project includes a model that references `@gateway_var` as part of the schema in the model's `name`, which is a SQL *identifier*.
+
+This is how we might try to write the model:
+
+``` sql title="Incorrectly rendered to string literal"
+MODEL (
+  name the_@gateway_var_schema.table
+);
+```
+
+From SQLMesh's perspective, the model schema is the combination of three sub-strings: `the_`, the value of `@gateway_var`, and `_schema`.
+
+SQLMesh will concatenate those strings, but it does not have the context to know that it is building a SQL identifier and will return a string literal.
+
+To provide the context SQLMesh needs, you must add curly braces to the macro variable reference: `@{gateway_var}` instead of `@gateway_var`:
+
+``` sql title="Correctly rendered to identifier"
+MODEL (
+  name the_@{gateway_var}_schema.table
+);
+```
+
+The curly braces let SQLMesh know that it should treat the string as a SQL identifier, which it will then quote based on the SQL dialect's quoting rules.
+
+The most common use of the curly brace syntax is embedding macro variables into strings, it can also be used to differentiate string literals and identifiers in SQL queries. For example, consider a macro variable `my_variable` whose value is `col`.
+
+If we `SELECT` this value with regular macro syntax, it will render to a string literal:
+
+``` sql
+SELECT @my_variable AS the_column; -- renders to SELECT 'col' AS the_column
+```
+
+`'col'` is surrounded with single quotes, and the SQL engine will use that string as the column's data value.
+
+If we use curly braces, SQLMesh will know that we want to use the rendered string as an identifier:
+
+``` sql
+SELECT @{my_variable} AS the_column; -- renders to SELECT col AS the_column
+```
+
+`col` is not surrounded with single quotes, and the SQL engine will determine that the query is referencing a column or other object named `col`.
 
 ## User-defined variables
 
@@ -173,6 +226,8 @@ SELECT
   @{field_b} AS field_b
 FROM @customer.some_source
 ```
+
+Note the use of both regular `@field_a` and curly brace syntax `@{field_b}` macro variable references in the model query. Learn more [above](#embedding-variables-in-strings)
 
 Blueprint variables can be accessed using the syntax shown above, or through the `@BLUEPRINT_VAR()` macro function, which also supports specifying default values in case the variable is undefined (similar to `@VAR()`).
 
@@ -448,7 +503,13 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-NOTE: SQLMesh macros support placing macro values at the end of a column name simply using `column_@x`. However if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit substitution syntax `@{}`. This avoids ambiguity. These are valid uses: `@{x}_column` or `my_@{x}_column`.
+!!! note "Embedding macros in strings"
+
+    SQLMesh macros support placing macro values at the end of a column name using `column_@x`.
+
+    However, if you wish to substitute the variable anywhere else in the identifier, you need to use the more explicit curly brace syntax `@{}` to avoid ambiguity. For example, these are valid uses: `@{x}_column` or `my_@{x}_column`.
+
+    Learn more about embedding macros in strings [above](#embedding-variables-in-strings)
 
 ### @IF
 
@@ -1087,7 +1148,9 @@ The `template` can contain the following placeholders that will be substituted:
   - `@{schema_name}` - The name of the physical schema that SQLMesh is using for the model version table, eg `sqlmesh__landing`
   - `@{table_name}` - The name of the physical table that SQLMesh is using for the model version, eg `landing__customers__2517971505`
 
-It can be used in a `MODEL` block:
+Note the use of the curly brace syntax `@{}` in the template placeholders - learn more [above](#embedding-variables-in-strings).
+
+The `@resolve_template` macro can be used in a `MODEL` block:
 
 ```sql linenums="1" hl_lines="5"
 MODEL (
