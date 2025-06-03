@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import contextlib
+import pandas as pd
 import re
 import typing as t
 from functools import lru_cache
@@ -24,11 +27,12 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 
@@ -86,6 +90,26 @@ class TrinoEngineAdapter(
                 or ()
             )
         return seq_get(row, 0) or self.DEFAULT_CATALOG_TYPE
+
+    @contextlib.contextmanager
+    def session(self, properties: SessionProperties) -> t.Iterator[None]:
+        authorization = properties.get("authorization")
+        if not authorization:
+            yield
+            return
+
+        if isinstance(authorization, str):
+            authorization = exp.Literal.string(authorization)
+        if not (isinstance(authorization, exp.Expression) and authorization.is_string):
+            raise SQLMeshError(f"Invalid authorization: '{authorization}'")
+
+        authorization_sql = authorization.sql(dialect=self.dialect)
+
+        self.execute(f"SET SESSION AUTHORIZATION {authorization_sql}")
+        try:
+            yield
+        finally:
+            self.execute(f"RESET SESSION AUTHORIZATION")
 
     def _insert_overwrite_by_condition(
         self,
