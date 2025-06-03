@@ -237,7 +237,7 @@ class DuckDBAttachOptions(BaseConfig):
 
         # DuckLake specific options
         if self.type == "ducklake":
-            if self.data_path:
+            if self.data_path is not None:
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
                 options.append("ENCRYPTED")
