@@ -99,7 +99,9 @@ class RichExplainerConsole(ExplainerConsole):
         if not step.snapshots:
             return Tree("[bold]SKIP: No physical layer updates to perform[/bold]")
 
-        tree = Tree("[bold]Validate SQL and create physical tables if they do not exist[/bold]")
+        tree = Tree(
+            "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
+        )
         for snapshot in step.snapshots:
             is_deployable = (
                 step.deployability_index.is_deployable(snapshot)
@@ -217,7 +219,7 @@ class RichExplainerConsole(ExplainerConsole):
             f"[bold]Update the virtual layer for environment '{self.environment_naming_info.name}'[/bold]"
         )
         promote_tree = Tree(
-            "[bold]Create or update views in the virtual layer to point at new physical tables[/bold]"
+            "[bold]Create or update views in the virtual layer to point at new physical tables and views[/bold]"
         )
         for snapshot in step.promoted_snapshots:
             display_name = self._display_name(snapshot)
