@@ -83,43 +83,6 @@ class ModelTextTestResult(unittest.TextTestResult):
         Args:
             test_duration: The duration of the tests.
         """
-        tests_run = self.testsRun
-        errors = self.errors
-        failures = self.failures
-        skipped = self.skipped
+        from sqlmesh.core.console import get_console
 
-        is_success = not (errors or failures)
-
-        infos = []
-        if failures:
-            infos.append(f"failures={len(failures)}")
-        if errors:
-            infos.append(f"errors={len(errors)}")
-        if skipped:
-            infos.append(f"skipped={skipped}")
-
-        stream = self.stream
-
-        stream.write("\n")
-
-        for test_case, failure in failures:
-            stream.writeln(unittest.TextTestResult.separator1)
-            stream.writeln(f"FAIL: {test_case}")
-            if test_description := test_case.shortDescription():
-                stream.writeln(test_description)
-            stream.writeln(unittest.TextTestResult.separator2)
-            stream.writeln(failure)
-
-        for test_case, error in errors:
-            stream.writeln(unittest.TextTestResult.separator1)
-            stream.writeln(f"ERROR: {test_case}")
-            stream.writeln(error)
-
-        # Output final report
-        stream.writeln(unittest.TextTestResult.separator2)
-        stream.writeln(
-            f"Ran {tests_run} {'tests' if tests_run > 1 else 'test'} in {test_duration:.3f}s \n"
-        )
-        stream.writeln(
-            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
-        )
+        get_console().log_unit_test_results(self, test_duration)
