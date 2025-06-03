@@ -6,6 +6,7 @@ import typing as t
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.custom import RenderModelEntry, ModelForRendering
+from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
 from sqlmesh.lsp.uri import URI
 
 
@@ -174,3 +175,16 @@ class LSPContext:
             for audit in self.context.standalone_audits.values()
             if audit._path is not None
         ]
+
+    def get_autocomplete(self, uri: t.Optional[URI]) -> AllModelsResponse:
+        """Get autocomplete suggestions for a file.
+
+        Args:
+            uri: The URI of the file to get autocomplete suggestions for.
+
+        Returns:
+            AllModelsResponse containing models and keywords.
+        """
+        from sqlmesh.lsp.completions import get_sql_completions
+
+        return get_sql_completions(self, uri)
