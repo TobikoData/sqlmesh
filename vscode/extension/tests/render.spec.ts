@@ -153,3 +153,44 @@ test('Render works correctly with every rendered model opening a new tab', async
     await fs.remove(tempDir)
   }
 })
+
+test('Render shows model picker when no active editor is open', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+
+  try {
+    const { window, close } = await startVSCode(tempDir)
+
+    // Load the lineage view to initialize SQLMesh context (like lineage.spec.ts does)
+    await window.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
+    )
+    await window.keyboard.type('Lineage: Focus On View')
+    await window.keyboard.press('Enter')
+
+    // Wait for "Loaded SQLmesh Context" text to appear
+    const loadedContextText = window.locator('text=Loaded SQLMesh Context')
+    await expect(loadedContextText.first()).toBeVisible({ timeout: 10_000 })
+
+    // Run the render command without any active editor
+    await window.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
+    )
+    await window.keyboard.type('Render Model')
+    await window.keyboard.press('Enter')
+
+    // Type to filter for customers model and select it
+    await window.keyboard.type('customers')
+    await window.waitForSelector('text=sushi.customers', { timeout: 5000 })
+    await window.locator('text=sushi.customers').click()
+
+    // Verify the rendered model is shown
+    await expect(window.locator('text=sushi.customers (rendered)')).toBeVisible(
+      { timeout: 15000 },
+    )
+
+    await close()
+  } finally {
+    await fs.remove(tempDir)
+  }
+})
