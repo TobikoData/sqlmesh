@@ -34,13 +34,11 @@ export class LSPClient implements Disposable {
       return sqlmesh
     }
     const workspaceFolders = getWorkspaceFolders()
-    if (workspaceFolders.length !== 1) {
-      traceError(
-        `Invalid number of workspace folders: ${workspaceFolders.length}`,
-      )
+    if (workspaceFolders.length === 0) {
+      traceError(`No workspace folders found`)
       return err({
         type: 'generic',
-        message: 'Invalid number of workspace folders',
+        message: 'No workspace folders found',
       })
     }
     const workspacePath = sqlmesh.value.workspacePath
