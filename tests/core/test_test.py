@@ -60,6 +60,7 @@ def _create_test(
         dialect=context.config.dialect,
         path=None,
         default_catalog=context.default_catalog,
+        rich_output=False,
     )
 
 
@@ -345,11 +346,11 @@ test_foo:
             context=sushi_context,
         ).run(),
         expected_msg=(
-            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
-            "   id     value      ds    \n"
-            "  exp act   exp act exp act\n"
-            "0   2   1     3   2   4   3\n"
-            "1   1   2     2   3   3   4\n"
+            "AssertionError: Data mismatch\n\n"
+            "        id           value              ds       \n"
+            "  Expected Actual Expected Actual Expected Actual\n"
+            "0        2      1        3      2        4      3\n"
+            "1        1      2        2      3        3      4"
         ),
     )
 
@@ -388,10 +389,10 @@ test_array_order:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run(),
         expected_msg=(
-            """AssertionError: Data mismatch (exp: expected, act: actual)\n\n"""
+            "AssertionError: Data mismatch\n\n"
             "  aggregated_duplicates        \n"
-            "                    exp     act\n"
-            "0                (c, b)  (b, c)\n"
+            "               Expected  Actual\n"
+            "0                (c, b)  (b, c)"
         ),
     )
 
@@ -924,10 +925,10 @@ test_foo:
             context=sushi_context,
         ).run(),
         expected_msg=(
-            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
-            "  value        ds    \n"
-            "    exp act   exp act\n"
-            "0  None   2  None   3\n"
+            "AssertionError: Data mismatch\n\n"
+            "     value              ds       \n"
+            "  Expected Actual Expected Actual\n"
+            "0     None      2     None      3"
         ),
     )
 
@@ -2218,6 +2219,7 @@ test_resolve_template_macro:
     _check_successful_or_raise(context.test())
 
 
+@use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
     init_example_project(tmp_path, dialect="duckdb")
 
@@ -2259,25 +2261,23 @@ test_example_full_model:
     with capture_output() as output:
         context.test()
 
+    stdout = output.stdout
+
     # Order may change due to concurrent execution
-    assert "F." in output.stderr or ".F" in output.stderr
+    assert "F." in stdout or ".F" in stdout
+
     assert (
-        f"""======================================================================
-FAIL: test_example_full_model ({new_test_file})
-This is a test
-----------------------------------------------------------------------
-AssertionError: Data mismatch (exp: expected, act: actual)
-
-  num_orders     
-         exp  act
-1        2.0  1.0
-
-----------------------------------------------------------------------"""
-        in output.stderr
+        """Data mismatch                        
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row  ┃   num_orders: Expected    ┃  num_orders: Actual   ┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│  0   │            2.0            │          1.0          │
+└──────┴───────────────────────────┴───────────────────────┘"""
+        in stdout
     )
 
-    assert "Ran 2 tests" in output.stderr
-    assert "FAILED (failures=1)" in output.stderr
+    assert "Ran 2 tests" in stdout
+    assert "FAILED (failures=1)" in stdout
 
     # Case 2: Assert that concurrent execution is working properly
     for i in range(50):
@@ -2287,8 +2287,9 @@ AssertionError: Data mismatch (exp: expected, act: actual)
     with capture_output() as output:
         context.test()
 
-    assert "Ran 102 tests" in output.stderr
-    assert "FAILED (failures=51)" in output.stderr
+    stdout = output.stdout
+    assert "Ran 102 tests" in stdout
+    assert "FAILED (failures=51)" in stdout
 
 
 @use_terminal_console

@@ -10,6 +10,11 @@ from itertools import chain
 from pathlib import Path
 from unittest.mock import patch
 
+from rich.table import Table
+from rich.align import Align
+
+import numpy as np
+import pandas as pd
 from io import StringIO
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -24,6 +29,7 @@ from sqlmesh.utils import UniqueKeyDict, random_id, type_is_known, yaml
 from sqlmesh.utils.date import date_dict, pandas_timestamp_to_pydatetime, to_datetime
 from sqlmesh.utils.errors import ConfigError, TestError
 from sqlmesh.utils.yaml import load as yaml_load
+from sqlmesh.utils import Verbosity
 
 if t.TYPE_CHECKING:
     import pandas as pd
@@ -60,6 +66,8 @@ class ModelTest(unittest.TestCase):
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
         concurrency: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
+        rich_output: bool = True,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -83,6 +91,8 @@ class ModelTest(unittest.TestCase):
         self.default_catalog = default_catalog
         self.dialect = dialect
         self.concurrency = concurrency
+        self.verbosity = verbosity
+        self.rich_output = rich_output
 
         self._fixture_table_cache: t.Dict[str, exp.Table] = {}
         self._normalized_column_name_cache: t.Dict[str, str] = {}
@@ -281,6 +291,7 @@ class ModelTest(unittest.TestCase):
                 check_like=True,  # Ignore column order
             )
         except AssertionError as e:
+            args: t.List[t.Any] = []
             if expected.shape != actual.shape:
                 _raise_if_unexpected_columns(expected.columns, actual.columns)
 
@@ -294,10 +305,29 @@ class ModelTest(unittest.TestCase):
                 if not unexpected_rows.empty:
                     error_msg += f"\n\nUnexpected rows:\n\n{unexpected_rows}"
 
-                e.args = (error_msg,)
+                args.append(error_msg)
             else:
-                diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
-                e.args = (f"Data mismatch (exp: expected, act: actual)\n\n{diff}",)
+                diff = expected.compare(actual).rename(
+                    columns={"self": "Expected", "other": "Actual"}
+                )
+
+                if not self.rich_output:
+                    args.append(f"Data mismatch\n\n{diff}")
+                elif self.verbosity == Verbosity.DEFAULT:
+                    args.append(df_to_table("Data mismatch", diff))
+                else:
+                    from pandas import MultiIndex
+
+                    levels = t.cast(MultiIndex, diff.columns).levels[0]
+                    for col in levels:
+                        col_diff = diff[col]
+                        if not col_diff.empty:
+                            table = df_to_table(
+                                f"[bold red]Column '{col}' mismatch[/bold red]", col_diff
+                            )
+                            args.append(table)
+
+            e.args = (*args,)
 
             raise e
 
@@ -319,6 +349,7 @@ class ModelTest(unittest.TestCase):
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
         concurrency: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
     ) -> t.Optional[ModelTest]:
         """Create a SqlModelTest or a PythonModelTest.
 
@@ -364,6 +395,7 @@ class ModelTest(unittest.TestCase):
                 preserve_fixtures,
                 default_catalog,
                 concurrency,
+                verbosity,
             )
         except Exception as e:
             raise TestError(f"Failed to create test {test_name} ({path})\n{str(e)}")
@@ -683,6 +715,8 @@ class PythonModelTest(ModelTest):
         preserve_fixtures: bool = False,
         default_catalog: str | None = None,
         concurrency: bool = False,
+        verbosity: Verbosity = Verbosity.DEFAULT,
+        rich_output: bool = True,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -709,6 +743,8 @@ class PythonModelTest(ModelTest):
             preserve_fixtures,
             default_catalog,
             concurrency,
+            verbosity,
+            rich_output,
         )
 
         self.context = TestExecutionContext(
@@ -942,3 +978,41 @@ def _normalize_df_value(value: t.Any) -> t.Any:
             return {k: _normalize_df_value(v) for k, v in zip(value["key"], value["value"])}
         return {k: _normalize_df_value(v) for k, v in value.items()}
     return value
+
+
+def df_to_table(
+    header: str,
+    df: pd.DataFrame,
+    show_index: bool = True,
+    index_name: str = "Row",
+) -> Table:
+    """Convert a pandas.DataFrame obj into a rich.Table obj.
+    Args:
+        df (DataFrame): A Pandas DataFrame to be converted to a rich Table.
+        rich_table (Table): A rich Table that should be populated by the DataFrame values.
+        show_index (bool): Add a column with a row count to the table. Defaults to True.
+        index_name (str, optional): The column name to give to the index column. Defaults to None, showing no value.
+    Returns:
+        Table: The rich Table instance passed, populated with the DataFrame values."""
+
+    rich_table = Table(title=f"[bold red]{header}[/bold red]", show_lines=True, min_width=60)
+    if show_index:
+        index_name = str(index_name) if index_name else ""
+        rich_table.add_column(index_name)
+
+    for column in df.columns:
+        column_name = column if isinstance(column, str) else ": ".join(str(col) for col in column)
+        if "expected" in column_name.lower():
+            column_name = f"[green]{column_name}[/green]"
+        else:
+            column_name = f"[red]{column_name}[/red]"
+
+        rich_table.add_column(Align.center(column_name))
+
+    for index, value_list in enumerate(df.values.tolist()):
+        row = [str(index)] if show_index else []
+        row += [str(x) for x in value_list]
+        center = [Align.center(x) for x in row]
+        rich_table.add_row(*center)
+
+    return rich_table

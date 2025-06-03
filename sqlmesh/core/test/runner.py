@@ -107,7 +107,7 @@ def run_tests(
     lock = threading.Lock()
 
     combined_results = ModelTextTestResult(
-        stream=unittest.runner._WritelnDecorator(stream or sys.stderr),  # type: ignore
+        stream=unittest.runner._WritelnDecorator(stream or sys.stdout),  # type: ignore
         verbosity=2 if verbosity >= Verbosity.VERBOSE else 1,
         descriptions=True,
     )
@@ -136,6 +136,7 @@ def run_tests(
             default_catalog=default_catalog,
             preserve_fixtures=preserve_fixtures,
             concurrency=num_workers > 1,
+            verbosity=verbosity,
         )
 
         if not test:
