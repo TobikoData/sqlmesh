@@ -21,7 +21,7 @@ interface RenderModelResponse {
 export interface RenderModelEntry {
   name: string
   fqn: string
-  description: string
+  description: string | null | undefined
   rendered_query: string
 }
 
@@ -30,6 +30,7 @@ export type CustomLSPMethods =
   | AllModelsMethod
   | AbstractAPICall
   | RenderModelMethod
+  | AllModelsForRenderMethod
 
 interface AllModelsRequest {
   textDocument: {
@@ -53,4 +54,24 @@ export interface AbstractAPICall {
   method: 'sqlmesh/api'
   request: AbstractAPICallRequest
   response: object
+}
+
+export interface AllModelsForRenderMethod {
+  method: 'sqlmesh/all_models_for_render'
+  request: AllModelsForRenderRequest
+  response: AllModelsForRenderResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface AllModelsForRenderRequest {}
+
+interface AllModelsForRenderResponse {
+  models: ModelForRendering[]
+}
+
+export interface ModelForRendering {
+  name: string
+  fqn: string
+  description: string | null | undefined
+  uri: string
 }

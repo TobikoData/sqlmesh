@@ -279,7 +279,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
 
     plan = PlanBuilder(
         context_diff=sushi_context._context_diff("prod"),
-        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
     ).build()
 
     # stringify used to trigger an unhashable exception due to
@@ -332,18 +331,18 @@ def test_evaluate_limit():
 def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["prod"]
-    assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["prod"]
+    assert ctx._get_engine_adapter("dev") == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
-    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
+    assert ctx._get_engine_adapter("test") == ctx.engine_adapters["test"]
 
 
 def test_multiple_gateways(tmp_path: Path):
@@ -800,7 +799,8 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
         ),
     ]
 
-    sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
+    sushi_context._engine_adapter = adapter_mock
+    sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     state_sync_mock.get_expired_snapshots.return_value = []
 
@@ -1238,6 +1238,19 @@ def test_requirements(copy_to_temp_path: t.Callable):
     diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}
+
+
+def test_deactivate_automatic_requirement_inference(copy_to_temp_path: t.Callable):
+    context_path = copy_to_temp_path("examples/sushi")[0]
+    config = next(iter(load_configs("config", Config, paths=context_path).values()))
+
+    config.infer_python_dependencies = False
+    context = Context(paths=context_path, config=config)
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+
+    assert environment.requirements == {"pandas": "2.2.2"}
 
 
 @pytest.mark.slow

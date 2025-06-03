@@ -60,7 +60,7 @@ async def write_file(
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
-        config = context.config_for_path(Path(path_or_new_path)) if context else None
+        config, _ = context.config_for_path(Path(path_or_new_path)) if context else (None, None)
         if (
             config
             and config.ui.format_on_save

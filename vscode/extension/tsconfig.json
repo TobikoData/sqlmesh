@@ -15,6 +15,6 @@
       "@bus/*": ["../bus/src/*"]
     }
   },
-  "include": ["src/**/*", "../bus/src/**/*"],
+  "include": ["tests/**/*", "src/**/*", "../bus/src/**/*"],
   "exclude": ["node_modules", "../node_modules", "../../node_modules"]
 }

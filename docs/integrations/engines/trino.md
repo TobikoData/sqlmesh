@@ -178,12 +178,13 @@ This would perform the following mappings:
 !!! info "Placeholders"
     You may use the `@{catalog_name}` and `@{schema_name}` placeholders in the mapping value.
 
-    If there is a match on one of the patterns then the catalog / schema that SQLMesh is about to use in the `CREATE SCHEMA` statement will be subsitituted into these placeholders.
+    If there is a match on one of the patterns then the catalog / schema that SQLMesh is about to use in the `CREATE SCHEMA` statement will be substituted into these placeholders.
 
+    Note the use of curly brace syntax `@{}` when referencing these placeholders - learn more [here](../../concepts/macros/sqlmesh_macros.md#embedding-variables-in-strings).
 
 #### Tables
 
-Often, you dont need to configure an explicit table location because if you have configured explicit schema locations, table locations are automatically inferred by Trino to be a subdirectory under the schema location.
+Often, you don't need to configure an explicit table location because if you have configured explicit schema locations, table locations are automatically inferred by Trino to be a subdirectory under the schema location.
 
 However, if you need to, you can configure an explicit table location by adding a `location` property to the model `physical_properties`.
 

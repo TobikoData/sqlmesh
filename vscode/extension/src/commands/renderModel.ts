@@ -2,24 +2,67 @@ import * as vscode from 'vscode'
 import { LSPClient } from '../lsp/lsp'
 import { isErr } from '@bus/result'
 import { RenderModelEntry } from '../lsp/custom'
+import { RenderedModelProvider } from '../providers/renderedModelProvider'
 
-export function renderModel(lspClient?: LSPClient) {
+export function renderModel(
+  lspClient?: LSPClient,
+  renderedModelProvider?: RenderedModelProvider,
+) {
   return async () => {
-    // Get the current active editor
-    const activeEditor = vscode.window.activeTextEditor
-
-    if (!activeEditor) {
-      vscode.window.showErrorMessage('No active editor found')
-      return
-    }
-
     if (!lspClient) {
       vscode.window.showErrorMessage('LSP client not available')
       return
     }
 
-    // Get the current document URI
-    const documentUri = activeEditor.document.uri.toString(true)
+    // Get the current active editor
+    const activeEditor = vscode.window.activeTextEditor
+
+    let documentUri: string
+
+    if (!activeEditor) {
+      // No active editor, show a list of all models
+      const allModelsResult = await lspClient.call_custom_method(
+        'sqlmesh/all_models_for_render',
+        {},
+      )
+
+      if (isErr(allModelsResult)) {
+        vscode.window.showErrorMessage(
+          `Failed to get models: ${allModelsResult.error}`,
+        )
+        return
+      }
+
+      if (
+        !allModelsResult.value.models ||
+        allModelsResult.value.models.length === 0
+      ) {
+        vscode.window.showInformationMessage('No models found in the project')
+        return
+      }
+
+      // Let user choose from all models
+      const items = allModelsResult.value.models.map(model => ({
+        label: model.name,
+        description: model.fqn,
+        detail: model.description ? model.description : undefined,
+        model: model,
+      }))
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select a model to render',
+      })
+
+      if (!selected) {
+        return
+      }
+
+      // Use the selected model's URI
+      documentUri = selected.model.uri
+    } else {
+      // Get the current document URI
+      documentUri = activeEditor.document.uri.toString(true)
+    }
 
     // Call the render model API
     const result = await lspClient.call_custom_method('sqlmesh/render_model', {
@@ -42,10 +85,10 @@ export function renderModel(lspClient?: LSPClient) {
     // If multiple models, let user choose
     let selectedModel: RenderModelEntry
     if (result.value.models.length > 1) {
-      const items = result.value.models.map((model: RenderModelEntry) => ({
+      const items = result.value.models.map(model => ({
         label: model.name,
         description: model.fqn,
-        detail: model.description,
+        detail: model.description ? model.description : undefined,
         model: model,
       }))
 
@@ -62,23 +105,31 @@ export function renderModel(lspClient?: LSPClient) {
       selectedModel = result.value.models[0]
     }
 
-    // Create a new untitled document with the rendered SQL
-    const document = await vscode.workspace.openTextDocument({
-      language: 'sql',
-      content: selectedModel.rendered_query,
-    })
+    if (!renderedModelProvider) {
+      vscode.window.showErrorMessage('Rendered model provider not available')
+      return
+    }
+
+    // Store the rendered content and get a virtual URI
+    const uri = renderedModelProvider.storeRenderedModel(
+      selectedModel.name,
+      selectedModel.rendered_query,
+    )
+
+    // Open the virtual document
+    const document = await vscode.workspace.openTextDocument(uri)
 
     // Determine the view column for side-by-side display
-    let viewColumn: vscode.ViewColumn
-    if (activeEditor) {
-      // Open beside the current editor
-      viewColumn = activeEditor.viewColumn
-        ? activeEditor.viewColumn + 1
-        : vscode.ViewColumn.Two
-    } else {
-      // If no active editor, open in column two
-      viewColumn = vscode.ViewColumn.Two
+    // Find the rightmost column with an editor
+    let maxColumn = vscode.ViewColumn.One
+    for (const editor of vscode.window.visibleTextEditors) {
+      if (editor.viewColumn && editor.viewColumn > maxColumn) {
+        maxColumn = editor.viewColumn
+      }
     }
+
+    // Open in the next column after the rightmost editor
+    const viewColumn = maxColumn + 1
 
     // Open the document in the editor as a preview (preview: true is default)
     await vscode.window.showTextDocument(document, {
@@ -86,5 +137,11 @@ export function renderModel(lspClient?: LSPClient) {
       preview: true,
       preserveFocus: false,
     })
+
+    // Execute "Keep Open" command to convert preview tab to permanent tab
+    await vscode.commands.executeCommand('workbench.action.keepEditor')
+
+    // Explicitly set the language mode to SQL for syntax highlighting
+    await vscode.languages.setTextDocumentLanguage(document, 'sql')
   }
 }

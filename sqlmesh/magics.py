@@ -32,7 +32,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata
-from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity
+from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity, optional_import
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -548,6 +548,8 @@ class SQLMeshMagics(Magics):
     def evaluate(self, context: Context, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
         context.refresh()
+
+        snowpark = optional_import("snowflake.snowpark")
         args = parse_argstring(self.evaluate, line)
 
         df = context.evaluate(
@@ -557,6 +559,10 @@ class SQLMeshMagics(Magics):
             execution_time=args.execution_time,
             limit=args.limit,
         )
+
+        if snowpark and isinstance(df, snowpark.DataFrame):
+            df = df.limit(args.limit or 100).to_pandas()
+
         self.display(df)
 
     @magic_arguments()

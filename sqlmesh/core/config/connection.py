@@ -221,6 +221,11 @@ class DuckDBAttachOptions(BaseConfig):
     path: str
     read_only: bool = False
 
+    # DuckLake specific options
+    data_path: t.Optional[str] = None
+    encrypted: bool = False
+    data_inlining_row_limit: t.Optional[int] = None
+
     def to_sql(self, alias: str) -> str:
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
@@ -229,6 +234,16 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
+
+        # DuckLake specific options
+        if self.type == "ducklake":
+            if self.data_path is not None:
+                options.append(f"DATA_PATH '{self.data_path}'")
+            if self.encrypted:
+                options.append("ENCRYPTED")
+            if self.data_inlining_row_limit is not None:
+                options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
+
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema

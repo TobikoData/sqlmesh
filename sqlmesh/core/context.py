@@ -62,7 +62,9 @@ from sqlmesh.core.config import (
     Config,
     load_configs,
 )
+from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.config.loader import C
+from sqlmesh.core.config.root import RegexKeyDict
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -367,6 +369,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._excluded_requirements: t.Set[str] = set()
         self._default_catalog: t.Optional[str] = None
         self._default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None
+        self._engine_adapter: t.Optional[EngineAdapter] = None
+        self._connection_config: t.Optional[ConnectionConfig] = None
+        self._test_connection_config: t.Optional[ConnectionConfig] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -383,7 +388,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
-        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -407,24 +411,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             for path, config in self.configs.items()
         ]
 
-        self._connection_config = self.config.get_connection(self.gateway)
+        self._concurrent_tasks = concurrent_tasks
         self._state_connection_config = (
-            self.config.get_state_connection(self.gateway) or self._connection_config
+            self.config.get_state_connection(self.gateway) or self.connection_config
         )
-        self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
-
-        self._engine_adapters: t.Dict[str, EngineAdapter] = {
-            self.selected_gateway: self._connection_config.create_engine_adapter()
-        }
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self.console = get_console()
-        setattr(self.console, "dialect", self.engine_adapter.dialect)
-
-        self._test_connection_config = self.config.get_test_connection(
-            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
-        )
+        setattr(self.console, "dialect", self.config.dialect)
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -434,14 +429,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.users = (users or []) + self.config.users
         self.users = list({user.username: user for user in self.users}.values())
         self._register_notification_targets()
-
-        if (
-            self.config.environment_catalog_mapping
-            and not self.engine_adapter.catalog_support.is_multi_catalog_supported
-        ):
-            raise SQLMeshError(
-                "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"
-            )
 
         if load:
             self.load()
@@ -453,7 +440,9 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def engine_adapter(self) -> EngineAdapter:
         """Returns the default engine adapter."""
-        return self._engine_adapters[self.selected_gateway]
+        if self._engine_adapter is None:
+            self._engine_adapter = self.connection_config.create_engine_adapter()
+        return self._engine_adapter
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
@@ -932,19 +921,22 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return snapshot
 
-    def config_for_path(self, path: Path) -> Config:
+    def config_for_path(self, path: Path) -> t.Tuple[Config, Path]:
+        """Returns the config and path of the said project for a given file path."""
         for config_path, config in self.configs.items():
             try:
                 path.relative_to(config_path)
-                return config
+                return config, config_path
             except ValueError:
                 pass
-        return self.config
+        return self.config, self.path
 
     def config_for_node(self, node: str | Model | Audit) -> Config:
         if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)  # type: ignore
-        return self.config_for_path(node._path)  # type: ignore
+            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
+                0
+            ]  # type: ignore
+        return self.config_for_path(node._path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:
@@ -977,8 +969,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @property
     def default_catalog(self) -> t.Optional[str]:
-        if self._default_catalog is None:
-            self._default_catalog = self._scheduler.get_default_catalog(self)
+        if self._default_catalog is None and self.default_catalog_per_gateway:
+            self._default_catalog = self.default_catalog_per_gateway[self.selected_gateway]
         return self._default_catalog
 
     @python_api_analytics
@@ -1456,12 +1448,18 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = model_selector.select_models(
-                select_models,
-                environment,
-                fallback_env_name=create_from or c.PROD,
-                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            )
+            try:
+                models_override = model_selector.select_models(
+                    select_models,
+                    environment,
+                    fallback_env_name=create_from or c.PROD,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+                )
+            except SQLMeshError as e:
+                logger.exception(e)  # ensure the full stack trace is logged
+                raise PlanError(
+                    f"{e}\nCheck the SQLMesh log file for the full stack trace.\nIf the model has been fixed locally, please ensure that the --select-model expression includes it."
+                )
             if not backfill_models:
                 # Only backfill selected models unless explicitly specified.
                 backfill_models = model_selector.expand_model_selections(select_models)
@@ -1535,7 +1533,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             allow_destructive_models=expanded_destructive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
-            environment_catalog_mapping=self.config.environment_catalog_mapping,
+            environment_catalog_mapping=self.environment_catalog_mapping,
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
@@ -1547,7 +1545,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
@@ -1636,7 +1633,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.show_model_difference_summary(
                 context_diff,
                 EnvironmentNamingInfo.from_environment_catalog_mapping(
-                    self.config.environment_catalog_mapping,
+                    self.environment_catalog_mapping,
                     name=environment,
                     suffix_target=self.config.environment_suffix_target,
                     normalize_name=context_diff.normalize_environment_name,
@@ -1724,7 +1721,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if target_snapshot and source_snapshot:
                     if (source_snapshot.fingerprint != target_snapshot.fingerprint) and (
                         (source_snapshot.version != target_snapshot.version)
-                        or (source_snapshot.is_forward_only or target_snapshot.is_forward_only)
+                        or source_snapshot.is_forward_only
                     ):
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
                         # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
@@ -1990,7 +1987,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            test_adapter = self._test_connection_config.create_engine_adapter(
+            test_adapter = self.test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
 
@@ -2036,7 +2033,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             preserve_fixtures=preserve_fixtures,
             stream=stream,
             default_catalog=self.default_catalog,
-            default_catalog_dialect=self.engine_adapter.DIALECT,
+            default_catalog_dialect=self.config.dialect or "",
         )
 
     @python_api_analytics
@@ -2475,7 +2472,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 self.console.log_test_results(
                     result,
                     test_output,
-                    self._test_connection_config._engine_adapter.DIALECT,
+                    self.test_connection_config._engine_adapter.DIALECT,
                 )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -2496,7 +2493,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if snapshot.version
                 else snapshot.qualified_view_name.for_environment(
                     EnvironmentNamingInfo.from_environment_catalog_mapping(
-                        self.config.environment_catalog_mapping,
+                        self.environment_catalog_mapping,
                         name=c.PROD,
                         suffix_target=self.config.environment_suffix_target,
                     )
@@ -2508,23 +2505,62 @@ class GenericContext(BaseContext, t.Generic[C]):
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
         """Returns all the engine adapters for the gateways defined in the configuration."""
+        adapters: t.Dict[str, EngineAdapter] = {self.selected_gateway: self.engine_adapter}
         for gateway_name in self.config.gateways:
             if gateway_name != self.selected_gateway:
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
-                self._engine_adapters[gateway_name] = adapter
-        return self._engine_adapters
+                adapters[gateway_name] = adapter
+        return adapters
 
     @cached_property
     def default_catalog_per_gateway(self) -> t.Dict[str, str]:
         """Returns the default catalogs for each engine adapter."""
         if self._default_catalog_per_gateway is None:
-            self._default_catalog_per_gateway = {
-                name: adapter.default_catalog
-                for name, adapter in self.engine_adapters.items()
-                if adapter.default_catalog
-            }
+            self._default_catalog_per_gateway = self._scheduler.get_default_catalog_per_gateway(
+                self
+            )
         return self._default_catalog_per_gateway
+
+    @cached_property
+    def concurrent_tasks(self) -> int:
+        if self._concurrent_tasks is None:
+            self._concurrent_tasks = self.connection_config.concurrent_tasks
+        return self._concurrent_tasks
+
+    @cached_property
+    def connection_config(self) -> ConnectionConfig:
+        if self._connection_config is None:
+            self._connection_config = self.config.get_connection(self.selected_gateway)
+        return self._connection_config
+
+    @cached_property
+    def test_connection_config(self) -> ConnectionConfig:
+        if self._test_connection_config is None:
+            self._test_connection_config = self.config.get_test_connection(
+                self.gateway,
+                self.default_catalog,
+                default_catalog_dialect=self.config.dialect,
+            )
+        return self._test_connection_config
+
+    @cached_property
+    def environment_catalog_mapping(self) -> RegexKeyDict:
+        engine_adapter = None
+        try:
+            engine_adapter = self.engine_adapter
+        except Exception:
+            pass
+
+        if (
+            self.config.environment_catalog_mapping
+            and engine_adapter
+            and not self.engine_adapter.catalog_support.is_multi_catalog_supported
+        ):
+            raise SQLMeshError(
+                "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"
+            )
+        return self.config.environment_catalog_mapping
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
@@ -2586,7 +2622,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
-            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
+            gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
+            infer_python_dependencies=self.config.infer_python_dependencies,
         )
 
     def _destroy(self) -> None:

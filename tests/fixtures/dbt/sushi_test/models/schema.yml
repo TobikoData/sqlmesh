@@ -9,8 +9,14 @@ models:
         data_type: double
       - name: model_columns
         data_type: int
+    freshness:
+      warn_after: {count: 6, period: hour}
+      error_after: {count: 7, period: hour}
     config:
       dialect: postgres
+      freshness:
+        warn_after: {count: 8, period: hour}
+        error_after: {count: 9, period: hour}
   - name: waiters
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day
@@ -30,6 +36,13 @@ sources:
       - name: items
       - name: orders
       - name: order_items
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 11, period: hour}
+    config:
+      freshness:
+        warn_after: {count: 12, period: hour}
+        error_after: {count: 13, period: hour}
 
   - name: parquet_file
     meta:

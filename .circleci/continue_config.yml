@@ -94,6 +94,9 @@ jobs:
           name: Run linters and code style checks
           command: make py-style
       - run:
+          name: Exercise the benchmarks
+          command: make benchmark-ci
+      - run:
           name: Run cicd tests
           command: make cicd-test
       - store_test_results:

@@ -36,7 +36,7 @@ class RenderModelEntry(PydanticModel):
 
     name: str
     fqn: str
-    description: str
+    description: t.Optional[str] = None
     rendered_query: str
 
 
@@ -46,3 +46,29 @@ class RenderModelResponse(PydanticModel):
     """
 
     models: t.List[RenderModelEntry]
+
+
+ALL_MODELS_FOR_RENDER_FEATURE = "sqlmesh/all_models_for_render"
+
+
+class ModelForRendering(PydanticModel):
+    """
+    A model that is available for rendering.
+    """
+
+    name: str
+    fqn: str
+    description: t.Optional[str] = None
+    uri: str
+
+
+class AllModelsForRenderRequest(PydanticModel):
+    pass
+
+
+class AllModelsForRenderResponse(PydanticModel):
+    """
+    Response to get all the models that are in the current project for rendering purposes.
+    """
+
+    models: t.List[ModelForRendering]

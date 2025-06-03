@@ -107,8 +107,6 @@
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run compile",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test:e2e": "playwright test",
@@ -129,7 +127,7 @@
     "fs-extra": "^11.3.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
-    "zod": "^3.25.28"
+    "zod": "^3.25.48"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",

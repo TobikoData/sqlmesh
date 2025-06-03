@@ -167,7 +167,7 @@ class DuckDbConfig(TargetConfig):
         if not isinstance(data, dict):
             return data
 
-        if "database" not in data and DBT_VERSION >= (1, 5):
+        if "database" not in data and DBT_VERSION >= (1, 5, 0):
             path = data.get("path")
             data["database"] = (
                 "memory"
@@ -424,7 +424,7 @@ class RedshiftConfig(TargetConfig):
 
     @classproperty
     def column_class(cls) -> t.Type[Column]:
-        if DBT_VERSION < (1, 6):
+        if DBT_VERSION < (1, 6, 0):
             from dbt.adapters.redshift import RedshiftColumn  # type: ignore
 
             return RedshiftColumn

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class Exceptions:
     def raise_compiler_error(self, msg: str) -> None:
-        if DBT_VERSION >= (1, 4):
+        if DBT_VERSION >= (1, 4, 0):
             from dbt.exceptions import CompilationError
 
             raise CompilationError(msg)
