@@ -95,6 +95,10 @@ The extension adds a lineage view to SQLMesh models. To view the lineage of a mo
 
 ![Lineage view](./vscode/lineage.png)
 
+### Render
+
+The extension allows you to render a model with the macros resolved. You can invoke it either with the command palette `Render SQLMesh Model` or by clicking the preview button in the top right.
+
 ### Editor
 
 The SQLMesh VSCode extension includes several features that make editing SQLMesh models easier and quicker:
@@ -107,7 +111,13 @@ See auto-completion suggestions when writing SQL models, keywords, or model name
 
 **Go to definition and hover information**
 
-Hovering over a model name shows a tooltip with the model description. Clicking the model name opens the file containing the model definition.
+Hovering over a model name shows a tooltip with the model description. 
+
+In addition to hover information, you can go to a definition of the following objects in a SQL file by either right-clicking and choosing "Go to definition" or by `Command/Control + Click` on the respective reference. This currently works for:
+
+- Model references in a SQL file like `FROM my_model`
+- CTE reference in a SQL file like `WITH my_cte AS (...) ... FROM my_cte` 
+- Python macros in a SQL file like `SELECT @my_macro(...)`
 
 **Diagnostics**
 
