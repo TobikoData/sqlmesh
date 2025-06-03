@@ -7,14 +7,25 @@ from sqlmesh.lsp.uri import URI
 
 
 def get_sql_completions(
-    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI], content: t.Optional[str] = None
 ) -> AllModelsResponse:
     """
     Return a list of completions for a given file.
     """
+    # Get SQL keywords for the dialect
+    sql_keywords = get_keywords(context, file_uri)
+
+    # Get keywords from file content if provided
+    file_keywords = set()
+    if content:
+        file_keywords = extract_keywords_from_content(content, get_dialect(context, file_uri))
+
+    # Combine keywords - SQL keywords first, then file keywords
+    all_keywords = list(sql_keywords) + list(file_keywords - sql_keywords)
+
     return AllModelsResponse(
         models=list(get_models(context, file_uri)),
-        keywords=list(get_keywords(context, file_uri)),
+        keywords=all_keywords,
     )
 
 
@@ -97,3 +108,54 @@ def get_keywords_from_tokenizer(dialect: t.Optional[str] = None) -> t.Set[str]:
         parts = keyword.split(" ")
         expanded_keywords.update(parts)
     return expanded_keywords
+
+
+def get_dialect(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Optional[str]:
+    """
+    Get the dialect for a given file.
+    """
+    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
+        file_info = context.map[file_uri.to_path()]
+
+        # Handle ModelInfo objects
+        if isinstance(file_info, ModelTarget) and file_info.names:
+            model_name = file_info.names[0]
+            model_from_context = context.context.get_model(model_name)
+            return model_from_context.dialect
+
+        # Handle AuditInfo objects
+        if isinstance(file_info, AuditTarget) and file_info.name:
+            audit = context.context.standalone_audits.get(file_info.name)
+            if audit is not None and audit.dialect:
+                return audit.dialect
+
+    if context is not None:
+        return context.context.default_dialect
+
+    return None
+
+
+def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None) -> t.Set[str]:
+    """
+    Extract identifiers from SQL content using the tokenizer.
+    Only extracts identifiers (variable names, table names, column names, etc.)
+    that are not SQL keywords.
+    """
+    if not content:
+        return set()
+
+    tokenizer_class = Dialect.get_or_raise(dialect).tokenizer_class
+    keywords = set()
+    try:
+        tokenizer = tokenizer_class()
+        tokens = tokenizer.tokenize(content)
+        for token in tokens:
+            # Don't include keywords in the set
+            if token.text.upper() not in tokenizer_class.KEYWORDS:
+                keywords.add(token.text)
+
+    except Exception:
+        # If tokenization fails, return empty set
+        pass
+
+    return keywords
