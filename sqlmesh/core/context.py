@@ -2635,7 +2635,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             return ContextDiff.create_no_diff(environment, self.state_reader)
 
         return ContextDiff.create(
-            environment=environment,
+            environment=environment or c.PROD,
             snapshots=snapshots or self.snapshots,
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,

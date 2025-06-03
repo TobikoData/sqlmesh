@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import sys
 import typing as t
-import logging
 
 from difflib import ndiff, unified_diff
 from functools import cached_property
@@ -39,8 +38,6 @@ from sqlmesh.utils.metaprogramming import Executable  # noqa
 from sqlmesh.core.environment import EnvironmentStatements
 
 IGNORED_PACKAGES = {"sqlmesh", "sqlglot"}
-
-logger = logging.getLogger(__name__)
 
 
 class ContextDiff(PydanticModel):
@@ -135,7 +132,8 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        initial_environment = environment
+        initial_environment = environment.lower()
+
         environment = _get_target_environment(
             environment, state_reader, always_compare_against_prod
         )
@@ -507,13 +505,7 @@ def _get_target_environment(
     if always_compare_against_prod:
         prod = state_reader.get_environment(c.PROD)
         if prod:
-            logger.warning(
-                f"Comparing against production environment instead of {environment}. Note that this may lead to "
-                "additional backfills as accumulated changes are still pushed to the target environment."
-            )
             environment = c.PROD
-    else:
-        environment = environment or c.PROD
 
     return environment.lower()
 
