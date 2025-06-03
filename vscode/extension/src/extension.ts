@@ -84,13 +84,6 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   )
 
-  context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider(
-      selector,
-      completionProvider(lspClient),
-    ),
-  )
-
   // Register the webview
   const lineagePanel = new LineagePanel(context.extensionUri, lspClient)
   context.subscriptions.push(
@@ -183,6 +176,15 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   } else {
     context.subscriptions.push(lspClient)
+  }
+
+  if (lspClient && !lspClient.hasCompletionCapability()) {
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        selector,
+        completionProvider(lspClient),
+      ),
+    )
   }
 
   traceInfo('Extension activated')
