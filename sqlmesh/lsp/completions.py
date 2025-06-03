@@ -6,7 +6,9 @@ from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
 from sqlmesh.lsp.uri import URI
 
 
-def get_sql_completions(context: t.Optional[LSPContext], file_uri: URI) -> AllModelsResponse:
+def get_sql_completions(
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+) -> AllModelsResponse:
     """
     Return a list of completions for a given file.
     """
