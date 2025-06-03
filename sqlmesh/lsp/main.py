@@ -343,9 +343,8 @@ class SQLMeshLanguageServer:
             try:
                 uri = URI(params.text_document.uri)
                 self._ensure_context_for_document(uri)
-                document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                    raise RuntimeError(f"No context found for document: {uri}")
 
                 start_line = params.range.start.line
                 end_line = params.range.end.line
