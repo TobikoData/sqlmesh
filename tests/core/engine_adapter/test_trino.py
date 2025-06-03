@@ -11,7 +11,6 @@ from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.dialect import schema_
-from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -624,13 +623,7 @@ def test_session_authorization(trino_mocked_engine_adapter: TrinoEngineAdapter):
         "RESET SESSION AUTHORIZATION",
     ]
 
-    # Test 4: Invalid authorization (non-string expression)
-    adapter.cursor.execute.reset_mock()
-    with pytest.raises(SQLMeshError, match="Invalid authorization"):
-        with adapter.session({"authorization": exp.Literal.number(123)}):
-            pass
-
-    # Test 5: RESET is called even if exception occurs during session
+    # Test 4: RESET is called even if exception occurs during session
     adapter.cursor.execute.reset_mock()
     try:
         with adapter.session({"authorization": "test_user"}):

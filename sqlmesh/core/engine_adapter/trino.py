@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import pandas as pd
 import re
 import typing as t
 from functools import lru_cache
@@ -27,7 +26,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import TimeLike
 
@@ -98,10 +96,8 @@ class TrinoEngineAdapter(
             yield
             return
 
-        if isinstance(authorization, str):
+        if not isinstance(authorization, exp.Expression):
             authorization = exp.Literal.string(authorization)
-        if not (isinstance(authorization, exp.Expression) and authorization.is_string):
-            raise SQLMeshError(f"Invalid authorization: '{authorization}'")
 
         authorization_sql = authorization.sql(dialect=self.dialect)
 
