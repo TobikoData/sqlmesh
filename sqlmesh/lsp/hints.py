@@ -63,7 +63,7 @@ def get_hints(
 def _get_type_hints_for_model_from_query(
     query: Expression,
     dialect: str,
-    columns_to_types: t.Dict[str, t.Any],
+    columns_to_types: t.Dict[str, exp.DataType],
     start_line: int,
     end_line: int,
 ) -> t.List[types.InlayHint]:
@@ -97,7 +97,12 @@ def _get_type_hints_for_model_from_query(
                 if line < start_line or line > end_line:
                     continue
 
-                type_label = str(columns_to_types.get(name))
+                data_type = columns_to_types.get(name)
+
+                if not data_type or data_type.is_type(exp.DataType.Type.UNKNOWN):
+                    continue
+
+                type_label = str(data_type)
                 hints.append(
                     types.InlayHint(
                         label=f"::{type_label}",
