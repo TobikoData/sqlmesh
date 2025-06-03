@@ -6,7 +6,9 @@ from sqlmesh.core.model import SqlModel, ModelKindName
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.plan.stages import (
     build_plan_stages,
+    AfterAllStage,
     PhysicalLayerUpdateStage,
+    BeforeAllStage,
     BackfillStage,
     EnvironmentRecordUpdateStage,
     VirtualLayerUpdateStage,
@@ -15,7 +17,7 @@ from sqlmesh.core.plan.stages import (
 )
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, DeployabilityIndex, Snapshot
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentStatements
 from sqlmesh.utils.date import to_timestamp
 
 
@@ -125,6 +127,104 @@ def test_build_plan_stages_basic(
     assert len(virtual_stage.promoted_snapshots) == 2
     assert len(virtual_stage.demoted_snapshots) == 0
     assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
+
+
+def test_build_plan_stages_with_before_all_and_after_all(
+    snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
+) -> None:
+    # Mock state reader
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    # Create environment
+    environment = Environment(
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+    )
+
+    # Create evaluatable plan
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_a, snapshot_b],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        indirectly_modified_snapshots={},
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        interval_end_per_model=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=[
+            EnvironmentStatements(
+                before_all=["BEFORE ALL A", "BEFORE ALL B"],
+                after_all=["AFTER ALL A", "AFTER ALL B"],
+                python_env={},
+                jinja_macros=None,
+            )
+        ],
+        user_provided_flags=None,
+    )
+
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
+
+    # Verify stages
+    assert len(stages) == 6
+
+    # Verify BeforeAllStage
+    before_all_stage = stages[0]
+    assert isinstance(before_all_stage, BeforeAllStage)
+    assert before_all_stage.statements == ["BEFORE ALL A", "BEFORE ALL B"]
+
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[1]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
+    assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
+
+    # Verify BackfillStage
+    backfill_stage = stages[2]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
+    expected_interval = (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
+    assert len(backfill_stage.snapshot_to_intervals) == 2
+    assert backfill_stage.snapshot_to_intervals[snapshot_a] == [expected_interval]
+    assert backfill_stage.snapshot_to_intervals[snapshot_b] == [expected_interval]
+
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[3], EnvironmentRecordUpdateStage)
+
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[4]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
+
+    # Verify AfterAllStage
+    after_all_stage = stages[5]
+    assert isinstance(after_all_stage, AfterAllStage)
+    assert after_all_stage.statements == ["AFTER ALL A", "AFTER ALL B"]
 
 
 def test_build_plan_stages_select_models(

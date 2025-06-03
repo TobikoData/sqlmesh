@@ -84,16 +84,10 @@ class RichExplainerConsole(ExplainerConsole):
         self.console.print(tree)
 
     def visit_before_all_stage(self, stage: stages.BeforeAllStage) -> Tree:
-        tree = Tree("[bold]Execute before all statements[/bold]")
-        for statement in stage.statements:
-            tree.add(statement)
-        return tree
+        return Tree("[bold]Execute before all statements[/bold]")
 
     def visit_after_all_stage(self, stage: stages.AfterAllStage) -> Tree:
-        tree = Tree("[bold]Execute after all statements[/bold]")
-        for statement in stage.statements:
-            tree.add(statement)
-        return tree
+        return Tree("[bold]Execute after all statements[/bold]")
 
     def visit_physical_layer_update_stage(self, stage: stages.PhysicalLayerUpdateStage) -> Tree:
         if not stage.snapshots:
