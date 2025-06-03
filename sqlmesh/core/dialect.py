@@ -10,7 +10,6 @@ from difflib import unified_diff
 from enum import Enum, auto
 from functools import lru_cache
 
-import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake
@@ -27,6 +26,8 @@ from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlglot._typing import E
 
 

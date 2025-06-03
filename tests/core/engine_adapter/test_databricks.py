@@ -1,7 +1,7 @@
 # type: ignore
 import typing as t
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock import MockFixture
 from sqlglot import exp, parse_one

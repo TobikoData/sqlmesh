@@ -2,7 +2,6 @@
 
 import json
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -11,6 +10,8 @@ from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
+    import pandas as pd
+
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"

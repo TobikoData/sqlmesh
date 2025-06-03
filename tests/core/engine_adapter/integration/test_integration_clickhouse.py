@@ -3,7 +3,7 @@ import pytest
 from pytest import FixtureRequest
 from tests.core.engine_adapter.integration import TestContext
 from sqlmesh.core.engine_adapter.clickhouse import ClickhouseEngineAdapter
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlglot import exp, parse_one
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 

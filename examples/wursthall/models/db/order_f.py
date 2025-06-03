@@ -3,7 +3,7 @@ import typing as t
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from models.src.shared import DATA_START_DATE_STR, set_seed  # type: ignore
 from sqlglot import parse_one
 

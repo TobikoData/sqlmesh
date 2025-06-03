@@ -3,7 +3,6 @@
 import json
 import zlib
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type
@@ -14,6 +13,8 @@ def _hash(data):  # type: ignore
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
+    import pandas as pd
+
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     environments_table = "_environments"

@@ -4,7 +4,7 @@ from datetime import date, datetime
 import pytest
 import time_machine
 from sqlglot import exp
-import pandas as pd
+import pandas as pd  # noqa: TID253
 
 from sqlmesh.utils.date import (
     UTC,

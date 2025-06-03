@@ -2,7 +2,7 @@ import typing as t
 import pytest
 from unittest.mock import Mock
 from pytest_mock import MockerFixture
-import pandas as pd
+import pandas as pd  # noqa: TID253
 
 from sqlglot import exp, parse_one
 import sqlmesh.core.dialect as d

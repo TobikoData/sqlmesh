@@ -2,7 +2,7 @@ import random
 import typing as t
 from datetime import datetime, timedelta
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from helper import iter_dates  # type: ignore
 
 from sqlmesh import ExecutionContext, model

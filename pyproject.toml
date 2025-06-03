@@ -271,3 +271,9 @@ select = [
     "F401",
     "RET505",
 ]
+extend-select = ["TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = [
+  "pandas",
+]

@@ -30,7 +30,6 @@ from collections import defaultdict
 from contextlib import contextmanager
 from functools import reduce
 
-import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
@@ -736,6 +735,8 @@ class SnapshotEvaluator:
             )
 
             if limit is not None:
+                import pandas as pd
+
                 query_or_df = next(queries_or_dfs)
                 if isinstance(query_or_df, pd.DataFrame):
                     return query_or_df.head(limit)
@@ -769,6 +770,8 @@ class SnapshotEvaluator:
                 )
                 and snapshot.is_incremental_by_time_range
             ):
+                import pandas as pd
+
                 query_or_df = reduce(
                     lambda a, b: (
                         pd.concat([a, b], ignore_index=True)  # type: ignore

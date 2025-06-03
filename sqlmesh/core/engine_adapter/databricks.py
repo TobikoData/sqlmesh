@@ -4,7 +4,6 @@ import logging
 import typing as t
 from functools import partial
 
-import pandas as pd
 from sqlglot import exp
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.shared import (
@@ -21,6 +20,8 @@ from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionC
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, TableName, SessionProperties
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query
 
@@ -199,6 +200,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         """
         Returns a Pandas DataFrame from a query or expression.
         """
+        import pandas as pd
+
         df = self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()

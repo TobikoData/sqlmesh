@@ -6,7 +6,7 @@ import sys
 import typing as t
 import time
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from sqlglot import exp, parse_one
 

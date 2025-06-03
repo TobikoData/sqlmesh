@@ -5,7 +5,7 @@ from enum import Enum
 from functools import partial
 from pathlib import Path
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from dbt.cli.main import dbtRunner
 import time_machine

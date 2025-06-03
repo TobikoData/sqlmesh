@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import typing as t
 
-import pandas as pd
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.helper import dict_depth, seq_get
@@ -65,6 +64,8 @@ def update_dbt_relations(
 
 
 def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ignore
+    import pandas as pd
+
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"

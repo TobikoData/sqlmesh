@@ -48,7 +48,6 @@ from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
 
-import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
 from sqlglot.lineage import GraphHTML
@@ -134,6 +133,7 @@ from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
@@ -1007,6 +1007,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         expand = self.dag.upstream(model.fqn) if expand is True else expand or []
 
         if model.is_seed:
+            import pandas as pd
+
             df = next(
                 model.render(
                     context=self.execution_context(
@@ -2013,6 +2015,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ModelTextTestResult:
         """Discover and run model tests"""
         if verbosity >= Verbosity.VERBOSE:
+            import pandas as pd
+
             pd.set_option("display.max_columns", None)
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)

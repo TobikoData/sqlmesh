@@ -4,7 +4,6 @@ import logging
 import typing as t
 from functools import partial
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
@@ -28,6 +27,7 @@ from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     from pyspark.sql import types as spark_types
 
     from sqlmesh.core._typing import SchemaName, TableName
@@ -232,6 +232,8 @@ class SparkEngineAdapter(
 
     @classmethod
     def try_get_pandas_df(cls, value: t.Any) -> t.Optional[pd.DataFrame]:
+        import pandas as pd
+
         if isinstance(value, pd.DataFrame):
             return value
         return None

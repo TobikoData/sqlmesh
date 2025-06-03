@@ -2,8 +2,7 @@ from __future__ import annotations
 import re
 import typing as t
 from functools import lru_cache
-import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
 from sqlglot import exp
 from sqlglot.helper import seq_get
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_result
@@ -194,6 +193,9 @@ class TrinoEngineAdapter(
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
         assert isinstance(df, pd.DataFrame)
 
         # Trino does not accept timestamps in ISOFORMAT that include the "T". `execution_time` is stored in

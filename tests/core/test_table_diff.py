@@ -1,6 +1,6 @@
 import pytest
 from pytest_mock.plugin import MockerFixture
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlglot import exp
 from sqlmesh.core import dialect as d
 import re

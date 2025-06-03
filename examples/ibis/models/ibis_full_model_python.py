@@ -2,7 +2,7 @@ import typing as t
 from datetime import datetime
 
 import ibis  # type: ignore
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from constants import DB_PATH  # type: ignore
 from sqlglot import exp
 

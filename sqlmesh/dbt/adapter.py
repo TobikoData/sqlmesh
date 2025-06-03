@@ -4,7 +4,6 @@ import abc
 import logging
 import typing as t
 
-import pandas as pd
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import normalize_and_quote, normalize_model_name, schema_
@@ -15,6 +14,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import agate
+    import pandas as pd
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
@@ -324,6 +324,7 @@ class RuntimeAdapter(BaseAdapter):
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Tuple[AdapterResponse, agate.Table]:
+        import pandas as pd
         from dbt.adapters.base.impl import AdapterResponse
 
         from sqlmesh.dbt.util import pandas_to_agate, empty_table
