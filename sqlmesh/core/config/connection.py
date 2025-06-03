@@ -241,7 +241,7 @@ class DuckDBAttachOptions(BaseConfig):
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
                 options.append("ENCRYPTED")
-            if self.data_inlining_row_limit:
+            if self.data_inlining_row_limit is not None:
                 options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
 
         options_sql = f" ({', '.join(options)})" if options else ""
