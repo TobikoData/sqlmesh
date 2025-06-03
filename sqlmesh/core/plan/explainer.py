@@ -9,7 +9,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, TerminalConsole, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.plan.definition import EvaluatablePlan, SnapshotIntervals
-from sqlmesh.core.plan import steps
+from sqlmesh.core.plan import stages
 from sqlmesh.core.plan.evaluator import (
     PlanEvaluator,
 )
@@ -39,16 +39,16 @@ class PlanExplainer(PlanEvaluator):
     def evaluate(
         self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
     ) -> None:
-        plan_steps = steps.build_plan_steps(plan, self.state_reader, self.default_catalog)
+        plan_stages = stages.build_plan_stages(plan, self.state_reader, self.default_catalog)
         explainer_console = _get_explainer_console(
             self.console, plan.environment, self.default_catalog
         )
-        explainer_console.explain(plan_steps)
+        explainer_console.explain(plan_stages)
 
 
 class ExplainerConsole(abc.ABC):
     @abc.abstractmethod
-    def explain(self, steps: t.List[steps.PlanStep]) -> None:
+    def explain(self, stages: t.List[stages.PlanStage]) -> None:
         pass
 
 
@@ -70,41 +70,41 @@ class RichExplainerConsole(ExplainerConsole):
         self.verbosity = verbosity
         self.console: RichConsole = console or srich.console
 
-    def explain(self, steps: t.List[steps.PlanStep]) -> None:
+    def explain(self, stages: t.List[stages.PlanStage]) -> None:
         tree = Tree("[bold]Explained plan[/bold]")
-        for step in steps:
-            handler_name = f"visit_{_to_snake_case(step.__class__.__name__)}"
+        for stage in stages:
+            handler_name = f"visit_{_to_snake_case(stage.__class__.__name__)}"
             if not hasattr(self, handler_name):
-                logger.error("Unexpected step: %s", step.__class__.__name__)
+                logger.error("Unexpected stage: %s", stage.__class__.__name__)
                 continue
             handler = getattr(self, handler_name)
-            result = handler(step)
+            result = handler(stage)
             if result:
                 tree.add(self._limit_tree(result))
         self.console.print(tree)
 
-    def visit_before_all_step(self, step: steps.BeforeAllStep) -> Tree:
+    def visit_before_all_stage(self, stage: stages.BeforeAllStage) -> Tree:
         tree = Tree("[bold]Execute before all statements[/bold]")
-        for statement in step.statements:
+        for statement in stage.statements:
             tree.add(statement)
         return tree
 
-    def visit_after_all_step(self, step: steps.AfterAllStep) -> Tree:
+    def visit_after_all_stage(self, stage: stages.AfterAllStage) -> Tree:
         tree = Tree("[bold]Execute after all statements[/bold]")
-        for statement in step.statements:
+        for statement in stage.statements:
             tree.add(statement)
         return tree
 
-    def visit_physical_layer_update_step(self, step: steps.PhysicalLayerUpdateStep) -> Tree:
-        if not step.snapshots:
+    def visit_physical_layer_update_stage(self, stage: stages.PhysicalLayerUpdateStage) -> Tree:
+        if not stage.snapshots:
             return Tree("[bold]SKIP: No physical layer updates to perform[/bold]")
 
         tree = Tree(
             "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
         )
-        for snapshot in step.snapshots:
+        for snapshot in stage.snapshots:
             is_deployable = (
-                step.deployability_index.is_deployable(snapshot)
+                stage.deployability_index.is_deployable(snapshot)
                 if self.environment_naming_info.name != c.PROD
                 else True
             )
@@ -138,31 +138,31 @@ class RichExplainerConsole(ExplainerConsole):
             tree.add(model_tree)
         return tree
 
-    def visit_audit_only_run_step(self, step: steps.AuditOnlyRunStep) -> Tree:
+    def visit_audit_only_run_stage(self, stage: stages.AuditOnlyRunStage) -> Tree:
         tree = Tree("[bold]Audit-only execution[/bold]")
-        for snapshot in step.snapshots:
+        for snapshot in stage.snapshots:
             display_name = self._display_name(snapshot)
             tree.add(display_name)
         return tree
 
-    def visit_restatement_step(self, step: steps.RestatementStep) -> Tree:
+    def visit_restatement_stage(self, stage: stages.RestatementStage) -> Tree:
         tree = Tree("[bold]Invalidate data intervals as part of restatement[/bold]")
-        for snapshot_table_info, interval in step.snapshot_intervals.items():
+        for snapshot_table_info, interval in stage.snapshot_intervals.items():
             display_name = self._display_name(snapshot_table_info)
             tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
         return tree
 
-    def visit_backfill_step(self, step: steps.BackfillStep) -> Tree:
-        if not step.snapshot_to_intervals:
+    def visit_backfill_stage(self, stage: stages.BackfillStage) -> Tree:
+        if not stage.snapshot_to_intervals:
             return Tree("[bold]SKIP: No model batches to execute[/bold]")
 
         tree = Tree(
             "[bold]Backfill models by running their queries and run standalone audits[/bold]"
         )
-        for snapshot, intervals in step.snapshot_to_intervals.items():
+        for snapshot, intervals in stage.snapshot_to_intervals.items():
             display_name = self._display_name(snapshot)
             if snapshot.is_model:
-                table_name = snapshot.table_name(step.deployability_index.is_deployable(snapshot))
+                table_name = snapshot.table_name(stage.deployability_index.is_deployable(snapshot))
                 model_tree = Tree(f"{display_name} -> {table_name}")
 
                 for signal_name, _ in snapshot.model.signals:
@@ -174,7 +174,7 @@ class RichExplainerConsole(ExplainerConsole):
                 if snapshot.is_incremental:
                     current_intervals = (
                         snapshot.intervals
-                        if step.deployability_index.is_deployable(snapshot)
+                        if stage.deployability_index.is_deployable(snapshot)
                         else snapshot.dev_intervals
                     )
                     if current_intervals:
@@ -204,43 +204,43 @@ class RichExplainerConsole(ExplainerConsole):
                 tree.add(f"{display_name} \[standalone audit]")
         return tree
 
-    def visit_migrate_schemas_step(self, step: steps.MigrateSchemasStep) -> Tree:
+    def visit_migrate_schemas_stage(self, stage: stages.MigrateSchemasStage) -> Tree:
         tree = Tree(
             "[bold]Update schemas (add, drop, alter columns) of production physical tables to reflect forward-only changes[/bold]"
         )
-        for snapshot in step.snapshots:
+        for snapshot in stage.snapshots:
             display_name = self._display_name(snapshot)
             table_name = snapshot.table_name(True)
             tree.add(f"{display_name} -> {table_name}")
         return tree
 
-    def visit_virtual_layer_update_step(self, step: steps.VirtualLayerUpdateStep) -> Tree:
+    def visit_virtual_layer_update_stage(self, stage: stages.VirtualLayerUpdateStage) -> Tree:
         tree = Tree(
             f"[bold]Update the virtual layer for environment '{self.environment_naming_info.name}'[/bold]"
         )
         promote_tree = Tree(
             "[bold]Create or update views in the virtual layer to point at new physical tables and views[/bold]"
         )
-        for snapshot in step.promoted_snapshots:
+        for snapshot in stage.promoted_snapshots:
             display_name = self._display_name(snapshot)
-            table_name = snapshot.table_name(step.deployability_index.is_representative(snapshot))
+            table_name = snapshot.table_name(stage.deployability_index.is_representative(snapshot))
             promote_tree.add(f"{display_name} -> {table_name}")
 
         demote_tree = Tree(
             "[bold]Delete views in the virtual layer for models that were removed[/bold]"
         )
-        for snapshot in step.demoted_snapshots:
+        for snapshot in stage.demoted_snapshots:
             display_name = self._display_name(snapshot)
             demote_tree.add(display_name)
 
-        if step.promoted_snapshots:
+        if stage.promoted_snapshots:
             tree.add(self._limit_tree(promote_tree))
-        if step.demoted_snapshots:
+        if stage.demoted_snapshots:
             tree.add(self._limit_tree(demote_tree))
         return tree
 
-    def visit_environment_record_update_step(
-        self, step: steps.EnvironmentRecordUpdateStep
+    def visit_environment_record_update_stage(
+        self, stage: stages.EnvironmentRecordUpdateStage
     ) -> t.Optional[Tree]:
         return None
 

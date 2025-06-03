@@ -4,14 +4,14 @@ from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.model import SqlModel, ModelKindName
 from sqlmesh.core.plan.definition import EvaluatablePlan
-from sqlmesh.core.plan.steps import (
-    build_plan_steps,
-    PhysicalLayerUpdateStep,
-    BackfillStep,
-    EnvironmentRecordUpdateStep,
-    VirtualLayerUpdateStep,
-    RestatementStep,
-    MigrateSchemasStep,
+from sqlmesh.core.plan.stages import (
+    build_plan_stages,
+    PhysicalLayerUpdateStage,
+    BackfillStage,
+    EnvironmentRecordUpdateStage,
+    VirtualLayerUpdateStage,
+    RestatementStage,
+    MigrateSchemasStage,
 )
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, DeployabilityIndex, Snapshot
 from sqlmesh.core.state_sync import StateReader
@@ -46,7 +46,7 @@ def snapshot_b(make_snapshot, snapshot_a: Snapshot) -> Snapshot:
     return snapshot
 
 
-def test_build_plan_steps_basic(
+def test_build_plan_stages_basic(
     snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
 ) -> None:
     # Mock state reader
@@ -91,43 +91,43 @@ def test_build_plan_steps_basic(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 4
+    # Verify stages
+    assert len(stages) == 4
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 2
-    assert {s.snapshot_id for s in physical_step.snapshots} == {
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
-    assert physical_step.deployability_index == DeployabilityIndex.all_deployable()
+    assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
 
-    # Verify BackfillStep
-    backfill_step = steps[1]
-    assert isinstance(backfill_step, BackfillStep)
-    assert backfill_step.deployability_index == DeployabilityIndex.all_deployable()
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
     expected_interval = (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
-    assert len(backfill_step.snapshot_to_intervals) == 2
-    assert backfill_step.snapshot_to_intervals[snapshot_a] == [expected_interval]
-    assert backfill_step.snapshot_to_intervals[snapshot_b] == [expected_interval]
+    assert len(backfill_stage.snapshot_to_intervals) == 2
+    assert backfill_stage.snapshot_to_intervals[snapshot_a] == [expected_interval]
+    assert backfill_stage.snapshot_to_intervals[snapshot_b] == [expected_interval]
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[2], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[2], EnvironmentRecordUpdateStage)
 
-    # Verify VirtualLayerUpdateStep
-    virtual_step = steps[3]
-    assert isinstance(virtual_step, VirtualLayerUpdateStep)
-    assert len(virtual_step.promoted_snapshots) == 2
-    assert len(virtual_step.demoted_snapshots) == 0
-    assert {s.name for s in virtual_step.promoted_snapshots} == {'"a"', '"b"'}
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[3]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
 
 
-def test_build_plan_steps_select_models(
+def test_build_plan_stages_select_models(
     snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
 ) -> None:
     # Mock state reader
@@ -172,40 +172,40 @@ def test_build_plan_steps_select_models(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 4
+    # Verify stages
+    assert len(stages) == 4
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 1
-    assert {s.snapshot_id for s in physical_step.snapshots} == {snapshot_a.snapshot_id}
-    assert physical_step.deployability_index == DeployabilityIndex.all_deployable()
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 1
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {snapshot_a.snapshot_id}
+    assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
 
-    # Verify BackfillStep
-    backfill_step = steps[1]
-    assert isinstance(backfill_step, BackfillStep)
-    assert backfill_step.deployability_index == DeployabilityIndex.all_deployable()
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
     expected_interval = (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
-    assert len(backfill_step.snapshot_to_intervals) == 1
-    assert backfill_step.snapshot_to_intervals[snapshot_a] == [expected_interval]
+    assert len(backfill_stage.snapshot_to_intervals) == 1
+    assert backfill_stage.snapshot_to_intervals[snapshot_a] == [expected_interval]
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[2], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[2], EnvironmentRecordUpdateStage)
 
-    # Verify VirtualLayerUpdateStep
-    virtual_step = steps[3]
-    assert isinstance(virtual_step, VirtualLayerUpdateStep)
-    assert len(virtual_step.promoted_snapshots) == 1
-    assert len(virtual_step.demoted_snapshots) == 0
-    assert {s.name for s in virtual_step.promoted_snapshots} == {'"a"'}
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[3]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 1
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"'}
 
 
 @pytest.mark.parametrize("skip_backfill,empty_backfill", [(True, False), (False, True)])
-def test_build_plan_steps_basic_no_backfill(
+def test_build_plan_stages_basic_no_backfill(
     snapshot_a: Snapshot,
     snapshot_b: Snapshot,
     mocker: MockerFixture,
@@ -254,39 +254,39 @@ def test_build_plan_steps_basic_no_backfill(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 4
+    # Verify stages
+    assert len(stages) == 4
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 2
-    assert {s.snapshot_id for s in physical_step.snapshots} == {
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
 
-    # Verify BackfillStep
-    backfill_step = steps[1]
-    assert isinstance(backfill_step, BackfillStep)
-    assert backfill_step.deployability_index == DeployabilityIndex.all_deployable()
-    assert backfill_step.snapshot_to_intervals == {}
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
+    assert backfill_stage.snapshot_to_intervals == {}
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[2], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[2], EnvironmentRecordUpdateStage)
 
-    # Verify VirtualLayerUpdateStep
-    virtual_step = steps[3]
-    assert isinstance(virtual_step, VirtualLayerUpdateStep)
-    assert len(virtual_step.promoted_snapshots) == 2
-    assert len(virtual_step.demoted_snapshots) == 0
-    assert {s.name for s in virtual_step.promoted_snapshots} == {'"a"', '"b"'}
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[3]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
 
 
-def test_build_plan_steps_restatement(
+def test_build_plan_stages_restatement(
     snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
 ) -> None:
     # Mock state reader to return existing snapshots and environment
@@ -347,44 +347,44 @@ def test_build_plan_steps_restatement(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 4
+    # Verify stages
+    assert len(stages) == 4
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 2
-    assert {s.snapshot_id for s in physical_step.snapshots} == {
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
 
-    # Verify RestatementStep
-    restatement_step = steps[1]
-    assert isinstance(restatement_step, RestatementStep)
-    assert len(restatement_step.snapshot_intervals) == 2
+    # Verify RestatementStage
+    restatement_stage = stages[1]
+    assert isinstance(restatement_stage, RestatementStage)
+    assert len(restatement_stage.snapshot_intervals) == 2
     expected_interval = (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
-    for snapshot_info, interval in restatement_step.snapshot_intervals.items():
+    for snapshot_info, interval in restatement_stage.snapshot_intervals.items():
         assert interval == expected_interval
         assert snapshot_info.name in ('"a"', '"b"')
 
-    # Verify BackfillStep
-    backfill_step = steps[2]
-    assert isinstance(backfill_step, BackfillStep)
-    assert len(backfill_step.snapshot_to_intervals) == 2
-    assert backfill_step.deployability_index == DeployabilityIndex.all_deployable()
+    # Verify BackfillStage
+    backfill_stage = stages[2]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 2
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
     expected_backfill_interval = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
-    for intervals in backfill_step.snapshot_to_intervals.values():
+    for intervals in backfill_stage.snapshot_to_intervals.values():
         assert intervals == expected_backfill_interval
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[3], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[3], EnvironmentRecordUpdateStage)
 
 
-def test_build_plan_steps_forward_only(
+def test_build_plan_stages_forward_only(
     snapshot_a: Snapshot, snapshot_b: Snapshot, make_snapshot, mocker: MockerFixture
 ) -> None:
     # Categorize snapshot_a as forward-only
@@ -456,54 +456,54 @@ def test_build_plan_steps_forward_only(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 5
+    # Verify stages
+    assert len(stages) == 5
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 2
-    assert {s.snapshot_id for s in physical_step.snapshots} == {
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
         new_snapshot_a.snapshot_id,
         new_snapshot_b.snapshot_id,
     }
-    assert physical_step.deployability_index == DeployabilityIndex.create(
+    assert physical_stage.deployability_index == DeployabilityIndex.create(
         [new_snapshot_a, new_snapshot_b]
     )
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[1], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[1], EnvironmentRecordUpdateStage)
 
-    # Verify MigrateSchemasStep
-    migrate_step = steps[2]
-    assert isinstance(migrate_step, MigrateSchemasStep)
-    assert len(migrate_step.snapshots) == 2
-    assert {s.snapshot_id for s in migrate_step.snapshots} == {
+    # Verify MigrateSchemasStage
+    migrate_stage = stages[2]
+    assert isinstance(migrate_stage, MigrateSchemasStage)
+    assert len(migrate_stage.snapshots) == 2
+    assert {s.snapshot_id for s in migrate_stage.snapshots} == {
         new_snapshot_a.snapshot_id,
         new_snapshot_b.snapshot_id,
     }
 
-    # Verify BackfillStep
-    backfill_step = steps[3]
-    assert isinstance(backfill_step, BackfillStep)
-    assert len(backfill_step.snapshot_to_intervals) == 2
+    # Verify BackfillStage
+    backfill_stage = stages[3]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 2
     expected_interval = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
-    for intervals in backfill_step.snapshot_to_intervals.values():
+    for intervals in backfill_stage.snapshot_to_intervals.values():
         assert intervals == expected_interval
-    assert backfill_step.deployability_index == DeployabilityIndex.all_deployable()
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
 
-    # Verify VirtualLayerUpdateStep
-    virtual_step = steps[4]
-    assert isinstance(virtual_step, VirtualLayerUpdateStep)
-    assert len(virtual_step.promoted_snapshots) == 2
-    assert len(virtual_step.demoted_snapshots) == 0
-    assert {s.name for s in virtual_step.promoted_snapshots} == {'"a"', '"b"'}
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[4]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
 
 
-def test_build_plan_steps_forward_only_dev(
+def test_build_plan_stages_forward_only_dev(
     snapshot_a: Snapshot, snapshot_b: Snapshot, make_snapshot, mocker: MockerFixture
 ) -> None:
     # Categorize snapshot_a as forward-only
@@ -565,41 +565,41 @@ def test_build_plan_steps_forward_only_dev(
         user_provided_flags=None,
     )
 
-    # Build plan steps
-    steps = build_plan_steps(plan, state_reader, None)
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
 
-    # Verify steps
-    assert len(steps) == 4
+    # Verify stages
+    assert len(stages) == 4
 
-    # Verify PhysicalLayerUpdateStep
-    physical_step = steps[0]
-    assert isinstance(physical_step, PhysicalLayerUpdateStep)
-    assert len(physical_step.snapshots) == 2
-    assert {s.snapshot_id for s in physical_step.snapshots} == {
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
         new_snapshot_a.snapshot_id,
         new_snapshot_b.snapshot_id,
     }
-    assert physical_step.deployability_index == DeployabilityIndex.create(
+    assert physical_stage.deployability_index == DeployabilityIndex.create(
         [new_snapshot_a, new_snapshot_b]
     )
 
-    # Verify BackfillStep
-    backfill_step = steps[1]
-    assert isinstance(backfill_step, BackfillStep)
-    assert len(backfill_step.snapshot_to_intervals) == 2
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 2
     expected_interval = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
-    for intervals in backfill_step.snapshot_to_intervals.values():
+    for intervals in backfill_stage.snapshot_to_intervals.values():
         assert intervals == expected_interval
-    assert backfill_step.deployability_index == DeployabilityIndex.create(
+    assert backfill_stage.deployability_index == DeployabilityIndex.create(
         [new_snapshot_a, new_snapshot_b]
     )
 
-    # Verify EnvironmentRecordUpdateStep
-    assert isinstance(steps[2], EnvironmentRecordUpdateStep)
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[2], EnvironmentRecordUpdateStage)
 
-    # Verify VirtualLayerUpdateStep
-    virtual_step = steps[3]
-    assert isinstance(virtual_step, VirtualLayerUpdateStep)
-    assert len(virtual_step.promoted_snapshots) == 2
-    assert len(virtual_step.demoted_snapshots) == 0
-    assert {s.name for s in virtual_step.promoted_snapshots} == {'"a"', '"b"'}
+    # Verify VirtualLayerUpdateStage
+    virtual_stage = stages[3]
+    assert isinstance(virtual_stage, VirtualLayerUpdateStage)
+    assert len(virtual_stage.promoted_snapshots) == 2
+    assert len(virtual_stage.demoted_snapshots) == 0
+    assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}

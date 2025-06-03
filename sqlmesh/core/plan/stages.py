@@ -18,69 +18,69 @@ from sqlmesh.core.snapshot.definition import (
 
 
 @dataclass
-class BeforeAllStep:
+class BeforeAllStage:
     statements: t.List[str]
 
 
 @dataclass
-class AfterAllStep:
+class AfterAllStage:
     statements: t.List[str]
 
 
 @dataclass
-class PhysicalLayerUpdateStep:
+class PhysicalLayerUpdateStage:
     snapshots: t.List[Snapshot]
     deployability_index: DeployabilityIndex
 
 
 @dataclass
-class AuditOnlyRunStep:
+class AuditOnlyRunStage:
     snapshots: t.List[Snapshot]
 
 
 @dataclass
-class RestatementStep:
+class RestatementStage:
     snapshot_intervals: t.Dict[SnapshotTableInfo, Interval]
 
 
 @dataclass
-class BackfillStep:
+class BackfillStage:
     snapshot_to_intervals: SnapshotToIntervals
     deployability_index: DeployabilityIndex
     before_promote: bool = True
 
 
 @dataclass
-class MigrateSchemasStep:
+class MigrateSchemasStage:
     snapshots: t.List[Snapshot]
 
 
 @dataclass
-class VirtualLayerUpdateStep:
+class VirtualLayerUpdateStage:
     promoted_snapshots: t.Set[SnapshotTableInfo]
     demoted_snapshots: t.Set[SnapshotTableInfo]
     deployability_index: DeployabilityIndex
 
 
 @dataclass
-class EnvironmentRecordUpdateStep:
+class EnvironmentRecordUpdateStage:
     pass
 
 
-PlanStep = t.Union[
-    BeforeAllStep,
-    AfterAllStep,
-    PhysicalLayerUpdateStep,
-    AuditOnlyRunStep,
-    RestatementStep,
-    BackfillStep,
-    MigrateSchemasStep,
-    VirtualLayerUpdateStep,
-    EnvironmentRecordUpdateStep,
+PlanStage = t.Union[
+    BeforeAllStage,
+    AfterAllStage,
+    PhysicalLayerUpdateStage,
+    AuditOnlyRunStage,
+    RestatementStage,
+    BackfillStage,
+    MigrateSchemasStage,
+    VirtualLayerUpdateStage,
+    EnvironmentRecordUpdateStage,
 ]
 
 
-class PlanStepsBuilder:
+class PlanStagesBuilder:
     def __init__(
         self,
         state_reader: StateReader,
@@ -89,7 +89,7 @@ class PlanStepsBuilder:
         self.state_reader = state_reader
         self.default_catalog = default_catalog
 
-    def build(self, plan: EvaluatablePlan) -> t.List[PlanStep]:
+    def build(self, plan: EvaluatablePlan) -> t.List[PlanStage]:
         new_snapshots = {s.snapshot_id: s for s in plan.new_snapshots}
         stored_snapshots = self.state_reader.get_snapshots(plan.environment.snapshots)
         snapshots = {**new_snapshots, **stored_snapshots}
@@ -138,81 +138,81 @@ class PlanStepsBuilder:
                 elif snapshot.snapshot_id in after_promote_snapshots:
                     missing_intervals_after_promote[snapshot] = intervals
 
-        steps: t.List[PlanStep] = []
+        stages: t.List[PlanStage] = []
 
-        before_all_step = self._get_before_all_step(plan)
-        if before_all_step:
-            steps.append(before_all_step)
+        before_all_stage = self._get_before_all_stage(plan)
+        if before_all_stage:
+            stages.append(before_all_stage)
 
-        steps.append(
-            self._get_physical_layer_update_step(
+        stages.append(
+            self._get_physical_layer_update_stage(
                 plan, snapshots, snapshots_to_intervals, deployability_index_for_creation
             )
         )
 
         audit_only_snapshots = get_audit_only_snapshots(new_snapshots, self.state_reader)
         if audit_only_snapshots:
-            steps.append(AuditOnlyRunStep(snapshots=list(audit_only_snapshots.values())))
+            stages.append(AuditOnlyRunStage(snapshots=list(audit_only_snapshots.values())))
 
-        restatement_step = self._get_restatement_step(plan, snapshots_by_name)
-        if restatement_step:
-            steps.append(restatement_step)
+        restatement_stage = self._get_restatement_stage(plan, snapshots_by_name)
+        if restatement_stage:
+            stages.append(restatement_stage)
 
         if missing_intervals_before_promote:
-            steps.append(
-                BackfillStep(
+            stages.append(
+                BackfillStage(
                     snapshot_to_intervals=missing_intervals_before_promote,
                     deployability_index=deployability_index,
                 )
             )
         elif not needs_backfill:
-            # Append an empty backfill step so that explainer can show that the step is skipped
-            steps.append(
-                BackfillStep(snapshot_to_intervals={}, deployability_index=deployability_index)
+            # Append an empty backfill stage so that explainer can show that the stage is skipped
+            stages.append(
+                BackfillStage(snapshot_to_intervals={}, deployability_index=deployability_index)
             )
 
-        steps.append(EnvironmentRecordUpdateStep())
+        stages.append(EnvironmentRecordUpdateStage())
 
         if snapshots_with_schema_migration:
-            steps.append(MigrateSchemasStep(snapshots=snapshots_with_schema_migration))
+            stages.append(MigrateSchemasStage(snapshots=snapshots_with_schema_migration))
 
         if missing_intervals_after_promote:
-            steps.append(
-                BackfillStep(
+            stages.append(
+                BackfillStage(
                     snapshot_to_intervals=missing_intervals_after_promote,
                     deployability_index=deployability_index,
                 )
             )
 
-        virtual_layer_update_step = self._get_virtual_layer_update_step(plan, deployability_index)
-        if virtual_layer_update_step:
-            steps.append(virtual_layer_update_step)
+        virtual_layer_update_stage = self._get_virtual_layer_update_stage(plan, deployability_index)
+        if virtual_layer_update_stage:
+            stages.append(virtual_layer_update_stage)
 
-        after_all_step = self._get_after_all_step(plan)
-        if after_all_step:
-            steps.append(after_all_step)
+        after_all_stage = self._get_after_all_stage(plan)
+        if after_all_stage:
+            stages.append(after_all_stage)
 
-        return steps
+        return stages
 
-    def _get_before_all_step(self, plan: EvaluatablePlan) -> t.Optional[BeforeAllStep]:
+    def _get_before_all_stage(self, plan: EvaluatablePlan) -> t.Optional[BeforeAllStage]:
         before_all = [
             statement
             for environment_statements in plan.environment_statements or []
             for statement in environment_statements.before_all
         ]
-        return BeforeAllStep(statements=before_all) if before_all else None
+        return BeforeAllStage(statements=before_all) if before_all else None
 
-    def _get_after_all_step(self, plan: EvaluatablePlan) -> t.Optional[AfterAllStep]:
+    def _get_after_all_stage(self, plan: EvaluatablePlan) -> t.Optional[AfterAllStage]:
         after_all = [
             statement
             for environment_statements in plan.environment_statements or []
             for statement in environment_statements.after_all
         ]
-        return AfterAllStep(statements=after_all) if after_all else None
+        return AfterAllStage(statements=after_all) if after_all else None
 
-    def _get_restatement_step(
+    def _get_restatement_stage(
         self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]
-    ) -> t.Optional[RestatementStep]:
+    ) -> t.Optional[RestatementStage]:
         snapshot_intervals_to_restate = {}
         for name, interval in plan.restatements.items():
             restated_snapshot = snapshots_by_name[name]
@@ -220,32 +220,32 @@ class PlanStepsBuilder:
             snapshot_intervals_to_restate[restated_snapshot.table_info] = interval
         if not snapshot_intervals_to_restate or plan.is_dev:
             return None
-        return RestatementStep(snapshot_intervals=snapshot_intervals_to_restate)
+        return RestatementStage(snapshot_intervals=snapshot_intervals_to_restate)
 
-    def _get_physical_layer_update_step(
+    def _get_physical_layer_update_stage(
         self,
         plan: EvaluatablePlan,
         snapshots: t.Dict[SnapshotId, Snapshot],
         snapshots_to_intervals: SnapshotToIntervals,
         deployability_index: DeployabilityIndex,
-    ) -> PhysicalLayerUpdateStep:
+    ) -> PhysicalLayerUpdateStage:
         snapshots_to_create = [
             s
             for s in get_snapshots_to_create(plan, snapshots)
             if s in snapshots_to_intervals and s.is_model and not s.is_symbolic
         ]
-        return PhysicalLayerUpdateStep(
+        return PhysicalLayerUpdateStage(
             snapshots=snapshots_to_create,
             deployability_index=deployability_index,
         )
 
-    def _get_virtual_layer_update_step(
+    def _get_virtual_layer_update_stage(
         self, plan: EvaluatablePlan, deployability_index: DeployabilityIndex
-    ) -> t.Optional[VirtualLayerUpdateStep]:
+    ) -> t.Optional[VirtualLayerUpdateStage]:
         promoted_snapshots, demoted_snapshots = self._get_promoted_demoted_snapshots(plan)
         if not promoted_snapshots and not demoted_snapshots:
             return None
-        return VirtualLayerUpdateStep(
+        return VirtualLayerUpdateStage(
             promoted_snapshots=promoted_snapshots,
             demoted_snapshots=demoted_snapshots,
             deployability_index=deployability_index,
@@ -295,9 +295,9 @@ class PlanStepsBuilder:
         )
 
 
-def build_plan_steps(
+def build_plan_stages(
     plan: EvaluatablePlan,
     state_reader: StateReader,
     default_catalog: t.Optional[str],
-) -> t.List[PlanStep]:
-    return PlanStepsBuilder(state_reader, default_catalog).build(plan)
+) -> t.List[PlanStage]:
+    return PlanStagesBuilder(state_reader, default_catalog).build(plan)
