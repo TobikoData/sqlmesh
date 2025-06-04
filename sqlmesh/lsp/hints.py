@@ -71,7 +71,11 @@ def _get_type_hints_for_select(
 
     for select_exp in expression.expressions:
         if isinstance(select_exp, exp.Alias):
+            if isinstance(select_exp.this, exp.Cast):
+                continue
+
             meta = select_exp.args["alias"]._meta
+
         elif isinstance(select_exp, exp.Column):
             meta = select_exp.parts[-1]._meta
         else:

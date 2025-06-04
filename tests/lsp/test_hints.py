@@ -57,11 +57,8 @@ def test_hints() -> None:
         start_line=0,
         end_line=9999,
     )
-    assert len(crbd_hints) == 4
+    assert len(crbd_hints) == 1
     assert crbd_hints[0].label == "::INT"
-    assert crbd_hints[1].label == "::DOUBLE"
-    assert crbd_hints[2].label == "::INT"
-    assert crbd_hints[3].label == "::DATE"
 
 
 @pytest.mark.fast
@@ -105,3 +102,102 @@ def test_complex_hints() -> None:
     assert len(result) == 2
     assert result[0].label == "::VARCHAR(100)"
     assert result[1].label == "::STRUCT<INT, STRUCT<TEXT, INT[]>>"
+
+
+@pytest.mark.fast
+def test_simple_cast_hints() -> None:
+    """Don't add type hints if the expression is already a cast"""
+    query = parse_one("SELECT a::INT, CAST(b AS DATE), c FROM d", dialect="postgres")
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("DATE"),
+            "c": exp.DataType.build("TEXT"),
+        },
+        start_line=0,
+        end_line=1,
+    )
+
+    assert len(result) == 1
+    assert result[0].label == "::TEXT"
+
+
+@pytest.mark.fast
+def test_alias_cast_hints() -> None:
+    """Don't add type hints if the expression is already a cast"""
+    query = parse_one(
+        "SELECT raw_a::INT AS a, CAST(raw_b AS DATE) AS b, c FROM d", dialect="postgres"
+    )
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("DATE"),
+            "c": exp.DataType.build("TEXT"),
+        },
+        start_line=0,
+        end_line=1,
+    )
+
+    assert len(result) == 1
+    assert result[0].label == "::TEXT"
+
+
+@pytest.mark.fast
+def test_simple_cte_hints() -> None:
+    """Don't add type hints if the expression is already a cast"""
+    query = parse_one("WITH t AS (SELECT a FROM b) SELECT a AS c FROM t", dialect="postgres")
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "c": exp.DataType.build("INT"),
+        },
+        start_line=0,
+        end_line=1,
+    )
+
+    assert len(result) == 1
+    assert result[0].label == "::INT"
+
+
+@pytest.mark.fast
+def test_cte_with_union_hints() -> None:
+    """Don't add type hints if the expression is already a cast"""
+    query = parse_one(
+        """WITH x AS (SELECT a FROM t),
+                y AS (SELECT b FROM t),
+                z AS (SELECT c FROM t)
+         SELECT a AS d FROM x
+          UNION
+         SELECT b AS e FROM y
+          UNION
+         SELECT c AS f FROM z""",
+        dialect="postgres",
+    )
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "a": exp.DataType.build("TEXT"),
+            "b": exp.DataType.build("DATE"),
+            "c": exp.DataType.build("INT"),
+            "d": exp.DataType.build("TEXT"),
+            "e": exp.DataType.build("DATE"),
+            "f": exp.DataType.build("INT"),
+        },
+        start_line=0,
+        end_line=9999,
+    )
+
+    assert len(result) == 3
+    assert result[0].label == "::TEXT"
+    assert result[1].label == "::DATE"
+    assert result[2].label == "::INT"
