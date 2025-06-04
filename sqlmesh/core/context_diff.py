@@ -150,7 +150,7 @@ class ContextDiff(PydanticModel):
                 s.snapshot_id for s in initial_env.promoted_snapshots
             }
 
-        # Find the proper environment to diff against, this might be different than the "initial" (i.e user provided) environment
+        # Find the proper environment to diff against, this might be different than the initial (i.e user provided) environment
         # e.g it will default to prod if the plan option `always_compare_against_prod` is set.
         environment = _get_diff_environment(environment, state_reader, always_compare_against_prod)
         env = (
