@@ -41,12 +41,12 @@ def github_client(mocker: MockerFixture):
 
 
 @pytest.fixture
-def make_pull_request_review() -> t.Callable:
+def make_pull_request_review(github_client) -> t.Callable:
     from github.PullRequestReview import PullRequestReview
 
     def _make_function(username: str, state: str, **kwargs) -> PullRequestReview:
         return PullRequestReview(
-            "test",  # type: ignore
+            github_client.requester,
             {},
             {
                 # Name is whatever they provide in their GitHub profile or login as fallback. Always use login.
@@ -54,7 +54,6 @@ def make_pull_request_review() -> t.Callable:
                 "state": state,
                 **kwargs,
             },
-            completed=False,
         )
 
     return _make_function
