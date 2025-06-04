@@ -1015,7 +1015,9 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                 actual_kind_type, _ = custom_materialization
                 return actual_kind_type(**props)
 
-        validate_extra_and_required_fields(kind_type, set(props), f"model kind '{name}'")
+        validate_extra_and_required_fields(
+            kind_type, set(props), f"MODEL block 'kind {name}(' field"
+        )
         return kind_type(**props)
 
     name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
