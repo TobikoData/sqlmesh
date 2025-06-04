@@ -96,6 +96,12 @@ def macro_evaluator() -> MacroEvaluator:
     def test_select_macro(evaluator):
         return "SELECT 1 AS col"
 
+    @macro()
+    def test_literal_type(evaluator, a: t.Literal["test_literal_a", "test_literal_b", 1, True]):
+        if isinstance(a, exp.Expression):
+            raise SQLMeshError("Coercion failed")
+        return f"'{a}'"
+
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload="def test(_):\n    return 'test'")},
@@ -1087,3 +1093,33 @@ def test_macro_with_spaces():
         ("d.@z", 'd.a."b c"'),
     ):
         assert evaluator.transform(parse_one(sql)).sql() == expected
+
+
+def test_macro_coerce_literal_type(macro_evaluator):
+    expression = d.parse_one("@TEST_LITERAL_TYPE('test_literal_a')")
+    assert macro_evaluator.transform(expression).sql() == "'test_literal_a'"
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE('test_literal_b')")
+    assert macro_evaluator.transform(expression).sql() == "'test_literal_b'"
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE(1)")
+    assert macro_evaluator.transform(expression).sql() == "'1'"
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE(True)")
+    assert macro_evaluator.transform(expression).sql() == "'True'"
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE('test_literal_c')")
+    with pytest.raises(MacroEvalError, match=".*Coercion failed"):
+        macro_evaluator.transform(expression)
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE(2)")
+    with pytest.raises(MacroEvalError, match=".*Coercion failed"):
+        macro_evaluator.transform(expression)
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE(False)")
+    with pytest.raises(MacroEvalError, match=".*Coercion failed"):
+        macro_evaluator.transform(expression)
+
+    expression = d.parse_one("@TEST_LITERAL_TYPE(1.0)")
+    with pytest.raises(MacroEvalError, match=".*Coercion failed"):
+        macro_evaluator.transform(expression)
