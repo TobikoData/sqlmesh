@@ -7,7 +7,7 @@ from lsprotocol import types
 from sqlglot import exp
 from sqlglot.expressions import Expression
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
-from sqlglot.optimizer.scope import build_scope, find_all_in_scope
+from sqlglot.optimizer.scope import build_scope
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.uri import URI
@@ -60,6 +60,77 @@ def get_hints(
     )
 
 
+def _get_type_hints_for_select(
+    expression: exp.Select,
+    dialect: str,
+    columns_to_types: t.Dict[str, exp.DataType],
+    start_line: int,
+    end_line: int,
+) -> t.List[types.InlayHint]:
+    hints: t.List[types.InlayHint] = []
+
+    for select_exp in expression.expressions:
+        if isinstance(select_exp, exp.Alias):
+            meta = select_exp.args["alias"]._meta
+        elif isinstance(select_exp, exp.Column):
+            meta = select_exp.parts[-1]._meta
+        else:
+            continue
+
+        if "line" not in meta or "col" not in meta:
+            continue
+
+        line = meta["line"]
+        col = meta["col"]
+
+        # Lines from sqlglot are 1 based
+        line -= 1
+
+        if line < start_line or line > end_line:
+            continue
+
+        name = select_exp.alias_or_name
+        data_type = columns_to_types.get(name)
+
+        if not data_type or data_type.is_type(exp.DataType.Type.UNKNOWN):
+            continue
+
+        type_label = data_type.sql(dialect)
+        hints.append(
+            types.InlayHint(
+                label=f"::{type_label}",
+                kind=types.InlayHintKind.Type,
+                padding_left=False,
+                padding_right=True,
+                position=types.Position(line=line, character=col),
+            )
+        )
+
+    return hints
+
+
+def _get_type_hints_for_expression(
+    expression: Expression,
+    dialect: str,
+    columns_to_types: t.Dict[str, exp.DataType],
+    start_line: int,
+    end_line: int,
+) -> t.List[types.InlayHint]:
+    if isinstance(expression, exp.Union):
+        return _get_type_hints_for_expression(
+            expression.this, dialect, columns_to_types, start_line, end_line
+        ) + _get_type_hints_for_expression(
+            expression.expression, dialect, columns_to_types, start_line, end_line
+        )
+
+    if isinstance(expression, exp.Select):
+        return _get_type_hints_for_select(
+            expression, dialect, columns_to_types, start_line, end_line
+        )
+
+    return []
+
+
 def _get_type_hints_for_model_from_query(
     query: Expression,
     dialect: str,
@@ -75,44 +146,8 @@ def _get_type_hints_for_model_from_query(
         if not root:
             return []
 
-        for select in find_all_in_scope(root.expression, exp.Select):
-            for select_exp in select.expressions:
-                if isinstance(select_exp, exp.Alias):
-                    meta = select_exp.args["alias"]._meta
-                elif isinstance(select_exp, exp.Column):
-                    meta = select_exp.parts[-1]._meta
-                else:
-                    continue
-
-                if "line" not in meta or "col" not in meta:
-                    continue
-
-                line = meta["line"]
-                col = meta["col"]
-
-                # Lines from sqlglot are 1 based
-                line -= 1
-
-                if line < start_line or line > end_line:
-                    continue
-
-                name = select_exp.alias_or_name
-                data_type = columns_to_types.get(name)
-
-                if not data_type or data_type.is_type(exp.DataType.Type.UNKNOWN):
-                    continue
-
-                type_label = data_type.sql(dialect)
-                hints.append(
-                    types.InlayHint(
-                        label=f"::{type_label}",
-                        kind=types.InlayHintKind.Type,
-                        padding_left=False,
-                        padding_right=True,
-                        position=types.Position(line=line, character=col),
-                    )
-                )
-
-        return hints
+        return _get_type_hints_for_expression(
+            root.expression, dialect, columns_to_types, start_line, end_line
+        )
     except Exception:
         return []

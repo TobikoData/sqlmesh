@@ -2,9 +2,11 @@
 
 import pytest
 
+from sqlglot import exp, parse_one
+
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.hints import get_hints
+from sqlmesh.lsp.hints import get_hints, _get_type_hints_for_model_from_query
 from sqlmesh.lsp.uri import URI
 
 
@@ -60,3 +62,46 @@ def test_hints() -> None:
     assert crbd_hints[1].label == "::DOUBLE"
     assert crbd_hints[2].label == "::INT"
     assert crbd_hints[3].label == "::DATE"
+
+
+@pytest.mark.fast
+def test_union_hints() -> None:
+    query_str = """SELECT a FROM table_a UNION SELECT b FROM table_b UNION SELECT c FROM table_c"""
+    query = parse_one(query_str, dialect="postgres")
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "a": exp.DataType.build("TEXT"),
+            "b": exp.DataType.build("INT"),
+            "c": exp.DataType.build("DATE"),
+        },
+        start_line=0,
+        end_line=1,
+    )
+
+    assert len(result) == 3
+    assert result[0].label == "::TEXT"
+    assert result[1].label == "::INT"
+    assert result[2].label == "::DATE"
+
+
+@pytest.mark.fast
+def test_complex_hints() -> None:
+    query = parse_one("SELECT a, b FROM c", dialect="postgres")
+
+    result = _get_type_hints_for_model_from_query(
+        query=query,
+        dialect="postgres",
+        columns_to_types={
+            "a": exp.DataType.build("VARCHAR(100)"),
+            "b": exp.DataType.build("STRUCT<INT, STRUCT<TEXT, ARRAY<INT>>>"),
+        },
+        start_line=0,
+        end_line=1,
+    )
+
+    assert len(result) == 2
+    assert result[0].label == "::VARCHAR(100)"
+    assert result[1].label == "::STRUCT<INT, STRUCT<TEXT, INT[]>>"
