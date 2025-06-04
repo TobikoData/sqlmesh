@@ -977,6 +977,7 @@ class GithubController:
         status: GithubCheckStatus,
         conclusion: t.Optional[GithubCheckConclusion] = None,
         skip_reason: t.Optional[str] = None,
+        plan_error: t.Optional[PlanError] = None,
     ) -> None:
         """
         Updates the status of the merge commit for the prod environment.
@@ -990,6 +991,7 @@ class GithubController:
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
                 GithubCheckConclusion.SKIPPED: skip_reason,
                 GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
+                GithubCheckConclusion.ACTION_REQUIRED: "Failed due to error applying plan",
             }
             title = (
                 conclusion_to_title.get(conclusion)
@@ -1002,6 +1004,11 @@ class GithubController:
                 summary = (
                     captured_errors or f"{title}\n\n**Error:**\n```\n{traceback.format_exc()}\n```"
                 )
+            elif conclusion.is_action_required:
+                if plan_error:
+                    summary = f"**Plan error:**\n```\n{plan_error}\n```"
+                else:
+                    summary = "Got an action required conclusion but no plan error was provided. This is unexpected."
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
             return conclusion, title, summary
