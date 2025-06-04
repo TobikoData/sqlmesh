@@ -629,7 +629,7 @@ def test_model_field_name_suggestions():
         load_sql_based_model(expressions)
     assert (
         str(ex.value)
-        == "Invalid field name present in the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE(' field: 'batch_sizes'. Did you mean 'batch_size'?"
+        == "Invalid field name present in the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field: 'batch_sizes'. Did you mean 'batch_size'?"
     )
 
     # multiple fields
@@ -675,7 +675,7 @@ def test_model_required_field_missing():
         load_sql_based_model(expressions)
     assert (
         str(ex.value)
-        == "Please add required field 'time_column' to the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE(' field."
+        == "Please add required field 'time_column' to the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field."
     )
 
 
