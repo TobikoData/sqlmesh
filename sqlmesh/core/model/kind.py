@@ -1016,7 +1016,7 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                 return actual_kind_type(**props)
 
         validate_extra_and_required_fields(
-            kind_type, set(props), f"MODEL block 'kind {name}(' field"
+            kind_type, set(props), f"MODEL block 'kind {name}' field"
         )
         return kind_type(**props)
 
