@@ -76,7 +76,7 @@ dev = [
     "psycopg2-binary",
     "pydantic",
     "PyAthena[Pandas]",
-    "PyGithub>=2.6.1",
+    "PyGithub>=2.6.0",
     "pyperf",
     "pyspark~=3.5.0",
     "pytest",
