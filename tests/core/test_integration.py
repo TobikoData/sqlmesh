@@ -8,7 +8,7 @@ from unittest import mock
 from unittest.mock import patch
 
 import os
-import numpy as np
+import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 from pathlib import Path

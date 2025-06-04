@@ -3,7 +3,7 @@ import typing as t
 from dataclasses import dataclass
 from datetime import datetime
 
-import numpy as np
+import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 from faker import Faker
 from models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed  # type: ignore

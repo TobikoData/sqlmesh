@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import typing as t
 
-import numpy as np
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
@@ -215,6 +214,7 @@ class MSSQLEngineAdapter(
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         import pandas as pd
+        import numpy as np
 
         assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")

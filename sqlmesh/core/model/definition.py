@@ -8,7 +8,6 @@ import typing as t
 from functools import cached_property, partial
 from pathlib import Path
 
-import numpy as np
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert
@@ -1565,6 +1564,8 @@ class SeedModel(_Model):
         yield from self.render_seed()
 
     def render_seed(self) -> t.Iterator[QueryOrDF]:
+        import numpy as np
+
         self._ensure_hydrated()
 
         date_columns = []

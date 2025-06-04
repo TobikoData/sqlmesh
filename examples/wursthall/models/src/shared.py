@@ -4,7 +4,7 @@ import random
 import typing as t
 from datetime import date, timedelta
 
-import numpy as np
+import numpy as np  # noqa: TID253
 from faker import Faker
 
 SEED = 99999999
