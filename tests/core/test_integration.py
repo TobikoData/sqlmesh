@@ -12,6 +12,7 @@ import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 from pathlib import Path
+from sqlmesh.core.console import set_console, get_console, TerminalConsole
 from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
@@ -4328,6 +4329,49 @@ def test_indirect_non_breaking_view_is_updated_with_new_table_references(
     assert context.get_model("sushi.top_waiters").kind.is_view
     row_num = context.engine_adapter.fetchone(f"SELECT COUNT(*) FROM sushi.top_waiters")[0]
     assert row_num > 0
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_explain(init_and_plan_context: t.Callable):
+    old_console = get_console()
+    set_console(TerminalConsole())
+
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    waiter_revenue_by_day_model = context.get_model("sushi.waiter_revenue_by_day")
+    waiter_revenue_by_day_model = add_projection_to_model(
+        t.cast(SqlModel, waiter_revenue_by_day_model)
+    )
+    context.upsert_model(waiter_revenue_by_day_model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(waiter_revenue_by_day_model.name)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters")
+
+    common_kwargs = dict(skip_tests=True, no_prompts=True, explain=True)
+
+    # For now just making sure the plan doesn't error
+    context.plan("dev", **common_kwargs)
+    context.plan("dev", **common_kwargs, skip_backfill=True)
+    context.plan("dev", **common_kwargs, empty_backfill=True)
+    context.plan("dev", **common_kwargs, forward_only=True, enable_preview=True)
+    context.plan("prod", **common_kwargs)
+    context.plan("prod", **common_kwargs, forward_only=True)
+    context.plan("prod", **common_kwargs, restate_models=[waiter_revenue_by_day_model.name])
+
+    set_console(old_console)
+
+    # Make sure that the now changes were actually applied
+    for target_env in ("dev", "prod"):
+        plan = context.plan_builder(target_env, skip_tests=True).build()
+        assert plan.has_changes
+        assert plan.missing_intervals
+        assert plan.directly_modified == {waiter_revenue_by_day_snapshot.snapshot_id}
+        assert len(plan.new_snapshots) == 2
+        assert {s.snapshot_id for s in plan.new_snapshots} == {
+            waiter_revenue_by_day_snapshot.snapshot_id,
+            top_waiters_snapshot.snapshot_id,
+        }
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
