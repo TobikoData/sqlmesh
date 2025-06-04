@@ -164,6 +164,13 @@ class Loader(abc.ABC):
     """Abstract base class to load macros and models for a context"""
 
     def __init__(self, context: GenericContext, path: Path) -> None:
+        # This ensures pandas is imported before any model loading happens in the forked process
+        # to avoid macOS fork() safety issues, see https://stackoverflow.com/a/52230415. Without
+        # it, the following error was observerd in a macOS 15.5 system:
+        #
+        # "+[NSMutableString initialize] may have been in progress in another thread when fork() was called."
+        import pandas as pd  # noqa
+
         from sqlmesh.core.console import get_console
 
         self._path_mtimes: t.Dict[Path, float] = {}
