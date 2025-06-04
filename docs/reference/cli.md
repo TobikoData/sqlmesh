@@ -343,6 +343,8 @@ Options:
                                   Default: prod.
   --skip-tests                    Skip tests prior to generating the plan if
                                   they are defined.
+  --skip-linter                   Skip linting prior to generating the plan if
+                                  the linter is enabled.
   -r, --restate-model TEXT        Restate data for specified models and models
                                   downstream from the one specified. For
                                   production environment, all related model
@@ -383,9 +385,12 @@ Options:
                                   application (prod environment only).
   --enable-preview                Enable preview for forward-only models when
                                   targeting a development environment.
-  --diff-rendered                 Output text differences for rendered versions
-                                  of models and standalone audits
-  -v, --verbose                   Verbose output.
+  --diff-rendered                 Output text differences for the rendered
+                                  versions of the models and standalone
+                                  audits.
+  --explain                       Explain the plan instead of applying it.
+  -v, --verbose                   Verbose output. Use -vv for very verbose
+                                  output.
   --help                          Show this message and exit.
 ```
 
