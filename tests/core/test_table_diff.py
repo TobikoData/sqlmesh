@@ -12,7 +12,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckDBConnectionConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff
-import numpy as np
+import numpy as np  # noqa: TID253
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.slow

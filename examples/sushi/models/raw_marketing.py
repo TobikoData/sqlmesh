@@ -2,7 +2,7 @@ import random
 import typing as t
 from datetime import datetime
 
-import numpy as np
+import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 from sqlglot import exp
 

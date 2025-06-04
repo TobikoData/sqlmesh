@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-import numpy as np
 from fastapi import APIRouter, Depends
 from sqlglot import exp
 
@@ -25,6 +24,8 @@ def get_table_diff(
     context: Context = Depends(get_loaded_context),
 ) -> t.Optional[TableDiff]:
     """Calculate differences between tables, taking into account schema and row level differences."""
+    import numpy as np
+
     table_diffs = context.table_diff(
         source=source,
         target=target,

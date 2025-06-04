@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-import numpy as np
+import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 
 

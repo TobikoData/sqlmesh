@@ -10,7 +10,6 @@ from itertools import chain
 from pathlib import Path
 from unittest.mock import patch
 
-import numpy as np
 from io import StringIO
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -207,6 +206,7 @@ class ModelTest(unittest.TestCase):
         partial: t.Optional[bool] = False,
     ) -> None:
         """Compare two DataFrames"""
+        import numpy as np
         import pandas as pd
         from pandas.api.types import is_object_dtype
 
@@ -775,6 +775,8 @@ def generate_test(
         name: The name of the test. This is inferred from the model name by default.
         include_ctes: When true, CTE fixtures will also be generated.
     """
+    import numpy as np
+
     test_name = name or f"test_{model.view_name}"
     path = path or f"{test_name}.yaml"
 
@@ -902,6 +904,7 @@ def _raise_if_unexpected_columns(
 
 def _row_difference(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
     """Returns all rows in `left` that don't appear in `right`."""
+    import numpy as np
     import pandas as pd
 
     rows_missing_from_right = []
@@ -928,6 +931,8 @@ def _raise_error(msg: str, path: Path | None = None) -> None:
 
 def _normalize_df_value(value: t.Any) -> t.Any:
     """Normalize data in a pandas dataframe so ruamel and sqlglot can deal with it."""
+    import numpy as np
+
     if isinstance(value, (list, np.ndarray)):
         return [_normalize_df_value(v) for v in value]
     if isinstance(value, dict):
