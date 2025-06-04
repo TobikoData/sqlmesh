@@ -4,7 +4,7 @@ import re
 import typing as t
 from unittest.mock import call, patch
 
-import duckdb
+import duckdb  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import time_machine

@@ -14,7 +14,7 @@ from unittest.mock import PropertyMock
 import os
 import shutil
 
-import duckdb
+import duckdb  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
