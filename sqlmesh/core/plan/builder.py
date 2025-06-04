@@ -6,7 +6,7 @@ import typing as t
 from collections import defaultdict
 from functools import cached_property
 
-
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import PlanBuilderConsole, get_console
 from sqlmesh.core.config import (
     AutoCategorizationMode,
@@ -117,6 +117,7 @@ class PlanBuilder:
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
         user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
+        environment: str = c.PROD,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -159,7 +160,7 @@ class PlanBuilder:
         self.override_end = end is not None
         self.environment_naming_info = EnvironmentNamingInfo.from_environment_catalog_mapping(
             environment_catalog_mapping or {},
-            name=self._context_diff.initial_environment,
+            name=environment,
             suffix_target=environment_suffix_target,
             normalize_name=self._context_diff.normalize_environment_name,
             gateway_managed=self._context_diff.gateway_managed_virtual_layer,

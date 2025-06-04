@@ -219,6 +219,7 @@ class DifferenceConsole(abc.ABC):
         self,
         context_diff: ContextDiff,
         no_diff: bool = True,
+        environment: t.Optional[str] = None,
     ) -> None:
         """Displays a summary of differences for the environment."""
 
@@ -645,6 +646,7 @@ class NoopConsole(Console):
         self,
         context_diff: ContextDiff,
         no_diff: bool = True,
+        environment: t.Optional[str] = None,
     ) -> None:
         pass
 
@@ -1524,18 +1526,21 @@ class TerminalConsole(Console):
         self,
         context_diff: ContextDiff,
         no_diff: bool = True,
+        environment: t.Optional[str] = None,
     ) -> None:
         """Shows a summary of the environment differences.
 
         Args:
             context_diff: The context diff to use to print the summary
             no_diff: Hide the actual environment statement differences.
+            environment: The initial target environment
         """
         if context_diff.is_new_environment:
+            new_environment = environment or context_diff.environment
             msg = (
-                f"\n`{context_diff.environment}` environment will be initialized"
+                f"\n`{new_environment}` environment will be initialized"
                 if not context_diff.create_from_env_exists
-                else f"\nNew environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+                else f"\nNew environment `{new_environment}` will be created from `{context_diff.create_from}`"
             )
             self._print(Tree(f"[bold]{msg}\n"))
             if not context_diff.has_snapshot_changes:
@@ -1786,6 +1791,7 @@ class TerminalConsole(Console):
             self.show_environment_difference_summary(
                 plan.context_diff,
                 no_diff=no_diff,
+                environment=plan_builder.environment_naming_info.name,
             )
 
         if plan.context_diff.has_changes:
@@ -2898,18 +2904,21 @@ class MarkdownConsole(CaptureTerminalConsole):
         self,
         context_diff: ContextDiff,
         no_diff: bool = True,
+        environment: t.Optional[str] = None,
     ) -> None:
         """Shows a summary of the environment differences.
 
         Args:
             context_diff: The context diff to use to print the summary.
             no_diff: Hide the actual environment statements differences.
+            environment: The initial target environment
         """
         if context_diff.is_new_environment:
+            new_environment = environment or context_diff.environment
             msg = (
-                f"\n**`{context_diff.environment}` environment will be initialized**"
+                f"\n**`{new_environment}` environment will be initialized**"
                 if not context_diff.create_from_env_exists
-                else f"\n**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**"
+                else f"\n**New environment `{new_environment}` will be created from `{context_diff.create_from}`**"
             )
             self._print(msg)
             if not context_diff.has_snapshot_changes:
@@ -3501,6 +3510,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self,
         context_diff: ContextDiff,
         no_diff: bool = True,
+        environment: t.Optional[str] = None,
     ) -> None:
         self._write("Environment Difference Summary:")
 

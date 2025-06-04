@@ -89,8 +89,6 @@ class ContextDiff(PydanticModel):
     """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
-    initial_environment: str = ""
-    """The initial target environment (e.g 'dev'), if the plan option `always_compare_to_prod` is set"""
 
     @classmethod
     def create(
@@ -106,7 +104,6 @@ class ContextDiff(PydanticModel):
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
         infer_python_dependencies: bool = True,
-        initial_environment: t.Optional[str] = None,
         always_compare_against_prod: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
@@ -133,33 +130,34 @@ class ContextDiff(PydanticModel):
             The ContextDiff object.
         """
         initial_environment = environment.lower()
-
-        environment = _get_target_environment(
-            environment, state_reader, always_compare_against_prod
-        )
-
-        env = state_reader.get_environment(environment)
-        initial_env = (
-            env
-            if initial_environment == environment
-            else state_reader.get_environment(initial_environment)
-        )
+        initial_env = state_reader.get_environment(initial_environment)
 
         create_from_env_exists = False
-        if env is None or env.expired:
-            env = state_reader.get_environment(create_from.lower())
+        if initial_env is None or initial_env.expired:
+            initial_env = state_reader.get_environment(create_from.lower())
 
-            if not env and create_from != c.PROD:
+            if not initial_env and create_from != c.PROD:
                 get_console().log_warning(
                     f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
                 )
 
             is_new_environment = True
-            create_from_env_exists = env is not None
+            create_from_env_exists = initial_env is not None
             previously_promoted_snapshot_ids = set()
         else:
             is_new_environment = False
-            previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
+            previously_promoted_snapshot_ids = {
+                s.snapshot_id for s in initial_env.promoted_snapshots
+            }
+
+        # Find the proper environment to diff against, this might be different than the "initial" (i.e user provided) environment
+        # e.g it will default to prod if the plan option `always_compare_against_prod` is set.
+        environment = _get_diff_environment(environment, state_reader, always_compare_against_prod)
+        env = (
+            initial_env
+            if (initial_environment == environment)
+            else state_reader.get_environment(environment)
+        )
 
         environment_snapshot_infos = []
         if env:
@@ -237,7 +235,6 @@ class ContextDiff(PydanticModel):
 
         return ContextDiff(
             environment=environment,
-            initial_environment=initial_environment,
             is_new_environment=is_new_environment,
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             normalize_environment_name=is_new_environment or bool(env and env.normalize_name),
@@ -279,9 +276,8 @@ class ContextDiff(PydanticModel):
 
         snapshots = state_reader.get_snapshots(env.snapshots)
 
-        environment = env.name
         return ContextDiff(
-            environment=environment,
+            environment=env.name,
             is_new_environment=False,
             is_unfinalized_environment=False,
             normalize_environment_name=env.normalize_name,
@@ -300,7 +296,6 @@ class ContextDiff(PydanticModel):
             previous_environment_statements=[],
             previous_gateway_managed_virtual_layer=env.gateway_managed,
             gateway_managed_virtual_layer=env.gateway_managed,
-            initial_environment=environment,
         )
 
     @property
@@ -499,7 +494,7 @@ class ContextDiff(PydanticModel):
             return ""
 
 
-def _get_target_environment(
+def _get_diff_environment(
     environment: str, state_reader: StateReader, always_compare_against_prod: bool = False
 ) -> str:
     if always_compare_against_prod:
