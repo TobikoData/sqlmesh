@@ -61,7 +61,7 @@ def make_pull_request_review(github_client) -> t.Callable:
 
 @pytest.fixture
 def sqlmesh_repo_root_path() -> Path:
-    return next(p for p in Path(__file__).parents if str(p).endswith("/tests")).parent
+    return next(p for p in Path(__file__).parents if str(p).endswith("tests")).parent
 
 
 @pytest.fixture
