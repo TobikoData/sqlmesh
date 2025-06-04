@@ -199,6 +199,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 (label_tuple.expressions[0].name, label_tuple.expressions[1].name)
                 for label_tuple in label_tuples
             )
+        elif query_label_property is not None:
+            raise SQLMeshError(
+                "Invalid value for `session_properties.query_label`. Must be an array or tuple."
+            )
 
         if parsed_query_label:
             query_label_str = ",".join([":".join(label) for label in parsed_query_label])
