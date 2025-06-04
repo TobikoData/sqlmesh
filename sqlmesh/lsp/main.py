@@ -103,12 +103,13 @@ class SQLMeshLanguageServer:
                                     loaded_sqlmesh_message(ls, folder_path)
                                     return  # Exit after successfully loading any config
                                 except Exception as e:
-                                    ls.show_message(
+                                    ls.log_trace(
                                         f"Error loading context from {config_path}: {e}",
-                                        types.MessageType.Warning,
                                     )
             except Exception as e:
-                ls.show_message(f"Error initializing SQLMesh context: {e}", types.MessageType.Error)
+                ls.log_trace(
+                    f"Error initializing SQLMesh context: {e}",
+                )
 
         @self.server.feature(ALL_MODELS_FEATURE)
         def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
@@ -321,7 +322,9 @@ class SQLMeshLanguageServer:
                 )
 
             except Exception as e:
-                ls.show_message(f"Error getting hover information: {e}", types.MessageType.Error)
+                ls.log_trace(
+                    f"Error getting hover information: {e}",
+                )
                 return None
 
         @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)
@@ -389,7 +392,9 @@ class SQLMeshLanguageServer:
                     result_id=str(result_id),
                 )
             except Exception as e:
-                ls.show_message(f"Error getting diagnostics: {e}", types.MessageType.Error)
+                ls.log_trace(
+                    f"Error getting diagnostics: {e}",
+                )
                 return types.RelatedFullDocumentDiagnosticReport(
                     kind=types.DocumentDiagnosticReportKind.Full,
                     items=[],
@@ -452,8 +457,8 @@ class SQLMeshLanguageServer:
                 return types.WorkspaceDiagnosticReport(items=items)
 
             except Exception as e:
-                ls.show_message(
-                    f"Error getting workspace diagnostics: {e}", types.MessageType.Error
+                ls.log_trace(
+                    f"Error getting workspace diagnostics: {e}",
                 )
                 return types.WorkspaceDiagnosticReport(items=[])
 
