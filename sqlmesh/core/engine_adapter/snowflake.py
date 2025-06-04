@@ -93,8 +93,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             return
 
         self.execute(f"USE WAREHOUSE {warehouse_sql}")
-        yield
-        self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
+        try:
+            yield
+        finally:
+            self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
     @property
     def _current_warehouse(self) -> exp.Identifier:
