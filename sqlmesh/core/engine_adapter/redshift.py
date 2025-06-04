@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import typing as t
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
@@ -27,6 +26,8 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter.base import QueryOrDF, Query
 
@@ -142,6 +143,8 @@ class RedshiftEngineAdapter(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
+        import pandas as pd
+
         self.execute(query, quote_identifiers=quote_identifiers)
 
         # We manually build the `DataFrame` here because the driver's `fetch_dataframe`
@@ -257,6 +260,8 @@ class RedshiftEngineAdapter(
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
+        import pandas as pd
+
         if not isinstance(query_or_df, pd.DataFrame) or not self.table_exists(table_name):
             return super().replace_query(
                 table_name,

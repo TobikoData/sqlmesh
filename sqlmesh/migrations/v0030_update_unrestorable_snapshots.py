@@ -4,13 +4,14 @@ import json
 import typing as t
 from collections import defaultdict
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync: t.Any, **kwargs: t.Any) -> None:  # type: ignore
+    import pandas as pd
+
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"

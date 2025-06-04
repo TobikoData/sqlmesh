@@ -1,6 +1,6 @@
 import typing as t
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from sqlglot import expressions as exp
 from sqlglot import parse_one

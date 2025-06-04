@@ -319,7 +319,9 @@ class ModelMeta(_Node):
             return parsed_session_properties
 
         for eq in parsed_session_properties:
-            if eq.name == "query_label":
+            prop_name = eq.left.name
+
+            if prop_name == "query_label":
                 query_label = eq.right
                 if not (
                     isinstance(query_label, exp.Array)
@@ -345,6 +347,12 @@ class ModelMeta(_Node):
                         raise ConfigError(
                             "Invalid entry in `session_properties.query_label`. Must be tuples of string literals with length 2."
                         )
+            elif prop_name == "authorization":
+                authorization = eq.right
+                if not (isinstance(authorization, exp.Literal) and authorization.is_string):
+                    raise ConfigError(
+                        "Invalid value for `session_properties.authorization`. Must be a string literal."
+                    )
 
         return parsed_session_properties
 

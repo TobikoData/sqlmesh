@@ -4,8 +4,6 @@ import math
 import typing as t
 from functools import cached_property
 
-import pandas as pd
-
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
@@ -18,7 +16,10 @@ from sqlglot.optimizer.scope import find_all_in_scope
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.errors import SQLMeshError
 
+
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
 
@@ -74,6 +75,21 @@ class RowDiff(PydanticModel, frozen=True):
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
     decimals: int = 3
+
+    _types_resolved: t.ClassVar[bool] = False
+
+    def __new__(cls, *args: t.Any, **kwargs: t.Any) -> RowDiff:
+        if not cls._types_resolved:
+            cls._resolve_types()
+        return super().__new__(cls)
+
+    @classmethod
+    def _resolve_types(cls) -> None:
+        # Pandas is imported by type checking so we need to resolve the types with the real import before instantiating
+        import pandas as pd  # noqa
+
+        cls.model_rebuild()
+        cls._types_resolved = True
 
     @property
     def source_count(self) -> int:

@@ -6,7 +6,6 @@ import zlib
 from io import StringIO
 from pathlib import Path
 
-import pandas as pd
 from sqlglot import exp
 from sqlglot.dialects.dialect import UNESCAPED_SEQUENCES
 from sqlglot.helper import seq_get
@@ -15,6 +14,9 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.core.model.common import parse_bool
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,8 @@ class CsvSeedReader:
             batch_start += batch_size
 
     def _get_df(self) -> pd.DataFrame:
+        import pandas as pd
+
         if self._df is None:
             self._df = pd.read_csv(
                 StringIO(self.content),

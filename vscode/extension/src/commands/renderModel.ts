@@ -4,6 +4,51 @@ import { isErr } from '@bus/result'
 import { RenderModelEntry } from '../lsp/custom'
 import { RenderedModelProvider } from '../providers/renderedModelProvider'
 
+export async function reRenderModelForSourceFile(
+  sourceUri: string,
+  lspClient: LSPClient,
+  renderedModelProvider: RenderedModelProvider,
+): Promise<void> {
+  const renderedUri = renderedModelProvider.getRenderedUriForSource(sourceUri)
+  if (!renderedUri) {
+    return // No rendered model exists for this source file
+  }
+
+  // Call the render model API
+  const result = await lspClient.call_custom_method('sqlmesh/render_model', {
+    textDocumentUri: sourceUri,
+  })
+
+  if (isErr(result)) {
+    // Silently fail on auto-rerender errors to avoid spamming user
+    return
+  }
+
+  // Check if we got any models
+  if (!result.value.models || result.value.models.length === 0) {
+    return
+  }
+
+  // Get the originally rendered model information
+  const originalModelInfo =
+    renderedModelProvider.getModelInfoForRendered(renderedUri)
+
+  // Find the specific model that was originally rendered, or fall back to the first model
+  const selectedModel = originalModelInfo
+    ? result.value.models.find(
+        model =>
+          model.name === originalModelInfo.name &&
+          model.fqn === originalModelInfo.fqn,
+      ) || result.value.models[0]
+    : result.value.models[0]
+
+  // Update the existing rendered model content
+  renderedModelProvider.updateRenderedModel(
+    renderedUri,
+    selectedModel.rendered_query,
+  )
+}
+
 export function renderModel(
   lspClient?: LSPClient,
   renderedModelProvider?: RenderedModelProvider,
@@ -114,6 +159,8 @@ export function renderModel(
     const uri = renderedModelProvider.storeRenderedModel(
       selectedModel.name,
       selectedModel.rendered_query,
+      documentUri,
+      selectedModel,
     )
 
     // Open the virtual document

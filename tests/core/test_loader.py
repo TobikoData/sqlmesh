@@ -22,7 +22,7 @@ SELECT 1;
         },
         "python": {
             "contents": """import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -134,7 +134,7 @@ def my_model(context, **kwargs):
     pass"""
 
     model_payload_b = f"""import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(

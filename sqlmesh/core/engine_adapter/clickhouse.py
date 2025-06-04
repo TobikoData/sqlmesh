@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 import logging
-import pandas as pd
 import re
 from sqlglot import exp, maybe_parse
 from sqlmesh.core.dialect import to_schema
@@ -19,6 +18,8 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 

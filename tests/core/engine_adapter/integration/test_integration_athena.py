@@ -1,7 +1,7 @@
 import typing as t
 import pytest
 from pytest import FixtureRequest
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import datetime
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
 from sqlmesh.utils.aws import parse_s3_uri

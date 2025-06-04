@@ -10,7 +10,7 @@ import shutil
 from datetime import datetime, timedelta
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 import pytz
 from sqlglot import exp, parse_one
@@ -2534,7 +2534,7 @@ def test_python_model_column_order(ctx_df: TestContext, tmp_path: pathlib.Path):
     model_definitions = {
         # python model that emits a Pandas dataframe
         "pandas": """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import typing as t
 from sqlmesh import ExecutionContext, model
 

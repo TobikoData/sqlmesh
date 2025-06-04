@@ -76,7 +76,7 @@ dev = [
     "psycopg2-binary",
     "pydantic",
     "PyAthena[Pandas]",
-    "PyGithub~=2.5.0",
+    "PyGithub",
     "pyperf",
     "pyspark~=3.5.0",
     "pytest",
@@ -270,4 +270,10 @@ retry_delay = 10
 select = [
     "F401",
     "RET505",
+]
+extend-select = ["TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = [
+  "pandas",
 ]

@@ -5,8 +5,6 @@ from __future__ import annotations
 import typing as t
 
 import numpy as np
-import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
@@ -189,6 +187,9 @@ class MSSQLEngineAdapter(
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _convert_df_datetime(self, df: DF, columns_to_types: t.Dict[str, exp.DataType]) -> None:
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype  # type: ignore
+
         # pymssql doesn't convert Pandas Timestamp (datetime64) types
         # - this code is based on snowflake adapter implementation
         for column, kind in columns_to_types.items():
@@ -213,6 +214,8 @@ class MSSQLEngineAdapter(
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+
         assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")
 
@@ -247,6 +250,8 @@ class MSSQLEngineAdapter(
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
+        import pandas as pd
+
         catalog = self.get_current_catalog()
         query = (
             exp.select(

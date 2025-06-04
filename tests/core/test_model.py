@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
 import time_machine
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -4531,6 +4531,81 @@ def test_model_session_properties(sushi_context):
         )
 
 
+def test_session_properties_authorization_validation():
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                authorization = 'test_user'
+            )
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="trino",
+        )
+    )
+    assert model.session_properties == {"authorization": "test_user"}
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = 123
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = some_column
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = CONCAT('user', '_suffix')
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+
 def test_model_jinja_macro_rendering():
     expressions = d.parse(
         """
@@ -8679,7 +8754,7 @@ def identity(evaluator, value):
     blueprint_pydf.parent.mkdir(parents=True, exist_ok=True)
     blueprint_pydf.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 
@@ -9105,7 +9180,7 @@ def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixt
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
     blueprint_variables.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlglot import exp
 from sqlmesh import model
 
@@ -9167,7 +9242,7 @@ def test_python_model_depends_on_blueprints(tmp_path: Path) -> None:
     py_model.parent.mkdir(parents=True, exist_ok=True)
     py_model.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 @model(

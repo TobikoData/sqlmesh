@@ -3,7 +3,7 @@ import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 

@@ -1,4 +1,11 @@
 import * as vscode from 'vscode'
+import { RenderModelEntry } from '../lsp/custom'
+
+interface RenderedModelInfo {
+  content: string
+  sourceUri?: string
+  modelInfo?: RenderModelEntry
+}
 
 /**
  * Content provider for read-only rendered SQL models
@@ -8,7 +15,10 @@ export class RenderedModelProvider
 {
   private static readonly scheme = 'sqlmesh-rendered'
 
-  private renderedModels = new Map<string, string>()
+  // Single map containing all rendered model information
+  private renderedModels = new Map<string, RenderedModelInfo>()
+  // Track which source file URIs are associated with rendered models
+  private sourceToRenderedUri = new Map<string, vscode.Uri>()
 
   // Event emitter for content changes
   private _onDidChange = new vscode.EventEmitter<vscode.Uri>()
@@ -19,13 +29,19 @@ export class RenderedModelProvider
    */
   provideTextDocumentContent(uri: vscode.Uri): string {
     const key = uri.toString()
-    return this.renderedModels.get(key) || ''
+    const modelInfo = this.renderedModels.get(key)
+    return modelInfo?.content || ''
   }
 
   /**
    * Store rendered model content and create a URI for it
    */
-  storeRenderedModel(modelName: string, content: string): vscode.Uri {
+  storeRenderedModel(
+    modelName: string,
+    content: string,
+    sourceUri?: string,
+    modelInfo?: RenderModelEntry,
+  ): vscode.Uri {
     const fileName = `${modelName} (rendered)`
     // Add a timestamp to make the URI unique for each render
     const timestamp = Date.now()
@@ -35,9 +51,76 @@ export class RenderedModelProvider
       path: fileName,
       fragment: timestamp.toString(),
     })
-    this.renderedModels.set(uri.toString(), content)
+
+    const uriString = uri.toString()
+
+    // Store all information in single map
+    this.renderedModels.set(uriString, {
+      content,
+      sourceUri,
+      modelInfo,
+    })
+
+    // Track the association between a source file and the rendered model
+    if (sourceUri) {
+      // Remove any existing mapping for this source file
+      const existingRenderedUri = this.sourceToRenderedUri.get(sourceUri)
+      if (existingRenderedUri) {
+        this.renderedModels.delete(existingRenderedUri.toString())
+      }
+
+      this.sourceToRenderedUri.set(sourceUri, uri)
+    }
+
     this._onDidChange.fire(uri)
     return uri
+  }
+
+  /**
+   * Update an existing rendered model with new content
+   */
+  updateRenderedModel(uri: vscode.Uri, content: string): void {
+    const uriString = uri.toString()
+    const existingInfo = this.renderedModels.get(uriString)
+    if (existingInfo) {
+      this.renderedModels.set(uriString, {
+        ...existingInfo,
+        content,
+      })
+    }
+    this._onDidChange.fire(uri)
+  }
+
+  /**
+   * Get the rendered URI for a given source file URI
+   */
+  getRenderedUriForSource(sourceUri: string): vscode.Uri | undefined {
+    return this.sourceToRenderedUri.get(sourceUri)
+  }
+
+  /**
+   * Get the source URI for a given rendered model URI
+   */
+  getSourceUriForRendered(renderedUri: string): string | undefined {
+    const modelInfo = this.renderedModels.get(renderedUri)
+    return modelInfo?.sourceUri
+  }
+
+  /**
+   * Get the model information for a given rendered model URI
+   */
+  getModelInfoForRendered(
+    renderedUri: vscode.Uri,
+  ): RenderModelEntry | undefined {
+    const modelInfo = this.renderedModels.get(renderedUri.toString())
+    return modelInfo?.modelInfo
+  }
+
+  /**
+   * Check if a source file has an associated rendered model
+   */
+  hasRenderedModelForSource(sourceUri: string): boolean {
+    return this.sourceToRenderedUri.has(sourceUri)
   }
 
   /**
@@ -52,6 +135,7 @@ export class RenderedModelProvider
    */
   dispose() {
     this.renderedModels.clear()
+    this.sourceToRenderedUri.clear()
     this._onDidChange.dispose()
   }
 }

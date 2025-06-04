@@ -8,7 +8,6 @@ import uuid
 import logging
 import textwrap
 from pathlib import Path
-import pandas as pd
 import numpy as np
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -2497,6 +2496,7 @@ class TerminalConsole(Console):
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
     """Helper function to compare two cells and returns true if they're equal, handling array objects."""
+    import pandas as pd
 
     # Convert array-like objects to list for consistent comparison
     def _normalize(val: t.Any) -> t.Any:
@@ -3184,6 +3184,12 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
         logger.warning(long_message or short_message)
+
+        if not short_message.endswith("\n"):
+            short_message += (
+                "\n"  # so that the closing ``` ends up on a newline which is important for GitHub
+            )
+
         self._print(f"```\n\\[WARNING] {short_message}```\n\n")
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--token",
     type=str,
+    envvar="GITHUB_TOKEN",
     help="The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
 )
 @click.pass_context
@@ -185,9 +186,11 @@ def _deploy_production(controller: GithubController) -> bool:
             skip_reason=str(e),
         )
         return False
-    except PlanError:
+    except PlanError as e:
         controller.update_prod_environment_check(
-            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.ACTION_REQUIRED
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.ACTION_REQUIRED,
+            plan_error=e,
         )
         return False
     except Exception:

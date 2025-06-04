@@ -4,8 +4,6 @@ import contextlib
 import logging
 import typing as t
 
-import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -33,6 +31,8 @@ logger = logging.getLogger(__name__)
 snowpark = optional_import("snowflake.snowpark")
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF, SnowparkSession
     from sqlmesh.core.node import IntervalUnit
@@ -93,8 +93,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             return
 
         self.execute(f"USE WAREHOUSE {warehouse_sql}")
-        yield
-        self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
+        try:
+            yield
+        finally:
+            self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
     @property
     def _current_warehouse(self) -> exp.Identifier:
@@ -290,6 +292,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype
+
         temp_table = self._get_temp_table(
             target_table or "pandas", quoted=False
         )  # write_pandas() re-quotes everything without checking if its already quoted
@@ -391,6 +396,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
+        import pandas as pd
         from snowflake.connector.errors import NotSupportedError
 
         self.execute(query, quote_identifiers=quote_identifiers)

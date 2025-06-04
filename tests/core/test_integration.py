@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import os
 import numpy as np
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pathlib import Path
 from sqlmesh.core.config.naming import NameInferenceConfig
@@ -5399,7 +5399,7 @@ def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
 
     # note: we deliberately dont specify a Kind here to allow the defaults to be picked up
     python_model_file = """import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(

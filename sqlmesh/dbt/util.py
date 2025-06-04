@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import typing as t
 
 import agate
-import pandas as pd
 from dbt.version import get_installed_version
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 
 def _get_dbt_version() -> t.Tuple[int, int, int]:

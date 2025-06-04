@@ -12,7 +12,7 @@ import { AuthenticationProviderTobikoCloud } from './auth/auth'
 import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
-import { renderModel } from './commands/renderModel'
+import { renderModel, reRenderModelForSourceFile } from './commands/renderModel'
 import { isErr } from '@bus/result'
 import {
   handleNotSginedInError,
@@ -23,6 +23,7 @@ import {
 import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
 import { RenderedModelProvider } from './providers/renderedModelProvider'
+import { sleep } from './utilities/sleep'
 
 let lspClient: LSPClient | undefined
 
@@ -83,13 +84,6 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   )
 
-  context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider(
-      selector,
-      completionProvider(lspClient),
-    ),
-  )
-
   // Register the webview
   const lineagePanel = new LineagePanel(context.extensionUri, lspClient)
   context.subscriptions.push(
@@ -97,6 +91,25 @@ export async function activate(context: vscode.ExtensionContext) {
       LineagePanel.viewType,
       lineagePanel,
     ),
+  )
+
+  // Add file save listener for auto-rerendering models
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async document => {
+      if (
+        lspClient &&
+        renderedModelProvider.hasRenderedModelForSource(
+          document.uri.toString(true),
+        )
+      ) {
+        await sleep(100)
+        await reRenderModelForSourceFile(
+          document.uri.toString(true),
+          lspClient,
+          renderedModelProvider,
+        )
+      }
+    }),
   )
 
   const restart = async () => {
@@ -163,6 +176,15 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   } else {
     context.subscriptions.push(lspClient)
+  }
+
+  if (lspClient && !lspClient.hasCompletionCapability()) {
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        selector,
+        completionProvider(lspClient),
+      ),
+    )
   }
 
   traceInfo('Extension activated')

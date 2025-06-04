@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh.dbt.util import pandas_to_agate
 
 
