@@ -10,7 +10,7 @@ dependencies = [
     "astor",
     "click",
     "croniter",
-    "duckdb!=0.10.3",
+    "duckdb>=0.10.0,!=0.10.3",
     "dateparser",
     "hyperscript>=0.1.0",
     "importlib-metadata; python_version<'3.12'",
@@ -275,6 +275,7 @@ extend-select = ["TID"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 banned-module-level-imports = [
-    "pandas",
+    "duckdb",
     "numpy",
+    "pandas",
 ]
