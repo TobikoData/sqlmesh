@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.dialect import schema_
+from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -631,6 +632,14 @@ def test_session_authorization(trino_mocked_engine_adapter: TrinoEngineAdapter):
             raise RuntimeError("Test exception")
     except RuntimeError:
         pass
+
+    # Test 5: Invalid authorization value
+    with pytest.raises(
+        SQLMeshError,
+        match="Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        with adapter.session({"authorization": exp.Literal.number(1)}):
+            adapter.execute("SELECT 1")
 
     assert to_sql_calls(adapter) == [
         "SET SESSION AUTHORIZATION 'test_user'",

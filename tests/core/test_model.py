@@ -10244,3 +10244,38 @@ def test_invalid_sql_model_query() -> None:
             match=r"^A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block.*",
         ):
             load_sql_based_model(expressions)
+
+
+def test_query_label_and_authorization_macro():
+    @macro()
+    def test_query_label_macro(evaluator):
+        return "[('key', 'value')]"
+
+    @macro()
+    def test_authorization_macro(evaluator):
+        return exp.Literal.string("test_authorization")
+
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           session_properties (
+            query_label = @test_query_label_macro(),
+            authorization = @test_authorization_macro()
+           )
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.session_properties == {
+        "query_label": d.parse_one("@test_query_label_macro()"),
+        "authorization": d.parse_one("@test_authorization_macro()"),
+    }
+
+    assert model.render_session_properties() == {
+        "query_label": d.parse_one("[('key', 'value')]"),
+        "authorization": d.parse_one("'test_authorization'"),
+    }
