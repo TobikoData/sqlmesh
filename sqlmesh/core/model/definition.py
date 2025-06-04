@@ -2156,7 +2156,10 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
         name = get_model_name(path)
 
     if not name:
-        raise_config_error("Model must have a name", path)
+        raise_config_error(
+            "Please add the required 'name' field to the MODEL block at the top of the file.\n\n"
+            + "Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview"
+        )
     if "default_catalog" in meta_fields:
         raise_config_error(
             "`default_catalog` cannot be set on a per-model basis. It must be set at the connection level.",
@@ -2400,7 +2403,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
     validate_extra_and_required_fields(
-        klass, {"name", *kwargs} - {"grain", "table_properties"}, "model definition"
+        klass, {"name", *kwargs} - {"grain", "table_properties"}, "MODEL block"
     )
 
     for prop in PROPERTIES:
