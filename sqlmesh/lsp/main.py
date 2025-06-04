@@ -352,7 +352,6 @@ class SQLMeshLanguageServer:
                 return hints
 
             except Exception as e:
-                ls.show_message(f"Error getting type hints: {e}", types.MessageType.Error)
                 return []
 
         @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)

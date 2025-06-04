@@ -41,19 +41,19 @@ def get_hints(
     file_info = lsp_context.map[path]
 
     # Process based on whether it's a model or standalone audit
-    if isinstance(file_info, ModelTarget):
-        # It's a model
-        model = lsp_context.context.get_model(
-            model_or_snapshot=file_info.names[0], raise_if_missing=False
-        )
-        if model is None or not isinstance(model, SqlModel):
-            return []
-
-        query = model.query
-        dialect = model.dialect
-        columns_to_types = model.columns_to_types or {}
-    else:
+    if not isinstance(file_info, ModelTarget):
         return []
+
+    # It's a model
+    model = lsp_context.context.get_model(
+        model_or_snapshot=file_info.names[0], raise_if_missing=False
+    )
+    if not isinstance(model, SqlModel):
+        return []
+
+    query = model.query
+    dialect = model.dialect
+    columns_to_types = model.columns_to_types or {}
 
     return _get_type_hints_for_model_from_query(
         query, dialect, columns_to_types, start_line, end_line
@@ -77,9 +77,6 @@ def _get_type_hints_for_model_from_query(
 
         for select in find_all_in_scope(root.expression, exp.Select):
             for select_exp in select.expressions:
-                if not select_exp:
-                    continue
-
                 if isinstance(select_exp, exp.Alias):
                     meta = select_exp.args["alias"]._meta
                 elif isinstance(select_exp, exp.Column):
@@ -87,22 +84,25 @@ def _get_type_hints_for_model_from_query(
                 else:
                     continue
 
-                line = meta.get("line") - 1  # Lines from sqlglot are 1 based
-                col = meta.get("col")
-
-                name = select_exp.alias_or_name
-                if name not in columns_to_types:
+                if "line" not in meta or "col" not in meta:
                     continue
+
+                line = meta["line"]
+                col = meta["col"]
+
+                # Lines from sqlglot are 1 based
+                line -= 1
 
                 if line < start_line or line > end_line:
                     continue
 
+                name = select_exp.alias_or_name
                 data_type = columns_to_types.get(name)
 
                 if not data_type or data_type.is_type(exp.DataType.Type.UNKNOWN):
                     continue
 
-                type_label = str(data_type)
+                type_label = data_type.sql(dialect)
                 hints.append(
                     types.InlayHint(
                         label=f"::{type_label}",
