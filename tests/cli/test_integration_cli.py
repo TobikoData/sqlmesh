@@ -7,8 +7,6 @@ from sqlmesh.utils import yaml
 import shutil
 import site
 import uuid
-import os
-import platform
 
 pytestmark = pytest.mark.slow
 
@@ -32,11 +30,6 @@ def invoke_cli(tmp_path: Path) -> InvokeCliType:
     ).stdout.strip()
 
     def _invoke(sqlmesh_args: t.List[str], **kwargs: t.Any) -> subprocess.CompletedProcess:
-        # Set up environment to handle macOS fork safety, see https://stackoverflow.com/a/52230415
-        env = os.environ.copy()
-        if platform.system() == "Darwin":
-            env["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-
         return subprocess.run(
             args=[sqlmesh_bin] + sqlmesh_args,
             # set the working directory to the isolated temp dir for this test
@@ -46,7 +39,6 @@ def invoke_cli(tmp_path: Path) -> InvokeCliType:
             # combine stdout/stderr into a single stream
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            env=env,
             **kwargs,
         )
 
