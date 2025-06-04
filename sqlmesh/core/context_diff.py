@@ -129,8 +129,8 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        initial_environment = environment.lower()
-        initial_env = state_reader.get_environment(initial_environment)
+        initial_environment_name = environment.lower()
+        initial_env = state_reader.get_environment(initial_environment_name)
 
         create_from_env_exists = False
         if initial_env is None or initial_env.expired:
@@ -155,7 +155,7 @@ class ContextDiff(PydanticModel):
         environment = _get_diff_environment(environment, state_reader, always_compare_against_prod)
         env = (
             initial_env
-            if (initial_environment == environment)
+            if (initial_environment_name == environment)
             else state_reader.get_environment(environment)
         )
 
