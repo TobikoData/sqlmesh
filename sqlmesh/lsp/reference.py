@@ -47,16 +47,7 @@ def by_position(position: Position) -> t.Callable[[Reference], bool]:
     """
 
     def contains_position(r: Reference) -> bool:
-        return (
-            r.range.start.line < position.line
-            or (
-                r.range.start.line == position.line
-                and r.range.start.character <= position.character
-            )
-        ) and (
-            r.range.end.line > position.line
-            or (r.range.end.line == position.line and r.range.end.character >= position.character)
-        )
+        return _position_within_range(position, r.range)
 
     return contains_position
 
@@ -477,4 +468,79 @@ def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optio
             end=Position(line=end_line_number - 1, character=0),
         ),
         markdown_description=func.__doc__ if func.__doc__ else None,
+    )
+
+
+def get_cte_references(
+    lint_context: LSPContext, document_uri: URI, position: Position
+) -> t.List[Reference]:
+    """
+    Get all references to a CTE at a specific position in a document.
+
+    This function finds both the definition and all usages of a CTE within the same file.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for CTE references
+
+    Returns:
+        A list of references to the CTE (including its definition and all usages)
+    """
+    references = get_model_definitions_for_a_path(lint_context, document_uri)
+
+    # Filter for CTE references (those with target_range set and same URI)
+    # TODO: Consider extending Reference class to explicitly indicate reference type instead
+    cte_references = [
+        ref for ref in references if ref.target_range is not None and ref.uri == document_uri.value
+    ]
+
+    if not cte_references:
+        return []
+
+    target_cte_definition_range = None
+    for ref in cte_references:
+        # Check if cursor is on a CTE usage
+        if _position_within_range(position, ref.range):
+            target_cte_definition_range = ref.target_range
+            break
+        # Check if cursor is on the CTE definition
+        elif ref.target_range and _position_within_range(position, ref.target_range):
+            target_cte_definition_range = ref.target_range
+            break
+
+    if target_cte_definition_range is None:
+        return []
+
+    # Add the CTE definition
+    matching_references = [
+        Reference(
+            uri=document_uri.value,
+            range=target_cte_definition_range,
+            markdown_description="CTE definition",
+        )
+    ]
+
+    # Add all usages
+    for ref in cte_references:
+        if ref.target_range == target_cte_definition_range:
+            matching_references.append(
+                Reference(
+                    uri=document_uri.value,
+                    range=ref.range,
+                    markdown_description="CTE usage",
+                )
+            )
+
+    return matching_references
+
+
+def _position_within_range(position: Position, range: Range) -> bool:
+    """Check if a position is within a given range."""
+    return (
+        range.start.line < position.line
+        or (range.start.line == position.line and range.start.character <= position.character)
+    ) and (
+        range.end.line > position.line
+        or (range.end.line == position.line and range.end.character >= position.character)
     )
