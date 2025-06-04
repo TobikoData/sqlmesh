@@ -197,6 +197,10 @@ def configure_logging(
     level = logging.DEBUG if debug else logging.INFO
     logger.setLevel(level)
 
+    if debug:
+        # Remove noisy snowflake connector logs that are not useful for users
+        logging.getLogger("snowflake.connector").setLevel(logging.INFO)
+
     if write_to_stdout:
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setFormatter(CustomFormatter())

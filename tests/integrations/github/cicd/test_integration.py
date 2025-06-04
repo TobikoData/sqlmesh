@@ -23,10 +23,9 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     GithubController,
 )
-from sqlmesh.utils.errors import CICDBotError
-from tests.integrations.github.cicd.fixtures import MockIssueComment
+from sqlmesh.utils.errors import CICDBotError, SQLMeshError
+from tests.integrations.github.cicd.conftest import MockIssueComment
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.github,
@@ -1502,10 +1501,9 @@ def test_error_msg_when_applying_plan_with_bug(
     assert GithubCheckStatus(pr_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_failure
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
-    assert (
-        'Binder Error: Referenced column "non_existing_col" not found in FROM clause!'
-        in pr_checks_runs[2]["output"]["summary"]
-    )
+    summary = pr_checks_runs[2]["output"]["summary"].replace("\n", "")
+    assert 'Failed models  **"memory"."sushi"."waiter_revenue_by_day"**' in summary
+    assert 'Binder Error: Referenced column "non_existing_col" not found in FROM clause!' in summary
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -2129,3 +2127,56 @@ def test_has_required_approval_but_not_base_branch(
             output
             == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\n"
         )
+
+
+def test_unexpected_error_is_handled(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - Plan throws a SQLMeshError due to a migration version mismatch
+    - Outcome should be a nice error like the CLI gives and not a stack trace
+    """
+
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments: t.List[MockIssueComment] = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(),
+        mock_out_context=True,
+    )
+    assert isinstance(controller, GithubController)
+
+    assert isinstance(controller._context.apply, mocker.MagicMock)
+    controller._context.apply.side_effect = SQLMeshError(
+        "SQLGlot (local) is using version 'X' which is ahead of 'Y' (remote). Please run a migration"
+    )
+
+    command._update_pr_environment(controller)
+
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    pr_checks_runs = controller._check_run_mapping["SQLMesh - PR Environment Synced"].all_kwargs  # type: ignore
+    assert pr_checks_runs[1]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
+    summary = pr_checks_runs[1]["output"]["summary"]
+    assert (
+        "**Error:** SQLGlot (local) is using version 'X' which is ahead of 'Y' (remote). Please run a migration"
+        in pr_checks_runs[1]["output"]["summary"]
+    )
+    assert "SQLMeshError" not in summary
+    assert "Traceback (most recent call last)" not in summary
