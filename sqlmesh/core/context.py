@@ -1677,6 +1677,12 @@ class GenericContext(BaseContext, t.Generic[C]):
             The list of TableDiff objects containing schema and summary differences.
         """
 
+        if "|" in source or "|" in target:
+            raise ConfigError(
+                "Cross-database table diffing is available in Tobiko Cloud. Read more here: "
+                "https://sqlmesh.readthedocs.io/en/stable/guides/tablediff/#diffing-tables-or-views-across-gateways"
+            )
+
         table_diffs: t.List[TableDiff] = []
 
         # Diffs multiple or a single model across two environments
