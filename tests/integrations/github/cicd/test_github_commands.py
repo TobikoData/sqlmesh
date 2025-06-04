@@ -884,6 +884,15 @@ def make_test_prod_update_failure_case(
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(prod_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]) == expect_prod_sync_conclusion
+    if expect_prod_sync_conclusion.is_action_required:
+        assert prod_checks_runs[2]["output"]["title"] == "Failed due to error applying plan"
+        assert (
+            prod_checks_runs[2]["output"]["summary"]
+            == f"""**Plan error:**
+```
+{to_raise_on_prod_plan}
+```"""
+        )
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
