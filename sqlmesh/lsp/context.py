@@ -5,7 +5,7 @@ import typing as t
 
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.custom import RenderModelEntry, ModelForRendering
+from sqlmesh.lsp.custom import ModelForRendering
 from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
 from sqlmesh.lsp.uri import URI
 

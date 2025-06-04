@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
-from sqlmesh.core.linter.rule import Rule, RuleViolation
+from sqlmesh.core.linter.helpers import TokenPositionDetails
+from sqlmesh.core.linter.rule import Rule, RuleViolation, Range
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
 
@@ -15,10 +17,25 @@ class NoSelectStar(Rule):
     """Query should not contain SELECT * on its outer most projections, even if it can be expanded."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # Only applies to SQL models, as other model types do not have a query.
         if not isinstance(model, SqlModel):
             return None
+        if model.query.is_star:
+            violation_range = self._get_range(model)
+            return self.violation(violation_range=violation_range)
+        return None
 
-        return self.violation() if model.query.is_star else None
+    def _get_range(self, model: SqlModel) -> t.Optional[Range]:
+        """Get the range of the violation if available."""
+        try:
+            if len(model.query.expressions) == 1 and isinstance(model.query.expressions[0], Star):
+                return TokenPositionDetails.from_meta(model.query.expressions[0].meta).to_range(
+                    None
+                )
+        except Exception:
+            pass
+
+        return None
 
 
 class InvalidSelectStarExpansion(Rule):

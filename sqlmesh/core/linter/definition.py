@@ -8,7 +8,7 @@ import operator as op
 from collections.abc import Iterator, Iterable, Set, Mapping, Callable
 from functools import reduce
 from sqlmesh.core.model import Model
-from sqlmesh.core.linter.rule import Rule, RuleViolation
+from sqlmesh.core.linter.rule import Rule, RuleViolation, Range
 from sqlmesh.core.console import LinterConsole, get_console
 
 if t.TYPE_CHECKING:
@@ -74,6 +74,7 @@ class Linter:
                 violation_msg=violation.violation_msg,
                 model=model,
                 violation_type="error",
+                violation_range=violation.violation_range,
             )
             for violation in error_violations
         ] + [
@@ -82,6 +83,7 @@ class Linter:
                 violation_msg=violation.violation_msg,
                 model=model,
                 violation_type="warning",
+                violation_range=violation.violation_range,
             )
             for violation in warn_violations
         ]
@@ -149,7 +151,8 @@ class AnnotatedRuleViolation(RuleViolation):
         violation_msg: str,
         model: Model,
         violation_type: t.Literal["error", "warning"],
+        violation_range: t.Optional[Range] = None,
     ) -> None:
-        super().__init__(rule, violation_msg)
+        super().__init__(rule, violation_msg, violation_range)
         self.model = model
         self.violation_type = violation_type

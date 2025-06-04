@@ -655,8 +655,24 @@ class SQLMeshLanguageServer:
     ) -> t.Optional[types.Diagnostic]:
         if diagnostic.model._path is None:
             return None
-        with open(diagnostic.model._path, "r", encoding="utf-8") as file:
-            lines = file.readlines()
+        if not diagnostic.violation_range:
+            with open(diagnostic.model._path, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+            range = types.Range(
+                start=types.Position(line=0, character=0),
+                end=types.Position(line=len(lines) - 1, character=len(lines[-1])),
+            )
+        else:
+            range = types.Range(
+                start=types.Position(
+                    line=diagnostic.violation_range.start.line,
+                    character=diagnostic.violation_range.start.character,
+                ),
+                end=types.Position(
+                    line=diagnostic.violation_range.end.line,
+                    character=diagnostic.violation_range.end.character,
+                ),
+            )
 
         # Get rule definition location for diagnostics link
         rule_location = diagnostic.rule.get_definition_location()
@@ -665,10 +681,7 @@ class SQLMeshLanguageServer:
 
         # Use URI format to create a link for "related information"
         return types.Diagnostic(
-            range=types.Range(
-                start=types.Position(line=0, character=0),
-                end=types.Position(line=len(lines), character=len(lines[-1])),
-            ),
+            range=range,
             message=diagnostic.violation_msg,
             severity=types.DiagnosticSeverity.Error
             if diagnostic.violation_type == "error"
