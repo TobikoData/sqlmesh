@@ -571,6 +571,114 @@ def test_opt_out_of_time_column_in_partitioned_by():
     assert model.partitioned_by == [exp.to_column('"b"')]
 
 
+def test_model_no_name():
+    expressions = d.parse(
+        """
+        MODEL (
+            dialect bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add the required 'name' field to the MODEL block at the top of the file.\n\nLearn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview"
+    )
+
+
+def test_model_field_name_suggestions():
+    # top-level field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block: 'dialects'. Did you mean 'dialect'?"
+    )
+
+    # kind field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                batch_sizes 1
+            ),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE(' field: 'batch_sizes'. Did you mean 'batch_size'?"
+    )
+
+    # multiple fields
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+            descriptions 'a',
+            asdfasdf true
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    ex_str = str(ex.value)
+    # field order is non-deterministic, so we can't test the output string directly
+    assert "Invalid field names present in the MODEL block: " in ex_str
+    assert "'descriptions'" in ex_str
+    assert "'dialects'" in ex_str
+    assert "'asdfasdf'" in ex_str
+    assert "- descriptions: Did you mean 'description'?" in ex_str
+    assert "- dialects: Did you mean 'dialect'?" in ex_str
+    assert "- asdfasdf: Did you mean " not in ex_str
+
+
+def test_model_required_field_missing():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add required field 'time_column' to the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE(' field."
+    )
+
+
 def test_no_model_statement(tmp_path: Path):
     # No name inference => MODEL (...) is required
     expressions = d.parse("SELECT 1 AS x")
