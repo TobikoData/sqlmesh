@@ -11,6 +11,7 @@ import typing as t
 import unittest
 from enum import Enum
 from typing import List
+from pathlib import Path
 
 import requests
 from hyperscript import Element, h
@@ -28,11 +29,11 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotTableInfo,
     format_intervals,
 )
+from sqlglot.errors import SqlglotError
 from sqlmesh.core.user import User
 from sqlmesh.core.config import Config
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils import word_characters_only, Verbosity
-from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
     CICDBotError,
@@ -40,6 +41,7 @@ from sqlmesh.utils.errors import (
     PlanError,
     UncategorizedPlanError,
     LinterError,
+    SQLMeshError,
 )
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -283,7 +285,7 @@ class GithubController:
 
     def __init__(
         self,
-        paths: t.Union[str, t.Iterable[str]],
+        paths: t.Union[Path, t.Iterable[Path]],
         token: str,
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
@@ -307,10 +309,13 @@ class GithubController:
             raise CICDBotError("Console must be a markdown console.")
         self._console = t.cast(MarkdownConsole, get_console())
 
+        from github.Consts import DEFAULT_BASE_URL
+        from github.Auth import Token
+
         self._client: Github = client or Github(
-            base_url=os.environ["GITHUB_API_URL"],
-            login_or_token=self._token,
+            base_url=os.environ.get("GITHUB_API_URL", DEFAULT_BASE_URL), auth=Token(self._token)
         )
+
         self._repo: Repository = self._client.get_repo(
             self._event.pull_request_info.full_repo_path, lazy=True
         )
@@ -327,6 +332,9 @@ class GithubController:
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
         self._context: Context = Context(paths=self._paths, config=self.config)
+
+        # Bot config needs the context to be initialized
+        logger.debug(f"Bot config: {self.bot_config.json(indent=2)}")
 
     @property
     def deploy_command_enabled(self) -> bool:
@@ -433,7 +441,6 @@ class GithubController:
         bot_config = self._context.config.cicd_bot or GithubCICDBotConfig(
             auto_categorize_changes=self._context.auto_categorize_changes
         )
-        logger.debug(f"Bot config: {bot_config.json(indent=2)}")
         return bot_config
 
     @property
@@ -454,8 +461,11 @@ class GithubController:
         Appends the given key/value to output so they can be read by following steps
         """
         logger.debug(f"Setting output. Key: {key}, Value: {value}")
-        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-            print(f"{key}={value}", file=fh)
+
+        # GitHub Actions sets this environment variable
+        if output_file := os.environ.get("GITHUB_OUTPUT"):
+            with open(output_file, "a", encoding="utf-8") as fh:
+                print(f"{key}={value}", file=fh)
 
     def get_plan_summary(self, plan: Plan) -> str:
         try:
@@ -637,15 +647,31 @@ class GithubController:
         if text:
             kwargs["output"]["text"] = text
         logger.debug(f"Updating check with kwargs: {kwargs}")
-        if name in self._check_run_mapping:
-            logger.debug(f"Found check run in mapping so updating it. Name: {name}")
-            check_run = self._check_run_mapping[name]
-            check_run.edit(
-                **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
-            )
+
+        if self.running_in_github_actions:
+            # Only make the API call to update the checks if we are running within GitHub Actions
+            # One very annoying limitation of the Pull Request Checks API is that its only available to GitHub Apps
+            # and not personal access tokens, which makes it unable to be utilized during local development
+            if name in self._check_run_mapping:
+                logger.debug(f"Found check run in mapping so updating it. Name: {name}")
+                check_run = self._check_run_mapping[name]
+                check_run.edit(
+                    **{
+                        k: v
+                        for k, v in kwargs.items()
+                        if k not in ("name", "head_sha", "started_at")
+                    }
+                )
+            else:
+                logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
+                self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
         else:
-            logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
-            self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
+            # Output the summary using print() so the newlines are resolved and the result can easily
+            # be disambiguated from the rest of the console output and copy+pasted into a Markdown renderer
+            print(
+                f"---CHECK OUTPUT START: {kwargs['output']['title']} ---\n{kwargs['output']['summary']}\n---CHECK OUTPUT END---\n"
+            )
+
         if conclusion:
             self._append_output(
                 word_characters_only(name.replace("SQLMesh - ", "").lower()), conclusion.value
@@ -890,15 +916,21 @@ class GithubController:
                 else:
                     skip_reason = "A prior stage failed resulting in skipping PR creation."
 
+                if not skip_reason and exception:
+                    logger.debug(
+                        f"Got {type(exception).__name__}. Stack trace: " + traceback.format_exc()
+                    )
+
                 captured_errors = self._console.consume_captured_errors()
                 if captured_errors:
                     logger.debug(f"Captured errors: {captured_errors}")
                     failure_msg = f"**Errors:**\n{captured_errors}\n"
-                elif isinstance(exception, NodeExecutionFailedError):
-                    logger.debug(
-                        "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
-                    )
-                    failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
+                elif isinstance(exception, PlanError):
+                    failure_msg = f"Plan application failed.\n\n{self._console.captured_output}"
+                elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
+                    # this logic is taken from the global error handler attached to the CLI, which uses `click.echo()` to output the message
+                    # so cant be re-used here because it bypasses the Console
+                    failure_msg = f"**Error:** {str(exception)}"
                 else:
                     logger.debug(
                         "Got unexpected error. Error Type: "
@@ -909,7 +941,7 @@ class GithubController:
                     failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
+                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n\n{failure_msg}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
                     GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
                 }
@@ -1054,3 +1086,7 @@ class GithubController:
             message_encoded[i : i + self.MAX_BYTE_LENGTH].decode("utf-8", "ignore")
             for i in range(0, len(message_encoded), self.MAX_BYTE_LENGTH)
         ]
+
+    @property
+    def running_in_github_actions(self) -> bool:
+        return os.environ.get("GITHUB_ACTIONS", None) == "true"

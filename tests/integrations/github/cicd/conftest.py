@@ -2,6 +2,7 @@ import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
+from pathlib import Path
 
 from sqlmesh.core.config import Config
 from sqlmesh.core.console import set_console, get_console, MarkdownConsole
@@ -13,6 +14,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     PullRequestInfo,
 )
 from sqlmesh.utils import AttributeDict
+from sqlglot.helper import ensure_list
 
 
 @pytest.fixture
@@ -59,17 +61,28 @@ def make_pull_request_review() -> t.Callable:
 
 
 @pytest.fixture
-def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.Callable:
+def sqlmesh_repo_root_path() -> Path:
+    return next(p for p in Path(__file__).parents if str(p).endswith("/tests")).parent
+
+
+@pytest.fixture
+def make_controller(
+    mocker: MockerFixture,
+    copy_to_temp_path: t.Callable,
+    monkeypatch: pytest.MonkeyPatch,
+    sqlmesh_repo_root_path: Path,
+) -> t.Callable:
     from github import Github
 
     def _make_function(
-        event_path: t.Union[str, t.Dict],
+        event_path: t.Union[str, Path, t.Dict],
         client: Github,
         *,
         merge_state_status: MergeStateStatus = MergeStateStatus.CLEAN,
         bot_config: t.Optional[GithubCICDBotConfig] = None,
         mock_out_context: bool = True,
         config: t.Optional[t.Union[Config, str]] = None,
+        paths: t.Optional[t.Union[Path, t.List[Path]]] = None,
     ) -> GithubController:
         if mock_out_context:
             mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
@@ -85,7 +98,23 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
                 bot_config,
             )
 
-        paths = copy_to_temp_path("examples/sushi")
+        if paths is None:
+            paths = copy_to_temp_path(sqlmesh_repo_root_path / "examples" / "sushi")
+
+        paths = ensure_list(paths)
+
+        if isinstance(event_path, str):
+            # resolve relative event_path references to absolute so they dont get affected by chdir() below
+            as_path = Path(event_path)
+            if not as_path.is_absolute():
+                event_path = sqlmesh_repo_root_path / as_path
+
+        # set the current working directory to the temp path so that config references to eg duckdb "db.db"
+        # get created in the temp path and not in the SQLMesh repo root path that the tests are triggered from
+        monkeypatch.chdir(paths[0])
+
+        # make the tests think they are running in GitHub Actions
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
 
         orig_console = get_console()
         try:
@@ -96,12 +125,13 @@ def make_controller(mocker: MockerFixture, copy_to_temp_path: t.Callable) -> t.C
                 token="abc",
                 event=(
                     GithubEvent.from_path(event_path)
-                    if isinstance(event_path, str)
+                    if isinstance(event_path, (str, Path))
                     else GithubEvent.from_obj(event_path)
                 ),
                 client=client,
                 config=config,
             )
+
         finally:
             set_console(orig_console)
 

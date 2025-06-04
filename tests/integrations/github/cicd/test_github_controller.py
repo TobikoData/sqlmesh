@@ -19,9 +19,8 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     MergeStateStatus,
 )
-from tests.integrations.github.cicd.fixtures import MockIssueComment
+from tests.integrations.github.cicd.conftest import MockIssueComment
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = pytest.mark.github
 
 github_controller_approvers_params = [

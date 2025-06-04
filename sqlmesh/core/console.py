@@ -3184,6 +3184,12 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
         logger.warning(long_message or short_message)
+
+        if not short_message.endswith("\n"):
+            short_message += (
+                "\n"  # so that the closing ``` ends up on a newline which is important for GitHub
+            )
+
         self._print(f"```\n\\[WARNING] {short_message}```\n\n")
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:

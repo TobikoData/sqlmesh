@@ -18,7 +18,6 @@ from sqlmesh.integrations.github.cicd.controller import (
 )
 from sqlmesh.utils.errors import ConflictingPlanError, PlanError, TestError, CICDBotError
 
-pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 pytestmark = [
     pytest.mark.github,
     pytest.mark.slow,
