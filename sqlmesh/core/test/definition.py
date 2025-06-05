@@ -13,8 +13,6 @@ from unittest.mock import patch
 from rich.table import Table
 from rich.align import Align
 
-import numpy as np
-import pandas as pd
 from io import StringIO
 from sqlglot import Dialect, exp
 from sqlglot.optimizer.annotate_types import annotate_types
