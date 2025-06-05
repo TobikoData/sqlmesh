@@ -104,7 +104,7 @@ class ContextDiff(PydanticModel):
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
         infer_python_dependencies: bool = True,
-        always_compare_against_prod: bool = False,
+        always_init_from_prod: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -129,35 +129,25 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        initial_environment_name = environment.lower()
-        initial_env = state_reader.get_environment(initial_environment_name)
-
+        environment = environment.lower()
+        existing_env = state_reader.get_environment(environment)
         create_from_env_exists = False
-        if initial_env is None or initial_env.expired:
-            initial_env = state_reader.get_environment(create_from.lower())
 
-            if not initial_env and create_from != c.PROD:
+        if existing_env is None or existing_env.expired or always_init_from_prod:
+            env = state_reader.get_environment(create_from.lower())
+
+            if not env and create_from != c.PROD:
                 get_console().log_warning(
                     f"The environment name '{create_from}' was passed to the `plan` command's `--create-from` argument, but '{create_from}' does not exist. Initializing new environment '{environment}' from scratch."
                 )
 
             is_new_environment = True
-            create_from_env_exists = initial_env is not None
+            create_from_env_exists = env is not None
             previously_promoted_snapshot_ids = set()
         else:
+            env = existing_env
             is_new_environment = False
-            previously_promoted_snapshot_ids = {
-                s.snapshot_id for s in initial_env.promoted_snapshots
-            }
-
-        # Find the proper environment to diff against, this might be different than the initial (i.e user provided) environment
-        # e.g it will default to prod if the plan option `always_compare_against_prod` is set.
-        environment = _get_diff_environment(environment, state_reader, always_compare_against_prod)
-        env = (
-            initial_env
-            if (initial_environment_name == environment)
-            else state_reader.get_environment(environment)
-        )
+            previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
 
         environment_snapshot_infos = []
         if env:
@@ -233,6 +223,11 @@ class ContextDiff(PydanticModel):
 
         previous_environment_statements = state_reader.get_environment_statements(environment)
 
+        if existing_env and always_init_from_prod:
+            previous_plan_id: t.Optional[str] = existing_env.plan_id
+        else:
+            previous_plan_id = env.plan_id if env and not is_new_environment else None
+
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
@@ -245,9 +240,7 @@ class ContextDiff(PydanticModel):
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
-            previous_plan_id=initial_env.plan_id
-            if initial_env and not is_new_environment
-            else None,
+            previous_plan_id=previous_plan_id,
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
             previous_requirements=env.requirements if env else {},
@@ -492,17 +485,6 @@ class ContextDiff(PydanticModel):
         except SQLMeshError as e:
             get_console().log_warning(f"Failed to diff model '{name}': {str(e)}.")
             return ""
-
-
-def _get_diff_environment(
-    environment: str, state_reader: StateReader, always_compare_against_prod: bool = False
-) -> str:
-    if always_compare_against_prod:
-        prod = state_reader.get_environment(c.PROD)
-        if prod:
-            environment = c.PROD
-
-    return environment.lower()
 
 
 def _build_requirements(

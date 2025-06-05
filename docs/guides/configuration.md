@@ -386,7 +386,7 @@ Example showing default values:
 
 By default, SQLMesh compares the current state of project files to the target `<env>` environment when `sqlmesh plan <env>` is run. However, a common expectation is that local changes should always be compared to the production environment.
 
-The `always_compare_against_prod` boolean plan option can alter this behavior. When enabled, SQLMesh will always attempt to compare against the production environment; If that does not exist, SQLMesh will fall back to comparing against the target environment.
+The `always_init_from_prod` boolean plan option can alter this behavior. When enabled, SQLMesh will always attempt to compare against the production environment; If that does not exist, SQLMesh will fall back to comparing against the target environment.
 
 **NOTE:**: Upon succesfull plan application, changes are still promoted to the target `<env>` environment.
 
@@ -394,7 +394,7 @@ The `always_compare_against_prod` boolean plan option can alter this behavior. W
 
     ```yaml linenums="1"
     plan:
-        always_compare_against_prod: True
+        always_init_from_prod: True
     ```
 
 === "Python"
@@ -416,7 +416,7 @@ The `always_compare_against_prod` boolean plan option can alter this behavior. W
 
 #### Change Categorization Example
 
-Consider this scenario with `always_compare_against_prod` enabled:
+Consider this scenario with `always_init_from_prod` enabled:
 
 1. Initial state in `prod`:
 ```sql
@@ -426,7 +426,7 @@ SELECT 1 AS col
 
 1. First (breaking) change in `dev`:
 ```sql
-MODEL (name test.a, kind FULL);
+MODEL (name sqlmesh_example__dev.test_model, kind FULL);
 SELECT 2 AS col
 ```
 
@@ -454,13 +454,15 @@ SELECT 2 AS col
 
 3. Second (metadata) change in `dev`:
 ```sql
-MODEL (name test.a, kind FULL, owner 'John Doe');
+MODEL (name sqlmesh_example__dev.test_model, kind FULL, owner 'John Doe');
 SELECT 5 AS col
 ```
 
 ??? "Output plan example #2"
 
     ```bash
+    New environment `dev` will be created from `prod`
+
     Differences from the `prod` environment:
 
     Models:

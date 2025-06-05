@@ -6256,7 +6256,7 @@ def test_render_path_instead_of_model(tmp_path: Path):
 
 
 @use_terminal_console
-def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path):
+def test_plan_always_init_from_prod(tmp_path: Path):
     def plan_with_output(ctx: Context, environment: str):
         with patch.object(logger, "info") as mock_logger:
             with capture_output() as output:
@@ -6268,11 +6268,6 @@ def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path)
 
         return output
 
-    def assert_environments(ctx: Context, input_env: str, promote_env: str, diff_env: str):
-        plan_builder = ctx.plan_builder(input_env)
-        assert plan_builder.environment_naming_info.name == promote_env
-        assert plan_builder.build().context_diff.environment == diff_env
-
     models_dir = tmp_path / "models"
 
     logger = logging.getLogger("sqlmesh.core.state_sync.db.facade")
@@ -6281,14 +6276,13 @@ def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path)
         tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
     )
 
-    config = Config(plan=PlanConfig(always_compare_against_prod=True))
+    config = Config(plan=PlanConfig(always_init_from_prod=True))
     ctx = Context(paths=[tmp_path], config=config)
 
     # Case 1: Neither prod nor dev exists, so dev is initialized
     output = plan_with_output(ctx, "dev")
 
     assert """`dev` environment will be initialized""" in output.stdout
-    assert_environments(ctx, input_env="dev", promote_env="dev", diff_env="dev")
 
     # Case 2: Prod does not exist, so dev is updated
     create_temp_file(
@@ -6296,15 +6290,11 @@ def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path)
     )
 
     output = plan_with_output(ctx, "dev")
-
-    assert_environments(ctx, input_env="dev", promote_env="dev", diff_env="dev")
-    assert "Differences from the `dev` environment" in output.stdout
+    assert "`dev` environment will be initialized" in output.stdout
 
     # Case 3: Prod is initialized, so plan comparisons moving forward should be against prod
     output = plan_with_output(ctx, "prod")
     assert "`prod` environment will be initialized" in output.stdout
-
-    assert_environments(ctx, input_env="prod", promote_env="prod", diff_env="prod")
 
     # Case 4: Dev is updated with a breaking change. Prod exists now so plan comparisons moving forward should be against prod
     create_temp_file(
@@ -6314,14 +6304,13 @@ def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path)
 
     plan = ctx.plan_builder("dev").build()
 
-    assert_environments(ctx, input_env="dev", promote_env="dev", diff_env="prod")
-
     assert (
         next(iter(plan.context_diff.snapshots.values())).change_category
         == SnapshotChangeCategory.BREAKING
     )
 
     output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
     assert "Differences from the `prod` environment" in output.stdout
 
     # Case 5: Dev is updated with a metadata change, but comparison against prod shows both the previous and the current changes
@@ -6335,14 +6324,13 @@ def test_plan_always_compare_against_prod(mocker: MockerFixture, tmp_path: Path)
 
     plan = ctx.plan_builder("dev").build()
 
-    assert_environments(ctx, input_env="dev", promote_env="dev", diff_env="prod")
-
     assert (
         next(iter(plan.context_diff.snapshots.values())).change_category
         == SnapshotChangeCategory.BREAKING
     )
 
     output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
     assert "Differences from the `prod` environment" in output.stdout
 
     assert (
