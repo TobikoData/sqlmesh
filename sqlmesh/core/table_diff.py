@@ -36,28 +36,77 @@ class SchemaDiff(PydanticModel, frozen=True):
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
+    ignore_case: bool = False
+
+    @property
+    def _comparable_source_schema(self) -> t.Dict[str, exp.DataType]:
+        return (
+            self._lowercase_schema_names(self.source_schema)
+            if self.ignore_case
+            else self.source_schema
+        )
+
+    @property
+    def _comparable_target_schema(self) -> t.Dict[str, exp.DataType]:
+        return (
+            self._lowercase_schema_names(self.target_schema)
+            if self.ignore_case
+            else self.target_schema
+        )
+
+    def _lowercase_schema_names(
+        self, schema: t.Dict[str, exp.DataType]
+    ) -> t.Dict[str, exp.DataType]:
+        return {c.lower(): t for c, t in schema.items()}
+
+    def _original_column_name(
+        self, maybe_lowercased_column_name: str, schema: t.Dict[str, exp.DataType]
+    ) -> str:
+        if not self.ignore_case:
+            return maybe_lowercased_column_name
+
+        return next(c for c in schema if c.lower() == maybe_lowercased_column_name)
 
     @property
     def added(self) -> t.List[t.Tuple[str, exp.DataType]]:
         """Added columns."""
-        return [(c, t) for c, t in self.target_schema.items() if c not in self.source_schema]
+        return [
+            (self._original_column_name(c, self.target_schema), t)
+            for c, t in self._comparable_target_schema.items()
+            if c not in self._comparable_source_schema
+        ]
 
     @property
     def removed(self) -> t.List[t.Tuple[str, exp.DataType]]:
         """Removed columns."""
-        return [(c, t) for c, t in self.source_schema.items() if c not in self.target_schema]
+        return [
+            (self._original_column_name(c, self.source_schema), t)
+            for c, t in self._comparable_source_schema.items()
+            if c not in self._comparable_target_schema
+        ]
 
     @property
     def modified(self) -> t.Dict[str, t.Tuple[exp.DataType, exp.DataType]]:
         """Columns with modified types."""
         modified = {}
-        for column in self.source_schema.keys() & self.target_schema.keys():
-            source_type = self.source_schema[column]
-            target_type = self.target_schema[column]
+        for column in self._comparable_source_schema.keys() & self._comparable_target_schema.keys():
+            source_type = self._comparable_source_schema[column]
+            target_type = self._comparable_target_schema[column]
 
             if source_type != target_type:
                 modified[column] = (source_type, target_type)
+
+        if self.ignore_case:
+            modified = {
+                self._original_column_name(c, self.source_schema): dt for c, dt in modified.items()
+            }
+
         return modified
+
+    @property
+    def has_changes(self) -> bool:
+        """Does the schema contain any changes at all between source and target"""
+        return bool(self.added or self.removed or self.modified)
 
 
 class RowDiff(PydanticModel, frozen=True):
@@ -183,6 +232,7 @@ class TableDiff:
         model_name: t.Optional[str] = None,
         model_dialect: t.Optional[str] = None,
         decimals: int = 3,
+        schema_diff_ignore_case: bool = False,
     ):
         if not isinstance(adapter, RowDiffMixin):
             raise ValueError(f"Engine {adapter} doesnt support RowDiff")
@@ -198,6 +248,7 @@ class TableDiff:
         self.model_name = model_name
         self.model_dialect = model_dialect
         self.decimals = decimals
+        self.schema_diff_ignore_case = schema_diff_ignore_case
 
         # Support environment aliases for diff output improvement in certain cases
         self.source_alias = source_alias
@@ -282,6 +333,7 @@ class TableDiff:
             source_alias=self.source_alias,
             target_alias=self.target_alias,
             model_name=self.model_name,
+            ignore_case=self.schema_diff_ignore_case,
         )
 
     def row_diff(

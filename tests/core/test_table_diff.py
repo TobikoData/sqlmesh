@@ -11,7 +11,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckDBConnectionConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
-from sqlmesh.core.table_diff import TableDiff
+from sqlmesh.core.table_diff import TableDiff, SchemaDiff
 import numpy as np  # noqa: TID253
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -944,3 +944,91 @@ def test_data_diff_multiple_models_lacking_grain(sushi_context_fixed_date, capsy
     assert row_diff1.t_sample.shape == (0, 2)
     assert row_diff1.joined_sample.shape == (2, 3)
     assert row_diff1.sample.shape == (2, 4)
+
+
+def test_schema_diff_ignore_case():
+    # no changes
+    table_a = {"COL_A": exp.DataType.build("varchar"), "cOl_b": exp.DataType.build("int")}
+    table_b = {"col_a": exp.DataType.build("varchar"), "COL_b": exp.DataType.build("int")}
+
+    diff = SchemaDiff(
+        source="table_a",
+        source_schema=table_a,
+        target="table_b",
+        target_schema=table_b,
+        ignore_case=True,
+    )
+
+    assert not diff.has_changes
+
+    # added in target
+    table_a = {"COL_A": exp.DataType.build("varchar"), "cOl_b": exp.DataType.build("int")}
+    table_b = {
+        "col_a": exp.DataType.build("varchar"),
+        "COL_b": exp.DataType.build("int"),
+        "cOL__C": exp.DataType.build("date"),
+    }
+
+    diff = SchemaDiff(
+        source="table_a",
+        source_schema=table_a,
+        target="table_b",
+        target_schema=table_b,
+        ignore_case=True,
+    )
+
+    assert diff.has_changes
+    assert len(diff.added) == 1
+    assert diff.added[0] == (
+        "cOL__C",
+        exp.DataType.build("date"),
+    )  # notice: case preserved on output
+    assert not diff.removed
+    assert not diff.modified
+
+    # removed from source
+    table_a = {
+        "cOL_fo0": exp.DataType.build("float"),
+        "COL_A": exp.DataType.build("varchar"),
+        "cOl_b": exp.DataType.build("int"),
+    }
+    table_b = {"col_a": exp.DataType.build("varchar"), "COL_b": exp.DataType.build("int")}
+
+    diff = SchemaDiff(
+        source="table_a",
+        source_schema=table_a,
+        target="table_b",
+        target_schema=table_b,
+        ignore_case=True,
+    )
+
+    assert diff.has_changes
+    assert not diff.added
+    assert len(diff.removed) == 1
+    assert diff.removed[0] == (
+        "cOL_fo0",
+        exp.DataType.build("float"),
+    )  # notice: case preserved on output
+    assert not diff.modified
+
+    # column type change
+    table_a = {"CoL_A": exp.DataType.build("varchar"), "cOl_b": exp.DataType.build("int")}
+    table_b = {"col_a": exp.DataType.build("date"), "COL_b": exp.DataType.build("int")}
+
+    diff = SchemaDiff(
+        source="table_a",
+        source_schema=table_a,
+        target="table_b",
+        target_schema=table_b,
+        ignore_case=True,
+    )
+
+    assert diff.has_changes
+    assert not diff.added
+    assert not diff.removed
+    assert diff.modified == {
+        "CoL_A": (
+            exp.DataType.build("varchar"),
+            exp.DataType.build("date"),
+        )  # notice: source casing used on output
+    }
