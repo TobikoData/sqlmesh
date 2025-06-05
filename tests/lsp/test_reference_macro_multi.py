@@ -1,11 +1,9 @@
-import pytest
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.reference import get_macro_definitions_for_a_path
 from sqlmesh.lsp.uri import URI
 
 
-@pytest.mark.fast
 def test_macro_references_multirepo() -> None:
     context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     lsp_context = LSPContext(context)
