@@ -36,9 +36,7 @@ from sqlmesh.lsp.custom import (
     RenderModelRequest,
     RenderModelResponse,
 )
-from sqlmesh.lsp.reference import (
-    get_references,
-)
+from sqlmesh.lsp.reference import get_references, get_cte_references
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
@@ -114,13 +112,22 @@ class SQLMeshLanguageServer:
         @self.server.feature(ALL_MODELS_FEATURE)
         def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
             uri = URI(params.textDocument.uri)
+
+            # Get the document content
+            content = None
+            try:
+                document = ls.workspace.get_text_document(params.textDocument.uri)
+                content = document.source
+            except Exception:
+                pass
+
             try:
                 context = self._context_get_or_load(uri)
-                return context.get_autocomplete(uri)
+                return context.get_autocomplete(uri, content)
             except Exception as e:
                 from sqlmesh.lsp.completions import get_sql_completions
 
-                return get_sql_completions(None, URI(params.textDocument.uri))
+                return get_sql_completions(None, URI(params.textDocument.uri), content)
 
         @self.server.feature(RENDER_MODEL_FEATURE)
         def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
@@ -369,6 +376,28 @@ class SQLMeshLanguageServer:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
                 return []
 
+        @self.server.feature(types.TEXT_DOCUMENT_REFERENCES)
+        def find_references(
+            ls: LanguageServer, params: types.ReferenceParams
+        ) -> t.Optional[t.List[types.Location]]:
+            """Find all references of a symbol (currently supporting CTEs)"""
+            try:
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
+                document = ls.workspace.get_text_document(params.text_document.uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {document.path}")
+
+                cte_references = get_cte_references(self.lsp_context, uri, params.position)
+
+                # Convert references to Location objects
+                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in cte_references]
+
+                return locations if locations else None
+            except Exception as e:
+                ls.show_message(f"Error getting locations: {e}", types.MessageType.Error)
+                return None
+
         @self.server.feature(types.TEXT_DOCUMENT_DIAGNOSTIC)
         def diagnostic(
             ls: LanguageServer, params: types.DocumentDiagnosticParams
@@ -471,8 +500,16 @@ class SQLMeshLanguageServer:
                 uri = URI(params.text_document.uri)
                 context = self._context_get_or_load(uri)
 
+                # Get the document content
+                content = None
+                try:
+                    document = ls.workspace.get_text_document(params.text_document.uri)
+                    content = document.source
+                except Exception:
+                    pass
+
                 # Get completions using the existing completions module
-                completion_response = context.get_autocomplete(uri)
+                completion_response = context.get_autocomplete(uri, content)
 
                 completion_items = []
                 # Add model completions
