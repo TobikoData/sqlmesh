@@ -41,6 +41,7 @@ interface AllModelsRequest {
 interface AllModelsResponse {
   models: string[]
   keywords: string[]
+  macros: string[]
 }
 
 export interface AbstractAPICallRequest {

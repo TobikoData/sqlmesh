@@ -1,6 +1,7 @@
 from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
+from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
 from sqlmesh.lsp.uri import URI
@@ -26,6 +27,7 @@ def get_sql_completions(
     return AllModelsResponse(
         models=list(get_models(context, file_uri)),
         keywords=all_keywords,
+        macros=list(get_macros(context)),
     )
 
 
@@ -54,6 +56,11 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.
                 all_models.discard(model)
 
     return all_models
+
+
+def get_macros(context: t.Optional[LSPContext]) -> t.Set[str]:
+    """Return a list of all macros available in the context."""
+    return set(macro.get_registry().keys())
 
 
 def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
@@ -159,3 +166,4 @@ def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None)
         pass
 
     return keywords
+

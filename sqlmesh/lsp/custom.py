@@ -20,6 +20,7 @@ class AllModelsResponse(PydanticModel):
 
     models: t.List[str]
     keywords: t.List[str]
+    macros: t.List[str]
 
 
 RENDER_MODEL_FEATURE = "sqlmesh/render_model"

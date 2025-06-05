@@ -20,6 +20,7 @@ def test_get_sql_completions_no_context():
     completions = get_sql_completions(None, None)
     assert len(completions.keywords) >= len(TOKENIZER_KEYWORDS)
     assert len(completions.models) == 0
+    assert "each" in completions.macros
 
 
 def test_get_sql_completions_with_context_no_file_uri():
@@ -30,6 +31,7 @@ def test_get_sql_completions_with_context_no_file_uri():
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" in completions.models
     assert "sushi.customers" in completions.models
+    assert "add_one" in completions.macros
 
 
 def test_get_sql_completions_with_context_and_file_uri():
@@ -40,6 +42,7 @@ def test_get_sql_completions_with_context_and_file_uri():
     completions = lsp_context.get_autocomplete(URI.from_path(file_uri))
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" not in completions.models
+    assert "add_one" in completions.macros
 
 
 def test_extract_keywords_from_content():
