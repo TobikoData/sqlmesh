@@ -1,4 +1,3 @@
-import pytest
 from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
@@ -6,7 +5,6 @@ from sqlmesh.lsp.reference import get_model_definitions_for_a_path, by_position
 from sqlmesh.lsp.uri import URI
 
 
-@pytest.mark.fast
 def test_reference() -> None:
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
@@ -39,7 +37,6 @@ def test_reference() -> None:
     assert referenced_text == "sushi.customers"
 
 
-@pytest.mark.fast
 def test_reference_with_alias() -> None:
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
@@ -79,7 +76,6 @@ def test_reference_with_alias() -> None:
     assert get_string_from_range(read_file, references[2].range) == "sushi.items"
 
 
-@pytest.mark.fast
 def test_standalone_audit_reference() -> None:
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
@@ -129,7 +125,6 @@ def get_string_from_range(file_lines, range_obj) -> str:
     return result
 
 
-@pytest.mark.fast
 def test_filter_references_by_position() -> None:
     """Test that we can filter references correctly based on cursor position."""
     context = Context(paths=["examples/sushi"])

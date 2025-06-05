@@ -1,11 +1,9 @@
-import pytest
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.reference import get_macro_definitions_for_a_path
 from sqlmesh.lsp.uri import URI
 
 
-@pytest.mark.fast
 def test_macro_references() -> None:
     """Test that macro references (e.g., @ADD_ONE, @MULTIPLY) have proper go-to-definition support."""
     context = Context(paths=["examples/sushi"])
