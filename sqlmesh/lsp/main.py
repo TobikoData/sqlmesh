@@ -112,13 +112,22 @@ class SQLMeshLanguageServer:
         @self.server.feature(ALL_MODELS_FEATURE)
         def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
             uri = URI(params.textDocument.uri)
+
+            # Get the document content
+            content = None
+            try:
+                document = ls.workspace.get_text_document(params.textDocument.uri)
+                content = document.source
+            except Exception:
+                pass
+
             try:
                 context = self._context_get_or_load(uri)
-                return context.get_autocomplete(uri)
+                return context.get_autocomplete(uri, content)
             except Exception as e:
                 from sqlmesh.lsp.completions import get_sql_completions
 
-                return get_sql_completions(None, URI(params.textDocument.uri))
+                return get_sql_completions(None, URI(params.textDocument.uri), content)
 
         @self.server.feature(RENDER_MODEL_FEATURE)
         def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
@@ -491,8 +500,16 @@ class SQLMeshLanguageServer:
                 uri = URI(params.text_document.uri)
                 context = self._context_get_or_load(uri)
 
+                # Get the document content
+                content = None
+                try:
+                    document = ls.workspace.get_text_document(params.text_document.uri)
+                    content = document.source
+                except Exception:
+                    pass
+
                 # Get completions using the existing completions module
-                completion_response = context.get_autocomplete(uri)
+                completion_response = context.get_autocomplete(uri, content)
 
                 completion_items = []
                 # Add model completions
