@@ -1673,6 +1673,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         skip_grain_check: bool = False,
         warn_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
+        schema_diff_ignore_case: bool = False,
     ) -> t.List[TableDiff]:
         """Show a diff between two tables.
 
@@ -1796,6 +1797,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                             show=show,
                             temp_schema=temp_schema,
                             skip_grain_check=skip_grain_check,
+                            schema_diff_ignore_case=schema_diff_ignore_case,
                         ),
                         tasks_num=tasks_num,
                     )
@@ -1821,6 +1823,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     on=on,
                     skip_columns=skip_columns,
                     where=where,
+                    schema_diff_ignore_case=schema_diff_ignore_case,
                 )
             ]
 
@@ -1845,6 +1848,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show: bool = True,
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
+        schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         self.console.start_table_diff_model_progress(model.name)
 
@@ -1860,6 +1864,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             target=target,
             source_alias=source_alias,
             target_alias=target_alias,
+            schema_diff_ignore_case=schema_diff_ignore_case,
         )
 
         if show:
@@ -1883,6 +1888,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         model: t.Optional[Model] = None,
         skip_columns: t.Optional[t.List[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
+        schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         if not on:
             raise SQLMeshError(
@@ -1902,6 +1908,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             decimals=decimals,
             model_name=model.name if model else None,
             model_dialect=model.dialect if model else None,
+            schema_diff_ignore_case=schema_diff_ignore_case,
         )
 
     @python_api_analytics

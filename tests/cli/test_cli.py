@@ -1,4 +1,5 @@
 import logging
+import string
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
@@ -1759,3 +1760,34 @@ select 1 as a;
     )
     assert result.exit_code == 0
     assert audit_warning not in result.output
+
+
+def test_table_diff_schema_diff_ignore_case(runner: CliRunner, tmp_path: Path):
+    from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
+
+    create_example_project(tmp_path)
+
+    ctx = Context(paths=tmp_path)
+    assert isinstance(ctx.engine_adapter, DuckDBEngineAdapter)
+
+    ctx.engine_adapter.execute('create table t1 (id int, "naME" varchar)')
+    ctx.engine_adapter.execute('create table t2 (id int, "name" varchar)')
+
+    # default behavior (case sensitive)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "table_diff", "t1:t2", "-o", "id"],
+    )
+    assert result.exit_code == 0
+    stripped_output = "".join((x for x in result.output if x in string.printable))
+    assert "Added Columns:\n    name (TEXT)" in stripped_output
+    assert "Removed Columns:\n     naME (TEXT)" in stripped_output
+
+    # ignore case
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "table_diff", "t1:t2", "-o", "id", "--schema-diff-ignore-case"],
+    )
+    assert result.exit_code == 0
+    stripped_output = "".join((x for x in result.output if x in string.printable))
+    assert "Schema Diff Between 'T1' and 'T2':\n Schemas match" in stripped_output
