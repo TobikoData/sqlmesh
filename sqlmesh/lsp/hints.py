@@ -123,6 +123,7 @@ def _get_type_hints_for_model_from_query(
     try:
         query = normalize_identifiers(query.copy(), dialect=dialect)
 
+        # Return the hints for top level selects (model definition columns only)
         return [
             hint
             for q in query.walk(prune=lambda n: not isinstance(n, exp.SetOperation))
