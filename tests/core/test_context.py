@@ -16,6 +16,7 @@ from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.core.console import get_console, TerminalConsole
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     load_configs,
@@ -2125,3 +2126,10 @@ def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path)
     # False instead of respecting the default plan config value, which is True
     assert calls[0].kwargs["no_prompts"] == False
     assert context.config.plan.no_prompts == True
+
+
+def test_plan_explain_skips_tests(sushi_context: Context, mocker: MockerFixture) -> None:
+    sushi_context.console = TerminalConsole()
+    spy = mocker.spy(sushi_context, "_run_plan_tests")
+    sushi_context.plan(environment="dev", explain=True, no_prompts=True, include_unmodified=True)
+    spy.assert_called_once_with(skip_tests=True)
