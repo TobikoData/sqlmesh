@@ -39,7 +39,7 @@ class SchemaDiff(PydanticModel, frozen=True):
     ignore_case: bool = False
 
     @property
-    def _normalized_source_schema(self) -> t.Dict[str, exp.DataType]:
+    def _comparable_source_schema(self) -> t.Dict[str, exp.DataType]:
         return (
             self._lowercase_schema_names(self.source_schema)
             if self.ignore_case
@@ -47,7 +47,7 @@ class SchemaDiff(PydanticModel, frozen=True):
         )
 
     @property
-    def _normalized_target_schema(self) -> t.Dict[str, exp.DataType]:
+    def _comparable_target_schema(self) -> t.Dict[str, exp.DataType]:
         return (
             self._lowercase_schema_names(self.target_schema)
             if self.ignore_case
@@ -72,8 +72,8 @@ class SchemaDiff(PydanticModel, frozen=True):
         """Added columns."""
         return [
             (self._original_column_name(c, self.target_schema), t)
-            for c, t in self._normalized_target_schema.items()
-            if c not in self._normalized_source_schema
+            for c, t in self._comparable_target_schema.items()
+            if c not in self._comparable_source_schema
         ]
 
     @property
@@ -81,17 +81,17 @@ class SchemaDiff(PydanticModel, frozen=True):
         """Removed columns."""
         return [
             (self._original_column_name(c, self.source_schema), t)
-            for c, t in self._normalized_source_schema.items()
-            if c not in self._normalized_target_schema
+            for c, t in self._comparable_source_schema.items()
+            if c not in self._comparable_target_schema
         ]
 
     @property
     def modified(self) -> t.Dict[str, t.Tuple[exp.DataType, exp.DataType]]:
         """Columns with modified types."""
         modified = {}
-        for column in self._normalized_source_schema.keys() & self._normalized_target_schema.keys():
-            source_type = self._normalized_source_schema[column]
-            target_type = self._normalized_target_schema[column]
+        for column in self._comparable_source_schema.keys() & self._comparable_target_schema.keys():
+            source_type = self._comparable_source_schema[column]
+            target_type = self._comparable_target_schema[column]
 
             if source_type != target_type:
                 modified[column] = (source_type, target_type)
