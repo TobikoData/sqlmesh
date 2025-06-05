@@ -1403,7 +1403,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             k: v for k, v in kwargs.items() if v is not None
         }
 
-        skip_tests = skip_tests or False
+        skip_tests = explain or skip_tests or False
         no_gaps = no_gaps or False
         skip_backfill = skip_backfill or False
         empty_backfill = empty_backfill or False
