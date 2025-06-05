@@ -176,18 +176,13 @@ class LSPContext:
             if audit._path is not None
         ]
 
-    def get_autocomplete(
-        self, uri: t.Optional[URI], content: t.Optional[str] = None
+    @staticmethod
+    def get_completions(
+        self: t.Optional["LSPContext"] = None,
+        uri: t.Optional[URI] = None,
+        file_content: t.Optional[str] = None,
     ) -> AllModelsResponse:
-        """Get autocomplete suggestions for a file.
-
-        Args:
-            uri: The URI of the file to get autocomplete suggestions for.
-            content: The content of the file (optional).
-
-        Returns:
-            AllModelsResponse containing models and keywords.
-        """
+        """Get completion suggestions for a file"""
         from sqlmesh.lsp.completions import get_sql_completions
 
-        return get_sql_completions(self, uri, content)
+        return get_sql_completions(self, uri, file_content)

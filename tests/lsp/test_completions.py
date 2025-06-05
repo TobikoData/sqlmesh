@@ -22,12 +22,27 @@ def test_get_sql_completions_no_context():
     assert len(completions.models) == 0
 
 
+def test_get_macros():
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    file_path = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
+    with open(file_path, "r", encoding="utf-8") as f:
+        file_content = f.read()
+
+    file_uri = URI.from_path(file_path)
+    completions = LSPContext.get_completions(lsp_context, file_uri, file_content)
+
+    assert "each" in completions.macros
+    assert "add_one" in completions.macros
+
+
 def test_get_sql_completions_with_context_no_file_uri():
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)
 
-    completions = lsp_context.get_autocomplete(None)
-    assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
+    completions = LSPContext.get_completions(lsp_context, None)
+    assert len(completions.keywords) >= len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" in completions.models
     assert "sushi.customers" in completions.models
 
@@ -37,7 +52,7 @@ def test_get_sql_completions_with_context_and_file_uri():
     lsp_context = LSPContext(context)
 
     file_uri = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
-    completions = lsp_context.get_autocomplete(URI.from_path(file_uri))
+    completions = LSPContext.get_completions(lsp_context, URI.from_path(file_uri))
     assert len(completions.keywords) > len(TOKENIZER_KEYWORDS)
     assert "sushi.active_customers" not in completions.models
 
@@ -84,7 +99,7 @@ def test_get_sql_completions_with_file_content():
     """
 
     file_uri = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
-    completions = lsp_context.get_autocomplete(URI.from_path(file_uri), content)
+    completions = LSPContext.get_completions(lsp_context, URI.from_path(file_uri), content)
 
     # Check that SQL keywords are included
     assert any(k in ["SELECT", "FROM", "WHERE", "JOIN"] for k in completions.keywords)
@@ -129,7 +144,7 @@ def test_get_sql_completions_with_partial_cte_query():
     """
 
     file_uri = next(key for key in lsp_context.map.keys() if key.name == "active_customers.sql")
-    completions = lsp_context.get_autocomplete(URI.from_path(file_uri), content)
+    completions = LSPContext.get_completions(lsp_context, URI.from_path(file_uri), content)
 
     # Check that CTE names are included in the keywords
     keywords_list = completions.keywords

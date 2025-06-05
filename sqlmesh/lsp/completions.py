@@ -1,13 +1,16 @@
 from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
 from sqlmesh.lsp.custom import AllModelsResponse
+from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
 from sqlmesh.lsp.uri import URI
 
 
 def get_sql_completions(
-    context: t.Optional[LSPContext], file_uri: t.Optional[URI], content: t.Optional[str] = None
+    context: t.Optional[LSPContext] = None,
+    file_uri: t.Optional[URI] = None,
+    content: t.Optional[str] = None,
 ) -> AllModelsResponse:
     """
     Return a list of completions for a given file.
@@ -26,6 +29,7 @@ def get_sql_completions(
     return AllModelsResponse(
         models=list(get_models(context, file_uri)),
         keywords=all_keywords,
+        macros=list(get_macros(context, file_uri)),
     )
 
 
@@ -54,6 +58,17 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.
                 all_models.discard(model)
 
     return all_models
+
+
+def get_macros(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
+    """Return a set of all macros with the ``@`` prefix."""
+    names = set(macro.get_registry())
+    try:
+        if context is not None:
+            names.update(context.context._macros)
+    except Exception:
+        pass
+    return names
 
 
 def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
@@ -138,6 +153,7 @@ def get_dialect(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t
 def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None) -> t.Set[str]:
     """
     Extract identifiers from SQL content using the tokenizer.
+
     Only extracts identifiers (variable names, table names, column names, etc.)
     that are not SQL keywords.
     """
@@ -155,7 +171,7 @@ def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None)
                 keywords.add(token.text)
 
     except Exception:
-        # If tokenization fails, return empty set
+        # If tokenization fails, return an empty set
         pass
 
     return keywords
