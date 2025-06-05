@@ -59,8 +59,14 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.
 
 
 def get_macros(context: t.Optional[LSPContext]) -> t.Set[str]:
-    """Return a list of all macros available in the context."""
-    return set(macro.get_registry().keys())
+    """Return a set of all macros with the ``@`` prefix."""
+    names = set(macro.get_registry().keys())
+    if context is not None:
+        try:
+            names.update(context.context._macros.keys())
+        except Exception:
+            pass
+    return {f"@{name}" for name in names}
 
 
 def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
