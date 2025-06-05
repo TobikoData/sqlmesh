@@ -79,9 +79,9 @@ def test_union_hints() -> None:
     )
 
     assert len(result) == 3
-    assert result[0].label == "::TEXT"
-    assert result[1].label == "::INT"
-    assert result[2].label == "::DATE"
+    assert result[0].label == "::DATE"
+    assert result[1].label == "::TEXT"
+    assert result[2].label == "::INT"
 
 
 @pytest.mark.fast
@@ -198,6 +198,6 @@ def test_cte_with_union_hints() -> None:
     )
 
     assert len(result) == 3
-    assert result[0].label == "::TEXT"
-    assert result[1].label == "::DATE"
-    assert result[2].label == "::INT"
+    assert result[0].label == "::INT"
+    assert result[1].label == "::TEXT"
+    assert result[2].label == "::DATE"

@@ -61,7 +61,7 @@ def get_hints(
 
 
 def _get_type_hints_for_select(
-    expression: exp.Select,
+    expression: exp.Expression,
     dialect: str,
     columns_to_types: t.Dict[str, exp.DataType],
     start_line: int,
@@ -113,28 +113,6 @@ def _get_type_hints_for_select(
     return hints
 
 
-def _get_type_hints_for_expression(
-    expression: Expression,
-    dialect: str,
-    columns_to_types: t.Dict[str, exp.DataType],
-    start_line: int,
-    end_line: int,
-) -> t.List[types.InlayHint]:
-    if isinstance(expression, exp.Union):
-        return _get_type_hints_for_expression(
-            expression.this, dialect, columns_to_types, start_line, end_line
-        ) + _get_type_hints_for_expression(
-            expression.expression, dialect, columns_to_types, start_line, end_line
-        )
-
-    if isinstance(expression, exp.Select):
-        return _get_type_hints_for_select(
-            expression, dialect, columns_to_types, start_line, end_line
-        )
-
-    return []
-
-
 def _get_type_hints_for_model_from_query(
     query: Expression,
     dialect: str,
@@ -150,8 +128,13 @@ def _get_type_hints_for_model_from_query(
         if not root:
             return []
 
-        return _get_type_hints_for_expression(
-            root.expression, dialect, columns_to_types, start_line, end_line
-        )
+        return [
+            hint
+            for q in query.walk(prune=lambda n: not isinstance(n, exp.SetOperation))
+            if isinstance(select := q.unnest(), exp.Select)
+            for hint in _get_type_hints_for_select(
+                q, dialect, columns_to_types, start_line, end_line
+            )
+        ]
     except Exception:
         return []
