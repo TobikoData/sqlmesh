@@ -99,11 +99,12 @@ class DbtLoader(Loader):
         for file in macro_files:
             self._track_file(file)
 
-        # This doesn't do anything, the actual content will be loaded from the manifest
-        return (
-            macro.get_registry(),
-            JinjaMacroRegistry(),
-        )
+        jinja_macros = JinjaMacroRegistry()
+        for project in self._load_projects():
+            jinja_macros = jinja_macros.merge(project.context.jinja_macros)
+            jinja_macros.add_globals(project.context.jinja_globals)
+
+        return (macro.get_registry(), jinja_macros)
 
     def _load_models(
         self,
