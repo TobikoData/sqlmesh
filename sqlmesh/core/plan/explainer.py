@@ -195,7 +195,7 @@ class RichExplainerConsole(ExplainerConsole):
 
                 tree.add(model_tree)
             else:
-                tree.add(f"{display_name} \[standalone audit]")
+                tree.add(f"{display_name} \\[standalone audit]")
         return tree
 
     def visit_migrate_schemas_stage(self, stage: stages.MigrateSchemasStage) -> Tree:
