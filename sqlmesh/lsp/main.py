@@ -382,14 +382,7 @@ class SQLMeshLanguageServer:
                 cte_references = get_cte_references(self.lsp_context, uri, params.position)
 
                 # Convert references to Location objects
-                locations = []
-                for ref in cte_references:
-                    locations.append(
-                        types.Location(
-                            uri=ref.uri,
-                            range=ref.range,
-                        )
-                    )
+                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in cte_references]
 
                 return locations if locations else None
             except Exception as e:
