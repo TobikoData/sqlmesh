@@ -58,11 +58,31 @@ export const startVSCode = async (
   const window = await electronApp.firstWindow()
   await window.waitForLoadState('domcontentloaded')
   await window.waitForLoadState('networkidle')
+  await clickExplorerTab(window)
+
   return {
     window,
     close: async () => {
       await electronApp.close()
-      await fs.removeSync(userDataDir)
+      await fs.remove(userDataDir)
     },
+  }
+}
+
+/**
+ * Click on the Explorer tab in the VS Code activity bar if the Explorer tab is not already active.
+ * This is necessary because the Explorer tab may not be visible if the user has not opened it yet.
+ */
+export const clickExplorerTab = async (page: Page): Promise<void> => {
+  const isExplorerActive = await page.locator("text='Explorer'").isVisible()
+  if (!isExplorerActive) {
+    // Wait for the activity bar to be loaded
+    await page.waitForSelector('.actions-container[role="tablist"]')
+
+    // Click on the Explorer tab using the codicon class
+    await page.click('.codicon-explorer-view-icon')
+
+    // Wait a bit for the explorer view to activate
+    await page.locator("text='Explorer'").waitFor({ state: 'visible' })
   }
 }
