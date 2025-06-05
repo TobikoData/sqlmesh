@@ -36,6 +36,7 @@ from sqlmesh.lsp.custom import (
     RenderModelRequest,
     RenderModelResponse,
 )
+from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import get_references, get_cte_references
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
@@ -333,6 +334,25 @@ class SQLMeshLanguageServer:
                     f"Error getting hover information: {e}",
                 )
                 return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_INLAY_HINT)
+        def inlay_hint(
+            ls: LanguageServer, params: types.InlayHintParams
+        ) -> t.List[types.InlayHint]:
+            """Implement type hints for sql columns as inlay hints"""
+            try:
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {uri}")
+
+                start_line = params.range.start.line
+                end_line = params.range.end.line
+                hints = get_hints(self.lsp_context, uri, start_line, end_line)
+                return hints
+
+            except Exception as e:
+                return []
 
         @self.server.feature(types.TEXT_DOCUMENT_DEFINITION)
         def goto_definition(
