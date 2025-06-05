@@ -39,7 +39,7 @@ from sqlmesh.core.config.scheduler import (
     scheduler_config_validator,
 )
 from sqlmesh.core.config.ui import UIConfig
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.loader import Loader, SqlMeshLoader, MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
@@ -218,6 +218,13 @@ class Config(BaseConfig):
             data["physical_schema_mapping"] = {
                 f"^{k}$": v for k, v in physical_schema_override.items()
             }
+
+        if (
+            (variables := data.get("variables", ""))
+            and isinstance(variables, dict)
+            and c.MIGRATED_DBT_PROJECT_NAME in variables
+        ):
+            data["loader"] = MigratedDbtProjectLoader
 
         return data
 

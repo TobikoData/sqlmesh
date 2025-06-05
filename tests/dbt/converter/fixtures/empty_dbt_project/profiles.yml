@@ -1,0 +1,6 @@
+test:
+  outputs:
+    in_memory:
+      type: duckdb
+      schema: project
+  target: in_memory
