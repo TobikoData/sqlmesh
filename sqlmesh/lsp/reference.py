@@ -4,6 +4,11 @@ from pathlib import Path
 
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.linter.helpers import (
+    TokenPositionDetails,
+    Range as SQLMeshRange,
+    Position as SQLMeshPosition,
+)
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
@@ -156,12 +161,17 @@ def get_model_definitions_for_a_path(
                     if isinstance(alias, exp.TableAlias):
                         identifier = alias.this
                         if isinstance(identifier, exp.Identifier):
-                            target_range = _range_from_token_position_details(
-                                TokenPositionDetails.from_meta(identifier.meta), read_file
-                            )
-                            table_range = _range_from_token_position_details(
-                                TokenPositionDetails.from_meta(table.this.meta), read_file
-                            )
+                            target_range_sqlmesh = TokenPositionDetails.from_meta(
+                                identifier.meta
+                            ).to_range(read_file)
+                            table_range_sqlmesh = TokenPositionDetails.from_meta(
+                                table.this.meta
+                            ).to_range(read_file)
+
+                            # Convert SQLMesh Range to LSP Range
+                            target_range = to_lsp_range(target_range_sqlmesh)
+                            table_range = to_lsp_range(table_range_sqlmesh)
+
                             references.append(
                                 Reference(
                                     uri=document_uri.value,  # Same file
@@ -203,95 +213,31 @@ def get_model_definitions_for_a_path(
 
                 # Extract metadata for positioning
                 table_meta = TokenPositionDetails.from_meta(table.this.meta)
-                table_range = _range_from_token_position_details(table_meta, read_file)
-                start_pos = table_range.start
-                end_pos = table_range.end
+                table_range_sqlmesh = table_meta.to_range(read_file)
+                start_pos_sqlmesh = table_range_sqlmesh.start
+                end_pos_sqlmesh = table_range_sqlmesh.end
 
                 # If there's a catalog or database qualifier, adjust the start position
                 catalog_or_db = table.args.get("catalog") or table.args.get("db")
                 if catalog_or_db is not None:
                     catalog_or_db_meta = TokenPositionDetails.from_meta(catalog_or_db.meta)
-                    catalog_or_db_range = _range_from_token_position_details(
-                        catalog_or_db_meta, read_file
-                    )
-                    start_pos = catalog_or_db_range.start
+                    catalog_or_db_range_sqlmesh = catalog_or_db_meta.to_range(read_file)
+                    start_pos_sqlmesh = catalog_or_db_range_sqlmesh.start
 
                 description = generate_markdown_description(referenced_model)
 
                 references.append(
                     Reference(
                         uri=referenced_model_uri.value,
-                        range=Range(start=start_pos, end=end_pos),
+                        range=Range(
+                            start=to_lsp_position(start_pos_sqlmesh),
+                            end=to_lsp_position(end_pos_sqlmesh),
+                        ),
                         markdown_description=description,
                     )
                 )
 
     return references
-
-
-class TokenPositionDetails(PydanticModel):
-    """
-    Details about a token's position in the source code.
-
-    Attributes:
-        line (int): The line that the token ends on.
-        col (int): The column that the token ends on.
-        start (int): The start index of the token.
-        end (int): The ending index of the token.
-    """
-
-    line: int
-    col: int
-    start: int
-    end: int
-
-    @staticmethod
-    def from_meta(meta: t.Dict[str, int]) -> "TokenPositionDetails":
-        return TokenPositionDetails(
-            line=meta["line"],
-            col=meta["col"],
-            start=meta["start"],
-            end=meta["end"],
-        )
-
-
-def _range_from_token_position_details(
-    token_position_details: TokenPositionDetails, read_file: t.List[str]
-) -> Range:
-    """
-    Convert a TokenPositionDetails object to a Range object.
-
-    :param token_position_details: Details about a token's position
-    :param read_file: List of lines from the file
-    :return: A Range object representing the token's position
-    """
-    # Convert from 1-indexed to 0-indexed for line only
-    end_line_0 = token_position_details.line - 1
-    end_col_0 = token_position_details.col
-
-    # Find the start line and column by counting backwards from the end position
-    start_pos = token_position_details.start
-    end_pos = token_position_details.end
-
-    # Initialize with the end position
-    start_line_0 = end_line_0
-    start_col_0 = end_col_0 - (end_pos - start_pos + 1)
-
-    # If start_col_0 is negative, we need to go back to previous lines
-    while start_col_0 < 0 and start_line_0 > 0:
-        start_line_0 -= 1
-        start_col_0 += len(read_file[start_line_0])
-        # Account for newline character
-        if start_col_0 >= 0:
-            break
-        start_col_0 += 1  # For the newline character
-
-    # Ensure we don't have negative values
-    start_col_0 = max(0, start_col_0)
-    return Range(
-        start=Position(line=start_line_0, character=start_col_0),
-        end=Position(line=end_line_0, character=end_col_0),
-    )
 
 
 def get_macro_definitions_for_a_path(
@@ -373,11 +319,10 @@ def get_macro_reference(
     try:
         # Get the position of the macro invocation in the source file first
         if hasattr(node, "meta") and node.meta:
-            token_details = TokenPositionDetails.from_meta(node.meta)
-            macro_range = _range_from_token_position_details(token_details, read_file)
+            macro_range = TokenPositionDetails.from_meta(node.meta).to_range(read_file)
 
             # Check if it's a built-in method
-            if builtin := get_built_in_macro_reference(macro_name, macro_range):
+            if builtin := get_built_in_macro_reference(macro_name, to_lsp_range(macro_range)):
                 return builtin
         else:
             # Skip if we can't get the position
@@ -429,7 +374,7 @@ def get_macro_reference(
 
         return Reference(
             uri=macro_uri.value,
-            range=macro_range,
+            range=to_lsp_range(macro_range),
             target_range=Range(
                 start=Position(line=start_line - 1, character=0),
                 end=Position(line=end_line - 1, character=get_length_of_end_line),
@@ -544,3 +489,24 @@ def _position_within_range(position: Position, range: Range) -> bool:
         range.end.line > position.line
         or (range.end.line == position.line and range.end.character >= position.character)
     )
+
+
+def to_lsp_range(
+    range: SQLMeshRange,
+) -> Range:
+    """
+    Converts a SQLMesh Range to an LSP Range.
+    """
+    return Range(
+        start=Position(line=range.start.line, character=range.start.character),
+        end=Position(line=range.end.line, character=range.end.character),
+    )
+
+
+def to_lsp_position(
+    position: SQLMeshPosition,
+) -> Position:
+    """
+    Converts a SQLMesh Position to an LSP Position.
+    """
+    return Position(line=position.line, character=position.character)

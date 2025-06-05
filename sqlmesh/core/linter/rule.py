@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+from dataclasses import dataclass
 
 from sqlmesh.core.model import Model
 
@@ -20,6 +21,22 @@ class RuleLocation(PydanticModel):
 
     file_path: str
     start_line: t.Optional[int] = None
+
+
+@dataclass(frozen=True)
+class Position:
+    """The position of a rule violation in a file, the position follows the LSP standard."""
+
+    line: int
+    character: int
+
+
+@dataclass(frozen=True)
+class Range:
+    """The range of a rule violation in a file. The range follows the LSP standard."""
+
+    start: Position
+    end: Position
 
 
 class _Rule(abc.ABCMeta):
@@ -45,9 +62,15 @@ class Rule(abc.ABC, metaclass=_Rule):
         """A summary of what this rule checks for."""
         return self.__doc__ or ""
 
-    def violation(self, violation_msg: t.Optional[str] = None) -> RuleViolation:
+    def violation(
+        self,
+        violation_msg: t.Optional[str] = None,
+        violation_range: t.Optional[Range] = None,
+    ) -> RuleViolation:
         """Create a RuleViolation instance for this rule"""
-        return RuleViolation(rule=self, violation_msg=violation_msg or self.summary)
+        return RuleViolation(
+            rule=self, violation_msg=violation_msg or self.summary, violation_range=violation_range
+        )
 
     def get_definition_location(self) -> RuleLocation:
         """Return the file path and position information for this rule.
@@ -79,9 +102,12 @@ class Rule(abc.ABC, metaclass=_Rule):
 
 
 class RuleViolation:
-    def __init__(self, rule: Rule, violation_msg: str) -> None:
+    def __init__(
+        self, rule: Rule, violation_msg: str, violation_range: t.Optional[Range] = None
+    ) -> None:
         self.rule = rule
         self.violation_msg = violation_msg
+        self.violation_range = violation_range
 
     def __repr__(self) -> str:
         return f"{self.rule.name}: {self.violation_msg}"
