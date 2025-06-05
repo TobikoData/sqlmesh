@@ -7,7 +7,6 @@ from lsprotocol import types
 from sqlglot import exp
 from sqlglot.expressions import Expression
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
-from sqlglot.optimizer.scope import build_scope
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.uri import URI
@@ -123,10 +122,6 @@ def _get_type_hints_for_model_from_query(
     hints: t.List[types.InlayHint] = []
     try:
         query = normalize_identifiers(query.copy(), dialect=dialect)
-        root = build_scope(query)
-
-        if not root:
-            return []
 
         return [
             hint
