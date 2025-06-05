@@ -33,15 +33,7 @@ export const startVSCode = async (
   const userDataDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-user-data-'),
   )
-  const ciArgs = process.env.CI
-    ? [
-        '--disable-gpu',
-        '--headless',
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--window-position=-10000,0',
-      ]
-    : []
+  const ciArgs = process.env.CI ? ['--window-position=-10000,0'] : []
   const args = [
     ...ciArgs,
     `--extensionDevelopmentPath=${EXT_PATH}`,
@@ -54,6 +46,7 @@ export const startVSCode = async (
   const electronApp = await electron.launch({
     executablePath: VS_CODE_EXE,
     args,
+    recordVideo: { dir: 'test-videos' },
   })
   const window = await electronApp.firstWindow()
   await window.waitForLoadState('domcontentloaded')
