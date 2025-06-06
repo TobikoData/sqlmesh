@@ -491,6 +491,18 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
 
         return v.transform(d.replace_merge_table_aliases)
 
+    @field_validator("batch_concurrency", mode="before")
+    def _batch_concurrency_validator(
+        cls, v: t.Optional[exp.Expression], info: ValidationInfo
+    ) -> int:
+        if isinstance(v, exp.Literal):
+            return int(
+                v.to_py()
+            )  # allow batch_concurrency = 1 to be specified in a Model definition without throwing a Pydantic error
+        if isinstance(v, int):
+            return v
+        return 1
+
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
         return [
