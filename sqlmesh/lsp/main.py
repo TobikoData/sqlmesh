@@ -590,6 +590,15 @@ class SQLMeshLanguageServer:
                             detail="SQLMesh Model",
                         )
                     )
+                # Add macro completions
+                for macro_name in completion_response.macros:
+                    completion_items.append(
+                        types.CompletionItem(
+                            label=macro_name,
+                            kind=types.CompletionItemKind.Function,
+                            detail="SQLMesh Macro",
+                        )
+                    )
                 # Add keyword completions
                 for keyword in completion_response.keywords:
                     completion_items.append(
