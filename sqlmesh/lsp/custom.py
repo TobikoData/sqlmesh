@@ -72,3 +72,30 @@ class AllModelsForRenderResponse(PydanticModel):
     """
 
     models: t.List[ModelForRendering]
+
+
+SUPPORTED_METHODS_FEATURE = "sqlmesh/supported_methods"
+
+
+class SupportedMethodsRequest(PydanticModel):
+    """
+    Request to get all supported custom LSP methods.
+    """
+
+    pass
+
+
+class CustomMethod(PydanticModel):
+    """
+    Information about a custom LSP method.
+    """
+
+    name: str
+
+
+class SupportedMethodsResponse(PydanticModel):
+    """
+    Response containing all supported custom LSP methods.
+    """
+
+    methods: t.List[CustomMethod]

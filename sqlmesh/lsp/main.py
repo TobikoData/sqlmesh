@@ -29,18 +29,30 @@ from sqlmesh.lsp.custom import (
     ALL_MODELS_FEATURE,
     ALL_MODELS_FOR_RENDER_FEATURE,
     RENDER_MODEL_FEATURE,
+    SUPPORTED_METHODS_FEATURE,
     AllModelsRequest,
     AllModelsResponse,
     AllModelsForRenderRequest,
     AllModelsForRenderResponse,
     RenderModelRequest,
     RenderModelResponse,
+    SupportedMethodsRequest,
+    SupportedMethodsResponse,
+    CustomMethod,
 )
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import get_references, get_cte_references
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
+
+SUPPORTED_CUSTOM_METHODS = [
+    ALL_MODELS_FEATURE,
+    RENDER_MODEL_FEATURE,
+    ALL_MODELS_FOR_RENDER_FEATURE,
+    API_FEATURE,
+    SUPPORTED_METHODS_FEATURE,
+]
 
 
 class SQLMeshLanguageServer:
@@ -147,6 +159,20 @@ class SQLMeshLanguageServer:
                 raise RuntimeError("No context found")
             return AllModelsForRenderResponse(
                 models=self.lsp_context.list_of_models_for_rendering()
+            )
+
+        @self.server.feature(SUPPORTED_METHODS_FEATURE)
+        def supported_methods(
+            ls: LanguageServer, params: SupportedMethodsRequest
+        ) -> SupportedMethodsResponse:
+            """Return all supported custom LSP methods."""
+            return SupportedMethodsResponse(
+                methods=[
+                    CustomMethod(
+                        name=name,
+                    )
+                    for name in SUPPORTED_CUSTOM_METHODS
+                ]
             )
 
         @self.server.feature(API_FEATURE)

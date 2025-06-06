@@ -7,13 +7,53 @@ import { traceInfo } from './common/log'
  * Represents different types of errors that can occur in the application.
  */
 export type ErrorType =
-  | { type: 'generic'; message: string }
+  | ErrorTypeGeneric
   | { type: 'not_signed_in' }
   | { type: 'sqlmesh_lsp_not_found' }
   // tcloud_bin_not_found is used when the tcloud executable is not found. This is likely to happen if the user
   // opens a project that has a `tcloud.yaml` file but doesn't have tcloud installed.
   | { type: 'tcloud_bin_not_found' }
   | SqlmeshLspDependenciesMissingError
+  | ErrorTypeInvalidState
+  | ErrorTypeSQLMeshOutdated
+
+/**
+ * ErrorTypeSQLMeshOutdated is used when the SQLMesh version is outdated. The
+ * message should explain the problem, but the suggestion to update SQLMesh is
+ * handled at the place where the error is shown.
+ */
+export interface ErrorTypeSQLMeshOutdated {
+  type: 'sqlmesh_outdated'
+  /**
+   * A message that describes the outdated SQLMesh version, it should not talk about
+   * updating SQLMesh. This is done at the place where the error is handled.
+   */
+  message: string
+}
+
+/**
+ * ErrorTypeInvalidState is used when the state of the application is invalid state.
+ * They should never be thrown by the application unless there is a bug in the code.
+ * The shown message should be generic and not contain any sensitive information but
+ * asks the user to report the issue to the developers.
+ */
+export interface ErrorTypeInvalidState {
+  type: 'invalid_state'
+  /**
+   * A message that describes the invalid state, it should not talk about reporting
+   * the issue to the developers. This is done at the place where the error is
+   * handled.
+   */
+  message: string
+}
+
+/**
+ * ErrorTypeGeneric is a generic error type that can be used to represent any error with a message.
+ */
+export interface ErrorTypeGeneric {
+  type: 'generic'
+  message: string
+}
 
 /**
  * SqlmeshLspDependenciesMissingError is used when the sqlmesh_lsp is found but
@@ -33,6 +73,16 @@ export async function handleError(
 ): Promise<void> {
   traceInfo('handleError', error)
   switch (error.type) {
+    case 'invalid_state':
+      await window.showErrorMessage(
+        `Invalid state: ${error.message}. Please report this issue to the developers.`,
+      )
+      return
+    case 'sqlmesh_outdated':
+      await window.showErrorMessage(
+        `SQLMesh itself is outdated. Please update SQLMesh to the latest version to use this feature. ${error.message}`,
+      )
+      return
     case 'not_signed_in':
       return handleNotSignedInError(authProvider)
     case 'sqlmesh_lsp_not_found':

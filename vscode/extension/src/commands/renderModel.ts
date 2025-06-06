@@ -73,7 +73,7 @@ export function renderModel(
 
       if (isErr(allModelsResult)) {
         vscode.window.showErrorMessage(
-          `Failed to get models: ${allModelsResult.error}`,
+          `Failed to get models: ${allModelsResult.error.message}`,
         )
         return
       }
@@ -115,7 +115,9 @@ export function renderModel(
     })
 
     if (isErr(result)) {
-      vscode.window.showErrorMessage(`Failed to render model: ${result.error}`)
+      vscode.window.showErrorMessage(
+        `Failed to render model: ${result.error.message}`,
+      )
       return
     }
 
