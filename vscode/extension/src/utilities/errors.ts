@@ -13,9 +13,12 @@ export type ErrorType =
   // tcloud_bin_not_found is used when the tcloud executable is not found. This is likely to happen if the user
   // opens a project that has a `tcloud.yaml` file but doesn't have tcloud installed.
   | { type: 'tcloud_bin_not_found' }
-  // sqlmesh_lsp_dependencies_missing is used when the sqlmesh_lsp is found but the lsp extras are missing.
   | SqlmeshLspDependenciesMissingError
 
+/**
+ * SqlmeshLspDependenciesMissingError is used when the sqlmesh_lsp is found but
+ * the lsp extras are missing.
+ */
 interface SqlmeshLspDependenciesMissingError {
   type: 'sqlmesh_lsp_dependencies_missing'
   is_missing_pygls: boolean
@@ -23,11 +26,36 @@ interface SqlmeshLspDependenciesMissingError {
   is_tobiko_cloud: boolean
 }
 
+export async function handleError(
+  authProvider: AuthenticationProviderTobikoCloud,
+  error: ErrorType,
+  genericErrorPrefix?: string,
+): Promise<void> {
+  traceInfo('handleError', error)
+  switch (error.type) {
+    case 'not_signed_in':
+      return handleNotSignedInError(authProvider)
+    case 'sqlmesh_lsp_not_found':
+      return handleSqlmeshLspNotFoundError()
+    case 'sqlmesh_lsp_dependencies_missing':
+      return handleSqlmeshLspDependenciesMissingError(error)
+    case 'tcloud_bin_not_found':
+      return handleTcloudBinNotFoundError()
+    case 'generic':
+      if (genericErrorPrefix) {
+        await window.showErrorMessage(`${genericErrorPrefix}: ${error.message}`)
+      } else {
+        await window.showErrorMessage(`An error occurred: ${error.message}`)
+      }
+      return
+  }
+}
+
 /**
  * Handles the case where the user is not signed in to Tobiko Cloud.
  * @param authProvider - The authentication provider to use for signing in.
  */
-export const handleNotSginedInError = async (
+const handleNotSignedInError = async (
   authProvider: AuthenticationProviderTobikoCloud,
 ): Promise<void> => {
   traceInfo('handleNotSginedInError')
@@ -43,7 +71,7 @@ export const handleNotSginedInError = async (
 /**
  * Handles the case where the sqlmesh_lsp is not found.
  */
-export const handleSqlmeshLspNotFoundError = async (): Promise<void> => {
+const handleSqlmeshLspNotFoundError = async (): Promise<void> => {
   traceInfo('handleSqlmeshLspNotFoundError')
   await window.showErrorMessage(
     'SQLMesh LSP not found, please check installation',
@@ -53,7 +81,7 @@ export const handleSqlmeshLspNotFoundError = async (): Promise<void> => {
 /**
  * Handles the case where the sqlmesh_lsp is found but the lsp extras are missing.
  */
-export const handleSqlmeshLspDependenciesMissingError = async (
+const handleSqlmeshLspDependenciesMissingError = async (
   error: SqlmeshLspDependenciesMissingError,
 ): Promise<void> => {
   traceInfo('handleSqlmeshLspDependenciesMissingError')
@@ -80,7 +108,7 @@ export const handleSqlmeshLspDependenciesMissingError = async (
 /**
  * Handles the case where the tcloud executable is not found.
  */
-export const handleTcloudBinNotFoundError = async (): Promise<void> => {
+const handleTcloudBinNotFoundError = async (): Promise<void> => {
   const result = await window.showErrorMessage(
     'tcloud executable not found, please check installation',
     'Install',
