@@ -135,6 +135,9 @@ def get_model_definitions_for_a_path(
     else:
         return []
 
+    if file_path is None:
+        return []
+
     # Find all possible references
     references = []
 
@@ -206,8 +209,10 @@ def get_model_definitions_for_a_path(
                 if referenced_model is None:
                     continue
                 referenced_model_path = referenced_model._path
+                if referenced_model_path is None:
+                    continue
                 # Check whether the path exists
-                if not referenced_model_path.is_file():
+                if referenced_model_path is None or not referenced_model_path.is_file():
                     continue
                 referenced_model_uri = URI.from_path(referenced_model_path)
 
@@ -283,6 +288,9 @@ def get_macro_definitions_for_a_path(
         query = target.query
         file_path = target._path
     else:
+        return []
+
+    if file_path is None:
         return []
 
     references = []
