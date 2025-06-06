@@ -2,13 +2,7 @@ import { traceLog } from '../utilities/common/log'
 import { sqlmeshExec } from '../utilities/sqlmesh/sqlmesh'
 import { err, isErr, ok, Result } from '@bus/result'
 import * as vscode from 'vscode'
-import {
-  ErrorType,
-  handleNotSginedInError,
-  handleSqlmeshLspNotFoundError,
-  handleSqlmeshLspDependenciesMissingError,
-  handleTcloudBinNotFoundError,
-} from '../utilities/errors'
+import { ErrorType, handleError } from '../utilities/errors'
 import { AuthenticationProviderTobikoCloud } from '../auth/auth'
 import { execAsync } from '../utilities/exec'
 
@@ -18,25 +12,7 @@ export const format =
     traceLog('Calling format')
     const out = await internalFormat()
     if (isErr(out)) {
-      switch (out.error.type) {
-        case 'not_signed_in':
-          await handleNotSginedInError(authProvider)
-          return
-        case 'sqlmesh_lsp_not_found':
-          await handleSqlmeshLspNotFoundError()
-          return
-        case 'sqlmesh_lsp_dependencies_missing':
-          await handleSqlmeshLspDependenciesMissingError(out.error)
-          return
-        case 'tcloud_bin_not_found':
-          await handleTcloudBinNotFoundError()
-          return
-        case 'generic':
-          await vscode.window.showErrorMessage(
-            `Project format failed: ${out.error.message}`,
-          )
-          return
-      }
+      return handleError(authProvider, out.error, 'Project format failed')
     }
     vscode.window.showInformationMessage('Project formatted successfully')
   }
