@@ -66,9 +66,8 @@ class FilenameEqualsModelname(Rule):
         table_name = full_model_name.split(".")[-1]
         path = Path(model._path)
         return (
-            self.violation()
-            if (table_name != path.stem) and not model.kind.is_symbolic
-            else None
+            self.violation() if (table_name != path.stem) and not model.kind.is_symbolic else None
         )
+
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
