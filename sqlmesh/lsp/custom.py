@@ -99,3 +99,22 @@ class SupportedMethodsResponse(PydanticModel):
     """
 
     methods: t.List[CustomMethod]
+
+
+FORMAT_PROJECT_FEATURE = "sqlmesh/format_project"
+
+
+class FormatProjectRequest(PydanticModel):
+    """
+    Request to format all models in the current project.
+    """
+
+    pass
+
+
+class FormatProjectResponse(PydanticModel):
+    """
+    Response to format project request.
+    """
+
+    pass

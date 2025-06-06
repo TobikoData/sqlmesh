@@ -5,19 +5,45 @@ import * as vscode from 'vscode'
 import { ErrorType, handleError } from '../utilities/errors'
 import { AuthenticationProviderTobikoCloud } from '../auth/auth'
 import { execAsync } from '../utilities/exec'
+import { LSPClient } from '../lsp/lsp'
 
 export const format =
-  (authProvider: AuthenticationProviderTobikoCloud) =>
+  (
+    authProvider: AuthenticationProviderTobikoCloud,
+    lsp: LSPClient | undefined,
+  ) =>
   async (): Promise<void> => {
     traceLog('Calling format')
-    const out = await internalFormat()
+    const out = await internalFormat(lsp)
     if (isErr(out)) {
       return handleError(authProvider, out.error, 'Project format failed')
     }
     vscode.window.showInformationMessage('Project formatted successfully')
   }
 
-const internalFormat = async (): Promise<Result<undefined, ErrorType>> => {
+const internalFormat = async (
+  lsp: LSPClient | undefined,
+): Promise<Result<undefined, ErrorType>> => {
+  try {
+    // Try LSP method first
+    if (lsp) {
+      const response = await lsp.call_custom_method(
+        'sqlmesh/format_project',
+        {},
+      )
+      if (isErr(response)) {
+        return response
+      }
+      return ok(undefined)
+    }
+  } catch (error) {
+    traceLog(`LSP format failed, falling back to CLI: ${JSON.stringify(error)}`)
+  }
+
+  // Fallback to CLI method if LSP is not available
+  // TODO This is a solution in order to be backwards compatible in the cases
+  //  where the LSP method is not implemented yet. This should be removed at
+  //  some point in the future.
   const exec = await sqlmeshExec()
   if (isErr(exec)) {
     return exec

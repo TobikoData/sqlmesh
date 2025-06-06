@@ -30,6 +30,7 @@ from sqlmesh.lsp.custom import (
     ALL_MODELS_FOR_RENDER_FEATURE,
     RENDER_MODEL_FEATURE,
     SUPPORTED_METHODS_FEATURE,
+    FORMAT_PROJECT_FEATURE,
     AllModelsRequest,
     AllModelsResponse,
     AllModelsForRenderRequest,
@@ -38,6 +39,8 @@ from sqlmesh.lsp.custom import (
     RenderModelResponse,
     SupportedMethodsRequest,
     SupportedMethodsResponse,
+    FormatProjectRequest,
+    FormatProjectResponse,
     CustomMethod,
 )
 from sqlmesh.lsp.hints import get_hints
@@ -52,6 +55,7 @@ SUPPORTED_CUSTOM_METHODS = [
     ALL_MODELS_FOR_RENDER_FEATURE,
     API_FEATURE,
     SUPPORTED_METHODS_FEATURE,
+    FORMAT_PROJECT_FEATURE,
 ]
 
 
@@ -174,6 +178,25 @@ class SQLMeshLanguageServer:
                     for name in SUPPORTED_CUSTOM_METHODS
                 ]
             )
+
+        @self.server.feature(FORMAT_PROJECT_FEATURE)
+        def format_project(
+            ls: LanguageServer, params: FormatProjectRequest
+        ) -> FormatProjectResponse:
+            """Format all models in the current project."""
+            try:
+                if self.lsp_context is None:
+                    current_path = Path.cwd()
+                    self._ensure_context_in_folder(current_path)
+                if self.lsp_context is None:
+                    raise RuntimeError("No context found")
+
+                # Call the format method on the context
+                self.lsp_context.context.format()
+                return FormatProjectResponse()
+            except Exception as e:
+                ls.log_trace(f"Error formatting project: {e}")
+                return FormatProjectResponse()
 
         @self.server.feature(API_FEATURE)
         def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
