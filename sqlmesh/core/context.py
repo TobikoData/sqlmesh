@@ -1521,7 +1521,6 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
-            environment=environment or c.PROD,
             start=start,
             end=end,
             execution_time=execution_time,

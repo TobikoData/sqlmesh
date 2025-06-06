@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import sys
 import typing as t
-
 from difflib import ndiff, unified_diff
 from functools import cached_property
 from sqlmesh.core import constants as c
