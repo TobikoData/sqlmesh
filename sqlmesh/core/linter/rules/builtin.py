@@ -62,11 +62,10 @@ class FilenameEqualsModelname(Rule):
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         # Rule violated if the model's name (schema.table_name) does not match the file name (foo/bar/table_name.sql).
-        full_model_name = model.name
-        table_name = full_model_name.split(".")[-1]
-        path = Path(model._path)
         return (
-            self.violation() if (table_name != path.stem) and not model.kind.is_symbolic else None
+            self.violation()
+            if (model.name.split(".")[-1] != Path(model._path).stem) and not model.kind.is_symbolic
+            else None
         )
 
 
