@@ -6,7 +6,7 @@ from collections import Counter
 from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
-
+import logging
 import os
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
@@ -37,6 +37,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
@@ -6252,3 +6253,103 @@ def test_render_path_instead_of_model(tmp_path: Path):
 
     # Case 3: Render the model successfully
     assert ctx.render("test_model").sql() == 'SELECT 1 AS "col"'
+
+
+@use_terminal_console
+def test_plan_always_recreate_environment(tmp_path: Path):
+    def plan_with_output(ctx: Context, environment: str):
+        with patch.object(logger, "info") as mock_logger:
+            with capture_output() as output:
+                ctx.load()
+                ctx.plan(environment, no_prompts=True, auto_apply=True)
+
+            # Facade logs info "Promoting environment {environment}"
+            assert mock_logger.call_args[0][1] == environment
+
+        return output
+
+    models_dir = tmp_path / "models"
+
+    logger = logging.getLogger("sqlmesh.core.state_sync.db.facade")
+
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
+    )
+
+    config = Config(plan=PlanConfig(always_recreate_environment=True))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # Case 1: Neither prod nor dev exists, so dev is initialized
+    output = plan_with_output(ctx, "dev")
+
+    assert """`dev` environment will be initialized""" in output.stdout
+
+    # Case 2: Prod does not exist, so dev is updated
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 5 AS col"
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "`dev` environment will be initialized" in output.stdout
+
+    # Case 3: Prod is initialized, so plan comparisons moving forward should be against prod
+    output = plan_with_output(ctx, "prod")
+    assert "`prod` environment will be initialized" in output.stdout
+
+    # Case 4: Dev is updated with a breaking change. Prod exists now so plan comparisons moving forward should be against prod
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 10 AS col"
+    )
+    ctx.load()
+
+    plan = ctx.plan_builder("dev").build()
+
+    assert (
+        next(iter(plan.context_diff.snapshots.values())).change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
+    assert "Differences from the `prod` environment" in output.stdout
+
+    # Case 5: Dev is updated with a metadata change, but comparison against prod shows both the previous and the current changes
+    # so it's still classified as a breaking change
+    create_temp_file(
+        tmp_path,
+        models_dir / "a.sql",
+        "MODEL (name test.a, kind FULL, owner 'test'); SELECT 10 AS col",
+    )
+    ctx.load()
+
+    plan = ctx.plan_builder("dev").build()
+
+    assert (
+        next(iter(plan.context_diff.snapshots.values())).change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
+    assert "Differences from the `prod` environment" in output.stdout
+
+    assert (
+        """MODEL (                                                                        
+   name test.a,                                                                 
++  owner test,                                                                  
+   kind FULL                                                                    
+ )                                                                              
+ SELECT                                                                         
+-  5 AS col                                                                     
++  10 AS col"""
+        in output.stdout
+    )
+
+    # Case 6: Ensure that target environment and create_from environment are not the same
+    output = plan_with_output(ctx, "prod")
+    assert not "New environment `prod` will be created from `prod`" in output.stdout
+
+    # Case 7: Check that we can still run Context::diff() against any environment
+    for environment in ["dev", "prod"]:
+        context_diff = ctx._context_diff(environment)
+        assert context_diff.environment == environment
