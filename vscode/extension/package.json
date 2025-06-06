@@ -137,7 +137,7 @@
     "@types/vscode": "1.96.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.4.2",
+    "@vscode/vsce": "^3.5.0",
     "esbuild": "^0.25.4",
     "eslint": "^9.27.0",
     "ts-loader": "^9.5.2",
