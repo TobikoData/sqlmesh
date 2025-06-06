@@ -1438,7 +1438,46 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
 
-    _engine_import_validator = _get_engine_import_validator("pymssql", "mssql")
+    @model_validator(mode="before")
+    @classmethod
+    def _mssql_engine_import_validator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        check_import = str_to_bool(str(data.pop("check_import", True)))
+        if not check_import:
+            return data
+
+        driver = data.get("driver", "pymssql")
+
+        try:
+            if driver == "pymssql":
+                importlib.import_module("pymssql")
+            elif driver == "pyodbc":
+                importlib.import_module("pyodbc")
+            else:
+                raise ValueError(f"Unsupported driver: {driver}")
+        except ImportError:
+            if debug_mode_enabled():
+                raise
+
+            logger.exception("Failed to import the MSSQL engine library")
+
+            if driver == "pymssql":
+                extra_name = "mssql"
+            elif driver == "pyodbc":
+                extra_name = "mssql-odbc"
+            else:
+                extra_name = "mssql"
+
+            raise ConfigError(
+                f"Failed to import the '{driver}' library for MSSQL connections. This may be due to a missing "
+                "or incompatible installation. Please ensure the required dependency is installed by "
+                f'running: `pip install "sqlmesh[{extra_name}]"`. For more details, check the logs '
+                "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+            )
+
+        return data
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:

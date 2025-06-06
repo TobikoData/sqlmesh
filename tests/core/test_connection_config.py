@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from unittest.mock import patch
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -19,6 +20,7 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
+    MSSQLConnectionConfig,
     _connection_config_validator,
     _get_engine_import_validator,
 )
@@ -1127,3 +1129,54 @@ def test_engine_import_validator():
         _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
 
     TestConfigC()
+
+
+def test_mssql_engine_import_validator():
+    """Test that MSSQL import validator respects driver configuration."""
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            "Failed to import the 'pyodbc' library for MSSQL connections. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[mssql-odbc]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+        ),
+    ):
+        # Test PyODBC driver suggests mssql-odbc extra
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pyodbc'")
+            MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            "Failed to import the 'pymssql' library for MSSQL connections. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[mssql]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+        ),
+    ):
+        # Test PyMSSQL driver suggests mssql extra
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost", driver="pymssql")
+
+    with pytest.raises(
+        ConfigError,
+        match=re.escape(
+            "Failed to import the 'pymssql' library for MSSQL connections. This may be due to a missing "
+            "or incompatible installation. Please ensure the required dependency is installed by "
+            'running: `pip install "sqlmesh[mssql]"`. For more details, check the logs '
+            "in the 'logs/' folder, or rerun the command with the '--debug' flag."
+        ),
+    ):
+        # Test default driver (pymssql) suggests mssql extra
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost")  # No driver specified
+
+    # Test successful import doesn't raise exception
+    with patch("importlib.import_module") as mock_import:
+        mock_import.return_value = None
+        config = MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+        assert config.driver == "pyodbc"
