@@ -1,7 +1,7 @@
 from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
-from sqlmesh.lsp.reference import get_model_definitions_for_a_path, by_position
+from sqlmesh.lsp.reference import LSPModelReference, get_model_definitions_for_a_path, by_position
 from sqlmesh.lsp.uri import URI
 
 
@@ -47,9 +47,13 @@ def test_reference_with_alias() -> None:
         if isinstance(info, ModelTarget) and "sushi.waiter_revenue_by_day" in info.names
     )
 
-    references = get_model_definitions_for_a_path(
-        lsp_context, URI.from_path(waiter_revenue_by_day_path)
-    )
+    references = [
+        ref
+        for ref in get_model_definitions_for_a_path(
+            lsp_context, URI.from_path(waiter_revenue_by_day_path)
+        )
+        if isinstance(ref, LSPModelReference)
+    ]
     assert len(references) == 3
 
     with open(waiter_revenue_by_day_path, "r") as file:

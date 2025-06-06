@@ -1,7 +1,7 @@
 import re
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.reference import get_references
+from sqlmesh.lsp.reference import LSPCteReference, get_references
 from sqlmesh.lsp.uri import URI
 from lsprotocol.types import Range, Position
 import typing as t
@@ -28,7 +28,7 @@ def test_cte_parsing():
     references = get_references(lsp_context, URI.from_path(sushi_customers_path), position)
     assert len(references) == 1
     assert references[0].uri == URI.from_path(sushi_customers_path).value
-    assert references[0].markdown_description is None
+    assert isinstance(references[0], LSPCteReference)
     assert (
         references[0].range.start.line == ranges[1].start.line
     )  # The reference location (where we clicked)
@@ -43,7 +43,7 @@ def test_cte_parsing():
     references = get_references(lsp_context, URI.from_path(sushi_customers_path), position)
     assert len(references) == 1
     assert references[0].uri == URI.from_path(sushi_customers_path).value
-    assert references[0].markdown_description is None
+    assert isinstance(references[0], LSPCteReference)
     assert (
         references[0].range.start.line == ranges[1].start.line
     )  # The reference location (where we clicked)
