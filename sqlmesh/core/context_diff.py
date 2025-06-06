@@ -132,7 +132,9 @@ class ContextDiff(PydanticModel):
         existing_env = state_reader.get_environment(environment)
         create_from_env_exists = False
 
-        if existing_env is None or existing_env.expired or always_recreate_environment:
+        recreate_environment = always_recreate_environment and not environment == create_from
+
+        if existing_env is None or existing_env.expired or recreate_environment:
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:

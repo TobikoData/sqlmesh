@@ -6345,7 +6345,11 @@ def test_plan_always_recreate_environment(tmp_path: Path):
         in output.stdout
     )
 
-    # Case 6: Check that we can still run Context::diff() against any environment
+    # Case 6: Ensure that target environment and create_from environment are not the same
+    output = plan_with_output(ctx, "prod")
+    assert not "New environment `prod` will be created from `prod`" in output.stdout
+
+    # Case 7: Check that we can still run Context::diff() against any environment
     for environment in ["dev", "prod"]:
         context_diff = ctx._context_diff(environment)
         assert context_diff.environment == environment
