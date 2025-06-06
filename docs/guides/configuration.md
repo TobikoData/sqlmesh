@@ -409,7 +409,7 @@ The `always_recreate_environment` boolean plan option can alter this behavior. W
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect=<dialect>),
         plan=PlanConfig(
-            always_compare_against_prod=True,
+            always_recreate_environment=True,
         ),
     )
     ```
