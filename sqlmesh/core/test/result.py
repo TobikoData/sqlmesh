@@ -19,6 +19,7 @@ class ModelTextTestResult(unittest.TextTestResult):
         self.successes = []
         self.original_failures: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
         self.original_errors: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
+        self.duration: t.Optional[float] = None
 
     def addSubTest(
         self,
@@ -76,7 +77,7 @@ class ModelTextTestResult(unittest.TextTestResult):
         super().addSuccess(test)
         self.successes.append(test)
 
-    def log_test_report(self, test_duration: float) -> None:
+    def log_test_report(self, test_duration: t.Optional[float] = None) -> None:
         """
         Log the test report following unittest's conventions.
 

@@ -184,6 +184,6 @@ def run_tests(
 
     end_time = time.perf_counter()
 
-    combined_results.log_test_report(test_duration=end_time - start_time)
+    combined_results.duration = end_time - start_time
 
     return combined_results

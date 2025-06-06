@@ -2053,7 +2053,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-        return run_tests(
+        result = run_tests(
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
@@ -2065,6 +2065,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
             default_catalog_dialect=self.config.dialect or "",
         )
+
+        self.console.log_test_results(result, output="", target_dialect=self.default_dialect)
+
+        return result
 
     @python_api_analytics
     def audit(

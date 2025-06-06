@@ -65,7 +65,6 @@ class ModelTest(unittest.TestCase):
         default_catalog: str | None = None,
         concurrency: bool = False,
         verbosity: Verbosity = Verbosity.DEFAULT,
-        rich_output: bool = True,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -90,7 +89,6 @@ class ModelTest(unittest.TestCase):
         self.dialect = dialect
         self.concurrency = concurrency
         self.verbosity = verbosity
-        self.rich_output = rich_output
 
         self._fixture_table_cache: t.Dict[str, exp.Table] = {}
         self._normalized_column_name_cache: t.Dict[str, str] = {}
@@ -141,6 +139,12 @@ class ModelTest(unittest.TestCase):
             }
 
         super().__init__()
+
+    def defaultTestResult(self) -> unittest.TestResult:
+        from sqlmesh.core.test.result import ModelTextTestResult
+        import sys
+
+        return ModelTextTestResult(stream=sys.stdout, descriptions=True, verbosity=self.verbosity)
 
     def shortDescription(self) -> t.Optional[str]:
         return self.body.get("description")
@@ -293,25 +297,23 @@ class ModelTest(unittest.TestCase):
             if expected.shape != actual.shape:
                 _raise_if_unexpected_columns(expected.columns, actual.columns)
 
-                error_msg = "Data mismatch (rows are different)"
+                args.append("Data mismatch (rows are different)")
 
                 missing_rows = _row_difference(expected, actual)
                 if not missing_rows.empty:
-                    error_msg += f"\n\nMissing rows:\n\n{missing_rows}"
+                    args.append(df_to_table("Missing rows", missing_rows))
 
                 unexpected_rows = _row_difference(actual, expected)
-                if not unexpected_rows.empty:
-                    error_msg += f"\n\nUnexpected rows:\n\n{unexpected_rows}"
 
-                args.append(error_msg)
+                if not unexpected_rows.empty:
+                    args.append(df_to_table("Unexpected rows", unexpected_rows))
+
             else:
                 diff = expected.compare(actual).rename(
                     columns={"self": "Expected", "other": "Actual"}
                 )
 
-                if not self.rich_output:
-                    args.append(f"Data mismatch\n\n{diff}")
-                elif self.verbosity == Verbosity.DEFAULT:
+                if self.verbosity == Verbosity.DEFAULT:
                     args.append(df_to_table("Data mismatch", diff))
                 else:
                     from pandas import MultiIndex
@@ -714,7 +716,6 @@ class PythonModelTest(ModelTest):
         default_catalog: str | None = None,
         concurrency: bool = False,
         verbosity: Verbosity = Verbosity.DEFAULT,
-        rich_output: bool = True,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -742,7 +743,6 @@ class PythonModelTest(ModelTest):
             default_catalog,
             concurrency,
             verbosity,
-            rich_output,
         )
 
         self.context = TestExecutionContext(
@@ -996,7 +996,7 @@ def df_to_table(
     rich_table = Table(title=f"[bold red]{header}[/bold red]", show_lines=True, min_width=60)
     if show_index:
         index_name = str(index_name) if index_name else ""
-        rich_table.add_column(index_name)
+        rich_table.add_column(Align.center(index_name))
 
     for column in df.columns:
         column_name = column if isinstance(column, str) else ": ".join(str(col) for col in column)

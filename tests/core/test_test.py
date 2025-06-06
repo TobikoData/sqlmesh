@@ -38,7 +38,7 @@ from sqlmesh.utils.yaml import load as load_yaml
 from tests.utils.test_helpers import use_terminal_console
 
 if t.TYPE_CHECKING:
-    from unittest import TestResult
+    pass
 
 pytestmark = pytest.mark.slow
 
@@ -60,7 +60,6 @@ def _create_test(
         dialect=context.config.dialect,
         path=None,
         default_catalog=context.default_catalog,
-        rich_output=False,
     )
 
 
@@ -77,16 +76,26 @@ def _create_model(
     )
 
 
+@use_terminal_console
 def _check_successful_or_raise(
-    result: t.Optional[TestResult], expected_msg: t.Optional[str] = None
+    test_or_result: t.Union[ModelTest, ModelTextTestResult], expected_msg: t.Optional[str] = None
 ) -> None:
-    assert result is not None
+    if isinstance(test_or_result, ModelTextTestResult):
+        result = test_or_result
+        test_output = ""
+    else:
+        with capture_output() as output:
+            result = t.cast(ModelTextTestResult, test_or_result.run())
+            assert result is not None
+            result.log_test_report()
+
+        test_output = output.stdout
+
     if not result.wasSuccessful():
-        error_or_failure_traceback = (result.errors or result.failures)[0][1]
         if expected_msg:
-            assert expected_msg in error_or_failure_traceback
+            assert expected_msg in test_output
         else:
-            raise AssertionError(error_or_failure_traceback)
+            raise AssertionError(test_output)
 
 
 @pytest.fixture
@@ -150,7 +159,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_with_two_ctes),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -178,7 +187,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_with_two_ctes),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -203,7 +212,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_with_two_ctes),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -234,7 +243,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_with_single_cte),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -262,7 +271,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_with_single_cte),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -291,7 +300,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_without_ctes),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -330,7 +339,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_without_ctes),
             context=sushi_context,
-        ).run()
+        )
     )
 
     full_model_without_ctes_dict = full_model_without_ctes.dict()
@@ -344,13 +353,17 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_without_ctes_orderby),
             context=sushi_context,
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch\n\n"
-            "        id           value              ds       \n"
-            "  Expected Actual Expected Actual Expected Actual\n"
-            "0        2      1        3      2        4      3\n"
-            "1        1      2        2      3        3      4"
+            """Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃     ┃ id:       ┃ id:       ┃ value:    ┃ value:    ┃ ds:        ┃ ds:       ┃
+┃ Row ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual    ┃ Expected   ┃ Actual    ┃
+┡━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│  0  │     2     │     1     │     3     │     2     │     4      │     3     │
+├─────┼───────────┼───────────┼───────────┼───────────┼────────────┼───────────┤
+│  1  │     1     │     2     │     2     │     3     │     3      │     4     │
+└─────┴───────────┴───────────┴───────────┴───────────┴────────────┴───────────┘"""
         ),
     )
 
@@ -387,12 +400,14 @@ test_array_order:
             test_name="test_array_order",
             model=_create_model(model_sql),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch\n\n"
-            "  aggregated_duplicates        \n"
-            "               Expected  Actual\n"
-            "0                (c, b)  (b, c)"
+            """Data mismatch                              
+┏━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row ┃ aggregated_duplicates: Expected ┃ aggregated_duplicates: Actual ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│  0  │           ('c', 'b')            │          ('b', 'c')           │
+└─────┴─────────────────────────────────┴───────────────────────────────┘"""
         ),
     )
 
@@ -452,7 +467,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -508,7 +523,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -578,7 +593,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -687,7 +702,7 @@ test_foo:
             test_name="test_foo",
             model=_create_model("WITH t AS (SELECT a, b, c, d FROM raw) SELECT a, b, c, d FROM t"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
     _check_successful_or_raise(
@@ -726,7 +741,7 @@ test_foo:
             test_name="test_foo",
             model=_create_model("WITH t AS (SELECT a, b, c, d FROM raw) SELECT a, b, c, d FROM t"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -761,7 +776,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -787,7 +802,7 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(_create_model("SELECT * FROM unknown")),
             context=sushi_context,
-        ).run()
+        )
     )
     _check_successful_or_raise(
         _create_test(
@@ -820,7 +835,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
@@ -861,7 +876,7 @@ test_child:
     test = _create_test(body, "test_child", child, sushi_context)
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     spy_execute.assert_any_call(
         'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."memory__sushi__parent" ("s", "a", "b") AS '
@@ -891,12 +906,13 @@ test_foo:
             test_name="test_foo",
             model=_create_model("SELECT value FROM raw"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
-            """Failed to infer the data type of column 'value' for '"raw"'. This issue can """
-            "be mitigated by casting the column in the model definition, setting its type in "
-            "external_models.yaml if it's an external model, setting the model's 'columns' property, "
-            "or setting its 'columns' mapping in the test itself\n"
+            "sqlmesh.utils.errors.TestError: Failed to run test:\n"
+            """Failed to infer the data type of column 'value' for '"raw"'. This issue can be \n"""
+            """mitigated by casting the column in the model definition, setting its type in \n"""
+            """external_models.yaml if it's an external model, setting the model's 'columns' \n"""
+            """property, or setting its 'columns' mapping in the test itself\n\n"""
         ),
     )
 
@@ -923,12 +939,14 @@ test_foo:
             test_name="test_foo",
             model=sushi_context.upsert_model(full_model_without_ctes),
             context=sushi_context,
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch\n\n"
-            "     value              ds       \n"
-            "  Expected Actual Expected Actual\n"
-            "0     None      2     None      3"
+            """Data mismatch                            
+┏━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Row ┃ value: Expected ┃ value: Actual ┃ ds: Expected ┃ ds: Actual ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│  0  │      None       │       2       │     None     │     3      │
+└─────┴─────────────────┴───────────────┴──────────────┴────────────┘"""
         ),
     )
 
@@ -952,12 +970,17 @@ test_foo:
             test_name="test_foo",
             model=_create_model("SELECT value FROM raw"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch (rows are different)\n\n"
-            "Missing rows:\n\n"
-            "   value\n"
-            "0      2\n"
+            """Data mismatch (rows are different)
+
+
+                        Missing rows                        
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row                    ┃              value              ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│           0            │                2                │
+└────────────────────────┴─────────────────────────────────┘"""
         ),
     )
     _check_successful_or_raise(
@@ -979,12 +1002,17 @@ test_foo:
                 "SELECT value FROM raw UNION ALL SELECT value + 1 AS value FROM raw"
             ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch (rows are different)\n\n"
-            "Unexpected rows:\n\n"
-            "   value\n"
-            "0      2\n"
+            """Data mismatch (rows are different)
+
+
+                      Unexpected rows                       
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row                    ┃              value              ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│           0            │                2                │
+└────────────────────────┴─────────────────────────────────┘"""
         ),
     )
     _check_successful_or_raise(
@@ -1008,16 +1036,27 @@ test_foo:
                 "SELECT value FROM raw UNION ALL SELECT value + 1 AS value FROM raw"
             ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
-            "AssertionError: Data mismatch (rows are different)\n\n"
-            "Missing rows:\n\n"
-            "   value\n"
-            "0      3\n"
-            "1      4\n\n"
-            "Unexpected rows:\n\n"
-            "   value\n"
-            "0      2\n"
+            """Data mismatch (rows are different)
+
+
+                        Missing rows                        
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row                    ┃              value              ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│           0            │                3                │
+├────────────────────────┼─────────────────────────────────┤
+│           1            │                4                │
+└────────────────────────┴─────────────────────────────────┘
+
+
+                      Unexpected rows                       
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row                    ┃              value              ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│           0            │                2                │
+└────────────────────────┴─────────────────────────────────┘"""
         ),
     )
 
@@ -1041,7 +1080,7 @@ test_foo:
             test_name="test_foo",
             model=_create_model("SELECT id, value FROM raw"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run(),
+        ),
         expected_msg=(
             "sqlmesh.utils.errors.TestError: Failed to run test:\n"
             "Detected unknown column(s)\n\n"
@@ -1071,7 +1110,7 @@ test_foo:
                 )
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
     _check_successful_or_raise(
@@ -1094,7 +1133,7 @@ test_a:
                 _create_model("SELECT x FROM b", default_catalog="memory")
             ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -1162,7 +1201,7 @@ test_foo:
                 """
             ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -1201,7 +1240,7 @@ test_foo:
                 "SELECT array1, array2, struct FROM sushi.raw", default_catalog="memory"
             ),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -1229,7 +1268,7 @@ test_foo:
     )
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     spy_execute.assert_has_calls(
         [
@@ -1262,7 +1301,7 @@ test_foo:
     )
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     spy_execute.assert_has_calls(
         [call('''SELECT CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMPTZ) AS "cur_timestamp"''')]
@@ -1294,7 +1333,7 @@ test_py_model:
             test_name="test_py_model",
             model=model.get_registry()["py_model"].model(module_path=Path("."), path=Path(".")),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -1325,7 +1364,7 @@ test_foo:
         model=_create_model("SELECT x FROM c.db.external"),
         context=sushi_context,
     )
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     assert len(test._fixture_table_cache) == 1
     for table in test._fixture_table_cache.values():
@@ -1352,7 +1391,7 @@ test_foo:
             test_name="test_foo",
             model=_create_model("SELECT [@test_macro()] AS c"),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -1446,7 +1485,7 @@ test_example_full_model_alt:
             test_name="test_example_full_model_alt",
             model=context.get_model("sqlmesh_example.full_model"),
             context=context,
-        ).run()
+        )
     )
 
     _check_successful_or_raise(
@@ -1472,7 +1511,7 @@ test_example_full_model_partial:
             test_name="test_example_full_model_partial",
             model=context.get_model("sqlmesh_example.full_model"),
             context=context,
-        ).run()
+        )
     )
 
     _check_successful_or_raise(
@@ -1499,7 +1538,7 @@ test_example_full_model_partial:
             test_name="test_example_full_model_partial",
             model=context.get_model("sqlmesh_example.full_model"),
             context=context,
-        ).run()
+        )
     )
 
     mocker.patch("sqlmesh.core.test.definition.random_id", return_value="jzngz56a")
@@ -1521,7 +1560,7 @@ test_foo:
         context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
     )
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     spy_execute.assert_any_call(
         'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."foo" AS '
@@ -1587,7 +1626,7 @@ test_pyspark_model:
                 module_path=Path("."), path=Path(".")
             ),
             context=context,
-        ).run()
+        )
     )
 
 
@@ -1717,7 +1756,7 @@ test_foo:
     )
 
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
 
     spy_execute.assert_has_calls(
         [
@@ -1746,7 +1785,7 @@ test_foo:
     )
     test.engine_adapter._pretty_sql = True
     spy_execute = mocker.spy(test.engine_adapter, "_execute")
-    _check_successful_or_raise(test.run())
+    _check_successful_or_raise(test)
     spy_execute.assert_has_calls(
         [
             call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"'),
@@ -1846,7 +1885,7 @@ test_recursive_ctes:
             test_name="test_recursive_ctes",
             model=_create_model(model_sql),
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
-        ).run()
+        )
     )
 
 
@@ -2336,10 +2375,10 @@ test_example_full_model:
             in mock_logger.call_args[0][0]
         )
         assert (
-            ".\n----------------------------------------------------------------------\nRan 1 test in"
-            in output.stderr
+            ".\n----------------------------------------------------------------------\n\nRan 1 test in"
+            in output.stdout
         )
-        assert "OK" in output.stderr
+        assert "OK" in output.stdout
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
@@ -2550,10 +2589,11 @@ test_test_upstream_table_python:
                 module_path=Path("."), path=Path(".")
             ),
             context=sushi_context,
-        ).run()
+        )
     )
 
 
+@use_terminal_console
 @pytest.mark.parametrize("is_error", [True, False])
 def test_model_test_text_result_reporting_no_traceback(
     sushi_context: Context, full_model_with_two_ctes: SqlModel, is_error: bool
@@ -2597,10 +2637,10 @@ test_foo:
         else:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
-    result.log_test_report(0)
+    with capture_output() as captured_output:
+        result.log_test_report(0)
 
-    stream.seek(0)
-    output = stream.read()
+    output = captured_output.stdout
 
     # Make sure that the traceback is not printed
     assert "Traceback" not in output

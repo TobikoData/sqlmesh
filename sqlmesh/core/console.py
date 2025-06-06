@@ -463,7 +463,7 @@ class Console(
 
     @abc.abstractmethod
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         """Display the test result and output.
 
@@ -498,7 +498,9 @@ class Console(
         """Stop loading for the given id."""
 
     @abc.abstractmethod
-    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
+    def log_unit_test_results(
+        self, result: ModelTextTestResult, test_duration: t.Optional[float] = None
+    ) -> None:
         """Print the unit test results."""
 
 
@@ -674,7 +676,7 @@ class NoopConsole(Console):
             plan_builder.apply()
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         pass
 
@@ -782,7 +784,9 @@ class NoopConsole(Console):
     def stop_destroy(self, success: bool = True) -> None:
         pass
 
-    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
+    def log_unit_test_results(
+        self, result: ModelTextTestResult, test_duration: t.Optional[float] = None
+    ) -> None:
         pass
 
 
@@ -1961,9 +1965,13 @@ class TerminalConsole(Console):
             plan_builder.apply()
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         divider_length = 70
+
+        self.log_unit_test_results(result)
+
+        self._print("\n")
         if result.wasSuccessful():
             self._print("=" * divider_length)
             self._print(
@@ -1980,7 +1988,7 @@ class TerminalConsole(Console):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"Failure Test: {test.model.name} {test.test_name}")
+                    self._print(f"Failure Test: {test.path}::{test.test_name}")
             self._print("=" * divider_length)
             self._print(output)
 
@@ -2500,7 +2508,9 @@ class TerminalConsole(Console):
         else:
             self.log_warning(msg)
 
-    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
+    def log_unit_test_results(
+        self, result: ModelTextTestResult, test_duration: t.Optional[float] = None
+    ) -> None:
         tests_run = result.testsRun
         errors = result.errors
         failures = result.original_failures
@@ -2524,22 +2534,27 @@ class TerminalConsole(Console):
 
             if test_description := test_case.shortDescription():
                 self._print(test_description)
-            self._print(f"{unittest.TextTestResult.separator2}\n")
+            self._print(f"{unittest.TextTestResult.separator2}")
 
             if exception := failure[1]:
-                for arg in exception.args:
+                for i, arg in enumerate(exception.args):
+                    arg = f"Exception: {arg}" if isinstance(arg, str) else arg
                     self._print(arg)
-                    self._print("\n")
+
+                    if i < len(exception.args) - 1:
+                        self._print("\n")
 
         for test_case, error in errors:
             self._print(unittest.TextTestResult.separator1)
             self._print(f"ERROR: {test_case}")
+            self._print(f"{unittest.TextTestResult.separator2}")
             self._print(error)
 
         # Output final report
         self._print(unittest.TextTestResult.separator2)
+        test_duration_msg = f" in {test_duration:.3f}s" if test_duration else ""
         self._print(
-            f"Ran {tests_run} {'tests' if tests_run > 1 else 'test'} in {test_duration:.3f}s \n"
+            f"\nRan {tests_run} {'tests' if tests_run > 1 else 'test'}{test_duration_msg} \n"
         )
         self._print(
             f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
@@ -2817,7 +2832,7 @@ class NotebookMagicConsole(TerminalConsole):
         self.display(radio)
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         import ipywidgets as widgets
 
@@ -3191,8 +3206,12 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(message)
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
+        # self._print("```")
+        self.log_unit_test_results(result)
+        # self._print("```\n\n")
+
         if result.wasSuccessful():
             self._print(
                 f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
@@ -3204,6 +3223,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
                     self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
+
             self._print(f"```{output}```\n\n")
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
@@ -3584,7 +3604,7 @@ class DebuggerTerminalConsole(TerminalConsole):
             self._write(f"  Modified: {modified}")
 
     def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
+        self, result: ModelTextTestResult, output: t.Optional[str], target_dialect: str
     ) -> None:
         self._write("Test Results:", result)
 
