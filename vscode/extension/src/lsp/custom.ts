@@ -32,6 +32,7 @@ export type CustomLSPMethods =
   | RenderModelMethod
   | AllModelsForRenderMethod
   | SupportedMethodsMethod
+  | FormatProjectMethod
 
 interface AllModelsRequest {
   textDocument: {
@@ -93,3 +94,15 @@ interface SupportedMethodsResponse {
 interface CustomMethod {
   name: string
 }
+
+export interface FormatProjectMethod {
+  method: 'sqlmesh/format_project'
+  request: FormatProjectRequest
+  response: FormatProjectResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface FormatProjectRequest {}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface FormatProjectResponse {}

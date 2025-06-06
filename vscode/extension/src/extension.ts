@@ -56,9 +56,6 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('sqlmesh.signout', signOut(authProvider)),
   )
-  context.subscriptions.push(
-    vscode.commands.registerCommand('sqlmesh.format', format(authProvider)),
-  )
 
   lspClient = new LSPClient()
 
@@ -76,6 +73,13 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'sqlmesh.renderModel',
       renderModel(lspClient, renderedModelProvider),
+    ),
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.format',
+      format(authProvider, lspClient),
     ),
   )
 

@@ -197,7 +197,7 @@ export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
 /**
  * Get the sqlmesh executable for the current workspace.
  *
- * @returns The sqlmesh executable for the current workspace.
+ * @deprecated Use LSP instead of direct sqlmesh execution for any new functionality.
  */
 export const sqlmeshExec = async (): Promise<
   Result<SqlmeshExecInfo, ErrorType>
