@@ -26,6 +26,7 @@ from rich.table import Table
 from rich.tree import Tree
 from sqlglot import exp
 
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
@@ -496,6 +497,10 @@ class Console(
     def loading_stop(self, id: uuid.UUID) -> None:
         """Stop loading for the given id."""
 
+    @abc.abstractmethod
+    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
+        """Print the unit test results."""
+
 
 class NoopConsole(Console):
     def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
@@ -775,6 +780,9 @@ class NoopConsole(Console):
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
+        pass
+
+    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
         pass
 
 
@@ -2491,6 +2499,51 @@ class TerminalConsole(Console):
             self.log_error(msg)
         else:
             self.log_warning(msg)
+
+    def log_unit_test_results(self, result: ModelTextTestResult, test_duration: float) -> None:
+        tests_run = result.testsRun
+        errors = result.errors
+        failures = result.original_failures
+        skipped = result.skipped
+
+        is_success = not (errors or failures)
+
+        infos = []
+        if failures:
+            infos.append(f"failures={len(failures)}")
+        if errors:
+            infos.append(f"errors={len(errors)}")
+        if skipped:
+            infos.append(f"skipped={skipped}")
+
+        self._print("\n", end="")
+
+        for test_case, failure in failures:
+            self._print(unittest.TextTestResult.separator1)
+            self._print(f"FAIL: {test_case}")
+
+            if test_description := test_case.shortDescription():
+                self._print(test_description)
+            self._print(f"{unittest.TextTestResult.separator2}\n")
+
+            if exception := failure[1]:
+                for arg in exception.args:
+                    self._print(arg)
+                    self._print("\n")
+
+        for test_case, error in errors:
+            self._print(unittest.TextTestResult.separator1)
+            self._print(f"ERROR: {test_case}")
+            self._print(error)
+
+        # Output final report
+        self._print(unittest.TextTestResult.separator2)
+        self._print(
+            f"Ran {tests_run} {'tests' if tests_run > 1 else 'test'} in {test_duration:.3f}s \n"
+        )
+        self._print(
+            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
+        )
 
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
