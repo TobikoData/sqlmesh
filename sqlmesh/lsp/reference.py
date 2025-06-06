@@ -1,6 +1,7 @@
 from lsprotocol.types import Range, Position
 import typing as t
 from pathlib import Path
+from pydantic import Field
 
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.dialect import normalize_model_name
@@ -23,21 +24,37 @@ from sqlmesh import macro
 import inspect
 
 
-class Reference(PydanticModel):
-    """
-    A reference to a model or CTE.
-
-    Attributes:
-        range: The range of the reference in the source file
-        uri: The uri of the referenced model
-        markdown_description: The markdown description of the referenced model
-        target_range: The range of the definition for go-to-definition (optional, used for CTEs)
-    """
+class LSPBaseReference(PydanticModel):
+    """Base class for all LSP reference types."""
 
     range: Range
     uri: str
     markdown_description: t.Optional[str] = None
-    target_range: t.Optional[Range] = None
+
+
+class LSPModelReference(LSPBaseReference):
+    """A LSP reference to a model."""
+
+    type: t.Literal["model"] = "model"
+
+
+class LSPCteReference(LSPBaseReference):
+    """A LSP reference to a CTE."""
+
+    type: t.Literal["cte"] = "cte"
+    target_range: Range
+
+
+class LSPMacroReference(LSPBaseReference):
+    """A LSP reference to a macro."""
+
+    type: t.Literal["macro"] = "macro"
+    target_range: Range
+
+
+Reference = t.Annotated[
+    t.Union[LSPModelReference, LSPCteReference, LSPMacroReference], Field(discriminator="type")
+]
 
 
 def by_position(position: Position) -> t.Callable[[Reference], bool]:
@@ -136,7 +153,7 @@ def get_model_definitions_for_a_path(
         return []
 
     # Find all possible references
-    references = []
+    references: t.List[Reference] = []
 
     with open(file_path, "r", encoding="utf-8") as file:
         read_file = file.readlines()
@@ -173,7 +190,7 @@ def get_model_definitions_for_a_path(
                             table_range = to_lsp_range(table_range_sqlmesh)
 
                             references.append(
-                                Reference(
+                                LSPCteReference(
                                     uri=document_uri.value,  # Same file
                                     range=table_range,
                                     target_range=target_range,
@@ -227,7 +244,7 @@ def get_model_definitions_for_a_path(
                 description = generate_markdown_description(referenced_model)
 
                 references.append(
-                    Reference(
+                    LSPModelReference(
                         uri=referenced_model_uri.value,
                         range=Range(
                             start=to_lsp_position(start_pos_sqlmesh),
@@ -286,7 +303,7 @@ def get_macro_definitions_for_a_path(
         return []
 
     references = []
-    config_for_model, config_path = lsp_context.context.config_for_path(
+    _, config_path = lsp_context.context.config_for_path(
         file_path,
     )
 
@@ -372,7 +389,7 @@ def get_macro_reference(
         # Create a reference to the macro definition
         macro_uri = URI.from_path(path)
 
-        return Reference(
+        return LSPMacroReference(
             uri=macro_uri.value,
             range=to_lsp_range(macro_range),
             target_range=Range(
@@ -405,7 +422,7 @@ def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optio
     # Calculate the end line number by counting the number of source lines
     end_line_number = line_number + len(source_lines) - 1
 
-    return Reference(
+    return LSPMacroReference(
         uri=URI.from_path(Path(filename)).value,
         range=macro_range,
         target_range=Range(
@@ -416,9 +433,91 @@ def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optio
     )
 
 
+def get_model_find_all_references(
+    lint_context: LSPContext, document_uri: URI, position: Position
+) -> t.List[LSPModelReference]:
+    """
+    Get all references to a model across the entire project.
+
+    This function finds all usages of a model in other files by searching through
+    all models in the project and checking their dependencies.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for model references
+
+    Returns:
+        A list of references to the model across all files
+    """
+    # First, get the references in the current file to determine what model we're looking for
+    current_file_references = get_model_definitions_for_a_path(lint_context, document_uri)
+
+    # Find the model reference at the cursor position
+    target_model_uri: t.Optional[str] = None
+    for ref in current_file_references:
+        if _position_within_range(position, ref.range) and isinstance(ref, LSPModelReference):
+            # This is a model reference, get the target model URI
+            target_model_uri = ref.uri
+            break
+
+    if target_model_uri is None:
+        return []
+
+    # Start with the model definition
+    all_references: t.List[LSPModelReference] = [
+        LSPModelReference(
+            uri=ref.uri,
+            range=Range(
+                start=Position(line=0, character=0),
+                end=Position(line=0, character=0),
+            ),
+            markdown_description=ref.markdown_description,
+        )
+    ]
+
+    # Then add the original reference
+    for ref in current_file_references:
+        if ref.uri == target_model_uri and isinstance(ref, LSPModelReference):
+            all_references.append(
+                LSPModelReference(
+                    uri=document_uri.value,
+                    range=ref.range,
+                    markdown_description=ref.markdown_description,
+                )
+            )
+
+    # Search through the models in the project
+    for path, target in lint_context.map.items():
+        if not isinstance(target, (ModelTarget, AuditTarget)):
+            continue
+
+        file_uri = URI.from_path(path)
+
+        # Skip current file, already processed
+        if file_uri.value == document_uri.value:
+            continue
+
+        # Get model references for this file
+        file_references = get_model_definitions_for_a_path(lint_context, file_uri)
+
+        # Add references that point to the target model file
+        for ref in file_references:
+            if ref.uri == target_model_uri and isinstance(ref, LSPModelReference):
+                all_references.append(
+                    LSPModelReference(
+                        uri=file_uri.value,
+                        range=ref.range,
+                        markdown_description=ref.markdown_description,
+                    )
+                )
+
+    return all_references
+
+
 def get_cte_references(
     lint_context: LSPContext, document_uri: URI, position: Position
-) -> t.List[Reference]:
+) -> t.List[LSPCteReference]:
     """
     Get all references to a CTE at a specific position in a document.
 
@@ -432,12 +531,12 @@ def get_cte_references(
     Returns:
         A list of references to the CTE (including its definition and all usages)
     """
-    references = get_model_definitions_for_a_path(lint_context, document_uri)
 
-    # Filter for CTE references (those with target_range set and same URI)
-    # TODO: Consider extending Reference class to explicitly indicate reference type instead
-    cte_references = [
-        ref for ref in references if ref.target_range is not None and ref.uri == document_uri.value
+    # Filter to get the CTE references
+    cte_references: t.List[LSPCteReference] = [
+        ref
+        for ref in get_model_definitions_for_a_path(lint_context, document_uri)
+        if isinstance(ref, LSPCteReference)
     ]
 
     if not cte_references:
@@ -450,7 +549,7 @@ def get_cte_references(
             target_cte_definition_range = ref.target_range
             break
         # Check if cursor is on the CTE definition
-        elif ref.target_range and _position_within_range(position, ref.target_range):
+        elif _position_within_range(position, ref.target_range):
             target_cte_definition_range = ref.target_range
             break
 
@@ -459,9 +558,10 @@ def get_cte_references(
 
     # Add the CTE definition
     matching_references = [
-        Reference(
+        LSPCteReference(
             uri=document_uri.value,
             range=target_cte_definition_range,
+            target_range=target_cte_definition_range,
             markdown_description="CTE definition",
         )
     ]
@@ -470,14 +570,43 @@ def get_cte_references(
     for ref in cte_references:
         if ref.target_range == target_cte_definition_range:
             matching_references.append(
-                Reference(
+                LSPCteReference(
                     uri=document_uri.value,
                     range=ref.range,
+                    target_range=ref.target_range,
                     markdown_description="CTE usage",
                 )
             )
 
     return matching_references
+
+
+def get_all_references(
+    lint_context: LSPContext, document_uri: URI, position: Position
+) -> t.Sequence[Reference]:
+    """
+    Get all references of a symbol at a specific position in a document.
+
+    This function determines the type of reference (CTE, model for now) at the cursor
+    position and returns all references to that symbol across the project.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for references
+
+    Returns:
+        A list of references to the symbol at the given position
+    """
+    # First try CTE references (within same file)
+    if cte_references := get_cte_references(lint_context, document_uri, position):
+        return cte_references
+
+    # Then try model references (across files)
+    if model_references := get_model_find_all_references(lint_context, document_uri, position):
+        return model_references
+
+    return []
 
 
 def _position_within_range(position: Position, range: Range) -> bool:

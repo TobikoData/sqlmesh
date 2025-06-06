@@ -44,7 +44,7 @@ from sqlmesh.lsp.custom import (
     CustomMethod,
 )
 from sqlmesh.lsp.hints import get_hints
-from sqlmesh.lsp.reference import get_references, get_cte_references
+from sqlmesh.lsp.reference import LSPModelReference, get_references, get_all_references
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
@@ -418,8 +418,8 @@ class SQLMeshLanguageServer:
                 references = get_references(self.lsp_context, uri, params.position)
                 location_links = []
                 for reference in references:
-                    # Use target_range if available (for CTEs), otherwise default to start of file
-                    if reference.target_range:
+                    # Use target_range if available (CTEs, Macros), otherwise default to start of file
+                    if not isinstance(reference, LSPModelReference) and reference.target_range:
                         target_range = reference.target_range
                         target_selection_range = reference.target_range
                     else:
@@ -449,7 +449,7 @@ class SQLMeshLanguageServer:
         def find_references(
             ls: LanguageServer, params: types.ReferenceParams
         ) -> t.Optional[t.List[types.Location]]:
-            """Find all references of a symbol (currently supporting CTEs)"""
+            """Find all references of a symbol (supporting CTEs, models for now)"""
             try:
                 uri = URI(params.text_document.uri)
                 self._ensure_context_for_document(uri)
@@ -457,10 +457,10 @@ class SQLMeshLanguageServer:
                 if self.lsp_context is None:
                     raise RuntimeError(f"No context found for document: {document.path}")
 
-                cte_references = get_cte_references(self.lsp_context, uri, params.position)
+                all_references = get_all_references(self.lsp_context, uri, params.position)
 
                 # Convert references to Location objects
-                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in cte_references]
+                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in all_references]
 
                 return locations if locations else None
             except Exception as e:
