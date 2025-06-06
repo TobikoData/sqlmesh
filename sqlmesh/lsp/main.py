@@ -44,7 +44,12 @@ from sqlmesh.lsp.custom import (
     CustomMethod,
 )
 from sqlmesh.lsp.hints import get_hints
-from sqlmesh.lsp.reference import LSPModelReference, get_references, get_all_references
+from sqlmesh.lsp.reference import (
+    LSPCteReference,
+    LSPModelReference,
+    get_references,
+    get_all_references,
+)
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
@@ -368,7 +373,7 @@ class SQLMeshLanguageServer:
                 if not references:
                     return None
                 reference = references[0]
-                if not reference.markdown_description:
+                if isinstance(reference, LSPCteReference) or not reference.markdown_description:
                     return None
                 return types.Hover(
                     contents=types.MarkupContent(
@@ -419,7 +424,7 @@ class SQLMeshLanguageServer:
                 location_links = []
                 for reference in references:
                     # Use target_range if available (CTEs, Macros), otherwise default to start of file
-                    if not isinstance(reference, LSPModelReference) and reference.target_range:
+                    if not isinstance(reference, LSPModelReference):
                         target_range = reference.target_range
                         target_selection_range = reference.target_range
                     else:

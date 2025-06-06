@@ -24,32 +24,32 @@ from sqlmesh import macro
 import inspect
 
 
-class LSPBaseReference(PydanticModel):
-    """Base class for all LSP reference types."""
-
-    range: Range
-    uri: str
-    markdown_description: t.Optional[str] = None
-
-
-class LSPModelReference(LSPBaseReference):
+class LSPModelReference(PydanticModel):
     """A LSP reference to a model."""
 
     type: t.Literal["model"] = "model"
+    uri: str
+    range: Range
+    markdown_description: t.Optional[str] = None
 
 
-class LSPCteReference(LSPBaseReference):
+class LSPCteReference(PydanticModel):
     """A LSP reference to a CTE."""
 
     type: t.Literal["cte"] = "cte"
+    uri: str
+    range: Range
     target_range: Range
 
 
-class LSPMacroReference(LSPBaseReference):
+class LSPMacroReference(PydanticModel):
     """A LSP reference to a macro."""
 
     type: t.Literal["macro"] = "macro"
+    uri: str
+    range: Range
     target_range: Range
+    markdown_description: t.Optional[str] = None
 
 
 Reference = t.Annotated[
@@ -451,12 +451,16 @@ def get_model_find_all_references(
         A list of references to the model across all files
     """
     # First, get the references in the current file to determine what model we're looking for
-    current_file_references = get_model_definitions_for_a_path(lint_context, document_uri)
+    current_file_references = [
+        ref
+        for ref in get_model_definitions_for_a_path(lint_context, document_uri)
+        if isinstance(ref, LSPModelReference)
+    ]
 
     # Find the model reference at the cursor position
     target_model_uri: t.Optional[str] = None
     for ref in current_file_references:
-        if _position_within_range(position, ref.range) and isinstance(ref, LSPModelReference):
+        if _position_within_range(position, ref.range):
             # This is a model reference, get the target model URI
             target_model_uri = ref.uri
             break
@@ -499,7 +503,11 @@ def get_model_find_all_references(
             continue
 
         # Get model references for this file
-        file_references = get_model_definitions_for_a_path(lint_context, file_uri)
+        file_references = [
+            ref
+            for ref in get_model_definitions_for_a_path(lint_context, file_uri)
+            if isinstance(ref, LSPModelReference)
+        ]
 
         # Add references that point to the target model file
         for ref in file_references:
@@ -562,7 +570,6 @@ def get_cte_references(
             uri=document_uri.value,
             range=target_cte_definition_range,
             target_range=target_cte_definition_range,
-            markdown_description="CTE definition",
         )
     ]
 
@@ -574,7 +581,6 @@ def get_cte_references(
                     uri=document_uri.value,
                     range=ref.range,
                     target_range=ref.target_range,
-                    markdown_description="CTE usage",
                 )
             )
 
