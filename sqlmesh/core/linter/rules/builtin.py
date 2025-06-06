@@ -11,6 +11,7 @@ from sqlmesh.core.linter.helpers import TokenPositionDetails
 from sqlmesh.core.linter.rule import Rule, RuleViolation, Range
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
+from pathlib import Path
 
 
 class NoSelectStar(Rule):
@@ -71,6 +72,18 @@ class NoMissingAudits(Rule):
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         return self.violation() if not model.audits and not model.kind.is_symbolic else None
+
+
+class FilenameEqualsModelname(Rule):
+    """The filename should equal the model name"""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # Rule violated if the model's name (schema.table_name) does not match the file name (foo/bar/table_name.sql).
+        return (
+            self.violation()
+            if (model.name.split(".")[-1] != Path(model._path).stem) and not model.kind.is_symbolic
+            else None
+        )
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
