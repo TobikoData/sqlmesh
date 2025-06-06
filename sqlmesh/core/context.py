@@ -1487,7 +1487,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             diff_rendered=diff_rendered,
-            always_init_from_prod=self.config.plan.always_init_from_prod,
+            always_recreate_environment=self.config.plan.always_recreate_environment,
         )
         modified_model_names = {
             *context_diff.modified_snapshots,
@@ -2630,7 +2630,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         force_no_diff: bool = False,
         ensure_finalized_snapshots: bool = False,
         diff_rendered: bool = False,
-        always_init_from_prod: bool = False,
+        always_recreate_environment: bool = False,
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
@@ -2648,7 +2648,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             environment_statements=self._environment_statements,
             gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
             infer_python_dependencies=self.config.infer_python_dependencies,
-            always_init_from_prod=always_init_from_prod,
+            always_recreate_environment=always_recreate_environment,
         )
 
     def _destroy(self) -> None:

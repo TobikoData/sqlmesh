@@ -104,7 +104,7 @@ class ContextDiff(PydanticModel):
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
         infer_python_dependencies: bool = True,
-        always_init_from_prod: bool = False,
+        always_recreate_environment: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -133,7 +133,7 @@ class ContextDiff(PydanticModel):
         existing_env = state_reader.get_environment(environment)
         create_from_env_exists = False
 
-        if existing_env is None or existing_env.expired or always_init_from_prod:
+        if existing_env is None or existing_env.expired or always_recreate_environment:
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:
@@ -223,7 +223,7 @@ class ContextDiff(PydanticModel):
 
         previous_environment_statements = state_reader.get_environment_statements(environment)
 
-        if existing_env and always_init_from_prod:
+        if existing_env and always_recreate_environment:
             previous_plan_id: t.Optional[str] = existing_env.plan_id
         else:
             previous_plan_id = env.plan_id if env and not is_new_environment else None

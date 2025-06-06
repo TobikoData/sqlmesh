@@ -1530,7 +1530,6 @@ class TerminalConsole(Console):
         Args:
             context_diff: The context diff to use to print the summary
             no_diff: Hide the actual environment statement differences.
-            environment: The initial target environment
         """
         if context_diff.is_new_environment:
             msg = (
@@ -2905,7 +2904,6 @@ class MarkdownConsole(CaptureTerminalConsole):
         Args:
             context_diff: The context diff to use to print the summary.
             no_diff: Hide the actual environment statements differences.
-            environment: The initial target environment
         """
         if context_diff.is_new_environment:
             msg = (

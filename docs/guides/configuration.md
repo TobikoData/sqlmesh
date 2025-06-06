@@ -386,7 +386,7 @@ Example showing default values:
 
 By default, SQLMesh compares the current state of project files to the target `<env>` environment when `sqlmesh plan <env>` is run. However, a common expectation is that local changes should always be compared to the production environment.
 
-The `always_init_from_prod` boolean plan option can alter this behavior. When enabled, SQLMesh will always attempt to compare against the production environment; If that does not exist, SQLMesh will fall back to comparing against the target environment.
+The `always_recreate_environment` boolean plan option can alter this behavior. When enabled, SQLMesh will always attempt to compare against the production environment by recreating the target environment; If `prod` does not exist, SQLMesh will fall back to comparing against the target environment.
 
 **NOTE:**: Upon succesfull plan application, changes are still promoted to the target `<env>` environment.
 
@@ -394,7 +394,7 @@ The `always_init_from_prod` boolean plan option can alter this behavior. When en
 
     ```yaml linenums="1"
     plan:
-        always_init_from_prod: True
+        always_recreate_environment: True
     ```
 
 === "Python"
@@ -416,7 +416,7 @@ The `always_init_from_prod` boolean plan option can alter this behavior. When en
 
 #### Change Categorization Example
 
-Consider this scenario with `always_init_from_prod` enabled:
+Consider this scenario with `always_recreate_environment` enabled:
 
 1. Initial state in `prod`:
 ```sql

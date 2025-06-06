@@ -6256,7 +6256,7 @@ def test_render_path_instead_of_model(tmp_path: Path):
 
 
 @use_terminal_console
-def test_plan_always_init_from_prod(tmp_path: Path):
+def test_plan_always_recreate_environment(tmp_path: Path):
     def plan_with_output(ctx: Context, environment: str):
         with patch.object(logger, "info") as mock_logger:
             with capture_output() as output:
@@ -6276,7 +6276,7 @@ def test_plan_always_init_from_prod(tmp_path: Path):
         tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
     )
 
-    config = Config(plan=PlanConfig(always_init_from_prod=True))
+    config = Config(plan=PlanConfig(always_recreate_environment=True))
     ctx = Context(paths=[tmp_path], config=config)
 
     # Case 1: Neither prod nor dev exists, so dev is initialized

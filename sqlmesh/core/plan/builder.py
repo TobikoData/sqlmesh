@@ -160,7 +160,7 @@ class PlanBuilder:
         self.override_end = end is not None
         self.environment_naming_info = EnvironmentNamingInfo.from_environment_catalog_mapping(
             environment_catalog_mapping or {},
-            name=environment,
+            name=self._context_diff.environment,
             suffix_target=environment_suffix_target,
             normalize_name=self._context_diff.normalize_environment_name,
             gateway_managed=self._context_diff.gateway_managed_virtual_layer,
