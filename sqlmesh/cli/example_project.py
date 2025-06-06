@@ -3,10 +3,10 @@ from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 
-import click
 from sqlglot import Dialect
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
+from sqlmesh.utils.errors import SQLMeshError
 
 from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
 
@@ -15,10 +15,15 @@ PRIMITIVES = (str, int, bool, float)
 
 
 class ProjectTemplate(Enum):
-    DBT = "dbt"
-    DLT = "dlt"
     DEFAULT = "default"
     EMPTY = "empty"
+    DBT = "dbt"
+    DLT = "dlt"
+
+
+class InitCliMode(Enum):
+    DEFAULT = "default"
+    SIMPLE = "simple"
 
 
 def _gen_config(
@@ -26,6 +31,7 @@ def _gen_config(
     settings: t.Optional[str],
     start: t.Optional[str],
     template: ProjectTemplate,
+    cli_mode: InitCliMode,
 ) -> str:
     connection_settings = (
         settings
@@ -76,16 +82,29 @@ def _gen_config(
         )
 
     default_configs = {
-        ProjectTemplate.DEFAULT: f"""gateways:
+        ProjectTemplate.DEFAULT: f"""# --- Gateway Connection ---
+gateways:
   {dialect}:
     connection:
 {connection_settings}
-
 default_gateway: {dialect}
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
   dialect: {dialect}
   start: {start or yesterday_ds()}
+
+# --- Linting Rules ---
+# Enforce standards for your team
+# https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+linter:
+  enabled: true
+  rules:
+    - ambiguousorinvalidcolumn
+    - invalidselectstarexpansion
 """,
         ProjectTemplate.DBT: """from pathlib import Path
 
@@ -97,7 +116,29 @@ config = sqlmesh_config(Path(__file__).parent)
 
     default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
     default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
-    return default_configs[template]
+
+    simple_cli_mode = """
+# --- SIMPLE CLI MODE ---
+# Minimal prompts, automatic changes, summary output
+# https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
+
+plan:
+  enable_preview: true      # Enable preview for forward-only models when targeting a development environment
+  no_diff: true             # Hide detailed text differences for changed models
+  use_finalized_state: true # Compare only against finalized snapshots
+  no_prompts: true          # No interactive prompts
+  auto_apply: true          # Apply changes automatically
+
+# --- Optional: Set a default target environment ---
+# default_target_environment: dev_{{ env_var('USER', 'your_name') }}
+
+# Example usage:
+# export USER=your_name
+# sqlmesh plan            # Resolves to: sqlmesh plan dev_your_name
+# sqlmesh plan prod       # To apply changes to production
+"""
+
+    return default_configs[template] + (simple_cli_mode if cli_mode == InitCliMode.SIMPLE else "")
 
 
 @dataclass
@@ -237,7 +278,8 @@ def init_example_project(
     pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
     schema_name: str = "sqlmesh_example",
-) -> None:
+    cli_mode: InitCliMode = InitCliMode.DEFAULT,
+) -> t.Union[str, Path]:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
     config_path = root_path / f"config.{config_extension}"
@@ -248,12 +290,12 @@ def init_example_project(
     tests_path = root_path / "tests"
 
     if config_path.exists():
-        raise click.ClickException(f"Found an existing config in '{config_path}'")
+        raise SQLMeshError(
+            f"Found an existing config file '{config_path}'.\n\nPlease change to another directory or remove the existing file."
+        )
 
     if not dialect and template != ProjectTemplate.DBT:
-        raise click.ClickException(
-            "Default SQL dialect is a required argument for SQLMesh projects"
-        )
+        raise SQLMeshError("Please provide a default SQL dialect for your project's models.")
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
@@ -264,19 +306,19 @@ def init_example_project(
                 pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
             )
         else:
-            raise click.ClickException(
-                "DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+            raise SQLMeshError(
+                "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
             )
 
-    _create_config(config_path, dialect, settings, start, template)
+    _create_config(config_path, dialect, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
-        return
+        return config_path
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
 
     if template == ProjectTemplate.DLT:
         _create_models(models_path, models)
-        return
+        return config_path
 
     example_objects = _gen_example_objects(schema_name=schema_name)
 
@@ -286,6 +328,8 @@ def init_example_project(
         _create_models(models_path, example_objects.models())
         _create_seeds(seeds_path, example_objects)
         _create_tests(tests_path, example_objects)
+
+    return config_path
 
 
 def _create_folders(target_folders: t.Sequence[Path]) -> None:
@@ -300,11 +344,12 @@ def _create_config(
     settings: t.Optional[str],
     start: t.Optional[str],
     template: ProjectTemplate,
+    cli_mode: InitCliMode,
 ) -> None:
     if dialect:
         Dialect.get_or_raise(dialect)
 
-    project_config = _gen_config(dialect, settings, start, template)
+    project_config = _gen_config(dialect, settings, start, template, cli_mode)
 
     _write_file(
         config_path,

@@ -6,11 +6,11 @@ import sys
 import typing as t
 
 import click
-
+from rich.prompt import Prompt
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.example_project import ProjectTemplate, init_example_project, InitCliMode
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
@@ -21,6 +21,9 @@ from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+if t.TYPE_CHECKING:
+    from rich.console import Console
 
 SKIP_LOAD_COMMANDS = (
     "clean",
@@ -36,6 +39,25 @@ SKIP_LOAD_COMMANDS = (
     "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
+
+ENGINE_DISPLAY_NAME_TO_DIALECT = {
+    "Athena": "athena",
+    "Azure SQL": "tsql",
+    "BigQuery": "bigquery",
+    "ClickHouse": "clickhouse",
+    "Databricks": "databricks",
+    "DuckDB": "duckdb",
+    "GCP Postgres": "postgres",
+    "MotherDuck": "duckdb",
+    "MSSQL": "tsql",
+    "MySQL": "mysql",
+    "Postgres": "postgres",
+    "Redshift": "redshift",
+    "RisingWave": "postgres",
+    "Snowflake": "snowflake",
+    "Spark": "spark",
+    "Trino": "trino",
+}
 
 
 def _sqlmesh_version() -> str:
@@ -166,17 +188,58 @@ def init(
     dlt_path: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
-    try:
-        project_template = ProjectTemplate(template.lower() if template else "default")
-    except ValueError:
-        raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(
-        ctx.obj,
-        dialect=sql_dialect,
-        template=project_template,
-        pipeline=dlt_pipeline,
-        dlt_path=dlt_path,
-    )
+    project_template = None
+    if template:
+        try:
+            project_template = ProjectTemplate(template.lower())
+        except ValueError:
+            template_strings = (
+                "'" + "', '".join([template.value for template in ProjectTemplate]) + "'"
+            )
+            raise click.ClickException(
+                f"Invalid project template value '{template}'. Please specify one of {template_strings}."
+            )
+
+    if sql_dialect or project_template == ProjectTemplate.DBT:
+        init_example_project(
+            ctx.obj,
+            dialect=sql_dialect,
+            template=project_template or ProjectTemplate.DEFAULT,
+            pipeline=dlt_pipeline,
+            dlt_path=dlt_path,
+        )
+    else:
+        import sqlmesh.utils.rich as srich
+
+        console = srich.console
+
+        project_template, sql_dialect, cli_mode = _interactive_init(console, project_template)
+        config_path = init_example_project(
+            ctx.obj,
+            template=project_template,
+            dialect=sql_dialect,
+            cli_mode=cli_mode,
+            pipeline=dlt_pipeline,
+            dlt_path=dlt_path,
+        )
+        console.print(f"""──────────────────────────────
+
+Your SQLMesh project is ready!
+
+Next steps:
+• Update your gateway connection settings (e.g., username/password) in the project configuration file:
+    {config_path}
+• Run command in CLI: sqlmesh plan
+• (Optional) Explain a plan: sqlmesh plan --explain
+
+Quickstart guide:
+  https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/
+
+Need help?
+• Docs:   https://sqlmesh.readthedocs.io
+• Slack:  https://www.tobikodata.com/slack
+• GitHub: https://github.com/TobikoData/sqlmesh/issues
+""")
 
 
 @cli.command("render")
@@ -1197,6 +1260,111 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
+
+
+def _interactive_init(
+    console: Console, project_template: t.Optional[ProjectTemplate] = None
+) -> t.Tuple[ProjectTemplate, str, InitCliMode]:
+    console.print("──────────────────────────────")
+    console.print("Welcome to SQLMesh!")
+
+    project_template = _init_template_prompt(console) if not project_template else project_template
+    dialect = _init_engine_prompt(console)
+    cli_mode = _init_cli_mode_prompt(console)
+
+    return (project_template, dialect, cli_mode)
+
+
+def _init_integer_prompt(
+    console: Console, err_msg_entity: str, num_options: int, retry_func: t.Callable[[t.Any], t.Any]
+) -> int:
+    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with Ctrl+C"
+    option_str = Prompt.ask("Enter a number", console=console)
+    try:
+        option_num = int(option_str)
+        if option_num < 1 or option_num > num_options:
+            raise ValueError
+    except ValueError:
+        console.print(
+            err_msg.format(
+                option_str=option_str, err_msg_entity=err_msg_entity, num_options=num_options
+            ),
+            style="red",
+        )
+        return retry_func(console)
+    finally:
+        console.print("")
+
+    return option_num
+
+
+def _init_template_prompt(console: Console) -> ProjectTemplate:
+    template_descriptions = {
+        ProjectTemplate.DEFAULT.name: "- Create SQLMesh example project models and files",
+        ProjectTemplate.EMPTY.name: "  - Create a configuration file and project file directories",
+        ProjectTemplate.DBT.value: "    - You have an existing dbt project and want to run it with SQLMesh",
+        ProjectTemplate.DLT.name: "    - You have an existing DLT pipeline and want to load it with SQLMesh",
+    }
+
+    console.print("──────────────────────────────\n")
+    console.print("What type of project do you want to set up?\n")
+
+    display_num_to_template = {}
+    for i, template_str in enumerate(template_descriptions.keys()):
+        console.print(f"    \[{i + 1}] {template_str} {template_descriptions[template_str]}")
+        display_num_to_template[i + 1] = template_str
+    console.print("")
+
+    template_num = _init_integer_prompt(
+        console, "project type", len(template_descriptions), _init_template_prompt
+    )
+
+    return ProjectTemplate(display_num_to_template[template_num].lower())
+
+
+def _init_engine_prompt(console: Console) -> str:
+    console.print("──────────────────────────────\n")
+    console.print("Choose your SQL engine:\n")
+
+    display_num_to_engine = {}
+    for i, engine in enumerate(ENGINE_DISPLAY_NAME_TO_DIALECT.keys()):
+        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{engine}")
+        display_num_to_engine[i + 1] = engine
+    console.print("")
+
+    #         self._print("""Need another engine? See: https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
+    #     • Exit: ctrl+c
+    #     • Install engine: pip install "sqlmesh[<your_engine>]"
+    #     • Restart: sqlmesh init
+    # """)
+
+    engine_num = _init_integer_prompt(
+        console, "engine", len(ENGINE_DISPLAY_NAME_TO_DIALECT), _init_engine_prompt
+    )
+
+    return ENGINE_DISPLAY_NAME_TO_DIALECT[display_num_to_engine[engine_num]]
+
+
+def _init_cli_mode_prompt(console: Console) -> InitCliMode:
+    cli_mode_descriptions = {
+        InitCliMode.DEFAULT.name: "- See and control every detail",
+        InitCliMode.SIMPLE.name: " - Automatically run changes and show summary output",
+    }
+
+    console.print("──────────────────────────────\n")
+    console.print("Choose your SQLMesh CLI experience:\n")
+
+    display_num_to_cli_mode = {}
+    for i, cli_mode in enumerate(cli_mode_descriptions.keys()):
+        console.print(f"    \[{i + 1}] {cli_mode} {cli_mode_descriptions[cli_mode]}")
+        display_num_to_cli_mode[i + 1] = cli_mode
+    console.print("")
+
+    cli_mode_num = _init_integer_prompt(
+        console, "config", len(cli_mode_descriptions), _init_cli_mode_prompt
+    )
+
+    return InitCliMode(display_num_to_cli_mode[cli_mode_num].lower())
 
 
 @cli.group(no_args_is_help=True, hidden=True)
