@@ -314,14 +314,6 @@ class ModelConfig(BaseModelConfig):
                     **incremental_by_kind_kwargs,
                 )
 
-            incremental_by_time_str = collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)
-            incremental_by_unique_key_str = collection_to_str(
-                INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(["none"])
-            )
-            get_console().log_warning(
-                f"Using unmanaged incremental materialization for model '{self.canonical_name(context)}'. "
-                f"Some features might not be available. Consider adding either a time_column ({incremental_by_time_str}) or a unique_key ({incremental_by_unique_key_str}) configuration to mitigate this.",
-            )
             strategy = self.incremental_strategy or target.default_incremental_strategy(
                 IncrementalUnmanagedKind
             )
