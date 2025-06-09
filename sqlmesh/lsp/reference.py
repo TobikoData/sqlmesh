@@ -587,13 +587,88 @@ def get_cte_references(
     return matching_references
 
 
+def get_macro_find_all_references(
+    lint_context: LSPContext, document_uri: URI, position: Position
+) -> t.List[LSPMacroReference]:
+    """
+    Get all references to a macro at a specific position in a document.
+
+    This function finds all usages of a macro across the entire project.
+
+    Args:
+        lint_context: The LSP context
+        document_uri: The URI of the document
+        position: The position to check for macro references
+
+    Returns:
+        A list of references to the macro across all files
+    """
+    # First, get the macro references in the current file to identify the target macro
+    current_file_references = [
+        ref
+        for ref in get_macro_definitions_for_a_path(lint_context, document_uri)
+        if isinstance(ref, LSPMacroReference)
+    ]
+
+    # Find the macro reference at the cursor position
+    target_macro_uri: t.Optional[str] = None
+    target_macro_target_range: t.Optional[Range] = None
+
+    for ref in current_file_references:
+        if _position_within_range(position, ref.range):
+            target_macro_uri = ref.uri
+            target_macro_target_range = ref.target_range
+            break
+
+    if target_macro_uri is None:
+        return []
+
+    # Start with the macro definition
+    all_references: t.List[LSPMacroReference] = [
+        LSPMacroReference(
+            uri=target_macro_uri,
+            range=target_macro_target_range,
+            target_range=target_macro_target_range,
+            markdown_description=None,
+        )
+    ]
+
+    # Search through all SQL and audit files in the project
+    for path, target in lint_context.map.items():
+        if not isinstance(target, (ModelTarget, AuditTarget)):
+            continue
+
+        file_uri = URI.from_path(path)
+
+        # Get macro references for this file
+        file_macro_references = [
+            ref
+            for ref in get_macro_definitions_for_a_path(lint_context, file_uri)
+            if isinstance(ref, LSPMacroReference)
+        ]
+
+        # Add references that point to the same macro definition
+        for ref in file_macro_references:
+            if ref.uri == target_macro_uri and ref.target_range == target_macro_target_range:
+                all_references.append(
+                    LSPMacroReference(
+                        uri=file_uri.value,
+                        range=ref.range,
+                        target_range=ref.target_range,
+                        markdown_description=ref.markdown_description,
+                    )
+                )
+
+    return all_references
+
+
 def get_all_references(
     lint_context: LSPContext, document_uri: URI, position: Position
 ) -> t.Sequence[Reference]:
     """
     Get all references of a symbol at a specific position in a document.
 
-    This function determines the type of reference (CTE, model for now) at the cursor
+    This function determines the type of reference (CTE, model or macro) at the cursor
     position and returns all references to that symbol across the project.
 
     Args:
@@ -611,6 +686,10 @@ def get_all_references(
     # Then try model references (across files)
     if model_references := get_model_find_all_references(lint_context, document_uri, position):
         return model_references
+
+    # Finally try macro references (across files)
+    if macro_references := get_macro_find_all_references(lint_context, document_uri, position):
+        return macro_references
 
     return []
 

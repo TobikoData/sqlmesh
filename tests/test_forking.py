@@ -46,12 +46,14 @@ LEFT JOIN (
   WITH "current_marketing" AS (
     SELECT
       "current_marketing_outer"."customer_id" AS "customer_id",
-      "current_marketing_outer"."status" AS "status"
+      "current_marketing_outer"."status" AS "status",
+      2 AS "another_column"
     FROM "current_marketing_outer" AS "current_marketing_outer"
   )
   SELECT
     "current_marketing"."customer_id" AS "customer_id",
-    "current_marketing"."status" AS "status"
+    "current_marketing"."status" AS "status",
+    "current_marketing"."another_column" AS "another_column"
   FROM "current_marketing" AS "current_marketing"
 ) AS "m"
   ON "m"."customer_id" = "o"."customer_id"
