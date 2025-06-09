@@ -477,3 +477,144 @@ test.describe('CTE References', () => {
     await expect(window.locator('text=customers.sql').first()).toBeVisible()
   })
 })
+
+test.describe('Macro References', () => {
+  let tempDir: string
+  let window: any
+  let close: () => Promise<void>
+
+  test.beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+    await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+    const vscode = await startVSCode(tempDir)
+    window = vscode.window
+    close = vscode.close
+
+    // Common setup: navigate to top_waiters.sql which uses macros
+    await window.waitForSelector('text=models')
+    await window
+      .getByRole('treeitem', { name: 'models', exact: true })
+      .locator('a')
+      .click()
+    await window
+      .getByRole('treeitem', { name: 'top_waiters.sql', exact: true })
+      .locator('a')
+      .click()
+    await window.waitForSelector('text=grain')
+    await window.waitForSelector('text=Loaded SQLMesh Context')
+  })
+
+  test.afterEach(async () => {
+    await close()
+    fs.removeSync(tempDir)
+  })
+
+  test('Go to References for @ADD_ONE macro', async () => {
+    // Click on the @ADD_ONE macro usage
+    await window.locator('text=@ADD_ONE').first().click()
+
+    // Use keyboard shortcut to find all references
+    await window.keyboard.press(GO_TO_REFERENCES_KEY)
+
+    // Wait for the references to appear
+    await window.waitForSelector('text=References')
+
+    // Wait for reference panel to populate
+    await window.waitForFunction(
+      () => {
+        const referenceElements = document.querySelectorAll(
+          '.reference-item, .monaco-list-row, .references-view .tree-row',
+        )
+        return referenceElements.length >= 2
+      },
+      { timeout: 5000 },
+    )
+
+    // Verify that both the definition and two usages are shown
+    await expect(window.locator('text=utils.py').first()).toBeVisible()
+    await expect(window.locator('text=top_waiters.sql').first()).toBeVisible()
+    await expect(window.locator('text=customers.sql').first()).toBeVisible()
+  })
+
+  test('Find All References for @MULTIPLY macro', async () => {
+    // Click on the @MULTIPLY macro usage and then navigate to it
+    await window.locator('text=@MULTIPLY').first().click()
+
+    // Use keyboard shortcut to find all references
+    await window.keyboard.press(FIND_ALL_REFERENCES_KEY)
+
+    // Verify references contains expected content
+    await window.waitForSelector('text=References')
+
+    // Verify that both utils.py (definition) and top_waiters.sql (usage) are shown
+    await expect(window.locator('text=utils.py').first()).toBeVisible()
+    await expect(window.locator('text=top_waiters.sql').first()).toBeVisible()
+
+    // Click on the utils.py reference to navigate to the macro definition
+    let clickedReference = false
+    const referenceItems = await window.locator(
+      '.monaco-list-row, .reference-item, .monaco-tl-row',
+    )
+    const count = await referenceItems.count()
+
+    for (let i = 0; i < count; i++) {
+      const item = referenceItems.nth(i)
+      const text = await item.textContent()
+
+      // Find the utils.py reference which contains the macro definition
+      if (text && text.includes('utils.py')) {
+        await item.click()
+        clickedReference = true
+        break
+      }
+    }
+
+    expect(clickedReference).toBe(true)
+
+    // Verify it appeared and click on it
+    await expect(window.locator('text=def multiply')).toBeVisible()
+    await window.locator('text=def multiply').first().click()
+
+    // Verify navigation to utils.py by checking the import that appears there
+    await expect(
+      window.locator('text=from sqlmesh import SQL, macro'),
+    ).toBeVisible()
+  })
+
+  test('Go to References for @SQL_LITERAL macro', async () => {
+    // Click on the @SQL_LITERAL macro usage
+    await window.locator('text=@SQL_LITERAL').first().click()
+
+    // Use keyboard shortcut to find references
+    await window.keyboard.press(GO_TO_REFERENCES_KEY)
+
+    // Wait for the references to appear
+    await window.waitForSelector('text=References')
+
+    // Wait for reference panel to populate
+    await window.waitForFunction(
+      () => {
+        const referenceElements = document.querySelectorAll(
+          '.reference-item, .monaco-list-row, .references-view .tree-row',
+        )
+        return referenceElements.length >= 2
+      },
+      { timeout: 5000 },
+    )
+
+    // Verify that references include both definition and usage
+    const hasReferences = await window.evaluate(() => {
+      const body = document.body.textContent || ''
+      return (
+        body.includes('References') &&
+        body.includes('.py') &&
+        body.includes('.sql')
+      )
+    })
+
+    expect(hasReferences).toBe(true)
+
+    await expect(window.locator('text=utils.py').first()).toBeVisible()
+    await expect(window.locator('text=top_waiters.sql').first()).toBeVisible()
+  })
+})
