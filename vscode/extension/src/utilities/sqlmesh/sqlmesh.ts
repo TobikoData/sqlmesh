@@ -25,7 +25,7 @@ export interface SqlmeshExecInfo {
  * 1. Check if the project has a tcloud.yaml file in the project root. If it does, we assume it's a Tcloud project.
  * 2. Check if the project has tcloud installed in the Python environment.
  *
- * @returns A Result indicating whether tcloud is installed.
+ * @returns A Result indicating whether tcloud is installed
  */
 export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   const projectRoot = await getProjectRoot()
@@ -47,6 +47,47 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   }
   traceVerbose(`tcloud is installed: ${isTcloudInstalled.value}`)
   return ok(isTcloudInstalled.value)
+}
+
+const environmentVariablesSchema = z.record(z.string())
+
+type EnvironmentVariables = z.infer<typeof environmentVariablesSchema>
+
+export const getTCLoudEnvironmentVariables = async (): Promise<Result<EnvironmentVariables, ErrorType>> => {
+    const projectRoot = await getProjectRoot()
+  const resolvedPath = resolveProjectPath(projectRoot)
+  if (isErr(resolvedPath)) {
+    return err(
+      {
+        type: "generic",
+        message: resolvedPath.error
+      }
+  )
+  }
+  const bin = await getTcloudBin()
+  if (isErr(bin)) {
+    return bin
+  }
+  const returned = await execAsync(bin.value, ['print_environment_variables'],
+    {
+      cwd: resolvedPath.value
+    }
+  )
+  if (returned.exitCode !== 0) {
+    return err({
+      type: 'generic',
+      message: `Failed to get tcloud environment variables: ${returned.stderr}`,
+    })
+  }
+  const parsed = JSON.parse(returned.stdout)
+  const validated = environmentVariablesSchema.safeParse(parsed)
+  if (!validated.success) {
+    return err({
+      type: 'generic',
+      message: `Failed to validate tcloud environment variables: ${validated.error.message}`,
+    })
+  }
+  return ok(validated.data)
 }
 
 /**
@@ -382,6 +423,14 @@ export const sqlmeshLspExec = async (): Promise<
         type: 'sqlmesh_lsp_not_found',
       })
     }
+    let additionalEnv: Record<string, string> = {}
+    const gotten = await getTCLoudEnvironmentVariables()
+    // TODO: Remove this try catch when we are confident that the tcloud command is always available.
+    if (isErr(gotten)) {
+      traceLog(`Failed to get tcloud environment variables: ${JSON.stringify(gotten.error)}`)
+    } else {
+      additionalEnv = gotten.value
+    }
     return ok({
       bin: binPath,
       workspacePath,
@@ -389,6 +438,7 @@ export const sqlmeshLspExec = async (): Promise<
         PYTHONPATH: interpreterDetails.path?.[0],
         VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
         PATH: interpreterDetails.binPath!, // binPath already points to the bin directory
+        ...additionalEnv,
       },
       args: [],
     })
