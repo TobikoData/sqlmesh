@@ -1444,40 +1444,26 @@ class MSSQLConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        check_import = str_to_bool(str(data.pop("check_import", True)))
-        if not check_import:
-            return data
-
         driver = data.get("driver", "pymssql")
 
-        try:
-            if driver == "pymssql":
-                importlib.import_module("pymssql")
-            elif driver == "pyodbc":
-                importlib.import_module("pyodbc")
-            else:
-                raise ValueError(f"Unsupported driver: {driver}")
-        except ImportError:
-            if debug_mode_enabled():
-                raise
+        # Define the mapping of driver to import module and extra name
+        driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
 
-            logger.exception("Failed to import the MSSQL engine library")
+        if driver not in driver_configs:
+            raise ValueError(f"Unsupported driver: {driver}")
 
-            if driver == "pymssql":
-                extra_name = "mssql"
-            elif driver == "pyodbc":
-                extra_name = "mssql-odbc"
-            else:
-                extra_name = "mssql"
+        import_module, extra_name = driver_configs[driver]
 
-            raise ConfigError(
-                f"Failed to import the '{driver}' library for MSSQL connections. This may be due to a missing "
-                "or incompatible installation. Please ensure the required dependency is installed by "
-                f'running: `pip install "sqlmesh[{extra_name}]"`. For more details, check the logs '
-                "in the 'logs/' folder, or rerun the command with the '--debug' flag."
-            )
+        # Conditionally delegate to the existing _get_engine_import_validator
+        # Create a validator for the specific driver and call its inner function
+        validator_func = _get_engine_import_validator(import_module, driver, extra_name)
 
-        return data
+        # Extract the inner validate function from the decorated validator
+        # The validator_func has a __wrapped__ attribute that contains the original function
+        inner_validate = getattr(validator_func, "__wrapped__", validator_func)
+
+        # Call the inner validation function directly
+        return inner_validate(cls, data)
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
