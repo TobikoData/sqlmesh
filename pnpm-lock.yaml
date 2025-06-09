@@ -115,8 +115,8 @@ importers:
         specifier: ^1.120.16
         version: 1.120.16(@tanstack/react-router@1.120.16(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(vite@6.3.5(@types/node@22.15.30)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.42.0)(tsx@4.19.4)(yaml@2.8.0))(webpack@5.99.8)
       apache-arrow:
-        specifier: ^19.0.1
-        version: 19.0.1
+        specifier: ^20.0.0
+        version: 20.0.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -236,8 +236,8 @@ importers:
         specifier: ^4.23.12
         version: 4.23.12(@babel/runtime@7.27.6)(@codemirror/autocomplete@6.18.6)(@codemirror/language@6.11.1)(@codemirror/lint@6.8.5)(@codemirror/search@6.5.10)(@codemirror/state@6.5.2)(@codemirror/theme-one-dark@6.1.2)(@codemirror/view@6.37.1)(codemirror@6.0.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       apache-arrow:
-        specifier: ^19.0.1
-        version: 19.0.1
+        specifier: ^20.0.0
+        version: 20.0.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -2491,8 +2491,8 @@ packages:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
 
-  apache-arrow@19.0.1:
-    resolution: {integrity: sha512-APmMLzS4qbTivLrPdQXexGM4JRr+0g62QDaobzEvip/FdQIrv2qLy0mD5Qdmw4buydtVJgbFeKR8f59I6PPGDg==}
+  apache-arrow@20.0.0:
+    resolution: {integrity: sha512-JUeK0jFRUd7rbmrhhzR3O2KXjLaZ4YYYFOptyUfxOsMIoZCPi6bZR58gVi/xi3HTBMPseXm9PXyQ2V916930pA==}
     hasBin: true
 
   arg@5.0.2:
@@ -3271,8 +3271,8 @@ packages:
     resolution: {integrity: sha512-b6suED+5/3rTpUBdG1gupIl8MPFCAMA0QXwmljLhvCUKcUvdE4gWky9zpuGCcXHOsz4J9wPGNWq6OKpmIzz3hQ==}
     hasBin: true
 
-  flatbuffers@24.12.23:
-    resolution: {integrity: sha512-dLVCAISd5mhls514keQzmEG6QHmUUsNuWsb4tFafIUwvvgDjXhtfAYSKOzt5SWOy+qByV5pbsDZ+Vb7HUOBEdA==}
+  flatbuffers@25.2.10:
+    resolution: {integrity: sha512-7JlN9ZvLDG1McO3kbX0k4v+SUAg48L1rIwEvN6ZQl/eCtgJz9UylTMzE9wrmYrcorgxm3CX/3T/w5VAub99UUw==}
 
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
@@ -7790,7 +7790,7 @@ snapshots:
 
   '@types/es-aggregate-error@1.0.6':
     dependencies:
-      '@types/node': 22.15.30
+      '@types/node': 20.11.25
 
   '@types/eslint-scope@3.7.7':
     dependencies:
@@ -7848,6 +7848,7 @@ snapshots:
   '@types/node@22.15.30':
     dependencies:
       undici-types: 6.21.0
+    optional: true
 
   '@types/normalize-package-data@2.4.4': {}
 
@@ -8326,7 +8327,7 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.1
 
-  apache-arrow@19.0.1:
+  apache-arrow@20.0.0:
     dependencies:
       '@swc/helpers': 0.5.17
       '@types/command-line-args': 5.2.3
@@ -8334,7 +8335,7 @@ snapshots:
       '@types/node': 20.19.0
       command-line-args: 6.0.1
       command-line-usage: 7.0.3
-      flatbuffers: 24.12.23
+      flatbuffers: 25.2.10
       json-bignum: 0.0.3
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -9211,7 +9212,7 @@ snapshots:
 
   flat@5.0.2: {}
 
-  flatbuffers@24.12.23: {}
+  flatbuffers@25.2.10: {}
 
   flatted@3.3.3: {}
 
