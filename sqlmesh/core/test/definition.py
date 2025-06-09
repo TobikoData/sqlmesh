@@ -258,12 +258,21 @@ class ModelTest(unittest.TestCase):
         actual = actual.replace({np.nan: None})
         expected = expected.replace({np.nan: None})
 
+        # We define this here to avoid a top-level import of numpy and pandas
+        DATETIME_TYPES = (
+            datetime.datetime,
+            datetime.date,
+            datetime.time,
+            np.datetime64,
+            pd.Timestamp,
+        )
+
         def _to_hashable(x: t.Any) -> t.Any:
             if isinstance(x, (list, np.ndarray)):
                 return tuple(_to_hashable(v) for v in x)
             if isinstance(x, dict):
                 return tuple((k, _to_hashable(v)) for k, v in x.items())
-            return str(x) if not isinstance(x, t.Hashable) else x
+            return str(x) if isinstance(x, DATETIME_TYPES) or not isinstance(x, t.Hashable) else x
 
         actual = actual.apply(lambda col: col.map(_to_hashable))
         expected = expected.apply(lambda col: col.map(_to_hashable))
