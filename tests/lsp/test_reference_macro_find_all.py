@@ -47,30 +47,32 @@ def test_find_all_references_for_macro_add_one():
     expected_ranges = [
         # Macro definition in utils.py
         {
-            "uri": "file:///Users/themistoklisvaltinos/Developer/sqlmesh/examples/sushi/macros/utils.py",
+            "uri_file": "utils.py",
             "range": ((6, 0), (9, 22)),
         },
         # Usage in customers.sql
         {
-            "uri": "file:///Users/themistoklisvaltinos/Developer/sqlmesh/examples/sushi/models/customers.sql",
+            "uri_file": "customers.sql",
             "range": ((36, 7), (36, 14)),
         },
         # Usage in top_waiters.sql
         {
-            "uri": "file:///Users/themistoklisvaltinos/Developer/sqlmesh/examples/sushi/models/top_waiters.sql",
+            "uri_file": "top_waiters.sql",
             "range": ((12, 5), (12, 12)),
         },
     ]
 
     for expected in expected_ranges:
         assert any(
-            ref.uri == expected["uri"] and
-            ref.range.start.line == expected["range"][0][0] and
-            ref.range.start.character == expected["range"][0][1] and
-            ref.range.end.line == expected["range"][1][0] and
-            ref.range.end.character == expected["range"][1][1]
+            expected["uri_file"] in ref.uri
+            and ref.range.start.line == expected["range"][0][0]
+            and ref.range.start.character == expected["range"][0][1]
+            and ref.range.end.line == expected["range"][1][0]
+            and ref.range.end.character == expected["range"][1][1]
             for ref in all_references
-        ), f"Expected reference with uri {expected['uri']} and range {expected['range']} not found"
+        ), (
+            f"Expected reference with uri {expected['uri_file']} and range {expected['range']} not found"
+        )
 
 
 def test_find_all_references_for_macro_multiply():
@@ -171,8 +173,7 @@ def test_multi_repo_macro_references():
         # Click on the second macro reference which appears under the same name in repo_1 ('dup')
         first_ref = macro_references[1]
         position = Position(
-            line=first_ref.range.start.line,
-            character=first_ref.range.start.character + 1
+            line=first_ref.range.start.line, character=first_ref.range.start.character + 1
         )
         all_references = get_macro_find_all_references(lsp_context, d_uri, position)
 
@@ -183,4 +184,6 @@ def test_multi_repo_macro_references():
         assert any("repo_2" in ref.uri for ref in all_references), "Should find macro in repo_2"
 
         # But not references in repo_1 since despite identical name they're different macros
-        assert not any("repo_1" in ref.uri for ref in all_references), "Shouldn't find macro in repo_1"
+        assert not any("repo_1" in ref.uri for ref in all_references), (
+            "Shouldn't find macro in repo_1"
+        )
