@@ -13,7 +13,7 @@ COPY web/client/package.json ./web/client/
 COPY vscode/extension/package.json ./vscode/extension/
 COPY vscode/bus/package.json ./vscode/bus/
 
-# Copy all source files
+# Copy source files
 COPY web/client/ ./web/client/
 COPY vscode/extension/ ./vscode/extension/
 COPY vscode/bus/ ./vscode/bus/
