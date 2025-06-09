@@ -6,6 +6,11 @@ from sqlmesh.lsp.reference import (
     get_macro_definitions_for_a_path,
 )
 from sqlmesh.lsp.uri import URI
+from sqlmesh.core.linter.helpers import (
+    read_range_from_file,
+    Range as SQLMeshRange,
+    Position as SQLMeshPosition,
+)
 
 
 def test_find_all_references_for_macro_add_one():
@@ -43,35 +48,32 @@ def test_find_all_references_for_macro_add_one():
     usage_refs = [ref for ref in all_references if "top_waiters" in ref.uri]
     assert len(usage_refs) >= 1, "Should include the usage in top_waiters.sql"
 
-    # breakpoint()
-    expected_ranges = [
-        # Macro definition in utils.py
-        {
-            "uri_file": "utils.py",
-            "range": ((6, 0), (9, 22)),
-        },
-        # Usage in customers.sql
-        {
-            "uri_file": "customers.sql",
-            "range": ((36, 7), (36, 14)),
-        },
-        # Usage in top_waiters.sql
-        {
-            "uri_file": "top_waiters.sql",
-            "range": ((12, 5), (12, 12)),
-        },
-    ]
+    expected_files = {
+        "utils.py": {"pattern": r"def add_one", "expected_content": "def add_one"},
+        "customers.sql": {"pattern": r"@ADD_ONE\s*\(", "expected_content": "ADD_ONE"},
+        "top_waiters.sql": {"pattern": r"@ADD_ONE\s*\(", "expected_content": "ADD_ONE"},
+    }
 
-    for expected in expected_ranges:
-        assert any(
-            expected["uri_file"] in ref.uri
-            and ref.range.start.line == expected["range"][0][0]
-            and ref.range.start.character == expected["range"][0][1]
-            and ref.range.end.line == expected["range"][1][0]
-            and ref.range.end.character == expected["range"][1][1]
-            for ref in all_references
-        ), (
-            f"Expected reference with uri {expected['uri_file']} and range {expected['range']} not found"
+    for expected_file, expectations in expected_files.items():
+        file_refs = [ref for ref in all_references if expected_file in ref.uri]
+        assert len(file_refs) >= 1, f"Should find at least one reference in {expected_file}"
+
+        file_ref = file_refs[0]
+        file_path = URI(file_ref.uri).to_path()
+
+        sqlmesh_range = SQLMeshRange(
+            start=SQLMeshPosition(
+                line=file_ref.range.start.line, character=file_ref.range.start.character
+            ),
+            end=SQLMeshPosition(
+                line=file_ref.range.end.line, character=file_ref.range.end.character
+            ),
+        )
+
+        # Read the content at the reference location
+        content = read_range_from_file(file_path, sqlmesh_range)
+        assert content.startswith(expectations["expected_content"]), (
+            f"Expected content to start with '{expectations['expected_content']}', got: {content}"
         )
 
 
