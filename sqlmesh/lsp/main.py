@@ -145,7 +145,7 @@ class SQLMeshLanguageServer:
 
             try:
                 context = self._context_get_or_load(uri)
-                return context.get_autocomplete(uri, content)
+                return LSPContext.get_completions(context, uri, content)
             except Exception as e:
                 from sqlmesh.lsp.completions import get_sql_completions
 
@@ -565,7 +565,10 @@ class SQLMeshLanguageServer:
                 )
                 return types.WorkspaceDiagnosticReport(items=[])
 
-        @self.server.feature(types.TEXT_DOCUMENT_COMPLETION)
+        @self.server.feature(
+            types.TEXT_DOCUMENT_COMPLETION,
+            types.CompletionOptions(trigger_characters=["@"]),  # advertise "@" for macros
+        )
         def completion(
             ls: LanguageServer, params: types.CompletionParams
         ) -> t.Optional[types.CompletionList]:
@@ -583,7 +586,7 @@ class SQLMeshLanguageServer:
                     pass
 
                 # Get completions using the existing completions module
-                completion_response = context.get_autocomplete(uri, content)
+                completion_response = LSPContext.get_completions(context, uri, content)
 
                 completion_items = []
                 # Add model completions
@@ -595,7 +598,26 @@ class SQLMeshLanguageServer:
                             detail="SQLMesh Model",
                         )
                     )
-                # Add keyword completions
+                # Add macro completions
+                triggered_by_at = (
+                    params.context is not None
+                    and getattr(params.context, "trigger_character", None) == "@"
+                )
+
+                for macro_name in completion_response.macros:
+                    insert_text = macro_name if triggered_by_at else f"@{macro_name}"
+
+                    completion_items.append(
+                        types.CompletionItem(
+                            label=f"@{macro_name}",
+                            insert_text=insert_text,
+                            insert_text_format=types.InsertTextFormat.PlainText,
+                            filter_text=macro_name,
+                            kind=types.CompletionItemKind.Function,
+                            detail="SQLMesh Macro",
+                        )
+                    )
+
                 for keyword in completion_response.keywords:
                     completion_items.append(
                         types.CompletionItem(

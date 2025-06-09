@@ -7,14 +7,14 @@ from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
-    Range as SQLMeshRange,
-    Position as SQLMeshPosition,
 )
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 from sqlmesh.lsp.description import generate_markdown_description
 from sqlglot.optimizer.scope import build_scope
+
+from sqlmesh.lsp.helpers import to_lsp_range, to_lsp_position
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -624,24 +624,3 @@ def _position_within_range(position: Position, range: Range) -> bool:
         range.end.line > position.line
         or (range.end.line == position.line and range.end.character >= position.character)
     )
-
-
-def to_lsp_range(
-    range: SQLMeshRange,
-) -> Range:
-    """
-    Converts a SQLMesh Range to an LSP Range.
-    """
-    return Range(
-        start=Position(line=range.start.line, character=range.start.character),
-        end=Position(line=range.end.line, character=range.end.character),
-    )
-
-
-def to_lsp_position(
-    position: SQLMeshPosition,
-) -> Position:
-    """
-    Converts a SQLMesh Position to an LSP Position.
-    """
-    return Position(line=position.line, character=position.character)
