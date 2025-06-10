@@ -106,10 +106,13 @@ class SQLMeshLanguageServer:
             A new LSPContext instance wrapping the created context, or None if creation fails
         """
         try:
-            context = self.context_class(paths=paths)
-            lsp_context = LSPContext(context)
-            self.lsp_context = lsp_context
-            return lsp_context
+            if self.lsp_context is None:
+                context = self.context_class(paths=paths)
+            else:
+                self.lsp_context.context.load()
+                context = self.lsp_context.context
+            self.lsp_context = LSPContext(context)
+            return self.lsp_context
         except Exception as e:
             self.server.log_trace(f"Error creating context: {e}")
             return None
@@ -293,8 +296,16 @@ class SQLMeshLanguageServer:
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
         def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
+            if self.lsp_context is None:
+                current_path = Path.cwd()
+                self._ensure_context_in_folder(current_path)
+                if self.lsp_context is None:
+                    ls.log_trace("No context found after did_change")
+                    return
+
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
+
             models = context.map[uri.to_path()]
             if models is None or not isinstance(models, ModelTarget):
                 return
@@ -731,9 +742,8 @@ class SQLMeshLanguageServer:
         for a config.py or config.yml file in the parent directories.
         """
         if self.lsp_context is not None:
-            context = self.lsp_context
-            context.context.load()  # Reload or refresh context
-            self.lsp_context = LSPContext(context.context)
+            self.lsp_context.context.load()
+            self.lsp_context = LSPContext(self.lsp_context.context)
             return
 
         # No context yet: try to find config and load it
