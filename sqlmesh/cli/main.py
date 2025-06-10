@@ -199,8 +199,13 @@ def init(
                 "'" + "', '".join([template.value for template in ProjectTemplate]) + "'"
             )
             raise click.ClickException(
-                f"Invalid project template value '{template}'. Please specify one of {template_strings}."
+                f"Invalid project template '{template}'. Please specify one of {template_strings}."
             )
+
+    if project_template == ProjectTemplate.DBT and not Path(ctx.obj, "dbt_project.yml").exists():
+        raise click.ClickException(
+            "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
+        )
 
     if engine or project_template == ProjectTemplate.DBT:
         init_example_project(
@@ -216,7 +221,7 @@ def init(
 
     console = srich.console
 
-    project_template, engine_type, cli_mode = _interactive_init(console, project_template)
+    project_template, engine_type, cli_mode = _interactive_init(ctx.obj, console, project_template)
     if project_template != ProjectTemplate.DBT:
         _check_engine_installed(console, engine_type)
 
@@ -1280,7 +1285,9 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
 
 
 def _interactive_init(
-    console: Console, project_template: t.Optional[ProjectTemplate] = None
+    path: Path,
+    console: Console,
+    project_template: t.Optional[ProjectTemplate] = None,
 ) -> t.Tuple[ProjectTemplate, t.Optional[str], t.Optional[InitCliMode]]:
     console.print("──────────────────────────────")
     console.print("Welcome to SQLMesh!")
@@ -1288,9 +1295,9 @@ def _interactive_init(
     project_template = _init_template_prompt(console) if not project_template else project_template
 
     if project_template == ProjectTemplate.DBT:
-        if not Path("dbt_project.yml").exists():
+        if not Path(path, "dbt_project.yml").exists():
             raise SQLMeshError(
-                "Required file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
+                "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
             )
         return (project_template, None, None)
 
