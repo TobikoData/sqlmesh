@@ -694,9 +694,9 @@ class SQLMeshLanguageServer:
         for a config.py or config.yml file in the parent directories.
         """
         if self.lsp_context is not None:
-            context = self.lsp_context
-            context.context.load()  # Reload or refresh context
-            self.lsp_context = LSPContext(context.context)
+            # If we already have a context, refresh it
+            paths = list(self.lsp_context.context.configs)
+            self._create_lsp_context(paths)
             return
 
         # No context yet: try to find config and load it
