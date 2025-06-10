@@ -1364,12 +1364,6 @@ def _init_engine_prompt(console: Console) -> str:
         display_num_to_engine[i + 1] = engine_type
     console.print("")
 
-    #         self._print("""Need another engine? See: https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
-    #     • Exit: ctrl+c
-    #     • Install engine: pip install "sqlmesh[<your_engine>]"
-    #     • Restart: sqlmesh init
-    # """)
-
     engine_num = _init_integer_prompt(
         console, "engine", len(ENGINE_TYPE_DISPLAY_ORDER), _init_engine_prompt
     )
