@@ -9,13 +9,16 @@ separate process for the web api.
 
 import typing as t
 from pydantic import field_validator
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.lsp.custom import (
+    CustomMethodRequestBaseClass,
+    CustomMethodResponseBaseClass,
+)
 from web.server.models import LineageColumn, Model
 
 API_FEATURE = "sqlmesh/api"
 
 
-class ApiRequest(PydanticModel):
+class ApiRequest(CustomMethodRequestBaseClass):
     """
     Request to call the SQLMesh API.
     This is a generic request that can be used to call any API endpoint.
@@ -28,7 +31,11 @@ class ApiRequest(PydanticModel):
     body: t.Optional[t.Dict[str, t.Any]] = None
 
 
-class ApiResponseGetModels(PydanticModel):
+class BaseAPIResponse(CustomMethodResponseBaseClass):
+    error: t.Optional[str] = None
+
+
+class ApiResponseGetModels(BaseAPIResponse):
     """
     Response from the SQLMesh API for the get_models endpoint.
     """
@@ -53,7 +60,7 @@ class ApiResponseGetModels(PydanticModel):
         return data
 
 
-class ApiResponseGetLineage(PydanticModel):
+class ApiResponseGetLineage(BaseAPIResponse):
     """
     Response from the SQLMesh API for the get_lineage endpoint.
     """
@@ -61,7 +68,7 @@ class ApiResponseGetLineage(PydanticModel):
     data: t.Dict[str, t.List[str]]
 
 
-class ApiResponseGetColumnLineage(PydanticModel):
+class ApiResponseGetColumnLineage(BaseAPIResponse):
     """
     Response from the SQLMesh API for the get_column_lineage endpoint.
     """
