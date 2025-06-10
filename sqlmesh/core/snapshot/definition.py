@@ -1995,7 +1995,12 @@ def earliest_start_date(
             start_date(snapshot, snapshots, cache=cache, relative_to=relative_to)
             for snapshot in snapshots.values()
         )
-    return yesterday()
+
+    relative_base = None
+    if relative_to is not None:
+        relative_base = to_datetime(relative_to)
+
+    return yesterday(relative_base=relative_base)
 
 
 def start_date(

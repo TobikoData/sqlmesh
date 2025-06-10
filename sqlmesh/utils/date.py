@@ -87,34 +87,34 @@ def now_ds() -> str:
     return to_ds(now())
 
 
-def yesterday() -> datetime:
+def yesterday(relative_base: t.Optional[datetime] = None) -> datetime:
     """
     Yesterday utc datetime.
 
     Returns:
         A datetime object with tz utc representing yesterday's date
     """
-    return to_datetime("yesterday")
+    return to_datetime("yesterday", relative_base=relative_base)
 
 
-def yesterday_ds() -> str:
+def yesterday_ds(relative_base: t.Optional[datetime] = None) -> str:
     """
     Yesterday utc ds.
 
     Returns:
         Yesterday's ds string.
     """
-    return to_ds("yesterday")
+    return to_ds("yesterday", relative_base=relative_base)
 
 
-def yesterday_timestamp() -> int:
+def yesterday_timestamp(relative_base: t.Optional[datetime] = None) -> int:
     """
     Yesterday utc timestamp.
 
     Returns:
         UTC epoch millis timestamp of yesterday
     """
-    return to_timestamp(yesterday())
+    return to_timestamp(yesterday(relative_base=relative_base))
 
 
 def to_timestamp(
@@ -265,19 +265,19 @@ def date_dict(
     return kwargs
 
 
-def to_ds(obj: TimeLike) -> str:
+def to_ds(obj: TimeLike, relative_base: t.Optional[datetime] = None) -> str:
     """Converts a TimeLike object into YYYY-MM-DD formatted string."""
-    return to_ts(obj)[0:10]
+    return to_ts(obj, relative_base=relative_base)[0:10]
 
 
-def to_ts(obj: TimeLike) -> str:
+def to_ts(obj: TimeLike, relative_base: t.Optional[datetime] = None) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
-    return to_datetime(obj).replace(tzinfo=None).isoformat(sep=" ")
+    return to_datetime(obj, relative_base=relative_base).replace(tzinfo=None).isoformat(sep=" ")
 
 
-def to_tstz(obj: TimeLike) -> str:
+def to_tstz(obj: TimeLike, relative_base: t.Optional[datetime] = None) -> str:
     """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS+00:00 formatted string."""
-    return to_datetime(obj).isoformat(sep=" ")
+    return to_datetime(obj, relative_base=relative_base).isoformat(sep=" ")
 
 
 def is_date(obj: TimeLike) -> bool:

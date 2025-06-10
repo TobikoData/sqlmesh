@@ -49,6 +49,7 @@ from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
     to_date,
+    to_datetime,
     to_timestamp,
     yesterday_ds,
 )
@@ -436,6 +437,99 @@ def test_plan_execution_time():
         str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
         == "2024-01-02 00:00:00"
     )
+
+
+def test_plan_execution_time_start_end():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # prod plan - no fixed execution time so it defaults to now() and reads all the data
+    prod_plan = context.plan(auto_apply=True)
+
+    assert len(prod_plan.new_snapshots) == 1
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds, 'changed' as a FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # dev plan with an execution time in the past and no explicit start/end specified
+    # the plan end should be bounded to it and not exceed it even though in prod the last interval (used as a default end)
+    # is newer than the execution time
+    dev_plan = context.plan("dev", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-01"
+    )  # default start is the earliest prod interval
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start
+    dev_plan = context.plan("dev", start="1 day ago", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-04"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start and a relative end
+    dev_plan = context.plan("dev", start="2 days ago", execution_time="2020-01-05", end="1 day ago")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-03"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime("2020-01-04")  # end relative to execution_time
 
 
 def test_override_builtin_audit_blocking_mode():

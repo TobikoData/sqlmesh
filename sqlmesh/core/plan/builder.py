@@ -41,6 +41,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     yesterday_ds,
     to_timestamp,
+    time_like_to_str,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError
 
@@ -55,6 +56,7 @@ class PlanBuilder:
         start: The start time to backfill data.
         end: The end time to backfill data.
         execution_time: The date/time time reference to use for execution time. Defaults to now.
+            If :start or :end are relative time expressions, they are interpreted as relative to the :execution_time
         apply: The callback to apply the plan.
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
@@ -172,6 +174,22 @@ class PlanBuilder:
         """Indicates whether this plan allows to set the start and end dates."""
         return self._is_dev or bool(self._restate_models)
 
+    @property
+    def start(self) -> t.Optional[TimeLike]:
+        if self._start and self._execution_time:
+            return to_datetime(self._start, relative_base=to_datetime(self._execution_time))
+        return self._start
+
+    @property
+    def end(self) -> t.Optional[TimeLike]:
+        if self._end and self._execution_time:
+            return to_datetime(self._end, relative_base=to_datetime(self._execution_time))
+        return self._end
+
+    @property
+    def execution_time(self) -> TimeLike:
+        return self._execution_time or now()
+
     def set_start(self, new_start: TimeLike) -> PlanBuilder:
         self._start = new_start
         self.override_start = True
@@ -256,7 +274,7 @@ class PlanBuilder:
         )
 
         restatements = self._build_restatements(
-            dag, earliest_interval_start(self._context_diff.snapshots.values())
+            dag, earliest_interval_start(self._context_diff.snapshots.values(), self.execution_time)
         )
         models_to_backfill = self._build_models_to_backfill(dag, restatements)
 
@@ -269,8 +287,8 @@ class PlanBuilder:
         plan = Plan(
             context_diff=self._context_diff,
             plan_id=self._plan_id,
-            provided_start=self._start,
-            provided_end=self._end,
+            provided_start=self.start,
+            provided_end=self.end,
             is_dev=self._is_dev,
             skip_backfill=self._skip_backfill,
             empty_backfill=self._empty_backfill,
@@ -289,7 +307,7 @@ class PlanBuilder:
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
-            execution_time=self._execution_time,
+            execution_time=self.execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
             user_provided_flags=self._user_provided_flags,
@@ -738,6 +756,18 @@ class PlanBuilder:
             raise PlanError(
                 "The start and end dates can't be set for a production plan without restatements."
             )
+
+        if (start := self.start) and (end := self.end):
+            if to_datetime(start) > to_datetime(end):
+                raise PlanError(
+                    f"Plan end date: '{time_like_to_str(end)}' must be after the plan start date: '{time_like_to_str(start)}'"
+                )
+
+        if end := self.end:
+            if to_datetime(end) > to_datetime(self.execution_time):
+                raise PlanError(
+                    f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
+                )
 
     def _ensure_no_forward_only_revert(self) -> None:
         """Ensures that a previously superseded breaking / non-breaking snapshot is not being
