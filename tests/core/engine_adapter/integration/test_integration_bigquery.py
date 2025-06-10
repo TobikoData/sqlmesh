@@ -210,7 +210,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
     model_name = ctx.table("test")
     dependency = f"`{'.'.join(part.name for part in information_schema_tables.parts)}`"
 
-    init_example_project(tmp_path, dialect="bigquery", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="bigquery", template=ProjectTemplate.EMPTY)
     with open(tmp_path / "models" / "test.sql", "w", encoding="utf-8") as f:
         f.write(
             f"""

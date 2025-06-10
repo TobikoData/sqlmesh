@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 
-from sqlglot import Dialect
+from sqlmesh.cli.main import ENGINE_TYPE_DISPLAY_ORDER
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
@@ -39,17 +39,15 @@ def _gen_config(
       database: db.db"""
     )
 
-    engine = "mssql" if engine_type == "tsql" else engine_type
-
     if not settings and template != ProjectTemplate.DBT:
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
 
-        if engine in CONNECTION_CONFIG_TO_TYPE:
+        if engine_type in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
             non_required_fields = []
 
-            for name, field in CONNECTION_CONFIG_TO_TYPE[engine].model_fields.items():
+            for name, field in CONNECTION_CONFIG_TO_TYPE[engine_type].model_fields.items():
                 field_name = field.alias or name
                 if field_name in ("dialect", "display_name"):
                     continue
@@ -65,7 +63,7 @@ def _gen_config(
                 option_str = f"      {'# ' if not required else ''}{field_name}: {default_value}\n"
 
                 # specify the DuckDB database field so quickstart runs out of the box
-                if engine == "duckdb" and field_name == "database":
+                if engine_type == "duckdb" and field_name == "database":
                     option_str = "      database: db.db\n"
                     required = True
 
@@ -76,7 +74,7 @@ def _gen_config(
 
             connection_settings = "".join(required_fields + non_required_fields)
 
-            engine_link = f"/{engine}/#connection-options"
+            engine_link = f"/{engine_type}/#connection-options"
 
         connection_settings = (
             "      # For more information on configuring the connection to your execution engine, visit:\n"
@@ -87,16 +85,16 @@ def _gen_config(
     default_configs = {
         ProjectTemplate.DEFAULT: f"""# --- Gateway Connection ---
 gateways:
-  {engine}:
+  {engine_type}:
     connection:
 {connection_settings}
-default_gateway: {engine}
+default_gateway: {engine_type}
 
 # --- Model Defaults ---
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
-  dialect: {DIALECT_TO_TYPE[engine]}
+  dialect: {DIALECT_TO_TYPE[engine_type]}
   start: {start or yesterday_ds()} # Start date for backfill history
   cron: '@daily'    # Run models daily at 12am UTC (can override per model)
 
@@ -276,7 +274,6 @@ WHERE
 
 def init_example_project(
     path: t.Union[str, Path],
-    dialect: t.Optional[str],
     engine_type: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
@@ -299,9 +296,17 @@ def init_example_project(
         )
 
     if not engine_type and template != ProjectTemplate.DBT:
-        if not dialect:
-            raise SQLMeshError("Please provide a default SQL dialect for your project's models.")
-        Dialect.get_or_raise(dialect)
+        raise SQLMeshError(
+            "Missing `engine` argument to `sqlmesh init`. Please specify a SQL engine for your project."
+        )
+
+    if engine_type not in ENGINE_TYPE_DISPLAY_ORDER:
+        engine_strings = "'" + "', '".join(ENGINE_TYPE_DISPLAY_ORDER) + "'"
+        raise SQLMeshError(
+            f"Invalid engine '{engine_type}'. Please specify one of {engine_strings}."
+        )
+
+    dialect = DIALECT_TO_TYPE[engine_type]
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
@@ -316,11 +321,7 @@ def init_example_project(
                 "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
             )
 
-    # config generation chooses engine based on ConnectionConfig.type_
-    # - if user passes a SQL dialect, we always generate the engine whose type_ == dialect
-    #   - example: if users passes `postgres` we will always choose `postgres` engine and never `gcp_postgres`
-    # - if user interactively chooses an engine, we will pass the correct ConnectionConfig.type_
-    _create_config(config_path, engine_type or dialect, settings, start, template, cli_mode)
+    _create_config(config_path, engine_type, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
         return config_path
 

@@ -2177,7 +2177,7 @@ def test_audit():
 
 
 def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),

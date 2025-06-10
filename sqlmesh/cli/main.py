@@ -162,7 +162,7 @@ def cli(
 
 
 @cli.command("init")
-@click.argument("sql_dialect", required=False)
+@click.argument("engine", required=False)
 @click.option(
     "-t",
     "--template",
@@ -184,7 +184,7 @@ def cli(
 @cli_analytics
 def init(
     ctx: click.Context,
-    sql_dialect: t.Optional[str] = None,
+    engine: t.Optional[str] = None,
     template: t.Optional[str] = None,
     dlt_pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
@@ -202,11 +202,10 @@ def init(
                 f"Invalid project template value '{template}'. Please specify one of {template_strings}."
             )
 
-    if sql_dialect or project_template == ProjectTemplate.DBT:
+    if engine or project_template == ProjectTemplate.DBT:
         init_example_project(
             path=ctx.obj,
-            dialect=sql_dialect,
-            engine_type=None,
+            engine_type=engine,
             template=project_template or ProjectTemplate.DEFAULT,
             pipeline=dlt_pipeline,
             dlt_path=dlt_path,
@@ -223,7 +222,6 @@ def init(
 
     config_path = init_example_project(
         path=ctx.obj,
-        dialect=None,
         template=project_template,
         engine_type=engine_type,
         cli_mode=cli_mode or InitCliMode.DEFAULT,

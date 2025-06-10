@@ -4005,7 +4005,7 @@ def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     star_model_definition = """
         MODEL (
@@ -6448,13 +6448,13 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "Differences from the `prod` environment" in output.stdout
 
     assert (
-        """MODEL (                                                                        
-   name test.a,                                                                 
-+  owner test,                                                                  
-   kind FULL                                                                    
- )                                                                              
- SELECT                                                                         
--  5 AS col                                                                     
+        """MODEL (
+   name test.a,
++  owner test,
+   kind FULL
+ )
+ SELECT
+-  5 AS col
 +  10 AS col"""
         in output.stdout
     )
