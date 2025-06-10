@@ -153,8 +153,10 @@ class ManifestHelper:
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
             source_config = SourceConfig(
-                **_config(source),
-                **source.to_dict(),
+                **{
+                    **source.to_dict(),
+                    **_config(source),
+                }
             )
             self._sources_per_package[source.package_name][source_config.config_name] = (
                 source_config

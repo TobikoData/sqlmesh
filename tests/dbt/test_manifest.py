@@ -114,6 +114,8 @@ def test_manifest_helper(caplog):
     assert sources["streaming.order_items"].table_name == "order_items"
     assert sources["streaming.order_items"].schema_ == "raw"
 
+    assert all(s.quoting["identifier"] is False for s in sources.values())
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_tests_referencing_disabled_models():
