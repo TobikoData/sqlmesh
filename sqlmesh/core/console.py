@@ -330,7 +330,37 @@ class UnitTestConsole(abc.ABC):
         """
 
 
+class SignalConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        total_signals: int,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+
+    @abc.abstractmethod
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+
+    @abc.abstractmethod
+    def stop_signal_progress(self, snapshot: Snapshot) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+
+
 class Console(
+    SignalConsole,
     PlanBuilderConsole,
     LinterConsole,
     StateExporterConsole,
@@ -534,6 +564,30 @@ class NoopConsole(Console):
         pass
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        total_signals: int,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        pass
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        pass
+
+    def stop_signal_progress(self, snapshot: Snapshot) -> None:
         pass
 
     def start_creation_progress(
@@ -860,6 +914,8 @@ class TerminalConsole(Console):
         self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
         self.table_diff_progress_live: t.Optional[Live] = None
 
+        self.signal_status_tree: t.Optional[Tree] = None
+
         self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
@@ -901,6 +957,9 @@ class TerminalConsole(Console):
         audit_only: bool = False,
     ) -> None:
         """Indicates that a new snapshot evaluation/auditing progress has begun."""
+        # Add a newline to separate signal checking from evaluation
+        self._print("")
+
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
                 "Executing model batches" if not audit_only else "Auditing models", self.console
@@ -1049,6 +1108,75 @@ class TerminalConsole(Console):
         self.evaluation_column_widths = {}
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
+
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        total_signals: int,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+        display_name = snapshot.display_name(
+            environment_naming_info,
+            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            dialect=self.dialect,
+        )
+        self.signal_status_tree = Tree(f"Checking signals for {display_name}")
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+        # Format checked intervals
+        check_display = []
+        for interval in check_intervals[:3]:  # Show first 3 intervals
+            interval_str = _format_signal_interval(snapshot, interval)
+            if interval_str:
+                check_display.append(interval_str)
+        if len(check_intervals) > 3:
+            check_display.append(f"... and {len(check_intervals) - 3} more")
+
+        # Format ready intervals
+        ready_display = []
+        for interval in ready_intervals[:3]:  # Show first 3 intervals
+            interval_str = _format_signal_interval(snapshot, interval)
+            if interval_str:
+                ready_display.append(interval_str)
+        if len(ready_intervals) > 3:
+            ready_display.append(f"... and {len(ready_intervals) - 3} more")
+
+        # Display signal name
+        tree = Tree(f"[{signal_idx + 1}/{total_signals}] {signal_name} {duration:.2f}s")
+
+        # TODO: what about full models and other cases where these lists can be empty?
+        check_str = ", ".join(check_display) if check_display else "no intervals"
+        tree.add(f"check: {check_str}")
+
+        ready_str = ", ".join(ready_display) if ready_display else "no intervals"
+        if ready_intervals == check_intervals:
+            ready_str = f"[green]ready: {ready_str}[/green]"
+        elif ready_intervals:
+            ready_str = f"[yellow]ready: {ready_str}[/yellow]"
+        else:
+            ready_str = f"[red]ready: {ready_str}[/red]"
+
+        tree.add(ready_str)
+        if self.signal_status_tree is not None:
+            self.signal_status_tree.add(tree)
+
+    def stop_signal_progress(self, snapshot: Snapshot) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+        if self.signal_status_tree is not None:
+            self._print(self.signal_status_tree)
+            self.signal_status_tree = None
 
     def start_creation_progress(
         self,
@@ -3810,7 +3938,8 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
     return "  " + "\n".join(error_messages)
 
 
-def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
+def _format_interval(snapshot: Snapshot, interval: Interval, prefix: str = "") -> str:
+    """Format an interval with an optional prefix."""
     if snapshot.is_model and (
         snapshot.model.kind.is_incremental
         or snapshot.model.kind.is_managed
@@ -3818,12 +3947,24 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
     ):
         inclusive_interval = make_inclusive(interval[0], interval[1])
         if snapshot.model.interval_unit.is_date_granularity:
-            return f"insert {to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
-        # omit end date if interval start/end on same day
-        if inclusive_interval[0].date() == inclusive_interval[1].date():
-            return f"insert {to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
-        return f"insert {inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+            base = f"{to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
+        elif inclusive_interval[0].date() == inclusive_interval[1].date():
+            # omit end date if interval start/end on same day
+            base = f"{to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+        else:
+            base = f"{inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"{prefix} {base}" if prefix else base
     return ""
+
+
+def _format_signal_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for signal output (without 'insert' prefix)."""
+    return _format_interval(snapshot, interval)
+
+
+def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for evaluation output (with 'insert' prefix)."""
+    return _format_interval(snapshot, interval, prefix="insert")
 
 
 def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Optional[str]) -> str:
