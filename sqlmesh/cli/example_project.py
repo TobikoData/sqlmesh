@@ -3,7 +3,6 @@ from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 
-from sqlmesh.cli.main import ENGINE_TYPE_DISPLAY_ORDER
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
@@ -94,7 +93,7 @@ default_gateway: {engine_type}
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
-  dialect: {DIALECT_TO_TYPE[engine_type]}
+  dialect: {DIALECT_TO_TYPE.get(engine_type)}
   start: {start or yesterday_ds()} # Start date for backfill history
   cron: '@daily'    # Run models daily at 12am UTC (can override per model)
 
@@ -281,6 +280,8 @@ def init_example_project(
     schema_name: str = "sqlmesh_example",
     cli_mode: InitCliMode = InitCliMode.DEFAULT,
 ) -> t.Union[str, Path]:
+    from sqlmesh.cli.main import ENGINE_TYPE_DISPLAY_ORDER
+
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
     config_path = root_path / f"config.{config_extension}"
@@ -295,31 +296,32 @@ def init_example_project(
             f"Found an existing config file '{config_path}'.\n\nPlease change to another directory or remove the existing file."
         )
 
-    if not engine_type and template != ProjectTemplate.DBT:
+    engine_types = "'" + "', '".join(ENGINE_TYPE_DISPLAY_ORDER) + "'"
+    if engine_type is None and template != ProjectTemplate.DBT:
         raise SQLMeshError(
-            "Missing `engine` argument to `sqlmesh init`. Please specify a SQL engine for your project."
+            f"Missing `engine` argument to `sqlmesh init` - please specify a SQL engine for your project. Options: '{engine_types}'."
         )
 
-    if engine_type not in ENGINE_TYPE_DISPLAY_ORDER:
-        engine_strings = "'" + "', '".join(ENGINE_TYPE_DISPLAY_ORDER) + "'"
+    if engine_type and engine_type not in ENGINE_TYPE_DISPLAY_ORDER:
         raise SQLMeshError(
-            f"Invalid engine '{engine_type}'. Please specify one of {engine_strings}."
+            f"Invalid engine '{engine_type}'. Please specify one of '{engine_types}'."
         )
-
-    dialect = DIALECT_TO_TYPE[engine_type]
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
     start = None
-    if template == ProjectTemplate.DLT:
-        if pipeline and dialect:
-            models, settings, start = generate_dlt_models_and_settings(
-                pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
-            )
-        else:
-            raise SQLMeshError(
-                "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
-            )
+    if engine_type:
+        dialect = DIALECT_TO_TYPE[engine_type]
+
+        if template == ProjectTemplate.DLT:
+            if pipeline and dialect:
+                models, settings, start = generate_dlt_models_and_settings(
+                    pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
+                )
+            else:
+                raise SQLMeshError(
+                    "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
+                )
 
     _create_config(config_path, engine_type, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
