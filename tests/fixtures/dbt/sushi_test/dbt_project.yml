@@ -35,6 +35,10 @@ seeds:
     +post-hook:
       - '{{ log("post-hook") }}'
 
+sources:
+  +quoting:
+    identifier: false
+
 vars:
   top_waiters:limit: 10
   'top_waiters:revenue': "revenue"
