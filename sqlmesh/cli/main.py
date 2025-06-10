@@ -15,6 +15,7 @@ from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
@@ -40,23 +41,24 @@ SKIP_LOAD_COMMANDS = (
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
-ENGINE_DISPLAY_NAME_TO_DIALECT = {
-    "Athena": "athena",
-    "Azure SQL": "tsql",
-    "BigQuery": "bigquery",
-    "ClickHouse": "clickhouse",
-    "Databricks": "databricks",
+# These are ordered for user display - do not reorder
+ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE = {
     "DuckDB": "duckdb",
-    "GCP Postgres": "postgres",
-    "MotherDuck": "duckdb",
-    "MSSQL": "tsql",
-    "MySQL": "mysql",
-    "Postgres": "postgres",
-    "Redshift": "redshift",
-    "RisingWave": "postgres",
     "Snowflake": "snowflake",
+    "Databricks": "databricks",
+    "BigQuery": "bigquery",
+    "MotherDuck": "duckdb",
+    "ClickHouse": "clickhouse",
+    "Redshift": "redshift",
     "Spark": "spark",
     "Trino": "trino",
+    "Azure SQL": "azuresql",
+    "MSSQL": "tsql",
+    "Postgres": "postgres",
+    "GCP Postgres": "gcp_postgres",
+    "MySQL": "mysql",
+    "Athena": "athena",
+    "RisingWave": "risingwave",
 }
 
 
@@ -202,38 +204,55 @@ def init(
 
     if sql_dialect or project_template == ProjectTemplate.DBT:
         init_example_project(
-            ctx.obj,
+            path=ctx.obj,
             dialect=sql_dialect,
+            engine_type=None,
             template=project_template or ProjectTemplate.DEFAULT,
             pipeline=dlt_pipeline,
             dlt_path=dlt_path,
         )
-    else:
-        import sqlmesh.utils.rich as srich
+        return
 
-        console = srich.console
+    import sqlmesh.utils.rich as srich
 
-        project_template, sql_dialect, cli_mode = _interactive_init(console, project_template)
-        config_path = init_example_project(
-            ctx.obj,
-            template=project_template,
-            dialect=sql_dialect,
-            cli_mode=cli_mode,
-            pipeline=dlt_pipeline,
-            dlt_path=dlt_path,
-        )
-        console.print(f"""──────────────────────────────
+    console = srich.console
+
+    project_template, engine_type, cli_mode = _interactive_init(console, project_template)
+    if project_template != ProjectTemplate.DBT:
+        _check_engine_installed(console, engine_type)
+
+    config_path = init_example_project(
+        path=ctx.obj,
+        dialect=None,
+        template=project_template,
+        engine_type=engine_type,
+        cli_mode=cli_mode or InitCliMode.DEFAULT,
+        pipeline=dlt_pipeline,
+        dlt_path=dlt_path,
+    )
+
+    next_step_text = {
+        ProjectTemplate.DEFAULT: f"• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}\nRun command in CLI: sqlmesh plan\n(Optional) Explain a plan: sqlmesh plan --explain",
+        ProjectTemplate.DBT: "",
+    }
+    next_step_text[ProjectTemplate.EMPTY] = next_step_text[ProjectTemplate.DEFAULT]
+
+    quickstart_text = {
+        ProjectTemplate.DEFAULT: "Quickstart guide:\nhttps://sqlmesh.readthedocs.io/en/stable/quickstart/cli/",
+        ProjectTemplate.DBT: "dbt guide:\nhttps://sqlmesh.readthedocs.io/en/stable/integrations/dbt/",
+    }
+    quickstart_text[ProjectTemplate.EMPTY] = quickstart_text[ProjectTemplate.DEFAULT]
+
+    console.print(f"""──────────────────────────────
 
 Your SQLMesh project is ready!
 
 Next steps:
-• Update your gateway connection settings (e.g., username/password) in the project configuration file:
-    {config_path}
+{next_step_text[project_template]}
 • Run command in CLI: sqlmesh plan
 • (Optional) Explain a plan: sqlmesh plan --explain
 
-Quickstart guide:
-  https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/
+{quickstart_text[project_template]}
 
 Need help?
 • Docs:   https://sqlmesh.readthedocs.io
@@ -1264,21 +1283,29 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
 
 def _interactive_init(
     console: Console, project_template: t.Optional[ProjectTemplate] = None
-) -> t.Tuple[ProjectTemplate, str, InitCliMode]:
+) -> t.Tuple[ProjectTemplate, t.Optional[str], t.Optional[InitCliMode]]:
     console.print("──────────────────────────────")
     console.print("Welcome to SQLMesh!")
 
     project_template = _init_template_prompt(console) if not project_template else project_template
-    dialect = _init_engine_prompt(console)
+
+    if project_template == ProjectTemplate.DBT:
+        if not Path("dbt_project.yml").exists():
+            raise SQLMeshError(
+                "Required file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
+            )
+        return (project_template, None, None)
+
+    engine_type = _init_engine_prompt(console)
     cli_mode = _init_cli_mode_prompt(console)
 
-    return (project_template, dialect, cli_mode)
+    return (project_template, engine_type, cli_mode)
 
 
 def _init_integer_prompt(
     console: Console, err_msg_entity: str, num_options: int, retry_func: t.Callable[[t.Any], t.Any]
 ) -> int:
-    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with Ctrl+C"
+    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with control+c"
     option_str = Prompt.ask("Enter a number", console=console)
     try:
         option_num = int(option_str)
@@ -1299,11 +1326,11 @@ def _init_integer_prompt(
 
 
 def _init_template_prompt(console: Console) -> ProjectTemplate:
+    # These are ordered for user display - do not reorder
     template_descriptions = {
         ProjectTemplate.DEFAULT.name: "- Create SQLMesh example project models and files",
-        ProjectTemplate.EMPTY.name: "  - Create a configuration file and project file directories",
         ProjectTemplate.DBT.value: "    - You have an existing dbt project and want to run it with SQLMesh",
-        ProjectTemplate.DLT.name: "    - You have an existing DLT pipeline and want to load it with SQLMesh",
+        ProjectTemplate.EMPTY.name: "  - Create a SQLMesh configuration file and project directories only",
     }
 
     console.print("──────────────────────────────\n")
@@ -1327,7 +1354,7 @@ def _init_engine_prompt(console: Console) -> str:
     console.print("Choose your SQL engine:\n")
 
     display_num_to_engine = {}
-    for i, engine in enumerate(ENGINE_DISPLAY_NAME_TO_DIALECT.keys()):
+    for i, engine in enumerate(ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE.keys()):
         console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{engine}")
         display_num_to_engine[i + 1] = engine
     console.print("")
@@ -1339,10 +1366,10 @@ def _init_engine_prompt(console: Console) -> str:
     # """)
 
     engine_num = _init_integer_prompt(
-        console, "engine", len(ENGINE_DISPLAY_NAME_TO_DIALECT), _init_engine_prompt
+        console, "engine", len(ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE), _init_engine_prompt
     )
 
-    return ENGINE_DISPLAY_NAME_TO_DIALECT[display_num_to_engine[engine_num]]
+    return ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE[display_num_to_engine[engine_num]]
 
 
 def _init_cli_mode_prompt(console: Console) -> InitCliMode:
@@ -1365,6 +1392,20 @@ def _init_cli_mode_prompt(console: Console) -> InitCliMode:
     )
 
     return InitCliMode(display_num_to_cli_mode[cli_mode_num].lower())
+
+
+def _check_engine_installed(console: Console, engine_type: t.Optional[str] = None) -> None:
+    if not engine_type:
+        return
+    connection_config = CONNECTION_CONFIG_TO_TYPE[engine_type]
+
+    try:
+        connection_config._connection_factory.fget(None)
+    except ModuleNotFoundError:
+        install_command = f'pip install "sqlmesh[{engine_type}]"'
+        raise SQLMeshError(
+            f"Unable to load required Python dependencies for the {engine_type.upper()} engine.\n\nPlease run `{install_command}` to install them before running `sqlmesh init` again."
+        )
 
 
 @cli.group(no_args_is_help=True, hidden=True)

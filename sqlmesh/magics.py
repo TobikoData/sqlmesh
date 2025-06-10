@@ -229,7 +229,12 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(
-            args.path, args.sql_dialect, project_template, args.dlt_pipeline, args.dlt_path
+            path=args.path,
+            dialect=args.sql_dialect,
+            engine_type=None,
+            template=project_template,
+            pipeline=args.dlt_pipeline,
+            dlt_path=args.dlt_path,
         )
         html = str(
             h(

@@ -39,11 +39,11 @@ def _gen_config(
       database: db.db"""
     )
 
+    engine = "mssql" if dialect == "tsql" else dialect
+
     if not settings and template != ProjectTemplate.DBT:
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
         engine_link = ""
-
-        engine = "mssql" if dialect == "tsql" else dialect
 
         if engine in CONNECTION_CONFIG_TO_TYPE:
             required_fields = []
@@ -84,17 +84,18 @@ def _gen_config(
     default_configs = {
         ProjectTemplate.DEFAULT: f"""# --- Gateway Connection ---
 gateways:
-  {dialect}:
+  {engine}:
     connection:
 {connection_settings}
-default_gateway: {dialect}
+default_gateway: {engine}
 
 # --- Model Defaults ---
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
   dialect: {dialect}
-  start: {start or yesterday_ds()}
+  start: {start or yesterday_ds()} # Start date for backfill history
+  cron: '@daily'    # Run models daily at 12am UTC (can override per model)
 
 # --- Linting Rules ---
 # Enforce standards for your team
@@ -123,7 +124,6 @@ config = sqlmesh_config(Path(__file__).parent)
 # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
 
 plan:
-  enable_preview: true      # Enable preview for forward-only models when targeting a development environment
   no_diff: true             # Hide detailed text differences for changed models
   use_finalized_state: true # Compare only against finalized snapshots
   no_prompts: true          # No interactive prompts
@@ -274,6 +274,7 @@ WHERE
 def init_example_project(
     path: t.Union[str, Path],
     dialect: t.Optional[str],
+    engine_type: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
@@ -294,8 +295,10 @@ def init_example_project(
             f"Found an existing config file '{config_path}'.\n\nPlease change to another directory or remove the existing file."
         )
 
-    if not dialect and template != ProjectTemplate.DBT:
-        raise SQLMeshError("Please provide a default SQL dialect for your project's models.")
+    if not engine_type and template != ProjectTemplate.DBT:
+        if not dialect:
+            raise SQLMeshError("Please provide a default SQL dialect for your project's models.")
+        Dialect.get_or_raise(dialect)
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
@@ -310,7 +313,11 @@ def init_example_project(
                 "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
             )
 
-    _create_config(config_path, dialect, settings, start, template, cli_mode)
+    # config generation chooses engine based on ConnectionConfig.type_
+    # - if user passes a SQL dialect, we always generate the engine whose type_ == dialect
+    #   - example: if users passes `postgres` we will always choose `postgres` engine and never `gcp_postgres`
+    # - if user interactively chooses an engine, we will pass the correct ConnectionConfig.type_
+    _create_config(config_path, engine_type or dialect, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
         return config_path
 
@@ -340,16 +347,13 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
 
 def _create_config(
     config_path: Path,
-    dialect: t.Optional[str],
+    engine_type: t.Optional[str],
     settings: t.Optional[str],
     start: t.Optional[str],
     template: ProjectTemplate,
     cli_mode: InitCliMode,
 ) -> None:
-    if dialect:
-        Dialect.get_or_raise(dialect)
-
-    project_config = _gen_config(dialect, settings, start, template, cli_mode)
+    project_config = _gen_config(engine_type, settings, start, template, cli_mode)
 
     _write_file(
         config_path,
