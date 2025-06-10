@@ -47,7 +47,7 @@ def create_example_project(temp_dir) -> None:
         - Creating the SQLMesh example project in the temp_dir directory
         - Overwriting the config.yaml file so the duckdb database file will be created in the temp_dir directory
     """
-    init_example_project(temp_dir, "duckdb")
+    init_example_project(temp_dir, engine_type="duckdb")
     with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
