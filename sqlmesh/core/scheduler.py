@@ -269,6 +269,7 @@ class Scheduler:
         self,
         merged_intervals: SnapshotToIntervals,
         deployability_index: t.Optional[DeployabilityIndex],
+        environment_naming_info: EnvironmentNamingInfo,
     ) -> t.Dict[Snapshot, Intervals]:
         dag = snapshots_to_dag(merged_intervals)
 
@@ -303,7 +304,13 @@ class Scheduler:
                 default_catalog=self.default_catalog,
             )
 
-            intervals = snapshot.check_ready_intervals(intervals, context)
+            intervals = snapshot.check_ready_intervals(
+                intervals,
+                context,
+                console=self.console,
+                default_catalog=self.default_catalog,
+                environment_naming_info=environment_naming_info,
+            )
             unready -= set(intervals)
 
             for parent in snapshot.parents:
@@ -324,10 +331,14 @@ class Scheduler:
                 ):
                     batches.append((next_batch[0][0], next_batch[-1][-1]))
                     next_batch = []
+
                 next_batch.append(interval)
+
             if next_batch:
                 batches.append((next_batch[0][0], next_batch[-1][-1]))
+
             snapshot_batches[snapshot] = batches
+
         return snapshot_batches
 
     def run_merged_intervals(
@@ -359,7 +370,9 @@ class Scheduler:
         """
         execution_time = execution_time or now_timestamp()
 
-        batched_intervals = self.batch_intervals(merged_intervals, deployability_index)
+        batched_intervals = self.batch_intervals(
+            merged_intervals, deployability_index, environment_naming_info
+        )
 
         self.console.start_evaluation_progress(
             batched_intervals,

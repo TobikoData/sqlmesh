@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -50,6 +51,7 @@ from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.console import Console
     from sqlglot.dialects.dialect import DialectType
     from sqlmesh.core.environment import EnvironmentNamingInfo
     from sqlmesh.core.context import ExecutionContext
@@ -965,7 +967,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             model_end_ts,
         )
 
-    def check_ready_intervals(self, intervals: Intervals, context: ExecutionContext) -> Intervals:
+    def check_ready_intervals(
+        self,
+        intervals: Intervals,
+        context: ExecutionContext,
+        console: t.Optional[Console] = None,
+        default_catalog: t.Optional[str] = None,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+    ) -> Intervals:
         """Returns a list of intervals that are considered ready by the provided signal.
 
         Note that this will handle gaps in the provided intervals. The returned intervals
@@ -979,7 +988,20 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         python_env = self.model.python_env
         env = prepare_env(python_env)
 
-        for signal_name, kwargs in signals.items():
+        if console:
+            console.start_signal_progress(
+                self,
+                len(signals),
+                default_catalog,
+                environment_naming_info or EnvironmentNamingInfo(),
+            )
+
+        for signal_idx, (signal_name, kwargs) in enumerate(signals.items()):
+            # Capture intervals before signal check for display
+            intervals_to_check = merge_intervals(intervals)
+
+            signal_start_ts = time.perf_counter()
+
             try:
                 intervals = _check_ready_intervals(
                     env[signal_name],
@@ -995,6 +1017,23 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 raise SQLMeshError(
                     f"{e} '{signal_name}' for '{self.model.name}' at {self.model._path}"
                 )
+
+            duration = time.perf_counter() - signal_start_ts
+
+            if console:
+                console.update_signal_progress(
+                    snapshot=self,
+                    signal_name=signal_name,
+                    signal_idx=signal_idx,
+                    total_signals=len(signals),
+                    ready_intervals=merge_intervals(intervals),
+                    check_intervals=intervals_to_check,
+                    duration=duration,
+                )
+
+        # Stop signal progress tracking
+        if console:
+            console.stop_signal_progress(self)
 
         return intervals
 
