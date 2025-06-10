@@ -35,6 +35,7 @@ from sqlmesh.lsp.custom import (
     AllModelsResponse,
     AllModelsForRenderRequest,
     AllModelsForRenderResponse,
+    CustomMethodResponseBaseClass,
     RenderModelRequest,
     RenderModelResponse,
     SupportedMethodsRequest,
@@ -53,15 +54,6 @@ from sqlmesh.lsp.reference import (
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
-
-SUPPORTED_CUSTOM_METHODS = [
-    ALL_MODELS_FEATURE,
-    RENDER_MODEL_FEATURE,
-    ALL_MODELS_FOR_RENDER_FEATURE,
-    API_FEATURE,
-    SUPPORTED_METHODS_FEATURE,
-    FORMAT_PROJECT_FEATURE,
-]
 
 
 class SQLMeshLanguageServer:
@@ -82,6 +74,22 @@ class SQLMeshLanguageServer:
         self.workspace_folders: t.List[Path] = []
 
         self.client_supports_pull_diagnostics = False
+        self._supported_custom_methods: t.Dict[
+            str,
+            t.Callable[
+                # mypy unable to recognise the base class
+                [LanguageServer, t.Any],
+                t.Any,
+            ],
+        ] = {
+            ALL_MODELS_FEATURE: self._custom_all_models,
+            RENDER_MODEL_FEATURE: self._custom_render_model,
+            ALL_MODELS_FOR_RENDER_FEATURE: self._custom_all_models_for_render,
+            API_FEATURE: self._custom_api,
+            SUPPORTED_METHODS_FEATURE: self._custom_supported_methods,
+            FORMAT_PROJECT_FEATURE: self._custom_format_project,
+        }
+
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
 
@@ -105,8 +113,128 @@ class SQLMeshLanguageServer:
             self.server.log_trace(f"Error creating context: {e}")
             return None
 
+    # All the custom LSP methods are registered here and prefixed with _custom
+    def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+        uri = URI(params.textDocument.uri)
+        # Get the document content
+        content = None
+        try:
+            document = ls.workspace.get_text_document(params.textDocument.uri)
+            content = document.source
+        except Exception:
+            pass
+        try:
+            context = self._context_get_or_load(uri)
+            return LSPContext.get_completions(context, uri, content)
+        except Exception as e:
+            from sqlmesh.lsp.completions import get_sql_completions
+
+            return get_sql_completions(None, URI(params.textDocument.uri), content)
+
+    def _custom_render_model(
+        self, ls: LanguageServer, params: RenderModelRequest
+    ) -> RenderModelResponse:
+        uri = URI(params.textDocumentUri)
+        context = self._context_get_or_load(uri)
+        return RenderModelResponse(models=context.render_model(uri))
+
+    def _custom_all_models_for_render(
+        self, ls: LanguageServer, params: AllModelsForRenderRequest
+    ) -> AllModelsForRenderResponse:
+        if self.lsp_context is None:
+            current_path = Path.cwd()
+            self._ensure_context_in_folder(current_path)
+        if self.lsp_context is None:
+            raise RuntimeError("No context found")
+        return AllModelsForRenderResponse(models=self.lsp_context.list_of_models_for_rendering())
+
+    def _custom_format_project(
+        self, ls: LanguageServer, params: FormatProjectRequest
+    ) -> FormatProjectResponse:
+        """Format all models in the current project."""
+        try:
+            if self.lsp_context is None:
+                current_path = Path.cwd()
+                self._ensure_context_in_folder(current_path)
+            if self.lsp_context is None:
+                raise RuntimeError("No context found")
+
+            # Call the format method on the context
+            self.lsp_context.context.format()
+            return FormatProjectResponse()
+        except Exception as e:
+            ls.log_trace(f"Error formatting project: {e}")
+            return FormatProjectResponse()
+
+    def _custom_api(
+        self, ls: LanguageServer, request: ApiRequest
+    ) -> t.Union[ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage]:
+        ls.log_trace(f"API request: {request}")
+        if self.lsp_context is None:
+            current_path = Path.cwd()
+            self._ensure_context_in_folder(current_path)
+        if self.lsp_context is None:
+            ls.log_trace("No context found in call")
+            raise RuntimeError("No context found")
+
+        parsed_url = urllib.parse.urlparse(request.url)
+        path_parts = parsed_url.path.strip("/").split("/")
+
+        if request.method == "GET":
+            if path_parts == ["api", "models"]:
+                # /api/models
+                return ApiResponseGetModels(data=get_models(self.lsp_context.context))
+
+            if path_parts[:2] == ["api", "lineage"]:
+                if len(path_parts) == 3:
+                    # /api/lineage/{model}
+                    model_name = urllib.parse.unquote(path_parts[2])
+                    lineage = model_lineage(model_name, self.lsp_context.context)
+                    non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                    return ApiResponseGetLineage(data=non_set_lineage)
+
+                if len(path_parts) == 4:
+                    # /api/lineage/{model}/{column}
+                    model_name = urllib.parse.unquote(path_parts[2])
+                    column = urllib.parse.unquote(path_parts[3])
+                    models_only = False
+                    if hasattr(request, "params"):
+                        models_only = bool(getattr(request.params, "models_only", False))
+                    column_lineage_response = column_lineage(
+                        model_name, column, models_only, self.lsp_context.context
+                    )
+                    return ApiResponseGetColumnLineage(data=column_lineage_response)
+
+        raise NotImplementedError(f"API request not implemented: {request.url}")
+
+    def _custom_supported_methods(
+        self, ls: LanguageServer, params: SupportedMethodsRequest
+    ) -> SupportedMethodsResponse:
+        """Return all supported custom LSP methods."""
+        return SupportedMethodsResponse(
+            methods=[
+                CustomMethod(
+                    name=name,
+                )
+                for name in self._supported_custom_methods
+            ]
+        )
+
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
+        for name, method in self._supported_custom_methods.items():
+
+            def create_function_call(method_func: t.Callable) -> t.Callable:
+                def function_call(ls: LanguageServer, params: t.Any) -> t.Dict[str, t.Any]:
+                    try:
+                        response = method_func(ls, params)
+                    except Exception as e:
+                        response = CustomMethodResponseBaseClass(response_error=str(e))
+                    return response.model_dump(mode="json")
+
+                return function_call
+
+            self.server.feature(name)(create_function_call(method))
 
         @self.server.feature(types.INITIALIZE)
         def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
@@ -143,121 +271,6 @@ class SQLMeshLanguageServer:
                 ls.log_trace(
                     f"Error initializing SQLMesh context: {e}",
                 )
-
-        @self.server.feature(ALL_MODELS_FEATURE)
-        def all_models(ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
-            uri = URI(params.textDocument.uri)
-
-            # Get the document content
-            content = None
-            try:
-                document = ls.workspace.get_text_document(params.textDocument.uri)
-                content = document.source
-            except Exception:
-                pass
-
-            try:
-                context = self._context_get_or_load(uri)
-                return LSPContext.get_completions(context, uri, content)
-            except Exception as e:
-                from sqlmesh.lsp.completions import get_sql_completions
-
-                return get_sql_completions(None, URI(params.textDocument.uri), content)
-
-        @self.server.feature(RENDER_MODEL_FEATURE)
-        def render_model(ls: LanguageServer, params: RenderModelRequest) -> RenderModelResponse:
-            uri = URI(params.textDocumentUri)
-            context = self._context_get_or_load(uri)
-            return RenderModelResponse(models=context.render_model(uri))
-
-        @self.server.feature(ALL_MODELS_FOR_RENDER_FEATURE)
-        def all_models_for_render(
-            ls: LanguageServer, params: AllModelsForRenderRequest
-        ) -> AllModelsForRenderResponse:
-            if self.lsp_context is None:
-                current_path = Path.cwd()
-                self._ensure_context_in_folder(current_path)
-            if self.lsp_context is None:
-                raise RuntimeError("No context found")
-            return AllModelsForRenderResponse(
-                models=self.lsp_context.list_of_models_for_rendering()
-            )
-
-        @self.server.feature(SUPPORTED_METHODS_FEATURE)
-        def supported_methods(
-            ls: LanguageServer, params: SupportedMethodsRequest
-        ) -> SupportedMethodsResponse:
-            """Return all supported custom LSP methods."""
-            return SupportedMethodsResponse(
-                methods=[
-                    CustomMethod(
-                        name=name,
-                    )
-                    for name in SUPPORTED_CUSTOM_METHODS
-                ]
-            )
-
-        @self.server.feature(FORMAT_PROJECT_FEATURE)
-        def format_project(
-            ls: LanguageServer, params: FormatProjectRequest
-        ) -> FormatProjectResponse:
-            """Format all models in the current project."""
-            try:
-                if self.lsp_context is None:
-                    current_path = Path.cwd()
-                    self._ensure_context_in_folder(current_path)
-                if self.lsp_context is None:
-                    raise RuntimeError("No context found")
-
-                # Call the format method on the context
-                self.lsp_context.context.format()
-                return FormatProjectResponse()
-            except Exception as e:
-                ls.log_trace(f"Error formatting project: {e}")
-                return FormatProjectResponse()
-
-        @self.server.feature(API_FEATURE)
-        def api(ls: LanguageServer, request: ApiRequest) -> t.Dict[str, t.Any]:
-            ls.log_trace(f"API request: {request}")
-            if self.lsp_context is None:
-                current_path = Path.cwd()
-                self._ensure_context_in_folder(current_path)
-            if self.lsp_context is None:
-                raise RuntimeError("No context found")
-
-            parsed_url = urllib.parse.urlparse(request.url)
-            path_parts = parsed_url.path.strip("/").split("/")
-
-            if request.method == "GET":
-                if path_parts == ["api", "models"]:
-                    # /api/models
-                    return ApiResponseGetModels(
-                        data=get_models(self.lsp_context.context)
-                    ).model_dump(mode="json")
-
-                if path_parts[:2] == ["api", "lineage"]:
-                    if len(path_parts) == 3:
-                        # /api/lineage/{model}
-                        model_name = urllib.parse.unquote(path_parts[2])
-                        lineage = model_lineage(model_name, self.lsp_context.context)
-                        non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
-                        return ApiResponseGetLineage(data=non_set_lineage).model_dump(mode="json")
-
-                    if len(path_parts) == 4:
-                        # /api/lineage/{model}/{column}
-                        model_name = urllib.parse.unquote(path_parts[2])
-                        column = urllib.parse.unquote(path_parts[3])
-                        models_only = False
-                        if hasattr(request, "params"):
-                            models_only = bool(getattr(request.params, "models_only", False))
-                        column_lineage_response = column_lineage(
-                            model_name, column, models_only, self.lsp_context.context
-                        )
-                        return ApiResponseGetColumnLineage(data=column_lineage_response).model_dump(
-                            mode="json"
-                        )
-
-            raise NotImplementedError(f"API request not implemented: {request.url}")
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:

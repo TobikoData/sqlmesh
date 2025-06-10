@@ -2,10 +2,20 @@ from lsprotocol import types
 import typing as t
 from sqlmesh.utils.pydantic import PydanticModel
 
+
+class CustomMethodRequestBaseClass(PydanticModel):
+    pass
+
+
+class CustomMethodResponseBaseClass(PydanticModel):
+    # Prefixing, so guaranteed not to collide
+    response_error: t.Optional[str] = None
+
+
 ALL_MODELS_FEATURE = "sqlmesh/all_models"
 
 
-class AllModelsRequest(PydanticModel):
+class AllModelsRequest(CustomMethodRequestBaseClass):
     """
     Request to get all the models that are in the current project.
     """
@@ -13,7 +23,7 @@ class AllModelsRequest(PydanticModel):
     textDocument: types.TextDocumentIdentifier
 
 
-class AllModelsResponse(PydanticModel):
+class AllModelsResponse(CustomMethodResponseBaseClass):
     """
     Response to get all the models that are in the current project.
     """
@@ -26,7 +36,7 @@ class AllModelsResponse(PydanticModel):
 RENDER_MODEL_FEATURE = "sqlmesh/render_model"
 
 
-class RenderModelRequest(PydanticModel):
+class RenderModelRequest(CustomMethodRequestBaseClass):
     textDocumentUri: str
 
 
@@ -41,7 +51,7 @@ class RenderModelEntry(PydanticModel):
     rendered_query: str
 
 
-class RenderModelResponse(PydanticModel):
+class RenderModelResponse(CustomMethodResponseBaseClass):
     """
     Response to render a model.
     """
@@ -63,11 +73,11 @@ class ModelForRendering(PydanticModel):
     uri: str
 
 
-class AllModelsForRenderRequest(PydanticModel):
+class AllModelsForRenderRequest(CustomMethodRequestBaseClass):
     pass
 
 
-class AllModelsForRenderResponse(PydanticModel):
+class AllModelsForRenderResponse(CustomMethodResponseBaseClass):
     """
     Response to get all the models that are in the current project for rendering purposes.
     """
@@ -94,7 +104,7 @@ class CustomMethod(PydanticModel):
     name: str
 
 
-class SupportedMethodsResponse(PydanticModel):
+class SupportedMethodsResponse(CustomMethodResponseBaseClass):
     """
     Response containing all supported custom LSP methods.
     """
@@ -105,7 +115,7 @@ class SupportedMethodsResponse(PydanticModel):
 FORMAT_PROJECT_FEATURE = "sqlmesh/format_project"
 
 
-class FormatProjectRequest(PydanticModel):
+class FormatProjectRequest(CustomMethodRequestBaseClass):
     """
     Request to format all models in the current project.
     """
@@ -113,7 +123,7 @@ class FormatProjectRequest(PydanticModel):
     pass
 
 
-class FormatProjectResponse(PydanticModel):
+class FormatProjectResponse(CustomMethodResponseBaseClass):
     """
     Response to format project request.
     """
