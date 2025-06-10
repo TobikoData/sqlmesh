@@ -47,7 +47,7 @@ def invoke_cli(tmp_path: Path) -> InvokeCliType:
 
 @pytest.fixture
 def duckdb_example_project(tmp_path: Path) -> Path:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config_path = tmp_path / "config.yaml"
 
     # we need state to persist between invocations
