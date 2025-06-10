@@ -2609,3 +2609,34 @@ test_foo:
     prefix = "ERROR" if is_error else "FAIL"
     assert f"{prefix}: test_foo (None)" in output
     assert "Exception: failure" in output
+
+
+def test_timestamp_normalization() -> None:
+    model = _create_model(
+        "SELECT id, array_agg(timestamp_col::timestamp) as agg_timestamp_col FROM temp_model_with_timestamp GROUP BY id",
+        meta="MODEL (name foo, kind FULL)",
+    )
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+    test_foo:
+      model: temp_agg_model_with_timestamp
+      inputs:
+        temp_model_with_timestamp:
+          rows:
+            - id: "id1"
+              timestamp_col: "2024-01-02T15:00:00"
+      outputs:
+        query:
+          rows:
+            - id: id1
+              agg_timestamp_col: ["2024-01-02T15:00:00.000000"]
+                """
+            ),
+            test_name="test_foo",
+            model=model,
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run()
+    )
