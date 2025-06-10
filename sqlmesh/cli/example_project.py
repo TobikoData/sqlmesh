@@ -8,7 +8,7 @@ from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
 
-from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
+from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE, DIALECT_TO_TYPE
 
 
 PRIMITIVES = (str, int, bool, float)
@@ -27,7 +27,7 @@ class InitCliMode(Enum):
 
 
 def _gen_config(
-    dialect: t.Optional[str],
+    engine_type: t.Optional[str],
     settings: t.Optional[str],
     start: t.Optional[str],
     template: ProjectTemplate,
@@ -39,7 +39,7 @@ def _gen_config(
       database: db.db"""
     )
 
-    engine = "mssql" if dialect == "tsql" else dialect
+    engine = "mssql" if engine_type == "tsql" else engine_type
 
     if not settings and template != ProjectTemplate.DBT:
         doc_link = "https://sqlmesh.readthedocs.io/en/stable/integrations/engines{engine_link}"
@@ -51,6 +51,9 @@ def _gen_config(
 
             for name, field in CONNECTION_CONFIG_TO_TYPE[engine].model_fields.items():
                 field_name = field.alias or name
+                if field_name in ("dialect", "display_name"):
+                    continue
+
                 default_value = field.get_default()
 
                 if isinstance(default_value, Enum):
@@ -77,7 +80,7 @@ def _gen_config(
 
         connection_settings = (
             "      # For more information on configuring the connection to your execution engine, visit:\n"
-            "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+            "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection\n"
             f"      # {doc_link.format(engine_link=engine_link)}\n{connection_settings}"
         )
 
@@ -93,7 +96,7 @@ default_gateway: {engine}
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
-  dialect: {dialect}
+  dialect: {DIALECT_TO_TYPE[engine]}
   start: {start or yesterday_ds()} # Start date for backfill history
   cron: '@daily'    # Run models daily at 12am UTC (can override per model)
 

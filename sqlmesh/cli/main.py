@@ -15,7 +15,7 @@ from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
-from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE
+from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE, DISPLAY_NAME_TO_TYPE
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
@@ -42,24 +42,24 @@ SKIP_LOAD_COMMANDS = (
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
 # These are ordered for user display - do not reorder
-ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE = {
-    "DuckDB": "duckdb",
-    "Snowflake": "snowflake",
-    "Databricks": "databricks",
-    "BigQuery": "bigquery",
-    "MotherDuck": "duckdb",
-    "ClickHouse": "clickhouse",
-    "Redshift": "redshift",
-    "Spark": "spark",
-    "Trino": "trino",
-    "Azure SQL": "azuresql",
-    "MSSQL": "tsql",
-    "Postgres": "postgres",
-    "GCP Postgres": "gcp_postgres",
-    "MySQL": "mysql",
-    "Athena": "athena",
-    "RisingWave": "risingwave",
-}
+ENGINE_TYPE_DISPLAY_ORDER = [
+    "duckdb",
+    "snowflake",
+    "databricks",
+    "bigquery",
+    "motherduck",
+    "clickhouse",
+    "redshift",
+    "spark",
+    "trino",
+    "azuresql",
+    "mssql",
+    "postgres",
+    "gcp_postgres",
+    "mysql",
+    "athena",
+    "risingwave",
+]
 
 
 def _sqlmesh_version() -> str:
@@ -232,7 +232,7 @@ def init(
     )
 
     next_step_text = {
-        ProjectTemplate.DEFAULT: f"• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}\nRun command in CLI: sqlmesh plan\n(Optional) Explain a plan: sqlmesh plan --explain",
+        ProjectTemplate.DEFAULT: f"• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
         ProjectTemplate.DBT: "",
     }
     next_step_text[ProjectTemplate.EMPTY] = next_step_text[ProjectTemplate.DEFAULT]
@@ -1354,9 +1354,9 @@ def _init_engine_prompt(console: Console) -> str:
     console.print("Choose your SQL engine:\n")
 
     display_num_to_engine = {}
-    for i, engine in enumerate(ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE.keys()):
-        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{engine}")
-        display_num_to_engine[i + 1] = engine
+    for i, engine_type in enumerate(ENGINE_TYPE_DISPLAY_ORDER):
+        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{DISPLAY_NAME_TO_TYPE[engine_type]}")
+        display_num_to_engine[i + 1] = engine_type
     console.print("")
 
     #         self._print("""Need another engine? See: https://sqlmesh.readthedocs.io/en/stable/integrations/overview/#execution-engines)
@@ -1366,10 +1366,10 @@ def _init_engine_prompt(console: Console) -> str:
     # """)
 
     engine_num = _init_integer_prompt(
-        console, "engine", len(ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE), _init_engine_prompt
+        console, "engine", len(ENGINE_TYPE_DISPLAY_ORDER), _init_engine_prompt
     )
 
-    return ENGINE_DISPLAY_NAME_TO_CONNECTION_TYPE[display_num_to_engine[engine_num]]
+    return display_num_to_engine[engine_num]
 
 
 def _init_cli_mode_prompt(console: Console) -> InitCliMode:
@@ -1404,7 +1404,7 @@ def _check_engine_installed(console: Console, engine_type: t.Optional[str] = Non
     except ModuleNotFoundError:
         install_command = f'pip install "sqlmesh[{engine_type}]"'
         raise SQLMeshError(
-            f"Unable to load required Python dependencies for the {engine_type.upper()} engine.\n\nPlease run `{install_command}` to install them before running `sqlmesh init` again."
+            f"Unable to load required Python dependencies for the {DISPLAY_NAME_TO_TYPE[engine_type]} engine.\n\nPlease run `{install_command}` to install them before running `sqlmesh init` again."
         )
 
 
