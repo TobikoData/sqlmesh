@@ -83,8 +83,9 @@ class Plan(PydanticModel, frozen=True):
     def end(self) -> TimeLike:
         return self.provided_end or self.execution_time
 
-    @property
+    @cached_property
     def execution_time(self) -> TimeLike:
+        # note: property is cached so that it returns a consistent timestamp for now()
         return self.execution_time_ or now()
 
     @property

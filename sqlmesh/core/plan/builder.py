@@ -42,6 +42,7 @@ from sqlmesh.utils.date import (
     yesterday_ds,
     to_timestamp,
     time_like_to_str,
+    is_relative,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError
 
@@ -139,7 +140,14 @@ class PlanBuilder:
         self._include_unmodified = include_unmodified
         self._restate_models = set(restate_models) if restate_models is not None else None
         self._effective_from = effective_from
+
+        # note: this deliberately doesnt default to now() here.
+        # There may be an significant delay between the PlanBuilder producing a Plan and the Plan actually being run
+        # so if execution_time=None is passed to the PlanBuilder, then the resulting Plan should also have execution_time=None
+        # in order to prevent the Plan that was intended to run "as at now" from having "now" fixed to some time in the past
+        # ref: https://github.com/TobikoData/sqlmesh/pull/4702#discussion_r2140696156
         self._execution_time = execution_time
+
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
@@ -176,18 +184,22 @@ class PlanBuilder:
 
     @property
     def start(self) -> t.Optional[TimeLike]:
-        if self._start and self._execution_time:
-            return to_datetime(self._start, relative_base=to_datetime(self._execution_time))
+        if self._start and is_relative(self._start):
+            # only do this for relative expressions otherwise inclusive date strings like '2020-01-01' can be turned into exclusive timestamps eg '2020-01-01 00:00:00'
+            return to_datetime(self._start, relative_base=to_datetime(self.execution_time))
         return self._start
 
     @property
     def end(self) -> t.Optional[TimeLike]:
-        if self._end and self._execution_time:
-            return to_datetime(self._end, relative_base=to_datetime(self._execution_time))
+        if self._end and is_relative(self._end):
+            # only do this for relative expressions otherwise inclusive date strings like '2020-01-01' can be turned into exclusive timestamps eg '2020-01-01 00:00:00'
+            return to_datetime(self._end, relative_base=to_datetime(self.execution_time))
         return self._end
 
-    @property
+    @cached_property
     def execution_time(self) -> TimeLike:
+        # this is cached to return a stable value from now() in the places where the execution time matters for resolving relative date strings
+        # during the plan building process
         return self._execution_time or now()
 
     def set_start(self, new_start: TimeLike) -> PlanBuilder:
@@ -274,7 +286,8 @@ class PlanBuilder:
         )
 
         restatements = self._build_restatements(
-            dag, earliest_interval_start(self._context_diff.snapshots.values(), self.execution_time)
+            dag,
+            earliest_interval_start(self._context_diff.snapshots.values(), self.execution_time),
         )
         models_to_backfill = self._build_models_to_backfill(dag, restatements)
 
@@ -283,6 +296,12 @@ class PlanBuilder:
             # If the end date was provided explicitly by a user, then interval end for each individual
             # model should be ignored.
             interval_end_per_model = None
+
+        # this deliberately uses the passed in self._execution_time and not self.execution_time cached property
+        # the reason is because that there can be a delay between the Plan being built and the Plan being actually run,
+        # so this ensures that an _execution_time of None can be propagated to the Plan and thus be re-resolved to
+        # the current timestamp of when the Plan is eventually run
+        plan_execution_time = self._execution_time
 
         plan = Plan(
             context_diff=self._context_diff,
@@ -307,7 +326,7 @@ class PlanBuilder:
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
-            execution_time=self.execution_time,
+            execution_time=plan_execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
             user_provided_flags=self._user_provided_flags,

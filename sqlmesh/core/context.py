@@ -120,7 +120,14 @@ from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, now_timestamp
+from sqlmesh.utils.date import (
+    TimeLike,
+    now_ds,
+    to_timestamp,
+    format_tz_datetime,
+    now_timestamp,
+    now,
+)
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -1517,7 +1524,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 max_interval_end_per_model,
                 backfill_models,
                 modified_model_names,
-                execution_time,
+                execution_time or now(),
             )
 
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.

@@ -373,6 +373,16 @@ def is_categorical_relative_expression(expression: str) -> bool:
     return not any(k in TIME_UNITS for k in grain_kwargs)
 
 
+def is_relative(value: TimeLike) -> bool:
+    """
+    Tests a TimeLike object to see if it is a relative expression, eg '1 week ago' as opposed to an absolute timestamp
+    """
+    if isinstance(value, str):
+        return is_categorical_relative_expression(value)
+
+    return False
+
+
 def to_time_column(
     time_column: t.Union[TimeLike, exp.Null],
     time_column_type: exp.DataType,
