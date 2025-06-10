@@ -100,6 +100,10 @@ class SQLMeshLanguageServer:
             context = self.context_class(paths=paths)
             lsp_context = LSPContext(context)
             self.lsp_context = lsp_context
+            
+            # Clear inlay hints by requesting a refresh from the client
+            self.server.send_notification(types.WORKSPACE_INLAY_HINT_REFRESH)
+            
             return lsp_context
         except Exception as e:
             self.server.log_trace(f"Error creating context: {e}")
@@ -694,15 +698,15 @@ class SQLMeshLanguageServer:
         for a config.py or config.yml file in the parent directories.
         """
         if self.lsp_context is not None:
-            context = self.lsp_context
-            context.context.load()  # Reload or refresh context
-            self.lsp_context = LSPContext(context.context)
-            return
+            # If we already have a context, refresh it
+            paths = list(self.lsp_context.context.configs)
+            self._create_lsp_context(paths)
+            return None
 
         # No context yet: try to find config and load it
         path = document_uri.to_path()
         if path.suffix not in (".sql", ".py"):
-            return
+            return None
 
         loaded = False
         # Ascend directories to look for config
