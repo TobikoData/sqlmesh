@@ -23,12 +23,15 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 SKIP_LOAD_COMMANDS = (
+    "clean",
     "create_external_models",
+    "destroy",
+    "environments",
+    "invalidate",
+    "janitor",
     "migrate",
     "rollback",
     "run",
-    "environments",
-    "invalidate",
     "table_name",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
