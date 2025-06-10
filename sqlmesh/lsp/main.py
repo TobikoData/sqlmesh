@@ -85,6 +85,22 @@ class SQLMeshLanguageServer:
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
 
+    def _create_lsp_context(self, paths: t.List[Path]) -> t.Optional[LSPContext]:
+        """Create a new LSPContext instance using the configured context class.
+
+        Args:
+            paths: List of paths to pass to the context constructor
+
+        Returns:
+            A new LSPContext instance wrapping the created context, or None if creation fails
+        """
+        try:
+            context = self.context_class(paths=paths)
+            return LSPContext(context)
+        except Exception as e:
+            self.server.log_trace(f"Error creating context: {e}")
+            return None
+
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
 
@@ -116,16 +132,11 @@ class SQLMeshLanguageServer:
                         for ext in ("py", "yml", "yaml"):
                             config_path = folder_path / f"config.{ext}"
                             if config_path.exists():
-                                try:
-                                    # Use user-provided instantiator to build the context
-                                    created_context = self.context_class(paths=[folder_path])
-                                    self.lsp_context = LSPContext(created_context)
+                                lsp_context = self._create_lsp_context([folder_path])
+                                if lsp_context:
+                                    self.lsp_context = lsp_context
                                     loaded_sqlmesh_message(ls, folder_path)
                                     return  # Exit after successfully loading any config
-                                except Exception as e:
-                                    ls.log_trace(
-                                        f"Error loading context from {config_path}: {e}",
-                                    )
             except Exception as e:
                 ls.log_trace(
                     f"Error initializing SQLMesh context: {e}",
@@ -288,13 +299,10 @@ class SQLMeshLanguageServer:
 
             # Reload the entire context and create a new LSPContext
             if self.lsp_context is not None:
-                try:
-                    new_context = Context(paths=list(self.lsp_context.context.configs))
-                    new_full_context = LSPContext(new_context)
-                    self.lsp_context = new_full_context
+                new_lsp_context = self._create_lsp_context(list(self.lsp_context.context.configs))
+                if new_lsp_context:
+                    self.lsp_context = new_lsp_context
                     return
-                except Exception as e:
-                    pass
 
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
@@ -664,29 +672,22 @@ class SQLMeshLanguageServer:
         for ext in ("py", "yml", "yaml"):
             config_path = folder_uri / f"config.{ext}"
             if config_path.exists():
-                try:
-                    created_context = self.context_class(paths=[folder_uri])
-                    self.lsp_context = LSPContext(created_context)
+                lsp_context = self._create_lsp_context([folder_uri])
+                if lsp_context:
+                    self.lsp_context = lsp_context
                     loaded_sqlmesh_message(self.server, folder_uri)
                     return
-                except Exception as e:
-                    self.server.show_message(f"Error loading context: {e}", types.MessageType.Error)
 
         # If not found in the provided folder, search through all workspace folders
         for workspace_folder in self.workspace_folders:
             for ext in ("py", "yml", "yaml"):
                 config_path = workspace_folder / f"config.{ext}"
                 if config_path.exists():
-                    try:
-                        created_context = self.context_class(paths=[workspace_folder])
-                        self.lsp_context = LSPContext(created_context)
+                    lsp_context = self._create_lsp_context([workspace_folder])
+                    if lsp_context:
+                        self.lsp_context = lsp_context
                         loaded_sqlmesh_message(self.server, workspace_folder)
                         return
-                    except Exception as e:
-                        self.server.show_message(
-                            f"Error loading context from {config_path}: {e}",
-                            types.MessageType.Warning,
-                        )
 
     def _ensure_context_for_document(
         self,
@@ -713,17 +714,12 @@ class SQLMeshLanguageServer:
             for ext in ("py", "yml", "yaml"):
                 config_path = path / f"config.{ext}"
                 if config_path.exists():
-                    try:
-                        # Use user-provided instantiator to build the context
-                        created_context = self.context_class(paths=[path])
-                        self.lsp_context = LSPContext(created_context)
+                    lsp_context = self._create_lsp_context([path])
+                    if lsp_context:
+                        self.lsp_context = lsp_context
                         loaded = True
                         # Re-check context for the document now that it's loaded
                         return self._ensure_context_for_document(document_uri)
-                    except Exception as e:
-                        self.server.show_message(
-                            f"Error loading context: {e}", types.MessageType.Error
-                        )
             path = path.parent
 
         # If still no context found, try the workspace folders
@@ -732,16 +728,11 @@ class SQLMeshLanguageServer:
                 for ext in ("py", "yml", "yaml"):
                     config_path = workspace_folder / f"config.{ext}"
                     if config_path.exists():
-                        try:
-                            created_context = self.context_class(paths=[workspace_folder])
-                            self.lsp_context = LSPContext(created_context)
+                        lsp_context = self._create_lsp_context([workspace_folder])
+                        if lsp_context:
+                            self.lsp_context = lsp_context
                             loaded_sqlmesh_message(self.server, workspace_folder)
                             return
-                        except Exception as e:
-                            self.server.show_message(
-                                f"Error loading context from {config_path}: {e}",
-                                types.MessageType.Warning,
-                            )
 
         return
 
