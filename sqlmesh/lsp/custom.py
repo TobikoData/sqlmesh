@@ -143,3 +143,30 @@ class FormatProjectResponse(CustomMethodResponseBaseClass):
     """
 
     pass
+
+
+LIST_ENVIRONMENTS_FEATURE = "sqlmesh/list_environments"
+
+
+class ListEnvironmentsRequest(CustomMethodRequestBaseClass):
+    pass
+
+
+class ListEnvironmentsResponse(CustomMethodResponseBaseClass):
+    environments: t.List[str]
+
+
+PLAN_DIFF_FEATURE = "sqlmesh/plan_diff"
+
+
+class PlanDiffRequest(CustomMethodRequestBaseClass):
+    environment: str
+
+
+class PlanDiffEntry(PydanticModel):
+    name: str
+    diff: str
+
+
+class PlanDiffResponse(CustomMethodResponseBaseClass):
+    diffs: t.List[PlanDiffEntry]
