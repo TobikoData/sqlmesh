@@ -1882,6 +1882,32 @@ def test_init_interactive_cli_mode_simple(runner: CliRunner, tmp_path: Path):
     assert "no_diff: true" in config_path.read_text()
 
 
+def test_init_interactive_engine_install_msg(runner: CliRunner, tmp_path: Path):
+    # Engine install text should not appear for built-in engines like DuckDB
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "Run command in CLI to install your SQL engine" not in result.output
+
+    remove(tmp_path / "config.yaml")
+
+    # Input: 1 (DEFAULT template), 13 (gcp postgres engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n13\n1\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        'Run command in CLI to install your SQL engine\'s Python dependencies: pip \ninstall "sqlmesh[gcppostgres]"'
+        in result.output
+    )
+
+
 # dbt template without dbt_project.yml in directory should error
 def test_init_dbt_template_no_dbt_project(runner: CliRunner, tmp_path: Path):
     # template passed to init
