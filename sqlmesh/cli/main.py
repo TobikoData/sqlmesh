@@ -205,8 +205,12 @@ def init(
         dlt_path=dlt_path,
     )
 
+    engine_install_text = ""
+    if engine_type and engine_type not in ("duckdb", "motherduck", "spark"):
+        engine_install_text = f'• Run command in CLI to install your SQL engine\'s Python dependencies: pip install "sqlmesh\\[{engine_type.replace("_", "")}]"\n'
+    # interactive init does not support DLT template
     next_step_text = {
-        ProjectTemplate.DEFAULT: f"• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
+        ProjectTemplate.DEFAULT: f"{engine_install_text}• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
         ProjectTemplate.DBT: "",
     }
     next_step_text[ProjectTemplate.EMPTY] = next_step_text[ProjectTemplate.DEFAULT]
