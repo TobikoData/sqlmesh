@@ -10,21 +10,20 @@ import typing as t
 def generate_markdown_description(
     model: t.Union[SqlModel, ExternalModel, PythonModel, SeedModel],
 ) -> t.Optional[str]:
+    description = model.description
     columns = model.columns_to_types
     column_descriptions = model.column_descriptions
 
-    columns_table = (
-        "\n".join(
-            [
-                f"| {column} | {column_type} | {column_descriptions.get(column, '')} |"
-                for column, column_type in columns.items()
-            ]
-        )
-        if columns
-        else ""
+    if columns is None:
+        return description or None
+
+    columns_table = "\n".join(
+        [
+            f"| {column} | {column_type} | {column_descriptions.get(column, '')} |"
+            for column, column_type in columns.items()
+        ]
     )
 
-    table_header = "\n\n| Column | Type | Description |\n|--------|------|-------------|\n"
-    return (
-        f"{model.description}{table_header}{columns_table}" if columns_table else model.description
-    )
+    table_header = "| Column | Type | Description |\n|--------|------|-------------|\n"
+    columns_text = table_header + columns_table
+    return f"{description}\n\n{columns_text}" if description else columns_text
