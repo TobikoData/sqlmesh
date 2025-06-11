@@ -4,6 +4,8 @@ from sqlmesh.lsp.custom import AllModelsResponse, MacroCompletion
 from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
+from sqlmesh.lsp.custom import ModelCompletion
+from sqlmesh.lsp.description import generate_markdown_description
 from sqlmesh.lsp.uri import URI
 
 
@@ -21,7 +23,9 @@ def get_sql_completions(
     # Get keywords from file content if provided
     file_keywords = set()
     if content:
-        file_keywords = extract_keywords_from_content(content, get_dialect(context, file_uri))
+        file_keywords = extract_keywords_from_content(
+            content, get_dialect(context, file_uri)
+        )
 
     # Combine keywords - SQL keywords first, then file keywords
     all_keywords = list(sql_keywords) + list(file_keywords - sql_keywords)
@@ -33,7 +37,9 @@ def get_sql_completions(
     )
 
 
-def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
+def get_models(
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+) -> t.List[ModelCompletion]:
     """
     Return a list of models for a given file.
 
@@ -41,23 +47,23 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.
     If there is a context, return a list of all models bar the ones the file itself defines.
     """
     if context is None:
-        return set()
+        return []
 
-    all_models = set()
-    # Extract model names from ModelInfo objects
-    for file_info in context.map.values():
-        if isinstance(file_info, ModelTarget):
-            all_models.update(file_info.names)
+    current_path = file_uri.to_path() if file_uri is not None else None
 
-    # Remove models from the current file
-    path = file_uri.to_path() if file_uri is not None else None
-    if path is not None and path in context.map:
-        file_info = context.map[path]
-        if isinstance(file_info, ModelTarget):
-            for model in file_info.names:
-                all_models.discard(model)
+    completions: t.List[ModelCompletion] = []
+    for model in context.context.models.values():
+        if current_path is not None and model._path == current_path:
+            continue
+        description = None
+        try:
+            description = generate_markdown_description(model)
+        except Exception:
+            description = getattr(model, "description", None)
 
-    return all_models
+        completions.append(ModelCompletion(name=model.name, description=description))
+
+    return completions
 
 
 def get_macros(
@@ -79,7 +85,9 @@ def get_macros(
     return [MacroCompletion(name=name, description=doc) for name, doc in macros.items()]
 
 
-def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
+def get_keywords(
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+) -> t.Set[str]:
     """
     Return a list of sql keywords for a given file.
     If no context is provided, return ANSI SQL keywords.
@@ -90,7 +98,11 @@ def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> 
     If both a context and a file_uri are provided, returns the keywords
     for the dialect of the model that the file belongs to.
     """
-    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
+    if (
+        file_uri is not None
+        and context is not None
+        and file_uri.to_path() in context.map
+    ):
         file_info = context.map[file_uri.to_path()]
 
         # Handle ModelInfo objects
@@ -133,11 +145,17 @@ def get_keywords_from_tokenizer(dialect: t.Optional[str] = None) -> t.Set[str]:
     return expanded_keywords
 
 
-def get_dialect(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Optional[str]:
+def get_dialect(
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+) -> t.Optional[str]:
     """
     Get the dialect for a given file.
     """
-    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
+    if (
+        file_uri is not None
+        and context is not None
+        and file_uri.to_path() in context.map
+    ):
         file_info = context.map[file_uri.to_path()]
 
         # Handle ModelInfo objects
@@ -158,7 +176,9 @@ def get_dialect(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t
     return None
 
 
-def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None) -> t.Set[str]:
+def extract_keywords_from_content(
+    content: str, dialect: t.Optional[str] = None
+) -> t.Set[str]:
     """
     Extract identifiers from SQL content using the tokenizer.
 

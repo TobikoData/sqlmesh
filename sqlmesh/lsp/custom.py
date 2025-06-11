@@ -30,12 +30,19 @@ class MacroCompletion(PydanticModel):
     description: t.Optional[str] = None
 
 
+class ModelCompletion(PydanticModel):
+    """Information about a model for autocompletion."""
+
+    name: str
+    description: t.Optional[str] = None
+
+
 class AllModelsResponse(CustomMethodResponseBaseClass):
     """
     Response to get all the models that are in the current project.
     """
 
-    models: t.List[str]
+    models: t.List[ModelCompletion]
     keywords: t.List[str]
     macros: t.List[MacroCompletion]
 

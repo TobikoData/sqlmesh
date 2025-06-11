@@ -19,10 +19,17 @@ export const completionProvider = (
       if (isErr(result)) {
         return []
       }
-      const modelCompletions = result.value.models.map(
-        model =>
-          new vscode.CompletionItem(model, vscode.CompletionItemKind.Reference),
-      )
+      const modelCompletions = result.value.models.map(model => {
+        const item = new vscode.CompletionItem(
+          model.name,
+          vscode.CompletionItemKind.Reference,
+        )
+        item.detail = 'SQLMesh Model'
+        if (model.description) {
+          item.documentation = new vscode.MarkdownString(model.description)
+        }
+        return item
+      })
       const keywordCompletions = result.value.keywords.map(
         keyword =>
           new vscode.CompletionItem(keyword, vscode.CompletionItemKind.Keyword),

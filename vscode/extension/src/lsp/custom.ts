@@ -25,6 +25,16 @@ export interface RenderModelEntry {
   rendered_query: string
 }
 
+export interface ModelCompletion {
+  name: string
+  description: string | null | undefined
+}
+
+export interface MacroCompletion {
+  name: string
+  description: string | null | undefined
+}
+
 // @eslint-disable-next-line  @typescript-eslint/consistent-type-definition
 export type CustomLSPMethods =
   | AllModelsMethod
@@ -41,8 +51,9 @@ interface AllModelsRequest {
 }
 
 interface AllModelsResponse {
-  models: string[]
+  models: ModelCompletion[]
   keywords: string[]
+  macros: MacroCompletion[]
 }
 
 export interface AbstractAPICallRequest {

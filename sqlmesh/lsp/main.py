@@ -115,7 +115,9 @@ class SQLMeshLanguageServer:
             return None
 
     # All the custom LSP methods are registered here and prefixed with _custom
-    def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
+    def _custom_all_models(
+        self, ls: LanguageServer, params: AllModelsRequest
+    ) -> AllModelsResponse:
         uri = URI(params.textDocument.uri)
         # Get the document content
         content = None
@@ -147,7 +149,9 @@ class SQLMeshLanguageServer:
             self._ensure_context_in_folder(current_path)
         if self.lsp_context is None:
             raise RuntimeError("No context found")
-        return AllModelsForRenderResponse(models=self.lsp_context.list_of_models_for_rendering())
+        return AllModelsForRenderResponse(
+            models=self.lsp_context.list_of_models_for_rendering()
+        )
 
     def _custom_format_project(
         self, ls: LanguageServer, params: FormatProjectRequest
@@ -169,7 +173,9 @@ class SQLMeshLanguageServer:
 
     def _custom_api(
         self, ls: LanguageServer, request: ApiRequest
-    ) -> t.Union[ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage]:
+    ) -> t.Union[
+        ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage
+    ]:
         ls.log_trace(f"API request: {request}")
         if self.lsp_context is None:
             current_path = Path.cwd()
@@ -191,7 +197,9 @@ class SQLMeshLanguageServer:
                     # /api/lineage/{model}
                     model_name = urllib.parse.unquote(path_parts[2])
                     lineage = model_lineage(model_name, self.lsp_context.context)
-                    non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
+                    non_set_lineage = {
+                        k: v for k, v in lineage.items() if v is not None
+                    }
                     return ApiResponseGetLineage(data=non_set_lineage)
 
                 if len(path_parts) == 4:
@@ -200,7 +208,9 @@ class SQLMeshLanguageServer:
                     column = urllib.parse.unquote(path_parts[3])
                     models_only = False
                     if hasattr(request, "params"):
-                        models_only = bool(getattr(request.params, "models_only", False))
+                        models_only = bool(
+                            getattr(request.params, "models_only", False)
+                        )
                     column_lineage_response = column_lineage(
                         model_name, column, models_only, self.lsp_context.context
                     )
@@ -226,7 +236,9 @@ class SQLMeshLanguageServer:
         for name, method in self._supported_custom_methods.items():
 
             def create_function_call(method_func: t.Callable) -> t.Callable:
-                def function_call(ls: LanguageServer, params: t.Any) -> t.Dict[str, t.Any]:
+                def function_call(
+                    ls: LanguageServer, params: t.Any
+                ) -> t.Dict[str, t.Any]:
                     try:
                         response = method_func(ls, params)
                     except Exception as e:
@@ -243,7 +255,9 @@ class SQLMeshLanguageServer:
             try:
                 # Check if the client supports pull diagnostics
                 if params.capabilities and params.capabilities.text_document:
-                    diagnostics = getattr(params.capabilities.text_document, "diagnostic", None)
+                    diagnostics = getattr(
+                        params.capabilities.text_document, "diagnostic", None
+                    )
                     if diagnostics:
                         self.client_supports_pull_diagnostics = True
                         ls.log_trace("Client supports pull diagnostics")
@@ -256,7 +270,8 @@ class SQLMeshLanguageServer:
                 if params.workspace_folders:
                     # Store all workspace folders for later use
                     self.workspace_folders = [
-                        Path(self._uri_to_path(folder.uri)) for folder in params.workspace_folders
+                        Path(self._uri_to_path(folder.uri))
+                        for folder in params.workspace_folders
                     ]
 
                     # Try to find a SQLMesh config file in any workspace folder (only at the root level)
@@ -274,7 +289,9 @@ class SQLMeshLanguageServer:
                 )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
-        def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
+        def did_open(
+            ls: LanguageServer, params: types.DidOpenTextDocumentParams
+        ) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
@@ -292,7 +309,9 @@ class SQLMeshLanguageServer:
                 )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
-        def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
+        def did_change(
+            ls: LanguageServer, params: types.DidChangeTextDocumentParams
+        ) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
             models = context.map[uri.to_path()]
@@ -310,7 +329,9 @@ class SQLMeshLanguageServer:
                 )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
-        def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
+        def did_save(
+            ls: LanguageServer, params: types.DidSaveTextDocumentParams
+        ) -> None:
             uri = URI(params.text_document.uri)
 
             # Reload the entire context and create a new LSPContext
@@ -344,7 +365,9 @@ class SQLMeshLanguageServer:
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 before = document.source
                 if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                    raise RuntimeError(
+                        f"No context found for document: {document.path}"
+                    )
 
                 target = next(
                     (
@@ -371,7 +394,9 @@ class SQLMeshLanguageServer:
                             start=types.Position(line=0, character=0),
                             end=types.Position(
                                 line=len(document.lines),
-                                character=len(document.lines[-1]) if document.lines else 0,
+                                character=len(document.lines[-1])
+                                if document.lines
+                                else 0,
                             ),
                         ),
                         new_text=after,
@@ -382,20 +407,27 @@ class SQLMeshLanguageServer:
                 return []
 
         @self.server.feature(types.TEXT_DOCUMENT_HOVER)
-        def hover(ls: LanguageServer, params: types.HoverParams) -> t.Optional[types.Hover]:
+        def hover(
+            ls: LanguageServer, params: types.HoverParams
+        ) -> t.Optional[types.Hover]:
             """Provide hover information for an object."""
             try:
                 uri = URI(params.text_document.uri)
                 self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                    raise RuntimeError(
+                        f"No context found for document: {document.path}"
+                    )
 
                 references = get_references(self.lsp_context, uri, params.position)
                 if not references:
                     return None
                 reference = references[0]
-                if isinstance(reference, LSPCteReference) or not reference.markdown_description:
+                if (
+                    isinstance(reference, LSPCteReference)
+                    or not reference.markdown_description
+                ):
                     return None
                 return types.Hover(
                     contents=types.MarkupContent(
@@ -440,7 +472,9 @@ class SQLMeshLanguageServer:
                 self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                    raise RuntimeError(
+                        f"No context found for document: {document.path}"
+                    )
 
                 references = get_references(self.lsp_context, uri, params.position)
                 location_links = []
@@ -484,7 +518,9 @@ class SQLMeshLanguageServer:
                     )
                 return location_links
             except Exception as e:
-                ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
+                ls.show_message(
+                    f"Error getting references: {e}", types.MessageType.Error
+                )
                 return []
 
         @self.server.feature(types.TEXT_DOCUMENT_REFERENCES)
@@ -497,16 +533,25 @@ class SQLMeshLanguageServer:
                 self._ensure_context_for_document(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                    raise RuntimeError(
+                        f"No context found for document: {document.path}"
+                    )
 
-                all_references = get_all_references(self.lsp_context, uri, params.position)
+                all_references = get_all_references(
+                    self.lsp_context, uri, params.position
+                )
 
                 # Convert references to Location objects
-                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in all_references]
+                locations = [
+                    types.Location(uri=ref.uri, range=ref.range)
+                    for ref in all_references
+                ]
 
                 return locations if locations else None
             except Exception as e:
-                ls.show_message(f"Error getting locations: {e}", types.MessageType.Error)
+                ls.show_message(
+                    f"Error getting locations: {e}", types.MessageType.Error
+                )
                 return None
 
         @self.server.feature(types.TEXT_DOCUMENT_DIAGNOSTIC)
@@ -519,7 +564,10 @@ class SQLMeshLanguageServer:
                 diagnostics, result_id = self._get_diagnostics_for_uri(uri)
 
                 # Check if client provided a previous result ID
-                if hasattr(params, "previous_result_id") and params.previous_result_id == result_id:
+                if (
+                    hasattr(params, "previous_result_id")
+                    and params.previous_result_id == result_id
+                ):
                     # Return unchanged report if diagnostics haven't changed
                     return types.RelatedUnchangedDocumentDiagnosticReport(
                         kind=types.DocumentDiagnosticReportKind.Unchanged,
@@ -568,7 +616,10 @@ class SQLMeshLanguageServer:
 
                         # Check if we have a previous result ID for this file
                         previous_result_id = None
-                        if hasattr(params, "previous_result_ids") and params.previous_result_ids:
+                        if (
+                            hasattr(params, "previous_result_ids")
+                            and params.previous_result_ids
+                        ):
                             for prev in params.previous_result_ids:
                                 if prev.uri == uri.value:
                                     previous_result_id = prev.value
@@ -604,7 +655,9 @@ class SQLMeshLanguageServer:
 
         @self.server.feature(
             types.TEXT_DOCUMENT_COMPLETION,
-            types.CompletionOptions(trigger_characters=["@"]),  # advertise "@" for macros
+            types.CompletionOptions(
+                trigger_characters=["@"]
+            ),  # advertise "@" for macros
         )
         def completion(
             ls: LanguageServer, params: types.CompletionParams
@@ -630,9 +683,10 @@ class SQLMeshLanguageServer:
                 for model in completion_response.models:
                     completion_items.append(
                         types.CompletionItem(
-                            label=model,
+                            label=model.name,
                             kind=types.CompletionItemKind.Reference,
                             detail="SQLMesh Model",
+                            documentation=model.description,
                         )
                     )
                 # Add macro completions
@@ -675,7 +729,9 @@ class SQLMeshLanguageServer:
                 get_sql_completions(None, URI(params.text_document.uri))
                 return None
 
-    def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
+    def _get_diagnostics_for_uri(
+        self, uri: URI
+    ) -> t.Tuple[t.List[types.Diagnostic], int]:
         """Get diagnostics for a specific URI, returning (diagnostics, result_id).
 
         Since we no longer track version numbers, we always return 0 as the result_id.
@@ -810,7 +866,9 @@ class SQLMeshLanguageServer:
         """
         lsp_diagnostics = {}
         for diagnostic in diagnostics:
-            lsp_diagnostic = SQLMeshLanguageServer._diagnostic_to_lsp_diagnostic(diagnostic)
+            lsp_diagnostic = SQLMeshLanguageServer._diagnostic_to_lsp_diagnostic(
+                diagnostic
+            )
             if lsp_diagnostic is not None:
                 # Create a unique key combining message and range
                 diagnostic_key = (
