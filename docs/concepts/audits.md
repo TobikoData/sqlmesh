@@ -639,7 +639,7 @@ MODEL (
 You can execute audits with the `sqlmesh audit` command as follows:
 
 ```bash
-$ sqlmesh -p project audit -start 2022-01-01 -end 2022-01-02
+$ sqlmesh -p project audit --start 2022-01-01 --end 2022-01-02
 Found 1 audit(s).
 assert_item_price_is_not_null FAIL.
 
