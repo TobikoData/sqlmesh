@@ -627,12 +627,18 @@ class SQLMeshLanguageServer:
 
                 completion_items = []
                 # Add model completions
-                for model in completion_response.models:
+                for model in completion_response.model_completions:
                     completion_items.append(
                         types.CompletionItem(
-                            label=model,
+                            label=model.name,
                             kind=types.CompletionItemKind.Reference,
                             detail="SQLMesh Model",
+                            documentation=types.MarkupContent(
+                                kind=types.MarkupKind.Markdown,
+                                value=model.description or "No description available",
+                            )
+                            if model.description
+                            else None,
                         )
                     )
                 # Add macro completions
