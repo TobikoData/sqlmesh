@@ -17,6 +17,7 @@ import {
 } from './ModelNode'
 import type { Lineage } from '@/domain/lineage'
 import type { ConnectedNode } from '@/workers/lineage'
+import type { ModelEncodedFQN, ModelName } from '@/domain/models'
 
 export interface GraphNodeData {
   label: string
@@ -108,7 +109,7 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
     })
 
     for (const targetColumnName in targetModel.columns) {
-      const sourceModel = targetModel.columns[targetColumnName]
+      const sourceModel = targetModel.columns[targetColumnName as ModelName]
 
       if (isNil(sourceModel) || isNil(sourceModel.models)) continue
 
@@ -210,7 +211,7 @@ function getNodeMap({
       node.targetPosition = Position.Left
     }
 
-    if (sources.has(node.id)) {
+    if (sources.has(node.id as ModelEncodedFQN)) {
       node.sourcePosition = Position.Right
     }
 
@@ -343,7 +344,7 @@ function mergeLineageWithColumns(
       }
 
       // New Column Lineage delivers fresh data, so we can just assign it
-      currentLineageModel.columns[targetColumnNameEncoded] = {
+      currentLineageModel.columns[targetColumnNameEncoded as ModelName] = {
         expression: newLineageModelColumn.expression,
         source: newLineageModelColumn.source,
         models: {},
@@ -353,7 +354,7 @@ function mergeLineageWithColumns(
       if (isObjectEmpty(newLineageModelColumn.models)) continue
 
       const currentLineageModelColumn =
-        currentLineageModel.columns[targetColumnNameEncoded]!
+        currentLineageModel.columns[targetColumnNameEncoded as ModelName]!
       const currentLineageModelColumnModels = currentLineageModelColumn.models
 
       for (const sourceColumnName in newLineageModelColumn.models) {
@@ -371,7 +372,7 @@ function mergeLineageWithColumns(
                   newLineageModelColumnModel,
                 ),
           ),
-        ).map(encodeURI)
+        ).map((uri: string) => encodeURI(uri))
       }
     }
   }
@@ -481,7 +482,7 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
 
       if (isNotNil(columns)) {
         Object.keys(columns).forEach(columnName => {
-          const column = columns[columnName]
+          const column = columns[columnName as ModelName]
 
           if (isNotNil(column) && isNotNil(column.models)) {
             Object.keys(column.models).forEach(m => allModels.add(m))
