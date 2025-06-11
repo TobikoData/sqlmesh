@@ -47,7 +47,7 @@ class ModelTextTestResult(unittest.TextTestResult):
     def _print_char(self, char: str) -> None:
         from sqlmesh.core.console import TerminalConsole
 
-        if self.console and isinstance(self.console, TerminalConsole):
+        if isinstance(self.console, TerminalConsole):
             self.console._print(char, end="")
 
     def addFailure(self, test: unittest.TestCase, err: ErrorType) -> None:

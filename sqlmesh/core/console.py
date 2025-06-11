@@ -322,7 +322,12 @@ class PlanBuilderConsole(BaseConsole, abc.ABC):
 class UnitTestConsole(abc.ABC):
     @abc.abstractmethod
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
-        """Display the test result and output."""
+        """Display the test result and output.
+
+        Args:
+            result: The unittest test result that contains metrics like num success, fails, ect.
+            target_dialect: The dialect that tests were run against. Assumes all tests run against the same dialect.
+        """
 
 
 class Console(
@@ -468,16 +473,6 @@ class Console(
             no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False
-        """
-
-    @abc.abstractmethod
-    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
-        """Display the test result and output.
-
-        Args:
-            result: The unittest test result that contains metrics like num success, fails, ect.
-            output: The generated output from the unittest.
-            target_dialect: The dialect that tests were run against. Assumes all tests run against the same dialect.
         """
 
     @abc.abstractmethod
