@@ -26,9 +26,7 @@ def get_sql_completions(
     # Get keywords from file content if provided
     file_keywords = set()
     if content:
-        file_keywords = extract_keywords_from_content(
-            content, get_dialect(context, file_uri)
-        )
+        file_keywords = extract_keywords_from_content(content, get_dialect(context, file_uri))
 
     # Combine keywords - SQL keywords first, then file keywords
     all_keywords = list(sql_keywords) + list(file_keywords - sql_keywords)
@@ -90,9 +88,7 @@ def get_macros(
     return [MacroCompletion(name=name, description=doc) for name, doc in macros.items()]
 
 
-def get_keywords(
-    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
-) -> t.Set[str]:
+def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
     """
     Return a list of sql keywords for a given file.
     If no context is provided, return ANSI SQL keywords.
@@ -103,11 +99,7 @@ def get_keywords(
     If both a context and a file_uri are provided, returns the keywords
     for the dialect of the model that the file belongs to.
     """
-    if (
-        file_uri is not None
-        and context is not None
-        and file_uri.to_path() in context.map
-    ):
+    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
         file_info = context.map[file_uri.to_path()]
 
         # Handle ModelInfo objects
@@ -150,17 +142,11 @@ def get_keywords_from_tokenizer(dialect: t.Optional[str] = None) -> t.Set[str]:
     return expanded_keywords
 
 
-def get_dialect(
-    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
-) -> t.Optional[str]:
+def get_dialect(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Optional[str]:
     """
     Get the dialect for a given file.
     """
-    if (
-        file_uri is not None
-        and context is not None
-        and file_uri.to_path() in context.map
-    ):
+    if file_uri is not None and context is not None and file_uri.to_path() in context.map:
         file_info = context.map[file_uri.to_path()]
 
         # Handle ModelInfo objects
@@ -181,9 +167,7 @@ def get_dialect(
     return None
 
 
-def extract_keywords_from_content(
-    content: str, dialect: t.Optional[str] = None
-) -> t.Set[str]:
+def extract_keywords_from_content(content: str, dialect: t.Optional[str] = None) -> t.Set[str]:
     """
     Extract identifiers from SQL content using the tokenizer.
 
