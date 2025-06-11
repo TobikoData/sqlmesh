@@ -27,9 +27,9 @@ from IPython.core.magic_arguments import argument, magic_arguments, parse_argstr
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
-from sqlmesh.cli.main import ENGINE_TYPE_DISPLAY_ORDER
 from sqlmesh.core import analytics
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
@@ -201,7 +201,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "engine",
         type=str,
-        help=f"Project SQL engine. Supported values: '{', '.join(ENGINE_TYPE_DISPLAY_ORDER)}'.",  # type: ignore
+        help=f"Project SQL engine. Supported values: '{', '.join([info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])])}'.",  # type: ignore
     )
     @argument(
         "--template",

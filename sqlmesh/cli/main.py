@@ -15,7 +15,7 @@ from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
-from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE, DISPLAY_NAME_TO_TYPE
+from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
@@ -40,26 +40,6 @@ SKIP_LOAD_COMMANDS = (
     "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
-
-# These are ordered for user display - do not reorder
-ENGINE_TYPE_DISPLAY_ORDER = [
-    "duckdb",
-    "snowflake",
-    "databricks",
-    "bigquery",
-    "motherduck",
-    "clickhouse",
-    "redshift",
-    "spark",
-    "trino",
-    "azuresql",
-    "mssql",
-    "postgres",
-    "gcp_postgres",
-    "mysql",
-    "athena",
-    "risingwave",
-]
 
 
 def _sqlmesh_version() -> str:
@@ -195,23 +175,16 @@ def init(
         try:
             project_template = ProjectTemplate(template.lower())
         except ValueError:
-            template_strings = (
-                "'" + "', '".join([template.value for template in ProjectTemplate]) + "'"
-            )
+            template_strings = "', '".join([template.value for template in ProjectTemplate])
             raise click.ClickException(
-                f"Invalid project template '{template}'. Please specify one of {template_strings}."
+                f"Invalid project template '{template}'. Please specify one of '{template_strings}'."
             )
-
-    if project_template == ProjectTemplate.DBT and not Path(ctx.obj, "dbt_project.yml").exists():
-        raise click.ClickException(
-            "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
-        )
 
     if engine or project_template == ProjectTemplate.DBT:
         init_example_project(
             path=ctx.obj,
-            engine_type=engine,
             template=project_template or ProjectTemplate.DEFAULT,
+            engine_type=engine,
             pipeline=dlt_pipeline,
             dlt_path=dlt_path,
         )
@@ -222,8 +195,6 @@ def init(
     console = srich.console
 
     project_template, engine_type, cli_mode = _interactive_init(ctx.obj, console, project_template)
-    if project_template != ProjectTemplate.DBT:
-        _check_engine_installed(console, engine_type)
 
     config_path = init_example_project(
         path=ctx.obj,
@@ -1295,10 +1266,6 @@ def _interactive_init(
     project_template = _init_template_prompt(console) if not project_template else project_template
 
     if project_template == ProjectTemplate.DBT:
-        if not Path(path, "dbt_project.yml").exists():
-            raise SQLMeshError(
-                "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your dbt project with SQLMesh."
-            )
         return (project_template, None, None)
 
     engine_type = _init_engine_prompt(console)
@@ -1310,24 +1277,26 @@ def _interactive_init(
 def _init_integer_prompt(
     console: Console, err_msg_entity: str, num_options: int, retry_func: t.Callable[[t.Any], t.Any]
 ) -> int:
-    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with control+c"
-    option_str = Prompt.ask("Enter a number", console=console)
-    try:
-        option_num = int(option_str)
-        if option_num < 1 or option_num > num_options:
-            raise ValueError
-    except ValueError:
-        console.print(
-            err_msg.format(
-                option_str=option_str, err_msg_entity=err_msg_entity, num_options=num_options
-            ),
-            style="red",
-        )
-        return retry_func(console)
-    finally:
-        console.print("")
+    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with control+c\n"
+    while True:
+        option_str = Prompt.ask("Enter a number", console=console)
 
-    return option_num
+        value_error = False
+        try:
+            option_num = int(option_str)
+        except ValueError:
+            value_error = True
+
+        if value_error or option_num < 1 or option_num > num_options:
+            console.print(
+                err_msg.format(
+                    option_str=option_str, err_msg_entity=err_msg_entity, num_options=num_options
+                ),
+                style="red",
+            )
+            continue
+        console.print("")
+        return option_num
 
 
 def _init_template_prompt(console: Console) -> ProjectTemplate:
@@ -1358,17 +1327,22 @@ def _init_engine_prompt(console: Console) -> str:
     console.print("──────────────────────────────\n")
     console.print("Choose your SQL engine:\n")
 
-    display_num_to_engine = {}
-    for i, engine_type in enumerate(ENGINE_TYPE_DISPLAY_ORDER):
-        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{DISPLAY_NAME_TO_TYPE[engine_type]}")
-        display_num_to_engine[i + 1] = engine_type
+    # INIT_DISPLAY_INFO_TO_TYPE is a dict of {engine_type: (display_order, display_name)}
+    ordered_engine_display_names = [
+        info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    ]
+    display_num_to_display_name = {}
+    for i, display_name in enumerate(ordered_engine_display_names):
+        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{display_name}")
+        display_num_to_display_name[i + 1] = display_name
     console.print("")
 
     engine_num = _init_integer_prompt(
-        console, "engine", len(ENGINE_TYPE_DISPLAY_ORDER), _init_engine_prompt
+        console, "engine", len(ordered_engine_display_names), _init_engine_prompt
     )
 
-    return display_num_to_engine[engine_num]
+    DISPLAY_NAME_TO_TYPE = {v[1]: k for k, v in INIT_DISPLAY_INFO_TO_TYPE.items()}
+    return DISPLAY_NAME_TO_TYPE[display_num_to_display_name[engine_num]]
 
 
 def _init_cli_mode_prompt(console: Console) -> InitCliMode:

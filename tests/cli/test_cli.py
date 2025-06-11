@@ -1836,7 +1836,7 @@ def test_init_interactive_invalid_int(runner: CliRunner, tmp_path: Path):
         ["--paths", str(tmp_path), "init"],
         input="0\n1\n1\n1\n",
     )
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert (
         "'0' is not a valid project type number - please enter a number between 1" in result.output
     )
