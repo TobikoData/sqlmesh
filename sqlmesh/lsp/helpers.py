@@ -6,22 +6,35 @@ from sqlmesh.core.linter.helpers import (
 )
 
 
-def to_lsp_range(
-    range: SQLMeshRange,
-) -> Range:
+def to_sqlmesh_position(position: Position) -> SQLMeshPosition:
     """
-    Converts a SQLMesh Range to an LSP Range.
+    Converts an LSP Position to a SQLMesh Position.
     """
-    return Range(
-        start=Position(line=range.start.line, character=range.start.character),
-        end=Position(line=range.end.line, character=range.end.character),
-    )
+    return SQLMeshPosition(line=position.line, character=position.character)
 
 
-def to_lsp_position(
-    position: SQLMeshPosition,
-) -> Position:
+def to_lsp_position(position: SQLMeshPosition) -> Position:
     """
     Converts a SQLMesh Position to an LSP Position.
     """
     return Position(line=position.line, character=position.character)
+
+
+def to_sqlmesh_range(range: Range) -> SQLMeshRange:
+    """
+    Converts an LSP Range to a SQLMesh Range.
+    """
+    return SQLMeshRange(
+        start=to_sqlmesh_position(range.start),
+        end=to_sqlmesh_position(range.end),
+    )
+
+
+def to_lsp_range(range: SQLMeshRange) -> Range:
+    """
+    Converts a SQLMesh Range to an LSP Range.
+    """
+    return Range(
+        start=to_lsp_position(range.start),
+        end=to_lsp_position(range.end),
+    )
