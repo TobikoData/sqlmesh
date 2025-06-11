@@ -1,6 +1,6 @@
 from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
-from sqlmesh.lsp.custom import AllModelsResponse
+from sqlmesh.lsp.custom import AllModelsResponse, MacroCompletion
 from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
@@ -60,15 +60,23 @@ def get_models(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.
     return all_models
 
 
-def get_macros(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:
-    """Return a set of all macros with the ``@`` prefix."""
-    names = set(macro.get_registry())
+def get_macros(
+    context: t.Optional[LSPContext], file_uri: t.Optional[URI]
+) -> t.List[MacroCompletion]:
+    """Return a list of macros with optional descriptions."""
+    macros: t.Dict[str, t.Optional[str]] = {}
+
+    for name, m in macro.get_registry().items():
+        macros[name] = getattr(m.func, "__doc__", None)
+
     try:
         if context is not None:
-            names.update(context.context._macros)
+            for name, m in context.context._macros.items():
+                macros[name] = getattr(m.func, "__doc__", None)
     except Exception:
         pass
-    return names
+
+    return [MacroCompletion(name=name, description=doc) for name, doc in macros.items()]
 
 
 def get_keywords(context: t.Optional[LSPContext], file_uri: t.Optional[URI]) -> t.Set[str]:

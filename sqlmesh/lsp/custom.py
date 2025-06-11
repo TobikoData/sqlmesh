@@ -23,6 +23,13 @@ class AllModelsRequest(CustomMethodRequestBaseClass):
     textDocument: types.TextDocumentIdentifier
 
 
+class MacroCompletion(PydanticModel):
+    """Information about a macro for autocompletion."""
+
+    name: str
+    description: t.Optional[str] = None
+
+
 class AllModelsResponse(CustomMethodResponseBaseClass):
     """
     Response to get all the models that are in the current project.
@@ -30,7 +37,7 @@ class AllModelsResponse(CustomMethodResponseBaseClass):
 
     models: t.List[str]
     keywords: t.List[str]
-    macros: t.List[str]
+    macros: t.List[MacroCompletion]
 
 
 RENDER_MODEL_FEATURE = "sqlmesh/render_model"
