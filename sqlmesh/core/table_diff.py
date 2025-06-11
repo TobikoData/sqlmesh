@@ -24,6 +24,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter import EngineAdapter
 
 SQLMESH_JOIN_KEY_COL = "__sqlmesh_join_key"
+SQLMESH_SAMPLE_TYPE_COL = "__sqlmesh_sample_type"
 
 
 class SchemaDiff(PydanticModel, frozen=True):
@@ -389,9 +390,6 @@ class TableDiff:
                 for c, t in matched_columns.items()
             ]
 
-            def name(e: exp.Expression) -> str:
-                return e.args["alias"].sql(identify=True)
-
             source_query = (
                 exp.select(
                     *(exp.column(c) for c in source_schema),
@@ -581,30 +579,19 @@ class TableDiff:
                     .drop(index=index_cols, errors="ignore")
                 )
 
-                sample_filter_cols = ["s_exists", "t_exists", "row_joined", "row_full_match"]
-                sample_query = (
-                    exp.select(
-                        *(sample_filter_cols),
-                        *(name(c) for c in s_selects.values()),
-                        *(name(c) for c in t_selects.values()),
-                    )
-                    .from_(table)
-                    .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
-                    .order_by(
-                        *(name(s_selects[c.name]) for c in s_index),
-                        *(name(t_selects[c.name]) for c in t_index),
-                    )
-                    .limit(self.limit)
+                sample = self._fetch_sample(
+                    table, s_selects, s_index, t_selects, t_index, self.limit
                 )
-                sample = self.adapter.fetchdf(sample_query, quote_identifiers=True)
 
                 joined_sample_cols = [f"s__{c}" for c in s_index_names]
                 comparison_cols = [
                     (f"s__{c}", f"t__{c}")
                     for c in column_stats[column_stats["pct_match"] < 100].index
                 ]
+
                 for cols in comparison_cols:
                     joined_sample_cols.extend(cols)
+
                 joined_renamed_cols = {
                     c: c.split("__")[1] if c.split("__")[1] in index_cols else c
                     for c in joined_sample_cols
@@ -638,13 +625,16 @@ class TableDiff:
                         )
                         for c, n in joined_renamed_cols.items()
                     }
-                joined_sample = sample[sample["row_joined"] == 1][joined_sample_cols]
+
+                joined_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "common_rows"][
+                    joined_sample_cols
+                ]
                 joined_sample.rename(
                     columns=joined_renamed_cols,
                     inplace=True,
                 )
 
-                s_sample = sample[(sample["s_exists"] == 1) & (sample["row_joined"] == 0)][
+                s_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "source_only"][
                     [
                         *[f"s__{c}" for c in s_index_names],
                         *[f"s__{c}" for c in source_schema if c not in s_index_names],
@@ -654,7 +644,7 @@ class TableDiff:
                     columns={c: c.replace("s__", "") for c in s_sample.columns}, inplace=True
                 )
 
-                t_sample = sample[(sample["t_exists"] == 1) & (sample["row_joined"] == 0)][
+                t_sample = sample[sample[SQLMESH_SAMPLE_TYPE_COL] == "target_only"][
                     [
                         *[f"t__{c}" for c in t_index_names],
                         *[f"t__{c}" for c in target_schema if c not in t_index_names],
@@ -665,8 +655,11 @@ class TableDiff:
                 )
 
                 sample.drop(
-                    columns=sample_filter_cols
-                    + [f"s__{SQLMESH_JOIN_KEY_COL}", f"t__{SQLMESH_JOIN_KEY_COL}"],
+                    columns=[
+                        f"s__{SQLMESH_JOIN_KEY_COL}",
+                        f"t__{SQLMESH_JOIN_KEY_COL}",
+                        SQLMESH_SAMPLE_TYPE_COL,
+                    ],
                     inplace=True,
                 )
 
@@ -684,4 +677,75 @@ class TableDiff:
                     model_name=self.model_name,
                     decimals=self.decimals,
                 )
+
         return self._row_diff
+
+    def _fetch_sample(
+        self,
+        sample_table: exp.Table,
+        s_selects: t.Dict[str, exp.Alias],
+        s_index: t.List[exp.Column],
+        t_selects: t.Dict[str, exp.Alias],
+        t_index: t.List[exp.Column],
+        limit: int,
+    ) -> pd.DataFrame:
+        rendered_data_column_names = [
+            name(s) for s in list(s_selects.values()) + list(t_selects.values())
+        ]
+        sample_type = exp.to_identifier(SQLMESH_SAMPLE_TYPE_COL)
+
+        source_only_sample = (
+            exp.select(
+                exp.Literal.string("source_only").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("s_exists").eq(1), exp.column("row_joined").eq(0)))
+            .order_by(*(name(s_selects[c.name]) for c in s_index))
+            .limit(limit)
+        )
+
+        target_only_sample = (
+            exp.select(
+                exp.Literal.string("target_only").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("t_exists").eq(1), exp.column("row_joined").eq(0)))
+            .order_by(*(name(t_selects[c.name]) for c in t_index))
+            .limit(limit)
+        )
+
+        common_rows_sample = (
+            exp.select(
+                exp.Literal.string("common_rows").as_(sample_type), *rendered_data_column_names
+            )
+            .from_(sample_table)
+            .where(exp.and_(exp.column("row_joined").eq(1), exp.column("row_full_match").eq(0)))
+            .order_by(
+                *(name(s_selects[c.name]) for c in s_index),
+                *(name(t_selects[c.name]) for c in t_index),
+            )
+            .limit(limit)
+        )
+
+        query = (
+            exp.Select()
+            .with_("source_only", source_only_sample)
+            .with_("target_only", target_only_sample)
+            .with_("common_rows", common_rows_sample)
+            .select(sample_type, *rendered_data_column_names)
+            .from_("source_only")
+            .union(
+                exp.select(sample_type, *rendered_data_column_names).from_("target_only"),
+                distinct=False,
+            )
+            .union(
+                exp.select(sample_type, *rendered_data_column_names).from_("common_rows"),
+                distinct=False,
+            )
+        )
+
+        return self.adapter.fetchdf(query, quote_identifiers=True)
+
+
+def name(e: exp.Expression) -> str:
+    return e.args["alias"].sql(identify=True)
