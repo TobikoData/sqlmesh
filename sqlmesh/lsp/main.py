@@ -680,7 +680,7 @@ class SQLMeshLanguageServer:
 
                 completion_items = []
                 # Add model completions
-                for model in completion_response.models:
+                for model in completion_response.model_completions:
                     completion_items.append(
                         types.CompletionItem(
                             label=model.name,

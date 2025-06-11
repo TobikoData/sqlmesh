@@ -41,6 +41,20 @@ def test_get_macros():
     assert add_one_macro.description
 
 
+def test_model_completions_include_descriptions():
+    context = Context(paths=["examples/sushi"])
+    lsp_context = LSPContext(context)
+
+    completions = LSPContext.get_completions(lsp_context, None)
+
+    model_entry = next(
+        (m for m in completions.model_completions if m.name == "sushi.customers"),
+        None,
+    )
+    assert model_entry is not None
+    assert model_entry.description
+
+
 def test_get_sql_completions_with_context_no_file_uri():
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)

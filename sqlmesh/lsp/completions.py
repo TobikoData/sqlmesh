@@ -1,10 +1,13 @@
 from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
-from sqlmesh.lsp.custom import AllModelsResponse, MacroCompletion
+from sqlmesh.lsp.custom import (
+    AllModelsResponse,
+    MacroCompletion,
+    ModelCompletion,
+)
 from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
-from sqlmesh.lsp.custom import ModelCompletion
 from sqlmesh.lsp.description import generate_markdown_description
 from sqlmesh.lsp.uri import URI
 
@@ -30,8 +33,10 @@ def get_sql_completions(
     # Combine keywords - SQL keywords first, then file keywords
     all_keywords = list(sql_keywords) + list(file_keywords - sql_keywords)
 
+    models = list(get_models(context, file_uri))
     return AllModelsResponse(
-        models=list(get_models(context, file_uri)),
+        models=[m.name for m in models],
+        model_completions=models,
         keywords=all_keywords,
         macros=list(get_macros(context, file_uri)),
     )

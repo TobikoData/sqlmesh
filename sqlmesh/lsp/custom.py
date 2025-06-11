@@ -38,11 +38,11 @@ class ModelCompletion(PydanticModel):
 
 
 class AllModelsResponse(CustomMethodResponseBaseClass):
-    """
-    Response to get all the models that are in the current project.
-    """
+    """Response to get all models that are in the current project."""
 
-    models: t.List[ModelCompletion]
+    #: Deprecated: use ``model_completions`` instead
+    models: t.List[str]
+    model_completions: t.List[ModelCompletion]
     keywords: t.List[str]
     macros: t.List[MacroCompletion]
 
