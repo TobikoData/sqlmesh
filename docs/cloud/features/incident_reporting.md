@@ -1,35 +1,46 @@
 # Incident Reporting
 
-## Overview
+We monitor Tobiko Cloud 24/7 to ensure your projects are running smoothly.
 
-Tobiko Cloud has 24/7 monitoring and alerting in place to ensure the platform is running smoothly. 
-However, if you encounter any issues, you can report incidents directly through the platform.
-This will immediately notify our support team, who will investigate and resolve the issue as quickly as possible.
+If you encounter any issues, however, you can report incidents directly in Tobiko Cloud itself.
 
-### Reporting an incident using SSO
+This will notify our support team, who will investigate and resolve the issue as quickly as possible.
 
-To report an incident using your Single Sign-On (SSO) account, follow these steps:
+### Reporting an incident
 
-* Visit [Tobiko Cloud Incident Reporting Page](https://incidents.tobikodata.com/).
-    * You will see your organization's name in the top right corner, indicating that you are logged in with your SSO account.
-* Select a severity level for your incident
-* Put in the project name that the incident is related to
-    * The project name is the name after your organization name in the Cloud UI.
-* Write a detailed description of the incident
-    * Include any relevant information that can help our support team understand and resolve the issue.
-* Click the "Submit" button to send your incident report.
-* You will receive a confirmation message indicating that your incident has been reported successfully.
-* You should hear from our support team shortly after submitting the incident report.
+Follow these steps to report an incident in Tobiko Cloud:
 
-### Getting URL that doesn't require SSO
+1. Visit the [Tobiko Cloud Incident Reporting Page](https://incidents.tobikodata.com/)
+2. Select one of the three severity levels for your incident
+3. Enter the project name the incident is related to
+    * The project name is displayed after your organization name in the Cloud UI
+4. Write a detailed description of the incident
+    * Include all relevant information that will help our support team understand and resolve the issue
+5. Click the `Submit` button to send your incident report
+6. You will receive a confirmation message indicating that your incident has been reported successfully
+7. You will hear from our support team after submitting the incident report
 
-Although in most cases SSO is the preferred way to report incidents, it is possible that SSO could be down or not working for some reason.
-To prepare for this situation, you can get a URL that doesn't require SSO by following these steps:
+![Tobiko Cloud incident reporting page](./incident_reporting/incident_reporting.png)
 
-* Visit [Tobiko Cloud Incident Reporting Page](https://incidents.tobikodata.com/).
-* Click the "Copy Standalone URL" button below the report incident part of the page.
-* Save this URL within your organization so that anyone can use it in case SSO is not working.
+### Reporting an incident when SSO is unavailable
 
-### If you don't have SSO enabled for your organization
+Single Sign-On (SSO) is the default way to log in to Tobiko Cloud. However, SSO could be down or not working when you need to report an incident.
 
-Contact your solution architect and ask them to provide you with a URL that doesn't require SSO.
+Tobiko Cloud provides a standalone page that doesn't require SSO so you can report an incident when SSO is not working. The page is unique to your organization.
+
+The standalone URL is available in the incident reporting page when you log in with SSO. Because accessing the standalone URL does not require SSO, you should only share it with staff authorized to report incidents.
+
+To store your standalone incident reporting URL:
+
+1. Visit the [Tobiko Cloud Incident Reporting Page](https://incidents.tobikodata.com/)
+2. Click the `Copy Standalone URL` button below the incident reporting section
+3. Save this URL in an easily accessible location in case you need to report an incident when SSO is not working
+
+!!! note "Don't wait!"
+    We recommend copying this URL *right now* so your organization is protected from difficulty reporting an incident.
+
+### SSO not enabled for your organization
+
+SSO login is required for accessing the standalone incident reporting URL.
+
+SSO is enabled by default in Tobiko Cloud. If it is not enabled for your organization, contact your solution architect and ask them to provide you with a standalone incident reporting URL.
