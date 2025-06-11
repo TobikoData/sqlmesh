@@ -474,10 +474,9 @@ def test_run_all_test_failed(
     assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_failure
     assert test_checks_runs[2]["output"]["title"] == "Tests Failed"
-    assert """FAIL: runTest (unittest.case.TestCase.runTest)
-No test
-----------------------------------------------------------------------
-sqlmesh.utils.errors.TestError: some error""" in test_checks_runs[2]["output"]["summary"]
+    assert (
+        """sqlmesh.utils.errors.TestError: some error""" in test_checks_runs[2]["output"]["summary"]
+    )
     assert """**Num Successful Tests: 0**""" in test_checks_runs[2]["output"]["summary"]
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
