@@ -2358,8 +2358,8 @@ def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
     assert row_diff.stats["distinct_count_s"] == 7
     assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
     assert row_diff.stats["distinct_count_t"] == 10
-    assert row_diff.s_sample.shape == (0, 3)
-    assert row_diff.t_sample.shape == (3, 3)
+    assert row_diff.s_sample.shape == (row_diff.s_only_count, 3)
+    assert row_diff.t_sample.shape == (row_diff.t_only_count, 3)
 
 
 def test_table_diff_arbitrary_condition(ctx: TestContext):
