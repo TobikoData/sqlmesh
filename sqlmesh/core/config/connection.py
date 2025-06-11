@@ -55,11 +55,10 @@ MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
 
 
 def _get_engine_import_validator(
-    import_name: str, engine_type: str, extra_name: t.Optional[str] = None
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None, decorate: bool = True
 ) -> t.Callable:
     extra_name = extra_name or engine_type
 
-    @model_validator(mode="before")
     def validate(cls: t.Any, data: t.Any) -> t.Any:
         check_import = (
             str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
@@ -83,7 +82,7 @@ def _get_engine_import_validator(
 
         return data
 
-    return validate
+    return model_validator(mode="before")(validate) if decorate else validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -1454,16 +1453,14 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
         import_module, extra_name = driver_configs[driver]
 
-        # Conditionally delegate to the existing _get_engine_import_validator
-        # Create a validator for the specific driver and call its inner function
-        validator_func = _get_engine_import_validator(import_module, driver, extra_name)
+        # Use _get_engine_import_validator with decorate=False to get the raw validation function
+        # This avoids the __wrapped__ issue in Python 3.9
+        validator_func = _get_engine_import_validator(
+            import_module, driver, extra_name, decorate=False
+        )
 
-        # Extract the inner validate function from the decorated validator
-        # The validator_func has a __wrapped__ attribute that contains the original function
-        inner_validate = getattr(validator_func, "__wrapped__", validator_func)
-
-        # Call the inner validation function directly
-        return inner_validate(cls, data)
+        # Call the raw validation function directly
+        return validator_func(cls, data)
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
