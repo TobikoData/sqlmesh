@@ -8,7 +8,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
 )
-from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.model.definition import SqlModel, ExternalModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 from sqlmesh.lsp.description import generate_markdown_description
@@ -22,15 +22,26 @@ import ast
 from sqlmesh.core.model import Model
 from sqlmesh import macro
 import inspect
+from ruamel.yaml import YAML
 
 
 class LSPModelReference(PydanticModel):
-    """A LSP reference to a model."""
+    """A LSP reference to a model, excluding external models."""
 
     type: t.Literal["model"] = "model"
     uri: str
     range: Range
     markdown_description: t.Optional[str] = None
+
+
+class LSPExternalModelReference(PydanticModel):
+    """A LSP reference to an external model."""
+
+    type: t.Literal["external_model"] = "external_model"
+    uri: str
+    range: Range
+    markdown_description: t.Optional[str] = None
+    target_range: t.Optional[Range] = None
 
 
 class LSPCteReference(PydanticModel):
@@ -53,7 +64,8 @@ class LSPMacroReference(PydanticModel):
 
 
 Reference = t.Annotated[
-    t.Union[LSPModelReference, LSPCteReference, LSPMacroReference], Field(discriminator="type")
+    t.Union[LSPModelReference, LSPCteReference, LSPMacroReference, LSPExternalModelReference],
+    Field(discriminator="type"),
 ]
 
 
@@ -243,16 +255,38 @@ def get_model_definitions_for_a_path(
 
                 description = generate_markdown_description(referenced_model)
 
-                references.append(
-                    LSPModelReference(
-                        uri=referenced_model_uri.value,
-                        range=Range(
-                            start=to_lsp_position(start_pos_sqlmesh),
-                            end=to_lsp_position(end_pos_sqlmesh),
-                        ),
-                        markdown_description=description,
+                # For external models in YAML files, find the specific model block
+                if isinstance(referenced_model, ExternalModel):
+                    yaml_target_range: t.Optional[Range] = None
+                    if (
+                        referenced_model_path.suffix in (".yaml", ".yml")
+                        and referenced_model_path.is_file()
+                    ):
+                        yaml_target_range = _get_yaml_model_range(
+                            referenced_model_path, referenced_model.name
+                        )
+                    references.append(
+                        LSPExternalModelReference(
+                            uri=referenced_model_uri.value,
+                            range=Range(
+                                start=to_lsp_position(start_pos_sqlmesh),
+                                end=to_lsp_position(end_pos_sqlmesh),
+                            ),
+                            markdown_description=description,
+                            target_range=yaml_target_range,
+                        )
                     )
-                )
+                else:
+                    references.append(
+                        LSPModelReference(
+                            uri=referenced_model_uri.value,
+                            range=Range(
+                                start=to_lsp_position(start_pos_sqlmesh),
+                                end=to_lsp_position(end_pos_sqlmesh),
+                            ),
+                            markdown_description=description,
+                        )
+                    )
 
     return references
 
@@ -699,3 +733,31 @@ def _position_within_range(position: Position, range: Range) -> bool:
         range.end.line > position.line
         or (range.end.line == position.line and range.end.character >= position.character)
     )
+
+
+def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:
+    """
+    Find the range of a specific model block in a YAML file.
+
+    Args:
+        yaml_path: Path to the YAML file
+        model_name: Name of the model to find
+
+    Returns:
+        The Range of the model block in the YAML file, or None if not found
+    """
+    yaml = YAML()
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.load(f)
+
+    if not isinstance(data, list):
+        return None
+
+    for item in data:
+        if isinstance(item, dict) and item.get("name") == model_name:
+            # Get size of block by taking the earliest line/col in the items block and the last line/col of the block
+            position_data = item.lc.data["name"]  # type: ignore
+            start = Position(line=position_data[2], character=position_data[3])
+            end = Position(line=position_data[2], character=position_data[3] + len(item["name"]))
+            return Range(start=start, end=end)
+    return None

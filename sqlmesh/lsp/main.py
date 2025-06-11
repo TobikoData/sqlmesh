@@ -48,6 +48,7 @@ from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
     LSPCteReference,
     LSPModelReference,
+    LSPExternalModelReference,
     get_references,
     get_all_references,
 )
@@ -444,11 +445,9 @@ class SQLMeshLanguageServer:
                 references = get_references(self.lsp_context, uri, params.position)
                 location_links = []
                 for reference in references:
-                    # Use target_range if available (CTEs, Macros), otherwise default to start of file
-                    if not isinstance(reference, LSPModelReference):
-                        target_range = reference.target_range
-                        target_selection_range = reference.target_range
-                    else:
+                    # Use target_range if available (CTEs, Macros, and external models in YAML)
+                    if isinstance(reference, LSPModelReference):
+                        # Regular SQL models - default to start of file
                         target_range = types.Range(
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
@@ -457,6 +456,23 @@ class SQLMeshLanguageServer:
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
                         )
+                    elif isinstance(reference, LSPExternalModelReference):
+                        # External models may have target_range set for YAML files
+                        target_range = types.Range(
+                            start=types.Position(line=0, character=0),
+                            end=types.Position(line=0, character=0),
+                        )
+                        target_selection_range = types.Range(
+                            start=types.Position(line=0, character=0),
+                            end=types.Position(line=0, character=0),
+                        )
+                        if reference.target_range is not None:
+                            target_range = reference.target_range
+                            target_selection_range = reference.target_range
+                    else:
+                        # CTEs and Macros always have target_range
+                        target_range = reference.target_range
+                        target_selection_range = reference.target_range
 
                     location_links.append(
                         types.LocationLink(
