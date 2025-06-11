@@ -625,7 +625,8 @@ class SQLMeshLanguageServer:
                     and getattr(params.context, "trigger_character", None) == "@"
                 )
 
-                for macro_name in completion_response.macros:
+                for macro in completion_response.macros:
+                    macro_name = macro.name
                     insert_text = macro_name if triggered_by_at else f"@{macro_name}"
 
                     completion_items.append(
@@ -636,6 +637,7 @@ class SQLMeshLanguageServer:
                             filter_text=macro_name,
                             kind=types.CompletionItemKind.Function,
                             detail="SQLMesh Macro",
+                            documentation=macro.description,
                         )
                     )
 

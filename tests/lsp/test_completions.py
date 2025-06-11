@@ -33,8 +33,12 @@ def test_get_macros():
     file_uri = URI.from_path(file_path)
     completions = LSPContext.get_completions(lsp_context, file_uri, file_content)
 
-    assert "each" in completions.macros
-    assert "add_one" in completions.macros
+    each_macro = next((m for m in completions.macros if m.name == "each"))
+    assert each_macro.name == "each"
+    assert each_macro.description
+    add_one_macro = next((m for m in completions.macros if m.name == "add_one"))
+    assert add_one_macro.name == "add_one"
+    assert add_one_macro.description
 
 
 def test_get_sql_completions_with_context_no_file_uri():
