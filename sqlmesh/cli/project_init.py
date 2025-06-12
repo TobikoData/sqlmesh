@@ -122,13 +122,11 @@ config = sqlmesh_config(Path(__file__).parent)
     default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
 
     simple_cli_mode = """
-# --- SIMPLE CLI MODE ---
 # Minimal prompts, automatic changes, summary output
 # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
 
 plan:
   no_diff: true             # Hide detailed text differences for changed models
-  use_finalized_state: true # Compare only against finalized snapshots
   no_prompts: true          # No interactive prompts
   auto_apply: true          # Apply changes automatically
 

@@ -17,7 +17,7 @@ from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d

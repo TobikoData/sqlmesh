@@ -11,7 +11,7 @@ import time_machine
 import json
 from unittest.mock import MagicMock
 from sqlmesh import RuntimeEnv
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
