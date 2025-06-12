@@ -1303,7 +1303,19 @@ def _init_integer_prompt(
         return option_num
 
 
+def _init_display_choices(values_dict: t.Dict[str, str], console: Console) -> t.Dict[int, str]:
+    display_num_to_value = {}
+    for i, value_str in enumerate(values_dict.keys()):
+        console.print(f"    \[{i + 1}] {value_str} {values_dict[value_str]}")
+        display_num_to_value[i + 1] = value_str
+    console.print("")
+    return display_num_to_value
+
+
 def _init_template_prompt(console: Console) -> ProjectTemplate:
+    console.print("──────────────────────────────\n")
+    console.print("What type of project do you want to set up?\n")
+
     # These are ordered for user display - do not reorder
     template_descriptions = {
         ProjectTemplate.DEFAULT.name: "- Create SQLMesh example project models and files",
@@ -1311,14 +1323,7 @@ def _init_template_prompt(console: Console) -> ProjectTemplate:
         ProjectTemplate.EMPTY.name: "  - Create a SQLMesh configuration file and project directories only",
     }
 
-    console.print("──────────────────────────────\n")
-    console.print("What type of project do you want to set up?\n")
-
-    display_num_to_template = {}
-    for i, template_str in enumerate(template_descriptions.keys()):
-        console.print(f"    \[{i + 1}] {template_str} {template_descriptions[template_str]}")
-        display_num_to_template[i + 1] = template_str
-    console.print("")
+    display_num_to_template = _init_display_choices(template_descriptions, console)
 
     template_num = _init_integer_prompt(
         console, "project type", len(template_descriptions), _init_template_prompt
@@ -1332,37 +1337,29 @@ def _init_engine_prompt(console: Console) -> str:
     console.print("Choose your SQL engine:\n")
 
     # INIT_DISPLAY_INFO_TO_TYPE is a dict of {engine_type: (display_order, display_name)}
-    ordered_engine_display_names = [
-        info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
-    ]
-    display_num_to_display_name = {}
-    for i, display_name in enumerate(ordered_engine_display_names):
-        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{display_name}")
-        display_num_to_display_name[i + 1] = display_name
-    console.print("")
+    DISPLAY_NAME_TO_TYPE = {v[1]: k for k, v in INIT_DISPLAY_INFO_TO_TYPE.items()}
+    ordered_engine_display_names = {
+        info[1]: "" for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    }
+    display_num_to_display_name = _init_display_choices(ordered_engine_display_names, console)
 
     engine_num = _init_integer_prompt(
         console, "engine", len(ordered_engine_display_names), _init_engine_prompt
     )
 
-    DISPLAY_NAME_TO_TYPE = {v[1]: k for k, v in INIT_DISPLAY_INFO_TO_TYPE.items()}
     return DISPLAY_NAME_TO_TYPE[display_num_to_display_name[engine_num]]
 
 
 def _init_cli_mode_prompt(console: Console) -> InitCliMode:
+    console.print("──────────────────────────────\n")
+    console.print("Choose your SQLMesh CLI experience:\n")
+
     cli_mode_descriptions = {
         InitCliMode.DEFAULT.name: "- See and control every detail",
         InitCliMode.SIMPLE.name: " - Automatically run changes and show summary output",
     }
 
-    console.print("──────────────────────────────\n")
-    console.print("Choose your SQLMesh CLI experience:\n")
-
-    display_num_to_cli_mode = {}
-    for i, cli_mode in enumerate(cli_mode_descriptions.keys()):
-        console.print(f"    \[{i + 1}] {cli_mode} {cli_mode_descriptions[cli_mode]}")
-        display_num_to_cli_mode[i + 1] = cli_mode
-    console.print("")
+    display_num_to_cli_mode = _init_display_choices(cli_mode_descriptions, console)
 
     cli_mode_num = _init_integer_prompt(
         console, "config", len(cli_mode_descriptions), _init_cli_mode_prompt
