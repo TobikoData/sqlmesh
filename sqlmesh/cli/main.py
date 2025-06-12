@@ -6,16 +6,19 @@ import sys
 import typing as t
 
 import click
-from rich.prompt import Prompt
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project, InitCliMode
+from sqlmesh.cli.example_project import (
+    ProjectTemplate,
+    init_example_project,
+    InitCliMode,
+    interactive_init,
+)
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
-from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
@@ -23,8 +26,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-if t.TYPE_CHECKING:
-    from rich.console import Console
 
 SKIP_LOAD_COMMANDS = (
     "clean",
@@ -194,7 +195,7 @@ def init(
 
     console = srich.console
 
-    project_template, engine_type, cli_mode = _interactive_init(ctx.obj, console, project_template)
+    project_template, engine_type, cli_mode = interactive_init(ctx.obj, console, project_template)
 
     config_path = init_example_project(
         path=ctx.obj,
@@ -206,8 +207,11 @@ def init(
     )
 
     engine_install_text = ""
-    if engine_type and engine_type not in ("duckdb", "motherduck", "spark"):
-        engine_install_text = f'• Run command in CLI to install your SQL engine\'s Python dependencies: pip install "sqlmesh\\[{engine_type.replace("_", "")}]"\n'
+    if engine_type and engine_type not in ("duckdb", "motherduck"):
+        install_text = (
+            "pyspark" if engine_type == "spark" else f"sqlmesh\\[{engine_type.replace('_', '')}]"
+        )
+        engine_install_text = f'• Run command in CLI to install your SQL engine\'s Python dependencies: pip install "{install_text}"\n'
     # interactive init does not support DLT template
     next_step_text = {
         ProjectTemplate.DEFAULT: f"{engine_install_text}• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
@@ -1257,115 +1261,6 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
-
-
-def _interactive_init(
-    path: Path,
-    console: Console,
-    project_template: t.Optional[ProjectTemplate] = None,
-) -> t.Tuple[ProjectTemplate, t.Optional[str], t.Optional[InitCliMode]]:
-    console.print("──────────────────────────────")
-    console.print("Welcome to SQLMesh!")
-
-    project_template = _init_template_prompt(console) if not project_template else project_template
-
-    if project_template == ProjectTemplate.DBT:
-        return (project_template, None, None)
-
-    engine_type = _init_engine_prompt(console)
-    cli_mode = _init_cli_mode_prompt(console)
-
-    return (project_template, engine_type, cli_mode)
-
-
-def _init_integer_prompt(
-    console: Console, err_msg_entity: str, num_options: int, retry_func: t.Callable[[t.Any], t.Any]
-) -> int:
-    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with control+c\n"
-    while True:
-        option_str = Prompt.ask("Enter a number", console=console)
-
-        value_error = False
-        try:
-            option_num = int(option_str)
-        except ValueError:
-            value_error = True
-
-        if value_error or option_num < 1 or option_num > num_options:
-            console.print(
-                err_msg.format(
-                    option_str=option_str, err_msg_entity=err_msg_entity, num_options=num_options
-                ),
-                style="red",
-            )
-            continue
-        console.print("")
-        return option_num
-
-
-def _init_display_choices(values_dict: t.Dict[str, str], console: Console) -> t.Dict[int, str]:
-    display_num_to_value = {}
-    for i, value_str in enumerate(values_dict.keys()):
-        console.print(f"    \[{i + 1}] {value_str} {values_dict[value_str]}")
-        display_num_to_value[i + 1] = value_str
-    console.print("")
-    return display_num_to_value
-
-
-def _init_template_prompt(console: Console) -> ProjectTemplate:
-    console.print("──────────────────────────────\n")
-    console.print("What type of project do you want to set up?\n")
-
-    # These are ordered for user display - do not reorder
-    template_descriptions = {
-        ProjectTemplate.DEFAULT.name: "- Create SQLMesh example project models and files",
-        ProjectTemplate.DBT.value: "    - You have an existing dbt project and want to run it with SQLMesh",
-        ProjectTemplate.EMPTY.name: "  - Create a SQLMesh configuration file and project directories only",
-    }
-
-    display_num_to_template = _init_display_choices(template_descriptions, console)
-
-    template_num = _init_integer_prompt(
-        console, "project type", len(template_descriptions), _init_template_prompt
-    )
-
-    return ProjectTemplate(display_num_to_template[template_num].lower())
-
-
-def _init_engine_prompt(console: Console) -> str:
-    console.print("──────────────────────────────\n")
-    console.print("Choose your SQL engine:\n")
-
-    # INIT_DISPLAY_INFO_TO_TYPE is a dict of {engine_type: (display_order, display_name)}
-    DISPLAY_NAME_TO_TYPE = {v[1]: k for k, v in INIT_DISPLAY_INFO_TO_TYPE.items()}
-    ordered_engine_display_names = {
-        info[1]: "" for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
-    }
-    display_num_to_display_name = _init_display_choices(ordered_engine_display_names, console)
-
-    engine_num = _init_integer_prompt(
-        console, "engine", len(ordered_engine_display_names), _init_engine_prompt
-    )
-
-    return DISPLAY_NAME_TO_TYPE[display_num_to_display_name[engine_num]]
-
-
-def _init_cli_mode_prompt(console: Console) -> InitCliMode:
-    console.print("──────────────────────────────\n")
-    console.print("Choose your SQLMesh CLI experience:\n")
-
-    cli_mode_descriptions = {
-        InitCliMode.DEFAULT.name: "- See and control every detail",
-        InitCliMode.SIMPLE.name: " - Automatically run changes and show summary output",
-    }
-
-    display_num_to_cli_mode = _init_display_choices(cli_mode_descriptions, console)
-
-    cli_mode_num = _init_integer_prompt(
-        console, "config", len(cli_mode_descriptions), _init_cli_mode_prompt
-    )
-
-    return InitCliMode(display_num_to_cli_mode[cli_mode_num].lower())
 
 
 def _check_engine_installed(console: Console, engine_type: t.Optional[str] = None) -> None:
