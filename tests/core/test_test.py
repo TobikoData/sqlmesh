@@ -2268,7 +2268,7 @@ This is a test
 ----------------------------------------------------------------------
 AssertionError: Data mismatch (exp: expected, act: actual)
 
-  num_orders
+  num_orders     
          exp  act
 1        2.0  1.0
 
