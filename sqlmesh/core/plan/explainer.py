@@ -17,7 +17,7 @@ from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.snapshot.definition import (
     SnapshotInfoMixin,
 )
-from sqlmesh.utils import Verbosity, rich as srich
+from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -73,7 +73,7 @@ class RichExplainerConsole(ExplainerConsole):
     def explain(self, stages: t.List[stages.PlanStage]) -> None:
         tree = Tree("[bold]Explained plan[/bold]")
         for stage in stages:
-            handler_name = f"visit_{_to_snake_case(stage.__class__.__name__)}"
+            handler_name = f"visit_{to_snake_case(stage.__class__.__name__)}"
             if not hasattr(self, handler_name):
                 logger.error("Unexpected stage: %s", stage.__class__.__name__)
                 continue
@@ -97,6 +97,9 @@ class RichExplainerConsole(ExplainerConsole):
             "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
         )
         for snapshot in stage.snapshots:
+            if snapshot.snapshot_id not in stage.snapshots_with_missing_intervals:
+                continue
+
             is_deployable = (
                 stage.deployability_index.is_deployable(snapshot)
                 if self.environment_naming_info.name != c.PROD
@@ -233,8 +236,21 @@ class RichExplainerConsole(ExplainerConsole):
             tree.add(self._limit_tree(demote_tree))
         return tree
 
+    def visit_create_snapshot_records_stage(
+        self, stage: stages.CreateSnapshotRecordsStage
+    ) -> t.Optional[Tree]:
+        return None
+
     def visit_environment_record_update_stage(
         self, stage: stages.EnvironmentRecordUpdateStage
+    ) -> t.Optional[Tree]:
+        return None
+
+    def visit_unpause_stage(self, stage: stages.UnpauseStage) -> t.Optional[Tree]:
+        return None
+
+    def visit_finalize_environment_stage(
+        self, stage: stages.FinalizeEnvironmentStage
     ) -> t.Optional[Tree]:
         return None
 
@@ -272,10 +288,4 @@ def _get_explainer_console(
         default_catalog=default_catalog,
         verbosity=console.verbosity,
         console=console.console,
-    )
-
-
-def _to_snake_case(name: str) -> str:
-    return "".join(
-        f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
     )

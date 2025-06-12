@@ -41,7 +41,6 @@ from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSharedConnectionPool
@@ -270,24 +269,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     sushi_context.console = mock_console
     yesterday = yesterday_ds()
     success = sushi_context.run(start=yesterday, end=yesterday)
-
-    plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync,
-        sushi_context.snapshot_evaluator,
-        sushi_context.create_scheduler,
-        sushi_context.default_catalog,
-    )
-
-    plan = PlanBuilder(
-        context_diff=sushi_context._context_diff("prod"),
-    ).build()
-
-    # stringify used to trigger an unhashable exception due to
-    # https://github.com/pydantic/pydantic/issues/8016
-    assert str(plan) != ""
-
-    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
-    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
 
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
