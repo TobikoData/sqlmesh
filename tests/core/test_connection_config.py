@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from unittest.mock import patch
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -19,6 +20,7 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
+    MSSQLConnectionConfig,
     _connection_config_validator,
     _get_engine_import_validator,
 )
@@ -1127,3 +1129,266 @@ def test_engine_import_validator():
         _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
 
     TestConfigC()
+
+
+def test_mssql_engine_import_validator():
+    """Test that MSSQL import validator respects driver configuration."""
+
+    # Test PyODBC driver suggests mssql-odbc extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql-odbc\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pyodbc'")
+            MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+
+    # Test PyMSSQL driver suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost", driver="pymssql")
+
+    # Test default driver (pymssql) suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost")  # No driver specified
+
+    # Test successful import works without error
+    with patch("importlib.import_module") as mock_import:
+        mock_import.return_value = None
+        config = MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+        assert config.driver == "pyodbc"
+
+
+def test_mssql_connection_config_parameter_validation(make_config):
+    """Test MSSQL connection config parameter validation."""
+    # Test default driver is pymssql
+    config = make_config(type="mssql", host="localhost", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test explicit pyodbc driver
+    config = make_config(type="mssql", host="localhost", driver="pyodbc", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pyodbc"
+
+    # Test explicit pymssql driver
+    config = make_config(type="mssql", host="localhost", driver="pymssql", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test pyodbc specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pyodbc",
+        driver_name="ODBC Driver 18 for SQL Server",
+        trust_server_certificate=True,
+        encrypt=False,
+        odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver_name == "ODBC Driver 18 for SQL Server"
+    assert config.trust_server_certificate is True
+    assert config.encrypt is False
+    assert config.odbc_properties == {"Authentication": "ActiveDirectoryServicePrincipal"}
+
+    # Test pymssql specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pymssql",
+        tds_version="7.4",
+        conn_properties=["SET ANSI_NULLS ON"],
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.tds_version == "7.4"
+    assert config.conn_properties == ["SET ANSI_NULLS ON"]
+
+
+def test_mssql_connection_kwargs_keys():
+    """Test _connection_kwargs_keys returns correct keys for each driver variant."""
+    # Test pymssql driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pymssql", check_import=False)
+    pymssql_keys = config._connection_kwargs_keys
+    expected_pymssql_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "tds_version",
+        "conn_properties",
+        "autocommit",
+    }
+    assert pymssql_keys == expected_pymssql_keys
+
+    # Test pyodbc driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pyodbc", check_import=False)
+    pyodbc_keys = config._connection_kwargs_keys
+    expected_pyodbc_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "autocommit",
+        "driver_name",
+        "trust_server_certificate",
+        "encrypt",
+        "odbc_properties",
+    }
+    assert pyodbc_keys == expected_pyodbc_keys
+
+    # Verify pyodbc keys don't include pymssql-specific parameters
+    assert "tds_version" not in pyodbc_keys
+    assert "conn_properties" not in pyodbc_keys
+
+
+def test_mssql_pyodbc_connection_string_generation():
+    """Test pyodbc.connect gets invoked with the correct ODBC connection string."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Mock the return value to have the methods we need
+        mock_connection = mock_pyodbc_connect.return_value
+
+        # Create a pyodbc config
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            port=1433,
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            driver="pyodbc",
+            driver_name="ODBC Driver 18 for SQL Server",
+            trust_server_certificate=True,
+            encrypt=True,
+            login_timeout=30,
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called with the correct connection string
+        mock_pyodbc_connect.assert_called_once()
+        call_args = mock_pyodbc_connect.call_args
+
+        # Check the connection string (first argument)
+        conn_str = call_args[0][0]
+        expected_parts = [
+            "DRIVER={ODBC Driver 18 for SQL Server}",
+            "SERVER=testserver.database.windows.net,1433",
+            "DATABASE=testdb",
+            "Encrypt=YES",
+            "TrustServerCertificate=YES",
+            "Connection Timeout=30",
+            "UID=testuser",
+            "PWD=testpass",
+        ]
+
+        for part in expected_parts:
+            assert part in conn_str
+
+        # Check autocommit parameter
+        assert call_args[1]["autocommit"] is False
+
+
+def test_mssql_pyodbc_connection_string_with_odbc_properties():
+    """Test pyodbc connection string includes custom ODBC properties."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Create a pyodbc config with custom ODBC properties
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            database="testdb",
+            user="client-id",
+            password="client-secret",
+            driver="pyodbc",
+            odbc_properties={
+                "Authentication": "ActiveDirectoryServicePrincipal",
+                "ClientCertificate": "/path/to/cert.pem",
+                "TrustServerCertificate": "NO",  # This should be ignored since we set it explicitly
+            },
+            trust_server_certificate=True,  # This should take precedence
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check that custom ODBC properties are included
+        assert "Authentication=ActiveDirectoryServicePrincipal" in conn_str
+        assert "ClientCertificate=/path/to/cert.pem" in conn_str
+
+        # Verify that explicit trust_server_certificate takes precedence
+        assert "TrustServerCertificate=YES" in conn_str
+
+        # Should not have the conflicting property from odbc_properties
+        assert conn_str.count("TrustServerCertificate") == 1
+
+
+def test_mssql_pyodbc_connection_string_minimal():
+    """Test pyodbc connection string with minimal configuration."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",
+            autocommit=True,
+            check_import=False,
+        )
+
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check basic required parts
+        assert "DRIVER={ODBC Driver 18 for SQL Server}" in conn_str
+        assert "SERVER=localhost,1433" in conn_str
+        assert "Encrypt=YES" in conn_str  # Default encrypt=True
+        assert "Connection Timeout=60" in conn_str  # Default timeout
+
+        # Check autocommit parameter
+        assert mock_pyodbc_connect.call_args[1]["autocommit"] is True
+
+
+def test_mssql_pymssql_connection_factory():
+    """Test pymssql connection factory returns correct function."""
+    # Mock the import of pymssql at the module level
+    import sys
+    from unittest.mock import MagicMock
+
+    # Create a mock pymssql module
+    mock_pymssql = MagicMock()
+    sys.modules["pymssql"] = mock_pymssql
+
+    try:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pymssql",
+            check_import=False,
+        )
+
+        factory = config._connection_factory
+
+        # Verify the factory returns pymssql.connect
+        assert factory is mock_pymssql.connect
+    finally:
+        # Clean up the mock module
+        if "pymssql" in sys.modules:
+            del sys.modules["pymssql"]

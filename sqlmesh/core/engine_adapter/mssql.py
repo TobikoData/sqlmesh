@@ -219,6 +219,10 @@ class MSSQLEngineAdapter(
         assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")
 
+        # Return the superclass implementation if the connection pool doesn't support bulk_copy
+        if not hasattr(self._connection_pool.get(), "bulk_copy"):
+            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+
         def query_factory() -> Query:
             # It is possible for the factory to be called multiple times and if so then the temp table will already
             # be created so we skip creating again. This means we are assuming the first call is the same result
