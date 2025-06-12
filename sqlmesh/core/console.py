@@ -499,10 +499,6 @@ class Console(
     def loading_stop(self, id: uuid.UUID) -> None:
         """Stop loading for the given id."""
 
-    @abc.abstractmethod
-    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
-        """Print the unit test results."""
-
 
 class NoopConsole(Console):
     def start_plan_evaluation(self, plan: EvaluatablePlan) -> None:
@@ -780,9 +776,6 @@ class NoopConsole(Console):
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
-        pass
-
-    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
         pass
 
 
@@ -1963,7 +1956,7 @@ class TerminalConsole(Console):
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         divider_length = 70
 
-        self.log_unit_test_results(result)
+        self._log_unit_test_results(result)
         self._print("\n")
 
         if result.wasSuccessful():
@@ -1987,7 +1980,7 @@ class TerminalConsole(Console):
 
     def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
         with self.console.capture() as capture:
-            self.log_unit_test_results(result)
+            self._log_unit_test_results(result)
         return strip_ansi_codes(capture.get())
 
     def show_sql(self, sql: str) -> None:
@@ -2506,7 +2499,14 @@ class TerminalConsole(Console):
         else:
             self.log_warning(msg)
 
-    def log_unit_test_results(self, result: ModelTextTestResult) -> None:
+    def _log_unit_test_results(self, result: ModelTextTestResult) -> None:
+        """
+        This is a helper method that encapsulates the logic for logging the relevant unittest for the result.
+        The top level method (`log_test_results`) reuses `_log_unit_test_results` differently based on the console.
+
+        Args:
+            result: The unittest test result that contains metrics like num success, fails, ect.
+        """
         tests_run = result.testsRun
         errors = result.errors
         failures = result.failures
@@ -3208,7 +3208,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
         else:
             self._print("```")
-            self.log_unit_test_results(result)
+            self._log_unit_test_results(result)
             self._print("```\n\n")
 
             self._print(

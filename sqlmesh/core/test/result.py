@@ -102,17 +102,6 @@ class ModelTextTestResult(unittest.TextTestResult):
 
         self.successes.append(test)
 
-    def log_test_report(self) -> None:
-        """
-        Log the test report following unittest's conventions.
-
-        Args:
-            test_duration: The duration of the tests.
-        """
-        from sqlmesh.core.console import get_console
-
-        get_console().log_unit_test_results(self)
-
     def merge(self, other: ModelTextTestResult) -> None:
         if other.successes:
             self.addSuccess(other.successes[0])

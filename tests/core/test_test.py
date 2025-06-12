@@ -2631,7 +2631,7 @@ test_foo:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
     with capture_output() as captured_output:
-        result.log_test_report()
+        get_console().log_test_results(result, "duckdb")
 
     output = captured_output.stdout
 
