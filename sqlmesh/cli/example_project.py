@@ -2,12 +2,17 @@ import typing as t
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
-
+from rich.prompt import Prompt
+from rich.console import Console
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
 
-from sqlmesh.core.config.connection import CONNECTION_CONFIG_TO_TYPE, DIALECT_TO_TYPE
+from sqlmesh.core.config.connection import (
+    CONNECTION_CONFIG_TO_TYPE,
+    DIALECT_TO_TYPE,
+    INIT_DISPLAY_INFO_TO_TYPE,
+)
 
 
 PRIMITIVES = (str, int, bool, float)
@@ -390,3 +395,112 @@ def _create_tests(tests_path: Path, example_objects: ExampleObjects) -> None:
 def _write_file(path: Path, payload: str) -> None:
     with open(path, "w", encoding="utf-8") as fd:
         fd.write(payload)
+
+
+def interactive_init(
+    path: Path,
+    console: Console,
+    project_template: t.Optional[ProjectTemplate] = None,
+) -> t.Tuple[ProjectTemplate, t.Optional[str], t.Optional[InitCliMode]]:
+    console.print("──────────────────────────────")
+    console.print("Welcome to SQLMesh!")
+
+    project_template = _init_template_prompt(console) if not project_template else project_template
+
+    if project_template == ProjectTemplate.DBT:
+        return (project_template, None, None)
+
+    engine_type = _init_engine_prompt(console)
+    cli_mode = _init_cli_mode_prompt(console)
+
+    return (project_template, engine_type, cli_mode)
+
+
+def _init_integer_prompt(
+    console: Console, err_msg_entity: str, num_options: int, retry_func: t.Callable[[t.Any], t.Any]
+) -> int:
+    err_msg = "\nERROR: '{option_str}' is not a valid {err_msg_entity} number - please enter a number between 1 and {num_options} or exit with control+c\n"
+    while True:
+        option_str = Prompt.ask("Enter a number", console=console)
+
+        value_error = False
+        try:
+            option_num = int(option_str)
+        except ValueError:
+            value_error = True
+
+        if value_error or option_num < 1 or option_num > num_options:
+            console.print(
+                err_msg.format(
+                    option_str=option_str, err_msg_entity=err_msg_entity, num_options=num_options
+                ),
+                style="red",
+            )
+            continue
+        console.print("")
+        return option_num
+
+
+def _init_display_choices(values_dict: t.Dict[str, str], console: Console) -> t.Dict[int, str]:
+    display_num_to_value = {}
+    for i, value_str in enumerate(values_dict.keys()):
+        console.print(f"    \[{i + 1}] {value_str} {values_dict[value_str]}")
+        display_num_to_value[i + 1] = value_str
+    console.print("")
+    return display_num_to_value
+
+
+def _init_template_prompt(console: Console) -> ProjectTemplate:
+    console.print("──────────────────────────────\n")
+    console.print("What type of project do you want to set up?\n")
+
+    # These are ordered for user display - do not reorder
+    template_descriptions = {
+        ProjectTemplate.DEFAULT.name: "- Create SQLMesh example project models and files",
+        ProjectTemplate.DBT.value: "    - You have an existing dbt project and want to run it with SQLMesh",
+        ProjectTemplate.EMPTY.name: "  - Create a SQLMesh configuration file and project directories only",
+    }
+
+    display_num_to_template = _init_display_choices(template_descriptions, console)
+
+    template_num = _init_integer_prompt(
+        console, "project type", len(template_descriptions), _init_template_prompt
+    )
+
+    return ProjectTemplate(display_num_to_template[template_num].lower())
+
+
+def _init_engine_prompt(console: Console) -> str:
+    console.print("──────────────────────────────\n")
+    console.print("Choose your SQL engine:\n")
+
+    # INIT_DISPLAY_INFO_TO_TYPE is a dict of {engine_type: (display_order, display_name)}
+    DISPLAY_NAME_TO_TYPE = {v[1]: k for k, v in INIT_DISPLAY_INFO_TO_TYPE.items()}
+    ordered_engine_display_names = {
+        info[1]: "" for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    }
+    display_num_to_display_name = _init_display_choices(ordered_engine_display_names, console)
+
+    engine_num = _init_integer_prompt(
+        console, "engine", len(ordered_engine_display_names), _init_engine_prompt
+    )
+
+    return DISPLAY_NAME_TO_TYPE[display_num_to_display_name[engine_num]]
+
+
+def _init_cli_mode_prompt(console: Console) -> InitCliMode:
+    console.print("──────────────────────────────\n")
+    console.print("Choose your SQLMesh CLI experience:\n")
+
+    cli_mode_descriptions = {
+        InitCliMode.DEFAULT.name: "- See and control every detail",
+        InitCliMode.SIMPLE.name: " - Automatically run changes and show summary output",
+    }
+
+    display_num_to_cli_mode = _init_display_choices(cli_mode_descriptions, console)
+
+    cli_mode_num = _init_integer_prompt(
+        console, "config", len(cli_mode_descriptions), _init_cli_mode_prompt
+    )
+
+    return InitCliMode(display_num_to_cli_mode[cli_mode_num].lower())
