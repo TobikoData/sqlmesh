@@ -6448,13 +6448,13 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "Differences from the `prod` environment" in output.stdout
 
     assert (
-        """MODEL (
-   name test.a,
-+  owner test,
-   kind FULL
- )
- SELECT
--  5 AS col
+        """MODEL (                                                                        
+   name test.a,                                                                 
++  owner test,                                                                  
+   kind FULL                                                                    
+ )                                                                              
+ SELECT                                                                         
+-  5 AS col                                                                     
 +  10 AS col"""
         in output.stdout
     )
