@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.helper import seq_get
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core.config import Config
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import _CLUSTERING_META_KEY

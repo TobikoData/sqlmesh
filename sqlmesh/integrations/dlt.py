@@ -138,7 +138,7 @@ def generate_dlt_models(
     force: bool,
     dlt_path: t.Optional[str] = None,
 ) -> t.List[str]:
-    from sqlmesh.cli.example_project import _create_models
+    from sqlmesh.cli.project_init import _create_models
 
     sqlmesh_models, _, _ = generate_dlt_models_and_settings(
         pipeline_name=pipeline_name,

@@ -14,7 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from IPython.utils.capture import capture_output
 
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,

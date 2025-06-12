@@ -26,7 +26,7 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core.config import load_configs
 from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE

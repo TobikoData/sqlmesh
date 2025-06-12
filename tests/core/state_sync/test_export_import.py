@@ -4,7 +4,7 @@ from sqlmesh.core.state_sync import StateSync, EngineAdapterStateSync, CachingSt
 from sqlmesh.core.state_sync.export_import import export_state, import_state
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core import constants as c
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.config import Config, GatewayConfig, DuckDBConnectionConfig, ModelDefaultsConfig

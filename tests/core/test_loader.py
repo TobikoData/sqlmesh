@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import ConfigError

@@ -9,7 +9,7 @@ import click
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.cli.example_project import (
+from sqlmesh.cli.project_init import (
     ProjectTemplate,
     init_example_project,
     InitCliMode,

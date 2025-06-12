@@ -12,7 +12,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
-from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 from pydantic import ValidationError

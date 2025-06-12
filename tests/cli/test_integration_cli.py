@@ -2,7 +2,7 @@ import typing as t
 from pathlib import Path
 import pytest
 import subprocess
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.utils import yaml
 import shutil
 import site
