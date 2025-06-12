@@ -68,6 +68,13 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
+        # Cache of the macro evaluator to be able to reuse it outside the render method
+        self._macro_evaluator: t.Optional[MacroEvaluator] = None
+
+    @property
+    def macro_evaluator(self) -> t.Optional[MacroEvaluator]:
+        """Returns the cached macro evaluator from the last render operation."""
+        return self._macro_evaluator
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -171,6 +178,7 @@ class BaseExpressionRenderer:
             environment_naming_info=environment_naming_info,
             model_fqn=self._model_fqn,
         )
+        self._macro_evaluator = macro_evaluator
 
         start_time, end_time = (
             make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
