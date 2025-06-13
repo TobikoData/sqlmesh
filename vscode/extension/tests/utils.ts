@@ -5,7 +5,7 @@ import { _electron as electron, Page } from '@playwright/test'
 
 // Absolute path to the VS Code executable you downloaded in step 1.
 export const VS_CODE_EXE = fs.readJsonSync(
-  '.vscode-test/paths.json',
+  path.join(__dirname, '..', '.vscode-test', 'paths.json'),
 ).executablePath
 // Where your extension lives on disk
 export const EXT_PATH = path.resolve(__dirname, '..')
