@@ -18,6 +18,7 @@ export const SUSHI_SOURCE_PATH = path.join(
   'examples',
   'sushi',
 )
+export const REPO_ROOT = path.join(__dirname, '..', '..', '..')
 
 /**
  * Launch VS Code and return the window and a function to close the app.
