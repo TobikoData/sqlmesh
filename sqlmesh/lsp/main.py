@@ -294,32 +294,6 @@ class SQLMeshLanguageServer:
                     SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
                 )
 
-        @self.server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
-        def did_change(ls: LanguageServer, params: types.DidChangeTextDocumentParams) -> None:
-            if self.lsp_context is None:
-                current_path = Path.cwd()
-                self._ensure_context_in_folder(current_path)
-                if self.lsp_context is None:
-                    ls.log_trace("No context found after did_change")
-                    return
-
-            uri = URI(params.text_document.uri)
-            context = self._context_get_or_load(uri)
-
-            models = context.map[uri.to_path()]
-            if models is None or not isinstance(models, ModelTarget):
-                return
-
-            # Get diagnostics from context (which handles caching)
-            diagnostics = context.lint_model(uri)
-
-            # Only publish diagnostics if client doesn't support pull diagnostics
-            if not self.client_supports_pull_diagnostics:
-                ls.publish_diagnostics(
-                    params.text_document.uri,
-                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
-                )
-
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
@@ -753,15 +727,19 @@ class SQLMeshLanguageServer:
 
         loaded = False
         # Ascend directories to look for config
-        while path.parents and not loaded:
+        current_dir = path.parent  # Start from the file's parent directory
+        while current_dir.parents and not loaded:
             for ext in ("py", "yml", "yaml"):
-                config_path = path / f"config.{ext}"
+                config_path = current_dir / f"config.{ext}"
                 if config_path.exists():
-                    if self._create_lsp_context([path]):
+                    if self._create_lsp_context([current_dir]):
                         loaded = True
                         # Re-check context for the document now that it's loaded
                         return self._ensure_context_for_document(document_uri)
-            path = path.parent
+            # Check if we've reached the filesystem root to prevent infinite loops
+            if current_dir == current_dir.parent:
+                break
+            current_dir = current_dir.parent
 
         # If still no context found, try the workspace folders
         if not loaded:
