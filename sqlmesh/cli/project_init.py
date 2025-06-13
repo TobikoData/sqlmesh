@@ -27,7 +27,7 @@ class ProjectTemplate(Enum):
 
 class InitCliMode(Enum):
     DEFAULT = "default"
-    SIMPLE = "simple"
+    FLOW = "flow"
 
 
 def _gen_config(
@@ -121,7 +121,7 @@ config = sqlmesh_config(Path(__file__).parent)
     default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
     default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
 
-    simple_cli_mode = """
+    flow_cli_mode = """
 # Minimal prompts, automatic changes, summary output
 # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
 
@@ -139,7 +139,7 @@ plan:
 # sqlmesh plan prod       # To apply changes to production
 """
 
-    return default_configs[template] + (simple_cli_mode if cli_mode == InitCliMode.SIMPLE else "")
+    return default_configs[template] + (flow_cli_mode if cli_mode == InitCliMode.FLOW else "")
 
 
 @dataclass
@@ -297,7 +297,7 @@ def init_example_project(
 
     if template == ProjectTemplate.DBT and not Path(root_path, "dbt_project.yml").exists():
         raise SQLMeshError(
-            "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\n Please add it or change directories before running `sqlmesh init` to set up your project."
+            "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\nPlease add it or change directories before running `sqlmesh init` to set up your project."
         )
 
     engine_types = "', '".join(CONNECTION_CONFIG_TO_TYPE)
@@ -492,7 +492,7 @@ def _init_cli_mode_prompt(console: Console) -> InitCliMode:
 
     cli_mode_descriptions = {
         InitCliMode.DEFAULT.name: "- See and control every detail",
-        InitCliMode.SIMPLE.name: " - Automatically run changes and show summary output",
+        InitCliMode.FLOW.name: "   - Automatically run changes and show summary output",
     }
 
     display_num_to_cli_mode = _init_display_choices(cli_mode_descriptions, console)
