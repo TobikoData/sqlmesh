@@ -3095,3 +3095,111 @@ def test_user_provided_flags(sushi_context: Context):
         context_diff,
     ).build()
     assert plan_builder.user_provided_flags == None
+
+
+@time_machine.travel(now())
+@pytest.mark.parametrize(
+    "input,output",
+    [
+        # execution_time, start, end
+        (
+            # no execution time, start or end
+            (None, None, None),
+            # execution time defaults to now()
+            # start defaults to 1 day before execution time
+            # end defaults to execution_time
+            (now(), yesterday_ds(), now()),
+        ),
+        (
+            # fixed execution time, no start, no end
+            ("2020-01-05", None, None),
+            # execution time set to 2020-01-05
+            # start defaults to 1 day before execution time
+            # end defaults to execution time
+            ("2020-01-05", "2020-01-04", "2020-01-05"),
+        ),
+        (
+            # fixed execution time, relative start, no end
+            ("2020-01-05", "2 days ago", None),
+            # execution time set to 2020-01-05
+            # start relative to execution time
+            # end defaults to execution time
+            ("2020-01-05", "2020-01-03", "2020-01-05"),
+        ),
+        (
+            # fixed execution time, relative start, relative end
+            ("2020-01-05", "2 days ago", "1 day ago"),
+            # execution time set to 2020-01-05
+            # start relative to execution time
+            # end relative to execution time
+            ("2020-01-05", "2020-01-03", "2020-01-04"),
+        ),
+        (
+            # fixed execution time, fixed start, fixed end
+            ("2020-01-05", "2020-01-01", "2020-01-05"),
+            # fixed dates are all in the valid range
+            ("2020-01-05", "2020-01-01", "2020-01-05"),
+        ),
+        (
+            # fixed execution time, fixed start, fixed end
+            ("2020-01-05", "2020-01-05", "2020-01-01"),
+            # Error because start is after end
+            r"Plan end date.*must be after the plan start date",
+        ),
+        (
+            # fixed execution time, relative start, fixed end beyond fixed execution time
+            ("2020-01-05", "2 days ago", "2021-01-01"),
+            # Error because end is set to 2021-01-01 which is after the execution time
+            r"Plan end date.*cannot be in the future",
+        ),
+    ],
+)
+def test_plan_dates_relative_to_execution_time(
+    input: t.Tuple[t.Optional[str], ...],
+    output: t.Union[str, t.Tuple[t.Optional[str], ...]],
+    make_snapshot: t.Callable,
+):
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), dialect="duckdb")
+    )
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added={snapshot_a.snapshot_id},
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+    )
+
+    input_execution_time, input_start, input_end = input
+
+    def _build_plan() -> Plan:
+        return PlanBuilder(
+            context_diff,
+            start=input_start,
+            end=input_end,
+            execution_time=input_execution_time,
+            is_dev=True,
+        ).build()
+
+    if isinstance(output, str):
+        with pytest.raises(PlanError, match=output):
+            _build_plan()
+    else:
+        output_execution_time, output_start, output_end = output
+
+        plan = _build_plan()
+        assert to_datetime(plan.start) == to_datetime(output_start)
+        assert to_datetime(plan.end) == to_datetime(output_end)
+        assert to_datetime(plan.execution_time) == to_datetime(output_execution_time)

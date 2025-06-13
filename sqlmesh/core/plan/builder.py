@@ -41,6 +41,8 @@ from sqlmesh.utils.date import (
     to_datetime,
     yesterday_ds,
     to_timestamp,
+    time_like_to_str,
+    is_relative,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError
 
@@ -55,6 +57,7 @@ class PlanBuilder:
         start: The start time to backfill data.
         end: The end time to backfill data.
         execution_time: The date/time time reference to use for execution time. Defaults to now.
+            If :start or :end are relative time expressions, they are interpreted as relative to the :execution_time
         apply: The callback to apply the plan.
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
@@ -137,7 +140,14 @@ class PlanBuilder:
         self._include_unmodified = include_unmodified
         self._restate_models = set(restate_models) if restate_models is not None else None
         self._effective_from = effective_from
+
+        # note: this deliberately doesnt default to now() here.
+        # There may be an significant delay between the PlanBuilder producing a Plan and the Plan actually being run
+        # so if execution_time=None is passed to the PlanBuilder, then the resulting Plan should also have execution_time=None
+        # in order to prevent the Plan that was intended to run "as at now" from having "now" fixed to some time in the past
+        # ref: https://github.com/TobikoData/sqlmesh/pull/4702#discussion_r2140696156
         self._execution_time = execution_time
+
         self._backfill_models = backfill_models
         self._end = end or default_end
         self._apply = apply
@@ -171,6 +181,26 @@ class PlanBuilder:
     def is_start_and_end_allowed(self) -> bool:
         """Indicates whether this plan allows to set the start and end dates."""
         return self._is_dev or bool(self._restate_models)
+
+    @property
+    def start(self) -> t.Optional[TimeLike]:
+        if self._start and is_relative(self._start):
+            # only do this for relative expressions otherwise inclusive date strings like '2020-01-01' can be turned into exclusive timestamps eg '2020-01-01 00:00:00'
+            return to_datetime(self._start, relative_base=to_datetime(self.execution_time))
+        return self._start
+
+    @property
+    def end(self) -> t.Optional[TimeLike]:
+        if self._end and is_relative(self._end):
+            # only do this for relative expressions otherwise inclusive date strings like '2020-01-01' can be turned into exclusive timestamps eg '2020-01-01 00:00:00'
+            return to_datetime(self._end, relative_base=to_datetime(self.execution_time))
+        return self._end
+
+    @cached_property
+    def execution_time(self) -> TimeLike:
+        # this is cached to return a stable value from now() in the places where the execution time matters for resolving relative date strings
+        # during the plan building process
+        return self._execution_time or now()
 
     def set_start(self, new_start: TimeLike) -> PlanBuilder:
         self._start = new_start
@@ -256,7 +286,8 @@ class PlanBuilder:
         )
 
         restatements = self._build_restatements(
-            dag, earliest_interval_start(self._context_diff.snapshots.values())
+            dag,
+            earliest_interval_start(self._context_diff.snapshots.values(), self.execution_time),
         )
         models_to_backfill = self._build_models_to_backfill(dag, restatements)
 
@@ -266,11 +297,17 @@ class PlanBuilder:
             # model should be ignored.
             interval_end_per_model = None
 
+        # this deliberately uses the passed in self._execution_time and not self.execution_time cached property
+        # the reason is because that there can be a delay between the Plan being built and the Plan being actually run,
+        # so this ensures that an _execution_time of None can be propagated to the Plan and thus be re-resolved to
+        # the current timestamp of when the Plan is eventually run
+        plan_execution_time = self._execution_time
+
         plan = Plan(
             context_diff=self._context_diff,
             plan_id=self._plan_id,
-            provided_start=self._start,
-            provided_end=self._end,
+            provided_start=self.start,
+            provided_end=self.end,
             is_dev=self._is_dev,
             skip_backfill=self._skip_backfill,
             empty_backfill=self._empty_backfill,
@@ -289,7 +326,7 @@ class PlanBuilder:
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
-            execution_time=self._execution_time,
+            execution_time=plan_execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
             user_provided_flags=self._user_provided_flags,
@@ -738,6 +775,18 @@ class PlanBuilder:
             raise PlanError(
                 "The start and end dates can't be set for a production plan without restatements."
             )
+
+        if (start := self.start) and (end := self.end):
+            if to_datetime(start) > to_datetime(end):
+                raise PlanError(
+                    f"Plan end date: '{time_like_to_str(end)}' must be after the plan start date: '{time_like_to_str(start)}'"
+                )
+
+        if end := self.end:
+            if to_datetime(end) > to_datetime(self.execution_time):
+                raise PlanError(
+                    f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
+                )
 
     def _ensure_no_forward_only_revert(self) -> None:
         """Ensures that a previously superseded breaking / non-breaking snapshot is not being

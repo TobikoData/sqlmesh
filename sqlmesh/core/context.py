@@ -120,7 +120,14 @@ from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, now_timestamp
+from sqlmesh.utils.date import (
+    TimeLike,
+    now_ds,
+    to_timestamp,
+    format_tz_datetime,
+    now_timestamp,
+    now,
+)
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -1513,7 +1520,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             # If no end date is specified, use the max interval end from prod
             # to prevent unintended evaluation of the entire DAG.
             default_start, default_end = self._get_plan_default_start_end(
-                snapshots, max_interval_end_per_model, backfill_models, modified_model_names
+                snapshots,
+                max_interval_end_per_model,
+                backfill_models,
+                modified_model_names,
+                execution_time or now(),
             )
 
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
@@ -2818,6 +2829,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         max_interval_end_per_model: t.Dict[str, int],
         backfill_models: t.Optional[t.Set[str]],
         modified_model_names: t.Set[str],
+        execution_time: t.Optional[TimeLike] = None,
     ) -> t.Tuple[t.Optional[int], t.Optional[int]]:
         if not max_interval_end_per_model:
             return None, None
@@ -2843,6 +2855,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                     )
                 ),
             )
+
+        if execution_time and to_timestamp(default_end) > to_timestamp(execution_time):
+            # the end date can't be in the future, which can happen if a specific `execution_time` is set and prod intervals
+            # are newer than it
+            default_end = to_timestamp(execution_time)
+
         return default_start, default_end
 
     def _get_max_interval_end_per_model(
