@@ -539,7 +539,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
-    _engine_import_validator = _get_engine_import_validator("snowflake", "snowflake")
 
     @model_validator(mode="before")
     def _validate_authenticator(cls, data: t.Any) -> t.Any:
@@ -565,6 +564,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             raise ConfigError("Token must be provided if using oauth authentication")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator(
+        "snowflake.connector.network", "snowflake"
+    )
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -733,7 +736,6 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
-    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
@@ -810,6 +812,8 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 raise ValueError("`http_path` is still required when using `auth_type`")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
