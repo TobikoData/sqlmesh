@@ -8,12 +8,18 @@ import {
   type ModelDefaultCatalog,
   type ModelDefinition,
 } from '@/api/client'
+import type { ModelFQN, ModelName, ModelPath } from '@/types/models'
 import { isArrayNotEmpty } from '@/utils/index'
 import { ModelInitial } from './initial'
 import type { Lineage } from './lineage'
 
-export interface InitialSQLMeshModel extends Model {
-  lineage?: Record<string, Lineage>
+export interface InitialSQLMeshModel
+  extends Omit<Model, 'name' | 'fqn' | 'path' | 'full_path'> {
+  name: ModelName
+  fqn: ModelFQN
+  path: ModelPath
+  full_path: ModelPath
+  lineage?: Record<ModelName, Lineage>
 }
 
 export class ModelSQLMeshModel<
@@ -22,9 +28,10 @@ export class ModelSQLMeshModel<
   _details: ModelDetails = {}
   _detailsIndex: string = ''
 
-  name: string
-  fqn: string
-  path: string
+  name: ModelName
+  fqn: ModelFQN
+  path: ModelPath
+  full_path: ModelPath
   dialect: string
   type: ModelType
   columns: Column[]
@@ -46,10 +53,11 @@ export class ModelSQLMeshModel<
           },
     )
 
-    this.name = encodeURI(this.initial.name)
-    this.fqn = encodeURI(this.initial.fqn)
+    this.name = encodeURI(this.initial.name) as ModelName
+    this.fqn = encodeURI(this.initial.fqn) as ModelFQN
     this.default_catalog = this.initial.default_catalog
-    this.path = this.initial.path
+    this.path = this.initial.path as ModelPath
+    this.full_path = this.initial.full_path as ModelPath
     this.dialect = this.initial.dialect
     this.description = this.initial.description
     this.sql = this.initial.sql
@@ -127,9 +135,9 @@ export class ModelSQLMeshModel<
       } else if (key === 'details') {
         this.details = value as ModelDetails
       } else if (key === 'name') {
-        this.name = encodeURI(value as string)
+        this.name = encodeURI(value as string) as ModelName
       } else if (key === 'fqn') {
-        this.fqn = encodeURI(value as string)
+        this.fqn = encodeURI(value as string) as ModelFQN
       } else if (key === 'type') {
         this.type = value as ModelType
       } else if (key === 'default_catalog') {
@@ -137,7 +145,11 @@ export class ModelSQLMeshModel<
       } else if (key === 'description') {
         this.description = value as ModelDescription
       } else if (key in this) {
-        this[key as 'path' | 'dialect' | 'sql'] = value as string
+        if (key === 'path' || key === 'full_path') {
+          ;(this as any)[key] = value as ModelPath
+        } else {
+          ;(this as any)[key] = value as string
+        }
       }
     }
   }
