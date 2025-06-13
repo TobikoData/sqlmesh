@@ -1,6 +1,8 @@
 # CLI
 
-In this quickstart, you'll use the SQLMesh command line interface (CLI) to get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
+In this quickstart, you'll use the SQLMesh command line interface (CLI) to get up and running with SQLMesh's scaffold generator.
+
+It will create an example project that runs locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 Before beginning, ensure that you meet all the [prerequisites](../prerequisites.md) for using SQLMesh.
 
@@ -39,36 +41,173 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
-If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
+If using a Python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
 
-Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
+### 1.1 Initialize the project
 
-In this example, we specify the `duckdb` dialect:
+SQLMesh includes a scaffold generator to initialize a new SQLMesh project.
+
+The scaffold generator will ask you some questions and create a SQLMesh configuration file based on your responses.
+
+Depending on your answers, it will also create multiple files for the SQLmesh example project used in this quickstart.
+
+Start the scaffold generator by executing the `sqlmesh init` command:
 
 ```bash
-sqlmesh init duckdb
+sqlmesh init
 ```
 
-The scaffold will include a SQLMesh configuration file for the example project.
+??? info "Skip the questions"
+
+    If you don't want to use the interactive scaffold generator, you can initialize your project with arguments to the [`sqlmesh init` command](../reference/cli.md#init).
+
+    The only required argument is `engine`, which specifies the SQL engine your project will use. Specify one of the engine `type`s in the [list of supported engines](../integrations/overview.md#execution-engines).
+
+    In this example, we specify the `duckdb` engine:
+
+    ```bash
+    sqlmesh init duckdb
+    ```
+
+    The scaffold will include a SQLMesh configuration file and example project directories and files. You're now ready to continue the quickstart [below](#2-create-a-prod-environment).
+
+#### Project type
+
+The first question asks about the type of project you want to create. Enter the number corresponding to the type of project you want to create and press `Enter`.
+
+``` bash
+──────────────────────────────
+Welcome to SQLMesh!
+──────────────────────────────
+
+What type of project do you want to set up?
+
+    [1] DEFAULT - Create SQLMesh example project models and files
+    [2] dbt     - You have an existing dbt project and want to run it with SQLMesh
+    [3] EMPTY   - Create a SQLMesh configuration file and project directories only
+
+Enter a number: 1
+```
+
+For this quickstart, choose the `DEFAULT` option `1` so the example project files are included in the project directories.
+
+#### SQL engine
+
+The second question asks which SQL engine your project will use. SQLMesh will include that engine's connection settings in the configuration file, which you will fill in later to connect your project to the engine.
+
+For this quickstart, choose the `DuckDB` option `1` so we can run the example project with the built-in DuckDB engine that doesn't need additional configuration.
+
+``` bash
+Choose your SQL engine:
+
+    [1]  DuckDB
+    [2]  Snowflake
+    [3]  Databricks
+    [4]  BigQuery
+    [5]  MotherDuck
+    [6]  ClickHouse
+    [7]  Redshift
+    [8]  Spark
+    [9]  Trino
+    [10] Azure SQL
+    [11] MSSQL
+    [12] Postgres
+    [13] GCP Postgres
+    [14] MySQL
+    [15] Athena
+    [16] RisingWave
+
+Enter a number: 1
+```
+
+#### CLI mode
+
+SQLMesh's core commands have multiple options that alter their behavior. Some of those options streamline the SQLMesh `plan` workflow and CLI output.
+
+If you prefer a streamlined workflow, choose the `FLOW` CLI mode to automatically include those options in your project configuration file. If you prefer to see all the output SQLMesh provides, choose `DEFAULT` mode.
+
+``` bash
+Choose your SQLMesh CLI experience:
+
+    [1] DEFAULT - See and control every detail
+    [2] FLOW    - Automatically run changes and show summary output
+
+Enter a number: 1
+```
+
+#### Ready to go
+
+Your project is now ready to go, and SQLMesh displays a message with some good next steps.
+
+If you chose the DuckDB engine, you're ready to move forward and run the example project with DuckDB.
+
+If you chose a different engine, add your engine's connection information to the `config.yaml` file before you run any additional SQLMesh commands.
+
+``` bash
+Your SQLMesh project is ready!
+
+Next steps:
+• Update your gateway connection settings (e.g., username/password) in the project configuration file:
+    /Users/trey/tobiko/sqlmesh/sqlmesh-example-fresh/test/config.yaml
+• Run command in CLI: sqlmesh plan
+• (Optional) Explain a plan: sqlmesh plan --explain
+
+Quickstart guide:
+https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/
+
+Need help?
+• Docs:   https://sqlmesh.readthedocs.io
+• Slack:  https://www.tobikodata.com/slack
+• GitHub: https://github.com/TobikoData/sqlmesh/issues
+```
 
 ??? info "Learn more about the project's configuration"
     SQLMesh project-level configuration parameters are specified in the `config.yaml` file in the project directory.
 
-    This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the local gateway's connection and the `local` gateway as the default.
+    This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the gateway's connection type. All available configuration settings are included in the file, with optional settings set to their default value and commented out.
 
-    The command to run the scaffold generator **requires** a default SQL dialect for your models, which it places in the config `model_defaults` `dialect` key. In this example, we specified the `duckdb` SQL dialect as the default:
+    SQLMesh requires a default model SQL dialect. SQLMesh automatically specifies the SQL dialect for your project's SQL engine, which it places in the config `model_defaults` `dialect` key. In this example, we specified the DuckDB engine, so `duckdb` is the default SQL dialect:
 
     ```yaml linenums="1"
+    # --- Gateway Connection ---
     gateways:
-      local:
+      duckdb:
         connection:
-          type: duckdb
-          database: ./db.db
+          # For more information on configuring the connection to your execution engine, visit:
+          # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection
+          # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/duckdb/#connection-options
+          #
+          type: duckdb               # <-- DuckDB engine
+          database: db.db
+          # concurrent_tasks: 1
+          # register_comments: True  # <-- Optional setting `register_comments` has a default value of True
+          # pre_ping: False
+          # pretty_sql: False
+          # catalogs:                # <-- Optional setting `catalogs` has no default value
+          # extensions:
+          # connector_config:
+          # secrets:
+          # token:
 
-    default_gateway: local
+    default_gateway: duckdb
+
+    # --- Model Defaults ---
+    # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
     model_defaults:
-      dialect: duckdb
+      dialect: duckdb                # <-- Models written in DuckDB SQL dialect by default
+      start: 2025-06-12 # Start date for backfill history
+      cron: '@daily'    # Run models daily at 12am UTC (can override per model)
+
+    # --- Linting Rules ---
+    # Enforce standards for your team
+    # https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+    linter:
+      enabled: true
+      rules:
+        - ambiguousorinvalidcolumn
+        - invalidselectstarexpansion
     ```
 
     Learn more about SQLMesh project configuration [here](../reference/configuration.md).
@@ -133,13 +272,19 @@ SQLMesh's key actions are creating and applying *plans* to *environments*. At th
 
     SQLMesh's key actions are creating and applying *plans* to *environments*.
 
-    A [SQLMesh environment](../concepts/environments.md) is an isolated namespace containing models and the data they generated. The most important environment is `prod` ("production"), which consists of the databases behind the applications your business uses to operate each day. Environments other than `prod` provide a place where you can test and preview changes to model code before they go live and affect business operations.
+    A [SQLMesh environment](../concepts/environments.md) is an isolated namespace containing models and the data they generated.
 
-    A [SQLMesh plan](../concepts/plans.md) contains a comparison of one environment to another and the set of changes needed to bring them into alignment. For example, if a new SQL model was added, tested, and run in the `dev` environment, it would need to be added and run in the `prod` environment to bring them into alignment. SQLMesh identifies all such changes and classifies them as either breaking or non-breaking.
+    The most important environment is `prod` ("production"), which consists of the databases behind the applications your business uses to operate each day. Environments other than `prod` provide a place where you can test and preview changes to model code before they go live and affect business operations.
 
-    Breaking changes are those that invalidate data already existing in an environment. For example, if a `WHERE` clause was added to a model in the `dev` environment, existing data created by that model in the `prod` environment are now invalid because they may contain rows that would be filtered out by the new `WHERE` clause. Other changes, like adding a new column to a model in `dev`, are non-breaking because all the existing data in `prod` are still valid to use - only new data must be added to align the environments.
+    A [SQLMesh plan](../concepts/plans.md) contains a comparison of one environment to another and the set of changes needed to bring them into alignment.
 
-    After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan. It will prompt you to "backfill" data to apply the plan - in this context, backfill is a generic term for updating or adding to a table's data (including an initial load or full refresh).
+    For example, if a new SQL model was added, tested, and run in the `dev` environment, it would need to be added and run in the `prod` environment to bring them into alignment. SQLMesh identifies all such changes and classifies them as either breaking or non-breaking.
+
+    Breaking changes are those that invalidate data already existing in an environment. For example, if a `WHERE` clause was added to a model in the `dev` environment, existing data created by that model in the `prod` environment are now invalid because they may contain rows that would be filtered out by the new `WHERE` clause.
+
+    Other changes, like adding a new column to a model in `dev`, are non-breaking because all the existing data in `prod` are still valid to use - only new data must be added to align the environments.
+
+    After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan. It will prompt you to "backfill" data to apply the plan. (In this context, backfill is a generic term for updating or adding to a table's data, including an initial load or full refresh.)
 
 The first SQLMesh plan must execute every model to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output:
 
@@ -257,12 +402,9 @@ Updating physical layer ━━━━━━━━━━━━━━━━━━�
 
 ✔ Physical layer updated
 
-[1/1] sqlmesh_example.seed_model         [insert seed file]
-0.02s
-[1/1] sqlmesh_example.incremental_model  [insert 2020-01-01 -
-2025-04-17]            0.03s
-[1/1] sqlmesh_example.full_model         [full refresh, audits ✔1]     
-0.05s
+[1/1] sqlmesh_example.seed_model         [insert seed file]               0.02s
+[1/1] sqlmesh_example.incremental_model  [insert 2020-01-01 -2025-04-17]  0.03s
+[1/1] sqlmesh_example.full_model         [full refresh, audits ✔1]        0.05s
 Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 ✔ Model batches executed
@@ -327,7 +469,7 @@ Run `sqlmesh plan dev` to create a development environment called `dev`:
 $ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
----------------------------------------------------------------------- 
+----------------------------------------------------------------------
 
 New environment `dev` will be created from `prod`
 
@@ -341,25 +483,25 @@ Models:
     └── sqlmesh_example__dev.full_model
 
 ---
-                                                                       
-+++                                                                    
-                                                                       
+
++++
+
 @@ -14,6 +14,7 @@
-                                                                       
+
  SELECT
-   id,                                                                 
-   item_id,                                                            
+   id,
+   item_id,
 +  'z' AS new_column,
-   event_date                                                          
+   event_date
  FROM sqlmesh_example.seed_model
  WHERE
 
-Directly Modified: sqlmesh_example__dev.incremental_model 
+Directly Modified: sqlmesh_example__dev.incremental_model
 (Non-breaking)
 └── Indirectly Modified Children:
-    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)        
+    └── sqlmesh_example__dev.full_model (Indirect Non-breaking)
 Models needing backfill:
-└── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2025-04-17]  
+└── sqlmesh_example__dev.incremental_model: [2020-01-01 - 2025-04-17]
 Apply - Backfill Tables [y/n]:
 ```
 
@@ -378,8 +520,7 @@ Updating physical layer ━━━━━━━━━━━━━━━━━━�
 
 ✔ Physical layer updated
 
-[1/1] sqlmesh_example__dev.incremental_model  [insert 2020-01-01 - 
-2025-04-17] 0.03s
+[1/1] sqlmesh_example__dev.incremental_model  [insert 2020-01-01 - 2025-04-17] 0.03s
 Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
 ✔ Model batches executed
@@ -447,7 +588,7 @@ Enter `y` and press `Enter` at the `Apply - Virtual Update [y/n]:` prompt to app
 $ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
----------------------------------------------------------------------- 
+----------------------------------------------------------------------
 
 Differences from the `prod` environment:
 
@@ -458,20 +599,20 @@ Models:
     └── sqlmesh_example.full_model
 
 ---
-                                                                       
-+++                                                                    
-                                                                       
+
++++
+
 @@ -14,6 +14,7 @@
-                                                                       
+
  SELECT
-   id,                                                                 
-   item_id,                                                            
+   id,
+   item_id,
 +  'z' AS new_column,
-   event_date                                                          
+   event_date
  FROM sqlmesh_example.seed_model
  WHERE
 
-Directly Modified: sqlmesh_example.incremental_model (Non-breaking)    
+Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example.full_model (Indirect Non-breaking)
 Apply - Virtual Update [y/n]: y

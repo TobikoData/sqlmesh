@@ -267,15 +267,17 @@ Options:
 ## init
 
 ```
-Usage: sqlmesh init [OPTIONS] [SQL_DIALECT]
+Usage: sqlmesh init [OPTIONS] [ENGINE]
 
   Create a new SQLMesh repository.
 
 Options:
-  -t, --template TEXT  Project template. Supported values: dbt,
-                       dlt, default, empty.
+  -t, --template TEXT  Project template. Supported values: dbt, dlt, default,
+                       empty.
   --dlt-pipeline TEXT  DLT pipeline for which to generate a SQLMesh project.
-                       For use with dlt template.
+                       Use alongside template: dlt
+  --dlt-path TEXT      The directory where the DLT pipeline resides. Use
+                       alongside template: dlt
   --help               Show this message and exit.
 ```
 
