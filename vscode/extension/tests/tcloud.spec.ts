@@ -2,48 +2,35 @@ import { expect, test } from '@playwright/test'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { REPO_ROOT, startVSCode, SUSHI_SOURCE_PATH } from './utils'
-
-const execAsync = promisify(exec)
+import {
+  createVirtualEnvironment,
+  pipInstall,
+  REPO_ROOT,
+  startVSCode,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 
 /**
  * Helper function to create and set up a Python virtual environment
  */
 async function setupPythonEnvironment(envDir: string): Promise<string> {
   // Create virtual environment
-  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3'
-  const { stderr } = await execAsync(`${pythonCmd} -m venv "${envDir}"`)
-  if (stderr && !stderr.includes('WARNING')) {
-    throw new Error(`Failed to create venv: ${stderr}`)
-  }
-
-  // Get paths
-  const isWindows = process.platform === 'win32'
-  const binDir = path.join(envDir, isWindows ? 'Scripts' : 'bin')
-  const pythonPath = path.join(binDir, isWindows ? 'python.exe' : 'python')
-  const pipPath = path.join(binDir, isWindows ? 'pip.exe' : 'pip')
+  const pythonDetails = await createVirtualEnvironment(envDir)
 
   // Install the mock tcloud package
   const mockTcloudPath = path.join(__dirname, 'tcloud')
-  const { stderr: pipErr1 } = await execAsync(
-    `"${pipPath}" install -e "${mockTcloudPath}"`,
-  )
-  if (pipErr1 && !pipErr1.includes('WARNING') && !pipErr1.includes('notice')) {
-    throw new Error(`Failed to install mock tcloud: ${pipErr1}`)
-  }
+  await pipInstall(pythonDetails, [mockTcloudPath])
 
   // Install sqlmesh from the local repository with LSP support
-  const sqlmeshRepoPath = path.join(__dirname, '..', '..', '..') // Navigate to repo root from tests dir
-  const { stderr: pipErr2 } = await execAsync(
-    `"${pipPath}" install -e "${sqlmeshRepoPath}[lsp,bigquery]" "${REPO_ROOT}/examples/custom_materializations"`,
+  const customMaterializations = path.join(
+    REPO_ROOT,
+    'examples',
+    'custom_materializations',
   )
-  if (pipErr2 && !pipErr2.includes('WARNING') && !pipErr2.includes('notice')) {
-    throw new Error(`Failed to install sqlmesh: ${pipErr2}`)
-  }
+  const sqlmeshWithExtras = `${REPO_ROOT}[lsp,bigquery]`
+  await pipInstall(pythonDetails, [sqlmeshWithExtras, customMaterializations])
 
-  return pythonPath
+  return pythonDetails.pythonPath
 }
 
 /**
