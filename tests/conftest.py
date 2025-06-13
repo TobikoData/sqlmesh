@@ -257,6 +257,7 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.create_scheduler,
         context.default_catalog,
     )
+    deployability_index = DeployabilityIndex.create(context.snapshots.values())
     evaluatable_plan = plan.to_evaluatable()
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, context.state_sync, context.default_catalog
@@ -265,12 +266,12 @@ def push_plan(context: Context, plan: Plan) -> None:
         if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
             plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
-            stage.deployability_index = DeployabilityIndex.all_deployable()
+            stage.deployability_index = deployability_index
             plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.EnvironmentRecordUpdateStage):
             plan_evaluator.visit_environment_record_update_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.VirtualLayerUpdateStage):
-            stage.deployability_index = DeployabilityIndex.all_deployable()
+            stage.deployability_index = deployability_index
             plan_evaluator.visit_virtual_layer_update_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.FinalizeEnvironmentStage):
             plan_evaluator.visit_finalize_environment_stage(stage, evaluatable_plan)

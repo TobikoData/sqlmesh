@@ -227,7 +227,7 @@ class RichExplainerConsole(ExplainerConsole):
             "[bold]Delete views in the virtual layer for models that were removed[/bold]"
         )
         for snapshot in stage.demoted_snapshots:
-            display_name = self._display_name(snapshot)
+            display_name = self._display_name(snapshot, stage.demoted_environment_naming_info)
             demote_tree.add(display_name)
 
         if stage.promoted_snapshots:
@@ -254,9 +254,13 @@ class RichExplainerConsole(ExplainerConsole):
     ) -> t.Optional[Tree]:
         return None
 
-    def _display_name(self, snapshot: SnapshotInfoMixin) -> str:
+    def _display_name(
+        self,
+        snapshot: SnapshotInfoMixin,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+    ) -> str:
         return snapshot.display_name(
-            self.environment_naming_info,
+            environment_naming_info or self.environment_naming_info,
             self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
             dialect=self.dialect,
         )
