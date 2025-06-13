@@ -196,6 +196,13 @@ PlanStage = t.Union[
 
 
 class PlanStagesBuilder:
+    """The builder for the plan stages.
+
+    Args:
+        state_reader: The state reader to use to read the snapshots and environment.
+        default_catalog: The default catalog to use for the snapshots.
+    """
+
     def __init__(
         self,
         state_reader: StateReader,
@@ -205,6 +212,16 @@ class PlanStagesBuilder:
         self.default_catalog = default_catalog
 
     def build(self, plan: EvaluatablePlan) -> t.List[PlanStage]:
+        """Builds the plan stages for the given plan.
+
+        NOTE: Building the plan stages should NOT produce any side effects in the state or the data warehouse.
+
+        Args:
+            plan: The plan to build the stages for.
+
+        Returns:
+            A list of plan stages.
+        """
         new_snapshots = {s.snapshot_id: s for s in plan.new_snapshots}
         stored_snapshots = self.state_reader.get_snapshots(plan.environment.snapshots)
         snapshots = {**new_snapshots, **stored_snapshots}
