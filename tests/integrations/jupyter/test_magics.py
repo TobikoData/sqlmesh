@@ -134,7 +134,7 @@ def test_context(notebook, convert_all_html_output_to_text, get_all_html_output,
 def test_init(tmp_path, notebook, convert_all_html_output_to_text, get_all_html_output):
     with pytest.raises(UsageError, match="the following arguments are required: path"):
         notebook.run_line_magic(magic_name="init", line="")
-    with pytest.raises(UsageError, match="the following arguments are required: sql_dialect"):
+    with pytest.raises(UsageError, match="the following arguments are required: engine"):
         notebook.run_line_magic(magic_name="init", line="foo")
     with capture_output() as output:
         notebook.run_line_magic(magic_name="init", line=f"{tmp_path} duckdb")
