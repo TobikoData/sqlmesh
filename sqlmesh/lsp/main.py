@@ -31,6 +31,8 @@ from sqlmesh.lsp.custom import (
     RENDER_MODEL_FEATURE,
     SUPPORTED_METHODS_FEATURE,
     FORMAT_PROJECT_FEATURE,
+    LIST_ENVIRONMENTS_FEATURE,
+    PLAN_DIFF_FEATURE,
     AllModelsRequest,
     AllModelsResponse,
     AllModelsForRenderRequest,
@@ -43,6 +45,11 @@ from sqlmesh.lsp.custom import (
     FormatProjectRequest,
     FormatProjectResponse,
     CustomMethod,
+    ListEnvironmentsRequest,
+    ListEnvironmentsResponse,
+    PlanDiffRequest,
+    PlanDiffResponse,
+    PlanDiffEntry,
 )
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
@@ -89,6 +96,8 @@ class SQLMeshLanguageServer:
             API_FEATURE: self._custom_api,
             SUPPORTED_METHODS_FEATURE: self._custom_supported_methods,
             FORMAT_PROJECT_FEATURE: self._custom_format_project,
+            LIST_ENVIRONMENTS_FEATURE: self._custom_list_environments,
+            PLAN_DIFF_FEATURE: self._custom_plan_diff,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
@@ -210,6 +219,37 @@ class SQLMeshLanguageServer:
                     return ApiResponseGetColumnLineage(data=column_lineage_response)
 
         raise NotImplementedError(f"API request not implemented: {request.url}")
+
+    def _custom_list_environments(
+        self, ls: LanguageServer, params: ListEnvironmentsRequest
+    ) -> ListEnvironmentsResponse:
+        if self.lsp_context is None:
+            current_path = Path.cwd()
+            self._ensure_context_in_folder(current_path)
+        if self.lsp_context is None:
+            raise RuntimeError("No context found")
+
+        envs = self.lsp_context.context._new_state_sync().get_environments_summary()
+        return ListEnvironmentsResponse(environments=[e.name for e in envs])
+
+    def _custom_plan_diff(self, ls: LanguageServer, params: PlanDiffRequest) -> PlanDiffResponse:
+        if self.lsp_context is None:
+            current_path = Path.cwd()
+            self._ensure_context_in_folder(current_path)
+        if self.lsp_context is None:
+            raise RuntimeError("No context found")
+
+        plan = self.lsp_context.context.plan_builder(
+            params.environment,
+            skip_tests=True,
+            skip_backfill=True,
+        ).build()
+
+        diffs = [
+            PlanDiffEntry(name=name, diff=plan.context_diff.text_diff(name))
+            for name in plan.context_diff.modified_snapshots
+        ]
+        return PlanDiffResponse(diffs=diffs)
 
     def _custom_supported_methods(
         self, ls: LanguageServer, params: SupportedMethodsRequest

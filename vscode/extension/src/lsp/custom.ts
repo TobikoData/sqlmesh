@@ -33,6 +33,8 @@ export type CustomLSPMethods =
   | AllModelsForRenderMethod
   | SupportedMethodsMethod
   | FormatProjectMethod
+  | ListEnvironmentsMethod
+  | PlanDiffMethod
 
 interface AllModelsRequest {
   textDocument: {
@@ -106,3 +108,35 @@ interface FormatProjectRequest {}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface FormatProjectResponse {}
+
+export interface ListEnvironmentsMethod {
+  method: 'sqlmesh/list_environments'
+  request: ListEnvironmentsRequest
+  response: ListEnvironmentsResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface ListEnvironmentsRequest {}
+
+interface ListEnvironmentsResponse {
+  environments: string[]
+}
+
+export interface PlanDiffMethod {
+  method: 'sqlmesh/plan_diff'
+  request: PlanDiffRequest
+  response: PlanDiffResponse
+}
+
+interface PlanDiffRequest {
+  environment: string
+}
+
+interface PlanDiffEntry {
+  name: string
+  diff: string
+}
+
+interface PlanDiffResponse {
+  diffs: PlanDiffEntry[]
+}

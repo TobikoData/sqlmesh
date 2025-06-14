@@ -13,6 +13,7 @@ import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
 import { renderModel, reRenderModelForSourceFile } from './commands/renderModel'
+import { planDiff } from './commands/planDiff'
 import { isErr } from '@bus/result'
 import { handleError } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
@@ -80,6 +81,13 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'sqlmesh.format',
       format(authProvider, lspClient),
+    ),
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.plan',
+      planDiff(lspClient),
     ),
   )
 

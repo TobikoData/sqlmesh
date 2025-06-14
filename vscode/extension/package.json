@@ -93,6 +93,11 @@
         "title": "Render Model",
         "description": "Render the model in the current editor",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "sqlmesh.plan",
+        "title": "Show Plan Diff",
+        "description": "Create a plan and show the diff"
       }
     ],
     "menus": {
