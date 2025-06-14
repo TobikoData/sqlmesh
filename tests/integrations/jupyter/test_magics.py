@@ -707,20 +707,6 @@ def test_test(notebook, sushi_context):
     assert test_file.read_text() == """test_customer_revenue_by_day: TESTING\n"""
 
 
-def test_run_test(notebook, sushi_context):
-    with capture_output() as output:
-        notebook.run_line_magic(
-            magic_name="run_test",
-            line=f"{sushi_context.path / 'tests' / 'test_customer_revenue_by_day.yaml'}::test_customer_revenue_by_day",
-        )
-
-    assert not output.stdout
-    # TODO: Does it make sense for this to go to stderr?
-    assert "Ran 1 test" in output.stderr
-    assert "OK" in output.stderr
-    assert not output.outputs
-
-
 @pytest.mark.slow
 def test_audit(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     with capture_output() as output:

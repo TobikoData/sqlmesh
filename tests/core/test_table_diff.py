@@ -3,7 +3,6 @@ from pytest_mock.plugin import MockerFixture
 import pandas as pd  # noqa: TID253
 from sqlglot import exp
 from sqlmesh.core import dialect as d
-import re
 import typing as t
 from io import StringIO
 from rich.console import Console
@@ -14,6 +13,7 @@ from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.table_diff import TableDiff, SchemaDiff
 import numpy as np  # noqa: TID253
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.rich import strip_ansi_codes
 
 pytestmark = pytest.mark.slow
 
@@ -43,12 +43,6 @@ def capture_console_output(method_name: str, **kwargs) -> str:
         return console_output.getvalue()
     finally:
         console_output.close()
-
-
-def strip_ansi_codes(text: str) -> str:
-    """Strip ANSI color codes and styling from text."""
-    ansi_escape = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
-    return ansi_escape.sub("", text).strip()
 
 
 def test_data_diff(sushi_context_fixed_date, capsys, caplog):

@@ -15,10 +15,13 @@ class ModelTextTestResult(unittest.TextTestResult):
     successes: t.List[unittest.TestCase]
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
+        self.console = kwargs.pop("console", None)
         super().__init__(*args, **kwargs)
         self.successes = []
         self.original_failures: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
+        self.failure_tables: t.List[t.Tuple[t.Any, ...]] = []
         self.original_errors: t.List[t.Tuple[unittest.TestCase, ErrorType]] = []
+        self.duration: t.Optional[float] = None
 
     def addSubTest(
         self,
@@ -41,6 +44,12 @@ class ModelTextTestResult(unittest.TextTestResult):
 
         super().addSubTest(test, subtest, err)
 
+    def _print_char(self, char: str) -> None:
+        from sqlmesh.core.console import TerminalConsole
+
+        if isinstance(self.console, TerminalConsole):
+            self.console._print(char, end="")
+
     def addFailure(self, test: unittest.TestCase, err: ErrorType) -> None:
         """Called when the test case test signals a failure.
 
@@ -51,7 +60,18 @@ class ModelTextTestResult(unittest.TextTestResult):
             err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
         """
         exctype, value, _ = err
+
+        if value and value.args:
+            exception_msg, rich_tables = value.args[:1], value.args[1:]
+            value.args = exception_msg
+
+            if rich_tables:
+                self.failure_tables.append(rich_tables)
+
+        self._print_char("F")
+
         self.original_failures.append((test, err))
+
         # Intentionally ignore the traceback to hide it from the user
         return super().addFailure(test, (exctype, value, None))  # type: ignore
 
@@ -64,6 +84,9 @@ class ModelTextTestResult(unittest.TextTestResult):
         """
         exctype, value, _ = err
         self.original_errors.append((test, err))
+
+        self._print_char("E")
+
         # Intentionally ignore the traceback to hide it from the user
         return super().addError(test, (exctype, value, None))  # type: ignore
 
@@ -74,52 +97,24 @@ class ModelTextTestResult(unittest.TextTestResult):
             test: The test case
         """
         super().addSuccess(test)
+
+        self._print_char(".")
+
         self.successes.append(test)
 
-    def log_test_report(self, test_duration: float) -> None:
-        """
-        Log the test report following unittest's conventions.
+    def merge(self, other: ModelTextTestResult) -> None:
+        if other.successes:
+            self.addSuccess(other.successes[0])
+        elif other.errors:
+            for error_test, error in other.original_errors:
+                self.addError(error_test, error)
+        elif other.failures:
+            for failure_test, failure in other.original_failures:
+                self.addFailure(failure_test, failure)
 
-        Args:
-            test_duration: The duration of the tests.
-        """
-        tests_run = self.testsRun
-        errors = self.errors
-        failures = self.failures
-        skipped = self.skipped
+            self.failure_tables.extend(other.failure_tables)
+        elif other.skipped:
+            skipped_args = other.skipped[0]
+            self.addSkip(skipped_args[0], skipped_args[1])
 
-        is_success = not (errors or failures)
-
-        infos = []
-        if failures:
-            infos.append(f"failures={len(failures)}")
-        if errors:
-            infos.append(f"errors={len(errors)}")
-        if skipped:
-            infos.append(f"skipped={skipped}")
-
-        stream = self.stream
-
-        stream.write("\n")
-
-        for test_case, failure in failures:
-            stream.writeln(unittest.TextTestResult.separator1)
-            stream.writeln(f"FAIL: {test_case}")
-            if test_description := test_case.shortDescription():
-                stream.writeln(test_description)
-            stream.writeln(unittest.TextTestResult.separator2)
-            stream.writeln(failure)
-
-        for test_case, error in errors:
-            stream.writeln(unittest.TextTestResult.separator1)
-            stream.writeln(f"ERROR: {test_case}")
-            stream.writeln(error)
-
-        # Output final report
-        stream.writeln(unittest.TextTestResult.separator2)
-        stream.writeln(
-            f"Ran {tests_run} {'tests' if tests_run > 1 else 'test'} in {test_duration:.3f}s \n"
-        )
-        stream.writeln(
-            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
-        )
+        self.testsRun += 1

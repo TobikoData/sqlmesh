@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from sqlmesh.utils.metaprogramming import Executable
-from tests.core.test_table_diff import create_test_console, strip_ansi_codes
+from tests.core.test_table_diff import create_test_console
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -42,6 +42,7 @@ from sqlmesh.utils.date import (
     yesterday_ds,
 )
 from sqlmesh.utils.errors import PlanError
+from sqlmesh.utils.rich import strip_ansi_codes
 
 
 def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
