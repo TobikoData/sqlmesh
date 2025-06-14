@@ -9,6 +9,7 @@ import { traceInfo } from './common/log'
 export type ErrorType =
   | ErrorTypeGeneric
   | { type: 'not_signed_in' }
+  | { type: 'sqlmesh_not_found' }
   | { type: 'sqlmesh_lsp_not_found' }
   // tcloud_bin_not_found is used when the tcloud executable is not found. This is likely to happen if the user
   // opens a project that has a `tcloud.yaml` file but doesn't have tcloud installed.
@@ -85,6 +86,8 @@ export async function handleError(
       return
     case 'not_signed_in':
       return handleNotSignedInError(authProvider)
+    case 'sqlmesh_not_found':
+      return handleSqlmeshNotFoundError()
     case 'sqlmesh_lsp_not_found':
       return handleSqlmeshLspNotFoundError()
     case 'sqlmesh_lsp_dependencies_missing':
@@ -116,6 +119,14 @@ const handleNotSignedInError = async (
   if (result === 'Sign In') {
     await signIn(authProvider)()
   }
+}
+
+/**
+ * Handles the case where the sqlmesh executable is not found.
+ */
+const handleSqlmeshNotFoundError = async (): Promise<void> => {
+  traceInfo('handleSqlmeshNotFoundError')
+  await window.showErrorMessage('SQLMesh not found, please check installation')
 }
 
 /**

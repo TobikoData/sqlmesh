@@ -2,19 +2,14 @@ import { test, expect, Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { openLineageView, startVSCode, SUSHI_SOURCE_PATH } from './utils'
 import { writeFileSync } from 'fs'
 
 /**
  * Helper function to launch VS Code and test lineage with given project path config
  */
 async function testLineageWithProjectPath(window: Page): Promise<void> {
-  // Trigger lineage command
-  await window.keyboard.press(
-    process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-  )
-  await window.keyboard.type('Lineage: Focus On View')
-  await window.keyboard.press('Enter')
+  await openLineageView(window)
 
   // Wait for "Loaded SQLMesh context" text to appear
   const loadedContextText = window.locator('text=Loaded SQLMesh context')
