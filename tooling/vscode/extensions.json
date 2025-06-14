@@ -6,6 +6,7 @@
     "amodio.tsl-problem-matcher",
     "ms-vscode.extension-test-runner",
     "ms-playwright.playwright",
-    "esbenp.prettier-vscode"
+    "esbenp.prettier-vscode",
+    "charliermarsh.ruff"
   ]
 }
