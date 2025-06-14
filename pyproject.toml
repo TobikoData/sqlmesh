@@ -270,6 +270,7 @@ retry_delay = 10
 select = [
     "F401",
     "RET505",
+    "T100",
 ]
 extend-select = ["TID"]
 
