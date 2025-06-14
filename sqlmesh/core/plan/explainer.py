@@ -117,7 +117,9 @@ class RichExplainerConsole(ExplainerConsole):
 
             if snapshot.is_view:
                 create_tree = Tree("Create view if it doesn't exist")
-            elif snapshot.is_forward_only and snapshot.previous_versions:
+            elif (
+                snapshot.is_forward_only and snapshot.previous_versions and not snapshot.is_managed
+            ):
                 prod_table = snapshot.table_name(True)
                 create_tree = Tree(
                     f"Clone {prod_table} into {table_name} and then update its schema if it doesn't exist"
