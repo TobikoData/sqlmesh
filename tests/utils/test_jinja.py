@@ -9,6 +9,8 @@ from sqlmesh.utils.jinja import (
     MacroReturnVal,
     call_name,
     nodes,
+    extract_macro_references_and_variables,
+    extract_dbt_adapter_dispatch_targets,
 )
 
 
@@ -175,6 +177,54 @@ def test_macro_registry_trim():
     assert not trimmed_registry_for_package_b.root_macros
 
 
+def test_macro_registry_trim_keeps_dbt_adapter_dispatch():
+    registry = JinjaMacroRegistry()
+    extractor = MacroExtractor()
+
+    registry.add_macros(
+        extractor.extract(
+            """
+        {% macro foo(col) %}
+            {{ adapter.dispatch('foo', 'test_package') }}
+        {% endmacro %}
+
+        {% macro default__foo(col) %}
+            foo_{{ col }}
+        {% endmacro %}
+
+        {% macro unrelated() %}foo{% endmacro %}
+        """,
+            dialect="duckdb",
+        ),
+        package="test_package",
+    )
+
+    assert sorted(list(registry.packages["test_package"].keys())) == [
+        "default__foo",
+        "foo",
+        "unrelated",
+    ]
+    assert sorted(str(r) for r in registry.packages["test_package"]["foo"].depends_on) == [
+        "adapter.dispatch",
+        "test_package.default__foo",
+        "test_package.duckdb__foo",
+    ]
+
+    query_str = """
+    select * from {{ test_package.foo('bar') }}
+    """
+
+    references, _ = extract_macro_references_and_variables(query_str, dbt_target_name="test")
+    references_list = list(references)
+    assert len(references_list) == 1
+    assert str(references_list[0]) == "test_package.foo"
+
+    trimmed_registry = registry.trim(references)
+
+    # duckdb__foo is missing from this list because it's not actually defined as a macro
+    assert sorted(list(trimmed_registry.packages["test_package"].keys())) == ["default__foo", "foo"]
+
+
 def test_macro_return():
     macros = "{% macro test_return() %}{{ macro_return([1, 2, 3]) }}{% endmacro %}"
 
@@ -302,3 +352,31 @@ macro_a
 
     rendered = registry.build_environment().from_string("{{ spark__macro_a() }}").render()
     assert rendered.strip() == "macro_a"
+
+
+def test_extract_dbt_adapter_dispatch_targets():
+    assert extract_dbt_adapter_dispatch_targets("""
+        {% macro my_macro(arg1, arg2) -%}
+            {{ return(adapter.dispatch('my_macro')(arg1, arg2)) }}
+        {% endmacro %}
+    """) == [("my_macro", None)]
+
+    assert extract_dbt_adapter_dispatch_targets("""
+        {% macro my_macro(arg1, arg2) -%}
+            {{ return(adapter.dispatch('my_macro', 'foo')(arg1, arg2)) }}
+        {% endmacro %}
+    """) == [("my_macro", "foo")]
+
+    assert extract_dbt_adapter_dispatch_targets("""{{ adapter.dispatch('my_macro') }}""") == [
+        ("my_macro", None)
+    ]
+
+    assert extract_dbt_adapter_dispatch_targets("""
+        {% macro foo() %}
+            {{ adapter.dispatch('my_macro') }}
+            {{ some_other_call() }}
+            {{ return(adapter.dispatch('other_macro', 'other_package')) }}
+        {% endmacro %}
+    """) == [("my_macro", None), ("other_macro", "other_package")]
+
+    assert extract_dbt_adapter_dispatch_targets("no jinja") == []

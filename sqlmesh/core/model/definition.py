@@ -2017,6 +2017,7 @@ def load_sql_based_model(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    migrated_dbt_project_name: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -2193,6 +2194,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
             query_or_seed_insert,
             kind=kind,
             time_column_format=time_column_format,
+            migrated_dbt_project_name=migrated_dbt_project_name,
             **common_kwargs,
         )
 
@@ -2400,6 +2402,7 @@ def _create_model(
     signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    migrated_dbt_project_name: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     validate_extra_and_required_fields(
@@ -2455,13 +2458,28 @@ def _create_model(
 
     if jinja_macros:
         jinja_macros = (
-            jinja_macros if jinja_macros.trimmed else jinja_macros.trim(jinja_macro_references)
+            jinja_macros
+            if jinja_macros.trimmed
+            else jinja_macros.trim(jinja_macro_references, package=migrated_dbt_project_name)
         )
     else:
         jinja_macros = JinjaMacroRegistry()
 
-    for jinja_macro in jinja_macros.root_macros.values():
-        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+    if migrated_dbt_project_name:
+        # extract {{ var() }} references used in all jinja macro dependencies to check for any variables specific
+        # to a migrated DBT package and resolve them accordingly
+        # vars are added into __sqlmesh_vars__ in the Python env so that the native SQLMesh var() function can resolve them
+        variables = variables or {}
+
+        nested_macro_used_variables, flattened_package_variables = (
+            _extract_migrated_dbt_variable_references(jinja_macros, variables)
+        )
+
+        used_variables.update(nested_macro_used_variables)
+        variables.update(flattened_package_variables)
+    else:
+        for jinja_macro in jinja_macros.root_macros.values():
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
     model = klass(
         name=name,
@@ -2844,7 +2862,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "cron_tz": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
     "clustered_by": _single_expr_or_tuple,
-    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
+    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)) if value else "()",
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
     "audits": _list_of_calls_to_exp,
@@ -2913,6 +2931,39 @@ def clickhouse_partition_func(
         ),
         col_type,
     )
+
+
+def _extract_migrated_dbt_variable_references(
+    jinja_macros: JinjaMacroRegistry, project_variables: t.Dict[str, t.Any]
+) -> t.Tuple[t.Set[str], t.Dict[str, t.Any]]:
+    if not jinja_macros.trimmed:
+        raise ValueError("Expecting a trimmed JinjaMacroRegistry")
+
+    used_variables = set()
+    # note: JinjaMacroRegistry is trimmed here so "all_macros" should be just be all the macros used by this model
+    for _, _, jinja_macro in jinja_macros.all_macros:
+        _, extracted_variable_names = extract_macro_references_and_variables(jinja_macro.definition)
+        used_variables.update(extracted_variable_names)
+
+    flattened = {}
+    if (dbt_package_variables := project_variables.get(c.MIGRATED_DBT_PACKAGES)) and isinstance(
+        dbt_package_variables, dict
+    ):
+        # flatten the nested dict structure from the migrated dbt package variables in the SQLmesh config into __dbt_packages.<package>.<variable>
+        # to match what extract_macro_references_and_variables() returns. This allows the usage checks in create_python_env() to work
+        def _flatten(prefix: str, root: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+            acc = {}
+            for k, v in root.items():
+                key_with_prefix = f"{prefix}.{k}"
+                if isinstance(v, dict):
+                    acc.update(_flatten(key_with_prefix, v))
+                else:
+                    acc[key_with_prefix] = v
+            return acc
+
+        flattened = _flatten(c.MIGRATED_DBT_PACKAGES, dbt_package_variables)
+
+    return used_variables, flattened
 
 
 TIME_COL_PARTITION_FUNC = {"clickhouse": clickhouse_partition_func}
