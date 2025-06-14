@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import {
   createVirtualEnvironment,
+  openLineageView,
   pipInstall,
   REPO_ROOT,
   startVSCode,
@@ -65,6 +66,44 @@ test('missing LSP dependencies shows install prompt', async ({}, testInfo) => {
     expect(await window.locator('text=Install').count()).toBeGreaterThanOrEqual(
       1,
     )
+
+    await close()
+  } finally {
+    // Clean up
+    await fs.remove(tempDir)
+  }
+})
+
+test('lineage, no sqlmesh found', async ({}) => {
+  const tempDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+  )
+  const pythonEnvDir = path.join(tempDir, '.venv')
+  const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
+
+  try {
+    // Copy sushi project
+    await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+
+    // Configure VS Code settings to use our Python environment
+    const settings = {
+      'python.defaultInterpreterPath': pythonDetails.pythonPath,
+      'sqlmesh.environmentPath': pythonEnvDir,
+    }
+    await fs.ensureDir(path.join(tempDir, '.vscode'))
+    await fs.writeJson(
+      path.join(tempDir, '.vscode', 'settings.json'),
+      settings,
+      { spaces: 2 },
+    )
+
+    const { window, close } = await startVSCode(tempDir)
+
+    // Open lineage view
+    await openLineageView(window)
+
+    // Assert shows that sqlmesh is not installed
+    await window.waitForSelector('text=SQLMesh LSP not found')
 
     await close()
   } finally {

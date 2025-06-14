@@ -287,6 +287,12 @@ export const sqlmeshExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmesh)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_not_found',
+      })
+    }
     return ok({
       bin: sqlmesh,
       workspacePath,
@@ -384,14 +390,16 @@ export const sqlmeshLspExec = async (): Promise<
           type: 'not_signed_in',
         })
       }
+      const exists = await doesExecutableExist(sqlmeshLSP)
+      if (!exists) {
+        return err({
+          type: 'sqlmesh_lsp_not_found',
+        })
+      }
       const ensured = await ensureSqlmeshEnterpriseInstalled()
       if (isErr(ensured)) {
         return ensured
       }
-    }
-    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
-    if (isErr(ensuredDependencies)) {
-      return ensuredDependencies
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
@@ -399,6 +407,10 @@ export const sqlmeshLspExec = async (): Promise<
       return err({
         type: 'sqlmesh_lsp_not_found',
       })
+    }
+    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
+    if (isErr(ensuredDependencies)) {
+      return ensuredDependencies
     }
     return ok({
       bin: binPath,
@@ -411,11 +423,27 @@ export const sqlmeshLspExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmeshLSP)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_lsp_not_found',
+      })
+    }
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
       env: {},
       args: [],
     })
+  }
+}
+
+async function doesExecutableExist(executable: string): Promise<boolean> {
+  if (process.platform === 'win32') {
+    const result = await execAsync('where.exe', [executable])
+    return result.exitCode === 0
+  } else {
+    const result = await execAsync('which', [executable])
+    return result.exitCode === 0
   }
 }
