@@ -287,6 +287,12 @@ export const sqlmeshExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmesh)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_not_found',
+      })
+    }
     return ok({
       bin: sqlmesh,
       workspacePath,
@@ -384,14 +390,16 @@ export const sqlmeshLspExec = async (): Promise<
           type: 'not_signed_in',
         })
       }
+      const exists = await doesExecutableExist(sqlmeshLSP)
+      if (!exists) {
+        return err({
+          type: 'sqlmesh_lsp_not_found',
+        })
+      }
       const ensured = await ensureSqlmeshEnterpriseInstalled()
       if (isErr(ensured)) {
         return ensured
       }
-    }
-    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
-    if (isErr(ensuredDependencies)) {
-      return ensuredDependencies
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
@@ -399,6 +407,10 @@ export const sqlmeshLspExec = async (): Promise<
       return err({
         type: 'sqlmesh_lsp_not_found',
       })
+    }
+    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
+    if (isErr(ensuredDependencies)) {
+      return ensuredDependencies
     }
     return ok({
       bin: binPath,
@@ -411,11 +423,32 @@ export const sqlmeshLspExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmeshLSP)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_lsp_not_found',
+      })
+    }
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
       env: {},
       args: [],
     })
+  }
+}
+
+async function doesExecutableExist(executable: string): Promise<boolean> {
+  const command = process.platform === 'win32' ? 'where.exe' : 'which'
+  traceLog(`Checking if ${executable} exists with ${command}`)
+  try {
+    const result = await execAsync(command, [executable])
+    traceLog(`Checked if ${executable} exists with ${command}, with result ${result.exitCode}`)
+    const exists = result.exitCode === 0
+    traceLog(`Checked if ${executable} exists with ${command}, with result ${exists}`)
+    return exists
+  } catch {
+    traceLog(`Checked if ${executable} exists with ${command}, errored, returning false`)
+    return false
   }
 }

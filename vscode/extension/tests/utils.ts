@@ -137,3 +137,25 @@ export const pipInstall = async (
     throw new Error(`Failed to install package: ${stderr}`)
   }
 }
+
+/**
+ * Open the lineage view in the given window.
+ */
+export const openLineageView = async (window: Page): Promise<void> => {
+  await window.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
+  )
+  await window.keyboard.type('Lineage: Focus On View')
+  await window.keyboard.press('Enter')
+}
+
+/**
+ * Restart the SQLMesh servers
+ */
+export const restartSqlmeshServers = async (window: Page): Promise<void> => {
+  await window.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
+  )
+  await window.keyboard.type('Restart SQLMesh servers')
+  await window.keyboard.press('Enter')
+}
