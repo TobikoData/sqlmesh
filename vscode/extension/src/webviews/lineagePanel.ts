@@ -16,37 +16,42 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
 
   private panel: WebviewView | undefined
   private lsp: LSPClient
-  private _extensionUri: Uri
+  private readonly extensionUri: Uri
+
+  private disposables: Disposable[] = []
 
   public constructor(extensionUri: Uri, lsp: LSPClient) {
-    this._extensionUri = extensionUri
+    this.extensionUri = extensionUri
     this.lsp = lsp
 
     if (this.panel) {
       this.panel.webview.html = this.getHTML(this.panel.webview)
     }
 
-    workspace.onDidSaveTextDocument(document => {
-      this.panel?.webview.postMessage({
-        key: 'vscode_send',
-        payload: {
-          key: 'savedFile',
-          payload: { fileUri: document.uri.toString() },
-        },
-      })
-    })
-
-    window.onDidChangeActiveTextEditor(editor => {
-      if (editor) {
+    this.disposables.push(
+      workspace.onDidSaveTextDocument(document => {
         this.panel?.webview.postMessage({
           key: 'vscode_send',
           payload: {
-            key: 'changeFocusOnFile',
-            payload: { path: editor.document.uri.toString() },
+            key: 'savedFile',
+            payload: { fileUri: document.uri.toString() },
           },
         })
-      }
-    })
+      }),
+    )
+    this.disposables.push(
+      window.onDidChangeActiveTextEditor(editor => {
+        if (editor) {
+          this.panel?.webview.postMessage({
+            key: 'vscode_send',
+            payload: {
+              key: 'changeFocusOnFile',
+              payload: { path: editor.document.uri.toString() },
+            },
+          })
+        }
+      }),
+    )
   }
 
   public resolveWebviewView(webviewView: WebviewView) {
@@ -58,12 +63,12 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
     webviewView.webview.options = {
       // Allow scripts in the webview
       enableScripts: true,
-      localResourceRoots: [this._extensionUri],
+      localResourceRoots: [this.extensionUri],
     }
 
     // Set content options for external URL access
     // Set up message listener for events from the iframe
-    webviewView.webview.onDidReceiveMessage(
+    const disposable = webviewView.webview.onDidReceiveMessage(
       async request => {
         if (!request) {
           return
@@ -99,7 +104,7 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
                     result: response,
                   },
                 }
-                webviewView.webview.postMessage(responseCallback)
+                await webviewView.webview.postMessage(responseCallback)
                 break
               }
               case 'get_active_file': {
@@ -113,7 +118,7 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
                     },
                   },
                 }
-                webviewView.webview.postMessage(responseCallback)
+                await webviewView.webview.postMessage(responseCallback)
                 break
               }
               default: {
@@ -132,21 +137,22 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
       undefined,
       [],
     )
+    this.disposables.push(disposable)
     webviewView.webview.html = this.getHTML(webviewView.webview)
   }
 
   private getHTML(panel: Webview) {
     const cssUri = panel.asWebviewUri(
-      Uri.joinPath(this._extensionUri, 'src_react', 'assets', 'index.css'),
+      Uri.joinPath(this.extensionUri, 'src_react', 'assets', 'index.css'),
     )
     const jsUri = panel.asWebviewUri(
-      Uri.joinPath(this._extensionUri, 'src_react', 'assets', 'index.js'),
+      Uri.joinPath(this.extensionUri, 'src_react', 'assets', 'index.js'),
     )
     const faviconUri = panel.asWebviewUri(
-      Uri.joinPath(this._extensionUri, 'src_react', 'favicon.ico'),
+      Uri.joinPath(this.extensionUri, 'src_react', 'favicon.ico'),
     )
     const logoUri = panel.asWebviewUri(
-      Uri.joinPath(this._extensionUri, 'src_react', 'logo192.png'),
+      Uri.joinPath(this.extensionUri, 'src_react', 'logo192.png'),
     )
 
     // Handle query requests from the React app
@@ -179,5 +185,9 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
     // WebviewView doesn't have a dispose method
     // We can clear references
     this.panel = undefined
+    this.disposables.forEach(disposable => {
+      disposable.dispose()
+    })
+    this.disposables = []
   }
 }
