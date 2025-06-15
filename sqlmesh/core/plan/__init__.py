@@ -8,6 +8,5 @@ from sqlmesh.core.plan.definition import (
 from sqlmesh.core.plan.evaluator import (
     BuiltInPlanEvaluator as BuiltInPlanEvaluator,
     PlanEvaluator as PlanEvaluator,
-    update_intervals_for_new_snapshots as update_intervals_for_new_snapshots,
 )
 from sqlmesh.core.plan.explainer import PlanExplainer as PlanExplainer
