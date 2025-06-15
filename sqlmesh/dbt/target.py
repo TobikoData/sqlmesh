@@ -83,26 +83,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             The configuration of the provided profile target
         """
         db_type = data["type"]
-        if db_type == "databricks":
-            return DatabricksConfig(**data)
-        if db_type == "duckdb":
-            return DuckDbConfig(**data)
-        if db_type == "postgres":
-            return PostgresConfig(**data)
-        if db_type == "redshift":
-            return RedshiftConfig(**data)
-        if db_type == "snowflake":
-            return SnowflakeConfig(**data)
-        if db_type == "bigquery":
-            return BigQueryConfig(**data)
-        if db_type == "sqlserver":
-            return MSSQLConfig(**data)
-        if db_type == "trino":
-            return TrinoConfig(**data)
-        if db_type == "clickhouse":
-            return ClickhouseConfig(**data)
-        if db_type == "athena":
-            return AthenaConfig(**data)
+        if config_class := TARGET_TYPE_TO_CONFIG_CLASS.get(db_type):
+            return config_class(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -112,6 +94,10 @@ class TargetConfig(abc.ABC, DbtConfig):
 
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
+        raise NotImplementedError
+
+    @classmethod
+    def from_sqlmesh(cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]) -> "TargetConfig":
         raise NotImplementedError
 
     def attribute_dict(self) -> AttributeDict:
@@ -199,6 +185,18 @@ class DuckDbConfig(TargetConfig):
         return DuckDBConnectionConfig(
             database=self.path,
             concurrent_tasks=1,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_sqlmesh(cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]) -> "DuckDbConfig":
+        if not isinstance(config, DuckDBConnectionConfig):
+            raise ValueError(f"Incorrect config type: {type(config)}")
+
+        return cls(
+            path=config.database,
+            extensions=config.extensions,
+            settings=config.connector_config,
             **kwargs,
         )
 
@@ -369,6 +367,28 @@ class PostgresConfig(TargetConfig):
             connect_timeout=self.connect_timeout,
             role=self.role,
             sslmode=self.sslmode,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_sqlmesh(
+        cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]
+    ) -> "PostgresConfig":
+        if not isinstance(config, PostgresConnectionConfig):
+            raise ValueError(f"Incorrect config type: {type(config)}")
+
+        return cls(
+            schema="public",
+            host=config.host,
+            user=config.user,
+            password=config.password,
+            port=config.port,
+            dbname=config.database,
+            keepalives_idle=config.keepalives_idle,
+            threads=config.concurrent_tasks,
+            connect_timeout=config.connect_timeout,
+            role=config.role,
+            sslmode=config.sslmode,
             **kwargs,
         )
 
@@ -610,6 +630,39 @@ class BigQueryConfig(TargetConfig):
             job_retry_deadline_seconds=self.job_retry_deadline_seconds,
             priority=self.priority,
             maximum_bytes_billed=self.maximum_bytes_billed,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_sqlmesh(
+        cls, config: ConnectionConfig, **kwargs: t.Dict[str, t.Any]
+    ) -> "BigQueryConfig":
+        if not isinstance(config, BigQueryConnectionConfig):
+            raise ValueError(f"Incorrect config type: {type(config)}")
+
+        return cls(
+            schema="__unknown__",
+            method=config.method,
+            project=config.project,
+            execution_project=config.execution_project,
+            quota_project=config.quota_project,
+            location=config.location,
+            threads=config.concurrent_tasks,
+            keyfile=config.keyfile,
+            keyfile_json=config.keyfile_json,
+            token=config.token,
+            refresh_token=config.refresh_token,
+            client_id=config.client_id,
+            client_secret=config.client_secret,
+            token_uri=config.token_uri,
+            scopes=config.scopes,
+            impersonated_service_account=config.impersonated_service_account,
+            job_creation_timeout_seconds=config.job_creation_timeout_seconds,
+            job_execution_timeout_seconds=config.job_execution_timeout_seconds,
+            job_retries=config.job_retries,
+            job_retry_deadline_seconds=config.job_retry_deadline_seconds,
+            priority=config.priority,
+            maximum_bytes_billed=config.maximum_bytes_billed,
             **kwargs,
         )
 
