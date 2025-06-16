@@ -1430,9 +1430,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
 
-        if run and is_dev:
-            raise ConfigError("The '--run' flag is only supported for the production environment.")
-
         if not skip_linter:
             self.lint_models()
 
