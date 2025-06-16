@@ -1263,20 +1263,6 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
 
 
-def _check_engine_installed(console: Console, engine_type: t.Optional[str] = None) -> None:
-    if not engine_type:
-        return
-    connection_config = CONNECTION_CONFIG_TO_TYPE[engine_type]
-
-    try:
-        connection_config._connection_factory.fget(None)
-    except ModuleNotFoundError:
-        install_command = f'pip install "sqlmesh[{engine_type}]"'
-        raise SQLMeshError(
-            f"Unable to load required Python dependencies for the {DISPLAY_NAME_TO_TYPE[engine_type]} engine.\n\nPlease run `{install_command}` to install them before running `sqlmesh init` again."
-        )
-
-
 @cli.group(no_args_is_help=True, hidden=True)
 def dbt() -> None:
     """Commands for doing dbt-specific things"""

@@ -207,7 +207,7 @@ def my_model(context, **kwargs):
 
 
 def test_load_migrated_dbt_adapter_dispatch_macros(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     migrated_package_path = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_utils"
     migrated_package_path.mkdir(parents=True)
@@ -273,7 +273,7 @@ JINJA_END;
 
 def test_load_migrated_dbt_adapter_dispatch_macros_in_different_packages(tmp_path: Path):
     # some things like dbt.current_timestamp() dispatch to macros in a different package
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     migrated_package_path_dbt = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt"
     migrated_package_path_dbt_duckdb = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_duckdb"
