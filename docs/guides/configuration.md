@@ -159,9 +159,11 @@ In some organizations, users never run plans directly against `prod` - they do a
 
 If your organization works like this, it may be convenient to change the `plan` command's default environment from `prod` to each user's development environment. That way people can issue `sqlmesh plan` without typing the environment name every time.
 
-The SQLMesh configuration `user()` function returns the name of the user currently logged in and running SQLMesh. Call it inside Jinja curly braces to use default target environments based on the user name. The curly braces allow you to combine the user name with a prefix or suffix.
+The SQLMesh configuration `user()` function returns the name of the user currently logged in and running SQLMesh. It retrieves the username from system environment variables like `USER` on MacOS/Linux or `USERNAME` on Windows.
 
-The example configuration below will add the username to the end of the string `dev_`. If the user running SQLMesh is `tony`, the default target environment when they run SQLMesh will be `dev_tony`. In other words, `sqlmesh plan` will be equivalent to `sqlmesh plan dev_tony`.
+Call `user()` inside Jinja curly braces with the syntax `{{ user() }}`, which allows you to combine the user name with a prefix or suffix.
+
+The example configuration below constructs the environment name by appending the username to the end of the string `dev_`. If the user running SQLMesh is `tony`, the default target environment when they run SQLMesh will be `dev_tony`. In other words, `sqlmesh plan` will be equivalent to `sqlmesh plan dev_tony`.
 
 === "YAML"
 
