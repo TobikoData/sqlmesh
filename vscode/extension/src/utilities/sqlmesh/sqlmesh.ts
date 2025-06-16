@@ -390,12 +390,6 @@ export const sqlmeshLspExec = async (): Promise<
           type: 'not_signed_in',
         })
       }
-      const exists = await doesExecutableExist(sqlmeshLSP)
-      if (!exists) {
-        return err({
-          type: 'sqlmesh_lsp_not_found',
-        })
-      }
       const ensured = await ensureSqlmeshEnterpriseInstalled()
       if (isErr(ensured)) {
         return ensured
