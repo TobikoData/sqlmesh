@@ -122,7 +122,7 @@ config = sqlmesh_config(Path(__file__).parent)
     default_configs[ProjectTemplate.DLT] = default_configs[ProjectTemplate.DEFAULT]
 
     flow_cli_mode = """
-# Minimal prompts, automatic changes, summary output
+# FLOW: Minimal prompts, automatic changes, summary output
 # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
 
 plan:
