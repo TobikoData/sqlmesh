@@ -16,5 +16,11 @@
     }
   },
   "include": ["tests/**/*", "src/**/*", "../bus/src/**/*"],
-  "exclude": ["node_modules", "../node_modules", "../../node_modules"]
+  "exclude": [
+    "node_modules",
+    "../node_modules",
+    "../../node_modules",
+    "tests/**/*.test.ts",
+    "src/**/*.test.ts"
+  ]
 }
