@@ -17,7 +17,7 @@ from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.snapshot.definition import (
     SnapshotInfoMixin,
 )
-from sqlmesh.utils import Verbosity, rich as srich
+from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -73,7 +73,7 @@ class RichExplainerConsole(ExplainerConsole):
     def explain(self, stages: t.List[stages.PlanStage]) -> None:
         tree = Tree("[bold]Explained plan[/bold]")
         for stage in stages:
-            handler_name = f"visit_{_to_snake_case(stage.__class__.__name__)}"
+            handler_name = f"visit_{to_snake_case(stage.__class__.__name__)}"
             if not hasattr(self, handler_name):
                 logger.error("Unexpected stage: %s", stage.__class__.__name__)
                 continue
@@ -97,6 +97,9 @@ class RichExplainerConsole(ExplainerConsole):
             "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
         )
         for snapshot in stage.snapshots:
+            if snapshot.snapshot_id not in stage.snapshots_with_missing_intervals:
+                continue
+
             is_deployable = (
                 stage.deployability_index.is_deployable(snapshot)
                 if self.environment_naming_info.name != c.PROD
@@ -114,7 +117,9 @@ class RichExplainerConsole(ExplainerConsole):
 
             if snapshot.is_view:
                 create_tree = Tree("Create view if it doesn't exist")
-            elif snapshot.is_forward_only and snapshot.previous_versions:
+            elif (
+                snapshot.is_forward_only and snapshot.previous_versions and not snapshot.is_managed
+            ):
                 prod_table = snapshot.table_name(True)
                 create_tree = Tree(
                     f"Clone {prod_table} into {table_name} and then update its schema if it doesn't exist"
@@ -224,7 +229,7 @@ class RichExplainerConsole(ExplainerConsole):
             "[bold]Delete views in the virtual layer for models that were removed[/bold]"
         )
         for snapshot in stage.demoted_snapshots:
-            display_name = self._display_name(snapshot)
+            display_name = self._display_name(snapshot, stage.demoted_environment_naming_info)
             demote_tree.add(display_name)
 
         if stage.promoted_snapshots:
@@ -233,14 +238,31 @@ class RichExplainerConsole(ExplainerConsole):
             tree.add(self._limit_tree(demote_tree))
         return tree
 
+    def visit_create_snapshot_records_stage(
+        self, stage: stages.CreateSnapshotRecordsStage
+    ) -> t.Optional[Tree]:
+        return None
+
     def visit_environment_record_update_stage(
         self, stage: stages.EnvironmentRecordUpdateStage
     ) -> t.Optional[Tree]:
         return None
 
-    def _display_name(self, snapshot: SnapshotInfoMixin) -> str:
+    def visit_unpause_stage(self, stage: stages.UnpauseStage) -> t.Optional[Tree]:
+        return None
+
+    def visit_finalize_environment_stage(
+        self, stage: stages.FinalizeEnvironmentStage
+    ) -> t.Optional[Tree]:
+        return None
+
+    def _display_name(
+        self,
+        snapshot: SnapshotInfoMixin,
+        environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+    ) -> str:
         return snapshot.display_name(
-            self.environment_naming_info,
+            environment_naming_info or self.environment_naming_info,
             self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
             dialect=self.dialect,
         )
@@ -272,10 +294,4 @@ def _get_explainer_console(
         default_catalog=default_catalog,
         verbosity=console.verbosity,
         console=console.console,
-    )
-
-
-def _to_snake_case(name: str) -> str:
-    return "".join(
-        f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
     )

@@ -109,6 +109,17 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
+        """Updates given snapshots with latest intervals from the state.
+
+        Args:
+            snapshots: The snapshots to refresh.
+
+        Returns:
+            The updated snapshots.
+        """
+
+    @abc.abstractmethod
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         """Returns the node names that exist in the state sync.
 
@@ -371,17 +382,6 @@ class StateSync(StateReader, abc.ABC):
         Args:
             snapshot_intervals: The snapshot intervals to remove.
             remove_shared_versions: Whether to remove intervals for snapshots that share the same version with the target snapshots.
-        """
-
-    @abc.abstractmethod
-    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
-        """Updates given snapshots with latest intervals from the state.
-
-        Args:
-            snapshots: The snapshots to refresh.
-
-        Returns:
-            The updated snapshots.
         """
 
     @abc.abstractmethod

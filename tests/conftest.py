@@ -33,14 +33,14 @@ from sqlmesh.core import lineage
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
 from sqlmesh.core.model.kind import OnDestructiveChange
-from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
+from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan, stages as plan_stages
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Node,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
-    DeployabilityIndex,
 )
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date
@@ -258,11 +258,23 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.default_catalog,
     )
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
-    plan_evaluator._push(plan.to_evaluatable(), plan.snapshots, deployability_index)
-    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
-    plan_evaluator._update_views(
-        plan.to_evaluatable(), plan.snapshots, promotion_result, deployability_index
+    evaluatable_plan = plan.to_evaluatable()
+    stages = plan_stages.build_plan_stages(
+        evaluatable_plan, context.state_sync, context.default_catalog
     )
+    for stage in stages:
+        if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
+            plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.EnvironmentRecordUpdateStage):
+            plan_evaluator.visit_environment_record_update_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.VirtualLayerUpdateStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_virtual_layer_update_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.FinalizeEnvironmentStage):
+            plan_evaluator.visit_finalize_environment_stage(stage, evaluatable_plan)
 
 
 @pytest.fixture()

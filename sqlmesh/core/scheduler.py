@@ -441,12 +441,27 @@ class Scheduler:
 
         try:
             with self.snapshot_evaluator.concurrent_context():
-                return concurrent_apply_to_dag(
+                errors, skipped_intervals = concurrent_apply_to_dag(
                     dag,
                     evaluate_node,
                     self.max_workers,
                     raise_on_error=False,
                 )
+                self.console.stop_evaluation_progress(success=not errors)
+
+                skipped_snapshots = {i[0] for i in skipped_intervals}
+                self.console.log_skipped_models(skipped_snapshots)
+                for skipped in skipped_snapshots:
+                    logger.info(f"SKIPPED snapshot {skipped}\n")
+
+                for error in errors:
+                    if isinstance(error.__cause__, CircuitBreakerError):
+                        raise error.__cause__
+                    logger.info(str(error), exc_info=error)
+
+                self.console.log_failed_models(errors)
+
+                return errors, skipped_intervals
         finally:
             if run_environment_statements:
                 execute_environment_statements(
@@ -604,7 +619,7 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
-        errors, skipped_intervals = self.run_merged_intervals(
+        errors, _ = self.run_merged_intervals(
             merged_intervals=merged_intervals,
             deployability_index=deployability_index,
             environment_naming_info=environment_naming_info,
@@ -615,20 +630,6 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
         )
-
-        self.console.stop_evaluation_progress(success=not errors)
-
-        skipped_snapshots = {i[0] for i in skipped_intervals}
-        self.console.log_skipped_models(skipped_snapshots)
-        for skipped in skipped_snapshots:
-            logger.info(f"SKIPPED snapshot {skipped}\n")
-
-        for error in errors:
-            if isinstance(error.__cause__, CircuitBreakerError):
-                raise error.__cause__
-            logger.info(str(error), exc_info=error)
-
-        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
