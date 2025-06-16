@@ -139,6 +139,16 @@ The SQLMesh VSCode extension provides the following commands in the VSCode comma
 
 ## Troubleshooting
 
+### DuckDB concurrent access
+
+If your SQLMesh project uses DuckDB to store its state, you will likely encounter problems.
+
+SQLMesh can create multiple connections to the state database, but DuckDB's local database file does not support concurrent access.
+
+Because the VSCode extension establishes a long-running process connected to the database, access conflicts are more likely than with standard SQLMesh usage from the CLI. 
+
+Therefore, we do not recommend using DuckDB as a state store with the VSCode extension.
+
 ### Python environment woes
 
 The most common problem is the extension not using the correct Python interpreter.
