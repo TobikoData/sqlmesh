@@ -333,7 +333,9 @@ class ModelTest(unittest.TestCase):
 
                 diff.rename(columns={"exp": "Expected", "act": "Actual"}, inplace=True)
                 if self.verbosity == Verbosity.DEFAULT:
-                    args.append(df_to_table("Data mismatch", diff))
+                    args.extend(
+                        df_to_table("Data mismatch", df) for df in _split_df_by_column_pairs(diff)
+                    )
                 else:
                     from pandas import MultiIndex
 
@@ -995,3 +997,43 @@ def _normalize_df_value(value: t.Any) -> t.Any:
             return {k: _normalize_df_value(v) for k, v in zip(value["key"], value["value"])}
         return {k: _normalize_df_value(v) for k, v in value.items()}
     return value
+
+
+def _split_df_by_column_pairs(df: pd.DataFrame, pairs_per_chunk: int = 4) -> t.List[pd.DataFrame]:
+    """Split a dataframe into chunks of column pairs.
+
+    Args:
+        df: The dataframe to split
+        pairs_per_chunk: Number of column pairs per chunk (default: 4)
+
+    Returns:
+        List of dataframes, each containing an even number of columns
+    """
+    total_columns = len(df.columns)
+
+    # If we have fewer columns than pairs_per_chunk * 2, return the original df
+    if total_columns <= pairs_per_chunk * 2:
+        return [df]
+
+    # Calculate number of chunks needed to split columns evenly
+    num_chunks = (total_columns + (pairs_per_chunk * 2 - 1)) // (pairs_per_chunk * 2)
+
+    # Calculate columns per chunk to ensure equal distribution
+    # We round down to nearest even number to ensure each chunk has even columns
+    columns_per_chunk = (total_columns // num_chunks) & ~1  # Round down to nearest even number
+    remainder = total_columns - (columns_per_chunk * num_chunks)
+
+    chunks = []
+    start_idx = 0
+
+    # Distribute columns evenly across chunks
+    for i in range(num_chunks):
+        # Add 2 columns to early chunks if there's a remainder
+        # This ensures we always add pairs of columns
+        extra = 2 if i < remainder // 2 else 0
+        end_idx = start_idx + columns_per_chunk + extra
+        chunk = df.iloc[:, start_idx:end_idx]
+        chunks.append(chunk)
+        start_idx = end_idx
+
+    return chunks

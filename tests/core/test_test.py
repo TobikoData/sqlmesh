@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 import unittest
 from unittest.mock import call, patch
-from shutil import copyfile
+from shutil import copyfile, rmtree
 
 import pandas as pd  # noqa: TID253
 import pytest
@@ -2322,6 +2322,65 @@ test_example_full_model:
 
     assert "Ran 102 tests" in output
     assert "FAILED (failures=51)" in output
+
+    # Case 4: Test that wide tables are split into even chunks for default verbosity
+    rmtree(tmp_path / "tests")
+
+    wide_model_query = (
+        "SELECT 1 AS col_1, 2 AS col_2, 3 AS col_3, 4 AS col_4, 5 AS col_5, 6 AS col_6, 7 AS col_7"
+    )
+
+    context.upsert_model(
+        _create_model(
+            meta="MODEL(name test.test_wide_model)",
+            query=wide_model_query,
+            default_catalog=context.default_catalog,
+        )
+    )
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    wide_test_file = tmp_path / "tests" / "test_wide_model.yaml"
+    wide_test_file_content = """
+    test_wide_model:
+      model: test.test_wide_model
+      outputs:
+        query:
+          rows:
+          - col_1: 6
+            col_2: 5
+            col_3: 4
+            col_4: 3
+            col_5: 2
+            col_6: 1
+            col_7: 0
+ 
+    """
+
+    wide_test_file.write_text(wide_test_file_content)
+
+    with capture_output() as captured_output:
+        context.test()
+
+    assert (
+        """Data mismatch                                  
+┏━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
+┃     ┃ col_1: ┃ col_1: ┃ col_2: ┃ col_2: ┃ col_3: ┃ col_3: ┃ col_4:  ┃ col_4: ┃
+┃ Row ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expect… ┃ Actual ┃
+┡━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│  0  │   6    │   1    │   5    │   2    │   4    │   3    │    3    │   4    │
+└─────┴────────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┘
+
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃     ┃ col_5:    ┃ col_5:    ┃ col_6:    ┃ col_6:    ┃ col_7:    ┃ col_7:     ┃
+┃ Row ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual     ┃
+┡━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│  0  │     2     │     5     │     1     │     6     │     0     │     7      │
+└─────┴───────────┴───────────┴───────────┴───────────┴───────────┴────────────┘"""
+        in captured_output.stdout
+    )
 
 
 @use_terminal_console
