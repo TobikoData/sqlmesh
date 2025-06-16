@@ -1673,6 +1673,28 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
 
 
+class FabricWarehouseConnectionConfig(MSSQLConnectionConfig):
+    """
+    Fabric Warehouse Connection Configuration. Inherits most settings from MSSQLConnectionConfig.
+    """
+
+    type_: t.Literal["fabric_warehouse"] = Field(alias="type", default="fabric_warehouse")  # type: ignore
+    autocommit: t.Optional[bool] = True
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        from sqlmesh.core.engine_adapter.fabric_warehouse import FabricWarehouseAdapter
+
+        return FabricWarehouseAdapter
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+        }
+
+
 class SparkConnectionConfig(ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.

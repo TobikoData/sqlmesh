@@ -19,6 +19,7 @@ from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlmesh.core.engine_adapter.risingwave import RisingwaveEngineAdapter
+from sqlmesh.core.engine_adapter.fabric_warehouse import FabricWarehouseAdapter
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "hive": SparkEngineAdapter,
@@ -35,6 +36,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "trino": TrinoEngineAdapter,
     "athena": AthenaEngineAdapter,
     "risingwave": RisingwaveEngineAdapter,
+    "fabric_warehouse": FabricWarehouseAdapter,
 }
 
 DIALECT_ALIASES = {
@@ -45,9 +47,11 @@ DIALECT_ALIASES = {
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, **kwargs: t.Any
 ) -> EngineAdapter:
+    print(kwargs)
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
     engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
+    print(engine_adapter)
     if engine_adapter is None:
         return EngineAdapter(connection_factory, dialect, **kwargs)
     if engine_adapter is EngineAdapterWithIndexSupport:
