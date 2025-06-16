@@ -47,11 +47,9 @@ DIALECT_ALIASES = {
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, **kwargs: t.Any
 ) -> EngineAdapter:
-    print(kwargs)
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
     engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
-    print(engine_adapter)
     if engine_adapter is None:
         return EngineAdapter(connection_factory, dialect, **kwargs)
     if engine_adapter is EngineAdapterWithIndexSupport:
