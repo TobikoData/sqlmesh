@@ -1956,7 +1956,7 @@ class TerminalConsole(Console):
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         divider_length = 70
 
-        self._log_unit_test_results(result)
+        self._log_test_details(result)
         self._print("\n")
 
         if result.wasSuccessful():
@@ -1980,7 +1980,7 @@ class TerminalConsole(Console):
 
     def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
         with self.console.capture() as capture:
-            self._log_unit_test_results(result)
+            self._log_test_details(result)
         return strip_ansi_codes(capture.get())
 
     def show_sql(self, sql: str) -> None:
@@ -2499,10 +2499,10 @@ class TerminalConsole(Console):
         else:
             self.log_warning(msg)
 
-    def _log_unit_test_results(self, result: ModelTextTestResult) -> None:
+    def _log_test_details(self, result: ModelTextTestResult) -> None:
         """
         This is a helper method that encapsulates the logic for logging the relevant unittest for the result.
-        The top level method (`log_test_results`) reuses `_log_unit_test_results` differently based on the console.
+        The top level method (`log_test_results`) reuses `_log_test_details` differently based on the console.
 
         Args:
             result: The unittest test result that contains metrics like num success, fails, ect.
@@ -3208,7 +3208,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
         else:
             self._print("```")
-            self._log_unit_test_results(result)
+            self._log_test_details(result)
             self._print("```\n\n")
 
             self._print(
