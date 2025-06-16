@@ -131,12 +131,18 @@ plan:
   auto_apply: true          # Apply changes automatically
 
 # --- Optional: Set a default target environment ---
-# default_target_environment: dev_{{ env_var('USER', 'your_name') }}
+# This is intended for local development to prevent users from accidentally applying plans to the prod environment.
+# It is a development only config and should NOT be committed to your git repo.
+# https://sqlmesh.readthedocs.io/en/stable/reference/configuration/?h=config#environments
+
+# Uncomment one of the following lines (depending on your computer's OS) to use a default target environment derived
+#   from your system environment variable USER/USERNAME.
+# default_target_environment: dev_{{ env_var('USER') }}     # Linux/MacOS
+# default_target_environment: dev_{{ env_var('USERNAME') }} # Windows
 
 # Example usage:
-# export USER=your_name
-# sqlmesh plan            # Resolves to: sqlmesh plan dev_your_name
-# sqlmesh plan prod       # To apply changes to production
+# sqlmesh plan            # Automatically resolves to: sqlmesh plan dev_yourname
+# sqlmesh plan prod       # Specify `prod` to apply changes to production
 """
 
     return default_configs[template] + (flow_cli_mode if cli_mode == InitCliMode.FLOW else "")
