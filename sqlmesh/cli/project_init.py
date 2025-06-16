@@ -133,12 +133,10 @@ plan:
 # --- Optional: Set a default target environment ---
 # This is intended for local development to prevent users from accidentally applying plans to the prod environment.
 # It is a development only config and should NOT be committed to your git repo.
-# https://sqlmesh.readthedocs.io/en/stable/reference/configuration/?h=config#environments
+# https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#default-target-environment
 
-# Uncomment one of the following lines (depending on your computer's OS) to use a default target environment derived
-#   from your system environment variable USER/USERNAME.
-# default_target_environment: dev_{{ env_var('USER') }}     # Linux/MacOS
-# default_target_environment: dev_{{ env_var('USERNAME') }} # Windows
+# Uncomment the following line to use a default target environment derived from the logged in user's name.
+# default_target_environment: dev_{{ user() }}
 
 # Example usage:
 # sqlmesh plan            # Automatically resolves to: sqlmesh plan dev_yourname

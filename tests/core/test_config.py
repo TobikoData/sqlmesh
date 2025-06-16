@@ -1045,9 +1045,9 @@ def test_loader_for_migrated_dbt_project(tmp_path: Path):
 
     model_defaults:
       dialect: bigquery
-                           
-    variables:    
-      __dbt_project_name__: sushi                           
+
+    variables:
+      __dbt_project_name__: sushi
 """)
 
     config = load_config_from_paths(
@@ -1058,6 +1058,32 @@ def test_loader_for_migrated_dbt_project(tmp_path: Path):
     assert config.loader == MigratedDbtProjectLoader
 
 
+def test_config_user_macro_function(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+
+    default_target_environment: dev_{{ user() }}
+""")
+
+    with mock.patch("getpass.getuser", return_value="test_user"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+    assert config.default_target_environment == "dev_test_user"
+
+
 def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text("""
@@ -1065,13 +1091,13 @@ def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
       warehouse:
         connection:
           type: duckdb
-                           
+
     default_gateway: warehouse
 
     model_defaults:
       dialect: duckdb
-                           
-    environment_suffix_target: catalog                          
+
+    environment_suffix_target: catalog
 """)
 
     config = load_config_from_paths(
@@ -1087,13 +1113,13 @@ def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
       warehouse:
         connection:
           type: duckdb
-                           
+
     default_gateway: warehouse
 
     model_defaults:
       dialect: duckdb
-                           
-    environment_suffix_target: catalog             
+
+    environment_suffix_target: catalog
 
     environment_catalog_mapping:
       '.*': "foo"
