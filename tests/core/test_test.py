@@ -2694,7 +2694,7 @@ test_foo:
 
     output = captured_output.stdout
 
-    # Make sure that the traceback is not ed
+    # Make sure that the traceback is not printed
     assert "Traceback" not in output
     assert "File" not in output
     assert "line" not in output
