@@ -241,7 +241,7 @@ def get_model_definitions_for_a_path(
                 if referenced_model_path is None:
                     continue
                 # Check whether the path exists
-                if referenced_model_path is None or not referenced_model_path.is_file():
+                if not referenced_model_path.is_file():
                     continue
                 referenced_model_uri = URI.from_path(referenced_model_path)
 
