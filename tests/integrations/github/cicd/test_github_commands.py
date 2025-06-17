@@ -477,7 +477,7 @@ def test_run_all_test_failed(
     assert (
         """sqlmesh.utils.errors.TestError: some error""" in test_checks_runs[2]["output"]["summary"]
     )
-    assert """**Num Successful Tests: 0**""" in test_checks_runs[2]["output"]["summary"]
+    assert """Failed tests (1):""" in test_checks_runs[2]["output"]["summary"]
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[

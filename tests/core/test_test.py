@@ -2281,7 +2281,7 @@ test_example_full_model:
     )
 
     assert "Ran 2 tests" in output
-    assert "FAILED (failures=1)" in output
+    assert "Failed tests (1):" in output
 
     # Case 2: Ensure that the verbose log report is structured correctly
     with capture_output() as captured_output:
@@ -2321,7 +2321,7 @@ test_example_full_model:
     output = captured_output.stdout
 
     assert "Ran 102 tests" in output
-    assert "FAILED (failures=51)" in output
+    assert "Failed tests (51):" in output
 
     # Case 4: Test that wide tables are split into even chunks for default verbosity
     rmtree(tmp_path / "tests")
@@ -2426,11 +2426,7 @@ test_example_full_model:
         f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
         in mock_logger.call_args[0][0]
     )
-    assert (
-        ".\n----------------------------------------------------------------------\n\nRan 1 test in"
-        in output.stdout
-    )
-    assert "OK" in output.stdout
+    assert "Successfully Ran 1 test" in output.stdout
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
