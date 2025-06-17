@@ -93,6 +93,55 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
     return wrapper
 
 
+def format_arguments(func: t.Callable) -> t.Callable:
+    """Decorator to add common format arguments to magic commands."""
+    func = argument(
+        "--normalize",
+        action="store_true",
+        help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
+    )(func)
+    func = argument(
+        "--pad",
+        type=int,
+        help="Determines the pad size in a formatted string.",
+    )(func)
+    func = argument(
+        "--indent",
+        type=int,
+        help="Determines the indentation size in a formatted string.",
+    )(func)
+    func = argument(
+        "--normalize-functions",
+        type=str,
+        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
+    )(func)
+    func = argument(
+        "--leading-comma",
+        action="store_true",
+        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+        default=None,
+    )(func)
+    func = argument(
+        "--max-text-width",
+        type=int,
+        help="The max number of characters in a segment before creating new lines in pretty mode.",
+    )(func)
+    func = argument(
+        "--append-newline",
+        action="store_true",
+        help="Include a newline at the end of the output.",
+        default=None,
+    )(func)
+    func = argument(
+        "--no-rewrite-casts",
+        action="store_true",
+        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
+        default=None,
+    )(func)
+    return func
+
+
 @magics_class
 class SQLMeshMagics(Magics):
     @property
@@ -579,23 +628,43 @@ class SQLMeshMagics(Magics):
     )
     @argument("--dialect", type=str, help="SQL dialect to render.")
     @argument("--no-format", action="store_true", help="Disable fancy formatting of the query.")
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def render(self, context: Context, line: str) -> None:
         """Renders a model's query, optionally expanding referenced models."""
         context.refresh()
-        args = parse_argstring(self.render, line)
+        render_opts = vars(parse_argstring(self.render, line))
+        model = render_opts.pop("model")
+        dialect = render_opts.pop("dialect", None)
 
         query = context.render(
-            args.model,
-            start=args.start,
-            end=args.end,
-            execution_time=args.execution_time,
-            expand=args.expand,
+            model,
+            start=render_opts.pop("start", None),
+            end=render_opts.pop("end", None),
+            execution_time=render_opts.pop("execution_time", None),
+            expand=render_opts.pop("expand", False),
         )
 
-        sql = query.sql(pretty=True, dialect=args.dialect or context.config.dialect)
-        if args.no_format:
+        no_format = render_opts.pop("no_format", False)
+
+        format_options = {}
+        if render_opts.get("no_rewrite_casts"):
+            format_options["rewrite_casts"] = False
+            render_opts.pop("no_rewrite_casts")
+
+        format_options.update({k: v for k, v in render_opts.items() if v is not None})
+
+        format_config = context.config_for_node(model).format
+        format_options = {**format_config.generator_options, **format_options}
+
+        sql = query.sql(
+            pretty=True,
+            dialect=context.config.dialect if dialect is None else dialect,
+            **format_options,
+        )
+
+        if no_format:
             context.console.log_status_update(sql)
         else:
             context.console.show_sql(sql)
@@ -853,55 +922,12 @@ class SQLMeshMagics(Magics):
         help="Transpile project models to the specified dialect.",
     )
     @argument(
-        "--append-newline",
-        action="store_true",
-        help="Whether or not to append a newline to the end of the file.",
-        default=None,
-    )
-    @argument(
-        "--no-rewrite-casts",
-        action="store_true",
-        help="Whether or not to preserve the existing casts, without rewriting them to use the :: syntax.",
-        default=None,
-    )
-    @argument(
-        "--normalize",
-        action="store_true",
-        help="Whether or not to normalize identifiers to lowercase.",
-        default=None,
-    )
-    @argument(
-        "--pad",
-        type=int,
-        help="Determines the pad size in a formatted string.",
-    )
-    @argument(
-        "--indent",
-        type=int,
-        help="Determines the indentation size in a formatted string.",
-    )
-    @argument(
-        "--normalize-functions",
-        type=str,
-        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
-    )
-    @argument(
-        "--leading-comma",
-        action="store_true",
-        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-        default=None,
-    )
-    @argument(
-        "--max-text-width",
-        type=int,
-        help="The max number of characters in a segment before creating new lines in pretty mode.",
-    )
-    @argument(
         "--check",
         action="store_true",
         help="Whether or not to check formatting (but not actually format anything).",
         default=None,
     )
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> bool:
