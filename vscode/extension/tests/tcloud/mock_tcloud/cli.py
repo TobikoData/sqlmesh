@@ -17,6 +17,11 @@ def get_auth_state_file():
     return Path.cwd() / ".tcloud_auth_state.json"
 
 
+def get_version_state_file():
+    """Get the path to the version state file in the current working directory"""
+    return Path.cwd() / ".tcloud_version_state.json"
+
+
 def load_auth_state():
     """Load authentication state from file"""
     auth_file = get_auth_state_file()
@@ -33,15 +38,39 @@ def save_auth_state(state):
         json.dump(state, f)
 
 
-@click.group(no_args_is_help=True)
+def load_version_state():
+    """Load version state from file"""
+    version_file = get_version_state_file()
+    if version_file.exists():
+        with open(version_file, "r") as f:
+            return json.load(f)
+    # Default to version 2.10.0 if no state file exists
+    return {"version": "2.10.0"}
+
+
+@click.group(no_args_is_help=True, invoke_without_command=True)
 @click.option(
     "--project",
     type=str,
     help="The name of the project.",
 )
+@click.option(
+    "--version",
+    is_flag=True,
+    help="Show version",
+)
 @click.pass_context
-def cli(ctx: click.Context, project: str) -> None:
+def cli(ctx: click.Context, project: str, version: bool) -> None:
     """Mock Tobiko Cloud CLI"""
+    if version:
+        version_state = load_version_state()
+        print(version_state["version"])
+        ctx.exit(0)
+    
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit(0)
+    
     ctx.ensure_object(dict)
     ctx.obj["project"] = project
 
@@ -104,6 +133,31 @@ def sqlmesh(ctx: click.Context, args) -> None:
 
     # Execute the real sqlmesh with the provided arguments
     result = subprocess.run([sqlmesh_path] + list(args), capture_output=False)
+    sys.exit(result.returncode)
+
+
+@cli.command("sqlmesh_lsp")
+@click.argument("args", nargs=-1)
+@click.pass_context
+def sqlmesh_lsp(ctx: click.Context, args) -> None:
+    """Run SQLMesh LSP server"""
+    # For testing purposes, we'll simulate the LSP server starting
+    print("Starting SQLMesh LSP server...", flush=True)
+    
+    # Get the path to sqlmesh in the same environment as this script
+    bin_dir = os.path.dirname(sys.executable)
+    sqlmesh_path = os.path.join(bin_dir, "sqlmesh")
+
+    if not os.path.exists(sqlmesh_path):
+        # Try with .exe extension on Windows
+        sqlmesh_path = os.path.join(bin_dir, "sqlmesh.exe")
+
+    if not os.path.exists(sqlmesh_path):
+        # Fall back to using sqlmesh from PATH
+        sqlmesh_path = "sqlmesh"
+
+    # Execute the real sqlmesh with lsp command and provided arguments
+    result = subprocess.run([sqlmesh_path, "lsp"] + list(args), capture_output=False)
     sys.exit(result.returncode)
 
 
