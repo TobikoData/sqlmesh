@@ -2173,7 +2173,7 @@ def _check_ready_intervals(
     context: ExecutionContext,
     python_env: t.Dict[str, Executable],
     dialect: DialectType = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     kwargs: t.Optional[t.Dict] = None,
 ) -> Intervals:
     checked_intervals: Intervals = []

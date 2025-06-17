@@ -171,8 +171,8 @@ class Column(PydanticModel):
 class Model(PydanticModel):
     name: str
     fqn: str
-    path: str
-    full_path: str
+    path: t.Optional[str] = None
+    full_path: t.Optional[str] = None
     """
     As opposed to path, which is relative to the project root, full_path is the absolute path to the model file.
     """

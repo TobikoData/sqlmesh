@@ -289,6 +289,10 @@ export interface Meta {
   has_running_task?: boolean
 }
 
+export type ModelPath = string | null
+
+export type ModelFullPath = string | null
+
 export type ModelDescription = string | null
 
 export type ModelDetailsProperty = ModelDetails | null
@@ -302,8 +306,8 @@ export type ModelDefaultCatalog = string | null
 export interface Model {
   name: string
   fqn: string
-  path: string
-  full_path: string
+  path?: ModelPath
+  full_path?: ModelFullPath
   dialect: string
   type: ModelType
   columns: Column[]
