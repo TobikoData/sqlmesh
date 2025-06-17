@@ -40,7 +40,6 @@ import sys
 import time
 import traceback
 import typing as t
-import unittest.result
 from functools import cached_property
 from io import StringIO
 from itertools import chain
@@ -2061,7 +2060,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-        return run_tests(
+        result = run_tests(
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
@@ -2073,6 +2072,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
             default_catalog_dialect=self.config.dialect or "",
         )
+
+        self.console.log_test_results(
+            result,
+            self.test_connection_config._engine_adapter.DIALECT,
+        )
+
+        return result
 
     @python_api_analytics
     def audit(
@@ -2496,28 +2502,20 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
-    ) -> t.Tuple[unittest.result.TestResult, str]:
+    ) -> t.Tuple[ModelTextTestResult, str]:
         test_output_io = StringIO()
         result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
-    def _run_plan_tests(
-        self, skip_tests: bool = False
-    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+    def _run_plan_tests(self, skip_tests: bool = False) -> t.Optional[ModelTextTestResult]:
         if not skip_tests:
-            result, test_output = self._run_tests()
-            if result.testsRun > 0:
-                self.console.log_test_results(
-                    result,
-                    test_output,
-                    self.test_connection_config._engine_adapter.DIALECT,
-                )
+            result = self.test()
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again."
                 )
-            return result, test_output
-        return None, None
+            return result
+        return None
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:

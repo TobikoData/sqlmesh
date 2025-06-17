@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from io import StringIO
+
 import functools
 import logging
 import typing as t
@@ -1032,6 +1034,7 @@ class SQLMeshMagics(Magics):
             tests=args.tests,
             verbosity=Verbosity(args.verbose),
             preserve_fixtures=args.preserve_fixtures,
+            stream=StringIO(),  # consume the output instead of redirecting to stdout
         )
 
     @magic_arguments()
