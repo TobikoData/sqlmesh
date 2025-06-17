@@ -63,20 +63,19 @@ def check_required_approvers(ctx: click.Context) -> None:
 def _run_tests(controller: GithubController) -> bool:
     controller.update_test_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
-        result, output = controller.run_tests()
+        result, _ = controller.run_tests()
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             # Conclusion will be updated with final status based on test results
             conclusion=GithubCheckConclusion.NEUTRAL,
             result=result,
-            output=output,
         )
         return result.wasSuccessful()
     except Exception:
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.FAILURE,
-            output=traceback.format_exc(),
+            traceback=traceback.format_exc(),
         )
         return False
 
