@@ -1587,22 +1587,28 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
 
 
-class FabricWarehouseConnectionConfig(MSSQLConnectionConfig):
+class FabricConnectionConfig(MSSQLConnectionConfig):
     """
-    Fabric Warehouse Connection Configuration. Inherits most settings from MSSQLConnectionConfig.
+    Fabric Connection Configuration.
+
+    Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
+    It is recommended to use the 'pyodbc' driver for Fabric.
     """
 
-    type_: t.Literal["fabric_warehouse"] = Field(alias="type", default="fabric_warehouse")  # type: ignore
+    type_: t.Literal["fabric"] = Field(alias="type", default="fabric")
     autocommit: t.Optional[bool] = True
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        from sqlmesh.core.engine_adapter.fabric_warehouse import FabricWarehouseAdapter
+        # This is the crucial link to the adapter you already created.
+        from sqlmesh.core.engine_adapter.fabric import FabricAdapter
 
-        return FabricWarehouseAdapter
+        return FabricAdapter
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        # This ensures the 'database' name from the config is passed
+        # to the FabricAdapter's constructor.
         return {
             "database": self.database,
             "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
