@@ -163,7 +163,7 @@ def execute(
 ) -> pd.DataFrame:
 
     # pre-statement
-    context.fetchdf("SET GLOBAL parameter = 'value';")
+    context.engine_adapter.execute("SET GLOBAL parameter = 'value';")
 
     # post-statement requires using `yield` instead of `return`
     yield pd.DataFrame([
@@ -171,7 +171,7 @@ def execute(
     ])
 
     # post-statement
-    context.fetchdf("CREATE INDEX idx ON example.pre_post_statements (id);")
+    context.engine_adapter.execute("CREATE INDEX idx ON example.pre_post_statements (id);")
 ```
 
 ## Optional on-virtual-update statements
