@@ -13,5 +13,15 @@
     "vscode/react/dist": true
   },
   // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
-  "typescript.tsc.autoDetect": "off"
+  "typescript.tsc.autoDetect": "off",
+  // Playwright configuration
+  // Python configuration to ensure consistent environment
+  "python.defaultInterpreterPath": "${env:VIRTUAL_ENV}/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "terminal.integrated.env.osx": {
+    "PATH": "${env:VIRTUAL_ENV}/bin:${env:PATH}"
+  },
+  "terminal.integrated.env.linux": {
+    "PATH": "${env:VIRTUAL_ENV}/bin:${env:PATH}"
+  }
 }

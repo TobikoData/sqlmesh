@@ -381,6 +381,117 @@ Example showing default values:
     )
     ```
 
+
+### Always comparing against production
+
+By default, SQLMesh compares the current state of project files to the target `<env>` environment when `sqlmesh plan <env>` is run. However, a common expectation is that local changes should always be compared to the production environment.
+
+The `always_recreate_environment` boolean plan option can alter this behavior. When enabled, SQLMesh will always attempt to compare against the production environment by recreating the target environment; If `prod` does not exist, SQLMesh will fall back to comparing against the target environment.
+
+**NOTE:**: Upon succesfull plan application, changes are still promoted to the target `<env>` environment.
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    plan:
+        always_recreate_environment: True
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        PlanConfig,
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        plan=PlanConfig(
+            always_recreate_environment=True,
+        ),
+    )
+    ```
+
+#### Change Categorization Example
+
+Consider this scenario with `always_recreate_environment` enabled:
+
+1. Initial state in `prod`:
+```sql
+MODEL (name sqlmesh_example.test_model, kind FULL);
+SELECT 1 AS col
+```
+
+1. First (breaking) change in `dev`:
+```sql
+MODEL (name sqlmesh_example__dev.test_model, kind FULL);
+SELECT 2 AS col
+```
+
+??? "Output plan example #1"
+
+    ```bash
+    New environment `dev` will be created from `prod`
+
+    Differences from the `prod` environment:
+
+    Models:
+    └── Directly Modified:
+        └── sqlmesh_example__dev.test_model
+
+    ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+    +++                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                    
+                                                                                                
+    kind FULL                                                                                                                                                                                                                                    
+    )                                                                                                                                                                                                                                              
+    SELECT                                                                                                                                                                                                                                         
+    -  1 AS col                                                                                                                                                                                                                                     
+    +  2 AS col  
+    ```
+
+3. Second (metadata) change in `dev`:
+```sql
+MODEL (name sqlmesh_example__dev.test_model, kind FULL, owner 'John Doe');
+SELECT 5 AS col
+```
+
+??? "Output plan example #2"
+
+    ```bash
+    New environment `dev` will be created from `prod`
+
+    Differences from the `prod` environment:
+
+    Models:
+    └── Directly Modified:
+        └── sqlmesh_example__dev.test_model
+
+    ---                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                    
+    +++                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                    
+    @@ -1,8 +1,9 @@                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                    
+    MODEL (                                                                                                                                                                                                                                        
+    name sqlmesh_example.test_model,                                                                                                                                                                                                             
+    +  owner "John Doe",                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+    kind FULL                                                                                                                                                                                                                                    
+    )                                                                                                                                                                                                                                              
+    SELECT                                                                                                                                                                                                                                         
+    -  1 AS col                                                                                                                                                                                                                                     
+    +  2 AS col                                                                                                                                                                                                                                     
+
+    Directly Modified: sqlmesh_example__dev.test_model (Breaking)
+    Models needing backfill:
+    └── sqlmesh_example__dev.test_model: [full refresh]
+    ```
+
+Even though the second change should have been a metadata change (thus not requiring a backfill), it will still be classified as a breaking change because the comparison is against production instead of the previous development state. This is intentional and may cause additional backfills as more changes are accumulated.  
+
+
 ### Gateways
 
 The `gateways` configuration defines how SQLMesh should connect to the data warehouse, state backend, and scheduler. These options are in the [gateway](../reference/configuration.md#gateway) section of the configuration reference page.

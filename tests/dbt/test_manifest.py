@@ -115,6 +115,8 @@ def test_manifest_helper(caplog):
     assert sources["streaming.order_items"].table_name == "order_items"
     assert sources["streaming.order_items"].schema_ == "raw"
 
+    assert all(s.quoting["identifier"] is False for s in sources.values())
+
     assert sources["streaming.order_items"].freshness == {
         "warn_after": {"count": 10 if DBT_VERSION < (1, 9, 5) else 12, "period": "hour"},
         "error_after": {"count": 11 if DBT_VERSION < (1, 9, 5) else 13, "period": "hour"},

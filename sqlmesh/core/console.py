@@ -8,7 +8,6 @@ import uuid
 import logging
 import textwrap
 from pathlib import Path
-import numpy as np
 from hyperscript import h
 from rich.console import Console as RichConsole
 from rich.live import Live
@@ -2497,6 +2496,7 @@ class TerminalConsole(Console):
 def _cells_match(x: t.Any, y: t.Any) -> bool:
     """Helper function to compare two cells and returns true if they're equal, handling array objects."""
     import pandas as pd
+    import numpy as np
 
     # Convert array-like objects to list for consistent comparison
     def _normalize(val: t.Any) -> t.Any:

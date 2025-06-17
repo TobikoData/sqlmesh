@@ -27,6 +27,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.date import TimeLike
 
 if t.TYPE_CHECKING:
@@ -98,6 +99,11 @@ class TrinoEngineAdapter(
 
         if not isinstance(authorization, exp.Expression):
             authorization = exp.Literal.string(authorization)
+
+        if not authorization.is_string:
+            raise SQLMeshError(
+                "Invalid value for `session_properties.authorization`. Must be a string literal."
+            )
 
         authorization_sql = authorization.sql(dialect=self.dialect)
 

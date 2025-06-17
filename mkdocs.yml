@@ -107,7 +107,7 @@ nav:
     - Configuration:
       - reference/configuration.md
       - reference/model_configuration.md
-  - Tobiko Cloud:
+  - Tobiko Cloud: # NOTE: if this item is no longer last, need to update extra.css to adjust logo positioning
     - "Overview": cloud/cloud_index.md
     - "Getting Started": cloud/tcloud_getting_started.md
     - Cloud Features:
@@ -125,6 +125,7 @@ nav:
         - cloud/features/scheduler/dagster.md
       - Security:
         - "Security Overview": cloud/features/security/security.md
+      - "Incident Reporting": cloud/features/incident_reporting.md
 #      - Observability:
 #        - cloud/features/observability/overview.md
 #        - cloud/features/observability/model_freshness.md

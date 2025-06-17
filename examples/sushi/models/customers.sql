@@ -33,7 +33,8 @@ LEFT JOIN (
   WITH current_marketing AS (
     SELECT
       customer_id,
-      status
+      status,
+      @ADD_ONE(1) AS another_column,
     FROM current_marketing_outer
   )
   SELECT * FROM current_marketing

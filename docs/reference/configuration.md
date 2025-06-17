@@ -80,7 +80,7 @@ Configuration for the `sqlmesh plan` command.
 | `enable_preview`          | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: True, except for dbt projects where the target engine does not support cloning)                | Boolean              | N        |
 | `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    | boolean              | N        |
 | `no_prompts`              | Disables interactive prompts in CLI (Default: True)                                                                                                                                                                                                     | boolean              | N        |
-
+| `always_recreate_environment`              | Always recreates the target environment from the environment specified in `create_from` (by default `prod`) (Default: False)                                                                                                                                                                                                     | boolean              | N        |
 ## Run
 
 Configuration for the `sqlmesh run` command. Please note that this is only applicable when configured with the [builtin](#builtin) scheduler.

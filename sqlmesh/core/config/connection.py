@@ -43,7 +43,7 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql", "azuresql"}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -55,11 +55,10 @@ MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
 
 
 def _get_engine_import_validator(
-    import_name: str, engine_type: str, extra_name: t.Optional[str] = None
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None, decorate: bool = True
 ) -> t.Callable:
     extra_name = extra_name or engine_type
 
-    @model_validator(mode="before")
     def validate(cls: t.Any, data: t.Any) -> t.Any:
         check_import = (
             str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
@@ -83,7 +82,7 @@ def _get_engine_import_validator(
 
         return data
 
-    return validate
+    return model_validator(mode="before")(validate) if decorate else validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
@@ -540,7 +539,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
-    _engine_import_validator = _get_engine_import_validator("snowflake", "snowflake")
 
     @model_validator(mode="before")
     def _validate_authenticator(cls, data: t.Any) -> t.Any:
@@ -566,6 +564,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             raise ConfigError("Token must be provided if using oauth authentication")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator(
+        "snowflake.connector.network", "snowflake"
+    )
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -734,7 +736,6 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
-    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
@@ -811,6 +812,8 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 raise ValueError("`http_path` is still required when using `auth_type`")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -1422,17 +1425,50 @@ class MSSQLConnectionConfig(ConnectionConfig):
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 
+    # Driver options
+    driver: t.Literal["pymssql", "pyodbc"] = "pymssql"
+    # PyODBC specific options
+    driver_name: t.Optional[str] = None  # e.g. "ODBC Driver 18 for SQL Server"
+    trust_server_certificate: t.Optional[bool] = None
+    encrypt: t.Optional[bool] = None
+    # Dictionary of arbitrary ODBC connection properties
+    # See: https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute
+    odbc_properties: t.Optional[t.Dict[str, t.Any]] = None
+
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
 
-    _engine_import_validator = _get_engine_import_validator("pymssql", "mssql")
+    @model_validator(mode="before")
+    @classmethod
+    def _mssql_engine_import_validator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        driver = data.get("driver", "pymssql")
+
+        # Define the mapping of driver to import module and extra name
+        driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
+
+        if driver not in driver_configs:
+            raise ValueError(f"Unsupported driver: {driver}")
+
+        import_module, extra_name = driver_configs[driver]
+
+        # Use _get_engine_import_validator with decorate=False to get the raw validation function
+        # This avoids the __wrapped__ issue in Python 3.9
+        validator_func = _get_engine_import_validator(
+            import_module, driver, extra_name, decorate=False
+        )
+
+        # Call the raw validation function directly
+        return validator_func(cls, data)
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {
+        base_keys = {
             "host",
             "user",
             "password",
@@ -1447,15 +1483,96 @@ class MSSQLConnectionConfig(ConnectionConfig):
             "tds_version",
         }
 
+        if self.driver == "pyodbc":
+            base_keys.update(
+                {
+                    "driver_name",
+                    "trust_server_certificate",
+                    "encrypt",
+                    "odbc_properties",
+                }
+            )
+            # Remove pymssql-specific parameters
+            base_keys.discard("tds_version")
+            base_keys.discard("conn_properties")
+
+        return base_keys
+
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.MSSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
+        if self.driver == "pymssql":
+            import pymssql
 
-        return pymssql.connect
+            return pymssql.connect
+
+        import pyodbc
+
+        def connect(**kwargs: t.Any) -> t.Callable:
+            # Extract parameters for connection string
+            host = kwargs.pop("host")
+            port = kwargs.pop("port", 1433)
+            database = kwargs.pop("database", "")
+            user = kwargs.pop("user", None)
+            password = kwargs.pop("password", None)
+            driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
+            trust_server_certificate = kwargs.pop("trust_server_certificate", False)
+            encrypt = kwargs.pop("encrypt", True)
+            login_timeout = kwargs.pop("login_timeout", 60)
+
+            # Build connection string
+            conn_str_parts = [
+                f"DRIVER={{{driver_name}}}",
+                f"SERVER={host},{port}",
+            ]
+
+            if database:
+                conn_str_parts.append(f"DATABASE={database}")
+
+            # Add security options
+            conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
+            if trust_server_certificate:
+                conn_str_parts.append("TrustServerCertificate=YES")
+
+            conn_str_parts.append(f"Connection Timeout={login_timeout}")
+
+            # Standard SQL Server authentication
+            if user:
+                conn_str_parts.append(f"UID={user}")
+            if password:
+                conn_str_parts.append(f"PWD={password}")
+
+            # Add any additional ODBC properties from the odbc_properties dictionary
+            if self.odbc_properties:
+                for key, value in self.odbc_properties.items():
+                    # Skip properties that we've already set above
+                    if key.lower() in (
+                        "driver",
+                        "server",
+                        "database",
+                        "uid",
+                        "pwd",
+                        "encrypt",
+                        "trustservercertificate",
+                        "connection timeout",
+                    ):
+                        continue
+
+                    # Handle boolean values properly
+                    if isinstance(value, bool):
+                        conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
+                    else:
+                        conn_str_parts.append(f"{key}={value}")
+
+            # Create the connection string
+            conn_str = ";".join(conn_str_parts)
+
+            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+        return connect
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:

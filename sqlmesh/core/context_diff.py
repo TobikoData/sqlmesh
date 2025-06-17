@@ -103,6 +103,7 @@ class ContextDiff(PydanticModel):
         environment_statements: t.Optional[t.List[EnvironmentStatements]] = [],
         gateway_managed_virtual_layer: bool = False,
         infer_python_dependencies: bool = True,
+        always_recreate_environment: bool = False,
     ) -> ContextDiff:
         """Create a ContextDiff object.
 
@@ -128,10 +129,12 @@ class ContextDiff(PydanticModel):
             The ContextDiff object.
         """
         environment = environment.lower()
-        env = state_reader.get_environment(environment)
-
+        existing_env = state_reader.get_environment(environment)
         create_from_env_exists = False
-        if env is None or env.expired:
+
+        recreate_environment = always_recreate_environment and not environment == create_from
+
+        if existing_env is None or existing_env.expired or recreate_environment:
             env = state_reader.get_environment(create_from.lower())
 
             if not env and create_from != c.PROD:
@@ -143,6 +146,7 @@ class ContextDiff(PydanticModel):
             create_from_env_exists = env is not None
             previously_promoted_snapshot_ids = set()
         else:
+            env = existing_env
             is_new_environment = False
             previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
 
@@ -220,6 +224,11 @@ class ContextDiff(PydanticModel):
 
         previous_environment_statements = state_reader.get_environment_statements(environment)
 
+        if existing_env and always_recreate_environment:
+            previous_plan_id: t.Optional[str] = existing_env.plan_id
+        else:
+            previous_plan_id = env.plan_id if env and not is_new_environment else None
+
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
@@ -232,7 +241,7 @@ class ContextDiff(PydanticModel):
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
-            previous_plan_id=env.plan_id if env and not is_new_environment else None,
+            previous_plan_id=previous_plan_id,
             previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
             previous_finalized_snapshots=env.previous_finalized_snapshots if env else None,
             previous_requirements=env.requirements if env else {},

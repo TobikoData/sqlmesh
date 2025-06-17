@@ -31,6 +31,8 @@ export type CustomLSPMethods =
   | AbstractAPICall
   | RenderModelMethod
   | AllModelsForRenderMethod
+  | SupportedMethodsMethod
+  | FormatProjectMethod
 
 interface AllModelsRequest {
   textDocument: {
@@ -75,3 +77,32 @@ export interface ModelForRendering {
   description: string | null | undefined
   uri: string
 }
+
+export interface SupportedMethodsMethod {
+  method: 'sqlmesh/supported_methods'
+  request: SupportedMethodsRequest
+  response: SupportedMethodsResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface SupportedMethodsRequest {}
+
+interface SupportedMethodsResponse {
+  methods: CustomMethod[]
+}
+
+interface CustomMethod {
+  name: string
+}
+
+export interface FormatProjectMethod {
+  method: 'sqlmesh/format_project'
+  request: FormatProjectRequest
+  response: FormatProjectResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface FormatProjectRequest {}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface FormatProjectResponse {}

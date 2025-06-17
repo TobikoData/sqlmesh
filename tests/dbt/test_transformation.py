@@ -1314,7 +1314,6 @@ def test_clickhouse_properties(mocker: MockerFixture):
         "SQLMesh does not support 'incremental_predicates' - they will not be applied.",
         "SQLMesh does not support the 'query_settings' model configuration parameter. Specify the query settings directly in the model query.",
         "SQLMesh does not support the 'sharding_key' model configuration parameter or distributed materializations.",
-        "Using unmanaged incremental materialization for model '`test`.`model`'. Some features might not be available. Consider adding either a time_column ('delete+insert', 'insert_overwrite') or a unique_key ('merge', 'none') configuration to mitigate this.",
     ]
 
     assert [e.sql("clickhouse") for e in model_to_sqlmesh.partitioned_by] == [

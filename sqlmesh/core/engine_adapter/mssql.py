@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import typing as t
 
-import numpy as np
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
@@ -215,9 +214,14 @@ class MSSQLEngineAdapter(
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         import pandas as pd
+        import numpy as np
 
         assert isinstance(df, pd.DataFrame)
         temp_table = self._get_temp_table(target_table or "pandas")
+
+        # Return the superclass implementation if the connection pool doesn't support bulk_copy
+        if not hasattr(self._connection_pool.get(), "bulk_copy"):
+            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
 
         def query_factory() -> Query:
             # It is possible for the factory to be called multiple times and if so then the temp table will already

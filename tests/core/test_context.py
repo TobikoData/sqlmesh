@@ -16,6 +16,7 @@ from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.core.console import get_console, TerminalConsole
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     load_configs,
@@ -40,7 +41,6 @@ from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSharedConnectionPool
@@ -48,6 +48,7 @@ from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
     to_date,
+    to_datetime,
     to_timestamp,
     yesterday_ds,
 )
@@ -270,24 +271,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     yesterday = yesterday_ds()
     success = sushi_context.run(start=yesterday, end=yesterday)
 
-    plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync,
-        sushi_context.snapshot_evaluator,
-        sushi_context.create_scheduler,
-        sushi_context.default_catalog,
-    )
-
-    plan = PlanBuilder(
-        context_diff=sushi_context._context_diff("prod"),
-    ).build()
-
-    # stringify used to trigger an unhashable exception due to
-    # https://github.com/pydantic/pydantic/issues/8016
-    assert str(plan) != ""
-
-    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
-    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
-
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
     assert mock_console.show_environment_difference_summary.called
@@ -435,6 +418,99 @@ def test_plan_execution_time():
         str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
         == "2024-01-02 00:00:00"
     )
+
+
+def test_plan_execution_time_start_end():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # prod plan - no fixed execution time so it defaults to now() and reads all the data
+    prod_plan = context.plan(auto_apply=True)
+
+    assert len(prod_plan.new_snapshots) == 1
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds, 'changed' as a FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # dev plan with an execution time in the past and no explicit start/end specified
+    # the plan end should be bounded to it and not exceed it even though in prod the last interval (used as a default end)
+    # is newer than the execution time
+    dev_plan = context.plan("dev", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-01"
+    )  # default start is the earliest prod interval
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start
+    dev_plan = context.plan("dev", start="1 day ago", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-04"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start and a relative end
+    dev_plan = context.plan("dev", start="2 days ago", execution_time="2020-01-05", end="1 day ago")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-03"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime("2020-01-04")  # end relative to execution_time
 
 
 def test_override_builtin_audit_blocking_mode():
@@ -2125,3 +2201,10 @@ def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path)
     # False instead of respecting the default plan config value, which is True
     assert calls[0].kwargs["no_prompts"] == False
     assert context.config.plan.no_prompts == True
+
+
+def test_plan_explain_skips_tests(sushi_context: Context, mocker: MockerFixture) -> None:
+    sushi_context.console = TerminalConsole()
+    spy = mocker.spy(sushi_context, "_run_plan_tests")
+    sushi_context.plan(environment="dev", explain=True, no_prompts=True, include_unmodified=True)
+    spy.assert_called_once_with(skip_tests=True)

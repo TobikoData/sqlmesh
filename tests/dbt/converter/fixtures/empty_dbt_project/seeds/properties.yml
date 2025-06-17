@@ -1,0 +1,13 @@
+version: 2
+
+seeds:
+  - name: items
+    columns:
+      - name: id
+        description: Item id
+      - name: name
+        description: Name of the item
+      - name: price
+        description: Price of the item
+      - name: ds
+        description: Date

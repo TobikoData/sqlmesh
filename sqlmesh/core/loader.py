@@ -38,7 +38,11 @@ from sqlmesh.core.signal import signal
 from sqlmesh.core.test import ModelTestMetadata, filter_tests_by_patterns
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroExtractor,
+    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+)
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.pydantic import validation_error_message
 from sqlmesh.utils.process import create_process_pool_executor
@@ -548,6 +552,7 @@ class SqlMeshLoader(Loader):
         signals: UniqueKeyDict[str, signal],
         cache: CacheBase,
         gateway: t.Optional[str],
+        loading_default_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -590,6 +595,7 @@ class SqlMeshLoader(Loader):
                 infer_names=self.config.model_naming.infer_names,
                 signal_definitions=signals,
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                **loading_default_kwargs or {},
             )
 
             with create_process_pool_executor(
@@ -942,3 +948,104 @@ class SqlMeshLoader(Loader):
                     self._loader.context.gateway or self._loader.config.default_gateway_name,
                 ]
             )
+
+
+class MigratedDbtProjectLoader(SqlMeshLoader):
+    @property
+    def migrated_dbt_project_name(self) -> str:
+        return self.config.variables[c.MIGRATED_DBT_PROJECT_NAME]
+
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
+        from sqlmesh.dbt.converter.common import infer_dbt_package_from_path
+        from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
+
+        # Store a copy of the macro registry
+        standard_macros = macro.get_registry()
+
+        jinja_macros = JinjaMacroRegistry(
+            create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+            top_level_packages=["dbt", self.migrated_dbt_project_name],
+        )
+        extractor = MacroExtractor()
+
+        macros_max_mtime: t.Optional[float] = None
+
+        for path in self._glob_paths(
+            self.config_path / c.MACROS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".py",
+        ):
+            if import_python_file(path, self.config_path):
+                self._track_file(path)
+                macro_file_mtime = self._path_mtimes[path]
+                macros_max_mtime = (
+                    max(macros_max_mtime, macro_file_mtime)
+                    if macros_max_mtime
+                    else macro_file_mtime
+                )
+
+        for path in self._glob_paths(
+            self.config_path / c.MACROS,
+            ignore_patterns=self.config.ignore_patterns,
+            extension=".sql",
+        ):
+            self._track_file(path)
+            macro_file_mtime = self._path_mtimes[path]
+            macros_max_mtime = (
+                max(macros_max_mtime, macro_file_mtime) if macros_max_mtime else macro_file_mtime
+            )
+
+            with open(path, "r", encoding="utf-8") as file:
+                try:
+                    package = infer_dbt_package_from_path(path) or self.migrated_dbt_project_name
+
+                    jinja_macros.add_macros(
+                        extractor.extract(file.read(), dialect=self.config.model_defaults.dialect),
+                        package=package,
+                    )
+                except Exception as e:
+                    raise ConfigError(f"Failed to load macro file: {path}", e)
+
+        self._macros_max_mtime = macros_max_mtime
+
+        macros = macro.get_registry()
+        macro.set_registry(standard_macros)
+
+        connection_config = self.context.connection_config
+        # this triggers the DBT create_builtins_module to have a `target` property which is required for a bunch of DBT macros to work
+        if dbt_config_type := TARGET_TYPE_TO_CONFIG_CLASS.get(connection_config.type_):
+            try:
+                jinja_macros.add_globals(
+                    {
+                        "target": dbt_config_type.from_sqlmesh(
+                            connection_config,
+                            name=self.config.default_gateway_name,
+                        ).attribute_dict()
+                    }
+                )
+            except NotImplementedError:
+                raise ConfigError(f"Unsupported dbt target type: {connection_config.type_}")
+
+        return macros, jinja_macros
+
+    def _load_sql_models(
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        audits: UniqueKeyDict[str, ModelAudit],
+        signals: UniqueKeyDict[str, signal],
+        cache: CacheBase,
+        gateway: t.Optional[str],
+        loading_default_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+    ) -> UniqueKeyDict[str, Model]:
+        return super()._load_sql_models(
+            macros=macros,
+            jinja_macros=jinja_macros,
+            audits=audits,
+            signals=signals,
+            cache=cache,
+            gateway=gateway,
+            loading_default_kwargs=dict(
+                migrated_dbt_project_name=self.migrated_dbt_project_name,
+            ),
+        )

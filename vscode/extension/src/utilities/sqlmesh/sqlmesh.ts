@@ -147,57 +147,75 @@ export const installSqlmeshEnterprise = async (
   return ok(true)
 }
 
+let installationLock: Promise<Result<boolean, ErrorType>> | undefined = undefined
+
 /**
  * Checks if sqlmesh enterprise is installed and updated. If not, it will install it.
  * This will also create a progress message in vscode in order to inform the user that sqlmesh enterprise is being installed.
+ * Uses a lock mechanism to prevent parallel executions.
  *
  * @returns A Result indicating whether sqlmesh enterprise was installed in the call.
  */
 export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
   Result<boolean, ErrorType>
 > => {
-  traceInfo('Ensuring sqlmesh enterprise is installed')
-  const isInstalled = await isSqlmeshEnterpriseInstalled()
-  if (isErr(isInstalled)) {
-    return isInstalled
+  // If there's an ongoing installation, wait for it to complete
+  if (installationLock) {
+    return installationLock
   }
-  if (isInstalled.value) {
-    traceInfo('Sqlmesh enterprise is installed')
-    return ok(false)
-  }
-  traceInfo('Sqlmesh enterprise is not installed, installing...')
-  const abortController = new AbortController()
-  const installResult = await window.withProgress(
-    {
-      location: ProgressLocation.Notification,
-      title: 'Installing sqlmesh enterprise...',
-      cancellable: true,
-    },
-    async (progress, token) => {
-      // Connect the cancellation token to our abort controller
-      token.onCancellationRequested(() => {
-        abortController.abort()
-        traceInfo('Sqlmesh enterprise installation cancelled')
-        window.showInformationMessage('Installation cancelled')
-      })
-      progress.report({ message: 'Installing sqlmesh enterprise...' })
-      const result = await installSqlmeshEnterprise(abortController)
-      if (isErr(result)) {
-        return result
+
+  // Create a new lock
+  installationLock = (async () => {
+    try {
+      traceInfo('Ensuring sqlmesh enterprise is installed')
+      const isInstalled = await isSqlmeshEnterpriseInstalled()
+      if (isErr(isInstalled)) {
+        return isInstalled
+      }
+      if (isInstalled.value) {
+        traceInfo('Sqlmesh enterprise is installed')
+        return ok(false)
+      }
+      traceInfo('Sqlmesh enterprise is not installed, installing...')
+      const abortController = new AbortController()
+      const installResult = await window.withProgress(
+        {
+          location: ProgressLocation.Notification,
+          title: 'SQLMesh',
+          cancellable: true,
+        },
+        async (progress, token) => {
+          // Connect the cancellation token to our abort controller
+          token.onCancellationRequested(() => {
+            abortController.abort()
+            traceInfo('Sqlmesh enterprise installation cancelled')
+            window.showInformationMessage('Installation cancelled')
+          })
+          progress.report({ message: 'Installing enterprise python package...' })
+          const result = await installSqlmeshEnterprise(abortController)
+          if (isErr(result)) {
+            return result
+          }
+          return ok(true)
+        },
+      )
+      if (isErr(installResult)) {
+        return installResult
       }
       return ok(true)
-    },
-  )
-  if (isErr(installResult)) {
-    return installResult
-  }
-  return ok(true)
+    } finally {
+      // Clear the lock when done
+      installationLock = undefined
+    }
+  })()
+
+  return installationLock
 }
 
 /**
  * Get the sqlmesh executable for the current workspace.
  *
- * @returns The sqlmesh executable for the current workspace.
+ * @deprecated Use LSP instead of direct sqlmesh execution for any new functionality.
  */
 export const sqlmeshExec = async (): Promise<
   Result<SqlmeshExecInfo, ErrorType>
@@ -269,6 +287,12 @@ export const sqlmeshExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmesh)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_not_found',
+      })
+    }
     return ok({
       bin: sqlmesh,
       workspacePath,
@@ -371,16 +395,16 @@ export const sqlmeshLspExec = async (): Promise<
         return ensured
       }
     }
-    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
-    if (isErr(ensuredDependencies)) {
-      return ensuredDependencies
-    }
     const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
     if (!fs.existsSync(binPath)) {
       return err({
         type: 'sqlmesh_lsp_not_found',
       })
+    }
+    const ensuredDependencies = await ensureSqlmeshLspDependenciesInstalled()
+    if (isErr(ensuredDependencies)) {
+      return ensuredDependencies
     }
     return ok({
       bin: binPath,
@@ -393,11 +417,32 @@ export const sqlmeshLspExec = async (): Promise<
       args: [],
     })
   } else {
+    const exists = await doesExecutableExist(sqlmeshLSP)
+    if (!exists) {
+      return err({
+        type: 'sqlmesh_lsp_not_found',
+      })
+    }
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
       env: {},
       args: [],
     })
+  }
+}
+
+async function doesExecutableExist(executable: string): Promise<boolean> {
+  const command = process.platform === 'win32' ? 'where.exe' : 'which'
+  traceLog(`Checking if ${executable} exists with ${command}`)
+  try {
+    const result = await execAsync(command, [executable])
+    traceLog(`Checked if ${executable} exists with ${command}, with result ${result.exitCode}`)
+    const exists = result.exitCode === 0
+    traceLog(`Checked if ${executable} exists with ${command}, with result ${exists}`)
+    return exists
+  } catch {
+    traceLog(`Checked if ${executable} exists with ${command}, errored, returning false`)
+    return false
   }
 }

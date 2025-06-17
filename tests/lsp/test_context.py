@@ -1,9 +1,7 @@
-import pytest
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 
 
-@pytest.mark.fast
 def test_lsp_context():
     context = Context(paths=["examples/sushi"])
     lsp_context = LSPContext(context)

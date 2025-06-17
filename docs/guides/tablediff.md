@@ -253,12 +253,12 @@ Then, specify each table's gateway in the `table_diff` command with this syntax:
 For example, we could diff the `landing.table` table across `bigquery` and `snowflake` gateways like this:
 
 ```sh
-$ sqlmesh table_diff 'bigquery|landing.table:snowflake|lake.table'
+$ tcloud sqlmesh table_diff 'bigquery|landing.table:snowflake|lake.table'
 ```
 
 This syntax tells SQLMesh to use the cross-database diffing algorithm instead of the normal within-database diffing algorithm.
 
-After adding gateways to the table names, use `table_diff` as described above - the same options apply for specifying the join keys, decimal precision, etc. See `sqlmesh table_diff --help` for a [full list of options](../reference/cli.md#table_diff).
+After adding gateways to the table names, use `table_diff` as described above - the same options apply for specifying the join keys, decimal precision, etc. See `tcloud sqlmesh table_diff --help` for a [full list of options](../reference/cli.md#table_diff).
 
 !!! warning
 
@@ -273,7 +273,7 @@ A cross-database diff is broken up into two stages.
 The first stage is a schema diff. This example shows that differences in column name case across the two tables are identified as schema differences:
 
 ```bash
-$ sqlmesh table_diff 'bigquery|sqlmesh_example.full_model:snowflake|sqlmesh_example.full_model' --on item_id --show-sample
+$ tcloud sqlmesh table_diff 'bigquery|sqlmesh_example.full_model:snowflake|sqlmesh_example.full_model' --on item_id --show-sample
 
 Schema Diff Between 'BIGQUERY|SQLMESH_EXAMPLE.FULL_MODEL' and 'SNOWFLAKE|SQLMESH_EXAMPLE.FULL_MODEL':
 ├── Added Columns:

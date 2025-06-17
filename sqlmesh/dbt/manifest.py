@@ -168,9 +168,11 @@ class ManifestHelper:
             )
 
             source_config = SourceConfig(
-                **source_config_dict,
-                **source_dict,
-                freshness=freshness.to_dict() if freshness else None,
+                **{
+                    **source_dict,
+                    **source_config_dict,
+                    "freshness": freshness.to_dict() if freshness else None,
+                }
             )
             self._sources_per_package[source.package_name][source_config.config_name] = (
                 source_config

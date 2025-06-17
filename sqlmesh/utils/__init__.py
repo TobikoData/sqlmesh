@@ -376,3 +376,9 @@ class CompletionStatus(Enum):
     @property
     def is_nothing_to_do(self) -> bool:
         return self == CompletionStatus.NOTHING_TO_DO
+
+
+def to_snake_case(name: str) -> str:
+    return "".join(
+        f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
+    )

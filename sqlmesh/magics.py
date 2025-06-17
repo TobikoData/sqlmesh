@@ -719,6 +719,11 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Warn if any selected model is missing a grain, and compute diffs for the remaining models.",
     )
+    @argument(
+        "--schema-diff-ignore-case",
+        action="store_true",
+        help="If set, when performing a schema diff the case of column names is ignored when matching between the two schemas. For example, 'col_a' in the source schema and 'COL_A' in the target schema will be treated as the same column.",
+    )
     @line_magic
     @pass_sqlmesh_context
     def table_diff(self, context: Context, line: str) -> None:
@@ -741,6 +746,7 @@ class SQLMeshMagics(Magics):
             decimals=args.decimals,
             skip_grain_check=args.skip_grain_check,
             warn_grain_check=args.warn_grain_check,
+            schema_diff_ignore_case=args.schema_diff_ignore_case,
         )
 
     @magic_arguments()

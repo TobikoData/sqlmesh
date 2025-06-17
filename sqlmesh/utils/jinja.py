@@ -22,6 +22,7 @@ if t.TYPE_CHECKING:
     CallNames = t.Tuple[t.Tuple[str, ...], t.Union[nodes.Call, nodes.Getattr]]
 
 SQLMESH_JINJA_PACKAGE = "sqlmesh.utils.jinja"
+SQLMESH_DBT_COMPATIBILITY_PACKAGE = "sqlmesh.dbt.converter.jinja_builtins"
 
 
 def environment(**kwargs: t.Any) -> Environment:
@@ -94,7 +95,11 @@ class MacroExtractor(Parser):
                 macro_str = self._find_sql(macro_start, self._next)
                 macros[name] = MacroInfo(
                     definition=macro_str,
-                    depends_on=list(extract_macro_references_and_variables(macro_str)[0]),
+                    depends_on=list(
+                        extract_macro_references_and_variables(macro_str, dbt_target_name=dialect)[
+                            0
+                        ]
+                    ),
                 )
 
             self._advance()
@@ -166,18 +171,86 @@ def extract_call_names(
     return parse()
 
 
+def extract_dbt_adapter_dispatch_targets(jinja_str: str) -> t.List[t.Tuple[str, t.Optional[str]]]:
+    """
+    Given a jinja string, identify {{ adapter.dispatch('foo','bar') }} calls and extract the (foo, bar) part as a tuple
+    """
+    ast = ENVIRONMENT.parse(jinja_str)
+
+    extracted = []
+
+    def _extract(node: nodes.Node, parent: t.Optional[nodes.Node] = None) -> None:
+        if (
+            isinstance(node, nodes.Getattr)
+            and isinstance(parent, nodes.Call)
+            and (node_name := node.find(nodes.Name))
+        ):
+            if node_name.name == "adapter" and node.attr == "dispatch":
+                call_args = [arg.value for arg in parent.args if isinstance(arg, nodes.Const)][0:2]
+                if len(call_args) == 1:
+                    call_args.append(None)
+                macro_name, package = call_args
+                extracted.append((macro_name, package))
+
+        for child_node in node.iter_child_nodes():
+            _extract(child_node, parent=node)
+
+    _extract(ast)
+
+    return extracted
+
+
 def extract_macro_references_and_variables(
-    *jinja_strs: str,
+    *jinja_strs: str, dbt_target_name: t.Optional[str] = None
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
     macro_references = set()
     variables = set()
     for jinja_str in jinja_strs:
+        if dbt_target_name and "adapter.dispatch" in jinja_str:
+            for dispatch_target_name, package in extract_dbt_adapter_dispatch_targets(jinja_str):
+                # here we are guessing at the macro names that the {{ adapter.dispatch() }} call will invoke
+                # there is a defined resolution order: https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch
+                # we rely on JinjaMacroRegistry.trim() to tune the dependencies down into just the ones that actually exist
+                macro_references.add(
+                    MacroReference(package=package, name=f"default__{dispatch_target_name}")
+                )
+                macro_references.add(
+                    MacroReference(
+                        package=package, name=f"{dbt_target_name}__{dispatch_target_name}"
+                    )
+                )
+                if package and package.startswith("dbt"):
+                    # handle the case where macros like `current_timestamp()` in the `dbt` package expect an implementation in eg the `dbt_bigquery` package
+                    macro_references.add(
+                        MacroReference(
+                            package=f"dbt_{dbt_target_name}",
+                            name=f"{dbt_target_name}__{dispatch_target_name}",
+                        )
+                    )
+
         for call_name, node in extract_call_names(jinja_str):
             if call_name[0] == c.VAR:
                 assert isinstance(node, nodes.Call)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
-                    variables.add(args[0].lower())
+                    variable_name = args[0].lower()
+
+                    # check if this {{ var() }} reference is from a migrated DBT package
+                    # if it is, there will be a __dbt_package=<package> kwarg
+                    dbt_package = next(
+                        (
+                            kwarg.value
+                            for kwarg in node.kwargs
+                            if isinstance(kwarg, nodes.Keyword) and kwarg.key == "__dbt_package"
+                        ),
+                        None,
+                    )
+                    if dbt_package and isinstance(dbt_package, nodes.Const):
+                        dbt_package = dbt_package.value
+                        # this convention is a flat way of referencing the nested values under `__dbt_packages__` in the SQLMesh project variables
+                        variable_name = f"{c.MIGRATED_DBT_PACKAGES}.{dbt_package}.{variable_name}"
+
+                    variables.add(variable_name)
             elif call_name[0] == c.GATEWAY:
                 variables.add(c.GATEWAY)
             elif len(call_name) == 1:
@@ -254,6 +327,19 @@ class JinjaMacroRegistry(PydanticModel):
     @property
     def trimmed(self) -> bool:
         return self._trimmed
+
+    @property
+    def all_macros(self) -> t.Iterable[t.Tuple[t.Optional[str], str, MacroInfo]]:
+        """
+        Returns (package, macro_name, MacroInfo) tuples for every macro in this registry
+        Root macros will have package=None
+        """
+        for name, macro in self.root_macros.items():
+            yield None, name, macro
+
+        for package, macros in self.packages.items():
+            for name, macro in macros.items():
+                yield (package, name, macro)
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
@@ -593,7 +679,12 @@ def jinja_call_arg_name(node: nodes.Node) -> str:
 
 
 def create_var(variables: t.Dict[str, t.Any]) -> t.Callable:
-    def _var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    def _var(
+        var_name: str, default: t.Optional[t.Any] = None, **kwargs: t.Any
+    ) -> t.Optional[t.Any]:
+        if dbt_package := kwargs.get("__dbt_package"):
+            var_name = f"{c.MIGRATED_DBT_PACKAGES}.{dbt_package}.{var_name}"
+
         value = variables.get(var_name.lower(), default)
         if isinstance(value, SqlValue):
             return value.sql

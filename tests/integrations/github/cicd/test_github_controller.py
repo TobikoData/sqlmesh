@@ -19,6 +19,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     MergeStateStatus,
 )
+from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
 
 pytestmark = pytest.mark.github
@@ -236,6 +237,7 @@ def test_pr_plan(github_client, make_controller):
 def test_pr_plan_auto_categorization(github_client, make_controller):
     custom_categorizer_config = CategorizerConfig.all_semi()
     default_start = "1 week ago"
+    default_start_absolute = to_datetime(default_start, relative_base=now())
     controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json",
         github_client,
@@ -249,7 +251,7 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
     assert controller._pr_plan_builder._categorizer_config == custom_categorizer_config
-    assert controller.pr_plan.start == default_start
+    assert controller.pr_plan.start == default_start_absolute
 
 
 def test_prod_plan(github_client, make_controller):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from duckdb import __version__ as duckdb_version
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.mixins import (
@@ -18,7 +17,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.utils import major_minor
 from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
@@ -35,13 +33,8 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
         },
     )
-
-    # TODO: remove once we stop supporting DuckDB 0.9
-    COMMENT_CREATION_TABLE, COMMENT_CREATION_VIEW = (
-        (CommentCreationTable.UNSUPPORTED, CommentCreationView.UNSUPPORTED)
-        if major_minor(duckdb_version) < (0, 10)
-        else (CommentCreationTable.COMMENT_COMMAND_ONLY, CommentCreationView.COMMENT_COMMAND_ONLY)
-    )
+    COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
+    COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
     @property
     def catalog_support(self) -> CatalogSupport:

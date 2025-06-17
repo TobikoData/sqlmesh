@@ -28,6 +28,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
+from sqlmesh.core.loader import MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -1028,3 +1029,29 @@ def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) 
         assert conn.project == "unit-test"
         assert conn.scopes == ("a", "b", "c")
         assert conn.keyfile_json == {"foo": "bar"}
+
+
+def test_loader_for_migrated_dbt_project(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+                           
+    variables:    
+      __dbt_project_name__: sushi                           
+""")
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.loader == MigratedDbtProjectLoader

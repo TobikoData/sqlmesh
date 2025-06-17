@@ -23,13 +23,17 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 SKIP_LOAD_COMMANDS = (
+    "clean",
     "create_external_models",
+    "destroy",
+    "environments",
+    "invalidate",
+    "janitor",
     "migrate",
     "rollback",
     "run",
-    "environments",
-    "invalidate",
     "table_name",
+    "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
@@ -457,7 +461,13 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @click.option(
     "--diff-rendered",
     is_flag=True,
-    help="Output text differences for the rendered versions of the models and standalone audits",
+    help="Output text differences for the rendered versions of the models and standalone audits.",
+    default=None,
+)
+@click.option(
+    "--explain",
+    is_flag=True,
+    help="Explain the plan instead of applying it.",
     default=None,
 )
 @opt.verbose
@@ -932,6 +942,11 @@ def create_external_models(obj: Context, **kwargs: t.Any) -> None:
     multiple=True,
     help="Specify one or more models to data diff. Use wildcards to diff multiple models. Ex: '*' (all models with applied plan diffs), 'demo.model+' (this and downstream models), 'git:feature_branch' (models with direct modifications in this branch only)",
 )
+@click.option(
+    "--schema-diff-ignore-case",
+    is_flag=True,
+    help="If set, when performing a schema diff the case of column names is ignored when matching between the two schemas. For example, 'col_a' in the source schema and 'COL_A' in the target schema will be treated as the same column.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
@@ -1205,3 +1220,39 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
+
+
+@cli.group(no_args_is_help=True, hidden=True)
+def dbt() -> None:
+    """Commands for doing dbt-specific things"""
+    pass
+
+
+@dbt.command("convert")
+@click.option(
+    "-i",
+    "--input-dir",
+    help="Path to the DBT project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "-o",
+    "--output-dir",
+    required=True,
+    help="Path to write out the converted SQLMesh project",
+    type=click.Path(exists=False, dir_okay=True, file_okay=False, readable=True, path_type=Path),
+)
+@click.option("--no-prompts", is_flag=True, help="Disable interactive prompts", default=False)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def dbt_convert(obj: Context, input_dir: Path, output_dir: Path, no_prompts: bool) -> None:
+    """Convert a DBT project to a SQLMesh project"""
+    from sqlmesh.dbt.converter.convert import convert_project_files
+
+    convert_project_files(
+        input_dir.absolute(),
+        output_dir.absolute(),
+        no_prompts=no_prompts,
+    )

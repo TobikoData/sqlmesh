@@ -15,6 +15,7 @@ from sqlglot.schema import MappingSchema
 from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from pydantic import ValidationError
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator, ValidationError
@@ -42,6 +43,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
+    IncrementalByUniqueKeyKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -63,7 +65,13 @@ from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroExtractor,
+    MacroReference,
+    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+)
 from sqlmesh.utils.metaprogramming import Executable, SqlValue
 from sqlmesh.core.macros import RuntimeStage
 from tests.utils.test_helpers import use_terminal_console
@@ -569,6 +577,114 @@ def test_opt_out_of_time_column_in_partitioned_by():
 
     model = load_sql_based_model(expressions)
     assert model.partitioned_by == [exp.to_column('"b"')]
+
+
+def test_model_no_name():
+    expressions = d.parse(
+        """
+        MODEL (
+            dialect bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add the required 'name' field to the MODEL block at the top of the file.\n\nLearn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview"
+    )
+
+
+def test_model_field_name_suggestions():
+    # top-level field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block: 'dialects'. Did you mean 'dialect'?"
+    )
+
+    # kind field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                batch_sizes 1
+            ),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field: 'batch_sizes'. Did you mean 'batch_size'?"
+    )
+
+    # multiple fields
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+            descriptions 'a',
+            asdfasdf true
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    ex_str = str(ex.value)
+    # field order is non-deterministic, so we can't test the output string directly
+    assert "Invalid field names present in the MODEL block: " in ex_str
+    assert "'descriptions'" in ex_str
+    assert "'dialects'" in ex_str
+    assert "'asdfasdf'" in ex_str
+    assert "- descriptions: Did you mean 'description'?" in ex_str
+    assert "- dialects: Did you mean 'dialect'?" in ex_str
+    assert "- asdfasdf: Did you mean " not in ex_str
+
+
+def test_model_required_field_missing():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add required field 'time_column' to the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field."
+    )
 
 
 def test_no_model_statement(tmp_path: Path):
@@ -6063,6 +6179,58 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
 
 
+def test_variables_migrated_dbt_package_macro():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('TEST_VAR_A') }}' as a, '{{ test.test_macro_var() }}' as b
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+        packages={
+            "test": {
+                "test_macro_var": MacroInfo(
+                    definition="""
+                    {% macro test_macro_var() %}
+                        {{- var('test_var_b', __dbt_package='test') }}
+                    {%- endmacro %}""",
+                    depends_on=[MacroReference(name="var")],
+                )
+            }
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={
+            "test_var_a": "test_var_a_value",
+            c.MIGRATED_DBT_PACKAGES: {
+                "test": {"test_var_b": "test_var_b_value", "unused": "unused_value"},
+            },
+            "test_var_c": "test_var_c_value",
+        },
+        jinja_macros=jinja_macros,
+        migrated_dbt_project_name="test",
+        dialect="bigquery",
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_var_a_value' AS `a`, 'test_var_b_value' AS `b`"
+    )
+
+
 def test_load_external_model_python(sushi_context) -> None:
     @model(
         "test_load_external_model_python",
@@ -7617,6 +7785,37 @@ materialized FALSE
 materialized TRUE
 )"""
     )
+
+
+def test_incremental_by_unique_key_batch_concurrency():
+    with pytest.raises(ValidationError, match=r"Input should be 1"):
+        load_sql_based_model(
+            d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 2
+            )
+        );
+        select 1;
+        """)
+        )
+
+    model = load_sql_based_model(
+        d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 1
+            )
+        );
+        select 1;
+        """)
+    )
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert model.kind.batch_concurrency == 1
 
 
 def test_bad_model_kind():
@@ -10244,3 +10443,38 @@ def test_invalid_sql_model_query() -> None:
             match=r"^A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block.*",
         ):
             load_sql_based_model(expressions)
+
+
+def test_query_label_and_authorization_macro():
+    @macro()
+    def test_query_label_macro(evaluator):
+        return "[('key', 'value')]"
+
+    @macro()
+    def test_authorization_macro(evaluator):
+        return exp.Literal.string("test_authorization")
+
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           session_properties (
+            query_label = @test_query_label_macro(),
+            authorization = @test_authorization_macro()
+           )
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.session_properties == {
+        "query_label": d.parse_one("@test_query_label_macro()"),
+        "authorization": d.parse_one("@test_authorization_macro()"),
+    }
+
+    assert model.render_session_properties() == {
+        "query_label": d.parse_one("[('key', 'value')]"),
+        "authorization": d.parse_one("'test_authorization'"),
+    }
