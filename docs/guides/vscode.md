@@ -151,11 +151,13 @@ Therefore, we do not recommend using DuckDB as a state store with the VSCode ext
 
 ### Environment variables
 
-The extension runs the language server in a separate process. This inherits the environment variables of the parent vscode instance but it does not necessarily inherit the environment variables of the terminal instance. This means that if you have environment variables set in your VSCode terminal, they will not necessarily be available to the language server. Making sure that the language server has access to any variables you call upon can either be done by ensuring the variables are set in the environment the LSP runs:
+The VSCode extension is based on a [language server](https://en.wikipedia.org/wiki/Language_Server_Protocol), which runs in the background as a separate process. When the VSCode extension starts the background language server, the server inherits variables from the environment you started VSCode in. Your VSCode instance may have a terminal instance open inside it - the language server does *not* inherit environment variables from the terminal instance in VSCode. It does not inherit variables you use when you call SQLMesh from the CLI. 
 
-- by opening vscode from a terminal that has the variables set
-- by not using environment variables but pulling them from somewhere else (e.g. a `.env` file)
-- by setting the environment variables in the VSCode settings in the python extension settings that you can find detailed [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
+If you have other environment variables that are needed by the context and the language server, you can use one of these approaches to inject them into the language server:
+
+- Open vscode from a terminal that has the variables set
+- Use environment variables pulled from somewhere else (e.g. a `.env` file) 
+- Set the environment variables in the python environment that the extension uses. You can find detailed instructions [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
 
 ### Python environment woes
 
