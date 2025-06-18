@@ -8,6 +8,7 @@ from sqlmesh.core.scheduler import merged_missing_intervals, SnapshotToIntervals
 from sqlmesh.core.snapshot.definition import (
     DeployabilityIndex,
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotTableInfo,
     SnapshotId,
     Interval,
@@ -255,7 +256,13 @@ class PlanStagesBuilder:
                 if s.is_paused
                 and s.is_model
                 and not s.is_symbolic
-                and (not deployability_index_for_creation.is_representative(s) or s.is_view)
+                and (
+                    not deployability_index_for_creation.is_representative(s)
+                    or (
+                        s.is_view
+                        and s.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+                    )
+                )
             ]
 
         snapshots_to_intervals = self._missing_intervals(
