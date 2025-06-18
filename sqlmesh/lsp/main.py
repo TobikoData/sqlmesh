@@ -74,6 +74,8 @@ class SQLMeshLanguageServer:
         self.lsp_context: t.Optional[LSPContext] = None
         self.workspace_folders: t.List[Path] = []
 
+        self.has_raised_loading_error: bool = False
+
         self.client_supports_pull_diagnostics = False
         self._supported_custom_methods: t.Dict[
             str,
@@ -93,29 +95,6 @@ class SQLMeshLanguageServer:
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
-
-    def _create_lsp_context(self, paths: t.List[Path]) -> t.Optional[LSPContext]:
-        """Create a new LSPContext instance using the configured context class.
-
-        On success, sets self.lsp_context and returns the created context.
-
-        Args:
-            paths: List of paths to pass to the context constructor
-
-        Returns:
-            A new LSPContext instance wrapping the created context, or None if creation fails
-        """
-        try:
-            if self.lsp_context is None:
-                context = self.context_class(paths=paths)
-            else:
-                self.lsp_context.context.load()
-                context = self.lsp_context.context
-            self.lsp_context = LSPContext(context)
-            return self.lsp_context
-        except Exception as e:
-            self.server.log_trace(f"Error creating context: {e}")
-            return None
 
     # All the custom LSP methods are registered here and prefixed with _custom
     def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
@@ -145,26 +124,16 @@ class SQLMeshLanguageServer:
     def _custom_all_models_for_render(
         self, ls: LanguageServer, params: AllModelsForRenderRequest
     ) -> AllModelsForRenderResponse:
-        if self.lsp_context is None:
-            current_path = Path.cwd()
-            self._ensure_context_in_folder(current_path)
-        if self.lsp_context is None:
-            raise RuntimeError("No context found")
-        return AllModelsForRenderResponse(models=self.lsp_context.list_of_models_for_rendering())
+        context = self._context_get_or_load()
+        return AllModelsForRenderResponse(models=context.list_of_models_for_rendering())
 
     def _custom_format_project(
         self, ls: LanguageServer, params: FormatProjectRequest
     ) -> FormatProjectResponse:
         """Format all models in the current project."""
         try:
-            if self.lsp_context is None:
-                current_path = Path.cwd()
-                self._ensure_context_in_folder(current_path)
-            if self.lsp_context is None:
-                raise RuntimeError("No context found")
-
-            # Call the format method on the context
-            self.lsp_context.context.format()
+            context = self._context_get_or_load()
+            context.context.format()
             return FormatProjectResponse()
         except Exception as e:
             ls.log_trace(f"Error formatting project: {e}")
@@ -174,12 +143,7 @@ class SQLMeshLanguageServer:
         self, ls: LanguageServer, request: ApiRequest
     ) -> t.Union[ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage]:
         ls.log_trace(f"API request: {request}")
-        if self.lsp_context is None:
-            current_path = Path.cwd()
-            self._ensure_context_in_folder(current_path)
-        if self.lsp_context is None:
-            ls.log_trace("No context found in call")
-            raise RuntimeError("No context found")
+        context = self._context_get_or_load()
 
         parsed_url = urllib.parse.urlparse(request.url)
         path_parts = parsed_url.path.strip("/").split("/")
@@ -187,13 +151,13 @@ class SQLMeshLanguageServer:
         if request.method == "GET":
             if path_parts == ["api", "models"]:
                 # /api/models
-                return ApiResponseGetModels(data=get_models(self.lsp_context.context))
+                return ApiResponseGetModels(data=get_models(context.context))
 
             if path_parts[:2] == ["api", "lineage"]:
                 if len(path_parts) == 3:
                     # /api/lineage/{model}
                     model_name = urllib.parse.unquote(path_parts[2])
-                    lineage = model_lineage(model_name, self.lsp_context.context)
+                    lineage = model_lineage(model_name, context.context)
                     non_set_lineage = {k: v for k, v in lineage.items() if v is not None}
                     return ApiResponseGetLineage(data=non_set_lineage)
 
@@ -205,7 +169,7 @@ class SQLMeshLanguageServer:
                     if hasattr(request, "params"):
                         models_only = bool(getattr(request.params, "models_only", False))
                     column_lineage_response = column_lineage(
-                        model_name, column, models_only, self.lsp_context.context
+                        model_name, column, models_only, context.context
                     )
                     return ApiResponseGetColumnLineage(data=column_lineage_response)
 
@@ -280,15 +244,10 @@ class SQLMeshLanguageServer:
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
             context = self._context_get_or_load(uri)
-            models = context.map[uri.to_path()]
-            if models is None or not isinstance(models, ModelTarget):
-                return
-
-            # Get diagnostics from context (which handles caching)
-            diagnostics = context.lint_model(uri)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
+                diagnostics = context.lint_model(uri)
                 ls.publish_diagnostics(
                     params.text_document.uri,
                     SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
@@ -297,22 +256,16 @@ class SQLMeshLanguageServer:
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
-
-            # Reload the entire context and create a new LSPContext
-            if self.lsp_context is not None:
-                if self._create_lsp_context(list(self.lsp_context.context.configs)):
-                    return
-
-            context = self._context_get_or_load(uri)
-            models = context.map[uri.to_path()]
-            if models is None or not isinstance(models, ModelTarget):
+            if self.lsp_context is None:
                 return
 
-            # Get diagnostics from context (which handles caching)
-            diagnostics = context.lint_model(uri)
+            context = self.lsp_context.context
+            context.load()
+            self.lsp_context = LSPContext(context)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
+                diagnostics = self.lsp_context.lint_model(uri)
                 ls.publish_diagnostics(
                     params.text_document.uri,
                     SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
@@ -325,18 +278,16 @@ class SQLMeshLanguageServer:
             """Format the document using SQLMesh `format_model_expressions`."""
             try:
                 uri = URI(params.text_document.uri)
-                self._ensure_context_for_document(uri)
+                context = self._context_get_or_load(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 before = document.source
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
 
                 target = next(
                     (
                         target
                         for target in chain(
-                            self.lsp_context.context._models.values(),
-                            self.lsp_context.context._audits.values(),
+                            context.context._models.values(),
+                            context.context._audits.values(),
                         )
                         if target._path is not None
                         and target._path.suffix == ".sql"
@@ -346,7 +297,7 @@ class SQLMeshLanguageServer:
                 )
                 if target is None:
                     return []
-                after = self.lsp_context.context._format(
+                after = context.context._format(
                     target=target,
                     before=before,
                 )
@@ -371,12 +322,10 @@ class SQLMeshLanguageServer:
             """Provide hover information for an object."""
             try:
                 uri = URI(params.text_document.uri)
-                self._ensure_context_for_document(uri)
+                context = self._context_get_or_load(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
 
-                references = get_references(self.lsp_context, uri, params.position)
+                references = get_references(context, uri, params.position)
                 if not references:
                     return None
                 reference = references[0]
@@ -403,13 +352,11 @@ class SQLMeshLanguageServer:
             """Implement type hints for sql columns as inlay hints"""
             try:
                 uri = URI(params.text_document.uri)
-                self._ensure_context_for_document(uri)
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {uri}")
+                context = self._context_get_or_load(uri)
 
                 start_line = params.range.start.line
                 end_line = params.range.end.line
-                hints = get_hints(self.lsp_context, uri, start_line, end_line)
+                hints = get_hints(context, uri, start_line, end_line)
                 return hints
 
             except Exception as e:
@@ -422,12 +369,9 @@ class SQLMeshLanguageServer:
             """Jump to an object's definition."""
             try:
                 uri = URI(params.text_document.uri)
-                self._ensure_context_for_document(uri)
-                document = ls.workspace.get_text_document(params.text_document.uri)
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                context = self._context_get_or_load(uri)
 
-                references = get_references(self.lsp_context, uri, params.position)
+                references = get_references(context, uri, params.position)
                 location_links = []
                 for reference in references:
                     # Use target_range if available (CTEs, Macros, and external models in YAML)
@@ -479,12 +423,9 @@ class SQLMeshLanguageServer:
             """Find all references of a symbol (supporting CTEs, models for now)"""
             try:
                 uri = URI(params.text_document.uri)
-                self._ensure_context_for_document(uri)
-                document = ls.workspace.get_text_document(params.text_document.uri)
-                if self.lsp_context is None:
-                    raise RuntimeError(f"No context found for document: {document.path}")
+                context = self._context_get_or_load(uri)
 
-                all_references = get_all_references(self.lsp_context, uri, params.position)
+                all_references = get_all_references(context, uri, params.position)
 
                 # Convert references to Location objects
                 locations = [types.Location(uri=ref.uri, range=ref.range) for ref in all_references]
@@ -531,12 +472,7 @@ class SQLMeshLanguageServer:
         ) -> types.WorkspaceDiagnosticReport:
             """Handle workspace-wide diagnostic pull requests from the client."""
             try:
-                if self.lsp_context is None:
-                    current_path = Path.cwd()
-                    self._ensure_context_in_folder(current_path)
-
-                if self.lsp_context is None:
-                    return types.WorkspaceDiagnosticReport(items=[])
+                context = self._context_get_or_load()
 
                 items: t.List[
                     t.Union[
@@ -546,7 +482,7 @@ class SQLMeshLanguageServer:
                 ] = []
 
                 # Get all SQL and Python model files from the context
-                for path, target in self.lsp_context.map.items():
+                for path, target in context.map.items():
                     if isinstance(target, ModelTarget):
                         uri = URI.from_path(path)
                         diagnostics, result_id = self._get_diagnostics_for_uri(uri)
@@ -679,24 +615,34 @@ class SQLMeshLanguageServer:
         except Exception:
             return [], 0
 
-    def _context_get_or_load(self, document_uri: URI) -> LSPContext:
+    def _context_get_or_load(self, document_uri: t.Optional[URI] = None) -> LSPContext:
         if self.lsp_context is None:
             self._ensure_context_for_document(document_uri)
         if self.lsp_context is None:
-            raise RuntimeError("No context found")
+            raise RuntimeError("No context found able to get or load")
         return self.lsp_context
 
-    def _ensure_context_in_folder(self, folder_uri: Path) -> None:
+    def _ensure_context_for_document(
+        self,
+        document_uri: t.Optional[URI] = None,
+    ) -> None:
+        """
+        Ensure that a context exists for the given document if applicable by searching
+        for a config.py or config.yml file in the parent directories.
+        """
+        if document_uri is not None:
+            document_path = document_uri.to_path()
+            if document_path.is_file() and document_path.suffix in (".sql", ".py"):
+                document_folder = document_path.parent
+                if document_folder.is_dir():
+                    self._ensure_context_in_folder(document_folder)
+                    return
+
+        return self._ensure_context_in_folder()
+
+    def _ensure_context_in_folder(self, folder_path: t.Optional[Path] = None) -> None:
         if self.lsp_context is not None:
             return
-
-        # First, check the provided folder
-        for ext in ("py", "yml", "yaml"):
-            config_path = folder_uri / f"config.{ext}"
-            if config_path.exists():
-                if self._create_lsp_context([folder_uri]):
-                    loaded_sqlmesh_message(self.server, folder_uri)
-                    return
 
         # If not found in the provided folder, search through all workspace folders
         for workspace_folder in self.workspace_folders:
@@ -704,54 +650,59 @@ class SQLMeshLanguageServer:
                 config_path = workspace_folder / f"config.{ext}"
                 if config_path.exists():
                     if self._create_lsp_context([workspace_folder]):
-                        loaded_sqlmesh_message(self.server, workspace_folder)
                         return
 
-    def _ensure_context_for_document(
-        self,
-        document_uri: URI,
-    ) -> None:
-        """
-        Ensure that a context exists for the given document if applicable by searching
-        for a config.py or config.yml file in the parent directories.
-        """
-        if self.lsp_context is not None:
-            self.lsp_context.context.load()
-            self.lsp_context = LSPContext(self.lsp_context.context)
-            return
-
-        # No context yet: try to find config and load it
-        path = document_uri.to_path()
-        if path.suffix not in (".sql", ".py"):
-            return
-
-        loaded = False
-        # Ascend directories to look for config
-        current_dir = path.parent  # Start from the file's parent directory
-        while current_dir.parents and not loaded:
+        #  Then , check the provided folder recursively
+        path = folder_path
+        if path is None:
+            path = Path.cwd()
+        while path.is_dir():
             for ext in ("py", "yml", "yaml"):
-                config_path = current_dir / f"config.{ext}"
+                config_path = path / f"config.{ext}"
                 if config_path.exists():
-                    if self._create_lsp_context([current_dir]):
-                        loaded = True
-                        # Re-check context for the document now that it's loaded
-                        return self._ensure_context_for_document(document_uri)
-            # Check if we've reached the filesystem root to prevent infinite loops
-            if current_dir == current_dir.parent:
+                    if self._create_lsp_context([path]):
+                        return
+
+            path = path.parent
+            if path == path.parent:
                 break
-            current_dir = current_dir.parent
 
-        # If still no context found, try the workspace folders
-        if not loaded:
-            for workspace_folder in self.workspace_folders:
-                for ext in ("py", "yml", "yaml"):
-                    config_path = workspace_folder / f"config.{ext}"
-                    if config_path.exists():
-                        if self._create_lsp_context([workspace_folder]):
-                            loaded_sqlmesh_message(self.server, workspace_folder)
-                            return
+        raise RuntimeError(
+            f"No context found in workspaces folders {self.workspace_folders}"
+            + (f" or in {folder_path}" if folder_path else "")
+        )
 
-        return
+    def _create_lsp_context(self, paths: t.List[Path]) -> t.Optional[LSPContext]:
+        """Create a new LSPContext instance using the configured context class.
+
+        On success, sets self.lsp_context and returns the created context.
+
+        Args:
+            paths: List of paths to pass to the context constructor
+
+        Returns:
+            A new LSPContext instance wrapping the created context, or None if creation fails
+        """
+        try:
+            if self.lsp_context is None:
+                context = self.context_class(paths=paths)
+                loaded_sqlmesh_message(self.server, paths[0])
+            else:
+                self.lsp_context.context.load()
+                context = self.lsp_context.context
+            self.lsp_context = LSPContext(context)
+            return self.lsp_context
+        except Exception as e:
+            # Only show the error message once
+            if not self.has_raised_loading_error:
+                self.server.show_message(
+                    f"Error creating context: {e}",
+                    types.MessageType.Error,
+                )
+                self.has_raised_loading_error = True
+
+            self.server.log_trace(f"Error creating context: {e}")
+            return None
 
     @staticmethod
     def _diagnostic_to_lsp_diagnostic(
