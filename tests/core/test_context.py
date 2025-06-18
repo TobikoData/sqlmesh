@@ -640,6 +640,11 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
     assert models_dir.exists()
 
+    # Test clearing caches when cache directory doesn't exist
+    # This should not raise an exception
+    context.clear_caches()
+    assert not cache_dir.exists()
+
 
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(
