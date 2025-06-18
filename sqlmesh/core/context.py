@@ -2438,7 +2438,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def clear_caches(self) -> None:
         for path in self.configs:
-            rmtree(path / c.CACHE)
+            cache_path = path / c.CACHE
+            if cache_path.exists():
+                rmtree(cache_path)
         if isinstance(self.state_sync, CachingStateSync):
             self.state_sync.clear_cache()
 
