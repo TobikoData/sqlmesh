@@ -43,7 +43,7 @@ class FabricAdapter(MSSQLEngineAdapter):
         except Exception as e:
             raise RuntimeError(f"Failed to set database context to '{self.database}'. Reason: {e}")
 
-    def _get_schema_name(self, name: t.Union[str, exp.Table, exp.Identifier]) -> t.Optional[str]:
+    def _get_schema_name(self, name: t.Union[str, exp.Table]) -> t.Optional[str]:
         """
         Safely extracts the schema name from a table or schema name, which can be
         a string or a sqlglot expression.
@@ -112,14 +112,31 @@ class FabricAdapter(MSSQLEngineAdapter):
                 catalog=catalog,
                 schema=row.schema_name,
                 name=row.name,
-                type=DataObjectType.from_str(row.type),
+                type=DataObjectType.from_str(str(row.type)),
             )
             for row in dataframe.itertuples()
         ]
 
+    def schema_exists(self, schema_name: SchemaName) -> bool:
+        """
+        Checks if a schema exists.
+        """
+        schema = exp.to_table(schema_name).db
+        if not schema:
+            return False
+
+        sql = (
+            exp.select("1")
+            .from_("INFORMATION_SCHEMA.SCHEMATA")
+            .where(f"SCHEMA_NAME = '{schema}'")
+            .where(f"CATALOG_NAME = '{self.database}'")
+        )
+        result = self.fetchone(sql, quote_identifiers=True)
+        return result[0] == 1 if result else False
+
     def create_schema(
         self,
-        schema_name: SchemaName,
+        schema_name: t.Optional[SchemaName],
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
         **kwargs: t.Any,
@@ -128,53 +145,51 @@ class FabricAdapter(MSSQLEngineAdapter):
         Creates a schema in a Microsoft Fabric Warehouse.
 
         Overridden to handle Fabric's specific T-SQL requirements.
-        T-SQL's `CREATE SCHEMA` command does not support `IF NOT EXISTS` directly
-        as part of the statement in all contexts, and error messages suggest
-        issues with batching or preceding statements like USE.
         """
-        if schema_name is None:
+        if not schema_name:
             return
 
-        schema_name_str = (
-            schema_name.name if isinstance(schema_name, exp.Identifier) else str(schema_name)
-        )
+        schema_exp = to_schema(schema_name)
+        simple_schema_name_str = exp.to_identifier(schema_exp.db).name if schema_exp.db else None
 
-        if not schema_name_str:
-            logger.warning("Attempted to create a schema with an empty name. Skipping.")
-            return
-
-        schema_name_str = schema_name_str.strip('[]"').rstrip(".")
-
-        if not schema_name_str:
+        if not simple_schema_name_str:
             logger.warning(
-                "Attempted to create a schema with an empty name after sanitization. Skipping."
+                f"Could not determine simple schema name from '{schema_name}'. Skipping schema creation."
             )
             return
 
         try:
-            if self.schema_exists(schema_name_str):
+            if self.schema_exists(simple_schema_name_str):
                 if ignore_if_exists:
                     return
-                raise RuntimeError(f"Schema '{schema_name_str}' already exists.")
+                raise RuntimeError(f"Schema '{simple_schema_name_str}' already exists.")
         except Exception as e:
             if warn_on_error:
-                logger.warning(f"Failed to check for existence of schema '{schema_name_str}': {e}")
+                logger.warning(
+                    f"Failed to check for existence of schema '{simple_schema_name_str}': {e}"
+                )
             else:
                 raise
 
         try:
-            create_sql = f"CREATE SCHEMA [{schema_name_str}]"
+            create_sql = f"CREATE SCHEMA [{simple_schema_name_str}]"
             self.execute(create_sql)
         except Exception as e:
-            if "already exists" in str(e).lower() or "There is already an object named" in str(e):
+            error_message = str(e).lower()
+            if (
+                "already exists" in error_message
+                or "there is already an object named" in error_message
+            ):
                 if ignore_if_exists:
                     return
-                raise RuntimeError(f"Schema '{schema_name_str}' already exists.") from e
+                raise RuntimeError(
+                    f"Schema '{simple_schema_name_str}' already exists due to race condition."
+                ) from e
             else:
                 if warn_on_error:
-                    logger.warning(f"Failed to create schema {schema_name_str}. Reason: {e}")
+                    logger.warning(f"Failed to create schema {simple_schema_name_str}. Reason: {e}")
                 else:
-                    raise RuntimeError(f"Failed to create schema {schema_name_str}.") from e
+                    raise RuntimeError(f"Failed to create schema {simple_schema_name_str}.") from e
 
     def _create_table_from_columns(
         self,
@@ -251,7 +266,7 @@ class FabricAdapter(MSSQLEngineAdapter):
             and isinstance(table.this, exp.Identifier)
             and (table.this.name.startswith("#"))
         ):
-            temp_identifier = exp.Identifier(this=table.this.this, quoted=True)
+            temp_identifier = exp.Identifier(this=table.this.name, quoted=True)
             return exp.Table(this=temp_identifier)
 
         schema = self._get_schema_name(name)
@@ -308,6 +323,8 @@ class FabricAdapter(MSSQLEngineAdapter):
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
+        import numpy as np
+
         table = exp.to_table(table_name)
         schema = self._get_schema_name(table_name)
 
@@ -346,6 +363,7 @@ class FabricAdapter(MSSQLEngineAdapter):
         )
 
         df = self.fetchdf(sql)
+        df = df.replace({np.nan: None})
 
         def build_var_length_col(
             column_name: str,
@@ -356,11 +374,9 @@ class FabricAdapter(MSSQLEngineAdapter):
         ) -> t.Tuple[str, str]:
             data_type = data_type.lower()
 
-            char_len_int = (
-                int(character_maximum_length) if character_maximum_length is not None else None
-            )
-            prec_int = int(numeric_precision) if numeric_precision is not None else None
-            scale_int = int(numeric_scale) if numeric_scale is not None else None
+            char_len_int = character_maximum_length
+            prec_int = numeric_precision
+            scale_int = numeric_scale
 
             if data_type in self.VARIABLE_LENGTH_DATA_TYPES and char_len_int is not None:
                 if char_len_int > 0:
@@ -378,78 +394,30 @@ class FabricAdapter(MSSQLEngineAdapter):
 
             return (column_name, data_type)
 
-        columns_raw = [
-            (
-                row.COLUMN_NAME,
-                row.DATA_TYPE,
-                getattr(row, "CHARACTER_MAXIMUM_LENGTH", None),
-                getattr(row, "NUMERIC_PRECISION", None),
-                getattr(row, "NUMERIC_SCALE", None),
+        def _to_optional_int(val: t.Any) -> t.Optional[int]:
+            """Safely convert DataFrame values to Optional[int] for mypy."""
+            if val is None:
+                return None
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                return None
+
+        columns_processed = [
+            build_var_length_col(
+                str(row.COLUMN_NAME),
+                str(row.DATA_TYPE),
+                _to_optional_int(row.CHARACTER_MAXIMUM_LENGTH),
+                _to_optional_int(row.NUMERIC_PRECISION),
+                _to_optional_int(row.NUMERIC_SCALE),
             )
             for row in df.itertuples()
         ]
-
-        columns_processed = [build_var_length_col(*row) for row in columns_raw]
 
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
             for column_name, data_type in columns_processed
         }
-
-    def create_schema(
-        self,
-        schema_name: SchemaName,
-        ignore_if_exists: bool = True,
-        warn_on_error: bool = True,
-        **kwargs: t.Any,
-    ) -> None:
-        if schema_name is None:
-            return
-
-        schema_exp = to_schema(schema_name)
-        simple_schema_name_str = None
-        if schema_exp.db:
-            simple_schema_name_str = exp.to_identifier(schema_exp.db).name
-
-        if not simple_schema_name_str:
-            logger.warning(
-                f"Could not determine simple schema name from '{schema_name}'. Skipping schema creation."
-            )
-            return
-
-        if ignore_if_exists:
-            try:
-                if self.schema_exists(simple_schema_name_str):
-                    return
-            except Exception as e:
-                if warn_on_error:
-                    logger.warning(
-                        f"Failed to check for existence of schema '{simple_schema_name_str}': {e}"
-                    )
-                else:
-                    raise
-        elif self.schema_exists(simple_schema_name_str):
-            raise RuntimeError(f"Schema '{simple_schema_name_str}' already exists.")
-
-        try:
-            create_sql = f"CREATE SCHEMA [{simple_schema_name_str}]"
-            self.execute(create_sql)
-        except Exception as e:
-            error_message = str(e).lower()
-            if (
-                "already exists" in error_message
-                or "there is already an object named" in error_message
-            ):
-                if ignore_if_exists:
-                    return
-                raise RuntimeError(
-                    f"Schema '{simple_schema_name_str}' already exists due to race condition."
-                ) from e
-            else:
-                if warn_on_error:
-                    logger.warning(f"Failed to create schema {simple_schema_name_str}. Reason: {e}")
-                else:
-                    raise RuntimeError(f"Failed to create schema {simple_schema_name_str}.") from e
 
     def _insert_overwrite_by_condition(
         self,
