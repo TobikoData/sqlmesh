@@ -81,11 +81,6 @@ export class LSPClient implements Disposable {
         transport: TransportKind.stdio,
         options: {
           cwd: workspacePath,
-          env: {
-            MAX_FORK_WORKERS: '1',
-            ...sqlmesh.value.env,
-            ...process.env,
-          },
         },
         args: sqlmesh.value.args,
       },
@@ -94,11 +89,6 @@ export class LSPClient implements Disposable {
         transport: TransportKind.stdio,
         options: {
           cwd: workspacePath,
-          env: {
-            MAX_FORK_WORKERS: '1',
-            ...sqlmesh.value.env,
-            ...process.env,
-          },
         },
         args: sqlmesh.value.args,
       },
