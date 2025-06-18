@@ -2245,8 +2245,6 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
-      - item_id: 2
-        num_orders: 2
       - item_id: 4
         num_orders: 3
         """
@@ -2270,7 +2268,7 @@ test_example_full_model:
     assert (
         f"""This is a test
 ----------------------------------------------------------------------
-                                 Data mismatch
+                                 Data mismatch                                  
 ┏━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃     ┃ item_id:        ┃                 ┃ num_orders:     ┃ num_orders:      ┃
 ┃ Row ┃ Expected        ┃ item_id: Actual ┃ Expected        ┃ Actual           ┃
@@ -2294,14 +2292,14 @@ test_example_full_model:
     assert (
         f"""This is a test
 ----------------------------------------------------------------------
-                 Column 'item_id' mismatch
+                 Column 'item_id' mismatch                  
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
 ┃     Row     ┃        Expected        ┃      Actual       ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
 │      0      │          4.0           │        2.0        │
 └─────────────┴────────────────────────┴───────────────────┘
 
-                Column 'num_orders' mismatch
+                Column 'num_orders' mismatch                
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
 ┃     Row     ┃        Expected        ┃      Actual       ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
@@ -2357,7 +2355,7 @@ test_example_full_model:
             col_5: 2
             col_6: 1
             col_7: 0
-
+ 
     """
 
     wide_test_file.write_text(wide_test_file_content)
@@ -2366,7 +2364,7 @@ test_example_full_model:
         context.test()
 
     assert (
-        """Data mismatch
+        """Data mismatch                                  
 ┏━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
 ┃     ┃ col_1: ┃ col_1: ┃ col_2: ┃ col_2: ┃ col_3: ┃ col_3: ┃ col_4:  ┃ col_4: ┃
 ┃ Row ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expect… ┃ Actual ┃
@@ -2374,7 +2372,7 @@ test_example_full_model:
 │  0  │   6    │   1    │   5    │   2    │   4    │   3    │    3    │   4    │
 └─────┴────────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┘
 
-                                 Data mismatch
+                                 Data mismatch                                  
 ┏━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃     ┃ col_5:    ┃ col_5:    ┃ col_6:    ┃ col_6:    ┃ col_7:    ┃ col_7:     ┃
 ┃ Row ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual     ┃
@@ -2410,7 +2408,7 @@ test_example_full_model:
       - item_id: 1
         num_orders: 2
       - item_id: 2
-        num_orders: 2
+        num_orders: 2 
         """
     )
 
@@ -2456,7 +2454,7 @@ test_example_full_model1:
         num_orders: 2
       - item_id: 2
         num_orders: 1
-
+        
 test_example_full_model2:
   model: sqlmesh_example.full_model
   inputs:
