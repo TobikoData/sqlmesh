@@ -149,6 +149,14 @@ Because the VSCode extension establishes a long-running process connected to the
 
 Therefore, we do not recommend using DuckDB as a state store with the VSCode extension.
 
+### Environment variables
+
+The extension runs the language server in a separate process. This inherits the environment variables of the parent vscode instance but it does not necessarily inherit the environment variables of the terminal instance. This means that if you have environment variables set in your VSCode terminal, they will not necessarily be available to the language server. Making sure that the language server has access to any variables you call upon can either be done by ensuring the variables are set in the environment the LSP runs:
+
+- by opening vscode from a terminal that has the variables set
+- by not using environment variables but pulling them from somewhere else (e.g. a `.env` file)
+- by setting the environment variables in the VSCode settings in the python extension settings that you can find detailed [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
+
 ### Python environment woes
 
 The most common problem is the extension not using the correct Python interpreter.
