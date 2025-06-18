@@ -12,6 +12,7 @@ import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 import { IS_WINDOWS } from '../isWindows'
 import { resolveProjectPath } from '../config'
+import { isSemVerGreaterThanOrEqual } from '../semver'
 
 export interface SqlmeshExecInfo {
   workspacePath: string
@@ -394,6 +395,23 @@ export const sqlmeshLspExec = async (): Promise<
       if (isErr(ensured)) {
         return ensured
       }
+      const tcloudBinVersion = await getTcloudBinVersion()
+      if (isErr(tcloudBinVersion)) {
+        return tcloudBinVersion
+      }
+      // TODO: Remove this once we have a stable version of tcloud that supports sqlmesh_lsp.
+      if (isSemVerGreaterThanOrEqual(tcloudBinVersion.value, [2, 10, 1])) {
+        return ok ({
+          bin: tcloudBin.value,
+          workspacePath,
+          env: {
+            PYTHONPATH: interpreterDetails.path?.[0],
+            VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
+            PATH: interpreterDetails.binPath!,
+          },
+          args: ['sqlmesh_lsp'],
+        })
+      }
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
@@ -445,4 +463,31 @@ async function doesExecutableExist(executable: string): Promise<boolean> {
     traceLog(`Checked if ${executable} exists with ${command}, errored, returning false`)
     return false
   }
+}
+
+/**
+ * Get the version of the tcloud bin.
+ *
+ * @returns The version of the tcloud bin.
+ */
+async function getTcloudBinVersion(): Promise<Result<[number, number, number], ErrorType>> {
+  const tcloudBin = await getTcloudBin()
+  if (isErr(tcloudBin)) {
+    return tcloudBin
+  }
+  const called = await execAsync(tcloudBin.value, ['--version'])
+  if (called.exitCode !== 0) {
+    return err({
+      type: 'generic',
+      message: `Failed to get tcloud bin version: ${called.stderr}`,
+    })
+  }
+  const version = called.stdout.split('.').map(Number)
+  if (version.length !== 3) {
+    return err({
+      type: 'generic',
+      message: `Failed to get tcloud bin version: ${called.stdout}`,
+    })
+  }
+  return ok(version as [number, number, number])
 }
