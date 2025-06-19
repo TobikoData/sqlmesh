@@ -733,11 +733,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     raise SQLMeshError(f"Environment '{environment}' was not found.")
                 if environment_state.finalized_ts:
                     return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
+                self.console.log_warning(
+                    f"Environment '{environment}' is being updated by plan '{environment_state.plan_id}'. "
+                    f"Retrying in {self.config.run.environment_check_interval} seconds..."
                 )
                 time.sleep(self.config.run.environment_check_interval)
             raise SQLMeshError(
@@ -774,9 +772,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 done = True
             except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' modified while running. Restarting the run...",
-                    environment,
+                self.console.log_warning(
+                    f"Environment '{environment}' modified while running. Restarting the run..."
                 )
                 if exit_on_env_update:
                     interrupted = True
