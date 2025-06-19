@@ -128,12 +128,17 @@ required_approvers_config = Config(
 )
 
 
-environment_suffix_config = Config(
+environment_suffix_table_config = Config(
     default_connection=DuckDBConnectionConfig(),
     model_defaults=model_defaults,
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
 )
 
+environment_suffix_catalog_config = environment_suffix_table_config.model_copy(
+    update={
+        "environment_suffix_target": EnvironmentSuffixTarget.CATALOG,
+    }
+)
 
 CATALOGS = {
     "in_memory": ":memory:",

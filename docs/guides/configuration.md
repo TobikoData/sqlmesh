@@ -244,7 +244,9 @@ This only applies to the _physical tables_ that SQLMesh creates - the views are 
 
 SQLMesh stores `prod` environment views in the schema in a model's name - for example, the `prod` views for a model `my_schema.users` will be located in `my_schema`.
 
-By default, for non-prod environments SQLMesh creates a new schema that appends the environment name to the model name's schema. For example, by default the view for a model `my_schema.users` in a SQLMesh environment named `dev` will be located in the schema `my_schema__dev`.
+By default, for non-prod environments SQLMesh creates a new schema that appends the environment name to the model name's schema. For example, by default the view for a model `my_schema.users` in a SQLMesh environment named `dev` will be located in the schema `my_schema__dev` as `my_schema__dev.users`.
+
+##### Show at the table level instead
 
 This behavior can be changed to append a suffix at the end of a _table/view_ name instead. Appending the suffix to a table/view name means that non-prod environment views will be created in the same schema as the `prod` environment. The prod and non-prod views are differentiated by non-prod view names ending with `__<env>`.
 
@@ -260,7 +262,7 @@ Config example:
 
 === "Python"
 
-    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE` or `EnvironmentSuffixTarget.SCHEMA` (default).
+    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE`, `EnvironmentSuffixTarget.CATALOG` or `EnvironmentSuffixTarget.SCHEMA` (default).
 
     ```python linenums="1"
     from sqlmesh.core.config import Config, ModelDefaultsConfig, EnvironmentSuffixTarget
@@ -271,15 +273,57 @@ Config example:
     )
     ```
 
-The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
+!!! info "Default behavior"
+    The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
+
+##### Show at the catalog level instead
+
+If neither the schema (default) nor the table level are sufficient for your use case, you may indicate the environment at the catalog level instead.
+
+This can be useful if you have downstream BI reporting tools and you would like to point them at a development environment to test something out without renaming all the table / schema references within the report query.
+
+In order to achieve this, you may configure [environment_suffix_target](../reference/configuration.md#environments) like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    environment_suffix_target: catalog
+    ```
+
+=== "Python"
+
+    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE`, `EnvironmentSuffixTarget.CATALOG` or `EnvironmentSuffixTarget.SCHEMA` (default).
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, EnvironmentSuffixTarget
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        environment_suffix_target=EnvironmentSuffixTarget.CATALOG,
+    )
+    ```
+
+Given the example of a model called `my_schema.users` with a default catalog of `warehouse` this will cause the following behavior:
+
+- For the `prod` environment, the default catalog as configured in the gateway will be used. So the view will be created at `warehouse.my_schema.users`
+- For any other environment, eg `dev`, the environment name will be appended to the default catalog. So the view will be created at `warehouse__dev.my_schema.users`
+- If a model is fully qualified with a catalog already, eg `finance_mart.my_schema.users`, then the environment catalog will be based off the model catalog and not the default catalog. In this example, the view will be created at `finance_mart__dev.my_schema.users`
+
+
+!!! warning "Caveats"
+    - Using `environment_suffix_target: catalog` only works on engines that support querying across different catalogs. If your engine does not support cross-catalog queries then you will need to use `environment_suffix_target: schema` or `environment_suffix_target: table` instead.
+    - Automatic catalog creation is not supported on all engines even if they support cross-catalog queries. For engines where it is not supported, the catalogs must exist prior to invoking SQLMesh.
 
 #### Environment view catalogs
 
 By default, SQLMesh creates an environment view in the same [catalog](../concepts/glossary.md#catalog) as the physical table the view points to. The physical table's catalog is determined by either the catalog specified in the model name or the default catalog defined in the connection.
 
-Some companies fully segregate `prod` and non-prod environment objects by catalog. For example, they might have a "prod" catalog that contains all `prod` environment physical tables and views and a separate "dev" catalog that contains all `dev` environment physical tables and views.
+It can be desirable to create `prod` and non-prod virtual layer objects in separate catalogs instead. For example, there might be a "prod" catalog that contains all `prod` environment views and a separate "dev" catalog that contains all `dev` environment views.
 
 Separate prod and non-prod catalogs can also be useful if you have a CI/CD pipeline that creates environments, like the [SQLMesh Github Actions CI/CD Bot](../integrations/github.md). You might want to store the CI/CD environment objects in a dedicated catalog since there can be many of them.
+
+!!! info "Virtual layer only"
+    Note that the following setting only affects the [virtual layer](../concepts/glossary.md#virtual-layer). If you need full segregation by catalog between environments in the [physical layer](../concepts/glossary.md#physical-layer) as well, see the [Isolated Systems Guide](../guides/isolated_systems.md).
 
 To configure separate catalogs, provide a mapping from [regex patterns](https://en.wikipedia.org/wiki/Regular_expression) to catalog names. SQLMesh will compare the name of an environment to the regex patterns; when it finds a match it will store the environment's objects in the corresponding catalog.
 
@@ -316,6 +360,9 @@ With the example configuration above, SQLMesh would evaluate environment names a
 * If the environment name is `prod`, the catalog will be `prod`.
 * If the environment name starts with `dev`, the catalog will be `dev`.
 * If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
+
+!!! warning
+    This feature is mutually exclusive with `environment_suffix_target: catalog` in order to prevent ambiguous mappings from being defined. Attempting to specify both settings will raise an error on project load
 
 *Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 
