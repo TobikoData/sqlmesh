@@ -323,7 +323,7 @@ def get_model_definitions_for_a_path(
                         dialect=dialect,
                     )
                     references.extend(column_references)
-    # breakpoint()
+
     return references
 
 
@@ -783,7 +783,7 @@ def _get_column_table_range(column: exp.Column, read_file: t.List[str]) -> Range
         The Range covering the table reference in the column
     """
 
-    table_parts = column.parts[:-1] if len(column.parts) > 1 else [column.parts[0]]
+    table_parts = column.parts[:-1]
 
     start_range = TokenPositionDetails.from_meta(table_parts[0].meta).to_range(read_file)
     end_range = TokenPositionDetails.from_meta(table_parts[-1].meta).to_range(read_file)
@@ -839,7 +839,7 @@ def _process_column_references(
                         )
                     )
             else:
-                table_parts = [part.name for part in column.parts[:-1]]
+                table_parts = [part.sql(dialect) for part in column.parts[:-1]]
                 table_ref = ".".join(table_parts)
                 normalized_reference_name = normalize_model_name(
                     table_ref,
