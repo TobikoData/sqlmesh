@@ -201,9 +201,9 @@ options:
 ```
 %render [--start START] [--end END] [--execution-time EXECUTION_TIME]
               [--expand EXPAND] [--dialect DIALECT] [--no-format]
-              [--no-rewrite-casts] [--append-newline] [--normalize]
-              [--pad PAD] [--indent INDENT] [--normalize-functions NORMALIZE_FUNCTIONS]
-              [--leading-comma] [--max-text-width MAX_TEXT_WIDTH]
+              [--normalize] [--pad PAD] [--indent INDENT]
+              [--normalize-functions NORMALIZE_FUNCTIONS] [--leading-comma]
+              [--max-text-width MAX_TEXT_WIDTH]
               model
 
 Renders a model's query, optionally expanding referenced models.
@@ -223,9 +223,6 @@ options:
                         models are expanded as raw queries.
   --dialect DIALECT     SQL dialect to render.
   --no-format           Disable fancy formatting of the query.
-  --no-rewrite-casts    Preserve the existing casts, without rewriting them
-                        to use the :: syntax.
-  --append-newline      Include a newline at the end of the output.
   --normalize           Whether or not to normalize identifiers to lowercase.
   --pad PAD             Determines the pad size in a formatted string.
   --indent INDENT       Determines the indentation size in a formatted string.

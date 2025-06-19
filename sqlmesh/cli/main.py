@@ -215,20 +215,16 @@ def render(
         expand=expand,
     )
 
-    format_options = {}
-    if format_kwargs.get("no_rewrite_casts"):
-        format_options["rewrite_casts"] = False
-        format_kwargs.pop("no_rewrite_casts")
-
-    format_options.update({k: v for k, v in format_kwargs.items() if v is not None})
-
     format_config = ctx.obj.config_for_node(model).format
-    format_options = {**format_config.generator_options, **format_options}
+    format_kwargs = {
+        **format_config.generator_options,
+        **{k: v for k, v in format_kwargs.items() if v is not None},
+    }
 
     sql = rendered.sql(
         pretty=True,
         dialect=ctx.obj.config.dialect if dialect is None else dialect,
-        **format_options,
+        **format_kwargs,
     )
     if no_format:
         print(sql)
@@ -285,6 +281,17 @@ def evaluate(
     help="Whether or not to check formatting (but not actually format anything).",
     default=None,
 )
+@click.option(
+    "--rewrite-casts/--no-rewrite-casts",
+    is_flag=True,
+    help="Rewrite casts to use the :: syntax.",
+    default=None,
+)
+@click.option(
+    "--append-newline",
+    is_flag=True,
+    help="Include a newline at the end of each file.",
+)
 @opt.format_options
 @click.pass_context
 @error_handler
@@ -293,9 +300,6 @@ def format(
     ctx: click.Context, paths: t.Optional[t.Tuple[str, ...]] = None, **kwargs: t.Any
 ) -> None:
     """Format all SQL models and audits."""
-    if kwargs.pop("no_rewrite_casts", None):
-        kwargs["rewrite_casts"] = False
-
     if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}, paths=paths):
         ctx.exit(1)
 

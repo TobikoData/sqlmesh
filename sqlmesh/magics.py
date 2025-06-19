@@ -127,18 +127,6 @@ def format_arguments(func: t.Callable) -> t.Callable:
         type=int,
         help="The max number of characters in a segment before creating new lines in pretty mode.",
     )(func)
-    func = argument(
-        "--append-newline",
-        action="store_true",
-        help="Include a newline at the end of the output.",
-        default=None,
-    )(func)
-    func = argument(
-        "--no-rewrite-casts",
-        action="store_true",
-        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
-        default=None,
-    )(func)
     return func
 
 
@@ -648,15 +636,11 @@ class SQLMeshMagics(Magics):
 
         no_format = render_opts.pop("no_format", False)
 
-        format_options = {}
-        if render_opts.get("no_rewrite_casts"):
-            format_options["rewrite_casts"] = False
-            render_opts.pop("no_rewrite_casts")
-
-        format_options.update({k: v for k, v in render_opts.items() if v is not None})
-
         format_config = context.config_for_node(model).format
-        format_options = {**format_config.generator_options, **format_options}
+        format_options = {
+            **format_config.generator_options,
+            **{k: v for k, v in render_opts.items() if v is not None},
+        }
 
         sql = query.sql(
             pretty=True,
@@ -925,6 +909,18 @@ class SQLMeshMagics(Magics):
         "--check",
         action="store_true",
         help="Whether or not to check formatting (but not actually format anything).",
+        default=None,
+    )
+    @argument(
+        "--append-newline",
+        action="store_true",
+        help="Include a newline at the end of the output.",
+        default=None,
+    )
+    @argument(
+        "--no-rewrite-casts",
+        action="store_true",
+        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
         default=None,
     )
     @format_arguments

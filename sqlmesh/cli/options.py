@@ -63,7 +63,6 @@ def format_options(func: t.Callable) -> t.Callable:
         "--normalize",
         is_flag=True,
         help="Whether or not to normalize identifiers to lowercase.",
-        default=None,
     )(func)
     func = click.option(
         "--pad",
@@ -84,23 +83,10 @@ def format_options(func: t.Callable) -> t.Callable:
         "--leading-comma",
         is_flag=True,
         help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-        default=None,
     )(func)
     func = click.option(
         "--max-text-width",
         type=int,
         help="The max number of characters in a segment before creating new lines in pretty mode.",
-    )(func)
-    func = click.option(
-        "--append-newline",
-        is_flag=True,
-        help="Include a newline at the end of each file.",
-        default=None,
-    )(func)
-    func = click.option(
-        "--no-rewrite-casts",
-        is_flag=True,
-        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
-        default=None,
     )(func)
     return func

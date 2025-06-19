@@ -431,9 +431,6 @@ Options:
                               only they will be expanded as raw queries.
   --dialect TEXT              The SQL dialect to render the query as.
   --no-format                 Disable fancy formatting of the query.
-  --no-rewrite-casts          Preserve the existing casts, without rewriting
-                              them to use the :: syntax.
-  --append-newline            Include a newline at the end of each file.
   --max-text-width INTEGER    The max number of characters in a segment before
                               creating new lines in pretty mode.
   --leading-comma             Determines whether or not the comma is leading
