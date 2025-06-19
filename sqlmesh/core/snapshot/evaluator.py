@@ -251,6 +251,8 @@ class SnapshotEvaluator:
 
         # A schema can be shared across multiple engines, so we need to group by gateway
         for gateway, tables in tables_by_gateway.items():
+            if environment_naming_info.suffix_target.is_catalog:
+                self._create_catalogs(tables=tables, gateway=gateway)
             self._create_schemas(tables=tables, gateway=gateway)
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
@@ -1113,6 +1115,18 @@ class SnapshotEvaluator:
             query=query,
             blocking=blocking,
         )
+
+    def _create_catalogs(
+        self,
+        tables: t.Iterable[t.Union[exp.Table, str]],
+        gateway: t.Optional[str] = None,
+    ) -> None:
+        # attempt to create catalogs for the virtual layer if possible
+        adapter = self.get_adapter(gateway)
+        if adapter.SUPPORTS_CREATE_DROP_CATALOG:
+            unique_catalogs = {t.catalog for t in [exp.to_table(maybe_t) for maybe_t in tables]}
+            for catalog_name in unique_catalogs:
+                adapter.create_catalog(catalog_name)
 
     def _create_schemas(
         self,

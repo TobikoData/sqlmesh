@@ -181,7 +181,7 @@ def test_mutating_clustered_by_forward_only(
     assert not metadata.is_clustered
 
 
-def test_create_iceberg_table(ctx: TestContext, engine_adapter: SnowflakeEngineAdapter) -> None:
+def test_create_iceberg_table(ctx: TestContext) -> None:
     # Note: this test relies on a default Catalog and External Volume being configured in Snowflake
     # ref: https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration#set-a-default-catalog-at-the-account-database-or-schema-level
     # ref: https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume#set-a-default-external-volume-at-the-account-database-or-schema-level
@@ -271,3 +271,39 @@ def test_snowpark_concurrency(ctx: TestContext) -> None:
     query = exp.select("*").from_(table)
     df = ctx.engine_adapter.fetchdf(query, quote_identifiers=True)
     assert len(df) == 10
+
+
+def test_create_drop_catalog(ctx: TestContext, engine_adapter: SnowflakeEngineAdapter):
+    non_sqlmesh_managed_catalog = ctx.add_test_suffix("external_catalog")
+    sqlmesh_managed_catalog = ctx.add_test_suffix("env_dev")
+
+    initial_catalog = engine_adapter.get_current_catalog()
+    assert initial_catalog
+
+    ctx.create_catalog(
+        non_sqlmesh_managed_catalog
+    )  # create via TestContext so the sqlmesh_managed comment doesnt get added
+    ctx._catalogs.append(sqlmesh_managed_catalog)  # so it still gets cleaned up if the test fails
+
+    engine_adapter.create_catalog(
+        sqlmesh_managed_catalog
+    )  # create via EngineAdapter so the sqlmesh_managed comment is added
+
+    def fetch_database_names() -> t.Set[str]:
+        engine_adapter.set_current_catalog(initial_catalog)
+        return {
+            str(r[0])
+            for r in engine_adapter.fetchall(
+                f"select database_name from information_schema.databases where database_name like '%{ctx.test_id}'"
+            )
+        }
+
+    assert fetch_database_names() == {non_sqlmesh_managed_catalog, sqlmesh_managed_catalog}
+
+    engine_adapter.drop_catalog(
+        non_sqlmesh_managed_catalog
+    )  # no-op: catalog is not SQLMesh-managed
+    assert fetch_database_names() == {non_sqlmesh_managed_catalog, sqlmesh_managed_catalog}
+
+    engine_adapter.drop_catalog(sqlmesh_managed_catalog)  # works, catalog is SQLMesh-managed
+    assert fetch_database_names() == {non_sqlmesh_managed_catalog}

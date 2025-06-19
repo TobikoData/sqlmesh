@@ -43,6 +43,10 @@ class EnvironmentNamingInfo(PydanticModel):
     normalize_name: bool = True
     gateway_managed: bool = False
 
+    @property
+    def is_dev(self) -> bool:
+        return self.name.lower() != c.PROD
+
     @field_validator("name", mode="before")
     @classmethod
     def _sanitize_name(cls, v: str) -> str:
