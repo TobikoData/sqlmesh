@@ -1222,7 +1222,7 @@ class EngineAdapter:
         return self._create_catalog(exp.parse_identifier(catalog_name, dialect=self.dialect))
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
-        raise NotImplementedError(
+        raise SQLMeshError(
             f"Unable to create catalog '{catalog_name.sql(dialect=self.dialect)}' as automatic catalog management is not implemented in the {self.dialect} engine."
         )
 
@@ -1230,7 +1230,7 @@ class EngineAdapter:
         return self._drop_catalog(exp.parse_identifier(catalog_name, dialect=self.dialect))
 
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
-        raise NotImplementedError(
+        raise SQLMeshError(
             f"Unable to drop catalog '{catalog_name.sql(dialect=self.dialect)}' as automatic catalog management is not implemented in the {self.dialect} engine."
         )
 
