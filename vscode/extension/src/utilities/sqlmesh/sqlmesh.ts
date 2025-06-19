@@ -55,7 +55,7 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
  *
  * @returns The tcloud executable for the current Python environment.
  */
-export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
+export const getTcloudBin = async (): Promise<Result<SqlmeshExecInfo, ErrorType>> => {
   const tcloud = IS_WINDOWS ? 'tcloud.exe' : 'tcloud'
   const interpreterDetails = await getInterpreterDetails()
   if (!interpreterDetails.path) {
@@ -68,7 +68,25 @@ export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
   if (!fs.existsSync(binPath)) {
     return err({type: 'tcloud_bin_not_found'})
   }
-  return ok(binPath)
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
+  return ok({
+    bin: binPath,
+    workspacePath: interpreterDetails.resource?.fsPath ?? '',
+    env: {
+      ...process.env,
+      ...envVariables.value,
+      PYTHONPATH: interpreterDetails.path[0],
+      VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
+      PATH: interpreterDetails.binPath!,
+    },
+    args: [],
+  })
 }
 
 const isSqlmeshInstalledSchema = z.object({
@@ -96,8 +114,9 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
       message: resolvedPath.error,
     })
   }
-  const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'], {
+  const called = await execAsync(tcloudBin.value.bin, ['is_sqlmesh_installed'], {
     cwd: resolvedPath.value,
+    env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
     return err({
@@ -135,9 +154,10 @@ export const installSqlmeshEnterprise = async (
       message: resolvedPath.error,
     })
   }
-  const called = await execAsync(tcloudBin.value, ['install_sqlmesh'], {
+  const called = await execAsync(tcloudBin.value.bin, ['install_sqlmesh'], {
     signal: abortController.signal,
     cwd: resolvedPath.value,
+    env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
     return err({
@@ -272,16 +292,10 @@ export const sqlmeshExec = async (): Promise<
         return ensured
       }
       return ok({
-        bin: `${tcloudBin.value} sqlmesh`,
+        bin: tcloudBin.value.bin,
         workspacePath,
-        env: {
-          ...process.env,
-          ...envVariables.value,
-          PYTHONPATH: interpreterDetails.path?.[0],
-          VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-          PATH: interpreterDetails.binPath!,
-        },
-        args: [],
+        env: tcloudBin.value.env,
+        args: ["sqlmesh"],
       })
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmesh)
@@ -423,15 +437,9 @@ export const sqlmeshLspExec = async (): Promise<
       // TODO: Remove this once we have a stable version of tcloud that supports sqlmesh_lsp.
       if (isSemVerGreaterThanOrEqual(tcloudBinVersion.value, [2, 10, 1])) {
         return ok ({
-          bin: tcloudBin.value,
+          bin: tcloudBin.value.bin,
           workspacePath,
-          env: {
-            PYTHONPATH: interpreterDetails.path?.[0],
-            VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-            PATH: interpreterDetails.binPath!,
-            ...process.env,
-            ...envVariables.value,
-          },
+          env: tcloudBin.value.env,
           args: ['sqlmesh_lsp'],
         })
       }
@@ -503,7 +511,9 @@ async function getTcloudBinVersion(): Promise<Result<[number, number, number], E
   if (isErr(tcloudBin)) {
     return tcloudBin
   }
-  const called = await execAsync(tcloudBin.value, ['--version'])
+  const called = await execAsync(tcloudBin.value.bin, ['--version'], {
+    env: tcloudBin.value.env,
+  })
   if (called.exitCode !== 0) {
     return err({
       type: 'generic',
