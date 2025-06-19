@@ -1853,6 +1853,7 @@ def test_pr_delete_model(
     assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_success
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
+    print(test_checks_runs[2]["output"]["summary"])
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
         == "**Successfully Ran `3` Tests Against `duckdb`**"
