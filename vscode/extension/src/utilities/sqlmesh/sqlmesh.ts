@@ -83,7 +83,7 @@ export const getTcloudBin = async (): Promise<Result<SqlmeshExecInfo, ErrorType>
       ...envVariables.value,
       PYTHONPATH: interpreterDetails.path[0],
       VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-      PATH: interpreterDetails.binPath!,
+      PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`,
     },
     args: [],
   })
@@ -308,7 +308,7 @@ export const sqlmeshExec = async (): Promise<
         ...envVariables.value,
         PYTHONPATH: interpreterDetails.path?.[0],
         VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: interpreterDetails.binPath!,
+        PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`,
       },
       args: [],
     })
@@ -459,11 +459,11 @@ export const sqlmeshLspExec = async (): Promise<
       bin: binPath,
       workspacePath,
       env: {
-        PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: interpreterDetails.binPath!, // binPath already points to the bin directory
         ...process.env, 
         ...envVariables.value,
+        PYTHONPATH: interpreterDetails.path?.[0],
+        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
+        PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`, // binPath already points to the bin directory
       },
       args: [],
     })
