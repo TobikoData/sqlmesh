@@ -303,7 +303,14 @@ class FabricAdapter(MSSQLEngineAdapter):
         qualified_view_name = self._fully_qualify(view_name)
 
         if isinstance(query_or_df, exp.Expression):
+            # CTEs should not be qualified with the database name.
+            cte_names = {cte.alias_or_name for cte in query_or_df.find_all(exp.CTE)}
+
             for table in query_or_df.find_all(exp.Table):
+                if table.this.name in cte_names:
+                    continue
+
+                # Qualify all other tables that don't already have a catalog.
                 if not table.catalog:
                     qualified_table = self._fully_qualify(table)
                     table.replace(qualified_table)
