@@ -1,7 +1,7 @@
 from lsprotocol.types import Position
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.reference import get_all_references, get_references, LSPModelReference
+from sqlmesh.lsp.reference import get_all_references
 from sqlmesh.lsp.uri import URI
 from tests.lsp.test_reference_cte import find_ranges_from_regex
 
@@ -63,9 +63,7 @@ def test_column_prefix_references_are_found():
     ranges = find_ranges_from_regex(read_file, r"sushi\.orders")
 
     # Should find exactly 2: FROM clause and WHERE clause with column prefix
-    assert len(ranges) == 2, (
-        f"Expected 2 occurrences of 'sushi.orders', found {len(ranges)}"
-    )
+    assert len(ranges) == 2, f"Expected 2 occurrences of 'sushi.orders', found {len(ranges)}"
 
     # Verify we have the expected lines
     line_contents = [read_file[r.start.line].strip() for r in ranges]
