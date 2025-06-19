@@ -1,6 +1,6 @@
 import path from 'path'
 import { traceInfo, traceLog, traceVerbose } from '../common/log'
-import { getInterpreterDetails } from '../common/python'
+import { getInterpreterDetails, getPythonEnvVariables } from '../common/python'
 import { Result, err, isErr, ok } from '@bus/result'
 import { getProjectRoot } from '../common/utilities'
 import { isPythonModuleInstalled } from '../python'
@@ -230,6 +230,13 @@ export const sqlmeshExec = async (): Promise<
       message: resolvedPath.error,
     })
   }
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
   const workspacePath = resolvedPath.value
   const interpreterDetails = await getInterpreterDetails()
   traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
@@ -268,6 +275,8 @@ export const sqlmeshExec = async (): Promise<
         bin: `${tcloudBin.value} sqlmesh`,
         workspacePath,
         env: {
+          ...process.env,
+          ...envVariables.value,
           PYTHONPATH: interpreterDetails.path?.[0],
           VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
           PATH: interpreterDetails.binPath!,
@@ -281,6 +290,8 @@ export const sqlmeshExec = async (): Promise<
       bin: binPath,
       workspacePath,
       env: {
+        ...process.env,
+        ...envVariables.value,
         PYTHONPATH: interpreterDetails.path?.[0],
         VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
         PATH: interpreterDetails.binPath!,
@@ -297,7 +308,10 @@ export const sqlmeshExec = async (): Promise<
     return ok({
       bin: sqlmesh,
       workspacePath,
-      env: {},
+      env: {
+        ...process.env,
+        ...envVariables.value,
+      },
       args: [],
     })
   }
@@ -353,6 +367,13 @@ export const sqlmeshLspExec = async (): Promise<
 > => {
   const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
   const projectRoot = await getProjectRoot()
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
   const resolvedPath = resolveProjectPath(projectRoot)
   if (isErr(resolvedPath)) {
     return err({
@@ -408,6 +429,8 @@ export const sqlmeshLspExec = async (): Promise<
             PYTHONPATH: interpreterDetails.path?.[0],
             VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
             PATH: interpreterDetails.binPath!,
+            ...process.env,
+            ...envVariables.value,
           },
           args: ['sqlmesh_lsp'],
         })
@@ -431,6 +454,8 @@ export const sqlmeshLspExec = async (): Promise<
         PYTHONPATH: interpreterDetails.path?.[0],
         VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
         PATH: interpreterDetails.binPath!, // binPath already points to the bin directory
+        ...process.env, 
+        ...envVariables.value,
       },
       args: [],
     })
@@ -444,7 +469,10 @@ export const sqlmeshLspExec = async (): Promise<
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
-      env: {},
+      env: {
+        ...process.env,
+        ...envVariables.value,
+      },
       args: [],
     })
   }

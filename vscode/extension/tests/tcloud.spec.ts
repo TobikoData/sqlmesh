@@ -9,6 +9,7 @@ import {
   startVSCode,
   SUSHI_SOURCE_PATH,
 } from './utils'
+import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
 
 /**
  * Helper function to create and set up a Python virtual environment
@@ -31,38 +32,6 @@ async function setupPythonEnvironment(envDir: string): Promise<string> {
   await pipInstall(pythonDetails, [sqlmeshWithExtras, customMaterializations])
 
   return pythonDetails.pythonPath
-}
-
-/**
- * Helper function to set up a pre-authenticated tcloud state
- */
-async function setupAuthenticatedState(tempDir: string): Promise<void> {
-  const authStateFile = path.join(tempDir, '.tcloud_auth_state.json')
-  const authState = {
-    is_logged_in: true,
-    id_token: {
-      iss: 'https://mock.tobikodata.com',
-      aud: 'mock-audience',
-      sub: 'user-123',
-      scope: 'openid email profile',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600, // Valid for 1 hour
-      email: 'test@example.com',
-      name: 'Test User',
-    },
-  }
-  await fs.writeJson(authStateFile, authState)
-}
-
-/**
- * Helper function to set the tcloud version for testing
- */
-async function setTcloudVersion(
-  tempDir: string,
-  version: string,
-): Promise<void> {
-  const versionStateFile = path.join(tempDir, '.tcloud_version_state.json')
-  await fs.writeJson(versionStateFile, { version })
 }
 
 test.describe('Tcloud', () => {
