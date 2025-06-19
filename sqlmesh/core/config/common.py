@@ -22,7 +22,7 @@ class EnvironmentSuffixTarget(str, Enum):
 
     # Intended to create virtual environments in their own catalogs to preserve the schema and view name of the models
     # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
-    # would have its virtual layer view created as "dev.sqlmesh_example.full_model"
+    # with a default catalog of "warehouse" would have its virtual layer view created as "warehouse__dev.sqlmesh_example.full_model"
     # note: this only works for engines that can query across catalogs
     CATALOG = "catalog"
 

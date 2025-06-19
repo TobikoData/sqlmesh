@@ -278,11 +278,11 @@ Config example:
 
 ##### Show at the catalog level instead
 
-If neither the schema (default) nor the table level are sufficient for your use case, you may indicate the environment at the catalog level instead.
+If neither the schema (default) nor the table level are sufficient for your use case, you can indicate the environment at the catalog level instead.
 
 This can be useful if you have downstream BI reporting tools and you would like to point them at a development environment to test something out without renaming all the table / schema references within the report query.
 
-In order to achieve this, you may configure [environment_suffix_target](../reference/configuration.md#environments) like so:
+In order to achieve this, you can configure [environment_suffix_target](../reference/configuration.md#environments) like so:
 
 === "YAML"
 
@@ -312,7 +312,7 @@ Given the example of a model called `my_schema.users` with a default catalog of 
 
 !!! warning "Caveats"
     - Using `environment_suffix_target: catalog` only works on engines that support querying across different catalogs. If your engine does not support cross-catalog queries then you will need to use `environment_suffix_target: schema` or `environment_suffix_target: table` instead.
-    - Automatic catalog creation is not supported on all engines even if they support cross-catalog queries. For engines where it is not supported, the catalogs must exist prior to invoking SQLMesh.
+    - Automatic catalog creation is not supported on all engines even if they support cross-catalog queries. For engines where it is not supported, the catalogs must be managed externally from SQLMesh and exist prior to invoking SQLMesh.
 
 #### Environment view catalogs
 
@@ -362,7 +362,7 @@ With the example configuration above, SQLMesh would evaluate environment names a
 * If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
 
 !!! warning
-    This feature is mutually exclusive with `environment_suffix_target: catalog` in order to prevent ambiguous mappings from being defined. Attempting to specify both settings will raise an error on project load
+    This feature is mutually exclusive with `environment_suffix_target: catalog` in order to prevent ambiguous mappings from being defined. Attempting to specify both `environment_catalog_mapping` and `environment_suffix_target: catalog` will raise an error on project load
 
 *Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 

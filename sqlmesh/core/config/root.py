@@ -248,7 +248,7 @@ class Config(BaseConfig):
         ):
             raise ConfigError(
                 f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
-                "Please specify one or thr other"
+                "Please specify one or the other"
             )
 
         if self.environment_catalog_mapping:
