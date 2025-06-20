@@ -655,6 +655,36 @@ def test_drop_schema(make_mocked_engine_adapter: t.Callable):
     ]
 
 
+def test_drop_schema_with_special_identifiers(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter._get_data_objects = mock.Mock()
+    adapter._get_data_objects.return_value = [
+        DataObject(
+            catalog="test_catalog",
+            schema="test schema",  # Schema with space
+            name="test view",  # Object with space
+            type=DataObjectType.from_str("VIEW"),
+        ),
+        DataObject(
+            catalog="test_catalog",
+            schema="test schema",
+            name="test table",  # Table with space
+            type=DataObjectType.from_str("TABLE"),
+        ),
+    ]
+
+    schema_name = exp.to_table("[test schema]", dialect="tsql")
+    adapter.drop_schema(schema_name, cascade=True)
+
+    # Validate that names with spaces/special chars are properly quoted with square brackets
+    assert to_sql_calls(adapter) == [
+        """DROP VIEW IF EXISTS [test schema].[test view];""",
+        """DROP TABLE IF EXISTS [test schema].[test table];""",
+        """DROP SCHEMA IF EXISTS [test schema];""",
+    ]
+
+
 def test_df_dates(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
