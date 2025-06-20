@@ -11,11 +11,7 @@ from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     fetchone,
 )
-from sqlmesh.core.environment import (
-    Environment,
-    EnvironmentStatements,
-    EnvironmentSummary,
-)
+from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
