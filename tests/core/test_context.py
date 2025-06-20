@@ -859,9 +859,9 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
 
-    state_sync_mock.get_expired_environments.return_value = [
+    environments = [
         Environment(
-            name="test_environment",
+            name="test_environment1",
             suffix_target=EnvironmentSuffixTarget.TABLE,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -870,7 +870,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
         Environment(
-            name="test_environment",
+            name="test_environment2",
             suffix_target=EnvironmentSuffixTarget.SCHEMA,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -879,6 +879,11 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
     ]
+
+    state_sync_mock.get_expired_environments.return_value = [env.summary for env in environments]
+    state_sync_mock.get_environment = lambda name: next(
+        env for env in environments if env.name == name
+    )
 
     sushi_context._engine_adapter = adapter_mock
     sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
@@ -891,7 +896,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_schema.assert_has_calls(
         [
             call(
-                schema_("sushi__test_environment", "memory"),
+                schema_("sushi__test_environment2", "memory"),
                 cascade=True,
                 ignore_if_not_exists=True,
             ),
@@ -903,7 +908,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_view.assert_has_calls(
         [
             call(
-                "memory.sushi.waiter_as_customer_by_day__test_environment",
+                "memory.sushi.waiter_as_customer_by_day__test_environment1",
                 ignore_if_not_exists=True,
             ),
         ]

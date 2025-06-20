@@ -165,27 +165,24 @@ class EnvironmentState:
             where=environment_filter,
         )
 
-    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         """Returns the expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
         Returns:
-            The list of environments to remove, the filter to remove environments.
+            The list of environment summaries to remove.
         """
-        rows = fetchall(
-            self.engine_adapter,
-            self._environments_query(
-                where=self._create_expiration_filter_expr(current_ts),
-                lock_for_update=True,
-            ),
-        )
-        expired_environments = [self._environment_from_row(r) for r in rows]
 
-        return expired_environments
+        environment_summaries = self.get_environments_summary()
+        return [
+            env_summary
+            for env_summary in environment_summaries
+            if env_summary.expiration_ts is not None and env_summary.expiration_ts <= current_ts
+        ]
 
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
-    ) -> t.List[Environment]:
+    ) -> t.List[EnvironmentSummary]:
         """Deletes expired environments.
 
         Returns:
