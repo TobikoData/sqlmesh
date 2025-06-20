@@ -2698,15 +2698,21 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:
         current_ts = current_ts or now_timestamp()
 
-        expired_environments = self.state_sync.get_expired_environments(current_ts=current_ts)
-
-        cleanup_expired_views(
-            default_adapter=self.engine_adapter,
-            engine_adapters=self.engine_adapters,
-            environments=expired_environments,
-            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
-            console=self.console,
+        expired_environments_summaries = self.state_sync.get_expired_environments(
+            current_ts=current_ts
         )
+
+        for expired_env_summary in expired_environments_summaries:
+            expired_env = self.state_reader.get_environment(expired_env_summary.name)
+
+            if expired_env:
+                cleanup_expired_views(
+                    default_adapter=self.engine_adapter,
+                    engine_adapters=self.engine_adapters,
+                    environments=[expired_env],
+                    warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
+                    console=self.console,
+                )
 
         self.state_sync.delete_expired_environments(current_ts=current_ts)
 

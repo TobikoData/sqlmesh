@@ -274,7 +274,7 @@ class EngineAdapterStateSync(StateSync):
             self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
         )
 
-    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         return self.environment_state.get_expired_environments(current_ts=current_ts)
 
     @transactional()
@@ -294,7 +294,7 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
-    ) -> t.List[Environment]:
+    ) -> t.List[EnvironmentSummary]:
         current_ts = current_ts or now_timestamp()
         return self.environment_state.delete_expired_environments(current_ts=current_ts)
 
