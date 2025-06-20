@@ -148,31 +148,29 @@ plan:
 
 @dataclass
 class ExampleObjects:
-    schema_name: str
-    full_model_name: str
-    full_model_def: str
-    incremental_model_name: str
-    incremental_model_def: str
-    seed_model_name: str
-    seed_model_def: str
-    seed_data: str
-    audit_def: str
-    test_def: str
-
-    def models(self) -> t.Set[t.Tuple[str, str]]:
-        return {
-            (self.full_model_name, self.full_model_def),
-            (self.incremental_model_name, self.incremental_model_def),
-            (self.seed_model_name, self.seed_model_def),
-        }
+    sql_models: t.Dict[str, str]
+    python_models: t.Dict[str, str]
+    seeds: t.Dict[str, str]
+    audits: t.Dict[str, str]
+    tests: t.Dict[str, str]
+    sql_macros: t.Dict[str, str]
+    python_macros: t.Dict[str, str]
 
 
 def _gen_example_objects(schema_name: str) -> ExampleObjects:
+    sql_models: t.Dict[str, str] = {}
+    python_models: t.Dict[str, str] = {}
+    seeds: t.Dict[str, str] = {}
+    audits: t.Dict[str, str] = {}
+    tests: t.Dict[str, str] = {}
+    sql_macros: t.Dict[str, str] = {}
+    python_macros: t.Dict[str, str] = {"__init__": ""}
+
     full_model_name = f"{schema_name}.full_model"
     incremental_model_name = f"{schema_name}.incremental_model"
     seed_model_name = f"{schema_name}.seed_model"
 
-    full_model_def = f"""MODEL (
+    sql_models[full_model_name] = f"""MODEL (
   name {full_model_name},
   kind FULL,
   cron '@daily',
@@ -188,7 +186,7 @@ FROM
 GROUP BY item_id
   """
 
-    incremental_model_def = f"""MODEL (
+    sql_models[incremental_model_name] = f"""MODEL (
   name {incremental_model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column event_date
@@ -208,7 +206,7 @@ WHERE
   event_date BETWEEN @start_date AND @end_date
   """
 
-    seed_model_def = f"""MODEL (
+    sql_models[seed_model_name] = f"""MODEL (
   name {seed_model_name},
   kind SEED (
     path '../seeds/seed_data.csv'
@@ -222,17 +220,7 @@ WHERE
 );
   """
 
-    audit_def = """AUDIT (
-  name assert_positive_order_ids,
-);
-
-SELECT *
-FROM @this_model
-WHERE
-  item_id < 0
-  """
-
-    seed_data = """id,item_id,event_date
+    seeds["seed_data"] = """id,item_id,event_date
 1,2,2020-01-01
 2,1,2020-01-01
 3,3,2020-01-03
@@ -242,7 +230,17 @@ WHERE
 7,1,2020-01-07
 """
 
-    test_def = f"""test_example_full_model:
+    audits["assert_positive_order_ids"] = """AUDIT (
+  name assert_positive_order_ids,
+);
+
+SELECT *
+FROM @this_model
+WHERE
+  item_id < 0
+  """
+
+    tests["test_example_full_model"] = f"""test_example_full_model:
   model: {full_model_name}
   inputs:
     {incremental_model_name}:
@@ -263,16 +261,13 @@ WHERE
   """
 
     return ExampleObjects(
-        schema_name=schema_name,
-        full_model_name=full_model_name,
-        full_model_def=full_model_def,
-        incremental_model_name=incremental_model_name,
-        incremental_model_def=incremental_model_def,
-        seed_model_name=seed_model_name,
-        seed_model_def=seed_model_def,
-        seed_data=seed_data,
-        audit_def=audit_def,
-        test_def=test_def,
+        sql_models=sql_models,
+        python_models=python_models,
+        seeds=seeds,
+        audits=audits,
+        tests=tests,
+        python_macros=python_macros,
+        sql_macros=sql_macros,
     )
 
 
@@ -321,7 +316,7 @@ def init_example_project(
     if engine_type and template == ProjectTemplate.DLT:
         dialect = DIALECT_TO_TYPE.get(engine_type)
         if pipeline and dialect:
-            models, settings, start = generate_dlt_models_and_settings(
+            dlt_models, settings, start = generate_dlt_models_and_settings(
                 pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
             )
         else:
@@ -336,17 +331,21 @@ def init_example_project(
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
 
     if template == ProjectTemplate.DLT:
-        _create_models(models_path, models)
+        _create_object_files(
+            models_path, {model[0].split(".")[-1]: model[1] for model in dlt_models}, "sql"
+        )
         return config_path
 
     example_objects = _gen_example_objects(schema_name=schema_name)
 
     if template != ProjectTemplate.EMPTY:
-        _create_macros(macros_path)
-        _create_audits(audits_path, example_objects)
-        _create_models(models_path, example_objects.models())
-        _create_seeds(seeds_path, example_objects)
-        _create_tests(tests_path, example_objects)
+        _create_object_files(models_path, example_objects.sql_models, "sql")
+        _create_object_files(models_path, example_objects.python_models, "py")
+        _create_object_files(seeds_path, example_objects.seeds, "csv")
+        _create_object_files(audits_path, example_objects.audits, "sql")
+        _create_object_files(tests_path, example_objects.tests, "yaml")
+        _create_object_files(macros_path, example_objects.python_macros, "py")
+        _create_object_files(macros_path, example_objects.sql_macros, "sql")
 
     return config_path
 
@@ -373,25 +372,10 @@ def _create_config(
     )
 
 
-def _create_macros(macros_path: Path) -> None:
-    (macros_path / "__init__.py").touch()
-
-
-def _create_audits(audits_path: Path, example_objects: ExampleObjects) -> None:
-    _write_file(audits_path / "assert_positive_order_ids.sql", example_objects.audit_def)
-
-
-def _create_models(models_path: Path, models: t.Set[t.Tuple[str, str]]) -> None:
-    for model_name, model_def in models:
-        _write_file(models_path / f"{model_name.split('.')[-1]}.sql", model_def)
-
-
-def _create_seeds(seeds_path: Path, example_objects: ExampleObjects) -> None:
-    _write_file(seeds_path / "seed_data.csv", example_objects.seed_data)
-
-
-def _create_tests(tests_path: Path, example_objects: ExampleObjects) -> None:
-    _write_file(tests_path / "test_full_model.yaml", example_objects.test_def)
+def _create_object_files(path: Path, object_dict: t.Dict[str, str], file_extension: str) -> None:
+    for object_name, object_def in object_dict.items():
+        # file name is table component of catalog.schema.table
+        _write_file(path / f"{object_name.split('.')[-1]}.{file_extension}", object_def)
 
 
 def _write_file(path: Path, payload: str) -> None:
