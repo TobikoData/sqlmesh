@@ -69,6 +69,7 @@ interface SqlmeshLspDependenciesMissingError {
 
 export async function handleError(
   authProvider: AuthenticationProviderTobikoCloud,
+  restartLsp: () => Promise<void>,
   error: ErrorType,
   genericErrorPrefix?: string,
 ): Promise<void> {
@@ -85,7 +86,7 @@ export async function handleError(
       )
       return
     case 'not_signed_in':
-      return handleNotSignedInError(authProvider)
+      return handleNotSignedInError(authProvider, restartLsp)
     case 'sqlmesh_not_found':
       return handleSqlmeshNotFoundError()
     case 'sqlmesh_lsp_not_found':
@@ -110,6 +111,7 @@ export async function handleError(
  */
 const handleNotSignedInError = async (
   authProvider: AuthenticationProviderTobikoCloud,
+  restartLsp: () => Promise<void>,
 ): Promise<void> => {
   traceInfo('handleNotSginedInError')
   const result = await window.showInformationMessage(
@@ -117,7 +119,7 @@ const handleNotSignedInError = async (
     'Sign In',
   )
   if (result === 'Sign In') {
-    await signIn(authProvider)()
+    await signIn(authProvider, restartLsp)()
   }
 }
 
