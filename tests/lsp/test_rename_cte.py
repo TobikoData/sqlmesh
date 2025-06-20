@@ -119,7 +119,9 @@ def test_rename_cte():
     assert uri in workspace_edit.changes
 
     edits = workspace_edit.changes[uri]
-    assert len(edits) == 2  # Should have 2 edits: definition + usage
+
+    # Should have edited four occurences including column usages
+    assert len(edits) == 4
 
     # Verify that both ranges are being edited
     edit_ranges = [edit.range for edit in edits]
@@ -134,6 +136,33 @@ def test_rename_cte():
 
     # Verify that all edits have the new name
     assert all(edit.new_text == "new_marketing" for edit in edits)
+
+    # Apply the edits to verify the result
+    with open(sushi_customers_path, "r", encoding="utf-8") as file:
+        lines = file.readlines()
+
+    # Apply edits in reverse order to avoid offset issues
+    sorted_edits = sorted(
+        edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+    )
+    for edit in sorted_edits:
+        line_idx = edit.range.start.line
+        start_char = edit.range.start.character
+        end_char = edit.range.end.character
+
+        line = lines[line_idx]
+        new_line = line[:start_char] + edit.new_text + line[end_char:]
+        lines[line_idx] = new_line
+
+    # Verify the edited content
+    edited_content = "".join(lines)
+    assert "new_marketing" in edited_content
+    assert "current_marketing" not in edited_content.replace("current_marketing_outer", "")
+    assert edited_content.count("new_marketing") == 4
+    assert (
+        "  SELECT new_marketing.* FROM new_marketing WHERE new_marketing.customer_id != 100\n"
+        in lines
+    )
 
 
 def test_rename_cte_outer():
