@@ -81,14 +81,6 @@ export class LSPClient implements Disposable {
         transport: TransportKind.stdio,
         options: {
           cwd: workspacePath,
-          // TODO: This is a temporary fix to avoid the issue with the LSP server
-          //  crashing when the number of workers is too high. This is a workaround
-          //  to avoid the issue. Once fixed, we should remove the whole env block.
-          env: {
-            MAX_FORK_WORKERS: '1',
-            ...process.env,
-            ...sqlmesh.value.env,
-          },
         },
         args: sqlmesh.value.args,
       },
@@ -97,14 +89,6 @@ export class LSPClient implements Disposable {
         transport: TransportKind.stdio,
         options: {
           cwd: workspacePath,
-          env: {
-            // TODO: This is a temporary fix to avoid the issue with the LSP server
-            //  crashing when the number of workers is too high. This is a workaround
-            //  to avoid the issue. Once fixed, we should remove the whole env block.
-            MAX_FORK_WORKERS: '1',
-            ...process.env,
-            ...sqlmesh.value.env,
-          },
         },
         args: sqlmesh.value.args,
       },
