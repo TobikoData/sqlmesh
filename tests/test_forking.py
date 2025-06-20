@@ -55,10 +55,14 @@ LEFT JOIN (
     "current_marketing"."status" AS "status",
     "current_marketing"."another_column" AS "another_column"
   FROM "current_marketing" AS "current_marketing"
+  WHERE
+  "current_marketing"."customer_id" <> 100
 ) AS "m"
   ON "m"."customer_id" = "o"."customer_id"
 LEFT JOIN "memory"."raw"."demographics" AS "d"
   ON "d"."customer_id" = "o"."customer_id"
+  WHERE
+  "o"."customer_id" > 0
         """,
     )
 
