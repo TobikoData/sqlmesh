@@ -106,5 +106,6 @@ def test_get_document_highlights_multiple_ctes():
     )
     highlights = get_document_highlights(lsp_context, test_uri, position)
 
+    # This should return the column usages as well
     assert highlights is not None
-    assert len(highlights) == len(inner_ranges)  # Should match all occurrences of inner CTE only
+    assert len(highlights) == 4
