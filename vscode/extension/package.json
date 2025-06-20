@@ -93,6 +93,11 @@
         "title": "SQLMesh: Render Model",
         "description": "SQLMesh",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "sqlmesh.stop",
+        "title": "SQLMesh: Stop Server",
+        "description": "SQLMesh"
       }
     ],
     "menus": {
