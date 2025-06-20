@@ -93,6 +93,11 @@
         "title": "SQLMesh: Render Model",
         "description": "SQLMesh",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "sqlmesh.plan",
+        "title": "Show Plan Diff",
+        "description": "Create a plan and show the diff"
       }
     ],
     "menus": {
