@@ -172,15 +172,18 @@ class MSSQLEngineAdapter(
         if cascade:
             objects = self._get_data_objects(schema_name)
             for obj in objects:
+                # Build properly quoted table for MSSQL using square brackets when needed
+                object_table = exp.table_(obj.name, obj.schema_name)
+
                 # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
                 if obj.type == DataObjectType.VIEW:
                     self.drop_view(
-                        ".".join([obj.schema_name, obj.name]),
+                        object_table,
                         ignore_if_not_exists=ignore_if_not_exists,
                     )
                 else:
                     self.drop_table(
-                        ".".join([obj.schema_name, obj.name]),
+                        object_table,
                         exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
