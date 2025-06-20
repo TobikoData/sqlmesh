@@ -45,12 +45,21 @@ export async function activate(context: vscode.ExtensionContext) {
   traceInfo('Authentication provider registered')
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('sqlmesh.signin', signIn(authProvider)),
+    vscode.commands.registerCommand(
+      'sqlmesh.signin',
+      signIn(authProvider, async () => {
+        traceInfo('Restarting LSP after sign-in')
+        await restart()
+      }),
+    ),
   )
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'sqlmesh.signinSpecifyFlow',
-      signInSpecifyFlow(authProvider),
+      signInSpecifyFlow(authProvider, async () => {
+        traceInfo('Restarting LSP after sign-in')
+        await restart()
+      }),
     ),
   )
   context.subscriptions.push(
@@ -73,13 +82,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'sqlmesh.renderModel',
       renderModel(lspClient, renderedModelProvider),
-    ),
-  )
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'sqlmesh.format',
-      format(authProvider, lspClient),
     ),
   )
 
@@ -118,13 +120,34 @@ export async function activate(context: vscode.ExtensionContext) {
       if (isErr(restartResult)) {
         return handleError(
           authProvider,
+          restart,
           restartResult.error,
           'LSP restart failed',
         )
       }
       context.subscriptions.push(lspClient)
+    } else {
+      lspClient = new LSPClient()
+      const result = await lspClient.start()
+      if (isErr(result)) {
+        return handleError(
+          authProvider,
+          restart,
+          result.error,
+          'Failed to start LSP',
+        )
+      } else {
+        context.subscriptions.push(lspClient)
+      }
     }
   }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.format',
+      format(authProvider, lspClient, restart),
+    ),
+  )
 
   context.subscriptions.push(
     onDidChangePythonInterpreter(async () => {
@@ -140,7 +163,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const result = await lspClient.start()
   if (isErr(result)) {
-    return handleError(authProvider, result.error, 'Failed to start LSP')
+    return handleError(
+      authProvider,
+      restart,
+      result.error,
+      'Failed to start LSP',
+    )
   } else {
     context.subscriptions.push(lspClient)
   }
