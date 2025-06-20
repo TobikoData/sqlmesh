@@ -173,13 +173,7 @@ class MSSQLEngineAdapter(
             objects = self._get_data_objects(schema_name)
             for obj in objects:
                 # Build properly quoted table for MSSQL using square brackets when needed
-                object_name = ".".join(
-                    [
-                        exp.to_identifier(obj.schema_name).sql(self.dialect),
-                        exp.to_identifier(obj.name).sql(self.dialect),
-                    ]
-                )
-                object_table = exp.to_table(object_name, dialect=self.dialect)
+                object_name = exp.table_(obj.name, obj.schema_name)
 
                 # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
                 if obj.type == DataObjectType.VIEW:
