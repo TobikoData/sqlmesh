@@ -232,6 +232,7 @@ class SQLMeshMagics(Magics):
         init_example_project(
             path=args.path,
             engine_type=args.engine,
+            dialect=None,
             template=project_template,
             pipeline=args.dlt_pipeline,
             dlt_path=args.dlt_path,

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from lsprotocol.types import Position
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.reference import get_all_references
@@ -84,7 +84,9 @@ def test_column_prefix_references_are_found():
 
 def test_quoted_uppercase_table_and_column_references(tmp_path: Path):
     # Initialize example project in temporary directory with case sensitive normalization
-    init_example_project(tmp_path, dialect="duckdb,normalization_strategy=case_sensitive")
+    init_example_project(
+        tmp_path, engine_type="duckdb", dialect="duckdb,normalization_strategy=case_sensitive"
+    )
 
     # Create a model with quoted uppercase schema and table names
     models_dir = tmp_path / "models"

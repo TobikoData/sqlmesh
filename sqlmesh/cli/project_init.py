@@ -36,7 +36,10 @@ def _gen_config(
     start: t.Optional[str],
     template: ProjectTemplate,
     cli_mode: InitCliMode,
+    dialect: t.Optional[str] = None,
 ) -> str:
+    project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
+
     connection_settings = (
         settings
         or """      type: duckdb
@@ -96,7 +99,7 @@ default_gateway: {engine_type}
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
-  dialect: {DIALECT_TO_TYPE.get(engine_type)}
+  dialect: {project_dialect}
   start: {start or yesterday_ds()} # Start date for backfill history
   cron: '@daily'    # Run models daily at 12am UTC (can override per model)
 
@@ -274,6 +277,7 @@ WHERE
 def init_example_project(
     path: t.Union[str, Path],
     engine_type: t.Optional[str],
+    dialect: t.Optional[str] = None,
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
     pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
@@ -314,17 +318,17 @@ def init_example_project(
     settings = None
     start = None
     if engine_type and template == ProjectTemplate.DLT:
-        dialect = DIALECT_TO_TYPE.get(engine_type)
-        if pipeline and dialect:
+        project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
+        if pipeline and project_dialect:
             dlt_models, settings, start = generate_dlt_models_and_settings(
-                pipeline_name=pipeline, dialect=dialect, dlt_path=dlt_path
+                pipeline_name=pipeline, dialect=project_dialect, dlt_path=dlt_path
             )
         else:
             raise SQLMeshError(
                 "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
             )
 
-    _create_config(config_path, engine_type, settings, start, template, cli_mode)
+    _create_config(config_path, engine_type, dialect, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
         return config_path
 
@@ -359,12 +363,13 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
 def _create_config(
     config_path: Path,
     engine_type: t.Optional[str],
+    dialect: t.Optional[str],
     settings: t.Optional[str],
     start: t.Optional[str],
     template: ProjectTemplate,
     cli_mode: InitCliMode,
 ) -> None:
-    project_config = _gen_config(engine_type, settings, start, template, cli_mode)
+    project_config = _gen_config(engine_type, settings, start, template, cli_mode, dialect)
 
     _write_file(
         config_path,
