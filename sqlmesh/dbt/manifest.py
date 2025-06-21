@@ -21,7 +21,12 @@ from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.parser.manifest import ManifestLoader
-from dbt.parser.sources import merge_freshness
+
+try:
+    from dbt.parser.sources import merge_source_freshness as merge_freshness  # type: ignore[attr-defined]
+except ImportError:
+    from dbt.parser.sources import merge_freshness  # type: ignore[no-redef,attr-defined]
+
 from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
