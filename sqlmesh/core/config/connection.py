@@ -228,6 +228,10 @@ class DuckDBAttachOptions(BaseConfig):
     encrypted: bool = False
     data_inlining_row_limit: t.Optional[int] = None
 
+    # Azure specific options
+    azure_account_name: t.Optional[str] = None
+    azure_account_host: t.Optional[str] = None
+
     def to_sql(self, alias: str) -> str:
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
@@ -382,6 +386,24 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 try:
                     if isinstance(path_options, DuckDBAttachOptions):
                         query = path_options.to_sql(alias)
+                        
+                        if path_options.data_path.split(":")[0] == "abfs":
+
+                            if path_options.azure_account_name is None or path_options.azure_account_host is None:
+                                raise ValueError("azure_account_name and azure_account_host must be set when using abfs protocol")
+
+
+                            storage_options = {
+                                "account_name": path_options.azure_account_name,
+                                "account_host": path_options.azure_account_host,
+                                "anon":False,
+                            }
+                            from fsspec import filesystem
+
+                            fs = filesystem("abfs", **storage_options)
+                            cursor.register_filesystem(fs)
+                            cursor.commit()
+
                     else:
                         query = f"ATTACH IF NOT EXISTS '{path_options}'"
                         if not path_options.startswith("md:"):
