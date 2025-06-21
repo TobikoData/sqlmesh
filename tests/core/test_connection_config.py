@@ -437,9 +437,20 @@ def test_duckdb(make_config):
                 "secret": "aws_secret",
             }
         ],
+        file_systems=[
+            {
+                "protocol": "abfs",
+                "storage_options": {
+                    "account_name": "onelake",
+                    "account_host": "onelake.blob.fabric.microsoft.com",
+                    "anon": False,
+                },
+            }
+        ],
     )
     assert config.connector_config
     assert config.secrets
+    assert config.file_systems
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
 
