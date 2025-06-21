@@ -13,6 +13,7 @@ import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
 import { renderModel, reRenderModelForSourceFile } from './commands/renderModel'
+import { stop } from './commands/stop'
 import { isErr } from '@bus/result'
 import { handleError } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
@@ -159,6 +160,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerCommand(`sqlmesh.restart`, async () => {
       await restart()
     }),
+    registerCommand(`sqlmesh.stop`, stop(lspClient)),
   )
 
   const result = await lspClient.start()
