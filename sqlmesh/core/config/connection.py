@@ -228,10 +228,6 @@ class DuckDBAttachOptions(BaseConfig):
     encrypted: bool = False
     data_inlining_row_limit: t.Optional[int] = None
 
-    # Azure specific options
-    azure_account_name: t.Optional[str] = None
-    azure_account_host: t.Optional[str] = None
-
     def to_sql(self, alias: str) -> str:
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
