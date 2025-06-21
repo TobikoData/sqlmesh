@@ -2,7 +2,7 @@ import typing as t
 from pathlib import Path
 import pytest
 import subprocess
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.utils import yaml
 import shutil
 import site
@@ -47,7 +47,7 @@ def invoke_cli(tmp_path: Path) -> InvokeCliType:
 
 @pytest.fixture
 def duckdb_example_project(tmp_path: Path) -> Path:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config_path = tmp_path / "config.yaml"
 
     # we need state to persist between invocations

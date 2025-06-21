@@ -4,7 +4,7 @@ from sqlmesh.core.state_sync import StateSync, EngineAdapterStateSync, CachingSt
 from sqlmesh.core.state_sync.export_import import export_state, import_state
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core import constants as c
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.config import Config, GatewayConfig, DuckDBConnectionConfig, ModelDefaultsConfig
@@ -74,7 +74,7 @@ def test_export_empty_state(tmp_path: Path, state_sync: StateSync) -> None:
 def test_export_entire_project(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # prod
@@ -159,7 +159,7 @@ def test_export_specific_environment(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -231,7 +231,7 @@ def test_export_local_state(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -385,7 +385,7 @@ def test_import_local_state_fails(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     export_state(state_sync, output_file, context.snapshots)
@@ -400,7 +400,7 @@ def test_import_partial(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
     output_file = tmp_path / "state_dump.json"
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # create prod
@@ -453,7 +453,7 @@ def test_import_partial(
 def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: StateSync) -> None:
     state_file = tmp_path / "state_dump.json"
 
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
     context = Context(paths=tmp_path, config=example_project_config, state_sync=state_sync)
 
     # populate initial state
@@ -525,7 +525,7 @@ def test_roundtrip(tmp_path: Path, example_project_config: Config, state_sync: S
 def test_roundtrip_includes_auto_restatements(
     tmp_path: Path, example_project_config: Config, state_sync: StateSync
 ) -> None:
-    init_example_project(path=tmp_path, dialect="duckdb")
+    init_example_project(path=tmp_path, engine_type="duckdb")
 
     # add a model with auto restatements
     (tmp_path / c.MODELS / "new_model.sql").write_text("""

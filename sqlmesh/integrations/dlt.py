@@ -138,7 +138,7 @@ def generate_dlt_models(
     force: bool,
     dlt_path: t.Optional[str] = None,
 ) -> t.List[str]:
-    from sqlmesh.cli.example_project import _create_models
+    from sqlmesh.cli.project_init import _create_object_files
 
     sqlmesh_models, _, _ = generate_dlt_models_and_settings(
         pipeline_name=pipeline_name,
@@ -152,7 +152,11 @@ def generate_dlt_models(
         sqlmesh_models = {model for model in sqlmesh_models if model[0] not in existing_models}
 
     if sqlmesh_models:
-        _create_models(models_path=context.path / "models", models=sqlmesh_models)
+        _create_object_files(
+            context.path / "models",
+            {model[0].split(".")[-1]: model[1] for model in sqlmesh_models},
+            "sql",
+        )
         return [model[0] for model in sqlmesh_models]
     return []
 

@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import ConfigError
@@ -71,7 +71,7 @@ def test_duplicate_model_names_different_kind(tmp_path: Path, sample_models):
     else:
         model_2, model_3 = models[0], None
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
     path_1: Path = tmp_path / model_1["path"]
@@ -101,7 +101,7 @@ def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
         return Path(fpath).parent / ("duplicate" + Path(fpath).suffix)
 
     model = sample_models[0]
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
     path_1: Path = tmp_path / model["path"]
@@ -121,7 +121,7 @@ def test_duplicate_model_names_same_kind(tmp_path: Path, sample_models):
 @pytest.mark.registry_isolation
 def test_duplicate_python_model_names_raise_error(tmp_path: Path) -> None:
     """Test python models with duplicate model names raises ConfigError if the functions are not identical."""
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     model_name = "test_schema.test_model"
 
@@ -170,7 +170,7 @@ def execute(
 @pytest.mark.slow
 def test_duplicate_python_model_names_no_error(tmp_path: Path) -> None:
     """Test python models with duplicate model names raises no error if the functions are identical."""
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     model_name = "test_schema.test_model"
 
@@ -207,7 +207,7 @@ def my_model(context, **kwargs):
 
 
 def test_load_migrated_dbt_adapter_dispatch_macros(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     migrated_package_path = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_utils"
     migrated_package_path.mkdir(parents=True)
@@ -273,7 +273,7 @@ JINJA_END;
 
 def test_load_migrated_dbt_adapter_dispatch_macros_in_different_packages(tmp_path: Path):
     # some things like dbt.current_timestamp() dispatch to macros in a different package
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     migrated_package_path_dbt = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt"
     migrated_package_path_dbt_duckdb = tmp_path / "macros" / c.MIGRATED_DBT_PACKAGES / "dbt_duckdb"

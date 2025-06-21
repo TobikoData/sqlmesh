@@ -25,7 +25,7 @@ from IPython.utils.capture import capture_output
 
 
 from sqlmesh import CustomMaterialization
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config import (
@@ -4005,7 +4005,7 @@ def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     star_model_definition = """
         MODEL (

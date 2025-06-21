@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.helper import seq_get
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core.config import Config
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import _CLUSTERING_META_KEY
@@ -210,7 +210,7 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
     model_name = ctx.table("test")
     dependency = f"`{'.'.join(part.name for part in information_schema_tables.parts)}`"
 
-    init_example_project(tmp_path, dialect="bigquery", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="bigquery", template=ProjectTemplate.EMPTY)
     with open(tmp_path / "models" / "test.sql", "w", encoding="utf-8") as f:
         f.write(
             f"""
