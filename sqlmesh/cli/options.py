@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import typing as t
 
 import click
 
@@ -54,3 +55,38 @@ verbose = click.option(
     count=True,
     help="Verbose output. Use -vv for very verbose output.",
 )
+
+
+def format_options(func: t.Callable) -> t.Callable:
+    """Decorator to add common format options to CLI commands."""
+    func = click.option(
+        "--normalize",
+        is_flag=True,
+        help="Whether or not to normalize identifiers to lowercase.",
+    )(func)
+    func = click.option(
+        "--pad",
+        type=int,
+        help="Determines the pad size in a formatted string.",
+    )(func)
+    func = click.option(
+        "--indent",
+        type=int,
+        help="Determines the indentation size in a formatted string.",
+    )(func)
+    func = click.option(
+        "--normalize-functions",
+        type=str,
+        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
+    )(func)
+    func = click.option(
+        "--leading-comma",
+        is_flag=True,
+        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+    )(func)
+    func = click.option(
+        "--max-text-width",
+        type=int,
+        help="The max number of characters in a segment before creating new lines in pretty mode.",
+    )(func)
+    return func

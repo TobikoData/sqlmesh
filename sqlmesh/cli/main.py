@@ -191,6 +191,7 @@ def init(
     help="The SQL dialect to render the query as.",
 )
 @click.option("--no-format", is_flag=True, help="Disable fancy formatting of the query.")
+@opt.format_options
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -203,6 +204,7 @@ def render(
     expand: t.Optional[t.Union[bool, t.Iterable[str]]] = None,
     dialect: t.Optional[str] = None,
     no_format: bool = False,
+    **format_kwargs: t.Any,
 ) -> None:
     """Render a model's query, optionally expanding referenced models."""
     rendered = ctx.obj.render(
@@ -213,7 +215,17 @@ def render(
         expand=expand,
     )
 
-    sql = rendered.sql(pretty=True, dialect=ctx.obj.config.dialect if dialect is None else dialect)
+    format_config = ctx.obj.config_for_node(model).format
+    format_kwargs = {
+        **format_config.generator_options,
+        **{k: v for k, v in format_kwargs.items() if v is not None},
+    }
+
+    sql = rendered.sql(
+        pretty=True,
+        dialect=ctx.obj.config.dialect if dialect is None else dialect,
+        **format_kwargs,
+    )
     if no_format:
         print(sql)
     else:
@@ -264,55 +276,23 @@ def evaluate(
     help="Transpile project models to the specified dialect.",
 )
 @click.option(
-    "--append-newline",
-    is_flag=True,
-    help="Include a newline at the end of each file.",
-    default=None,
-)
-@click.option(
-    "--no-rewrite-casts",
-    is_flag=True,
-    help="Preserve the existing casts, without rewriting them to use the :: syntax.",
-    default=None,
-)
-@click.option(
-    "--normalize",
-    is_flag=True,
-    help="Whether or not to normalize identifiers to lowercase.",
-    default=None,
-)
-@click.option(
-    "--pad",
-    type=int,
-    help="Determines the pad size in a formatted string.",
-)
-@click.option(
-    "--indent",
-    type=int,
-    help="Determines the indentation size in a formatted string.",
-)
-@click.option(
-    "--normalize-functions",
-    type=str,
-    help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
-)
-@click.option(
-    "--leading-comma",
-    is_flag=True,
-    help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-    default=None,
-)
-@click.option(
-    "--max-text-width",
-    type=int,
-    help="The max number of characters in a segment before creating new lines in pretty mode.",
-)
-@click.option(
     "--check",
     is_flag=True,
     help="Whether or not to check formatting (but not actually format anything).",
     default=None,
 )
+@click.option(
+    "--rewrite-casts/--no-rewrite-casts",
+    is_flag=True,
+    help="Rewrite casts to use the :: syntax.",
+    default=None,
+)
+@click.option(
+    "--append-newline",
+    is_flag=True,
+    help="Include a newline at the end of each file.",
+)
+@opt.format_options
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -320,9 +300,6 @@ def format(
     ctx: click.Context, paths: t.Optional[t.Tuple[str, ...]] = None, **kwargs: t.Any
 ) -> None:
     """Format all SQL models and audits."""
-    if kwargs.pop("no_rewrite_casts", None):
-        kwargs["rewrite_casts"] = False
-
     if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}, paths=paths):
         ctx.exit(1)
 

@@ -207,7 +207,7 @@ SELECT
         parse(
             """
             MODEL(name foo);
-            SELECT 1::INT AS bla
+            SELECT CAST(1 AS INT) AS bla
             """
         ),
         rewrite_casts=False,

@@ -419,19 +419,31 @@ Usage: sqlmesh render [OPTIONS] MODEL
   Render a model's query, optionally expanding referenced models.
 
 Options:
-  -s, --start TEXT       The start datetime of the interval for which this
-                         command will be applied.
-  -e, --end TEXT         The end datetime of the interval for which this
-                         command will be applied.
-  --execution-time TEXT  The execution time (defaults to now).
-  --expand TEXT          Whether or not to expand materialized models
-                         (defaults to False). If True, all referenced models
-                         are expanded as raw queries. Multiple model names can
-                         also be specified, in which case only they will be
-                         expanded as raw queries.
-  --dialect TEXT         The SQL dialect to render the query as.
-  --no-format            Disable fancy formatting of the query.
-  --help                 Show this message and exit.
+  -s, --start TEXT            The start datetime of the interval for which
+                              this command will be applied.
+  -e, --end TEXT              The end datetime of the interval for which this
+                              command will be applied.
+  --execution-time TEXT       The execution time (defaults to now).
+  --expand TEXT               Whether or not to expand materialized models
+                              (defaults to False). If True, all referenced
+                              models are expanded as raw queries. Multiple
+                              model names can also be specified, in which case
+                              only they will be expanded as raw queries.
+  --dialect TEXT              The SQL dialect to render the query as.
+  --no-format                 Disable fancy formatting of the query.
+  --max-text-width INTEGER    The max number of characters in a segment before
+                              creating new lines in pretty mode.
+  --leading-comma             Determines whether or not the comma is leading
+                              or trailing in select expressions. Default is
+                              trailing.
+  --normalize-functions TEXT  Whether or not to normalize all function names.
+                              Possible values are: 'upper', 'lower'
+  --indent INTEGER            Determines the indentation size in a formatted
+                              string.
+  --pad INTEGER               Determines the pad size in a formatted string.
+  --normalize                 Whether or not to normalize identifiers to
+                              lowercase.
+  --help                      Show this message and exit.
 ```
 
 ## rewrite

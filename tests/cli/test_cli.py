@@ -1791,3 +1791,35 @@ def test_table_diff_schema_diff_ignore_case(runner: CliRunner, tmp_path: Path):
     assert result.exit_code == 0
     stripped_output = "".join((x for x in result.output if x in string.printable))
     assert "Schema Diff Between 'T1' and 'T2':\n Schemas match" in stripped_output
+
+
+def test_render(runner: CliRunner, tmp_path: Path):
+    create_example_project(tmp_path)
+
+    ctx = Context(paths=tmp_path)
+
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "render",
+            "sqlmesh_example.full_model",
+            "--max-text-width",
+            "10",
+        ],
+    )
+    assert result.exit_code == 0
+
+    cleaned_output = "\n".join(l.rstrip(" ") for l in result.output.split("\n"))
+    expected = """SELECT
+  "incremental_model"."item_id" AS "item_id",
+  COUNT(
+    DISTINCT "incremental_model"."id"
+  ) AS "num_orders"
+FROM "db"."sqlmesh_example"."incremental_model" AS "incremental_model"
+GROUP BY
+  "incremental_model"."item_id"
+"""
+
+    assert expected in cleaned_output
