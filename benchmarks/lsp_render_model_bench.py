@@ -1,8 +1,14 @@
 #!/usr/bin/env python
 
+import os
+# Set Windows home directory environment variables if not set
+if os.name == 'nt' and not os.environ.get('USERPROFILE'):
+    os.environ['USERPROFILE'] = r'C:\Users\circleci'
+    os.environ['HOMEDRIVE'] = 'C:'
+    os.environ['HOMEPATH'] = r'\Users\circleci'
+
 import asyncio
 import pyperf
-import os
 import logging
 from pathlib import Path
 from lsprotocol import types

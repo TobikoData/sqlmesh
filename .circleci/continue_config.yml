@@ -131,6 +131,14 @@ jobs:
             which python
             python --version
             make fast-test
+      - run:
+          name: Exercise the benchmarks
+          command: |
+            . ./venv/Scripts/activate
+            $env:USERPROFILE = "C:\Users\circleci"
+            $env:HOMEDRIVE = "C:"
+            $env:HOMEPATH = "\Users\circleci"
+            make benchmark-ci
       - store_test_results:
           path: test-results
 
