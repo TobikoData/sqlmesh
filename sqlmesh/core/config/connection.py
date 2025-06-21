@@ -1587,6 +1587,31 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
 
 
+class FabricConnectionConfig(MSSQLConnectionConfig):
+    """
+    Fabric Connection Configuration.
+
+    Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
+    It is recommended to use the 'pyodbc' driver for Fabric.
+    """
+
+    type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    autocommit: t.Optional[bool] = True
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+
+        return FabricAdapter
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+        }
+
+
 class SparkConnectionConfig(ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
