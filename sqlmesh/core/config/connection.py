@@ -270,6 +270,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
+        file_systems: A list of dictionaries used to register `fsspec` filesystems to the DuckDB cursor.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -281,6 +282,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
     secrets: t.List[t.Dict[str, t.Any]] = []
+    file_systems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -375,6 +377,15 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
+            if self.file_systems:
+                from fsspec import filesystem  # type: ignore
+
+                for file_system in self.file_systems:
+                    protocol = file_system.pop("protocol")
+                    storage_options = file_system.pop("storage_options")
+                    fs = filesystem(protocol, **storage_options)
+                    cursor.register_filesystem(fs)
+
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()
             ):
@@ -386,24 +397,6 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 try:
                     if isinstance(path_options, DuckDBAttachOptions):
                         query = path_options.to_sql(alias)
-                        
-                        if path_options.data_path.split(":")[0] == "abfs":
-
-                            if path_options.azure_account_name is None or path_options.azure_account_host is None:
-                                raise ValueError("azure_account_name and azure_account_host must be set when using abfs protocol")
-
-
-                            storage_options = {
-                                "account_name": path_options.azure_account_name,
-                                "account_host": path_options.azure_account_host,
-                                "anon":False,
-                            }
-                            from fsspec import filesystem
-
-                            fs = filesystem("abfs", **storage_options)
-                            cursor.register_filesystem(fs)
-                            cursor.commit()
-
                     else:
                         query = f"ATTACH IF NOT EXISTS '{path_options}'"
                         if not path_options.startswith("md:"):
