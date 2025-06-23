@@ -409,6 +409,13 @@ class GithubController:
         return self._pr_plan_builder.build()
 
     @property
+    def pr_plan_or_none(self) -> t.Optional[Plan]:
+        try:
+            return self.pr_plan
+        except:
+            return None
+
+    @property
     def prod_plan(self) -> Plan:
         if not self._prod_plan_builder:
             self._prod_plan_builder = self._context.plan_builder(
@@ -823,6 +830,7 @@ class GithubController:
         self,
         status: GithubCheckStatus,
         exception: t.Optional[Exception] = None,
+        plan: t.Optional[Plan] = None,
     ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
@@ -926,6 +934,14 @@ class GithubController:
                 if captured_errors:
                     logger.debug(f"Captured errors: {captured_errors}")
                     failure_msg = f"**Errors:**\n{captured_errors}\n"
+                elif isinstance(exception, UncategorizedPlanError) and plan:
+                    failure_msg = f"The following models could not be categorized automatically:\n"
+                    for snapshot in plan.uncategorized:
+                        failure_msg += f"- {snapshot.name}\n"
+                    failure_msg += (
+                        f"\nRun `sqlmesh plan {self.pr_environment_name}` locally to apply these changes.\n\n"
+                        "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+                    )
                 elif isinstance(exception, PlanError):
                     failure_msg = f"Plan application failed.\n\n{self._console.captured_output}"
                 elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
@@ -940,11 +956,12 @@ class GithubController:
                         + traceback.format_exc()
                     )
                     failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
+
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
                     GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n\n{failure_msg}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
+                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:\n\n{failure_msg}",
                 }
                 summary = conclusion_to_summary.get(
                     conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
@@ -1031,7 +1048,7 @@ class GithubController:
                 or f"Got an unexpected conclusion: {conclusion.value}"
             )
             if conclusion.is_skipped:
-                summary = title
+                summary = skip_reason
             elif conclusion.is_failure:
                 captured_errors = self._console.consume_captured_errors()
                 summary = (
