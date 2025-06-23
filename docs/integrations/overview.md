@@ -9,7 +9,7 @@ SQLMesh supports integrations with the following tools:
 * [Kestra](https://kestra.io/plugins/plugin-sqlmesh/tasks/cli/io.kestra.plugin.sqlmesh.cli.sqlmeshcli)
 
 ## Execution engines
-SQLMesh supports the following execution engines for running SQLMesh projects (engine `type` in parentheses):
+SQLMesh supports the following execution engines for running SQLMesh projects (engine `type` in parentheses - example usage: `pip install "sqlmesh[databricks]"`):
 
 * [Athena](./engines/athena.md) (athena)
 * [Azure SQL](./engines/azuresql.md) (azuresql)
