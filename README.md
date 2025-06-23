@@ -6,6 +6,7 @@ SQLMesh is a next-generation data transformation framework designed to ship data
 
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
+TODO: replace image
 <p align="center">
   <img src="docs/readme/architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
 </p>
@@ -145,8 +146,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 source .venv/bin/activate # reactivate the venv to ensure you're using the right installation
-sqlmesh init duckdb # get started right away with a local duckdb instance
-sqlmesh plan # see the plan for the changes you're making
+sqlmesh init # follow the prompts to get started (choose DuckDB)
 ```
 
 </details>
@@ -163,8 +163,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 .\.venv\Scripts\Activate.ps1 # reactivate the venv to ensure you're using the right installation
-sqlmesh init duckdb # get started right away with a local duckdb instance
-sqlmesh plan # see the plan for the changes you're making
+sqlmesh init # follow the prompts to get started (choose DuckDB)
 ```
 </details>
 
