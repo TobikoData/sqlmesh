@@ -92,3 +92,39 @@ test('bad project, double model, then fixed', async ({}) => {
     await fs.remove(tempDir)
   }
 })
+
+test('bad project, double model, check lineage', async ({}) => {
+  const tempDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+  )
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+
+  // Read the customers.sql file
+  const customersSql = await fs.readFile(
+    path.join(tempDir, 'models', 'customers.sql'),
+    'utf8',
+  )
+
+  // Write the customers.sql file with a double model
+  await fs.writeFile(
+    path.join(tempDir, 'models', 'customers_duplicated.sql'),
+    customersSql,
+  )
+
+  const { window, close } = await startVSCode(tempDir)
+  try {
+    await window.waitForSelector('text=models')
+
+    // Open the lineage view
+    await openLineageView(window)
+
+    await window.waitForSelector('text=Error creating context')
+
+    await window.waitForSelector('text=Error:')
+
+    await window.waitForTimeout(1000)
+  } finally {
+    await close()
+    await fs.remove(tempDir)
+  }
+})
