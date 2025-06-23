@@ -74,6 +74,11 @@
         "description": "SQLMesh"
       },
       {
+        "command": "sqlmesh.printEnvironment",
+        "title": "SQLMesh: Print Environment Variables",
+        "description": "SQLMesh"
+      },
+      {
         "command": "sqlmesh.signin",
         "title": "SQLMesh: Sign in to Tobiko Cloud",
         "description": "SQLMesh"
