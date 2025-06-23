@@ -14,6 +14,7 @@ import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
 import { renderModel, reRenderModelForSourceFile } from './commands/renderModel'
 import { stop } from './commands/stop'
+import { printEnvironment } from './commands/printEnvironment'
 import { isErr } from '@bus/result'
 import { handleError } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
@@ -161,6 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
       await restart()
     }),
     registerCommand(`sqlmesh.stop`, stop(lspClient)),
+    registerCommand(`sqlmesh.printEnvironment`, printEnvironment()),
   )
 
   const result = await lspClient.start()

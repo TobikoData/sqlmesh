@@ -22,6 +22,41 @@ export interface SqlmeshExecInfo {
 }
 
 /**
+ * Gets the current SQLMesh environment variables that would be used for execution.
+ * This is useful for debugging and understanding the environment configuration.
+ * 
+ * @returns A Result containing the environment variables or an error
+ */
+export async function getSqlmeshEnvironment(): Promise<Result<Record<string, string>, string>> {
+  const interpreterDetails = await getInterpreterDetails()
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err(envVariables.error)
+  }
+
+  const binPath = interpreterDetails.binPath
+  const virtualEnvPath = binPath && interpreterDetails.isVirtualEnvironment
+    ? path.dirname(path.dirname(binPath)) // binPath points to bin dir in venv
+    : binPath ? path.dirname(binPath) : undefined
+
+  const env: Record<string, string> = {
+    ...process.env,
+    ...envVariables.value,
+    PYTHONPATH: interpreterDetails.path?.[0] ?? '',
+  }
+
+  if (virtualEnvPath) {
+    env['VIRTUAL_ENV'] = virtualEnvPath
+  }
+
+  if (binPath) {
+    env['PATH'] = `${binPath}${path.delimiter}${process.env.PATH || ''}`
+  }
+
+  return ok(env)
+}
+
+/**
  * Returns true if the current project is a Tcloud project. To detect this we,
  * 1. Check if the project has a tcloud.yaml file in the project root. If it does, we assume it's a Tcloud project.
  * 2. Check if the project has tcloud installed in the Python environment.
@@ -68,23 +103,17 @@ export const getTcloudBin = async (): Promise<Result<SqlmeshExecInfo, ErrorType>
   if (!fs.existsSync(binPath)) {
     return err({type: 'tcloud_bin_not_found'})
   }
-  const envVariables = await getPythonEnvVariables()
-  if (isErr(envVariables)) {
+  const env = await getSqlmeshEnvironment()
+  if (isErr(env)) {
     return err({
       type: 'generic',
-      message: envVariables.error,
+      message: env.error,
     })
   }
   return ok({
     bin: binPath,
     workspacePath: interpreterDetails.resource?.fsPath ?? '',
-    env: {
-      ...process.env,
-      ...envVariables.value,
-      PYTHONPATH: interpreterDetails.path[0],
-      VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-      PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`,
-    },
+    env: env.value,
     args: [],
   })
 }
@@ -300,16 +329,17 @@ export const sqlmeshExec = async (): Promise<
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmesh)
     traceLog(`Bin path: ${binPath}`)
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: binPath,
       workspacePath,
-      env: {
-        ...process.env,
-        ...envVariables.value,
-        PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`,
-      },
+      env: env.value,
       args: [],
     })
   } else {
@@ -319,13 +349,17 @@ export const sqlmeshExec = async (): Promise<
         type: 'sqlmesh_not_found',
       })
     }
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: sqlmesh,
       workspacePath,
-      env: {
-        ...process.env,
-        ...envVariables.value,
-      },
+      env: env.value,
       args: [],
     })
   }
@@ -455,19 +489,27 @@ export const sqlmeshLspExec = async (): Promise<
     if (isErr(ensuredDependencies)) {
       return ensuredDependencies
     }
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: binPath,
       workspacePath,
-      env: {
-        ...process.env, 
-        ...envVariables.value,
-        PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: `${interpreterDetails.binPath!}${path.delimiter}${process.env.PATH || ''}`, // binPath already points to the bin directory
-      },
+      env: env.value,
       args: [],
     })
   } else {
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     const exists = await doesExecutableExist(sqlmeshLSP)
     if (!exists) {
       return err({
@@ -477,10 +519,7 @@ export const sqlmeshLspExec = async (): Promise<
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
-      env: {
-        ...process.env,
-        ...envVariables.value,
-      },
+      env: env.value,
       args: [],
     })
   }
