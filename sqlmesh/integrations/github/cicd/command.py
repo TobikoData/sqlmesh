@@ -116,7 +116,7 @@ def _update_pr_environment(controller: GithubController) -> bool:
         return conclusion is not None and conclusion.is_success
     except Exception as e:
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, exception=e
+            status=GithubCheckStatus.COMPLETED, exception=e, plan=controller.pr_plan_or_none
         )
         return (
             conclusion is not None

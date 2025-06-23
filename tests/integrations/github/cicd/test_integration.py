@@ -665,7 +665,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
         pr_checks_runs[2]["output"]["summary"]
-        == ":warning: Action Required to create or update PR Environment `hello_world_2`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+        == """:warning: Action Required to create or update PR Environment `hello_world_2` :warning:\n\nThe following models could not be categorized automatically:\n- "memory"."sushi"."waiter_revenue_by_day"\n\nRun `sqlmesh plan hello_world_2` locally to apply these changes.\n\nIf you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
