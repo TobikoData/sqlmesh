@@ -266,7 +266,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
-        file_systems: A list of dictionaries used to register `fsspec` filesystems to the DuckDB cursor.
+        filesystems: A list of dictionaries used to register `fsspec` filesystems to the DuckDB cursor.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -278,7 +278,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
     secrets: t.List[t.Dict[str, t.Any]] = []
-    file_systems: t.List[t.Dict[str, t.Any]] = []
+    filesystems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -373,10 +373,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
-            if self.file_systems:
+            if self.filesystems:
                 from fsspec import filesystem  # type: ignore
 
-                for file_system in self.file_systems:
+                for file_system in self.filesystems:
                     protocol = file_system.pop("protocol")
                     storage_options = file_system.pop("storage_options")
                     fs = filesystem(protocol, **storage_options)

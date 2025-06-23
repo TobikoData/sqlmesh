@@ -138,7 +138,7 @@ class DuckDbConfig(TargetConfig):
         extensions: A list of autoloadable extensions to load.
         settings: A dictionary of settings to pass into the duckdb connector.
         secrets: A list of secrets to pass to the secret manager in the duckdb connector.
-        file_systems: A list of `fsspec` filesystems to register in the duckdb connection.
+        filesystems: A list of `fsspec` filesystems to register in the duckdb connection.
     """
 
     type: t.Literal["duckdb"] = "duckdb"
@@ -148,7 +148,7 @@ class DuckDbConfig(TargetConfig):
     extensions: t.Optional[t.List[str]] = None
     settings: t.Optional[t.Dict[str, t.Any]] = None
     secrets: t.Optional[t.List[t.Dict[str, t.Any]]] = None
-    file_systems: t.Optional[t.List[t.Dict[str, t.Any]]] = None
+    filesystems: t.Optional[t.List[t.Dict[str, t.Any]]] = None
 
     @model_validator(mode="before")
     def validate_authentication(cls, data: t.Any) -> t.Any:
@@ -184,8 +184,8 @@ class DuckDbConfig(TargetConfig):
             kwargs["connector_config"] = self.settings
         if self.secrets is not None:
             kwargs["secrets"] = self.secrets
-        if self.file_systems is not None:
-            kwargs["file_systems"] = self.file_systems
+        if self.filesystems is not None:
+            kwargs["filesystems"] = self.filesystems
         return DuckDBConnectionConfig(
             database=self.path,
             concurrent_tasks=1,

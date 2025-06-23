@@ -437,7 +437,7 @@ def test_duckdb(make_config):
                 "secret": "aws_secret",
             }
         ],
-        file_systems=[
+        filesystems=[
             {
                 "protocol": "abfs",
                 "storage_options": {
@@ -450,7 +450,7 @@ def test_duckdb(make_config):
     )
     assert config.connector_config
     assert config.secrets
-    assert config.file_systems
+    assert config.filesystems
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
 

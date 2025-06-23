@@ -562,7 +562,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
-        "file_systems": [],
+        "filesystems": [],
         "database": "my_db",
     }
     assert serialized["default_test_connection"] == {
@@ -574,7 +574,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
-        "file_systems": [],
+        "filesystems": [],
         "database": "my_test_db",
     }
 

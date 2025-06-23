@@ -18,7 +18,7 @@
 | `extensions`       | Extension to load into duckdb. Only autoloadable extensions are supported.                                                                                                                                                                      |  list  |    N     |
 | `connector_config` | Configuration to pass into the duckdb connector.                                                                                                                                                                                                |  dict  |    N     |
 | `secrets`   | Configuration for authenticating external sources (e.g., S3) using DuckDB secrets.                                                                                                                                                                                                |  dict  |    N     |
-| `file_systems`   | Configuration for registering `fsspec` filesystems to the DuckDB connection. secrets.                                                                                                                                                                                                |  dict  |    N     |
+| `filesystems`   | Configuration for registering `fsspec` filesystems to the DuckDB connection.                                                                                                                                                                                                |  dict  |    N     |
 
 #### DuckDB Catalogs Example
 
@@ -261,7 +261,7 @@ Refer to the official DuckDB documentation for the full list of [supported S3 se
 
 ##### File system configuration example for Microsoft Onelake
 
-The `file_systems` accepts a list of file systems to register in the DuckDB connection. This is especially useful for Azure Storage Accounts, as it adds write support for DuckDB which is not natively supported by DuckDB (yet).
+The `filesystems` accepts a list of file systems to register in the DuckDB connection. This is especially useful for Azure Storage Accounts, as it adds write support for DuckDB which is not natively supported by DuckDB (yet).
 
 
 === "YAML"
@@ -278,7 +278,7 @@ The `file_systems` accepts a list of file systems to register in the DuckDB conn
             data_path: abfs://MyFabricWorkspace/MyFabricLakehouse.Lakehouse/Files/DuckLake.Files
         extensions:
           - ducklake
-        file_systems:
+        filesystems:
           - protocol: abfs
             storage_options:
               account_name: onelake
