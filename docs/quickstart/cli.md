@@ -161,7 +161,7 @@ Need help?
 • GitHub: https://github.com/TobikoData/sqlmesh/issues
 ```
 
-??? info "Learn more about the project's configuration"
+??? info "Learn more about the project's configuration: `config.yaml`"
     SQLMesh project-level configuration parameters are specified in the `config.yaml` file in the project directory.
 
     This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the gateway's connection type. All available configuration settings are included in the file, with optional settings set to their default value and commented out.
