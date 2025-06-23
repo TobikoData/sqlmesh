@@ -124,7 +124,7 @@ Enter a number: 1
 
 SQLMesh's core commands have multiple options that alter their behavior. Some of those options streamline the SQLMesh `plan` workflow and CLI output.
 
-If you prefer a streamlined workflow, choose the `FLOW` CLI mode to automatically include those options in your project configuration file. If you prefer to see all the output SQLMesh provides, choose `DEFAULT` mode.
+If you prefer a streamlined workflow (no prompts, no diff previews, auto-apply changes), choose the `FLOW` CLI mode to automatically include those options in your project configuration file. If you prefer to see all the output SQLMesh provides, choose `DEFAULT` mode.
 
 ``` bash
 Choose your SQLMesh CLI experience:
