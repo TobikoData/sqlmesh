@@ -378,7 +378,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
                 for file_system in self.filesystems:
                     options = file_system.copy()
-                    fs = file_system.pop("fs")
+                    fs = options.pop("fs")
                     fs = filesystem(fs, **options)
                     cursor.register_filesystem(fs)
 
