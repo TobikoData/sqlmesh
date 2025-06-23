@@ -49,7 +49,6 @@ RECOMMENDED_STATE_SYNC_ENGINES = {
     "mysql",
     "mssql",
     "azuresql",
-    "fabric",
 }
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
@@ -1603,6 +1602,7 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     """
 
     type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    driver: t.Literal["pyodbc"] = "pyodbc"
     autocommit: t.Optional[bool] = True
 
     @property

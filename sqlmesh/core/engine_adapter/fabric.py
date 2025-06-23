@@ -31,8 +31,10 @@ class FabricAdapter(MSSQLEngineAdapter):
             exp.select("1")
             .from_("INFORMATION_SCHEMA.TABLES")
             .where(f"TABLE_NAME = '{table.alias_or_name}'")
-            .where(f"TABLE_SCHEMA = '{table.db}'")
         )
+        database_name = table.db
+        if database_name:
+            sql = sql.where(f"TABLE_SCHEMA = '{database_name}'")
 
         result = self.fetchone(sql, quote_identifiers=True)
 
