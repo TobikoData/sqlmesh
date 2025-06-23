@@ -52,6 +52,7 @@ from sqlmesh.lsp.reference import (
     get_references,
     get_all_references,
 )
+from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
@@ -433,6 +434,59 @@ class SQLMeshLanguageServer:
                 return locations if locations else None
             except Exception as e:
                 ls.show_message(f"Error getting locations: {e}", types.MessageType.Error)
+                return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_PREPARE_RENAME)
+        def prepare_rename_handler(
+            ls: LanguageServer, params: types.PrepareRenameParams
+        ) -> t.Optional[types.PrepareRenameResult]:
+            """Prepare for rename operation by checking if the symbol can be renamed."""
+            try:
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {uri}")
+
+                result = prepare_rename(self.lsp_context, uri, params.position)
+                return result
+            except Exception as e:
+                ls.log_trace(f"Error preparing rename: {e}")
+                return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_RENAME)
+        def rename_handler(
+            ls: LanguageServer, params: types.RenameParams
+        ) -> t.Optional[types.WorkspaceEdit]:
+            """Perform rename operation on the symbol at the given position."""
+            try:
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {uri}")
+
+                workspace_edit = rename_symbol(
+                    self.lsp_context, uri, params.position, params.new_name
+                )
+                return workspace_edit
+            except Exception as e:
+                ls.show_message(f"Error performing rename: {e}", types.MessageType.Error)
+                return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT)
+        def document_highlight_handler(
+            ls: LanguageServer, params: types.DocumentHighlightParams
+        ) -> t.Optional[t.List[types.DocumentHighlight]]:
+            """Highlight all occurrences of the symbol at the given position."""
+            try:
+                uri = URI(params.text_document.uri)
+                self._ensure_context_for_document(uri)
+                if self.lsp_context is None:
+                    raise RuntimeError(f"No context found for document: {uri}")
+
+                highlights = get_document_highlights(self.lsp_context, uri, params.position)
+                return highlights
+            except Exception as e:
+                ls.log_trace(f"Error getting document highlights: {e}")
                 return None
 
         @self.server.feature(types.TEXT_DOCUMENT_DIAGNOSTIC)
