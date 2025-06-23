@@ -124,7 +124,9 @@ Enter a number: 1
 
 SQLMesh's core commands have multiple options that alter their behavior. Some of those options streamline the SQLMesh `plan` workflow and CLI output.
 
-If you prefer a streamlined workflow (no prompts, no diff previews, auto-apply changes), choose the `FLOW` CLI mode to automatically include those options in your project configuration file. If you prefer to see all the output SQLMesh provides, choose `DEFAULT` mode.
+If you prefer a streamlined workflow (no prompts, no file diff previews, auto-apply changes), choose the `FLOW` CLI mode to automatically include those options in your project configuration file.
+
+If you prefer to see all the output SQLMesh provides, choose `DEFAULT` mode, which we will use in this quickstart:
 
 ``` bash
 Choose your SQLMesh CLI experience:
@@ -147,18 +149,18 @@ If you chose a different engine, add your engine's connection information to the
 Your SQLMesh project is ready!
 
 Next steps:
-• Update your gateway connection settings (e.g., username/password) in the project configuration file:
-    /Users/trey/tobiko/sqlmesh/sqlmesh-example-fresh/test/config.yaml
-• Run command in CLI: sqlmesh plan
-• (Optional) Explain a plan: sqlmesh plan --explain
+- Update your gateway connection settings (e.g., username/password) in the project configuration file:
+    /sqlmesh-example/config.yaml
+- Run command in CLI: sqlmesh plan
+- (Optional) Explain a plan: sqlmesh plan --explain
 
 Quickstart guide:
 https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/
 
 Need help?
-• Docs:   https://sqlmesh.readthedocs.io
-• Slack:  https://www.tobikodata.com/slack
-• GitHub: https://github.com/TobikoData/sqlmesh/issues
+- Docs:   https://sqlmesh.readthedocs.io
+- Slack:  https://www.tobikodata.com/slack
+- GitHub: https://github.com/TobikoData/sqlmesh/issues
 ```
 
 ??? info "Learn more about the project's configuration: `config.yaml`"
@@ -212,7 +214,7 @@ Need help?
 
     Learn more about SQLMesh project configuration [here](../reference/configuration.md).
 
-The scaffold will also include multiple directories where SQLMesh project files are stored and multiple files that constitute the example project (e.g., SQL models).
+The scaffold generator creates multiple directories where SQLMesh project files are stored and multiple files that constitute the example project (e.g., SQL models).
 
 ??? info "Learn more about the project directories and files"
     SQLMesh uses a scaffold generator to initiate a new project. The generator will create multiple sub-directories and files for organizing your SQLMesh project code.
@@ -245,7 +247,7 @@ The scaffold will also include multiple directories where SQLMesh project files 
     - ./tests
         - test_full_model.yaml
 
-Finally, the scaffold will include data for the example project to use.
+Finally, the scaffold generator creates data for the example project to use.
 
 ??? info "Learn more about the project's data"
     The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
@@ -291,7 +293,7 @@ The first SQLMesh plan must execute every model to populate the production envir
 ```bash linenums="1"
 $ sqlmesh plan
 ======================================================================
-Successfully Ran 1 tests against duckdb
+Successfully Ran 1 tests against duckdb in 0.1 seconds.
 ----------------------------------------------------------------------
 
 `prod` environment will be initialized
@@ -303,20 +305,18 @@ Models:
     └── sqlmesh_example.seed_model
 Models needing backfill:
 ├── sqlmesh_example.full_model: [full refresh]
-├── sqlmesh_example.incremental_model: [2020-01-01 - 2025-04-17]
+├── sqlmesh_example.incremental_model: [2020-01-01 - 2025-06-22]
 └── sqlmesh_example.seed_model: [full refresh]
 Apply - Backfill Tables [y/n]:
 ```
 
 Line 3 of the output notes that `sqlmesh plan` successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
 
-Line 5 describes what environments the plan will affect when applied - a new `prod` environment in this case.
+Line 6 describes what environments the plan will affect when applied - a new `prod` environment in this case.
 
-Lines 7-11 of the output show that SQLMesh detected three new models relative to the current empty environment.
+Lines 8-12 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 12-16 list each model that will be executed by the plan, along with the date intervals or refresh types. For both `full_model` and `seed_model`, it shows `[full refresh]`, while for `incremental_model` it shows a specific date range `[2020-01-01 - 2025-04-17]`. The incremental model date range begins from 2020-01-01 because the `full` model kind always fully rebuilds its table.
-
-The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
+Lines 13-16 list each model that will be executed by the plan, along with the date intervals or refresh types. For both `full_model` and `seed_model`, it shows `[full refresh]`, while for `incremental_model` it shows a specific date range `[2020-01-01 - 2025-06-22]`. The incremental model date range begins from 2020-01-01 because its definition specifies a model start date of `2020-01-01`.
 
 ??? info "Learn more about the project's models"
 
@@ -393,23 +393,23 @@ The `seed_model` date range begins on the same day the plan was made because `SE
     GROUP BY item_id
     ```
 
-Line 16 asks you whether to proceed with executing the model backfills described in lines 11-14. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
+Line 18 asks you whether to proceed with executing the model backfills described in lines 13-16. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
 
 ```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
 
-Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+Updating physical layer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 ✔ Physical layer updated
 
-[1/1] sqlmesh_example.seed_model         [insert seed file]               0.02s
-[1/1] sqlmesh_example.incremental_model  [insert 2020-01-01 -2025-04-17]  0.03s
-[1/1] sqlmesh_example.full_model         [full refresh, audits ✔1]        0.05s
-Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+[1/1] sqlmesh_example.seed_model          [insert seed file]                 0.01s
+[1/1] sqlmesh_example.incremental_model   [insert 2020-01-01 - 2025-06-22]   0.01s
+[1/1] sqlmesh_example.full_model          [full refresh, audits ✔1]          0.01s
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 ✔ Model batches executed
 
-Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
+Updating virtual layer  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
 
 ✔ Virtual layer updated
 ```
@@ -428,7 +428,89 @@ Lines 12-14 show the progress and completion of the second step - executing mode
 
 Lines 16-18 show the progress and completion of the final step - virtually updating the plan's target environment, which makes the data available for querying.
 
-You've now created a new production environment with all of history backfilled.
+??? "Learn more about the plan's actions"
+
+    Before applying a plan, you can view a detailed description of the actions it will take by passing the explain flag in your `sqlmesh plan` command:
+
+    ```bash
+    sqlmesh plan --explain
+    ```
+
+    Passing the explain flag for the quickstart example project above adds the following information to the output:
+
+    ```bash
+    Explained plan
+    ├── Validate SQL and create physical layer tables and views if they do not exist
+    │   ├── sqlmesh_example.seed_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__seed_model__2185867172
+    │   │   ├── Dry run model query without inserting results
+    │   │   └── Create table if it doesn't exist
+    │   ├── sqlmesh_example.full_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865
+    │   │   ├── Dry run model query without inserting results
+    │   │   └── Create table if it doesn't exist
+    │   └── sqlmesh_example.incremental_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__incremental_model__1880815781
+    │       ├── Dry run model query without inserting results
+    │       └── Create table if it doesn't exist
+    ├── Backfill models by running their queries and run standalone audits
+    │   ├── sqlmesh_example.seed_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__seed_model__2185867172
+    │   │   └── Fully refresh table
+    │   ├── sqlmesh_example.full_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865
+    │   │   ├── Fully refresh table
+    │   │   └── Run 'assert_positive_order_ids' audit
+    │   └── sqlmesh_example.incremental_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__incremental_model__1880815781
+    │       └── Fully refresh table
+    └── Update the virtual layer for environment 'prod'
+        └── Create or update views in the virtual layer to point at new physical tables and views
+            ├── sqlmesh_example.full_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865
+            ├── sqlmesh_example.seed_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__seed_model__2185867172
+            └── sqlmesh_example.incremental_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__incremental_model__1880815781
+    ```
+
+    The explanation has three top-level sections, corresponding to the three types of actions a plan takes:
+
+      - Validate SQL and create physical layer tables and views if they do not exist
+      - Backfill models by running their queries and run standalone audits
+      - Update the virtual layer for environment 'prod'
+
+    Each section lists the affected models and provides more information about what will occur. For example, the first model in the first section is:
+
+    ```bash
+    ├── sqlmesh_example.seed_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__seed_model__2185867172
+    │   ├── Dry run model query without inserting results
+    │   └── Create table if it doesn't exist
+    ```
+
+    The first line shows the model name `sqlmesh_example.seed_model` and the physical layer table SQLMesh will create to store its data: `db.sqlmesh__sqlmesh_example.sqlmesh_example__seed_model__2185867172`. The second and third lines tell us that in this step SQLMesh will dry-run the model query and create the physical layer table if it doesn't exist.
+
+    The second section describes what will occur during the backfill step. The second model in this section is:
+
+    ```bash
+    ├── sqlmesh_example.full_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865
+    │   ├── Fully refresh table
+    │   └── Run 'assert_positive_order_ids' audit
+    ```
+
+    The first line shows the model name `sqlmesh_example.full_model` and the physical layer table SQLMesh will insert the model's data into: `db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865`. The second and third lines tell us that the backfill action will fully refresh the model's physical table and run the `assert_positive_order_ids` audit.
+
+    The final section describes SQLMesh's action during the virtual layer update step. The first model in this section is:
+
+    ```bash
+    └── Create or update views in the virtual layer to point at new physical tables and views
+        ├── sqlmesh_example.full_model -> db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865
+    ```
+
+    The virtual layer step will update the `sqlmesh_example.full_model` virtual layer view to `SELECT * FROM` the physical table `db.sqlmesh__sqlmesh_example.sqlmesh_example__full_model__2278521865`.
+
+Let's take a quick look at the project's DuckDB database file to see the objects SQLMesh created. First, we open the built-in DuckDB CLI tool with the `duckdb db.db` command, then run our two queries:
+
+Our first query shows the three physical tables SQLMesh created in the `sqlmesh__sqlmesh_example` schema (one table for each model):
+
+![Example project physical layer tables in the DuckDB CLI](./cli/cli-quickstart_duckdb-tables.png)
+
+Our second query shows that in the `sqlmesh` schema SQLMesh created three virtual layer views that read from the three physical tables:
+
+![Example project virtual layer views in the DuckDB CLI](./cli/cli-quickstart_duckdb-views.png)
+
+You've now created a new production environment with all of history backfilled!
 
 ## 3. Update a model
 
