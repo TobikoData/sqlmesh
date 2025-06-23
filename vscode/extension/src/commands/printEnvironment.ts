@@ -20,7 +20,7 @@ export function printEnvironment() {
       env: env,
     })
 
-    // Show the termina
+    // Show the terminal
     terminal.show()
 
     // Run the appropriate command to display environment variables
