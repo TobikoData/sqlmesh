@@ -234,7 +234,9 @@ def test_macro_var(macro_evaluator):
 
     # Check Snowflake-specific StagedFilePath / MacroVar behavior
     e = parse_one("select @x from @path, @y", dialect="snowflake")
+
     macro_evaluator.locals = {"x": parse_one("a"), "y": parse_one("t2")}
+    macro_evaluator.dialect = "snowflake"
 
     assert e.find(StagedFilePath) is not None
     assert macro_evaluator.transform(e).sql(dialect="snowflake") == "SELECT a FROM @path, t2"
