@@ -1954,6 +1954,10 @@ class TerminalConsole(Console):
             plan_builder.apply()
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         divider_length = 70
 
         self._log_test_details(result)
@@ -2827,6 +2831,10 @@ class NotebookMagicConsole(TerminalConsole):
         self.display(radio)
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         import ipywidgets as widgets
 
         divider_length = 70
@@ -3206,6 +3214,10 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(message)
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         message = f"Ran `{result.testsRun}` Tests Against `{target_dialect}`"
 
         if result.wasSuccessful():
