@@ -435,7 +435,7 @@ def _init_integer_prompt(
 def _init_display_choices(values_dict: t.Dict[str, str], console: Console) -> t.Dict[int, str]:
     display_num_to_value = {}
     for i, value_str in enumerate(values_dict.keys()):
-        console.print(f"    \[{i + 1}] {' ' if i < 9 else ''}{value_str} {values_dict[value_str]}")
+        console.print(f"    \\[{i + 1}] {' ' if i < 9 else ''}{value_str} {values_dict[value_str]}")
         display_num_to_value[i + 1] = value_str
     console.print("")
     return display_num_to_value
