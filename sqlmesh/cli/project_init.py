@@ -243,7 +243,7 @@ WHERE
   item_id < 0
   """
 
-    tests["test_example_full_model"] = f"""test_example_full_model:
+    tests["test_full_model"] = f"""test_example_full_model:
   model: {full_model_name}
   inputs:
     {incremental_model_name}:

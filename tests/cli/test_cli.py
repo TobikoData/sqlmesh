@@ -914,7 +914,9 @@ def test_dlt_filesystem_pipeline(tmp_path):
     info = filesystem_pipeline.run([{"item_id": 1}], table_name="equipment")
     assert not info.has_failed_jobs
 
-    init_example_project(tmp_path, "athena", ProjectTemplate.DLT, "filesystem_pipeline")
+    init_example_project(
+        tmp_path, "athena", template=ProjectTemplate.DLT, pipeline="filesystem_pipeline"
+    )
 
     # Validate generated sqlmesh config and models
     config_path = tmp_path / "config.yaml"
@@ -1014,12 +1016,18 @@ def test_dlt_pipeline(runner, tmp_path):
     # This should fail since it won't be able to locate the pipeline in this path
     with pytest.raises(ClickException, match=r".*Could not attach to pipeline*"):
         init_example_project(
-            tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path="./dlt2/pipelines"
+            tmp_path,
+            "duckdb",
+            template=ProjectTemplate.DLT,
+            pipeline="sushi",
+            dlt_path="./dlt2/pipelines",
         )
 
     # By setting the pipelines path where the pipeline directory is located, it should work
     dlt_path = get_dlt_pipelines_dir()
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path=dlt_path)
+    init_example_project(
+        tmp_path, "duckdb", template=ProjectTemplate.DLT, pipeline="sushi", dlt_path=dlt_path
+    )
 
     expected_config = f"""# --- Gateway Connection ---
 gateways:

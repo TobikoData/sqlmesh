@@ -2737,7 +2737,7 @@ def test_timestamp_normalization() -> None:
 
 @use_terminal_console
 def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
