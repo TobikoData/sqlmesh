@@ -428,7 +428,7 @@ Lines 12-14 show the progress and completion of the second step - executing mode
 
 Lines 16-18 show the progress and completion of the final step - virtually updating the plan's target environment, which makes the data available for querying.
 
-??? "Learn more about the plan's actions"
+??? "Learn more about the plan's actions: `sqlmesh plan --explain`"
 
     Before applying a plan, you can view a detailed description of the actions it will take by passing the explain flag in your `sqlmesh plan` command:
 
