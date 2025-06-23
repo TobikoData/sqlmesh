@@ -17,7 +17,7 @@ from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
@@ -1583,7 +1583,7 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    init_example_project(tmp_path, ctx.dialect, schema_name=schema_name)
+    init_example_project(tmp_path, ctx.mark.split("_")[0], schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,

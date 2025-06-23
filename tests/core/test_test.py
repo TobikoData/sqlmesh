@@ -14,7 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from IPython.utils.capture import capture_output
 
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
@@ -1406,7 +1406,7 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
 
 
 def test_generate_input_data_using_sql(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -1592,7 +1592,7 @@ test_pyspark_model:
 
 
 def test_variable_usage(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     variables = {"gold": "gold_db", "silver": "silver_db"}
     incorrect_variables = {"gold": "foo", "silver": "bar"}
@@ -1873,7 +1873,7 @@ outputs:
 
 
 def test_test_generation(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2004,7 +2004,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
         )
         return load_yaml(context.path / c.TESTS / "test_foo.yaml")
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2023,7 +2023,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
 
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2060,7 +2060,7 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
 def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> None:
     from decimal import Decimal
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2096,7 +2096,7 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
 
 
 def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2128,7 +2128,7 @@ def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
 
 
 def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         gateways={
@@ -2221,7 +2221,7 @@ test_resolve_template_macro:
 
 @use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     original_test_file = tmp_path / "tests" / "test_full_model.yaml"
 
@@ -2385,7 +2385,7 @@ test_example_full_model:
 
 @use_terminal_console
 def test_test_output_with_invalid_model_name(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     wrong_test_file = tmp_path / "tests" / "test_incorrect_model_name.yaml"
     wrong_test_file.write_text(
@@ -2430,7 +2430,7 @@ test_example_full_model:
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     # Example project contains 1 test and we add a new file with 2 tests
     test_file = tmp_path / "tests" / "test_new.yaml"
@@ -2508,7 +2508,7 @@ from sqlmesh.core.macros import macro
 @macro()
 def test_datetime_now(evaluator):
   return exp.cast(exp.Literal.string(datetime.datetime.now(tz=datetime.timezone.utc)), exp.DataType.Type.DATE)
-  
+
 @macro()
 def test_sqlglot_expr(evaluator):
   return exp.CurrentDate().sql(evaluator.dialect)
@@ -2737,7 +2737,7 @@ def test_timestamp_normalization() -> None:
 
 @use_terminal_console
 def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),

@@ -26,15 +26,16 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata
-from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity, optional_import
+from sqlmesh.utils import yaml, Verbosity, optional_import
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -198,9 +199,9 @@ class SQLMeshMagics(Magics):
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
-        "sql_dialect",
+        "engine",
         type=str,
-        help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
+        help=f"Project SQL engine. Supported values: '{', '.join([info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])])}'.",  # type: ignore
     )
     @argument(
         "--template",
@@ -229,7 +230,12 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(
-            args.path, args.sql_dialect, project_template, args.dlt_pipeline, args.dlt_path
+            path=args.path,
+            engine_type=args.engine,
+            dialect=None,
+            template=project_template,
+            pipeline=args.dlt_pipeline,
+            dlt_path=args.dlt_path,
         )
         html = str(
             h(

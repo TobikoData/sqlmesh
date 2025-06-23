@@ -23,6 +23,7 @@ from sqlmesh.core.config.connection import (
     MSSQLConnectionConfig,
     _connection_config_validator,
     _get_engine_import_validator,
+    INIT_DISPLAY_INFO_TO_TYPE,
 )
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -1129,6 +1130,19 @@ def test_engine_import_validator():
         _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
 
     TestConfigC()
+
+
+def test_engine_display_order():
+    """
+    Each engine's ConnectionConfig contains a display_order integer class var that is used to order the
+    interactive `sqlmesh init` engine choices.
+
+    This test ensures that those integers begin with 1, are unique, and are sequential.
+    """
+    display_numbers = [
+        info[0] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    ]
+    assert display_numbers == list(range(1, len(display_numbers) + 1))
 
 
 def test_mssql_engine_import_validator():

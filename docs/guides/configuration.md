@@ -151,6 +151,55 @@ The examples specify a Snowflake connection whose password is stored in an envir
     )
     ```
 
+#### Default target environment
+
+The SQLMesh `plan` command acts on the `prod` environment by default (i.e., `sqlmesh plan` is equivalent to `sqlmesh plan prod`).
+
+In some organizations, users never run plans directly against `prod` - they do all SQLMesh work in a development environment unique to them. In a standard SQLMesh configuration, this means they need to include their development environment name every time they issue the `plan` command (e.g., `sqlmesh plan dev_tony`).
+
+If your organization works like this, it may be convenient to change the `plan` command's default environment from `prod` to each user's development environment. That way people can issue `sqlmesh plan` without typing the environment name every time.
+
+The SQLMesh configuration `user()` function returns the name of the user currently logged in and running SQLMesh. It retrieves the username from system environment variables like `USER` on MacOS/Linux or `USERNAME` on Windows.
+
+Call `user()` inside Jinja curly braces with the syntax `{{ user() }}`, which allows you to combine the user name with a prefix or suffix.
+
+The example configuration below constructs the environment name by appending the username to the end of the string `dev_`. If the user running SQLMesh is `tony`, the default target environment when they run SQLMesh will be `dev_tony`. In other words, `sqlmesh plan` will be equivalent to `sqlmesh plan dev_tony`.
+
+=== "YAML"
+
+    Default target environment is `dev_` combined with the username running SQLMesh.
+
+    ```yaml
+    default_target_environment: dev_{{ user() }}
+    ```
+
+=== "Python"
+
+    Default target environment is `dev_` combined with the username running SQLMesh.
+
+    Retrieve the username with the `getpass.getuser()` function, and combine it with `dev_` in a Python f-string.
+
+    ```python linenums="1" hl_lines="1 17"
+    import getpass
+    import os
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        SnowflakeConnectionConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={
+            "my_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(),
+            ),
+        },
+        default_target_environment=f"dev_{getpass.getuser()}",
+    )
+    ```
+
 ### Overrides
 
 Environment variables have the highest precedence among configuration methods, as [noted above](#configuration-files). They will automatically override configuration file specifications if they follow a specific naming structure.
@@ -488,15 +537,15 @@ SELECT 2 AS col
     └── Directly Modified:
         └── sqlmesh_example__dev.test_model
 
-    ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-    +++                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-                                                                                                
-    kind FULL                                                                                                                                                                                                                                    
-    )                                                                                                                                                                                                                                              
-    SELECT                                                                                                                                                                                                                                         
-    -  1 AS col                                                                                                                                                                                                                                     
-    +  2 AS col  
+    ---
+    +++
+
+
+    kind FULL
+    )
+    SELECT
+    -  1 AS col
+    +  2 AS col
     ```
 
 3. Second (metadata) change in `dev`:
@@ -516,27 +565,27 @@ SELECT 5 AS col
     └── Directly Modified:
         └── sqlmesh_example__dev.test_model
 
-    ---                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-    +++                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-    @@ -1,8 +1,9 @@                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                    
-    MODEL (                                                                                                                                                                                                                                        
-    name sqlmesh_example.test_model,                                                                                                                                                                                                             
-    +  owner "John Doe",                                                                                                                                                                                                                                                                                                                                                                                                                                                        
-    kind FULL                                                                                                                                                                                                                                    
-    )                                                                                                                                                                                                                                              
-    SELECT                                                                                                                                                                                                                                         
-    -  1 AS col                                                                                                                                                                                                                                     
-    +  2 AS col                                                                                                                                                                                                                                     
+    ---
+
+    +++
+
+    @@ -1,8 +1,9 @@
+
+    MODEL (
+    name sqlmesh_example.test_model,
+    +  owner "John Doe",
+    kind FULL
+    )
+    SELECT
+    -  1 AS col
+    +  2 AS col
 
     Directly Modified: sqlmesh_example__dev.test_model (Breaking)
     Models needing backfill:
     └── sqlmesh_example__dev.test_model: [full refresh]
     ```
 
-Even though the second change should have been a metadata change (thus not requiring a backfill), it will still be classified as a breaking change because the comparison is against production instead of the previous development state. This is intentional and may cause additional backfills as more changes are accumulated.  
+Even though the second change should have been a metadata change (thus not requiring a backfill), it will still be classified as a breaking change because the comparison is against production instead of the previous development state. This is intentional and may cause additional backfills as more changes are accumulated.
 
 
 ### Gateways

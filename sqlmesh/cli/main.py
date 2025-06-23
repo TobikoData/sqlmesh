@@ -6,11 +6,15 @@ import sys
 import typing as t
 
 import click
-
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import (
+    ProjectTemplate,
+    init_example_project,
+    InitCliMode,
+    interactive_init,
+)
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
@@ -21,6 +25,7 @@ from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
 
 SKIP_LOAD_COMMANDS = (
     "clean",
@@ -138,7 +143,7 @@ def cli(
 
 
 @cli.command("init")
-@click.argument("sql_dialect", required=False)
+@click.argument("engine", required=False)
 @click.option(
     "-t",
     "--template",
@@ -160,23 +165,82 @@ def cli(
 @cli_analytics
 def init(
     ctx: click.Context,
-    sql_dialect: t.Optional[str] = None,
+    engine: t.Optional[str] = None,
     template: t.Optional[str] = None,
     dlt_pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
-    try:
-        project_template = ProjectTemplate(template.lower() if template else "default")
-    except ValueError:
-        raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(
-        ctx.obj,
-        dialect=sql_dialect,
+    project_template = None
+    if template:
+        try:
+            project_template = ProjectTemplate(template.lower())
+        except ValueError:
+            template_strings = "', '".join([template.value for template in ProjectTemplate])
+            raise click.ClickException(
+                f"Invalid project template '{template}'. Please specify one of '{template_strings}'."
+            )
+
+    if engine or project_template == ProjectTemplate.DBT:
+        init_example_project(
+            path=ctx.obj,
+            template=project_template or ProjectTemplate.DEFAULT,
+            engine_type=engine,
+            pipeline=dlt_pipeline,
+            dlt_path=dlt_path,
+        )
+        return
+
+    import sqlmesh.utils.rich as srich
+
+    console = srich.console
+
+    project_template, engine_type, cli_mode = interactive_init(ctx.obj, console, project_template)
+
+    config_path = init_example_project(
+        path=ctx.obj,
         template=project_template,
+        engine_type=engine_type,
+        cli_mode=cli_mode or InitCliMode.DEFAULT,
         pipeline=dlt_pipeline,
         dlt_path=dlt_path,
     )
+
+    engine_install_text = ""
+    if engine_type and engine_type not in ("duckdb", "motherduck"):
+        install_text = (
+            "pyspark" if engine_type == "spark" else f"sqlmesh\\[{engine_type.replace('_', '')}]"
+        )
+        engine_install_text = f'• Run command in CLI to install your SQL engine\'s Python dependencies: pip install "{install_text}"\n'
+    # interactive init does not support DLT template
+    next_step_text = {
+        ProjectTemplate.DEFAULT: f"{engine_install_text}• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
+        ProjectTemplate.DBT: "",
+    }
+    next_step_text[ProjectTemplate.EMPTY] = next_step_text[ProjectTemplate.DEFAULT]
+
+    quickstart_text = {
+        ProjectTemplate.DEFAULT: "Quickstart guide:\nhttps://sqlmesh.readthedocs.io/en/stable/quickstart/cli/",
+        ProjectTemplate.DBT: "dbt guide:\nhttps://sqlmesh.readthedocs.io/en/stable/integrations/dbt/",
+    }
+    quickstart_text[ProjectTemplate.EMPTY] = quickstart_text[ProjectTemplate.DEFAULT]
+
+    console.print(f"""──────────────────────────────
+
+Your SQLMesh project is ready!
+
+Next steps:
+{next_step_text[project_template]}
+• Run command in CLI: sqlmesh plan
+• (Optional) Explain a plan: sqlmesh plan --explain
+
+{quickstart_text[project_template]}
+
+Need help?
+• Docs:   https://sqlmesh.readthedocs.io
+• Slack:  https://www.tobikodata.com/slack
+• GitHub: https://github.com/TobikoData/sqlmesh/issues
+""")
 
 
 @cli.command("render")
