@@ -2685,6 +2685,10 @@ test_foo:
         else:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
+        # Since we're simulating an error/failure, this doesn't go through the
+        # test runner logic, so we need to manually set how many tests were ran
+        result.testsRun = 1
+
     with capture_output() as captured_output:
         get_console().log_test_results(result, "duckdb")
 
@@ -2729,3 +2733,23 @@ def test_timestamp_normalization() -> None:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run()
     )
+
+
+@use_terminal_console
+def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_test_connection=DuckDBConnectionConfig(concurrent_tasks=8),
+    )
+
+    rmtree(tmp_path / "tests")
+
+    with capture_output() as captured_output:
+        context = Context(paths=tmp_path, config=config)
+        context.plan(no_prompts=True, auto_apply=True)
+
+    output = captured_output.stdout
+    assert "test" not in output.lower()
