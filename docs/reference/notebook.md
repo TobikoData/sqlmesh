@@ -201,6 +201,9 @@ options:
 ```
 %render [--start START] [--end END] [--execution-time EXECUTION_TIME]
               [--expand EXPAND] [--dialect DIALECT] [--no-format]
+              [--normalize] [--pad PAD] [--indent INDENT]
+              [--normalize-functions NORMALIZE_FUNCTIONS] [--leading-comma]
+              [--max-text-width MAX_TEXT_WIDTH]
               model
 
 Renders a model's query, optionally expanding referenced models.
@@ -220,6 +223,17 @@ options:
                         models are expanded as raw queries.
   --dialect DIALECT     SQL dialect to render.
   --no-format           Disable fancy formatting of the query.
+  --normalize           Whether or not to normalize identifiers to lowercase.
+  --pad PAD             Determines the pad size in a formatted string.
+  --indent INDENT       Determines the indentation size in a formatted string.
+  --normalize-functions NORMALIZE_FUNCTIONS
+                        Whether or not to normalize all function names.
+                        Possible values are: 'upper', 'lower'
+  --leading-comma       Determines whether or not the comma is leading or
+                        trailing in select expressions. Default is trailing.
+  --max-text-width MAX_TEXT_WIDTH
+                        The max number of characters in a segment before
+                        creating new lines in pretty mode.
 ```
 
 #### dag
