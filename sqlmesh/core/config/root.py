@@ -256,6 +256,10 @@ class Config(BaseConfig):
         if self.physical_schema_mapping:
             _normalize_identifiers("physical_schema_mapping")
 
+        if self.cicd_bot and not self.cicd_bot.auto_categorize_changes_:
+            # inherit the project-level auto_categorize_changes setting into the CICD bot if it has not been explicitly overridden
+            self.cicd_bot.auto_categorize_changes_ = self.plan.auto_categorize_changes
+
         return self
 
     def get_default_test_connection(

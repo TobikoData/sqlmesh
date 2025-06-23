@@ -34,7 +34,7 @@ model_defaults:
     assert config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
-    assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
+    assert config.cicd_bot.auto_categorize_changes == config.plan.auto_categorize_changes
     assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
@@ -112,7 +112,7 @@ config = Config(
     assert config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
-    assert config.cicd_bot.auto_categorize_changes == CategorizerConfig.all_off()
+    assert config.cicd_bot.auto_categorize_changes == config.plan.auto_categorize_changes
     assert config.cicd_bot.default_pr_start is None
     assert not config.cicd_bot.enable_deploy_command
     assert config.cicd_bot.skip_pr_backfill
@@ -252,3 +252,24 @@ model_defaults:
             match="TTL '1 week' is in the past. Please specify a relative time in the future. Ex: `in 1 week` instead of `1 week`.",
         ):
             load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+
+
+def test_auto_categorize_changes_inherits_from_project_config(tmp_path):
+    (tmp_path / "config.yaml").write_text("""
+plan:
+  auto_categorize_changes:
+    external: off
+    python: full
+    sql: off
+    seed: full
+                                          
+cicd_bot:
+  type: github
+
+model_defaults:
+  dialect: duckdb    
+""")
+
+    config = load_config_from_paths(Config, [tmp_path / "config.yaml"])
+
+    assert config.cicd_bot.auto_categorize_changes == config.plan.auto_categorize_changes
