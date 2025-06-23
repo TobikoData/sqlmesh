@@ -261,6 +261,7 @@ class Plan(PydanticModel, frozen=True):
             indirectly_modified_snapshots={
                 s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
             },
+            metadata_updated_snapshots=sorted(self.metadata_updated),
             removed_snapshots=sorted(self.context_diff.removed_snapshots),
             requires_backfill=self.requires_backfill,
             models_to_backfill=self.models_to_backfill,
@@ -298,6 +299,7 @@ class EvaluatablePlan(PydanticModel):
     ensure_finalized_snapshots: bool
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
+    metadata_updated_snapshots: t.List[SnapshotId]
     removed_snapshots: t.List[SnapshotId]
     requires_backfill: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
