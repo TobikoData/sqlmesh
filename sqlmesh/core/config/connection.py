@@ -43,7 +43,14 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql", "azuresql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {
+    "postgres",
+    "gcp_postgres",
+    "mysql",
+    "mssql",
+    "azuresql",
+    "fabric",
+}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
