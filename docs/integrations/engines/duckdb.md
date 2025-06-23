@@ -279,14 +279,13 @@ The `filesystems` accepts a list of file systems to register in the DuckDB conne
         extensions:
           - ducklake
         filesystems:
-          - protocol: abfs
-            storage_options:
-              account_name: onelake
-              account_host: onelake.blob.fabric.microsoft.com
-              client_id: {{ env_var('AZURE_CLIENT_ID') }}
-              client_secret: {{ env_var('AZURE_CLIENT_SECRET') }}
-              tenant_id: {{ env_var('AZURE_TENANT_ID') }}
-              # anon: False # To use azure.identity.DefaultAzureCredential authentication 
+          - fs: abfs
+            account_name: onelake
+            account_host: onelake.blob.fabric.microsoft.com
+            client_id: {{ env_var('AZURE_CLIENT_ID') }}
+            client_secret: {{ env_var('AZURE_CLIENT_SECRET') }}
+            tenant_id: {{ env_var('AZURE_TENANT_ID') }}
+            # anon: False # To use azure.identity.DefaultAzureCredential authentication 
     ```
 
 

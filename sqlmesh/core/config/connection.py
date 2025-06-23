@@ -377,9 +377,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 from fsspec import filesystem  # type: ignore
 
                 for file_system in self.filesystems:
-                    protocol = file_system.pop("protocol")
-                    storage_options = file_system.pop("storage_options")
-                    fs = filesystem(protocol, **storage_options)
+                    options = file_system.copy()
+                    fs = file_system.pop("fs")
+                    fs = filesystem(fs, **options)
                     cursor.register_filesystem(fs)
 
             for i, (alias, path_options) in enumerate(
