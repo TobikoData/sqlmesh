@@ -276,7 +276,9 @@ def _run_all(controller: GithubController) -> None:
     if has_required_approval and prod_plan_generated and controller.pr_targets_prod_branch:
         deployed_to_prod = _deploy_production(controller)
     elif is_auto_deploying_prod:
-        if not has_required_approval:
+        if controller.deploy_command_enabled and not has_required_approval:
+            skip_reason = "Skipped Deploying to Production because a `/deploy` command has not been detected yet"
+        elif controller.do_required_approval_check and not has_required_approval:
             skip_reason = (
                 "Skipped Deploying to Production because a required approver has not approved"
             )
