@@ -10445,7 +10445,7 @@ def test_invalid_sql_model_query() -> None:
             load_sql_based_model(expressions)
 
 
-def test_query_label_and_authorization_macro():
+def test_query_label_and_authorization_macro() -> None:
     @macro()
     def test_query_label_macro(evaluator):
         return "[('key', 'value')]"
@@ -10478,3 +10478,19 @@ def test_query_label_and_authorization_macro():
         "query_label": d.parse_one("[('key', 'value')]"),
         "authorization": d.parse_one("'test_authorization'"),
     }
+
+
+def test_boolean_property_validation() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           enabled @IF(TRUE, TRUE, FALSE),
+           dialect tsql
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="tsql")
+    assert model.enabled
