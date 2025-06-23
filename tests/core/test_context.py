@@ -52,7 +52,13 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError, PlanError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    SQLMeshError,
+    LinterError,
+    PlanError,
+    NoChangesPlanError,
+)
 from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
@@ -2218,3 +2224,83 @@ def test_plan_explain_skips_tests(sushi_context: Context, mocker: MockerFixture)
     spy = mocker.spy(sushi_context, "_run_plan_tests")
     sushi_context.plan(environment="dev", explain=True, no_prompts=True, include_unmodified=True)
     spy.assert_called_once_with(skip_tests=True)
+
+
+def test_dev_environment_virtual_update_with_environment_statements(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    model_sql = """
+    MODEL (
+        name db.test_model,
+        kind FULL
+    );
+
+    SELECT 1 as id, 'test' as name
+    """
+
+    with open(models_dir / "test_model.sql", "w") as f:
+        f.write(model_sql)
+
+    # Create initial context without environment statements
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # First, apply to production
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Try to create dev environment without changes (should fail)
+    with pytest.raises(NoChangesPlanError, match="Creating a new environment requires a change"):
+        context.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Now create a new context with only new environment statements
+    config_with_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=["CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_with_statements = Context(paths=tmp_path, config=config_with_statements)
+
+    # This should succeed because environment statements are different
+    context_with_statements.plan("dev", auto_apply=True, no_prompts=True)
+    env = context_with_statements.state_reader.get_environment("dev")
+    assert env is not None
+    assert env.name == "dev"
+
+    # Verify the environment statements were stored
+    stored_statements = context_with_statements.state_reader.get_environment_statements("dev")
+    assert len(stored_statements) == 1
+    assert stored_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"
+    ]
+    assert stored_statements[0].after_all == [
+        "INSERT INTO audit_log VALUES (1, 'environment_created')"
+    ]
+
+    # Update environment statements and plan again (should trigger another virtual update)
+    config_updated_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))",
+            "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)",
+        ],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_updated = Context(paths=tmp_path, config=config_updated_statements)
+    context_updated.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Verify the updated statements were stored
+    updated_statements = context_updated.state_reader.get_environment_statements("dev")
+    assert len(updated_statements) == 1
+    assert len(updated_statements[0].before_all) == 2
+    assert (
+        updated_statements[0].before_all[1]
+        == "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)"
+    )
