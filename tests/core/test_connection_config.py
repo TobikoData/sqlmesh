@@ -12,6 +12,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DatabricksConnectionConfig,
     DuckDBAttachOptions,
+    FabricConnectionConfig,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
     MotherDuckConnectionConfig,
@@ -1687,3 +1688,85 @@ def test_mssql_pyodbc_connection_negative_timezone_offset():
         expected_dt = datetime(2023, 1, 1, 12, 0, 0, 0, timezone(timedelta(hours=-8, minutes=0)))
         assert result == expected_dt
         assert result.tzinfo == timezone(timedelta(hours=-8))
+
+
+def test_fabric_connection_config_defaults(make_config):
+    """Test Fabric connection config defaults to pyodbc and autocommit=True."""
+    config = make_config(type="fabric", host="localhost", check_import=False)
+    assert isinstance(config, FabricConnectionConfig)
+    assert config.driver == "pyodbc"
+    assert config.autocommit is True
+
+    # Ensure it creates the FabricAdapter
+    from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+
+    assert isinstance(config.create_engine_adapter(), FabricAdapter)
+
+
+def test_fabric_connection_config_parameter_validation(make_config):
+    """Test Fabric connection config parameter validation."""
+    # Test that FabricConnectionConfig correctly handles pyodbc-specific parameters.
+    config = make_config(
+        type="fabric",
+        host="localhost",
+        driver_name="ODBC Driver 18 for SQL Server",
+        trust_server_certificate=True,
+        encrypt=False,
+        odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        check_import=False,
+    )
+    assert isinstance(config, FabricConnectionConfig)
+    assert config.driver == "pyodbc"  # Driver is fixed to pyodbc
+    assert config.driver_name == "ODBC Driver 18 for SQL Server"
+    assert config.trust_server_certificate is True
+    assert config.encrypt is False
+    assert config.odbc_properties == {"Authentication": "ActiveDirectoryServicePrincipal"}
+
+    # Test that specifying a different driver for Fabric raises an error
+    with pytest.raises(ConfigError, match=r"Input should be 'pyodbc'"):
+        make_config(type="fabric", host="localhost", driver="pymssql", check_import=False)
+
+
+def test_fabric_pyodbc_connection_string_generation():
+    """Test that the Fabric pyodbc connection gets invoked with the correct ODBC connection string."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Create a Fabric config
+        config = FabricConnectionConfig(
+            host="testserver.datawarehouse.fabric.microsoft.com",
+            port=1433,
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            driver_name="ODBC Driver 18 for SQL Server",
+            trust_server_certificate=True,
+            encrypt=True,
+            login_timeout=30,
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called with the correct connection string
+        mock_pyodbc_connect.assert_called_once()
+        call_args = mock_pyodbc_connect.call_args
+
+        # Check the connection string (first argument)
+        conn_str = call_args[0][0]
+        expected_parts = [
+            "DRIVER={ODBC Driver 18 for SQL Server}",
+            "SERVER=testserver.datawarehouse.fabric.microsoft.com,1433",
+            "DATABASE=testdb",
+            "Encrypt=YES",
+            "TrustServerCertificate=YES",
+            "Connection Timeout=30",
+            "UID=testuser",
+            "PWD=testpass",
+        ]
+
+        for part in expected_parts:
+            assert part in conn_str
+
+        # Check autocommit parameter, should default to True for Fabric
+        assert call_args[1]["autocommit"] is True

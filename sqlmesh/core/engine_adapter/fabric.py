@@ -4,6 +4,7 @@ import typing as t
 from sqlglot import exp
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
+from sqlmesh.core.engine_adapter.base import EngineAdapter
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -110,22 +111,17 @@ class FabricAdapter(MSSQLEngineAdapter):
         **kwargs: t.Any,
     ) -> None:
         """
-        Implements the insert overwrite strategy for Fabric.
+        Implements the insert overwrite strategy for Fabric using DELETE and INSERT.
 
-        Overridden to enforce a `DELETE`/`INSERT` strategy, as Fabric's
-        `MERGE` statement has limitations.
+        This method is overridden to avoid the MERGE statement from the parent
+        MSSQLEngineAdapter, which is not fully supported in Fabric.
         """
-
-        columns_to_types = columns_to_types or self.columns(table_name)
-
-        self.delete_from(table_name, where=where or exp.true())
-
-        for source_query in source_queries:
-            with source_query as query:
-                query = self._order_projections_and_filter(query, columns_to_types, where=where)
-                self._insert_append_query(
-                    table_name,
-                    query,
-                    columns_to_types=columns_to_types,
-                    order_projections=False,
-                )
+        return EngineAdapter._insert_overwrite_by_condition(
+            self,
+            table_name=table_name,
+            source_queries=source_queries,
+            columns_to_types=columns_to_types,
+            where=where,
+            insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
+            **kwargs,
+        )
