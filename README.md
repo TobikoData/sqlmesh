@@ -6,7 +6,6 @@ SQLMesh is a next-generation data transformation framework designed to ship data
 
 It is more than just a [dbt alternative](https://tobikodata.com/reduce_costs_with_cron_and_partitions.html).
 
-TODO: replace image
 <p align="center">
   <img src="docs/readme/architecture_diagram.png" alt="Architecture Diagram" width="100%" height="100%">
 </p>
