@@ -1022,7 +1022,7 @@ class GithubController:
             conclusion_to_title = {
                 GithubCheckConclusion.SUCCESS: "Deployed to Prod",
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
-                GithubCheckConclusion.SKIPPED: skip_reason,
+                GithubCheckConclusion.SKIPPED: "Skipped deployment",
                 GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
                 GithubCheckConclusion.ACTION_REQUIRED: "Failed due to error applying plan",
             }
@@ -1031,7 +1031,7 @@ class GithubController:
                 or f"Got an unexpected conclusion: {conclusion.value}"
             )
             if conclusion.is_skipped:
-                summary = title
+                summary = skip_reason
             elif conclusion.is_failure:
                 captured_errors = self._console.consume_captured_errors()
                 summary = (
