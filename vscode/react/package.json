@@ -23,7 +23,7 @@
     "@tanstack/react-router-devtools": "^1.120.16",
     "@tanstack/react-virtual": "^3.13.9",
     "@tanstack/router-plugin": "^1.120.16",
-    "apache-arrow": "^19.0.1",
+    "apache-arrow": "^20.0.0",
     "clsx": "^2.1.1",
     "elkjs": "^0.8.2",
     "orval": "^7.9.0",
