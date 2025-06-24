@@ -90,18 +90,18 @@ class MSSQLEngineAdapter(
 
         sql = (
             exp.select(
-                "column_name",
-                "data_type",
-                "character_maximum_length",
-                "numeric_precision",
-                "numeric_scale",
+                "COLUMN_NAME",
+                "DATA_TYPE",
+                "CHARACTER_MAXIMUM_LENGTH",
+                "NUMERIC_PRECISION",
+                "NUMERIC_SCALE",
             )
-            .from_("information_schema.columns")
-            .where(f"table_name = '{table.name}'")
+            .from_("INFORMATION_SCHEMA.COLUMNS")
+            .where(f"TABLE_NAME = '{table.name}'")
         )
         database_name = table.db
         if database_name:
-            sql = sql.where(f"table_schema = '{database_name}'")
+            sql = sql.where(f"TABLE_SCHEMA = '{database_name}'")
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
@@ -145,12 +145,12 @@ class MSSQLEngineAdapter(
 
         sql = (
             exp.select("1")
-            .from_("information_schema.tables")
-            .where(f"table_name = '{table.alias_or_name}'")
+            .from_("INFORMATION_SCHEMA.TABLES")
+            .where(f"TABLE_NAME = '{table.alias_or_name}'")
         )
         database_name = table.db
         if database_name:
-            sql = sql.where(f"table_schema = '{database_name}'")
+            sql = sql.where(f"TABLE_SCHEMA = '{database_name}'")
 
         result = self.fetchone(sql, quote_identifiers=True)
 
