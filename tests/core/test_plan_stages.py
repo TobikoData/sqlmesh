@@ -141,6 +141,10 @@ def test_build_plan_stages_basic(
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
+    assert {s.snapshot_id for s in physical_stage.snapshots_with_missing_intervals} == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
     assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
 
     # Verify BackfillStage
@@ -357,6 +361,7 @@ def test_build_plan_stages_select_models(
     assert len(physical_stage.snapshots) == 1
     assert {s.snapshot_id for s in physical_stage.snapshots} == {snapshot_a.snapshot_id}
     assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
+    assert physical_stage.snapshots_with_missing_intervals == {snapshot_a.snapshot_id}
 
     # Verify BackfillStage
     backfill_stage = stages[2]
