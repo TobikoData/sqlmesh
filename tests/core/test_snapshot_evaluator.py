@@ -54,7 +54,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import to_view_mapping
-from sqlmesh.core.snapshot.evaluator import CustomMaterialization
+from sqlmesh.core.snapshot.evaluator import CustomMaterialization, SnapshotCreationFailedError
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, DestructiveChangeError
@@ -92,13 +92,16 @@ def date_kwargs() -> t.Dict[str, str]:
 
 @pytest.fixture
 def adapter_mock(mocker: MockerFixture):
+    def mock_exit(self, exc_type, exc_value, traceback):
+        pass
+
     transaction_mock = mocker.Mock()
     transaction_mock.__enter__ = mocker.Mock()
-    transaction_mock.__exit__ = mocker.Mock()
+    transaction_mock.__exit__ = mock_exit
 
     session_mock = mocker.Mock()
     session_mock.__enter__ = mocker.Mock()
-    session_mock.__exit__ = mocker.Mock()
+    session_mock.__exit__ = mock_exit
 
     adapter_mock = mocker.Mock()
     adapter_mock.transaction.return_value = transaction_mock
@@ -1160,6 +1163,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
+    session_spy = mocker.spy(adapter, "session")
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -1200,6 +1204,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
             ),
         ]
     )
+
+    session_spy.assert_called_once()
 
 
 def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
@@ -1596,7 +1602,8 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
         ),
     ]
 
-    evaluator.create([snapshot], {})
+    with pytest.raises(SnapshotCreationFailedError):
+        evaluator.create([snapshot], {})
 
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
@@ -2537,7 +2544,9 @@ def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator = SnapshotEvaluator(adapter_mock)
-    evaluator.create([snapshot], {})
+
+    with pytest.raises(SnapshotCreationFailedError):
+        evaluator.create([snapshot], {})
 
     adapter_mock.replace_query.assert_called_once_with(
         f"sqlmesh__db.db__seed__{snapshot.version}",
