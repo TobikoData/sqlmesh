@@ -672,6 +672,7 @@ class SqlMeshLoader(Loader):
                             default_catalog=self.context.default_catalog,
                             infer_names=self.config.model_naming.infer_names,
                             audit_definitions=audits,
+                            signal_definitions=signals,
                             default_catalog_per_gateway=self.context.default_catalog_per_gateway,
                         ):
                             if model.enabled:

@@ -911,39 +911,40 @@ class SnapshotEvaluator:
         ):
             return
 
+        deployability_index = DeployabilityIndex.all_deployable()
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            engine_adapter=adapter,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
+            runtime_stage=RuntimeStage.CREATING,
+            deployability_index=deployability_index,
+        )
         target_table_name = snapshot.table_name()
-        if adapter.table_exists(target_table_name):
-            evaluation_strategy = _evaluation_strategy(snapshot, adapter)
-            tmp_table_name = snapshot.table_name(is_deployable=False)
-            logger.info(
-                "Migrating table schema from '%s' to '%s'",
-                tmp_table_name,
-                target_table_name,
-            )
-            evaluation_strategy.migrate(
-                target_table_name=target_table_name,
-                source_table_name=tmp_table_name,
-                snapshot=snapshot,
-                snapshots=parent_snapshots_by_name(snapshot, snapshots),
-                allow_destructive_snapshots=allow_destructive_snapshots,
-            )
-        else:
-            logger.info(
-                "Creating table '%s' for the snapshot of the forward-only model %s",
-                target_table_name,
-                snapshot.snapshot_id,
-            )
-            deployability_index = DeployabilityIndex.all_deployable()
-            render_kwargs: t.Dict[str, t.Any] = dict(
-                engine_adapter=adapter,
-                snapshots=parent_snapshots_by_name(snapshot, snapshots),
-                runtime_stage=RuntimeStage.CREATING,
-                deployability_index=deployability_index,
-            )
-            with (
-                adapter.transaction(),
-                adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
-            ):
+
+        with (
+            adapter.transaction(),
+            adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
+        ):
+            if adapter.table_exists(target_table_name):
+                evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+                tmp_table_name = snapshot.table_name(is_deployable=False)
+                logger.info(
+                    "Migrating table schema from '%s' to '%s'",
+                    tmp_table_name,
+                    target_table_name,
+                )
+                evaluation_strategy.migrate(
+                    target_table_name=target_table_name,
+                    source_table_name=tmp_table_name,
+                    snapshot=snapshot,
+                    snapshots=parent_snapshots_by_name(snapshot, snapshots),
+                    allow_destructive_snapshots=allow_destructive_snapshots,
+                )
+            else:
+                logger.info(
+                    "Creating table '%s' for the snapshot of the forward-only model %s",
+                    target_table_name,
+                    snapshot.snapshot_id,
+                )
                 self._execute_create(
                     snapshot=snapshot,
                     table_name=target_table_name,

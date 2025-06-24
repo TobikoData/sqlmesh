@@ -1295,3 +1295,74 @@ def test_comment_command_deploy_prod_not_enabled(
     with open(github_output_file, "r", encoding="utf-8") as f:
         output = f.read()
         assert output == ""
+
+
+def test_comment_command_deploy_prod_no_deploy_detected_yet(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is not merged
+    - No requred approvers defined
+    - Tests passed
+    - PR Merge Method defined
+    - Deploy command enabled but not yet triggered
+
+    Outcome:
+    - "Prod Environment Synced" step should explain the reason why it was skipped is because /deploy has not yet been detected
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(merge_method=MergeMethod.REBASE, enable_deploy_command=True),
+    )
+    controller._context._run_tests = mocker.MagicMock(
+        side_effect=lambda **kwargs: (TestResult(), "")
+    )
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 2
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
+    assert prod_checks_runs[1]["output"]["title"] == "Skipped deployment"
+    assert (
+        prod_checks_runs[1]["output"]["summary"]
+        == "Skipped Deploying to Production because a `/deploy` command has not been detected yet"
+    )
+    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
+
+    # required approvers are irrelevant because /deploy command is enabled
+    assert "SQLMesh - Has Required Approval" not in controller._check_run_mapping
