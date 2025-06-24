@@ -2122,7 +2122,7 @@ def test_check_intervals(sushi_context, mocker):
     intervals = sushi_context.check_intervals(environment=None, no_signals=False, select_models=[])
 
     min_intervals = 19
-    assert spy.call_count == 1
+    assert spy.call_count == 2
     assert len(intervals) >= min_intervals
 
     for i in intervals.values():
