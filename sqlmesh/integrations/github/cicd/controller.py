@@ -11,6 +11,7 @@ import typing as t
 from enum import Enum
 from typing import List
 from pathlib import Path
+from dataclasses import dataclass
 
 import requests
 from hyperscript import Element, h
@@ -21,13 +22,13 @@ from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, Mark
 from sqlmesh.core.context import Context
 from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import Plan, PlanBuilder
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.snapshot.definition import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotTableInfo,
-    format_intervals,
 )
 from sqlglot.errors import SqlglotError
 from sqlmesh.core.user import User
@@ -434,7 +435,9 @@ class GithubController:
         if not self._prod_plan_with_gaps_builder:
             self._prod_plan_with_gaps_builder = self._context.plan_builder(
                 c.PROD,
+                # this is required to highlight any data gaps between this PR environment and prod (since PR environments may only contain a subset of data)
                 no_gaps=False,
+                # this works because the snapshots were already categorized when applying self.pr_plan so there are no uncategorized local snapshots to trigger a plan error
                 no_auto_categorization=True,
                 skip_tests=True,
                 skip_linter=True,
@@ -495,9 +498,17 @@ class GithubController:
             difference_summary = self._console.consume_captured_output()
             self._console._show_missing_dates(plan, self._context.default_catalog)
             missing_dates = self._console.consume_captured_output()
+
+            plan_flags_section = (
+                f"\n\n{self._generate_plan_flags_section(plan.user_provided_flags)}"
+                if plan.user_provided_flags
+                else ""
+            )
+
             if not difference_summary and not missing_dates:
-                return "No changes to apply."
-            return f"{difference_summary}\n{missing_dates}"
+                return f"No changes to apply.{plan_flags_section}"
+
+            return f"{difference_summary}\n{missing_dates}{plan_flags_section}"
         except PlanError as e:
             return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
 
@@ -831,6 +842,7 @@ class GithubController:
         status: GithubCheckStatus,
         exception: t.Optional[Exception] = None,
         plan: t.Optional[Plan] = None,
+        plan_builder: t.Optional[PlanBuilder] = None,
     ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
@@ -852,58 +864,17 @@ class GithubController:
             conclusion: GithubCheckConclusion, exception: t.Optional[Exception]
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if conclusion.is_success:
-                if not self.modified_snapshots:
+                prod_plan = self.prod_plan_with_gaps
+
+                if not prod_plan.has_changes:
                     summary = "No models were modified in this PR.\n"
                 else:
-                    header_rows = [
-                        h("th", {"colspan": "3"}, "PR Environment Summary"),
-                        [
-                            h("th", "Model"),
-                            h("th", "Change Type"),
-                            h("th", "Dates Loaded"),
-                        ],
-                    ]
-                    body_rows: List[Element | List[Element]] = []
-                    for modified_snapshot in self.modified_snapshots.values():
-                        # We don't want to display indirect non-breaking since to users these are effectively no-op changes
-                        if modified_snapshot.is_indirect_non_breaking:
-                            continue
-                        if modified_snapshot.snapshot_id in self.removed_snapshots:
-                            # This will be an FQN since we don't have access to node name from a snapshot table info
-                            # which is what a removed snapshot is
-                            model_name = modified_snapshot.name
-                            change_category = SNAPSHOT_CHANGE_CATEGORY_STR[
-                                SnapshotChangeCategory.BREAKING
-                            ]
-                            interval_output = "REMOVED"
-                        else:
-                            assert isinstance(modified_snapshot, Snapshot)
-                            model_name = modified_snapshot.node.name
-                            change_category = (
-                                "Uncategorized"
-                                if not modified_snapshot.change_category
-                                else SNAPSHOT_CHANGE_CATEGORY_STR[modified_snapshot.change_category]
-                            )
-                            intervals = (
-                                modified_snapshot.dev_intervals
-                                if modified_snapshot.is_forward_only
-                                else modified_snapshot.intervals
-                            )
-                            interval_output = (
-                                format_intervals(intervals, modified_snapshot.node.interval_unit)
-                                if intervals
-                                else "N/A"
-                            )
-                        body_rows.append(
-                            [
-                                h("td", model_name, autoescape=False),
-                                h("td", change_category),
-                                h("td", interval_output),
-                            ]
-                        )
-                    table_header = h("thead", [h("tr", row) for row in header_rows])
-                    table_body = h("tbody", [h("tr", row) for row in body_rows])
-                    summary = str(h("table", [table_header, table_body]))
+                    intro = self._generate_pr_environment_summary_intro()
+                    # summary = intro + self._generate_pr_environment_summary_table(prod_plan)
+                    summary = intro + self._generate_pr_environment_summary_list(prod_plan)
+                    if prod_plan.user_provided_flags:
+                        summary += self._generate_plan_flags_section(prod_plan.user_provided_flags)
+
                 vde_title = (
                     "- :eyes: To **review** this PR's changes, use virtual data environment:"
                 )
@@ -943,7 +914,11 @@ class GithubController:
                         "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
                     )
                 elif isinstance(exception, PlanError):
-                    failure_msg = f"Plan application failed.\n\n{self._console.captured_output}"
+                    failure_msg = f"Plan application failed.\n"
+                    if exception.args and (msg := exception.args[0]) and isinstance(msg, str):
+                        failure_msg += f"\n{msg}\n"
+                    if self._console.captured_output:
+                        failure_msg += f"\n{self._console.captured_output}"
                 elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
                     # this logic is taken from the global error handler attached to the CLI, which uses `click.echo()` to output the message
                     # so cant be re-used here because it bypasses the Console
@@ -959,13 +934,19 @@ class GithubController:
 
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n\n{failure_msg}",
+                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}` :x:\n\n{failure_msg}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
                     GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:\n\n{failure_msg}",
                 }
                 summary = conclusion_to_summary.get(
                     conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
                 )
+                if plan_builder and (flags := plan_builder._user_provided_flags):
+                    # note: we get these off the plan_builder and not the plan because sometimes the plan cant be built
+                    # and we want to know what flags lead to a plan that couldnt be built
+                    plan_flags_section = self._generate_plan_flags_section(flags)
+                    summary += f"\n\n{plan_flags_section}"
+
             self._append_output("pr_environment_name", self.pr_environment_name)
             return conclusion, check_title, summary
 
@@ -1006,6 +987,12 @@ class GithubController:
             title = conclusion_to_title.get(
                 conclusion, f"Got an unexpected conclusion: {conclusion.value}"
             )
+            if conclusion == GithubCheckConclusion.SUCCESS and summary:
+                summary = (
+                    f"This is a preview that shows the differences between this PR environment `{self.pr_environment_name}` and `prod`.\n\n"
+                    "These are the changes that would be deployed.\n\n"
+                ) + summary
+
             return conclusion, title, summary
 
         self._update_check_handler(
@@ -1115,3 +1102,252 @@ class GithubController:
     @property
     def running_in_github_actions(self) -> bool:
         return os.environ.get("GITHUB_ACTIONS", None) == "true"
+
+    @property
+    def version_info(self) -> str:
+        from sqlmesh.cli.main import _sqlmesh_version
+
+        return _sqlmesh_version()
+
+    def _generate_plan_flags_section(
+        self, user_provided_flags: t.Dict[str, UserProvidedFlags]
+    ) -> str:
+        # collapsed section syntax:
+        # https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/organizing-information-with-collapsed-sections#creating-a-collapsed-section
+        section = "<details>\n\n<summary>Plan flags</summary>\n\n"
+        for flag_name, flag_value in user_provided_flags.items():
+            section += f"- `{flag_name}` = `{flag_value}`\n"
+        section += "\n</summary>"
+
+        return section
+
+    def _generate_pr_environment_summary_intro(self) -> str:
+        note = ""
+        subset_reasons = []
+
+        if self.bot_config.skip_pr_backfill:
+            subset_reasons.append("`skip_pr_backfill` is enabled")
+
+        if default_pr_start := self.bot_config.default_pr_start:
+            subset_reasons.append(f"`default_pr_start` is set to `{default_pr_start}`")
+
+        if subset_reasons:
+            note = (
+                "> [!IMPORTANT]\n"
+                f"> This PR environment may only contain a subset of data because:\n"
+                + "\n".join(f"> - {r}" for r in subset_reasons)
+                + "\n"
+                "> \n"
+                "> This means that deploying to `prod` may not be a simple virtual update if there is still some data to load.\n"
+                "> See `Dates still to load` below or the `Prod Plan Preview` check for more information.\n\n"
+            )
+
+        return (
+            f"Here is a summary of data that has been loaded into the PR environment `{self.pr_environment_name}` and could be deployed to `prod`.\n\n"
+            + note
+        )
+
+    def _generate_pr_environment_summary_table(self, plan: Plan) -> str:
+        header_rows = [
+            h("th", {"colspan": "5"}, "PR Environment Summary"),
+            [
+                h("th", "Model"),
+                h("th", "Modification Type"),
+                h("th", "Change Category"),
+                h("th", "Data"),
+                h("th", "Dates Missing"),
+            ],
+        ]
+        body_rows: List[Element | List[Element]] = []
+
+        added_snapshot_ids = set(plan.context_diff.added)
+        modified_snapshot_ids = set(
+            s.snapshot_id for s, _ in plan.context_diff.modified_snapshots.values()
+        )
+        removed_snapshot_ids = set(plan.context_diff.removed_snapshots.keys())
+
+        table_records = [
+            SummaryTableRecord(snapshot=plan.snapshots[snapshot_id], plan=plan)
+            for snapshot_id in (added_snapshot_ids | modified_snapshot_ids | removed_snapshot_ids)
+        ]
+
+        for record in table_records:
+            body_rows.append(record.as_table_cell_rendered)
+
+        table_header = h("thead", [h("tr", row) for row in header_rows])
+        table_body = h("tbody", [h("tr", row) for row in body_rows])
+        return str(h("table", [table_header, table_body]))
+
+    def _generate_pr_environment_summary_list(self, plan: Plan) -> str:
+        added_snapshot_ids = set(plan.context_diff.added)
+        modified_snapshot_ids = set(
+            s.snapshot_id for s, _ in plan.context_diff.modified_snapshots.values()
+        )
+        removed_snapshot_ids = set(plan.context_diff.removed_snapshots.keys())
+
+        table_records = [
+            SummaryTableRecord(snapshot=plan.snapshots[snapshot_id], plan=plan)
+            for snapshot_id in (added_snapshot_ids | modified_snapshot_ids | removed_snapshot_ids)
+        ]
+
+        sections = [
+            ("### Added", [r for r in table_records if r.is_added]),
+            ("### Removed", [r for r in table_records if r.is_removed]),
+            ("### Directly Modified", [r for r in table_records if r.is_directly_modified]),
+            ("### Indirectly Modified", [r for r in table_records if r.is_indirectly_modified]),
+            (
+                "### Metadata Updated",
+                [r for r in table_records if r.is_metadata_updated and not r.is_modified],
+            ),
+        ]
+
+        summary = ""
+        for title, records in sections:
+            if records:
+                summary += f"\n{title}\n"
+
+            for record in records:
+                summary += f"{record.as_list_item_rendered}\n"
+
+        return summary
+
+
+@dataclass
+class SummaryTableRecord:
+    snapshot: Snapshot
+    plan: Plan
+
+    @property
+    def display_name(self) -> str:
+        return self.snapshot.display_name(
+            self.plan.environment_naming_info, self.snapshot.node.dialect
+        )
+        # return self.snapshot.node.name if self.snapshot.is_model else self.snapshot.name
+
+    @property
+    def change_category(self) -> str:
+        if self.is_removed:
+            return SNAPSHOT_CHANGE_CATEGORY_STR[SnapshotChangeCategory.BREAKING]
+
+        if change_category := self.snapshot.change_category:
+            return SNAPSHOT_CHANGE_CATEGORY_STR[change_category]
+
+        return "Uncategorized"
+
+    @property
+    def is_added(self) -> bool:
+        return self.snapshot.snapshot_id in self.plan.context_diff.added
+
+    @property
+    def is_removed(self) -> bool:
+        return self.snapshot.snapshot_id in self.plan.context_diff.removed_snapshots
+
+    @property
+    def is_dev_preview(self) -> bool:
+        return not self.plan.deployability_index.is_deployable(self.snapshot)
+
+    @property
+    def is_directly_modified(self) -> bool:
+        return self.plan.context_diff.directly_modified(self.snapshot.name)
+
+    @property
+    def is_indirectly_modified(self) -> bool:
+        return self.plan.context_diff.indirectly_modified(self.snapshot.name)
+
+    @property
+    def is_modified(self) -> bool:
+        return self.is_directly_modified or self.is_indirectly_modified
+
+    @property
+    def is_metadata_updated(self) -> bool:
+        return self.plan.context_diff.metadata_updated(self.snapshot.name)
+
+    @property
+    def is_incremental(self) -> bool:
+        return self.snapshot.is_incremental
+
+    @property
+    def modification_type(self) -> str:
+        if self.is_directly_modified:
+            return "Directly modified"
+        if self.is_indirectly_modified:
+            return "Indirectly modified"
+        if self.is_metadata_updated:
+            return "Metadata updated"
+
+        return "Unknown"
+
+    @property
+    def loaded_intervals(self) -> SnapshotIntervals:
+        return SnapshotIntervals(
+            snapshot_id=self.snapshot.snapshot_id,
+            intervals=(
+                self.snapshot.dev_intervals
+                if self.snapshot.is_forward_only
+                else self.snapshot.intervals
+            ),
+        )
+
+    @property
+    def loaded_intervals_rendered(self) -> str:
+        if self.is_removed:
+            return "REMOVED"
+
+        return self._format_intervals(self.loaded_intervals)
+
+    @property
+    def missing_intervals(self) -> t.Optional[SnapshotIntervals]:
+        return next(
+            (
+                si
+                for si in self.plan.missing_intervals
+                if si.snapshot_id == self.snapshot.snapshot_id
+            ),
+            None,
+        )
+
+    @property
+    def missing_intervals_rendered(self) -> str:
+        if not self.is_removed and (intervals := self.missing_intervals):
+            return self._format_intervals(intervals)
+
+        return "N/A"
+
+    @property
+    def as_list_item_rendered(self) -> str:
+        how_applied = ""
+
+        if not self.is_incremental:
+            from sqlmesh.core.console import _format_missing_intervals
+
+            # note: this is to re-use the 'recreate view' and 'full refresh' text and keep it in sync with updates to the CLI
+            how_applied = _format_missing_intervals(self.snapshot, self.loaded_intervals)
+
+        how_applied_str = f" [{how_applied}]" if how_applied else ""
+
+        item = f"- `{self.display_name}` ({self.change_category})\n"
+
+        if self.snapshot.model_kind_name:
+            item += f"  **Kind:** {self.snapshot.model_kind_name} {how_applied_str}\n"
+
+        if self.is_incremental:
+            # in-depth interval info is only relevant for incremental models
+            item += f"  **Dates loaded:** [{self.loaded_intervals_rendered}]\n"
+            if self.missing_intervals:
+                item += f"  **Dates still to load:** [{self.missing_intervals_rendered}]\n"
+
+        return item
+
+    @property
+    def as_table_cell_rendered(self) -> t.List[Element]:
+        return [
+            h("td", self.display_name, autoescape=False),
+            h("td", self.modification_type),
+            h("td", self.change_category),
+            h("td", self.loaded_intervals_rendered),
+            h("td", self.missing_intervals_rendered),
+        ]
+
+    def _format_intervals(self, intervals: SnapshotIntervals) -> str:
+        preview_modifier = " (**preview**)" if self.is_dev_preview else ""
+        return f"{intervals.format_intervals(self.snapshot.node.interval_unit)} {preview_modifier}"
