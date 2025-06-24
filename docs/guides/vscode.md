@@ -155,7 +155,7 @@ The VSCode extension is based on a [language server](https://en.wikipedia.org/wi
 
 If you have environment variables that are needed by the context and the language server, you can use one of these approaches to pass variables to the language server:
 
-- Open VSCode from a terminal that has the variables set (e.g. `.zshrc` or `.bashrc`). This will automatically be picked up by the language server only if you have `export ENV_VAR=value` in your shell configuration file when initializing the terminal.
+- Open VSCode from a terminal that sets environment variables in its configuration file (e.g., `.bashrc` for Bash or `.zshrc` for Zsh). The variables will automatically be picked up by the language server only if you explicitly export them in the shell configuration file like `export ENV_VAR=value`.
 - Use environment variables pulled from somewhere else dynamically (e.g. a `.env` file) in your root project directory. This will automatically be picked up by the language server.
 - Set the environment variables in the python environment that the extension uses. You can find detailed instructions [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
 
