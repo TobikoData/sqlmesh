@@ -108,6 +108,7 @@ def test_build_plan_stages_basic(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -215,6 +216,7 @@ def test_build_plan_stages_with_before_all_and_after_all(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -323,6 +325,7 @@ def test_build_plan_stages_select_models(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill={snapshot_a.name},
@@ -422,6 +425,7 @@ def test_build_plan_stages_basic_no_backfill(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -531,6 +535,7 @@ def test_build_plan_stages_restatement(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],  # No changes
         indirectly_modified_snapshots={},  # No changes
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -642,6 +647,7 @@ def test_build_plan_stages_forward_only(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_b.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -770,6 +776,7 @@ def test_build_plan_stages_forward_only_dev(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_b.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -893,6 +900,7 @@ def test_build_plan_stages_audit_only(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_b.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -1016,6 +1024,7 @@ def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_b.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -1088,6 +1097,7 @@ def test_build_plan_stages_removed_model(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[snapshot_b.snapshot_id],
         requires_backfill=False,
         models_to_backfill=None,
@@ -1169,6 +1179,7 @@ def test_build_plan_stages_environment_suffix_target_changed(
         ensure_finalized_snapshots=False,
         directly_modified_snapshots=[],
         indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=False,
         models_to_backfill=None,
@@ -1268,6 +1279,7 @@ def test_build_plan_stages_indirect_non_breaking_no_migration(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_b.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
@@ -1355,6 +1367,7 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
         indirectly_modified_snapshots={
             new_snapshot_a.name: [new_snapshot_c.snapshot_id],
         },
+        metadata_updated_snapshots=[],
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
