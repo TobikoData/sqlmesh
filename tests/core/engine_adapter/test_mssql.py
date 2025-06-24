@@ -79,7 +79,7 @@ def test_columns(adapter: MSSQLEngineAdapter):
     }
 
     adapter.cursor.execute.assert_called_once_with(
-        """SELECT [column_name], [data_type], [character_maximum_length], [numeric_precision], [numeric_scale] FROM [information_schema].[columns] WHERE [table_name] = 'table' AND [table_schema] = 'db';"""
+        """SELECT [COLUMN_NAME], [DATA_TYPE], [CHARACTER_MAXIMUM_LENGTH], [NUMERIC_PRECISION], [NUMERIC_SCALE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = 'table' AND [TABLE_SCHEMA] = 'db';"""
     )
 
 
@@ -149,8 +149,8 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     resp = adapter.table_exists("db.table")
     adapter.cursor.execute.assert_called_once_with(
         """SELECT 1 """
-        """FROM [information_schema].[tables] """
-        """WHERE [table_name] = 'table' AND [table_schema] = 'db';"""
+        """FROM [INFORMATION_SCHEMA].[TABLES] """
+        """WHERE [TABLE_NAME] = 'table' AND [TABLE_SCHEMA] = 'db';"""
     )
     assert resp
     adapter.cursor.fetchone.return_value = None
@@ -506,7 +506,7 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM [information_schema].[tables] WHERE [table_name] = 'test_table';""",
+        """SELECT 1 FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_NAME] = 'test_table';""",
         "TRUNCATE TABLE [test_table];",
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]
