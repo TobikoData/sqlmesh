@@ -431,7 +431,11 @@ class PlanStagesBuilder:
         return PhysicalLayerUpdateStage(
             snapshots=self._get_snapshots_to_create(plan, snapshots),
             all_snapshots=snapshots,
-            snapshots_with_missing_intervals={s.snapshot_id for s in snapshots_to_intervals},
+            snapshots_with_missing_intervals={
+                s.snapshot_id
+                for s in snapshots_to_intervals
+                if plan.is_selected_for_backfill(s.name)
+            },
             deployability_index=deployability_index,
         )
 
