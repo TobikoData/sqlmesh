@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
+from unittest.mock import patch
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -19,8 +20,10 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     AthenaConnectionConfig,
+    MSSQLConnectionConfig,
     _connection_config_validator,
     _get_engine_import_validator,
+    INIT_DISPLAY_INFO_TO_TYPE,
 )
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -434,9 +437,20 @@ def test_duckdb(make_config):
                 "secret": "aws_secret",
             }
         ],
+        filesystems=[
+            {
+                "protocol": "abfs",
+                "storage_options": {
+                    "account_name": "onelake",
+                    "account_host": "onelake.blob.fabric.microsoft.com",
+                    "anon": False,
+                },
+            }
+        ],
     )
     assert config.connector_config
     assert config.secrets
+    assert config.filesystems
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
 
@@ -600,6 +614,33 @@ def test_duckdb_attach_catalog(make_config):
     assert config.catalogs.get("test2").read_only is False
     assert config.catalogs.get("test2").path == "test2.duckdb"
     assert not config.is_recommended_for_state_sync
+
+
+def test_duckdb_attach_ducklake_catalog(make_config):
+    config = make_config(
+        type="duckdb",
+        catalogs={
+            "ducklake": DuckDBAttachOptions(
+                type="ducklake",
+                path="catalog.ducklake",
+                data_path="/tmp/ducklake_data",
+                encrypted=True,
+                data_inlining_row_limit=10,
+            ),
+        },
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+    ducklake_catalog = config.catalogs.get("ducklake")
+    assert ducklake_catalog is not None
+    assert ducklake_catalog.type == "ducklake"
+    assert ducklake_catalog.path == "catalog.ducklake"
+    assert ducklake_catalog.data_path == "/tmp/ducklake_data"
+    assert ducklake_catalog.encrypted is True
+    assert ducklake_catalog.data_inlining_row_limit == 10
+    # Check that the generated SQL includes DATA_PATH
+    assert "DATA_PATH '/tmp/ducklake_data'" in ducklake_catalog.to_sql("ducklake")
+    assert "ENCRYPTED" in ducklake_catalog.to_sql("ducklake")
+    assert "DATA_INLINING_ROW_LIMIT 10" in ducklake_catalog.to_sql("ducklake")
 
 
 def test_duckdb_attach_options():
@@ -875,6 +916,13 @@ def test_clickhouse(make_config):
         cluster="default",
         use_compression=True,
         connection_settings={"this_setting": "1"},
+        server_host_name="server_host_name",
+        verify=True,
+        ca_cert="ca_cert",
+        client_cert="client_cert",
+        client_cert_key="client_cert_key",
+        https_proxy="https://proxy",
+        connection_pool_options={"pool_option": "value"},
     )
     assert isinstance(config, ClickhouseConnectionConfig)
     assert config.cluster == "default"
@@ -884,6 +932,14 @@ def test_clickhouse(make_config):
     assert config._static_connection_kwargs["this_setting"] == "1"
     assert config.is_recommended_for_state_sync is False
     assert config.is_forbidden_for_state_sync
+
+    pool = config._connection_factory.keywords["pool_mgr"]
+    assert pool.connection_pool_kw["server_hostname"] == "server_host_name"
+    assert pool.connection_pool_kw["assert_hostname"] == "server_host_name"  # because verify=True
+    assert pool.connection_pool_kw["ca_certs"] == "ca_cert"
+    assert pool.connection_pool_kw["cert_file"] == "client_cert"
+    assert pool.connection_pool_kw["key_file"] == "client_cert_key"
+    assert pool.connection_pool_kw["pool_option"] == "value"
 
     config2 = make_config(
         type="clickhouse",
@@ -1085,3 +1141,279 @@ def test_engine_import_validator():
         _engine_import_validator = _get_engine_import_validator("sqlmesh", "bigquery")
 
     TestConfigC()
+
+
+def test_engine_display_order():
+    """
+    Each engine's ConnectionConfig contains a display_order integer class var that is used to order the
+    interactive `sqlmesh init` engine choices.
+
+    This test ensures that those integers begin with 1, are unique, and are sequential.
+    """
+    display_numbers = [
+        info[0] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
+    ]
+    assert display_numbers == list(range(1, len(display_numbers) + 1))
+
+
+def test_mssql_engine_import_validator():
+    """Test that MSSQL import validator respects driver configuration."""
+
+    # Test PyODBC driver suggests mssql-odbc extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql-odbc\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pyodbc'")
+            MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+
+    # Test PyMSSQL driver suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost", driver="pymssql")
+
+    # Test default driver (pymssql) suggests mssql extra when import fails
+    with pytest.raises(ConfigError, match=r"pip install \"sqlmesh\[mssql\]\""):
+        with patch("importlib.import_module") as mock_import:
+            mock_import.side_effect = ImportError("No module named 'pymssql'")
+            MSSQLConnectionConfig(host="localhost")  # No driver specified
+
+    # Test successful import works without error
+    with patch("importlib.import_module") as mock_import:
+        mock_import.return_value = None
+        config = MSSQLConnectionConfig(host="localhost", driver="pyodbc")
+        assert config.driver == "pyodbc"
+
+
+def test_mssql_connection_config_parameter_validation(make_config):
+    """Test MSSQL connection config parameter validation."""
+    # Test default driver is pymssql
+    config = make_config(type="mssql", host="localhost", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test explicit pyodbc driver
+    config = make_config(type="mssql", host="localhost", driver="pyodbc", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pyodbc"
+
+    # Test explicit pymssql driver
+    config = make_config(type="mssql", host="localhost", driver="pymssql", check_import=False)
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver == "pymssql"
+
+    # Test pyodbc specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pyodbc",
+        driver_name="ODBC Driver 18 for SQL Server",
+        trust_server_certificate=True,
+        encrypt=False,
+        odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.driver_name == "ODBC Driver 18 for SQL Server"
+    assert config.trust_server_certificate is True
+    assert config.encrypt is False
+    assert config.odbc_properties == {"Authentication": "ActiveDirectoryServicePrincipal"}
+
+    # Test pymssql specific parameters
+    config = make_config(
+        type="mssql",
+        host="localhost",
+        driver="pymssql",
+        tds_version="7.4",
+        conn_properties=["SET ANSI_NULLS ON"],
+        check_import=False,
+    )
+    assert isinstance(config, MSSQLConnectionConfig)
+    assert config.tds_version == "7.4"
+    assert config.conn_properties == ["SET ANSI_NULLS ON"]
+
+
+def test_mssql_connection_kwargs_keys():
+    """Test _connection_kwargs_keys returns correct keys for each driver variant."""
+    # Test pymssql driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pymssql", check_import=False)
+    pymssql_keys = config._connection_kwargs_keys
+    expected_pymssql_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "tds_version",
+        "conn_properties",
+        "autocommit",
+    }
+    assert pymssql_keys == expected_pymssql_keys
+
+    # Test pyodbc driver keys
+    config = MSSQLConnectionConfig(host="localhost", driver="pyodbc", check_import=False)
+    pyodbc_keys = config._connection_kwargs_keys
+    expected_pyodbc_keys = {
+        "password",
+        "user",
+        "database",
+        "host",
+        "timeout",
+        "login_timeout",
+        "charset",
+        "appname",
+        "port",
+        "autocommit",
+        "driver_name",
+        "trust_server_certificate",
+        "encrypt",
+        "odbc_properties",
+    }
+    assert pyodbc_keys == expected_pyodbc_keys
+
+    # Verify pyodbc keys don't include pymssql-specific parameters
+    assert "tds_version" not in pyodbc_keys
+    assert "conn_properties" not in pyodbc_keys
+
+
+def test_mssql_pyodbc_connection_string_generation():
+    """Test pyodbc.connect gets invoked with the correct ODBC connection string."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Mock the return value to have the methods we need
+        mock_connection = mock_pyodbc_connect.return_value
+
+        # Create a pyodbc config
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            port=1433,
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            driver="pyodbc",
+            driver_name="ODBC Driver 18 for SQL Server",
+            trust_server_certificate=True,
+            encrypt=True,
+            login_timeout=30,
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called with the correct connection string
+        mock_pyodbc_connect.assert_called_once()
+        call_args = mock_pyodbc_connect.call_args
+
+        # Check the connection string (first argument)
+        conn_str = call_args[0][0]
+        expected_parts = [
+            "DRIVER={ODBC Driver 18 for SQL Server}",
+            "SERVER=testserver.database.windows.net,1433",
+            "DATABASE=testdb",
+            "Encrypt=YES",
+            "TrustServerCertificate=YES",
+            "Connection Timeout=30",
+            "UID=testuser",
+            "PWD=testpass",
+        ]
+
+        for part in expected_parts:
+            assert part in conn_str
+
+        # Check autocommit parameter
+        assert call_args[1]["autocommit"] is False
+
+
+def test_mssql_pyodbc_connection_string_with_odbc_properties():
+    """Test pyodbc connection string includes custom ODBC properties."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Create a pyodbc config with custom ODBC properties
+        config = MSSQLConnectionConfig(
+            host="testserver.database.windows.net",
+            database="testdb",
+            user="client-id",
+            password="client-secret",
+            driver="pyodbc",
+            odbc_properties={
+                "Authentication": "ActiveDirectoryServicePrincipal",
+                "ClientCertificate": "/path/to/cert.pem",
+                "TrustServerCertificate": "NO",  # This should be ignored since we set it explicitly
+            },
+            trust_server_certificate=True,  # This should take precedence
+            check_import=False,
+        )
+
+        # Get the connection factory with kwargs and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify pyodbc.connect was called
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check that custom ODBC properties are included
+        assert "Authentication=ActiveDirectoryServicePrincipal" in conn_str
+        assert "ClientCertificate=/path/to/cert.pem" in conn_str
+
+        # Verify that explicit trust_server_certificate takes precedence
+        assert "TrustServerCertificate=YES" in conn_str
+
+        # Should not have the conflicting property from odbc_properties
+        assert conn_str.count("TrustServerCertificate") == 1
+
+
+def test_mssql_pyodbc_connection_string_minimal():
+    """Test pyodbc connection string with minimal configuration."""
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",
+            autocommit=True,
+            check_import=False,
+        )
+
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        mock_pyodbc_connect.assert_called_once()
+        conn_str = mock_pyodbc_connect.call_args[0][0]
+
+        # Check basic required parts
+        assert "DRIVER={ODBC Driver 18 for SQL Server}" in conn_str
+        assert "SERVER=localhost,1433" in conn_str
+        assert "Encrypt=YES" in conn_str  # Default encrypt=True
+        assert "Connection Timeout=60" in conn_str  # Default timeout
+
+        # Check autocommit parameter
+        assert mock_pyodbc_connect.call_args[1]["autocommit"] is True
+
+
+def test_mssql_pymssql_connection_factory():
+    """Test pymssql connection factory returns correct function."""
+    # Mock the import of pymssql at the module level
+    import sys
+    from unittest.mock import MagicMock
+
+    # Create a mock pymssql module
+    mock_pymssql = MagicMock()
+    sys.modules["pymssql"] = mock_pymssql
+
+    try:
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pymssql",
+            check_import=False,
+        )
+
+        factory = config._connection_factory
+
+        # Verify the factory returns pymssql.connect
+        assert factory is mock_pymssql.connect
+    finally:
+        # Clean up the mock module
+        if "pymssql" in sys.modules:
+            del sys.modules["pymssql"]

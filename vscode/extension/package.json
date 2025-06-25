@@ -65,34 +65,44 @@
     "commands": [
       {
         "command": "sqlmesh.format",
-        "title": "Format SQLMesh Project",
+        "title": "SQLMesh: Format Project",
         "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.restart",
-        "title": "Restart SQLMesh Servers",
+        "title": "SQLMesh: Restart Servers",
+        "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.printEnvironment",
+        "title": "SQLMesh: Print Environment Variables",
         "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.signin",
-        "title": "Sign in to Tobiko Cloud",
+        "title": "SQLMesh: Sign in to Tobiko Cloud",
         "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.signinSpecifyFlow",
-        "title": "Sign in to Tobiko Cloud (Specify Auth Flow)",
+        "title": "SQLMesh: Sign in to Tobiko Cloud (Specify Auth Flow)",
         "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.signout",
-        "title": "Sign out from Tobiko Cloud",
+        "title": "SQLMesh: Sign out from Tobiko Cloud",
         "description": "SQLMesh"
       },
       {
         "command": "sqlmesh.renderModel",
-        "title": "Render Model",
-        "description": "Render the model in the current editor",
+        "title": "SQLMesh: Render Model",
+        "description": "SQLMesh",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "sqlmesh.stop",
+        "title": "SQLMesh: Stop Server",
+        "description": "SQLMesh"
       }
     ],
     "menus": {
@@ -106,17 +116,16 @@
     }
   },
   "scripts": {
-    "ci": "pnpm run lint && pnpm run compile",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
+    "ci": "pnpm run lint && pnpm run compile && pnpm run test:unit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "fetch-vscode": "tsx scripts/fetch-vscode.ts",
     "compile": "pnpm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit -p ./tsconfig.build.json",
     "watch": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:package": "vsce package --no-dependencies",
@@ -129,22 +138,24 @@
     "fs-extra": "^11.3.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
-    "zod": "^3.25.28"
+    "zod": "^3.25.55"
   },
   "devDependencies": {
-    "@eslint/js": "^9.27.0",
+    "@eslint/js": "^9.28.0",
     "@playwright/test": "^1.52.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.11.25",
     "@types/vscode": "1.96.0",
+    "@vitest/ui": "^3.2.3",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.4.2",
-    "esbuild": "^0.25.4",
-    "eslint": "^9.27.0",
+    "@vscode/vsce": "^3.5.0",
+    "esbuild": "^0.25.5",
+    "eslint": "^9.29.0",
     "ts-loader": "^9.5.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.1"
+    "typescript-eslint": "^8.34.0",
+    "vitest": "^3.2.3"
   }
 }

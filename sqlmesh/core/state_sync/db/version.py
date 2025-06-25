@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import typing as t
 
-import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 from sqlglot.helper import seq_get
@@ -40,6 +39,8 @@ class VersionState:
         sqlglot_version: str = SQLGLOT_VERSION,
         sqlmesh_version: str = SQLMESH_VERSION,
     ) -> None:
+        import pandas as pd
+
         self.engine_adapter.delete_from(self.versions_table, "TRUE")
 
         self.engine_adapter.insert_append(

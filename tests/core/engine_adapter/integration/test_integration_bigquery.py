@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.helper import seq_get
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core.config import Config
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import _CLUSTERING_META_KEY
@@ -204,13 +204,13 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
     # This representation is produced by BigQuery's parser, so that the mapping schema
     # nesting depth is consistent with other table references in a project, which will
     # usually look like `project.dataset.table`.
-    information_schema_tables_view = ctx.table("INFORMATION_SCHEMA.TABLES")
-    assert len(information_schema_tables_view.parts) == 3
+    information_schema_tables = ctx.table("INFORMATION_SCHEMA.TABLES")
+    assert len(information_schema_tables.parts) == 3
 
     model_name = ctx.table("test")
-    dependency = f"`{'.'.join(part.name for part in information_schema_tables_view.parts)}`"
+    dependency = f"`{'.'.join(part.name for part in information_schema_tables.parts)}`"
 
-    init_example_project(tmp_path, dialect="bigquery", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="bigquery", template=ProjectTemplate.EMPTY)
     with open(tmp_path / "models" / "test.sql", "w", encoding="utf-8") as f:
         f.write(
             f"""
@@ -231,60 +231,20 @@ def test_information_schema_view_external_model(ctx: TestContext, tmp_path: Path
     sqlmesh.create_external_models()
     sqlmesh.load()
 
-    assert sqlmesh.get_model(information_schema_tables_view.sql()).columns_to_types == {
+    actual_columns_to_types = sqlmesh.get_model(information_schema_tables.sql()).columns_to_types
+    expected_columns_to_types = {
         "table_catalog": exp.DataType.build("TEXT"),
         "table_schema": exp.DataType.build("TEXT"),
         "table_name": exp.DataType.build("TEXT"),
         "table_type": exp.DataType.build("TEXT"),
-        "is_insertable_into": exp.DataType.build("TEXT"),
-        "is_typed": exp.DataType.build("TEXT"),
-        "creation_time": exp.DataType.build("TIMESTAMPTZ"),
-        "base_table_catalog": exp.DataType.build("TEXT"),
-        "base_table_schema": exp.DataType.build("TEXT"),
-        "base_table_name": exp.DataType.build("TEXT"),
-        "snapshot_time_ms": exp.DataType.build("TIMESTAMPTZ"),
-        "ddl": exp.DataType.build("TEXT"),
-        "default_collation_name": exp.DataType.build("TEXT"),
-        "upsert_stream_apply_watermark": exp.DataType.build("TIMESTAMPTZ"),
-        "replica_source_catalog": exp.DataType.build("TEXT"),
-        "replica_source_schema": exp.DataType.build("TEXT"),
-        "replica_source_name": exp.DataType.build("TEXT"),
-        "replication_status": exp.DataType.build("TEXT"),
-        "replication_error": exp.DataType.build("TEXT"),
-        "is_change_history_enabled": exp.DataType.build("TEXT"),
-        "sync_status": exp.DataType.build(
-            "STRUCT<last_completion_time TIMESTAMPTZ, error_time TIMESTAMPTZ, error STRUCT<reason TEXT, location TEXT, message TEXT>>"
-        ),
     }
+
+    assert actual_columns_to_types is not None
+    assert actual_columns_to_types.items() >= expected_columns_to_types.items()
 
     rendered_query = sqlmesh.get_model(model_name.sql()).render_query()
     assert isinstance(rendered_query, exp.Query)
-
-    assert rendered_query.sql("bigquery", pretty=True) == (
-        "SELECT\n"
-        "  `tables`.`table_catalog` AS `table_catalog`,\n"
-        "  `tables`.`table_schema` AS `table_schema`,\n"
-        "  `tables`.`table_name` AS `table_name`,\n"
-        "  `tables`.`table_type` AS `table_type`,\n"
-        "  `tables`.`is_insertable_into` AS `is_insertable_into`,\n"
-        "  `tables`.`is_typed` AS `is_typed`,\n"
-        "  `tables`.`creation_time` AS `creation_time`,\n"
-        "  `tables`.`base_table_catalog` AS `base_table_catalog`,\n"
-        "  `tables`.`base_table_schema` AS `base_table_schema`,\n"
-        "  `tables`.`base_table_name` AS `base_table_name`,\n"
-        "  `tables`.`snapshot_time_ms` AS `snapshot_time_ms`,\n"
-        "  `tables`.`ddl` AS `ddl`,\n"
-        "  `tables`.`default_collation_name` AS `default_collation_name`,\n"
-        "  `tables`.`upsert_stream_apply_watermark` AS `upsert_stream_apply_watermark`,\n"
-        "  `tables`.`replica_source_catalog` AS `replica_source_catalog`,\n"
-        "  `tables`.`replica_source_schema` AS `replica_source_schema`,\n"
-        "  `tables`.`replica_source_name` AS `replica_source_name`,\n"
-        "  `tables`.`replication_status` AS `replication_status`,\n"
-        "  `tables`.`replication_error` AS `replication_error`,\n"
-        "  `tables`.`is_change_history_enabled` AS `is_change_history_enabled`,\n"
-        "  `tables`.`sync_status` AS `sync_status`\n"
-        f"FROM {dependency} AS `tables`"
-    )
+    assert not rendered_query.selects[0].is_star
 
 
 def test_compare_nested_values_in_table_diff(ctx: TestContext):

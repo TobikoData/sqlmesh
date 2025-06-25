@@ -18,6 +18,7 @@
 | `extensions`       | Extension to load into duckdb. Only autoloadable extensions are supported.                                                                                                                                                                      |  list  |    N     |
 | `connector_config` | Configuration to pass into the duckdb connector.                                                                                                                                                                                                |  dict  |    N     |
 | `secrets`   | Configuration for authenticating external sources (e.g., S3) using DuckDB secrets.                                                                                                                                                                                                |  dict  |    N     |
+| `filesystems`   | Configuration for registering `fsspec` filesystems to the DuckDB connection.                                                                                                                                                                                                |  dict  |    N     |
 
 #### DuckDB Catalogs Example
 
@@ -57,6 +58,55 @@ SQLMesh will place models with the explicit catalog "ephemeral", such as `epheme
                     catalogs={
                         "persistent": "local.duckdb"
                         "ephemeral": ":memory:"
+                    }
+                )
+            ),
+        }
+    )
+    ```
+
+#### DuckLake Catalog Example
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      my_gateway:
+        connection:
+          type: duckdb
+          catalogs:
+            ducklake:
+              type: ducklake
+              path: 'catalog.ducklake'
+              data_path: data/ducklake
+              encrypted: True
+              data_inlining_row_limit: 10
+    ```
+    
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        DuckDBConnectionConfig
+    )
+    from sqlmesh.core.config.connection import DuckDBAttachOptions
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        gateways={
+            "my_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    catalogs={
+                        "ducklake": DuckDBAttachOptions(
+                            type="ducklake",
+                            path="catalog.ducklake",
+                            data_path="data/ducklake",
+                            encrypted=True,
+                            data_inlining_row_limit=10,
+                        ),
                     }
                 )
             ),
@@ -208,3 +258,35 @@ After configuring the secrets, you can directly reference S3 paths in your catal
 Refer to the official DuckDB documentation for the full list of [supported S3 secret parameters](https://duckdb.org/docs/stable/extensions/httpfs/s3api.html#overview-of-s3-secret-parameters) and for more information on the [Secrets Manager configuration](https://duckdb.org/docs/configuration/secrets_manager.html).
 
 > Note: Loading credentials at runtime using `load_aws_credentials()` or similar deprecated functions may fail when using SQLMesh.
+
+##### File system configuration example for Microsoft Onelake
+
+The `filesystems` accepts a list of file systems to register in the DuckDB connection. This is especially useful for Azure Storage Accounts, as it adds write support for DuckDB which is not natively supported by DuckDB (yet).
+
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+      ducklake:
+        connection:
+          type: duckdb
+          catalogs:
+            ducklake:
+            type: ducklake
+            path: myducklakecatalog.duckdb
+            data_path: abfs://MyFabricWorkspace/MyFabricLakehouse.Lakehouse/Files/DuckLake.Files
+        extensions:
+          - ducklake
+        filesystems:
+          - fs: abfs
+            account_name: onelake
+            account_host: onelake.blob.fabric.microsoft.com
+            client_id: {{ env_var('AZURE_CLIENT_ID') }}
+            client_secret: {{ env_var('AZURE_CLIENT_SECRET') }}
+            tenant_id: {{ env_var('AZURE_TENANT_ID') }}
+            # anon: False # To use azure.identity.DefaultAzureCredential authentication 
+    ```
+
+
+Refer to the documentation for `fsspec` [fsspec.filesystem](https://filesystem-spec.readthedocs.io/en/latest/api.html#fsspec.filesystem) and `adlfs` [adlfs.AzureBlobFileSystem](https://fsspec.github.io/adlfs/api/#api-reference) for a full list of storage options. 

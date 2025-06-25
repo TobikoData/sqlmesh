@@ -5,6 +5,8 @@ import { commands, Disposable, Event, EventEmitter, Uri } from 'vscode'
 import { traceError, traceLog } from './log'
 import { PythonExtension, ResolvedEnvironment } from '@vscode/python-extension'
 import path from 'path'
+import { err, ok, Result } from '@bus/result'
+import * as vscode from 'vscode'
 
 export interface IInterpreterDetails {
   path?: string[]
@@ -15,10 +17,12 @@ export interface IInterpreterDetails {
 
 const onDidChangePythonInterpreterEvent =
   new EventEmitter<IInterpreterDetails>()
+
 export const onDidChangePythonInterpreter: Event<IInterpreterDetails> =
   onDidChangePythonInterpreterEvent.event
 
 let _api: PythonExtension | undefined
+
 async function getPythonExtensionAPI(): Promise<PythonExtension | undefined> {
   if (_api) {
     return _api
@@ -117,4 +121,35 @@ export function checkVersion(
   traceError(`Selected python path: ${resolved?.executable.uri?.fsPath}`)
   traceError('Supported versions are 3.8 and above.')
   return false
+}
+
+/**
+ * getPythonEnvVariables returns the environment variables for the current python interpreter.
+ *
+ * @returns The environment variables for the current python interpreter.
+ */
+export async function getPythonEnvVariables(): Promise<
+  Result<Record<string, string>, string>
+> {
+  const api = await getPythonExtensionAPI()
+  if (!api) {
+    return err('Python extension API not found')
+  }
+
+  const workspaces = vscode.workspace.workspaceFolders
+  if (!workspaces) {
+    return ok({})
+  }
+  const out: Record<string, string> = {}
+  for (const workspace of workspaces) {
+    const envVariables = api.environments.getEnvironmentVariables(workspace.uri)
+    if (envVariables) {
+      for (const [key, value] of Object.entries(envVariables)) {
+        if (value) {
+          out[key] = value
+        }
+      }
+    }
+  }
+  return ok(out)
 }

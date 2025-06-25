@@ -40,7 +40,6 @@ import sys
 import time
 import traceback
 import typing as t
-import unittest.result
 from functools import cached_property
 from io import StringIO
 from itertools import chain
@@ -48,7 +47,6 @@ from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
 
-import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
 from sqlglot.lineage import GraphHTML
@@ -62,7 +60,9 @@ from sqlmesh.core.config import (
     Config,
     load_configs,
 )
+from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.config.loader import C
+from sqlmesh.core.config.root import RegexKeyDict
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -87,7 +87,7 @@ from sqlmesh.core.notification_target import (
     NotificationTarget,
     NotificationTargetManager,
 )
-from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals, PlanExplainer
 from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
@@ -119,7 +119,14 @@ from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds, to_timestamp, format_tz_datetime, now_timestamp
+from sqlmesh.utils.date import (
+    TimeLike,
+    now_ds,
+    to_timestamp,
+    format_tz_datetime,
+    now_timestamp,
+    now,
+)
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
@@ -132,6 +139,7 @@ from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import (
@@ -365,8 +373,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._requirements: t.Dict[str, str] = {}
         self._environment_statements: t.List[EnvironmentStatements] = []
         self._excluded_requirements: t.Set[str] = set()
-        self._default_catalog: t.Optional[str] = None
-        self._default_catalog_per_gateway: t.Optional[t.Dict[str, str]] = None
+        self._engine_adapter: t.Optional[EngineAdapter] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
 
@@ -383,7 +390,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
         self.selected_gateway = gateway or self.config.default_gateway_name
-        self.gateway_managed_virtual_layer = self.config.gateway_managed_virtual_layer
 
         gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
         if gw_model_defaults:
@@ -407,24 +413,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             for path, config in self.configs.items()
         ]
 
-        self._connection_config = self.config.get_connection(self.gateway)
+        self._concurrent_tasks = concurrent_tasks
         self._state_connection_config = (
-            self.config.get_state_connection(self.gateway) or self._connection_config
+            self.config.get_state_connection(self.gateway) or self.connection_config
         )
-        self.concurrent_tasks = concurrent_tasks or self._connection_config.concurrent_tasks
-
-        self._engine_adapters: t.Dict[str, EngineAdapter] = {
-            self.selected_gateway: self._connection_config.create_engine_adapter()
-        }
 
         self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self.console = get_console()
-        setattr(self.console, "dialect", self.engine_adapter.dialect)
-
-        self._test_connection_config = self.config.get_test_connection(
-            self.gateway, self.default_catalog, default_catalog_dialect=self.engine_adapter.DIALECT
-        )
+        setattr(self.console, "dialect", self.config.dialect)
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -434,14 +431,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.users = (users or []) + self.config.users
         self.users = list({user.username: user for user in self.users}.values())
         self._register_notification_targets()
-
-        if (
-            self.config.environment_catalog_mapping
-            and not self.engine_adapter.catalog_support.is_multi_catalog_supported
-        ):
-            raise SQLMeshError(
-                "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"
-            )
 
         if load:
             self.load()
@@ -453,7 +442,9 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def engine_adapter(self) -> EngineAdapter:
         """Returns the default engine adapter."""
-        return self._engine_adapters[self.selected_gateway]
+        if self._engine_adapter is None:
+            self._engine_adapter = self.connection_config.create_engine_adapter()
+        return self._engine_adapter
 
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
@@ -744,11 +735,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     raise SQLMeshError(f"Environment '{environment}' was not found.")
                 if environment_state.finalized_ts:
                     return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
+                self.console.log_warning(
+                    f"Environment '{environment}' is being updated by plan '{environment_state.plan_id}'. "
+                    f"Retrying in {self.config.run.environment_check_interval} seconds..."
                 )
                 time.sleep(self.config.run.environment_check_interval)
             raise SQLMeshError(
@@ -785,9 +774,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 done = True
             except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' modified while running. Restarting the run...",
-                    environment,
+                self.console.log_warning(
+                    f"Environment '{environment}' modified while running. Restarting the run..."
                 )
                 if exit_on_env_update:
                     interrupted = True
@@ -934,19 +922,22 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return snapshot
 
-    def config_for_path(self, path: Path) -> Config:
+    def config_for_path(self, path: Path) -> t.Tuple[Config, Path]:
+        """Returns the config and path of the said project for a given file path."""
         for config_path, config in self.configs.items():
             try:
                 path.relative_to(config_path)
-                return config
+                return config, config_path
             except ValueError:
                 pass
-        return self.config
+        return self.config, self.path
 
     def config_for_node(self, node: str | Model | Audit) -> Config:
         if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)  # type: ignore
-        return self.config_for_path(node._path)  # type: ignore
+            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
+                0
+            ]  # type: ignore
+        return self.config_for_path(node._path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:
@@ -977,11 +968,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Returns the Python dependencies of the project loaded in this context."""
         return self._requirements.copy()
 
-    @property
+    @cached_property
     def default_catalog(self) -> t.Optional[str]:
-        if self._default_catalog is None:
-            self._default_catalog = self._scheduler.get_default_catalog(self)
-        return self._default_catalog
+        return self.default_catalog_per_gateway.get(self.selected_gateway)
 
     @python_api_analytics
     def render(
@@ -1023,6 +1012,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         expand = self.dag.upstream(model.fqn) if expand is True else expand or []
 
         if model.is_seed:
+            import pandas as pd
+
             df = next(
                 model.render(
                     context=self.execution_context(
@@ -1225,6 +1216,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run: t.Optional[bool] = None,
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
+        explain: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1270,6 +1262,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
             skip_linter: Linter runs by default so this will skip it if enabled
+            explain: Whether to explain the plan instead of applying it.
 
         Returns:
             The populated Plan object.
@@ -1297,6 +1290,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             run=run,
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
+            explain=explain,
         )
 
         plan = plan_builder.build()
@@ -1305,6 +1299,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             # Prompts are required if the auto categorization is disabled
             # or if there are any uncategorized snapshots in the plan
             no_prompts = False
+
+        if explain:
+            auto_apply = True
 
         self.console.plan(
             plan_builder,
@@ -1342,6 +1339,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         run: t.Optional[bool] = None,
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
+        explain: t.Optional[bool] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1410,7 +1408,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             k: v for k, v in kwargs.items() if v is not None
         }
 
-        skip_tests = skip_tests or False
+        skip_tests = explain or skip_tests or False
         no_gaps = no_gaps or False
         skip_backfill = skip_backfill or False
         empty_backfill = empty_backfill or False
@@ -1429,9 +1427,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise ConfigError(
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
-
-        if run and is_dev:
-            raise ConfigError("The '--run' flag is only supported for the production environment.")
 
         if not skip_linter:
             self.lint_models()
@@ -1458,12 +1453,18 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = model_selector.select_models(
-                select_models,
-                environment,
-                fallback_env_name=create_from or c.PROD,
-                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            )
+            try:
+                models_override = model_selector.select_models(
+                    select_models,
+                    environment,
+                    fallback_env_name=create_from or c.PROD,
+                    ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+                )
+            except SQLMeshError as e:
+                logger.exception(e)  # ensure the full stack trace is logged
+                raise PlanError(
+                    f"{e}\nCheck the SQLMesh log file for the full stack trace.\nIf the model has been fixed locally, please ensure that the --select-model expression includes it."
+                )
             if not backfill_models:
                 # Only backfill selected models unless explicitly specified.
                 backfill_models = model_selector.expand_model_selections(select_models)
@@ -1488,6 +1489,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             diff_rendered=diff_rendered,
+            always_recreate_environment=self.config.plan.always_recreate_environment,
         )
         modified_model_names = {
             *context_diff.modified_snapshots,
@@ -1513,7 +1515,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             # If no end date is specified, use the max interval end from prod
             # to prevent unintended evaluation of the entire DAG.
             default_start, default_end = self._get_plan_default_start_end(
-                snapshots, max_interval_end_per_model, backfill_models, modified_model_names
+                snapshots,
+                max_interval_end_per_model,
+                backfill_models,
+                modified_model_names,
+                execution_time or now(),
             )
 
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
@@ -1537,7 +1543,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             allow_destructive_models=expanded_destructive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
-            environment_catalog_mapping=self.config.environment_catalog_mapping,
+            environment_catalog_mapping=self.environment_catalog_mapping,
             categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
@@ -1549,10 +1555,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            engine_schema_differ=self.engine_adapter.SCHEMA_DIFFER,
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
+            explain=explain or False,
         )
 
     def apply(
@@ -1577,6 +1583,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             return
         if plan.uncategorized:
             raise UncategorizedPlanError("Can't apply a plan with uncategorized changes.")
+
+        if plan.explain:
+            explainer = PlanExplainer(
+                state_reader=self.state_reader,
+                default_catalog=self.default_catalog,
+                console=self.console,
+            )
+            explainer.evaluate(plan.to_evaluatable())
+            return
+
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_START,
             environment=plan.environment_naming_info.name,
@@ -1638,7 +1654,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.show_model_difference_summary(
                 context_diff,
                 EnvironmentNamingInfo.from_environment_catalog_mapping(
-                    self.config.environment_catalog_mapping,
+                    self.environment_catalog_mapping,
                     name=environment,
                     suffix_target=self.config.environment_suffix_target,
                     normalize_name=context_diff.normalize_environment_name,
@@ -1664,6 +1680,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         skip_grain_check: bool = False,
         warn_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
+        schema_diff_ignore_case: bool = False,
     ) -> t.List[TableDiff]:
         """Show a diff between two tables.
 
@@ -1685,6 +1702,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The list of TableDiff objects containing schema and summary differences.
         """
+
+        if "|" in source or "|" in target:
+            raise ConfigError(
+                "Cross-database table diffing is available in Tobiko Cloud. Read more here: "
+                "https://sqlmesh.readthedocs.io/en/stable/guides/tablediff/#diffing-tables-or-views-across-gateways"
+            )
 
         table_diffs: t.List[TableDiff] = []
 
@@ -1726,7 +1749,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if target_snapshot and source_snapshot:
                     if (source_snapshot.fingerprint != target_snapshot.fingerprint) and (
                         (source_snapshot.version != target_snapshot.version)
-                        or (source_snapshot.is_forward_only or target_snapshot.is_forward_only)
+                        or source_snapshot.is_forward_only
                     ):
                         # Compare the virtual layer instead of the physical layer because the virtual layer is guaranteed to point
                         # to the correct/active snapshot for the model in the specified environment, taking into account things like dev previews
@@ -1781,6 +1804,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                             show=show,
                             temp_schema=temp_schema,
                             skip_grain_check=skip_grain_check,
+                            schema_diff_ignore_case=schema_diff_ignore_case,
                         ),
                         tasks_num=tasks_num,
                     )
@@ -1806,6 +1830,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                     on=on,
                     skip_columns=skip_columns,
                     where=where,
+                    schema_diff_ignore_case=schema_diff_ignore_case,
                 )
             ]
 
@@ -1830,6 +1855,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         show: bool = True,
         temp_schema: t.Optional[str] = None,
         skip_grain_check: bool = False,
+        schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         self.console.start_table_diff_model_progress(model.name)
 
@@ -1845,6 +1871,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             target=target,
             source_alias=source_alias,
             target_alias=target_alias,
+            schema_diff_ignore_case=schema_diff_ignore_case,
         )
 
         if show:
@@ -1868,6 +1895,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         model: t.Optional[Model] = None,
         skip_columns: t.Optional[t.List[str]] = None,
         where: t.Optional[str | exp.Condition] = None,
+        schema_diff_ignore_case: bool = False,
     ) -> TableDiff:
         if not on:
             raise SQLMeshError(
@@ -1887,6 +1915,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             decimals=decimals,
             model_name=model.name if model else None,
             model_dialect=model.dialect if model else None,
+            schema_diff_ignore_case=schema_diff_ignore_case,
         )
 
     @python_api_analytics
@@ -1992,7 +2021,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         try:
             model_to_test = self.get_model(model, raise_if_missing=True)
-            test_adapter = self._test_connection_config.create_engine_adapter(
+            test_adapter = self.test_connection_config.create_engine_adapter(
                 register_comments_override=False
             )
 
@@ -2024,11 +2053,13 @@ class GenericContext(BaseContext, t.Generic[C]):
     ) -> ModelTextTestResult:
         """Discover and run model tests"""
         if verbosity >= Verbosity.VERBOSE:
+            import pandas as pd
+
             pd.set_option("display.max_columns", None)
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-        return run_tests(
+        result = run_tests(
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
@@ -2038,8 +2069,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             preserve_fixtures=preserve_fixtures,
             stream=stream,
             default_catalog=self.default_catalog,
-            default_catalog_dialect=self.engine_adapter.DIALECT,
+            default_catalog_dialect=self.config.dialect or "",
         )
+
+        self.console.log_test_results(
+            result,
+            self.test_connection_config._engine_adapter.DIALECT,
+        )
+
+        return result
 
     @python_api_analytics
     def audit(
@@ -2399,7 +2437,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def clear_caches(self) -> None:
         for path in self.configs:
-            rmtree(path / c.CACHE)
+            cache_path = path / c.CACHE
+            if cache_path.exists():
+                rmtree(cache_path)
         if isinstance(self.state_sync, CachingStateSync):
             self.state_sync.clear_cache()
 
@@ -2463,28 +2503,20 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
-    ) -> t.Tuple[unittest.result.TestResult, str]:
+    ) -> t.Tuple[ModelTextTestResult, str]:
         test_output_io = StringIO()
         result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
-    def _run_plan_tests(
-        self, skip_tests: bool = False
-    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+    def _run_plan_tests(self, skip_tests: bool = False) -> t.Optional[ModelTextTestResult]:
         if not skip_tests:
-            result, test_output = self._run_tests()
-            if result.testsRun > 0:
-                self.console.log_test_results(
-                    result,
-                    test_output,
-                    self._test_connection_config._engine_adapter.DIALECT,
-                )
+            result = self.test()
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again."
                 )
-            return result, test_output
-        return None, None
+            return result
+        return None
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:
@@ -2498,7 +2530,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 if snapshot.version
                 else snapshot.qualified_view_name.for_environment(
                     EnvironmentNamingInfo.from_environment_catalog_mapping(
-                        self.config.environment_catalog_mapping,
+                        self.environment_catalog_mapping,
                         name=c.PROD,
                         suffix_target=self.config.environment_suffix_target,
                     )
@@ -2510,23 +2542,54 @@ class GenericContext(BaseContext, t.Generic[C]):
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
         """Returns all the engine adapters for the gateways defined in the configuration."""
+        adapters: t.Dict[str, EngineAdapter] = {self.selected_gateway: self.engine_adapter}
         for gateway_name in self.config.gateways:
             if gateway_name != self.selected_gateway:
                 connection = self.config.get_connection(gateway_name)
                 adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
-                self._engine_adapters[gateway_name] = adapter
-        return self._engine_adapters
+                adapters[gateway_name] = adapter
+        return adapters
 
     @cached_property
     def default_catalog_per_gateway(self) -> t.Dict[str, str]:
         """Returns the default catalogs for each engine adapter."""
-        if self._default_catalog_per_gateway is None:
-            self._default_catalog_per_gateway = {
-                name: adapter.default_catalog
-                for name, adapter in self.engine_adapters.items()
-                if adapter.default_catalog
-            }
-        return self._default_catalog_per_gateway
+        return self._scheduler.get_default_catalog_per_gateway(self)
+
+    @property
+    def concurrent_tasks(self) -> int:
+        if self._concurrent_tasks is None:
+            self._concurrent_tasks = self.connection_config.concurrent_tasks
+        return self._concurrent_tasks
+
+    @cached_property
+    def connection_config(self) -> ConnectionConfig:
+        return self.config.get_connection(self.selected_gateway)
+
+    @cached_property
+    def test_connection_config(self) -> ConnectionConfig:
+        return self.config.get_test_connection(
+            self.gateway,
+            self.default_catalog,
+            default_catalog_dialect=self.config.dialect,
+        )
+
+    @cached_property
+    def environment_catalog_mapping(self) -> RegexKeyDict:
+        engine_adapter = None
+        try:
+            engine_adapter = self.engine_adapter
+        except Exception:
+            pass
+
+        if (
+            self.config.environment_catalog_mapping
+            and engine_adapter
+            and not self.engine_adapter.catalog_support.is_multi_catalog_supported
+        ):
+            raise SQLMeshError(
+                "Environment catalog mapping is only supported for engine adapters that support multiple catalogs"
+            )
+        return self.config.environment_catalog_mapping
 
     def _get_engine_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         if gateway:
@@ -2573,6 +2636,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         force_no_diff: bool = False,
         ensure_finalized_snapshots: bool = False,
         diff_rendered: bool = False,
+        always_recreate_environment: bool = False,
     ) -> ContextDiff:
         environment = Environment.sanitize_name(environment)
         if force_no_diff:
@@ -2588,7 +2652,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             ensure_finalized_snapshots=ensure_finalized_snapshots,
             diff_rendered=diff_rendered,
             environment_statements=self._environment_statements,
-            gateway_managed_virtual_layer=self.gateway_managed_virtual_layer,
+            gateway_managed_virtual_layer=self.config.gateway_managed_virtual_layer,
+            infer_python_dependencies=self.config.infer_python_dependencies,
+            always_recreate_environment=always_recreate_environment,
         )
 
     def _destroy(self) -> None:
@@ -2631,15 +2697,21 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:
         current_ts = current_ts or now_timestamp()
 
-        expired_environments = self.state_sync.get_expired_environments(current_ts=current_ts)
-
-        cleanup_expired_views(
-            default_adapter=self.engine_adapter,
-            engine_adapters=self.engine_adapters,
-            environments=expired_environments,
-            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
-            console=self.console,
+        expired_environments_summaries = self.state_sync.get_expired_environments(
+            current_ts=current_ts
         )
+
+        for expired_env_summary in expired_environments_summaries:
+            expired_env = self.state_reader.get_environment(expired_env_summary.name)
+
+            if expired_env:
+                cleanup_expired_views(
+                    default_adapter=self.engine_adapter,
+                    engine_adapters=self.engine_adapters,
+                    environments=[expired_env],
+                    warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
+                    console=self.console,
+                )
 
         self.state_sync.delete_expired_environments(current_ts=current_ts)
 
@@ -2759,6 +2831,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         max_interval_end_per_model: t.Dict[str, int],
         backfill_models: t.Optional[t.Set[str]],
         modified_model_names: t.Set[str],
+        execution_time: t.Optional[TimeLike] = None,
     ) -> t.Tuple[t.Optional[int], t.Optional[int]]:
         if not max_interval_end_per_model:
             return None, None
@@ -2784,6 +2857,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                     )
                 ),
             )
+
+        if execution_time and to_timestamp(default_end) > to_timestamp(execution_time):
+            # the end date can't be in the future, which can happen if a specific `execution_time` is set and prod intervals
+            # are newer than it
+            default_end = to_timestamp(execution_time)
+
         return default_start, default_end
 
     def _get_max_interval_end_per_model(

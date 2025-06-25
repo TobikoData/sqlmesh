@@ -10,7 +10,7 @@ dependencies = [
     "astor",
     "click",
     "croniter",
-    "duckdb!=0.10.3",
+    "duckdb>=0.10.0,!=0.10.3",
     "dateparser",
     "hyperscript>=0.1.0",
     "importlib-metadata; python_version<'3.12'",
@@ -22,7 +22,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.21.0",
+    "sqlglot[rs]~=26.30.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -39,6 +39,7 @@ classifiers = [
 [project.optional-dependencies]
 athena = ["PyAthena[Pandas]"]
 azuresql = ["pymssql"]
+azuresql-odbc = ["pyodbc"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
     "google-cloud-bigquery-storage"
@@ -76,7 +77,8 @@ dev = [
     "psycopg2-binary",
     "pydantic",
     "PyAthena[Pandas]",
-    "PyGithub~=2.5.0",
+    "PyGithub>=2.6.0",
+    "pyperf",
     "pyspark~=3.5.0",
     "pytest",
     "pytest-asyncio",
@@ -103,6 +105,7 @@ gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
 mssql = ["pymssql"]
+mssql-odbc = ["pyodbc"]
 mysql = ["pymysql"]
 mwaa = ["boto3"]
 postgres = ["psycopg2"]
@@ -202,6 +205,7 @@ module = [
     "databricks_cli.*",
     "mysql.*",
     "pymssql.*",
+    "pyodbc.*",
     "psycopg2.*",
     "langchain.*",
     "pytest_lazyfixture.*",
@@ -269,4 +273,13 @@ retry_delay = 10
 select = [
     "F401",
     "RET505",
+    "T100",
+]
+extend-select = ["TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = [
+    "duckdb",
+    "numpy",
+    "pandas",
 ]

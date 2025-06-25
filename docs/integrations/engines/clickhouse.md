@@ -59,6 +59,35 @@ ClickHouse Cloud automates ClickHouse's cluster controls, which sometimes constr
 
 Aside from those constraints, ClickHouse Cloud mode is similar to single server mode - you run standard SQL commands/queries, and ClickHouse Cloud executes them.
 
+## Permissions
+
+In the default SQLMesh configuration, users must have sufficient permissions to create new ClickHouse databases.
+
+Alternatively, you can configure specific databases where SQLMesh should create table and view objects.
+
+### Environment views
+
+Use the [`environment_suffix_target` key in your project configuration](../../guides/configuration.md#disable-environment-specific-schemas) to specify that environment views should be created within the model's database instead of in a new database:
+
+``` yaml
+environment_suffix_target: table
+```
+
+### Physical tables
+
+Use the [`physical_schema_mapping` key in your project configuration](../../guides/configuration.md#physical-table-schemas) to specify the databases where physical tables should be created.
+
+The key accepts a dictionary of regular expressions that map model database names to the corresponding databases where physical tables should be created.
+
+SQLMesh will compare a model's database name to each regular expression and use the first match to determine which database a physical table should be created in.
+
+For example, this configuration places every model's physical table in the `model_physical_tables` database because the regular expression `.*` matches any database name:
+
+``` yaml
+physical_schema_mapping:
+  '.*': model_physical_tables
+```
+
 ## Cluster specification
 
 A ClickHouse cluster allows multiple networked ClickHouse servers to operate on the same data object. Every cluster must be named in the ClickHouse configuration files, and that name is passed to a table's DDL statements in the `ON CLUSTER` clause.
@@ -392,4 +421,29 @@ If a model has many records in each partition, you may see additional performanc
     Choose a model's time partitioning granularity based on the characteristics of the data it will process, making sure the total number of partitions is 1000 or fewer.
 
 ## Local/Built-in Scheduler
+
 **Engine Adapter Type**: `clickhouse`
+
+| Option                    | Description                                                                                                                                                                                                                                                                     |  Type  | Required |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
+| `type`                    | Engine type name - must be `clickhouse`                                                                                                                                                                                                                                         | string |    Y     |
+| `host`                    | ClickHouse server hostname or IP address                                                                                                                                                                                                                                        | string |    Y     |
+| `username`                | ClickHouse user name                                                                                                                                                                                                                                                            | string |    Y     |
+| `password`                | ClickHouse user password                                                                                                                                                                                                                                                        | string |    N     |
+| `port`                    | The ClickHouse HTTP or HTTPS port (Default: `8123`)                                                                                                                                                                                                                             |  int   |    N     |
+| `cluster`                 | ClickHouse cluster name                                                                                                                                                                                                                                                         | string |    N     |
+| `connect_timeout`         | Connection timeout in seconds (Default: `10`)                                                                                                                                                                                                                                   |  int   |    N     |
+| `send_receive_timeout`    | Send/receive timeout in seconds (Default: `300`)                                                                                                                                                                                                                                |  int   |    N     |
+| `query_limit`             | Query result limit (Default: `0` - no limit)                                                                                                                                                                                                                                    |  int   |    N     |
+| `use_compression`         | Whether to use compression (Default: `True`)                                                                                                                                                                                                                                    |  bool  |    N     |
+| `compression_method`      | Compression method to use                                                                                                                                                                                                                                                       | string |    N     |
+| `http_proxy`              | HTTP proxy address (equivalent to setting the HTTP_PROXY environment variable)                                                                                                                                                                                                  | string |    N     |
+| `verify`                  | Verify server TLS/SSL certificate (Default: `True`)                                                                                                                                                                                                                             |  bool  |    N     |
+| `ca_cert`                 | Ignored if verify is `False`. If verify is `True`, the file path to Certificate Authority root to validate ClickHouse server certificate, in .pem format. Not necessary if the ClickHouse server certificate is a globally trusted root as verified by the operating system.    | string |    N     |
+| `client_cert`             | File path to a TLS Client certificate in .pem format (for mutual TLS authentication). The file should contain a full certificate chain, including any intermediate certificates.                                                                                                | string |    N     |
+| `client_cert_key`         | File path to the private key for the Client Certificate. Required if the private key is not included the Client Certificate key file.                                                                                                                                           | string |    N     |
+| `https_proxy`             | HTTPS proxy address (equivalent to setting the HTTPS_PROXY environment variable)                                                                                                                                                                                                | string |    N     |
+| `server_host_name`        | The ClickHouse server hostname as identified by the CN or SNI of its TLS certificate. Set this to avoid SSL errors when connecting through a proxy or tunnel with a different hostname.                                                                                         | string |    N     |
+| `tls_mode`                | Controls advanced TLS behavior. proxy and strict do not invoke ClickHouse mutual TLS connection, but do send client cert and key. mutual assumes ClickHouse mutual TLS auth with a client certificate.                                                                          | string |    N     |
+| `connection_settings`     | Additional [connection settings](https://clickhouse.com/docs/integrations/python#settings-argument)                                                                                                                                                                             |  dict  |    N     |
+| `connection_pool_options` | Additional [options](https://clickhouse.com/docs/integrations/python#customizing-the-http-connection-pool)                                                                                                                                         for the HTTP connection pool |  dict  |    N     |

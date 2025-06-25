@@ -8,14 +8,15 @@ from unittest.mock import PropertyMock, call, patch
 
 import time_machine
 import pytest
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from sqlglot import ParseError, exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
+from sqlmesh.core.console import get_console, TerminalConsole
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     load_configs,
@@ -40,7 +41,6 @@ from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSharedConnectionPool
@@ -48,10 +48,17 @@ from sqlmesh.utils.date import (
     make_inclusive_end,
     now,
     to_date,
+    to_datetime,
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError, PlanError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    SQLMeshError,
+    LinterError,
+    PlanError,
+    NoChangesPlanError,
+)
 from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
@@ -270,25 +277,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     yesterday = yesterday_ds()
     success = sushi_context.run(start=yesterday, end=yesterday)
 
-    plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync,
-        sushi_context.snapshot_evaluator,
-        sushi_context.create_scheduler,
-        sushi_context.default_catalog,
-    )
-
-    plan = PlanBuilder(
-        context_diff=sushi_context._context_diff("prod"),
-        engine_schema_differ=sushi_context.engine_adapter.SCHEMA_DIFFER,
-    ).build()
-
-    # stringify used to trigger an unhashable exception due to
-    # https://github.com/pydantic/pydantic/issues/8016
-    assert str(plan) != ""
-
-    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
-    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
-
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
     assert mock_console.show_environment_difference_summary.called
@@ -332,18 +320,18 @@ def test_evaluate_limit():
 def test_gateway_specific_adapters(copy_to_temp_path, mocker):
     path = copy_to_temp_path("examples/sushi")
     ctx = Context(paths=path, config="isolated_systems_config", gateway="prod")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["prod"]
-    assert ctx._get_engine_adapter("dev") == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["prod"]
+    assert ctx._get_engine_adapter("dev") == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
-    assert len(ctx._engine_adapters) == 3
-    assert ctx.engine_adapter == ctx._engine_adapters["dev"]
+    assert len(ctx.engine_adapters) == 3
+    assert ctx.engine_adapter == ctx.engine_adapters["dev"]
 
     ctx = Context(paths=path, config="isolated_systems_config")
     assert len(ctx.engine_adapters) == 3
     assert ctx.engine_adapter == ctx._get_engine_adapter()
-    assert ctx._get_engine_adapter("test") == ctx._engine_adapters["test"]
+    assert ctx._get_engine_adapter("test") == ctx.engine_adapters["test"]
 
 
 def test_multiple_gateways(tmp_path: Path):
@@ -436,6 +424,99 @@ def test_plan_execution_time():
         str(list(context.fetchdf("select * from db__dev.x")["execution_date"])[0])
         == "2024-01-02 00:00:00"
     )
+
+
+def test_plan_execution_time_start_end():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # prod plan - no fixed execution time so it defaults to now() and reads all the data
+    prod_plan = context.plan(auto_apply=True)
+
+    assert len(prod_plan.new_snapshots) == 1
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.x,
+                    start '2020-01-01',
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds, 'changed' as a FROM (VALUES
+                    ('1', '2020-01-01'),
+                    ('2', '2021-01-01'),
+                    ('3', '2022-01-01'),
+                    ('4', '2023-01-01'),
+                    ('5', '2024-01-01')
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # dev plan with an execution time in the past and no explicit start/end specified
+    # the plan end should be bounded to it and not exceed it even though in prod the last interval (used as a default end)
+    # is newer than the execution time
+    dev_plan = context.plan("dev", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-01"
+    )  # default start is the earliest prod interval
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start
+    dev_plan = context.plan("dev", start="1 day ago", execution_time="2020-01-05")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-04"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime(
+        "2020-01-05"
+    )  # end should not be greater than execution_time
+
+    # same as above but with a relative start and a relative end
+    dev_plan = context.plan("dev", start="2 days ago", execution_time="2020-01-05", end="1 day ago")
+
+    assert to_datetime(dev_plan.start) == to_datetime(
+        "2020-01-03"
+    )  # start relative to execution_time
+    assert to_datetime(dev_plan.execution_time) == to_datetime("2020-01-05")
+    assert to_datetime(dev_plan.end) == to_datetime("2020-01-04")  # end relative to execution_time
 
 
 def test_override_builtin_audit_blocking_mode():
@@ -564,6 +645,11 @@ def test_clear_caches(tmp_path: pathlib.Path):
 
     assert not cache_dir.exists()
     assert models_dir.exists()
+
+    # Test clearing caches when cache directory doesn't exist
+    # This should not raise an exception
+    context.clear_caches()
+    assert not cache_dir.exists()
 
 
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
@@ -779,9 +865,9 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
 
-    state_sync_mock.get_expired_environments.return_value = [
+    environments = [
         Environment(
-            name="test_environment",
+            name="test_environment1",
             suffix_target=EnvironmentSuffixTarget.TABLE,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -790,7 +876,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
         Environment(
-            name="test_environment",
+            name="test_environment2",
             suffix_target=EnvironmentSuffixTarget.SCHEMA,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -800,7 +886,13 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
         ),
     ]
 
-    sushi_context._engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
+    state_sync_mock.get_expired_environments.return_value = [env.summary for env in environments]
+    state_sync_mock.get_environment = lambda name: next(
+        env for env in environments if env.name == name
+    )
+
+    sushi_context._engine_adapter = adapter_mock
+    sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
     state_sync_mock.get_expired_snapshots.return_value = []
 
@@ -810,7 +902,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_schema.assert_has_calls(
         [
             call(
-                schema_("sushi__test_environment", "memory"),
+                schema_("sushi__test_environment2", "memory"),
                 cascade=True,
                 ignore_if_not_exists=True,
             ),
@@ -822,7 +914,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_view.assert_has_calls(
         [
             call(
-                "memory.sushi.waiter_as_customer_by_day__test_environment",
+                "memory.sushi.waiter_as_customer_by_day__test_environment1",
                 ignore_if_not_exists=True,
             ),
         ]
@@ -1238,6 +1330,19 @@ def test_requirements(copy_to_temp_path: t.Callable):
     diff = context.plan_builder("dev", skip_tests=True, skip_backfill=True).build().context_diff
     assert set(diff.previous_requirements) == requirements
     assert set(diff.requirements) == {"numpy", "pandas"}
+
+
+def test_deactivate_automatic_requirement_inference(copy_to_temp_path: t.Callable):
+    context_path = copy_to_temp_path("examples/sushi")[0]
+    config = next(iter(load_configs("config", Config, paths=context_path).values()))
+
+    config.infer_python_dependencies = False
+    context = Context(paths=context_path, config=config)
+    environment = context.plan(
+        "dev", no_prompts=True, skip_tests=True, skip_backfill=True, auto_apply=True
+    ).environment
+
+    assert environment.requirements == {"pandas": "2.2.2"}
 
 
 @pytest.mark.slow
@@ -2017,7 +2122,7 @@ def test_check_intervals(sushi_context, mocker):
     intervals = sushi_context.check_intervals(environment=None, no_signals=False, select_models=[])
 
     min_intervals = 19
-    assert spy.call_count == 1
+    assert spy.call_count == 2
     assert len(intervals) >= min_intervals
 
     for i in intervals.values():
@@ -2078,7 +2183,7 @@ def test_audit():
 
 
 def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -2112,3 +2217,90 @@ def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path)
     # False instead of respecting the default plan config value, which is True
     assert calls[0].kwargs["no_prompts"] == False
     assert context.config.plan.no_prompts == True
+
+
+def test_plan_explain_skips_tests(sushi_context: Context, mocker: MockerFixture) -> None:
+    sushi_context.console = TerminalConsole()
+    spy = mocker.spy(sushi_context, "_run_plan_tests")
+    sushi_context.plan(environment="dev", explain=True, no_prompts=True, include_unmodified=True)
+    spy.assert_called_once_with(skip_tests=True)
+
+
+def test_dev_environment_virtual_update_with_environment_statements(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    model_sql = """
+    MODEL (
+        name db.test_model,
+        kind FULL
+    );
+
+    SELECT 1 as id, 'test' as name
+    """
+
+    with open(models_dir / "test_model.sql", "w") as f:
+        f.write(model_sql)
+
+    # Create initial context without environment statements
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # First, apply to production
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Try to create dev environment without changes (should fail)
+    with pytest.raises(NoChangesPlanError, match="Creating a new environment requires a change"):
+        context.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Now create a new context with only new environment statements
+    config_with_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=["CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_with_statements = Context(paths=tmp_path, config=config_with_statements)
+
+    # This should succeed because environment statements are different
+    context_with_statements.plan("dev", auto_apply=True, no_prompts=True)
+    env = context_with_statements.state_reader.get_environment("dev")
+    assert env is not None
+    assert env.name == "dev"
+
+    # Verify the environment statements were stored
+    stored_statements = context_with_statements.state_reader.get_environment_statements("dev")
+    assert len(stored_statements) == 1
+    assert stored_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"
+    ]
+    assert stored_statements[0].after_all == [
+        "INSERT INTO audit_log VALUES (1, 'environment_created')"
+    ]
+
+    # Update environment statements and plan again (should trigger another virtual update)
+    config_updated_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))",
+            "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)",
+        ],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_updated = Context(paths=tmp_path, config=config_updated_statements)
+    context_updated.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Verify the updated statements were stored
+    updated_statements = context_updated.state_reader.get_environment_statements("dev")
+    assert len(updated_statements) == 1
+    assert len(updated_statements[0].before_all) == 2
+    assert (
+        updated_statements[0].before_all[1]
+        == "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)"
+    )

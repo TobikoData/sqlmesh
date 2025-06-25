@@ -36,6 +36,7 @@ Configuration options for SQLMesh environment creation and promotion.
 | `physical_schema_mapping`     | A mapping from regular expressions to names of schemas in which physical tables for the corresponding models [will be placed](../guides/configuration.md#physical-table-schemas). (Default physical schema name: `sqlmesh__[model schema]`)                                                        | dict[string, string] | N        |
 | `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                 | string               | N        |
 | `gateway_managed_virtual_layer`   | Whether SQLMesh views of the virtual layer will be created by the default gateway or model specified gateways - [additional details](../guides/multi_engine.md#gateway-managed-virtual-layer). (Default: False)                                                                                                                 | boolean               | N        |
+| `infer_python_dependencies`   | Whether SQLMesh will statically analyze Python code to automatically infer Python package requirements. (Default: True)                                                                                                                 | boolean               | N        |
 | `environment_catalog_mapping` | A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.                                                                                                                                                             | dict[string, string] | N        |
 | `log_limit`                   | The default number of logs to keep (Default: `20`)                                                                                                                                                                                                                                                 | int                  | N        |
 
@@ -79,7 +80,7 @@ Configuration for the `sqlmesh plan` command.
 | `enable_preview`          | Indicates whether to enable [data preview](../concepts/plans.md#data-preview) for forward-only models when targeting a development environment (Default: True, except for dbt projects where the target engine does not support cloning)                | Boolean              | N        |
 | `no_diff`                 | Don't show diffs for changed models (Default: False)                                                                                                                                                                                                    | boolean              | N        |
 | `no_prompts`              | Disables interactive prompts in CLI (Default: True)                                                                                                                                                                                                     | boolean              | N        |
-
+| `always_recreate_environment`              | Always recreates the target environment from the environment specified in `create_from` (by default `prod`) (Default: False)                                                                                                                                                                                                     | boolean              | N        |
 ## Run
 
 Configuration for the `sqlmesh run` command. Please note that this is only applicable when configured with the [builtin](#builtin) scheduler.
@@ -243,7 +244,7 @@ For example, you might have a specific connection where your tests should run re
 | Option                    | Description                                                                                                                                            |    Type     | Required |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------: | :------: |
 | `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection  |    N     |
-| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) |    N     |
+| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database) | connection |    N     |
 | `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          |  scheduler  |    N     |
 
 ## Debug mode

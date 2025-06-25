@@ -2,7 +2,6 @@
 
 import json
 
-import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type
@@ -10,6 +9,8 @@ from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
+    import pandas as pd
+
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     plan_dags_table = "_plan_dags"

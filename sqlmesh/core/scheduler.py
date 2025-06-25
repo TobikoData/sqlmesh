@@ -118,16 +118,12 @@ class Scheduler:
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
         """
-        restatements = restatements or {}
-        validate_date_range(start, end)
-
-        snapshots: t.Collection[Snapshot] = self.snapshot_per_version.values()
-        snapshots_to_intervals = compute_interval_params(
-            snapshots,
-            start=start or earliest_start_date(snapshots),
-            end=end or now_timestamp(),
+        snapshots_to_intervals = merged_missing_intervals(
+            snapshots=self.snapshot_per_version.values(),
+            start=start,
+            end=end,
+            execution_time=execution_time,
             deployability_index=deployability_index,
-            execution_time=execution_time or now_timestamp(),
             restatements=restatements,
             interval_end_per_model=interval_end_per_model,
             ignore_cron=ignore_cron,
@@ -445,12 +441,27 @@ class Scheduler:
 
         try:
             with self.snapshot_evaluator.concurrent_context():
-                return concurrent_apply_to_dag(
+                errors, skipped_intervals = concurrent_apply_to_dag(
                     dag,
                     evaluate_node,
                     self.max_workers,
                     raise_on_error=False,
                 )
+                self.console.stop_evaluation_progress(success=not errors)
+
+                skipped_snapshots = {i[0] for i in skipped_intervals}
+                self.console.log_skipped_models(skipped_snapshots)
+                for skipped in skipped_snapshots:
+                    logger.info(f"SKIPPED snapshot {skipped}\n")
+
+                for error in errors:
+                    if isinstance(error.__cause__, CircuitBreakerError):
+                        raise error.__cause__
+                    logger.info(str(error), exc_info=error)
+
+                self.console.log_failed_models(errors)
+
+                return errors, skipped_intervals
         finally:
             if run_environment_statements:
                 execute_environment_statements(
@@ -608,7 +619,7 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
-        errors, skipped_intervals = self.run_merged_intervals(
+        errors, _ = self.run_merged_intervals(
             merged_intervals=merged_intervals,
             deployability_index=deployability_index,
             environment_naming_info=environment_naming_info,
@@ -619,20 +630,6 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
         )
-
-        self.console.stop_evaluation_progress(success=not errors)
-
-        skipped_snapshots = {i[0] for i in skipped_intervals}
-        self.console.log_skipped_models(skipped_snapshots)
-        for skipped in skipped_snapshots:
-            logger.info(f"SKIPPED snapshot {skipped}\n")
-
-        for error in errors:
-            if isinstance(error.__cause__, CircuitBreakerError):
-                raise error.__cause__
-            logger.info(str(error), exc_info=error)
-
-        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
@@ -698,6 +695,52 @@ class Scheduler:
                 )
 
         return audit_results
+
+
+def merged_missing_intervals(
+    snapshots: t.Collection[Snapshot],
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
+    restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
+    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    ignore_cron: bool = False,
+    end_bounded: bool = False,
+) -> SnapshotToIntervals:
+    """Find the largest contiguous date interval parameters based only on what is missing.
+
+    For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
+    calculate the missing intervals that need to be processed given the passed in start and end intervals.
+
+    This is a superset of what may actually get processed at runtime based on things like batch size, signal readiness, etc.
+
+    Args:
+        snapshots: A set of target snapshots for which intervals should be computed.
+        start: The start of the run. Defaults to the min node start date.
+        end: The end of the run. Defaults to now.
+        execution_time: The date/time reference to use for execution time. Defaults to now.
+        deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+        restatements: A set of snapshot names being restated.
+        interval_end_per_model: The mapping from model FQNs to target end dates.
+        ignore_cron: Whether to ignore the node's cron schedule.
+        end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
+            allow_partials, and other attributes that could cause the intervals to exceed the target end date.
+    """
+    restatements = restatements or {}
+    validate_date_range(start, end)
+
+    return compute_interval_params(
+        snapshots,
+        start=start or earliest_start_date(snapshots),
+        end=end or now_timestamp(),
+        deployability_index=deployability_index,
+        execution_time=execution_time or now_timestamp(),
+        restatements=restatements,
+        interval_end_per_model=interval_end_per_model,
+        ignore_cron=ignore_cron,
+        end_bounded=end_bounded,
+    )
 
 
 def compute_interval_params(

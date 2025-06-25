@@ -5,7 +5,7 @@ from pathlib import Path
 from tenacity import retry, stop_after_attempt
 
 import re
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 import sqlglot
 from pytest_mock.plugin import MockerFixture
@@ -108,7 +108,7 @@ def other_func(a: int) -> int:
 
 
 @contextmanager
-def test_context_manager():
+def sample_context_manager():
     yield
 
 
@@ -141,7 +141,7 @@ def main_func(y: int, foo=exp.true(), *, bar=expressions.Literal.number(1) + 2) 
     def closure(z: int) -> int:
         return z + Z
 
-    with test_context_manager():
+    with sample_context_manager():
         pass
 
     return closure(y) + other_func(Y)
@@ -171,7 +171,7 @@ def test_func_globals() -> None:
         "exp": exp,
         "expressions": exp,
         "fetch_data": fetch_data,
-        "test_context_manager": test_context_manager,
+        "sample_context_manager": sample_context_manager,
         "function_with_custom_decorator": function_with_custom_decorator,
         "SQLGLOT_META": SQLGLOT_META,
     }
@@ -211,7 +211,7 @@ def test_normalize_source() -> None:
 
     def closure(z: int):
         return z + Z
-    with test_context_manager():
+    with sample_context_manager():
         pass
     return closure(y) + other_func(Y)"""
     )
@@ -261,7 +261,7 @@ def test_serialize_env() -> None:
 
     def closure(z: int):
         return z + Z
-    with test_context_manager():
+    with sample_context_manager():
         pass
     return closure(y) + other_func(Y)""",
         ),
@@ -318,9 +318,9 @@ class DataClass:
         ),
         "func": Executable(
             payload="""@contextmanager
-def test_context_manager():
+def sample_context_manager():
     yield""",
-            name="test_context_manager",
+            name="sample_context_manager",
             path="test_metaprogramming.py",
             alias="func",
         ),
@@ -344,11 +344,11 @@ def test_context_manager():
     my_lambda()
     return X + a + W""",
         ),
-        "test_context_manager": Executable(
+        "sample_context_manager": Executable(
             payload="""@contextmanager
-def test_context_manager():
+def sample_context_manager():
     yield""",
-            name="test_context_manager",
+            name="sample_context_manager",
             path="test_metaprogramming.py",
         ),
         "wraps": Executable(payload="from functools import wraps", kind=ExecutableKind.IMPORT),

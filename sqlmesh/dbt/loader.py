@@ -28,7 +28,6 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
-    extract_macro_references_and_variables,
     make_jinja_registry,
 )
 
@@ -100,11 +99,12 @@ class DbtLoader(Loader):
         for file in macro_files:
             self._track_file(file)
 
-        # This doesn't do anything, the actual content will be loaded from the manifest
-        return (
-            macro.get_registry(),
-            JinjaMacroRegistry(),
-        )
+        jinja_macros = JinjaMacroRegistry()
+        for project in self._load_projects():
+            jinja_macros = jinja_macros.merge(project.context.jinja_macros)
+            jinja_macros.add_globals(project.context.jinja_globals)
+
+        return (macro.get_registry(), jinja_macros)
 
     def _load_models(
         self,
@@ -240,11 +240,11 @@ class DbtLoader(Loader):
     def _load_environment_statements(self, macros: MacroRegistry) -> t.List[EnvironmentStatements]:
         """Loads dbt's on_run_start, on_run_end hooks into sqlmesh's before_all, after_all statements respectively."""
 
-        environment_statements: t.List[EnvironmentStatements] = []
+        hooks_by_package_name: t.Dict[str, EnvironmentStatements] = {}
+        project_names: t.Set[str] = set()
         dialect = self.config.dialect
         for project in self._load_projects():
             context = project.context
-            hooks_by_package_name: t.Dict[str, EnvironmentStatements] = {}
             for package_name, package in project.packages.items():
                 context.set_and_render_variables(package.variables, package_name)
                 on_run_start: t.List[str] = [
@@ -256,18 +256,14 @@ class DbtLoader(Loader):
                     for on_run_hook in sorted(package.on_run_end.values(), key=lambda h: h.index)
                 ]
 
-                if statements := on_run_start + on_run_end:
-                    jinja_references, used_variables = extract_macro_references_and_variables(
-                        *statements
-                    )
+                if on_run_start or on_run_end:
+                    dependencies = Dependencies()
+                    for hook in [*package.on_run_start.values(), *package.on_run_end.values()]:
+                        dependencies = dependencies.union(hook.dependencies)
 
-                    statements_context = context.context_for_dependencies(
-                        Dependencies(
-                            variables=used_variables,
-                        )
-                    )
+                    statements_context = context.context_for_dependencies(dependencies)
                     jinja_registry = make_jinja_registry(
-                        statements_context.jinja_macros, package_name, jinja_references
+                        statements_context.jinja_macros, package_name, set(dependencies.macros)
                     )
                     jinja_registry.add_globals(statements_context.jinja_globals)
 
@@ -283,15 +279,15 @@ class DbtLoader(Loader):
                         python_env={},
                         jinja_macros=jinja_registry,
                     )
-                # Project hooks should be executed first and then rest of the packages
-                environment_statements = [
-                    statements
-                    for _, statements in sorted(
-                        hooks_by_package_name.items(),
-                        key=lambda item: 0 if item[0] == context.project_name else 1,
-                    )
-                ]
-        return environment_statements
+                    project_names.add(package_name)
+
+        return [
+            statements
+            for _, statements in sorted(
+                hooks_by_package_name.items(),
+                key=lambda item: 0 if item[0] in project_names else 1,
+            )
+        ]
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():

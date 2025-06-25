@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
+from pydantic import Field
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
@@ -46,6 +47,7 @@ class Plan(PydanticModel, frozen=True):
     include_unmodified: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
+    explain: bool
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo
@@ -62,7 +64,7 @@ class Plan(PydanticModel, frozen=True):
     models_to_backfill: t.Optional[t.Set[str]] = None
     """All models that should be backfilled as part of this plan."""
     effective_from: t.Optional[TimeLike] = None
-    execution_time: t.Optional[TimeLike] = None
+    execution_time_: t.Optional[TimeLike] = Field(default=None, alias="execution_time")
 
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
 
@@ -79,7 +81,12 @@ class Plan(PydanticModel, frozen=True):
 
     @cached_property
     def end(self) -> TimeLike:
-        return self.provided_end or now()
+        return self.provided_end or self.execution_time
+
+    @cached_property
+    def execution_time(self) -> TimeLike:
+        # note: property is cached so that it returns a consistent timestamp for now()
+        return self.execution_time_ or now()
 
     @property
     def previous_plan_id(self) -> t.Optional[str]:
@@ -254,6 +261,7 @@ class Plan(PydanticModel, frozen=True):
             indirectly_modified_snapshots={
                 s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
             },
+            metadata_updated_snapshots=sorted(self.metadata_updated),
             removed_snapshots=sorted(self.context_diff.removed_snapshots),
             requires_backfill=self.requires_backfill,
             models_to_backfill=self.models_to_backfill,
@@ -270,7 +278,7 @@ class Plan(PydanticModel, frozen=True):
 
     @cached_property
     def _earliest_interval_start(self) -> datetime:
-        return earliest_interval_start(self.snapshots.values())
+        return earliest_interval_start(self.snapshots.values(), self.execution_time)
 
 
 class EvaluatablePlan(PydanticModel):
@@ -291,6 +299,7 @@ class EvaluatablePlan(PydanticModel):
     ensure_finalized_snapshots: bool
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
+    metadata_updated_snapshots: t.List[SnapshotId]
     removed_snapshots: t.List[SnapshotId]
     requires_backfill: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
@@ -344,8 +353,10 @@ class SnapshotIntervals:
         return format_intervals(self.merged_intervals, unit)
 
 
-def earliest_interval_start(snapshots: t.Collection[Snapshot]) -> datetime:
-    earliest_start = earliest_start_date(snapshots)
+def earliest_interval_start(
+    snapshots: t.Collection[Snapshot], execution_time: t.Optional[TimeLike] = None
+) -> datetime:
+    earliest_start = earliest_start_date(snapshots, relative_to=execution_time)
     earliest_interval_starts = [s.intervals[0][0] for s in snapshots if s.intervals]
     return (
         min(earliest_start, to_datetime(min(earliest_interval_starts)))

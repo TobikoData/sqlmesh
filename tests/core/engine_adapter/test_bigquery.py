@@ -1,7 +1,7 @@
 # type: ignore
 import typing as t
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from google.cloud import bigquery
 from pytest_mock.plugin import MockerFixture
@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = [pytest.mark.bigquery, pytest.mark.engine]
 
@@ -563,6 +564,14 @@ def test_begin_end_session(mocker: MockerFixture):
         adapter.execute("SELECT 5;")
     begin_new_session_call = connection_mock._client.query.call_args_list[5]
     assert begin_new_session_call[0][0] == 'SET @@query_label = "key1:value1";SELECT 1;'
+
+    # test invalid query_label value
+    with pytest.raises(
+        SQLMeshError,
+        match="Invalid value for `session_properties.query_label`. Must be an array or tuple.",
+    ):
+        with adapter.session({"query_label": parse_one("'key1:value1'")}):
+            adapter.execute("SELECT 6;")
 
 
 def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:

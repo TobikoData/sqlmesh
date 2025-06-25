@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import typing as t
 
-import pandas as pd
 from fastapi import APIRouter, Body, Depends, Request, Response
 from starlette.status import HTTP_204_NO_CONTENT
 from sqlmesh.core.console import Verbosity
@@ -66,6 +64,8 @@ async def evaluate(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
+    import pandas as pd
+
     try:
         df = context.evaluate(
             options.model,
@@ -141,12 +141,10 @@ async def test(
     context: Context = Depends(get_loaded_context),
 ) -> models.TestResult:
     """Run one or all model tests"""
-    test_output = io.StringIO()
     try:
         result = context.test(
             tests=[str(context.path / Path(test))] if test else None,
             verbosity=verbosity,
-            stream=test_output,
         )
     except Exception:
         import traceback
@@ -156,11 +154,7 @@ async def test(
             message="Unable to run tests",
             origin="API -> commands -> test",
         )
-    context.console.log_test_results(
-        result,
-        test_output.getvalue(),
-        context._test_connection_config._engine_adapter.DIALECT,
-    )
+    context.console.log_test_results(result, context.test_connection_config._engine_adapter.DIALECT)
 
     def _test_path(test: ModelTest) -> t.Optional[str]:
         if path := test.path_relative_to(context.path):

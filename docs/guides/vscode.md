@@ -95,6 +95,10 @@ The extension adds a lineage view to SQLMesh models. To view the lineage of a mo
 
 ![Lineage view](./vscode/lineage.png)
 
+### Render
+
+The extension allows you to render a model with the macros resolved. You can invoke it either with the command palette `Render SQLMesh Model` or by clicking the preview button in the top right.
+
 ### Editor
 
 The SQLMesh VSCode extension includes several features that make editing SQLMesh models easier and quicker:
@@ -107,7 +111,13 @@ See auto-completion suggestions when writing SQL models, keywords, or model name
 
 **Go to definition and hover information**
 
-Hovering over a model name shows a tooltip with the model description. Clicking the model name opens the file containing the model definition.
+Hovering over a model name shows a tooltip with the model description. 
+
+In addition to hover information, you can go to a definition of the following objects in a SQL file by either right-clicking and choosing "Go to definition" or by `Command/Control + Click` on the respective reference. This currently works for:
+
+- Model references in a SQL file like `FROM my_model`
+- CTE reference in a SQL file like `WITH my_cte AS (...) ... FROM my_cte` 
+- Python macros in a SQL file like `SELECT @my_macro(...)`
 
 **Diagnostics**
 
@@ -128,6 +138,26 @@ The SQLMesh VSCode extension provides the following commands in the VSCode comma
 - `Sign out of Tobiko Cloud` (Tobiko Cloud users only)
 
 ## Troubleshooting
+
+### DuckDB concurrent access
+
+If your SQLMesh project uses DuckDB to store its state, you will likely encounter problems.
+
+SQLMesh can create multiple connections to the state database, but DuckDB's local database file does not support concurrent access.
+
+Because the VSCode extension establishes a long-running process connected to the database, access conflicts are more likely than with standard SQLMesh usage from the CLI. 
+
+Therefore, we do not recommend using DuckDB as a state store with the VSCode extension.
+
+### Environment variables
+
+The VSCode extension is based on a [language server](https://en.wikipedia.org/wiki/Language_Server_Protocol) that runs in the background as a separate process. When the VSCode extension starts the background language server, the server inherits environment variables from the environment where you started VSCode. The server does *not* inherit environment variables from your terminal instance in VSCode, so it may not have access to variables you use when calling SQLMesh from the CLI.
+
+If you have environment variables that are needed by the context and the language server, you can use one of these approaches to pass variables to the language server:
+
+- Open VSCode from a terminal that has the variables set
+- Use environment variables pulled from somewhere else dynamically (e.g. a `.env` file) in your config 
+- Set the environment variables in the python environment that the extension uses. You can find detailed instructions [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
 
 ### Python environment woes
 

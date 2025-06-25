@@ -8,10 +8,9 @@ from sqlmesh.core.plan import (
     BuiltInPlanEvaluator,
     Plan,
     PlanBuilder,
-    update_intervals_for_new_snapshots,
+    stages as plan_stages,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.date import to_timestamp
 
 
 @pytest.fixture
@@ -22,7 +21,6 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
 
     return PlanBuilder(
         sushi_context._context_diff("dev"),
-        sushi_context.engine_adapter.SCHEMA_DIFFER,
         is_dev=True,
         include_unmodified=True,
     ).build()
@@ -57,9 +55,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    plan = PlanBuilder(
-        sushi_context._context_diff("prod"), sushi_context.engine_adapter.SCHEMA_DIFFER
-    ).build()
+    plan = PlanBuilder(sushi_context._context_diff("prod")).build()
 
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
@@ -68,7 +64,14 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         sushi_context.default_catalog,
         console=sushi_context.console,
     )
-    evaluator._push(plan.to_evaluatable(), plan.snapshots)
+    evaluatable_plan = plan.to_evaluatable()
+    stages = plan_stages.build_plan_stages(
+        evaluatable_plan, sushi_context.state_sync, sushi_context.default_catalog
+    )
+    assert isinstance(stages[0], plan_stages.CreateSnapshotRecordsStage)
+    evaluator.visit_create_snapshot_records_stage(stages[0], evaluatable_plan)
+    assert isinstance(stages[1], plan_stages.PhysicalLayerUpdateStage)
+    evaluator.visit_physical_layer_update_stage(stages[1], evaluatable_plan)
 
     assert (
         len(sushi_context.state_sync.get_snapshots([new_model_snapshot, new_view_model_snapshot]))
@@ -76,38 +79,3 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     )
     assert sushi_context.engine_adapter.table_exists(new_model_snapshot.table_name())
     assert sushi_context.engine_adapter.table_exists(new_view_model_snapshot.table_name())
-
-
-@pytest.mark.parametrize(
-    "change_category", [SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.FORWARD_ONLY]
-)
-def test_update_intervals_for_new_snapshots(
-    sushi_context: Context,
-    mocker: MockerFixture,
-    change_category: SnapshotChangeCategory,
-    make_snapshot,
-):
-    model = SqlModel(
-        name="sushi.new_test_model",
-        query=parse_one("SELECT 1::INT AS one"),
-    )
-    snapshot = make_snapshot(model)
-    snapshot.categorize_as(change_category)
-
-    snapshot.add_interval("2023-01-01", "2023-01-01")
-
-    state_sync_mock = mocker.Mock()
-    state_sync_mock.refresh_snapshot_intervals.return_value = [snapshot]
-
-    update_intervals_for_new_snapshots([snapshot], state_sync_mock)
-
-    state_sync_mock.refresh_snapshot_intervals.assert_called_once_with([snapshot])
-
-    if change_category == SnapshotChangeCategory.FORWARD_ONLY:
-        assert snapshot.dev_intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
-        expected_intervals = snapshot.snapshot_intervals
-        expected_intervals.intervals.clear()
-        state_sync_mock.add_snapshots_intervals.assert_called_once_with([expected_intervals])
-    else:
-        assert not snapshot.dev_intervals
-        state_sync_mock.add_snapshots_intervals.assert_not_called()

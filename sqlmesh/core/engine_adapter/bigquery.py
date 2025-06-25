@@ -4,7 +4,6 @@ import logging
 import typing as t
 from collections import defaultdict
 
-import pandas as pd
 from sqlglot import exp, parse_one
 from sqlglot.transforms import remove_precision_parameterized_types
 
@@ -29,6 +28,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_dtypes
 
 if t.TYPE_CHECKING:
+    import pandas as pd
     from google.api_core.retry import Retry
     from google.cloud import bigquery
     from google.cloud.bigquery import StandardSqlDataType
@@ -147,6 +147,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+
         temp_bq_table = self.__get_temp_bq_table(
             self._get_temp_table(target_table or "pandas"), columns_to_types
         )
@@ -196,6 +198,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             parsed_query_label.extend(
                 (label_tuple.expressions[0].name, label_tuple.expressions[1].name)
                 for label_tuple in label_tuples
+            )
+        elif query_label_property is not None:
+            raise SQLMeshError(
+                "Invalid value for `session_properties.query_label`. Must be an array or tuple."
             )
 
         if parsed_query_label:

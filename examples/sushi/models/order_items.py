@@ -2,8 +2,8 @@ import random
 import typing as t
 from datetime import datetime
 
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: TID253
+import pandas as pd  # noqa: TID253
 from helper import iter_dates  # type: ignore
 from sqlglot import exp
 from sqlglot.expressions import to_column

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sys
 import time
 import threading
 import typing as t
 import unittest
+from io import StringIO
 
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +16,6 @@ from sqlmesh.core.test.discovery import (
     ModelTestMetadata as ModelTestMetadata,
 )
 from sqlmesh.core.config.connection import BaseDuckDBConnectionConfig
-
 from sqlmesh.core.test.result import ModelTextTestResult as ModelTextTestResult
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 
@@ -106,10 +105,13 @@ def run_tests(
 
     lock = threading.Lock()
 
+    from sqlmesh.core.console import get_console
+
     combined_results = ModelTextTestResult(
-        stream=unittest.runner._WritelnDecorator(stream or sys.stderr),  # type: ignore
+        stream=unittest.runner._WritelnDecorator(stream or StringIO()),  # type: ignore
         verbosity=2 if verbosity >= Verbosity.VERBOSE else 1,
         descriptions=True,
+        console=get_console(),
     )
 
     metadata_to_adapter = create_testing_engine_adapters(
@@ -136,6 +138,7 @@ def run_tests(
             default_catalog=default_catalog,
             preserve_fixtures=preserve_fixtures,
             concurrency=num_workers > 1,
+            verbosity=verbosity,
         )
 
         if not test:
@@ -147,19 +150,7 @@ def run_tests(
         )
 
         with lock:
-            if result.successes:
-                combined_results.addSuccess(result.successes[0])
-            elif result.errors:
-                for error_test, error in result.original_errors:
-                    combined_results.addError(error_test, error)
-            elif result.failures:
-                for failure_test, failure in result.original_failures:
-                    combined_results.addFailure(failure_test, failure)
-            elif result.skipped:
-                skipped_args = result.skipped[0]
-                combined_results.addSkip(skipped_args[0], skipped_args[1])
-
-            combined_results.testsRun += 1
+            combined_results.merge(result)
 
         return result
 
@@ -183,6 +174,6 @@ def run_tests(
 
     end_time = time.perf_counter()
 
-    combined_results.log_test_report(test_duration=end_time - start_time)
+    combined_results.duration = round(end_time - start_time, 2)
 
     return combined_results

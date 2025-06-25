@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import typing as t
-from duckdb import __version__ as duckdb_version
 from sqlglot import exp
+from pathlib import Path
 
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -18,7 +18,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.utils import major_minor
 from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
@@ -35,13 +34,9 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
         },
     )
-
-    # TODO: remove once we stop supporting DuckDB 0.9
-    COMMENT_CREATION_TABLE, COMMENT_CREATION_VIEW = (
-        (CommentCreationTable.UNSUPPORTED, CommentCreationView.UNSUPPORTED)
-        if major_minor(duckdb_version) < (0, 10)
-        else (CommentCreationTable.COMMENT_COMMAND_ONLY, CommentCreationView.COMMENT_COMMAND_ONLY)
-    )
+    COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
+    COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
+    SUPPORTS_CREATE_DROP_CATALOG = True
 
     @property
     def catalog_support(self) -> CatalogSupport:
@@ -50,6 +45,18 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        db_filename = f"{catalog_name.output_name}.db"
+        self.execute(
+            exp.Attach(this=exp.alias_(exp.Literal.string(db_filename), catalog_name), exists=True)
+        )
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        db_file_path = Path(f"{catalog_name.output_name}.db")
+        self.execute(exp.Detach(this=catalog_name, exists=True))
+        if db_file_path.exists():
+            db_file_path.unlink()
 
     def _df_to_source_queries(
         self,

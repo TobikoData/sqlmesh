@@ -9,15 +9,15 @@ import typing as t
 import shutil
 from datetime import datetime, timedelta
 
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: TID253
+import pandas as pd  # noqa: TID253
 import pytest
 import pytz
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
@@ -1583,7 +1583,7 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    init_example_project(tmp_path, ctx.dialect, schema_name=schema_name)
+    init_example_project(tmp_path, ctx.mark.split("_")[0], schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,
@@ -2358,8 +2358,8 @@ def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
     assert row_diff.stats["distinct_count_s"] == 7
     assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
     assert row_diff.stats["distinct_count_t"] == 10
-    assert row_diff.s_sample.shape == (0, 3)
-    assert row_diff.t_sample.shape == (3, 3)
+    assert row_diff.s_sample.shape == (row_diff.s_only_count, 3)
+    assert row_diff.t_sample.shape == (row_diff.t_only_count, 3)
 
 
 def test_table_diff_arbitrary_condition(ctx: TestContext):
@@ -2534,7 +2534,7 @@ def test_python_model_column_order(ctx_df: TestContext, tmp_path: pathlib.Path):
     model_definitions = {
         # python model that emits a Pandas dataframe
         "pandas": """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import typing as t
 from sqlmesh import ExecutionContext, model
 

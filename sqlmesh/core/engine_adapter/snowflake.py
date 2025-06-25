@@ -4,13 +4,12 @@ import contextlib
 import logging
 import typing as t
 
-import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
+import sqlmesh.core.constants as c
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -33,6 +32,8 @@ logger = logging.getLogger(__name__)
 snowpark = optional_import("snowflake.snowpark")
 
 if t.TYPE_CHECKING:
+    import pandas as pd
+
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF, SnowparkSession
     from sqlmesh.core.node import IntervalUnit
@@ -43,6 +44,7 @@ if t.TYPE_CHECKING:
         "_get_data_objects": CatalogSupport.REQUIRES_SET_CATALOG,
         "create_schema": CatalogSupport.REQUIRES_SET_CATALOG,
         "drop_schema": CatalogSupport.REQUIRES_SET_CATALOG,
+        "drop_catalog": CatalogSupport.REQUIRES_SET_CATALOG,  # needs a catalog to issue a query to information_schema.databases even though the result is global
     }
 )
 class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin, RowDiffMixin):
@@ -52,6 +54,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     SUPPORTS_CLONING = True
     SUPPORTS_MANAGED_MODELS = True
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
+    SUPPORTS_CREATE_DROP_CATALOG = True
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(8388608,)],
@@ -93,8 +96,10 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             return
 
         self.execute(f"USE WAREHOUSE {warehouse_sql}")
-        yield
-        self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
+        try:
+            yield
+        finally:
+            self.execute(f"USE WAREHOUSE {current_warehouse_sql}")
 
     @property
     def _current_warehouse(self) -> exp.Identifier:
@@ -120,6 +125,36 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        props = exp.Properties(
+            expressions=[exp.SchemaCommentProperty(this=exp.Literal.string(c.SQLMESH_MANAGED))]
+        )
+        self.execute(
+            exp.Create(
+                this=exp.Table(this=catalog_name), kind="DATABASE", exists=True, properties=props
+            )
+        )
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        # only drop the catalog if it was created by SQLMesh, which is indicated by its comment matching {c.SQLMESH_MANAGED}
+        exists_check = (
+            exp.select(exp.Literal.number(1))
+            .from_(exp.to_table("information_schema.databases"))
+            .where(
+                exp.and_(
+                    exp.column("database_name").eq(exp.Literal.string(catalog_name)),
+                    exp.column("comment").eq(exp.Literal.string(c.SQLMESH_MANAGED)),
+                )
+            )
+        )
+        normalize_identifiers(exists_check, dialect=self.dialect)
+        if self.fetchone(exists_check, quote_identifiers=True) is not None:
+            self.execute(exp.Drop(this=exp.Table(this=catalog_name), kind="DATABASE", exists=True))
+        else:
+            logger.warning(
+                f"Not dropping database {catalog_name.sql(dialect=self.dialect)} because there is no indication it is '{c.SQLMESH_MANAGED}'"
+            )
 
     def _create_table(
         self,
@@ -290,6 +325,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype
+
         temp_table = self._get_temp_table(
             target_table or "pandas", quoted=False
         )  # write_pandas() re-quotes everything without checking if its already quoted
@@ -391,6 +429,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
+        import pandas as pd
         from snowflake.connector.errors import NotSupportedError
 
         self.execute(query, quote_identifiers=quote_identifiers)

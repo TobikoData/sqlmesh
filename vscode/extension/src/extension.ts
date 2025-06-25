@@ -12,16 +12,15 @@ import { AuthenticationProviderTobikoCloud } from './auth/auth'
 import { signOut } from './commands/signout'
 import { signIn } from './commands/signin'
 import { signInSpecifyFlow } from './commands/signinSpecifyFlow'
-import { renderModel } from './commands/renderModel'
+import { renderModel, reRenderModelForSourceFile } from './commands/renderModel'
+import { stop } from './commands/stop'
+import { printEnvironment } from './commands/printEnvironment'
 import { isErr } from '@bus/result'
-import {
-  handleNotSginedInError,
-  handleSqlmeshLspNotFoundError,
-  handleSqlmeshLspDependenciesMissingError,
-  handleTcloudBinNotFoundError,
-} from './utilities/errors'
+import { handleError } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
+import { RenderedModelProvider } from './providers/renderedModelProvider'
+import { sleep } from './utilities/sleep'
 
 let lspClient: LSPClient | undefined
 
@@ -48,34 +47,43 @@ export async function activate(context: vscode.ExtensionContext) {
   traceInfo('Authentication provider registered')
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('sqlmesh.signin', signIn(authProvider)),
+    vscode.commands.registerCommand(
+      'sqlmesh.signin',
+      signIn(authProvider, async () => {
+        traceInfo('Restarting LSP after sign-in')
+        await restart()
+      }),
+    ),
   )
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'sqlmesh.signinSpecifyFlow',
-      signInSpecifyFlow(authProvider),
+      signInSpecifyFlow(authProvider, async () => {
+        traceInfo('Restarting LSP after sign-in')
+        await restart()
+      }),
     ),
   )
   context.subscriptions.push(
     vscode.commands.registerCommand('sqlmesh.signout', signOut(authProvider)),
   )
-  context.subscriptions.push(
-    vscode.commands.registerCommand('sqlmesh.format', format(authProvider)),
-  )
 
   lspClient = new LSPClient()
+
+  // Create and register the rendered model provider
+  const renderedModelProvider = new RenderedModelProvider()
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      RenderedModelProvider.getScheme(),
+      renderedModelProvider,
+    ),
+    renderedModelProvider,
+  )
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'sqlmesh.renderModel',
-      renderModel(lspClient),
-    ),
-  )
-
-  context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider(
-      selector,
-      completionProvider(lspClient),
+      renderModel(lspClient, renderedModelProvider),
     ),
   )
 
@@ -88,34 +96,60 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   )
 
+  // Add file save listener for auto-rerendering models
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async document => {
+      if (
+        lspClient &&
+        renderedModelProvider.hasRenderedModelForSource(
+          document.uri.toString(true),
+        )
+      ) {
+        await sleep(100)
+        await reRenderModelForSourceFile(
+          document.uri.toString(true),
+          lspClient,
+          renderedModelProvider,
+        )
+      }
+    }),
+  )
+
   const restart = async () => {
     if (lspClient) {
       traceVerbose('Restarting LSP client')
       const restartResult = await lspClient.restart()
       if (isErr(restartResult)) {
-        switch (restartResult.error.type) {
-          case 'not_signed_in':
-            await handleNotSginedInError(authProvider)
-            return
-          case 'sqlmesh_lsp_not_found':
-            await handleSqlmeshLspNotFoundError()
-            return
-          case 'sqlmesh_lsp_dependencies_missing':
-            await handleSqlmeshLspDependenciesMissingError(restartResult.error)
-            return
-          case 'tcloud_bin_not_found':
-            await handleTcloudBinNotFoundError()
-            return
-          case 'generic':
-            await vscode.window.showErrorMessage(
-              `Failed to restart LSP: ${restartResult.error.message}`,
-            )
-            return
-        }
+        return handleError(
+          authProvider,
+          restart,
+          restartResult.error,
+          'LSP restart failed',
+        )
       }
       context.subscriptions.push(lspClient)
+    } else {
+      lspClient = new LSPClient()
+      const result = await lspClient.start()
+      if (isErr(result)) {
+        return handleError(
+          authProvider,
+          restart,
+          result.error,
+          'Failed to start LSP',
+        )
+      } else {
+        context.subscriptions.push(lspClient)
+      }
     }
   }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.format',
+      format(authProvider, lspClient, restart),
+    ),
+  )
 
   context.subscriptions.push(
     onDidChangePythonInterpreter(async () => {
@@ -127,31 +161,29 @@ export async function activate(context: vscode.ExtensionContext) {
     registerCommand(`sqlmesh.restart`, async () => {
       await restart()
     }),
+    registerCommand(`sqlmesh.stop`, stop(lspClient)),
+    registerCommand(`sqlmesh.printEnvironment`, printEnvironment()),
   )
 
   const result = await lspClient.start()
   if (isErr(result)) {
-    switch (result.error.type) {
-      case 'not_signed_in':
-        await handleNotSginedInError(authProvider)
-        break
-      case 'sqlmesh_lsp_not_found':
-        await handleSqlmeshLspNotFoundError()
-        break
-      case 'sqlmesh_lsp_dependencies_missing':
-        await handleSqlmeshLspDependenciesMissingError(result.error)
-        break
-      case 'tcloud_bin_not_found':
-        await handleTcloudBinNotFoundError()
-        break
-      case 'generic':
-        await vscode.window.showErrorMessage(
-          `Failed to start LSP: ${result.error.message}`,
-        )
-        break
-    }
+    return handleError(
+      authProvider,
+      restart,
+      result.error,
+      'Failed to start LSP',
+    )
   } else {
     context.subscriptions.push(lspClient)
+  }
+
+  if (lspClient && !lspClient.hasCompletionCapability()) {
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        selector,
+        completionProvider(lspClient),
+      ),
+    )
   }
 
   traceInfo('Extension activated')

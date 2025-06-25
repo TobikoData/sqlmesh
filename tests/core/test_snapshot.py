@@ -1780,7 +1780,31 @@ def test_is_valid_start(make_snapshot):
             EnvironmentNamingInfo(name="dev", catalog_name_override="g-h"),
             '"g-h".default__dev."e-f"',
         ),
-        (QualifiedViewName(table="e-f"), EnvironmentNamingInfo(name="dev"), 'default__dev."e-f"'),
+        (
+            QualifiedViewName(table="e-f"),
+            EnvironmentNamingInfo(name="dev"),
+            'default__dev."e-f"',
+        ),
+        # EnvironmentSuffixTarget.CATALOG
+        (
+            QualifiedViewName(
+                catalog="default-foo", schema_name="sqlmesh_example", table="full_model"
+            ),
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.CATALOG,
+            ),
+            '"default-foo__dev".sqlmesh_example.full_model',
+        ),
+        (
+            QualifiedViewName(catalog="default", schema_name="sqlmesh_example", table="full_model"),
+            EnvironmentNamingInfo(
+                name=c.PROD,
+                catalog_name_override=None,
+                suffix_target=EnvironmentSuffixTarget.CATALOG,
+            ),
+            "default.sqlmesh_example.full_model",
+        ),
     ),
 )
 def test_qualified_view_name(qualified_view_name, environment_naming_info, expected):

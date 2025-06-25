@@ -6,12 +6,14 @@ from collections import Counter
 from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
-
+import logging
 import os
-import numpy as np
-import pandas as pd
+import numpy as np  # noqa: TID253
+import pandas as pd  # noqa: TID253
 import pytest
+from pytest import MonkeyPatch
 from pathlib import Path
+from sqlmesh.core.console import set_console, get_console, TerminalConsole
 from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
@@ -23,7 +25,7 @@ from IPython.utils.capture import capture_output
 
 
 from sqlmesh import CustomMaterialization
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config import (
@@ -33,9 +35,11 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
+from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
+from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
@@ -4001,7 +4005,7 @@ def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     star_model_definition = """
         MODEL (
@@ -4331,6 +4335,49 @@ def test_indirect_non_breaking_view_is_updated_with_new_table_references(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_explain(init_and_plan_context: t.Callable):
+    old_console = get_console()
+    set_console(TerminalConsole())
+
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    waiter_revenue_by_day_model = context.get_model("sushi.waiter_revenue_by_day")
+    waiter_revenue_by_day_model = add_projection_to_model(
+        t.cast(SqlModel, waiter_revenue_by_day_model)
+    )
+    context.upsert_model(waiter_revenue_by_day_model)
+
+    waiter_revenue_by_day_snapshot = context.get_snapshot(waiter_revenue_by_day_model.name)
+    top_waiters_snapshot = context.get_snapshot("sushi.top_waiters")
+
+    common_kwargs = dict(skip_tests=True, no_prompts=True, explain=True)
+
+    # For now just making sure the plan doesn't error
+    context.plan("dev", **common_kwargs)
+    context.plan("dev", **common_kwargs, skip_backfill=True)
+    context.plan("dev", **common_kwargs, empty_backfill=True)
+    context.plan("dev", **common_kwargs, forward_only=True, enable_preview=True)
+    context.plan("prod", **common_kwargs)
+    context.plan("prod", **common_kwargs, forward_only=True)
+    context.plan("prod", **common_kwargs, restate_models=[waiter_revenue_by_day_model.name])
+
+    set_console(old_console)
+
+    # Make sure that the now changes were actually applied
+    for target_env in ("dev", "prod"):
+        plan = context.plan_builder(target_env, skip_tests=True).build()
+        assert plan.has_changes
+        assert plan.missing_intervals
+        assert plan.directly_modified == {waiter_revenue_by_day_snapshot.snapshot_id}
+        assert len(plan.new_snapshots) == 2
+        assert {s.snapshot_id for s in plan.new_snapshots} == {
+            waiter_revenue_by_day_snapshot.snapshot_id,
+            top_waiters_snapshot.snapshot_id,
+        }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dbt_requirements(sushi_dbt_context: Context):
     assert set(sushi_dbt_context.requirements) == {"dbt-core", "dbt-duckdb"}
     assert sushi_dbt_context.requirements["dbt-core"].startswith("1.")
@@ -4346,7 +4393,7 @@ def test_dbt_dialect_with_normalization_strategy(init_and_plan_context: t.Callab
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_dbt_before_all_with_var(init_and_plan_context: t.Callable):
+def test_dbt_before_all_with_var_ref_source(init_and_plan_context: t.Callable):
     _, plan = init_and_plan_context(
         "tests/fixtures/dbt/sushi_test", config="test_config_with_normalization_strategy"
     )
@@ -4356,7 +4403,7 @@ def test_dbt_before_all_with_var(init_and_plan_context: t.Callable):
     assert rendered_statements[0] == [
         "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
         "CREATE TABLE IF NOT EXISTS to_be_executed_last (col TEXT)",
-        'SELECT 1 AS "1"',
+        "SELECT 1 AS var, 'items' AS src, 'waiters' AS ref",
     ]
 
 
@@ -4872,13 +4919,11 @@ def test_multi(mocker):
     assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
     assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
 
-    adapter = context.engine_adapter
     context = Context(
         paths=["examples/multi/repo_1"],
         state_sync=context.state_sync,
         gateway="memory",
     )
-    context._engine_adapters["memory"] = adapter
 
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
@@ -4935,6 +4980,8 @@ def test_multi_virtual_layer(copy_to_temp_path):
     )
 
     context = Context(paths=paths, config=config)
+    assert context.default_catalog_per_gateway == {"first": "db_1", "second": "db_2"}
+    assert len(context.engine_adapters) == 2
 
     # For the model without gateway the default should be used and the gateway variable should overide the global
     assert (
@@ -5050,7 +5097,7 @@ def test_multi_virtual_layer(copy_to_temp_path):
     assert len(prod_environment.snapshots_) == 3
 
     # Changing the flag should show a diff
-    context.gateway_managed_virtual_layer = False
+    context.config.gateway_managed_virtual_layer = False
     plan = context.plan_builder().build()
     assert not plan.requires_backfill
     assert (
@@ -5214,7 +5261,9 @@ def test_invalidating_environment(sushi_context: Context):
 
 
 def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi", config="environment_suffix_config")
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="environment_suffix_table_config"
+    )
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)
     environments_schemas = {"sushi"}
@@ -5248,6 +5297,116 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert {x.sql(dialect="duckdb") for x in prod_views} - {
         x.sql(dialect="duckdb") for x in views_after_janitor
     } == set()
+
+
+def test_environment_suffix_target_catalog(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(catalogs={"main_warehouse": ":memory:"}),
+        environment_suffix_target=EnvironmentSuffixTarget.CATALOG,
+    )
+
+    assert config.default_connection
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    (models_dir / "model.sql").write_text("""
+    MODEL (
+        name example_schema.test_model,
+        kind FULL
+    );
+
+    SELECT '1' as a""")
+
+    (models_dir / "fqn_model.sql").write_text("""
+    MODEL (
+        name memory.example_fqn_schema.test_model_fqn,
+        kind FULL
+    );
+
+    SELECT '1' as a""")
+
+    ctx = Context(config=config, paths=tmp_path)
+
+    metadata = DuckDBMetadata.from_context(ctx)
+    assert ctx.default_catalog == "main_warehouse"
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+
+    ctx.plan(auto_apply=True)
+
+    # prod should go to the default catalog and not be overridden to a catalog called 'prod'
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse.example_schema.test_model")[0]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory.example_fqn_schema.test_model_fqn")[0]  # type: ignore
+        == "1"
+    )
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+
+    # dev should be overridden to go to a catalogs called 'main_warehouse__dev' and 'memory__dev'
+    ctx.plan(environment="dev", include_unmodified=True, auto_apply=True)
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse__dev.example_schema.test_model")[
+            0
+        ]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory__dev.example_fqn_schema.test_model_fqn")[
+            0
+        ]  # type: ignore
+        == "1"
+    )
+    assert metadata.catalogs == {"main_warehouse", "main_warehouse__dev", "memory", "memory__dev"}
+
+    # schemas in dev envs should match prod and not have a suffix
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("main_warehouse__dev") == ["example_schema"]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory__dev") == ["example_fqn_schema"]
+
+    ctx.invalidate_environment("dev", sync=True)
+
+    # dev catalogs cleaned up
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+
+    # prod catalogs still contain physical layer and views still work
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse.example_schema.test_model")[0]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory.example_fqn_schema.test_model_fqn")[0]  # type: ignore
+        == "1"
+    )
 
 
 def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
@@ -5399,7 +5558,7 @@ def test_python_model_default_kind_change(init_and_plan_context: t.Callable):
 
     # note: we deliberately dont specify a Kind here to allow the defaults to be picked up
     python_model_file = """import typing as t
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import ExecutionContext, model
 
 @model(
@@ -6208,3 +6367,103 @@ def test_render_path_instead_of_model(tmp_path: Path):
 
     # Case 3: Render the model successfully
     assert ctx.render("test_model").sql() == 'SELECT 1 AS "col"'
+
+
+@use_terminal_console
+def test_plan_always_recreate_environment(tmp_path: Path):
+    def plan_with_output(ctx: Context, environment: str):
+        with patch.object(logger, "info") as mock_logger:
+            with capture_output() as output:
+                ctx.load()
+                ctx.plan(environment, no_prompts=True, auto_apply=True)
+
+            # Facade logs info "Promoting environment {environment}"
+            assert mock_logger.call_args[0][1] == environment
+
+        return output
+
+    models_dir = tmp_path / "models"
+
+    logger = logging.getLogger("sqlmesh.core.state_sync.db.facade")
+
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
+    )
+
+    config = Config(plan=PlanConfig(always_recreate_environment=True))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # Case 1: Neither prod nor dev exists, so dev is initialized
+    output = plan_with_output(ctx, "dev")
+
+    assert """`dev` environment will be initialized""" in output.stdout
+
+    # Case 2: Prod does not exist, so dev is updated
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 5 AS col"
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "`dev` environment will be initialized" in output.stdout
+
+    # Case 3: Prod is initialized, so plan comparisons moving forward should be against prod
+    output = plan_with_output(ctx, "prod")
+    assert "`prod` environment will be initialized" in output.stdout
+
+    # Case 4: Dev is updated with a breaking change. Prod exists now so plan comparisons moving forward should be against prod
+    create_temp_file(
+        tmp_path, models_dir / "a.sql", "MODEL (name test.a, kind FULL); SELECT 10 AS col"
+    )
+    ctx.load()
+
+    plan = ctx.plan_builder("dev").build()
+
+    assert (
+        next(iter(plan.context_diff.snapshots.values())).change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
+    assert "Differences from the `prod` environment" in output.stdout
+
+    # Case 5: Dev is updated with a metadata change, but comparison against prod shows both the previous and the current changes
+    # so it's still classified as a breaking change
+    create_temp_file(
+        tmp_path,
+        models_dir / "a.sql",
+        "MODEL (name test.a, kind FULL, owner 'test'); SELECT 10 AS col",
+    )
+    ctx.load()
+
+    plan = ctx.plan_builder("dev").build()
+
+    assert (
+        next(iter(plan.context_diff.snapshots.values())).change_category
+        == SnapshotChangeCategory.BREAKING
+    )
+
+    output = plan_with_output(ctx, "dev")
+    assert "New environment `dev` will be created from `prod`" in output.stdout
+    assert "Differences from the `prod` environment" in output.stdout
+
+    assert (
+        """MODEL (                                                                        
+   name test.a,                                                                 
++  owner test,                                                                  
+   kind FULL                                                                    
+ )                                                                              
+ SELECT                                                                         
+-  5 AS col                                                                     
++  10 AS col"""
+        in output.stdout
+    )
+
+    # Case 6: Ensure that target environment and create_from environment are not the same
+    output = plan_with_output(ctx, "prod")
+    assert not "New environment `prod` will be created from `prod`" in output.stdout
+
+    # Case 7: Check that we can still run Context::diff() against any environment
+    for environment in ["dev", "prod"]:
+        context_diff = ctx._context_diff(environment)
+        assert context_diff.environment == environment

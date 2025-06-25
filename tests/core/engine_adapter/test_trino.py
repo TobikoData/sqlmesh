@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.dialect import schema_
+from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.trino]
@@ -442,8 +443,8 @@ def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: M
     # rather than explicitly telling it to create an Iceberg table. So this is testing that `FORMAT='ORC'` is output
     # instead of `FORMAT='ICEBERG'` which would be invalid
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (FORMAT=\'ORC\')',
-        'CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (FORMAT=\'ORC\') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"',
+        """CREATE TABLE IF NOT EXISTS "iceberg"."test_table" ("cola" TIMESTAMP, "colb" VARCHAR, "colc" VARCHAR) WITH (format='orc')""",
+        '''CREATE TABLE IF NOT EXISTS "iceberg"."test_table" WITH (format='orc') AS SELECT CAST("cola" AS TIMESTAMP) AS "cola", CAST("colb" AS VARCHAR) AS "colb", CAST("colc" AS VARCHAR) AS "colc" FROM (SELECT CAST(1 AS TIMESTAMP) AS "cola", CAST(2 AS VARCHAR) AS "colb", \'foo\' AS "colc") AS "_subquery"''',
     ]
 
 
@@ -591,3 +592,57 @@ def test_create_schema_sets_location(make_mocked_engine_adapter: t.Callable, moc
             'CREATE SCHEMA IF NOT EXISTS "landing"."transactions" WITH (LOCATION=\'s3://raw-data/landing/transactions\')',  # match '^landing\..*$'
         ]
     )
+
+
+def test_session_authorization(trino_mocked_engine_adapter: TrinoEngineAdapter):
+    adapter = trino_mocked_engine_adapter
+
+    # Test 1: No authorization property - should not execute any authorization commands
+    with adapter.session({}):
+        pass
+
+    assert to_sql_calls(adapter) == []
+
+    # Test 2: String authorization
+    with adapter.session({"authorization": "test_user"}):
+        adapter.execute("SELECT 1")
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'test_user'",
+        "SELECT 1",
+        "RESET SESSION AUTHORIZATION",
+    ]
+
+    # Test 3: Expression authorization
+    adapter.cursor.execute.reset_mock()
+    with adapter.session({"authorization": exp.Literal.string("another_user")}):
+        adapter.execute("SELECT 2")
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'another_user'",
+        "SELECT 2",
+        "RESET SESSION AUTHORIZATION",
+    ]
+
+    # Test 4: RESET is called even if exception occurs during session
+    adapter.cursor.execute.reset_mock()
+    try:
+        with adapter.session({"authorization": "test_user"}):
+            adapter.execute("SELECT 1")
+            raise RuntimeError("Test exception")
+    except RuntimeError:
+        pass
+
+    # Test 5: Invalid authorization value
+    with pytest.raises(
+        SQLMeshError,
+        match="Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        with adapter.session({"authorization": exp.Literal.number(1)}):
+            adapter.execute("SELECT 1")
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION AUTHORIZATION 'test_user'",
+        "SELECT 1",
+        "RESET SESSION AUTHORIZATION",
+    ]

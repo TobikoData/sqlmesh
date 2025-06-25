@@ -39,7 +39,7 @@ from sqlmesh.core.config.scheduler import (
     scheduler_config_validator,
 )
 from sqlmesh.core.config.ui import UIConfig
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.loader import Loader, SqlMeshLoader, MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
@@ -107,6 +107,7 @@ class Config(BaseConfig):
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
+        infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
         log_limit: The default number of logs to keep.
@@ -146,6 +147,7 @@ class Config(BaseConfig):
         default=EnvironmentSuffixTarget.default
     )
     gateway_managed_virtual_layer: bool = False
+    infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
     default_target_environment: str = c.PROD
     log_limit: int = c.DEFAULT_LOG_LIMIT
@@ -217,6 +219,13 @@ class Config(BaseConfig):
                 f"^{k}$": v for k, v in physical_schema_override.items()
             }
 
+        if (
+            (variables := data.get("variables", ""))
+            and isinstance(variables, dict)
+            and c.MIGRATED_DBT_PROJECT_NAME in variables
+        ):
+            data["loader"] = MigratedDbtProjectLoader
+
         return data
 
     @model_validator(mode="after")
@@ -231,6 +240,15 @@ class Config(BaseConfig):
                     k: normalize_identifiers(v, dialect=dialect).name
                     for k, v in getattr(self, key, {}).items()
                 },
+            )
+
+        if (
+            self.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+            and self.environment_catalog_mapping
+        ):
+            raise ConfigError(
+                f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
+                "Please specify one or the other"
             )
 
         if self.environment_catalog_mapping:

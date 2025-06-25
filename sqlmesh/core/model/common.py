@@ -5,6 +5,7 @@ import typing as t
 from pathlib import Path
 
 from astor import to_source
+from difflib import get_close_matches
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
@@ -267,13 +268,33 @@ def validate_extra_and_required_fields(
 ) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
+        field_names = "'" + "', '".join(missing_required_fields) + "'"
         raise_config_error(
-            f"Missing required fields {missing_required_fields} in the {entity_name}"
+            f"Please add required field{'s' if len(missing_required_fields) > 1 else ''} {field_names} to the {entity_name}."
         )
 
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
-        raise_config_error(f"Invalid extra fields {extra_fields} in the {entity_name}")
+        extra_field_names = "'" + "', '".join(extra_fields) + "'"
+
+        all_fields = klass.all_fields()
+        close_matches = {}
+        for field in extra_fields:
+            matches = get_close_matches(field, all_fields, n=1)
+            if matches:
+                close_matches[field] = matches[0]
+
+        if len(close_matches) == 1:
+            similar_msg = ". Did you mean " + "'" + "', '".join(close_matches.values()) + "'?"
+        else:
+            similar = [
+                f"- {field}: Did you mean '{match}'?" for field, match in close_matches.items()
+            ]
+            similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
+
+        raise_config_error(
+            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}"
+        )
 
 
 def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
@@ -315,10 +336,18 @@ def parse_expression(
 
 
 def parse_bool(v: t.Any) -> bool:
-    if isinstance(v, exp.Boolean):
-        return v.this
     if isinstance(v, exp.Expression):
+        if not isinstance(v, exp.Boolean):
+            from sqlglot.optimizer.simplify import simplify
+
+            # Try to reduce expressions like (1 = 1) (see: T-SQL boolean generation)
+            v = simplify(v)
+
+        if isinstance(v, exp.Boolean):
+            return v.this
+
         return str_to_bool(v.name)
+
     return str_to_bool(str(v or ""))
 
 

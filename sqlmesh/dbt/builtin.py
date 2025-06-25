@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class Exceptions:
     def raise_compiler_error(self, msg: str) -> None:
-        if DBT_VERSION >= (1, 4):
+        if DBT_VERSION >= (1, 4, 0):
             from dbt.exceptions import CompilationError
 
             raise CompilationError(msg)
@@ -156,7 +156,7 @@ class Var:
     def __init__(self, variables: t.Dict[str, t.Any]) -> None:
         self.variables = variables
 
-    def __call__(self, name: str, default: t.Optional[t.Any] = None) -> t.Any:
+    def __call__(self, name: str, default: t.Optional[t.Any] = None, **kwargs: t.Any) -> t.Any:
         return self.variables.get(name, default)
 
     def has_var(self, name: str) -> bool:

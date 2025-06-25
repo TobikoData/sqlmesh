@@ -24,7 +24,6 @@ from datetime import datetime
 
 from sqlglot import exp
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
@@ -224,13 +223,7 @@ class EngineAdapterStateSync(StateSync):
         }
 
         added_table_infos = set(table_infos.values())
-        if (
-            existing_environment
-            and existing_environment.finalized_ts
-            and not existing_environment.expired
-            and existing_environment.gateway_managed == environment.gateway_managed
-            and existing_environment.name == c.PROD
-        ):
+        if existing_environment and environment.can_partially_promote(existing_environment):
             # Only promote new snapshots.
             added_table_infos -= set(existing_environment.promoted_snapshots)
 
@@ -281,7 +274,7 @@ class EngineAdapterStateSync(StateSync):
             self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
         )
 
-    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         return self.environment_state.get_expired_environments(current_ts=current_ts)
 
     @transactional()
@@ -301,7 +294,7 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
-    ) -> t.List[Environment]:
+    ) -> t.List[EnvironmentSummary]:
         current_ts = current_ts or now_timestamp()
         return self.environment_state.delete_expired_environments(current_ts=current_ts)
 

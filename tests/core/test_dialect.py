@@ -207,7 +207,7 @@ SELECT
         parse(
             """
             MODEL(name foo);
-            SELECT 1::INT AS bla
+            SELECT CAST(1 AS INT) AS bla
             """
         ),
         rewrite_casts=False,
@@ -643,9 +643,6 @@ def test_model_normalization_quote_flexibility():
         normalize_model_name('"catalog"."db"."table"', default_catalog=None, dialect="spark")
         == '"catalog"."db"."table"'
     )
-    # It doesn't work the other way which is what we currently expect
-    with pytest.raises(ParseError):
-        normalize_model_name("`catalog`.`db`.`table`", default_catalog=None, dialect=None)
 
 
 def test_macro_parse():

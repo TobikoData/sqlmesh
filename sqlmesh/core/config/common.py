@@ -10,8 +10,21 @@ from sqlmesh.utils.pydantic import field_validator
 
 
 class EnvironmentSuffixTarget(str, Enum):
+    # Intended to create virtual environments in their own schemas, with names like "<model_schema_name>__<env name>". The view name is untouched.
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # would have its virtual layer view created as 'sqlmesh_example__dev.full_model'
     SCHEMA = "schema"
+
+    # Intended to create virtual environments in the same schema as their production counterparts by adjusting the table name.
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # would have its virtual layer view created as "sqlmesh_example.full_model__dev"
     TABLE = "table"
+
+    # Intended to create virtual environments in their own catalogs to preserve the schema and view name of the models
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # with a default catalog of "warehouse" would have its virtual layer view created as "warehouse__dev.sqlmesh_example.full_model"
+    # note: this only works for engines that can query across catalogs
+    CATALOG = "catalog"
 
     @property
     def is_schema(self) -> bool:
@@ -20,6 +33,10 @@ class EnvironmentSuffixTarget(str, Enum):
     @property
     def is_table(self) -> bool:
         return self == EnvironmentSuffixTarget.TABLE
+
+    @property
+    def is_catalog(self) -> bool:
+        return self == EnvironmentSuffixTarget.CATALOG
 
     @classproperty
     def default(cls) -> EnvironmentSuffixTarget:

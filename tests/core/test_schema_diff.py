@@ -9,6 +9,7 @@ from sqlmesh.core.schema_diff import (
     TableAlterColumn,
     TableAlterColumnPosition,
     TableAlterOperation,
+    get_schema_differ,
 )
 
 
@@ -1327,4 +1328,51 @@ def test_schema_diff_alter_op_column():
     assert (
         super_nested.column("element").sql()
         == '"nested_1".element.nested_2.nested_3.element.nested_4.nested_5."nested_6".nested_7.nested_8.element."col_a"'
+    )
+
+
+def test_get_schema_differ():
+    # Test that known dialects return SchemaDiffer instances
+    for dialect in ["bigquery", "snowflake", "postgres", "databricks", "spark", "duckdb"]:
+        schema_differ = get_schema_differ(dialect)
+        assert isinstance(schema_differ, SchemaDiffer)
+
+    # Test specific configurations
+    # Databricks should support positional add and nested operations
+    databricks_differ = get_schema_differ("databricks")
+    assert databricks_differ.support_positional_add is True
+    assert databricks_differ.support_nested_operations is True
+    assert databricks_differ.support_nested_drop is True
+
+    # BigQuery should have specific compatible types configured
+    bigquery_differ = get_schema_differ("bigquery")
+    assert len(bigquery_differ.compatible_types) > 0
+    assert bigquery_differ.support_coercing_compatible_types is True
+
+    # Snowflake should have parameterized type defaults
+    snowflake_differ = get_schema_differ("snowflake")
+    assert len(snowflake_differ.parameterized_type_defaults) > 0
+
+    # Postgres should support drop cascade
+    postgres_differ = get_schema_differ("postgres")
+    assert postgres_differ.drop_cascade is True
+    assert len(postgres_differ.types_with_unlimited_length) > 0
+
+    # Test dialect aliases work correctly
+    schema_differ_pg = get_schema_differ("postgresql")
+    schema_differ_postgres = get_schema_differ("postgres")
+    assert schema_differ_pg.drop_cascade == schema_differ_postgres.drop_cascade
+
+    # Test unknown dialect returns default SchemaDiffer
+    schema_differ_unknown = get_schema_differ("unknown_dialect")
+    assert isinstance(schema_differ_unknown, SchemaDiffer)
+    assert schema_differ_unknown.support_positional_add is False
+    assert schema_differ_unknown.support_nested_operations is False
+
+    # Test case insensitivity
+    schema_differ_upper = get_schema_differ("BIGQUERY")
+    schema_differ_lower = get_schema_differ("bigquery")
+    assert (
+        schema_differ_upper.support_coercing_compatible_types
+        == schema_differ_lower.support_coercing_compatible_types
     )

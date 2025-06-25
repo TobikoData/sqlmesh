@@ -16,6 +16,7 @@ from sqlmesh.core.config import (
     BigQueryConnectionConfig,
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
+    EnvironmentSuffixTarget,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -28,6 +29,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
+from sqlmesh.core.loader import MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -560,6 +562,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
+        "filesystems": [],
         "database": "my_db",
     }
     assert serialized["default_test_connection"] == {
@@ -571,6 +574,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
+        "filesystems": [],
         "database": "my_test_db",
     }
 
@@ -742,7 +746,7 @@ model_defaults:
 
     ctx = Context(paths=tmp_path, config=config)
 
-    assert isinstance(ctx._connection_config, RedshiftConnectionConfig)
+    assert isinstance(ctx.connection_config, RedshiftConnectionConfig)
     assert len(ctx.engine_adapters) == 3
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
     assert isinstance(ctx.engine_adapters["redshift"], RedshiftEngineAdapter)
@@ -782,7 +786,7 @@ model_defaults:
     )
 
     ctx = Context(paths=tmp_path, config=config)
-    assert isinstance(ctx._connection_config, DuckDBConnectionConfig)
+    assert isinstance(ctx.connection_config, DuckDBConnectionConfig)
     assert len(ctx.engine_adapters) == 2
     assert ctx.engine_adapter == ctx._get_engine_adapter("duckdb")
     assert isinstance(ctx.engine_adapters["athena"], AthenaEngineAdapter)
@@ -1028,3 +1032,103 @@ def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) 
         assert conn.project == "unit-test"
         assert conn.scopes == ("a", "b", "c")
         assert conn.keyfile_json == {"foo": "bar"}
+
+
+def test_loader_for_migrated_dbt_project(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+
+    variables:
+      __dbt_project_name__: sushi
+""")
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.loader == MigratedDbtProjectLoader
+
+
+def test_config_user_macro_function(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+
+    default_target_environment: dev_{{ user() }}
+""")
+
+    with mock.patch("getpass.getuser", return_value="test_user"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+    assert config.default_target_environment == "dev_test_user"
+
+
+def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      warehouse:
+        connection:
+          type: duckdb
+
+    default_gateway: warehouse
+
+    model_defaults:
+      dialect: duckdb
+
+    environment_suffix_target: catalog
+""")
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+    assert not config.environment_catalog_mapping
+
+    config_path.write_text("""
+    gateways:
+      warehouse:
+        connection:
+          type: duckdb
+
+    default_gateway: warehouse
+
+    model_defaults:
+      dialect: duckdb
+
+    environment_suffix_target: catalog
+
+    environment_catalog_mapping:
+      '.*': "foo"
+""")
+
+    with pytest.raises(ConfigError, match=r"mutually exclusive"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )

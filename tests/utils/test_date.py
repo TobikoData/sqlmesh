@@ -4,7 +4,7 @@ from datetime import date, datetime
 import pytest
 import time_machine
 from sqlglot import exp
-import pandas as pd
+import pandas as pd  # noqa: TID253
 
 from sqlmesh.utils.date import (
     UTC,
@@ -12,6 +12,7 @@ from sqlmesh.utils.date import (
     date_dict,
     format_tz_datetime,
     is_categorical_relative_expression,
+    is_relative,
     make_inclusive,
     to_datetime,
     to_time_column,
@@ -324,3 +325,17 @@ def test_format_tz_datetime():
     test_datetime = to_datetime("2020-01-01 00:00:00")
     assert format_tz_datetime(test_datetime) == "2020-01-01 12:00AM UTC"
     assert format_tz_datetime(test_datetime, format_string=None) == "2020-01-01 00:00:00+00:00"
+
+
+def test_is_relative():
+    assert is_relative("1 week ago")
+    assert is_relative("1 week")
+    assert is_relative("1 day ago")
+    assert is_relative("yesterday")
+
+    assert not is_relative("2024-01-01")
+    assert not is_relative("2024-01-01 01:02:03")
+    assert not is_relative(to_datetime("2024-01-01 01:02:03"))
+    assert not is_relative(to_timestamp("2024-01-01 01:02:03"))
+    assert not is_relative(to_datetime("1 week ago"))
+    assert not is_relative(to_timestamp("1 day ago"))

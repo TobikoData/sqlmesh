@@ -60,7 +60,7 @@ async def write_file(
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
-        config = context.config_for_path(Path(path_or_new_path)) if context else None
+        config, _ = context.config_for_path(Path(path_or_new_path)) if context else (None, None)
         if (
             config
             and config.ui.format_on_save
@@ -168,7 +168,7 @@ def _get_directory(path: str | Path, settings: Settings) -> models.Directory:
 def _get_file_with_content(file_path: Path, relative_path: str) -> models.File:
     """Get a file, including its contents."""
     try:
-        content = file_path.read_text()
+        content = file_path.read_text(encoding="utf-8")
     except FileNotFoundError as e:
         raise e
     except Exception:

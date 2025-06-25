@@ -6,7 +6,6 @@ import io
 import typing as t
 from pathlib import Path, PurePath
 
-import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
@@ -17,6 +16,9 @@ from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_settings
 from sqlmesh.utils.windows import IS_WINDOWS
+
+if t.TYPE_CHECKING:
+    import pandas as pd
 
 R = t.TypeVar("R")
 
@@ -64,11 +66,10 @@ def validate_path(path: str, settings: Settings = Depends(get_settings)) -> str:
     if any(
         full_path.match(pattern)
         for pattern in (
-            context.config_for_path(Path(path)).ignore_patterns if context else c.IGNORE_PATTERNS
+            context.config_for_path(Path(path))[0].ignore_patterns if context else c.IGNORE_PATTERNS
         )
     ):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-
     return path
 
 

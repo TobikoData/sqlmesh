@@ -6,15 +6,16 @@ from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
 import time_machine
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
-from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from pydantic import ValidationError
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator, ValidationError
@@ -42,6 +43,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
+    IncrementalByUniqueKeyKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -63,7 +65,13 @@ from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroExtractor,
+    MacroReference,
+    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+)
 from sqlmesh.utils.metaprogramming import Executable, SqlValue
 from sqlmesh.core.macros import RuntimeStage
 from tests.utils.test_helpers import use_terminal_console
@@ -473,7 +481,7 @@ def test_model_missing_audits(tmp_path: Path):
 
 
 def test_project_is_set_in_standalone_audit(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -571,17 +579,125 @@ def test_opt_out_of_time_column_in_partitioned_by():
     assert model.partitioned_by == [exp.to_column('"b"')]
 
 
+def test_model_no_name():
+    expressions = d.parse(
+        """
+        MODEL (
+            dialect bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add the required 'name' field to the MODEL block at the top of the file.\n\nLearn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview"
+    )
+
+
+def test_model_field_name_suggestions():
+    # top-level field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block: 'dialects'. Did you mean 'dialect'?"
+    )
+
+    # kind field
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+                batch_sizes 1
+            ),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Invalid field name present in the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field: 'batch_sizes'. Did you mean 'batch_size'?"
+    )
+
+    # multiple fields
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialects bigquery,
+            descriptions 'a',
+            asdfasdf true
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    ex_str = str(ex.value)
+    # field order is non-deterministic, so we can't test the output string directly
+    assert "Invalid field names present in the MODEL block: " in ex_str
+    assert "'descriptions'" in ex_str
+    assert "'dialects'" in ex_str
+    assert "'asdfasdf'" in ex_str
+    assert "- descriptions: Did you mean 'description'?" in ex_str
+    assert "- dialects: Did you mean 'dialect'?" in ex_str
+    assert "- asdfasdf: Did you mean " not in ex_str
+
+
+def test_model_required_field_missing():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (),
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_sql_based_model(expressions)
+    assert (
+        str(ex.value)
+        == "Please add required field 'time_column' to the MODEL block 'kind INCREMENTAL_BY_TIME_RANGE' field."
+    )
+
+
 def test_no_model_statement(tmp_path: Path):
     # No name inference => MODEL (...) is required
     expressions = d.parse("SELECT 1 AS x")
     with pytest.raises(
         ConfigError,
-        match="The MODEL statement is required as the first statement in the definition, unless model name inference is enabled. at '.'",
+        match="Please add a MODEL block at the top of the file. Example:",
     ):
         load_sql_based_model(expressions)
 
     # Name inference is enabled => MODEL (...) not required
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     test_sql_file = tmp_path / "models/test_schema/test_model.sql"
     test_sql_file.parent.mkdir(parents=True, exist_ok=True)
@@ -613,7 +729,7 @@ def test_unordered_model_statements():
 
     with pytest.raises(ConfigError) as ex:
         load_sql_based_model(expressions)
-    assert "MODEL statement is required" in str(ex.value)
+    assert "Please add a MODEL block at the top of the file. Example:" in str(ex.value)
 
 
 def test_no_query():
@@ -2972,7 +3088,7 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     db_path = str(tmp_path / "db.db")
     config = Config(
@@ -2995,7 +3111,7 @@ def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     Context(paths=tmp_path)
 
     patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
@@ -4518,7 +4634,7 @@ def test_model_session_properties(sushi_context):
                 name test_schema.test_model,
                 session_properties (
                     'query_label' = (
-                        'some value', 
+                        'some value',
                         'another value',
                         'yet another value',
                     )
@@ -4527,6 +4643,81 @@ def test_model_session_properties(sushi_context):
             SELECT a FROM tbl;
             """,
                 default_dialect="bigquery",
+            )
+        )
+
+
+def test_session_properties_authorization_validation():
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                authorization = 'test_user'
+            )
+        );
+        SELECT a FROM tbl;
+        """,
+            default_dialect="trino",
+        )
+    )
+    assert model.session_properties == {"authorization": "test_user"}
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = 123
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = some_column
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
+            )
+        )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Invalid value for `session_properties.authorization`. Must be a string literal.",
+    ):
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                session_properties (
+                    authorization = CONCAT('user', '_suffix')
+                )
+            );
+            SELECT a FROM tbl;
+            """,
+                default_dialect="trino",
             )
         )
 
@@ -5110,6 +5301,30 @@ def test_signals():
         "signals (MY_SIGNAL(arg := 1), (table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string'))"
         in model.render_definition()[0].sql()
     )
+
+
+def test_load_python_model_with_signals():
+    @signal()
+    def always_true(batch):
+        return True
+
+    @model(
+        name="model_with_signal",
+        kind="full",
+        columns={'"COL"': "int"},
+        signals=[("always_true", {})],
+    )
+    def model_with_signal(context, **kwargs):
+        return pd.DataFrame([{"COL": 1}])
+
+    models = model.get_registry()["model_with_signal"].models(
+        get_variables=lambda _: {},
+        path=Path("."),
+        module_path=Path("."),
+        signal_definitions=signal.get_registry(),
+    )
+    assert len(models) == 1
+    assert models[0].signals == [("always_true", {})]
 
 
 def test_null_column_type():
@@ -5986,6 +6201,58 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
+
+
+def test_variables_migrated_dbt_package_macro():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('TEST_VAR_A') }}' as a, '{{ test.test_macro_var() }}' as b
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+        packages={
+            "test": {
+                "test_macro_var": MacroInfo(
+                    definition="""
+                    {% macro test_macro_var() %}
+                        {{- var('test_var_b', __dbt_package='test') }}
+                    {%- endmacro %}""",
+                    depends_on=[MacroReference(name="var")],
+                )
+            }
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={
+            "test_var_a": "test_var_a_value",
+            c.MIGRATED_DBT_PACKAGES: {
+                "test": {"test_var_b": "test_var_b_value", "unused": "unused_value"},
+            },
+            "test_var_c": "test_var_c_value",
+        },
+        jinja_macros=jinja_macros,
+        migrated_dbt_project_name="test",
+        dialect="bigquery",
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_var_a_value' AS `a`, 'test_var_b_value' AS `b`"
+    )
 
 
 def test_load_external_model_python(sushi_context) -> None:
@@ -7038,7 +7305,7 @@ def test_model_table_name_inference(
     ],
 )
 def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7058,7 +7325,7 @@ def my_model(context, **kwargs):
 
 
 def test_python_model_name_inference_multiple_models(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7544,6 +7811,37 @@ materialized TRUE
     )
 
 
+def test_incremental_by_unique_key_batch_concurrency():
+    with pytest.raises(ValidationError, match=r"Input should be 1"):
+        load_sql_based_model(
+            d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 2
+            )
+        );
+        select 1;
+        """)
+        )
+
+    model = load_sql_based_model(
+        d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 1
+            )
+        );
+        select 1;
+        """)
+    )
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert model.kind.batch_concurrency == 1
+
+
 def test_bad_model_kind():
     with pytest.raises(
         SQLMeshError,
@@ -7965,7 +8263,7 @@ def test_cache():
 
 
 def test_snowflake_macro_func_as_table(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     custom_macro_file = tmp_path / "macros/custom_macros.py"
     custom_macro_file.parent.mkdir(parents=True, exist_ok=True)
@@ -8350,7 +8648,7 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
         default_gateway="main",
     )
     context = Context(config=config)
-    assert context.engine_adapter == context._engine_adapters["main"]
+    assert context.engine_adapter == context.engine_adapters["main"]
 
     @model(
         name="dummy_model",
@@ -8376,7 +8674,7 @@ def test_gateway_specific_render(assert_exp_eq) -> None:
         """,
     )
     assert isinstance(context._get_engine_adapter("duckdb"), DuckDBEngineAdapter)
-    assert len(context._engine_adapters) == 2
+    assert len(context.engine_adapters) == 2
 
 
 def test_model_on_virtual_update(make_snapshot: t.Callable):
@@ -8636,7 +8934,7 @@ def test_partition_interval_unit():
 
 
 def test_model_blueprinting(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -8679,7 +8977,7 @@ def identity(evaluator, value):
     blueprint_pydf.parent.mkdir(parents=True, exist_ok=True)
     blueprint_pydf.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 
@@ -8797,7 +9095,7 @@ def entrypoint(evaluator):
 
 
 def test_dynamic_blueprinting_using_custom_macro(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_custom_macro.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -8860,7 +9158,7 @@ def gen_blueprints(evaluator):
 
 
 def test_dynamic_blueprinting_using_each(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_each.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -8907,7 +9205,7 @@ def entrypoint(evaluator):
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     single_blueprint = tmp_path / "models/single_blueprint.sql"
     single_blueprint.parent.mkdir(parents=True, exist_ok=True)
@@ -8932,7 +9230,7 @@ def test_single_blueprint(tmp_path: Path) -> None:
 
 
 def test_blueprinting_with_quotes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     template_with_quoted_vars = tmp_path / "models/template_with_quoted_vars.sql"
     template_with_quoted_vars.parent.mkdir(parents=True, exist_ok=True)
@@ -8965,7 +9263,7 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
 
 
 def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9050,7 +9348,7 @@ def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Call
 
 
 def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9099,13 +9397,13 @@ def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> 
 
 
 def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.py"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
     blueprint_variables.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlglot import exp
 from sqlmesh import model
 
@@ -9167,7 +9465,7 @@ def test_python_model_depends_on_blueprints(tmp_path: Path) -> None:
     py_model.parent.mkdir(parents=True, exist_ok=True)
     py_model.write_text(
         """
-import pandas as pd
+import pandas as pd  # noqa: TID253
 from sqlmesh import model
 
 @model(
@@ -9324,7 +9622,7 @@ def test_data_hash_unchanged_when_column_type_uses_default_dialect():
 
 
 def test_transitive_dependency_of_metadata_only_object_is_metadata_only(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9403,7 +9701,7 @@ def metadata_macro(evaluator):
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9459,7 +9757,7 @@ def m2(evaluator):
 def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_only(
     tmp_path: Path,
 ) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9726,7 +10024,7 @@ def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path
     # in sqlmesh.utils.metaprogramming.import_python_file. Depending on the module loading
     # order, we could get a "duplicate symbol in python env" error, even though the references
     # essentially pointed to the same definition (e.g. function or class).
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -9808,7 +10106,7 @@ def second_macro(evaluator):
 
 
 def test_unequal_duplicate_python_env_references_are_prohibited(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -9849,7 +10147,7 @@ def f():
 
 
 def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
     config = Config(
@@ -10089,7 +10387,7 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
 
 
 def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
@@ -10132,7 +10430,7 @@ def check_self_schema(evaluator):
 
 
 def test_model_relies_on_os_getenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     (tmp_path / "macros" / "getenv_macro.py").write_text(
         """
@@ -10169,3 +10467,54 @@ def test_invalid_sql_model_query() -> None:
             match=r"^A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block.*",
         ):
             load_sql_based_model(expressions)
+
+
+def test_query_label_and_authorization_macro() -> None:
+    @macro()
+    def test_query_label_macro(evaluator):
+        return "[('key', 'value')]"
+
+    @macro()
+    def test_authorization_macro(evaluator):
+        return exp.Literal.string("test_authorization")
+
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           session_properties (
+            query_label = @test_query_label_macro(),
+            authorization = @test_authorization_macro()
+           )
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.session_properties == {
+        "query_label": d.parse_one("@test_query_label_macro()"),
+        "authorization": d.parse_one("@test_authorization_macro()"),
+    }
+
+    assert model.render_session_properties() == {
+        "query_label": d.parse_one("[('key', 'value')]"),
+        "authorization": d.parse_one("'test_authorization'"),
+    }
+
+
+def test_boolean_property_validation() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           enabled @IF(TRUE, TRUE, FALSE),
+           dialect tsql
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="tsql")
+    assert model.enabled

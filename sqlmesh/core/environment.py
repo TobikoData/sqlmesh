@@ -43,6 +43,10 @@ class EnvironmentNamingInfo(PydanticModel):
     normalize_name: bool = True
     gateway_managed: bool = False
 
+    @property
+    def is_dev(self) -> bool:
+        return self.name.lower() != c.PROD
+
     @field_validator("name", mode="before")
     @classmethod
     def _sanitize_name(cls, v: str) -> str:
@@ -227,6 +231,19 @@ class Environment(EnvironmentNamingInfo, EnvironmentSummary):
             previous_plan_id=self.previous_plan_id,
             expiration_ts=self.expiration_ts,
             finalized_ts=self.finalized_ts,
+        )
+
+    def can_partially_promote(self, existing_environment: Environment) -> bool:
+        """Returns True if the existing environment can be partially promoted to the current environment.
+
+        Partial promotion means that we don't need to re-create views for snapshots that are already promoted in the
+        target environment.
+        """
+        return (
+            bool(existing_environment.finalized_ts)
+            and not existing_environment.expired
+            and existing_environment.gateway_managed == self.gateway_managed
+            and existing_environment.name == c.PROD
         )
 
     def _convert_list_to_models_and_store(

@@ -43,7 +43,7 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql", "azuresql"}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -55,11 +55,10 @@ MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
 
 
 def _get_engine_import_validator(
-    import_name: str, engine_type: str, extra_name: t.Optional[str] = None
+    import_name: str, engine_type: str, extra_name: t.Optional[str] = None, decorate: bool = True
 ) -> t.Callable:
     extra_name = extra_name or engine_type
 
-    @model_validator(mode="before")
     def validate(cls: t.Any, data: t.Any) -> t.Any:
         check_import = (
             str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
@@ -83,11 +82,14 @@ def _get_engine_import_validator(
 
         return data
 
-    return validate
+    return model_validator(mode="before")(validate) if decorate else validate
 
 
 class ConnectionConfig(abc.ABC, BaseConfig):
     type_: str
+    DIALECT: t.ClassVar[str]
+    DISPLAY_NAME: t.ClassVar[str]
+    DISPLAY_ORDER: t.ClassVar[int]
     concurrent_tasks: int
     register_comments: bool
     pre_ping: bool
@@ -221,6 +223,11 @@ class DuckDBAttachOptions(BaseConfig):
     path: str
     read_only: bool = False
 
+    # DuckLake specific options
+    data_path: t.Optional[str] = None
+    encrypted: bool = False
+    data_inlining_row_limit: t.Optional[int] = None
+
     def to_sql(self, alias: str) -> str:
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
@@ -229,6 +236,16 @@ class DuckDBAttachOptions(BaseConfig):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
+
+        # DuckLake specific options
+        if self.type == "ducklake":
+            if self.data_path is not None:
+                options.append(f"DATA_PATH '{self.data_path}'")
+            if self.encrypted:
+                options.append("ENCRYPTED")
+            if self.data_inlining_row_limit is not None:
+                options.append(f"DATA_INLINING_ROW_LIMIT {self.data_inlining_row_limit}")
+
         options_sql = f" ({', '.join(options)})" if options else ""
         alias_sql = ""
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
@@ -249,6 +266,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         extensions: A list of autoloadable extensions to load.
         connector_config: A dictionary of configuration to pass into the duckdb connector.
         secrets: A list of dictionaries used to generate DuckDB secrets for authenticating with external services (e.g. S3).
+        filesystems: A list of dictionaries used to register `fsspec` filesystems to the DuckDB cursor.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         register_comments: Whether or not to register model comments with the SQL engine.
         pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
@@ -260,6 +278,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
     secrets: t.List[t.Dict[str, t.Any]] = []
+    filesystems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -353,6 +372,15 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                                 cursor.execute(f"CREATE SECRET ({secret_clause});")
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
+
+            if self.filesystems:
+                from fsspec import filesystem  # type: ignore
+
+                for file_system in self.filesystems:
+                    options = file_system.copy()
+                    fs = options.pop("fs")
+                    fs = filesystem(fs, **options)
+                    cursor.register_filesystem(fs)
 
             for i, (alias, path_options) in enumerate(
                 (getattr(self, "catalogs", None) or {}).items()
@@ -449,6 +477,9 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the MotherDuck connection."""
 
     type_: t.Literal["motherduck"] = Field(alias="type", default="motherduck")
+    DIALECT: t.ClassVar[t.Literal["duckdb"]] = "duckdb"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MotherDuck"]] = "MotherDuck"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[5]] = 5
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -473,6 +504,9 @@ class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection."""
 
     type_: t.Literal["duckdb"] = Field(alias="type", default="duckdb")
+    DIALECT: t.ClassVar[t.Literal["duckdb"]] = "duckdb"
+    DISPLAY_NAME: t.ClassVar[t.Literal["DuckDB"]] = "DuckDB"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[1]] = 1
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
@@ -523,9 +557,11 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     session_parameters: t.Optional[dict] = None
 
     type_: t.Literal["snowflake"] = Field(alias="type", default="snowflake")
+    DIALECT: t.ClassVar[t.Literal["snowflake"]] = "snowflake"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Snowflake"]] = "Snowflake"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[2]] = 2
 
     _concurrent_tasks_validator = concurrent_tasks_validator
-    _engine_import_validator = _get_engine_import_validator("snowflake", "snowflake")
 
     @model_validator(mode="before")
     def _validate_authenticator(cls, data: t.Any) -> t.Any:
@@ -551,6 +587,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             raise ConfigError("Token must be provided if using oauth authentication")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator(
+        "snowflake.connector.network", "snowflake"
+    )
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -716,10 +756,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["databricks"] = Field(alias="type", default="databricks")
+    DIALECT: t.ClassVar[t.Literal["databricks"]] = "databricks"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Databricks"]] = "Databricks"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[3]] = 3
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
-    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @model_validator(mode="before")
     def _databricks_connect_validator(cls, data: t.Any) -> t.Any:
@@ -796,6 +838,8 @@ class DatabricksConnectionConfig(ConnectionConfig):
                 raise ValueError("`http_path` is still required when using `auth_type`")
 
         return data
+
+    _engine_import_validator = _get_engine_import_validator("databricks", "databricks")
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -971,6 +1015,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["bigquery"] = Field(alias="type", default="bigquery")
+    DIALECT: t.ClassVar[t.Literal["bigquery"]] = "bigquery"
+    DISPLAY_NAME: t.ClassVar[t.Literal["BigQuery"]] = "BigQuery"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[4]] = 4
 
     _engine_import_validator = _get_engine_import_validator("google.cloud.bigquery", "bigquery")
 
@@ -1111,7 +1158,12 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     timeout: t.Optional[int] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/sqlservice.admin",)
     driver: str = "pg8000"
+
     type_: t.Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
+    DIALECT: t.ClassVar[t.Literal["postgres"]] = "postgres"
+    DISPLAY_NAME: t.ClassVar[t.Literal["GCP Postgres"]] = "GCP Postgres"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[13]] = 13
+
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
@@ -1246,6 +1298,9 @@ class RedshiftConnectionConfig(ConnectionConfig):
     pre_ping: bool = False
 
     type_: t.Literal["redshift"] = Field(alias="type", default="redshift")
+    DIALECT: t.ClassVar[t.Literal["redshift"]] = "redshift"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Redshift"]] = "Redshift"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[7]] = 7
 
     _engine_import_validator = _get_engine_import_validator("redshift_connector", "redshift")
 
@@ -1307,6 +1362,9 @@ class PostgresConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["postgres"] = Field(alias="type", default="postgres")
+    DIALECT: t.ClassVar[t.Literal["postgres"]] = "postgres"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Postgres"]] = "Postgres"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[12]] = 12
 
     _engine_import_validator = _get_engine_import_validator("psycopg2", "postgres")
 
@@ -1360,6 +1418,9 @@ class MySQLConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["mysql"] = Field(alias="type", default="mysql")
+    DIALECT: t.ClassVar[t.Literal["mysql"]] = "mysql"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MySQL"]] = "MySQL"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[14]] = 14
 
     _engine_import_validator = _get_engine_import_validator("pymysql", "mysql")
 
@@ -1407,17 +1468,53 @@ class MSSQLConnectionConfig(ConnectionConfig):
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 
+    # Driver options
+    driver: t.Literal["pymssql", "pyodbc"] = "pymssql"
+    # PyODBC specific options
+    driver_name: t.Optional[str] = None  # e.g. "ODBC Driver 18 for SQL Server"
+    trust_server_certificate: t.Optional[bool] = None
+    encrypt: t.Optional[bool] = None
+    # Dictionary of arbitrary ODBC connection properties
+    # See: https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute
+    odbc_properties: t.Optional[t.Dict[str, t.Any]] = None
+
     concurrent_tasks: int = 4
     register_comments: bool = True
     pre_ping: bool = True
 
     type_: t.Literal["mssql"] = Field(alias="type", default="mssql")
+    DIALECT: t.ClassVar[t.Literal["tsql"]] = "tsql"
+    DISPLAY_NAME: t.ClassVar[t.Literal["MSSQL"]] = "MSSQL"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[11]] = 11
 
-    _engine_import_validator = _get_engine_import_validator("pymssql", "mssql")
+    @model_validator(mode="before")
+    @classmethod
+    def _mssql_engine_import_validator(cls, data: t.Any) -> t.Any:
+        if not isinstance(data, dict):
+            return data
+
+        driver = data.get("driver", "pymssql")
+
+        # Define the mapping of driver to import module and extra name
+        driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
+
+        if driver not in driver_configs:
+            raise ValueError(f"Unsupported driver: {driver}")
+
+        import_module, extra_name = driver_configs[driver]
+
+        # Use _get_engine_import_validator with decorate=False to get the raw validation function
+        # This avoids the __wrapped__ issue in Python 3.9
+        validator_func = _get_engine_import_validator(
+            import_module, driver, extra_name, decorate=False
+        )
+
+        # Call the raw validation function directly
+        return validator_func(cls, data)
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {
+        base_keys = {
             "host",
             "user",
             "password",
@@ -1432,15 +1529,96 @@ class MSSQLConnectionConfig(ConnectionConfig):
             "tds_version",
         }
 
+        if self.driver == "pyodbc":
+            base_keys.update(
+                {
+                    "driver_name",
+                    "trust_server_certificate",
+                    "encrypt",
+                    "odbc_properties",
+                }
+            )
+            # Remove pymssql-specific parameters
+            base_keys.discard("tds_version")
+            base_keys.discard("conn_properties")
+
+        return base_keys
+
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.MSSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
+        if self.driver == "pymssql":
+            import pymssql
 
-        return pymssql.connect
+            return pymssql.connect
+
+        import pyodbc
+
+        def connect(**kwargs: t.Any) -> t.Callable:
+            # Extract parameters for connection string
+            host = kwargs.pop("host")
+            port = kwargs.pop("port", 1433)
+            database = kwargs.pop("database", "")
+            user = kwargs.pop("user", None)
+            password = kwargs.pop("password", None)
+            driver_name = kwargs.pop("driver_name", "ODBC Driver 18 for SQL Server")
+            trust_server_certificate = kwargs.pop("trust_server_certificate", False)
+            encrypt = kwargs.pop("encrypt", True)
+            login_timeout = kwargs.pop("login_timeout", 60)
+
+            # Build connection string
+            conn_str_parts = [
+                f"DRIVER={{{driver_name}}}",
+                f"SERVER={host},{port}",
+            ]
+
+            if database:
+                conn_str_parts.append(f"DATABASE={database}")
+
+            # Add security options
+            conn_str_parts.append(f"Encrypt={'YES' if encrypt else 'NO'}")
+            if trust_server_certificate:
+                conn_str_parts.append("TrustServerCertificate=YES")
+
+            conn_str_parts.append(f"Connection Timeout={login_timeout}")
+
+            # Standard SQL Server authentication
+            if user:
+                conn_str_parts.append(f"UID={user}")
+            if password:
+                conn_str_parts.append(f"PWD={password}")
+
+            # Add any additional ODBC properties from the odbc_properties dictionary
+            if self.odbc_properties:
+                for key, value in self.odbc_properties.items():
+                    # Skip properties that we've already set above
+                    if key.lower() in (
+                        "driver",
+                        "server",
+                        "database",
+                        "uid",
+                        "pwd",
+                        "encrypt",
+                        "trustservercertificate",
+                        "connection timeout",
+                    ):
+                        continue
+
+                    # Handle boolean values properly
+                    if isinstance(value, bool):
+                        conn_str_parts.append(f"{key}={'YES' if value else 'NO'}")
+                    else:
+                        conn_str_parts.append(f"{key}={value}")
+
+            # Create the connection string
+            conn_str = ";".join(conn_str_parts)
+
+            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+        return connect
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
@@ -1449,6 +1627,8 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
 class AzureSQLConnectionConfig(MSSQLConnectionConfig):
     type_: t.Literal["azuresql"] = Field(alias="type", default="azuresql")  # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Azure SQL"]] = "Azure SQL"  # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[10]] = 10  # type: ignore
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
@@ -1469,6 +1649,9 @@ class SparkConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["spark"] = Field(alias="type", default="spark")
+    DIALECT: t.ClassVar[t.Literal["spark"]] = "spark"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Spark"]] = "Spark"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[8]] = 8
 
     _engine_import_validator = _get_engine_import_validator("pyspark", "spark")
 
@@ -1587,6 +1770,9 @@ class TrinoConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["trino"] = Field(alias="type", default="trino")
+    DIALECT: t.ClassVar[t.Literal["trino"]] = "trino"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Trino"]] = "Trino"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[9]] = 9
 
     _engine_import_validator = _get_engine_import_validator("trino", "trino")
 
@@ -1722,11 +1908,19 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     cluster: t.Optional[str] = None
     connect_timeout: int = 10
     send_receive_timeout: int = 300
-    verify: bool = True
     query_limit: int = 0
     use_compression: bool = True
     compression_method: t.Optional[str] = None
     connection_settings: t.Optional[t.Dict[str, t.Any]] = None
+    http_proxy: t.Optional[str] = None
+    # HTTPS/TLS settings
+    verify: bool = True
+    ca_cert: t.Optional[str] = None
+    client_cert: t.Optional[str] = None
+    client_cert_key: t.Optional[str] = None
+    https_proxy: t.Optional[str] = None
+    server_host_name: t.Optional[str] = None
+    tls_mode: t.Optional[str] = None
 
     concurrent_tasks: int = 1
     register_comments: bool = True
@@ -1739,6 +1933,9 @@ class ClickhouseConnectionConfig(ConnectionConfig):
     connection_pool_options: t.Optional[t.Dict[str, t.Any]] = None
 
     type_: t.Literal["clickhouse"] = Field(alias="type", default="clickhouse")
+    DIALECT: t.ClassVar[t.Literal["clickhouse"]] = "clickhouse"
+    DISPLAY_NAME: t.ClassVar[t.Literal["ClickHouse"]] = "ClickHouse"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[6]] = 6
 
     _engine_import_validator = _get_engine_import_validator("clickhouse_connect", "clickhouse")
 
@@ -1751,8 +1948,15 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             "password",
             "connect_timeout",
             "send_receive_timeout",
-            "verify",
             "query_limit",
+            "http_proxy",
+            "verify",
+            "ca_cert",
+            "client_cert",
+            "client_cert_key",
+            "https_proxy",
+            "server_host_name",
+            "tls_mode",
         }
         return kwargs
 
@@ -1771,7 +1975,18 @@ class ClickhouseConnectionConfig(ConnectionConfig):
             maxsize=self.concurrent_tasks,
             # Block if there are no free connections
             block=True,
+            verify=self.verify,
+            ca_cert=self.ca_cert,
+            client_cert=self.client_cert,
+            client_cert_key=self.client_cert_key,
+            https_proxy=self.https_proxy,
         )
+        # this doesn't happen automatically because we always supply our own pool manager to the connection
+        # https://github.com/ClickHouse/clickhouse-connect/blob/3a7f4b04cad29c7c2536661b831fb744248e2ec0/clickhouse_connect/driver/httpclient.py#L109
+        if self.server_host_name:
+            pool_manager_options["server_hostname"] = self.server_host_name
+            if self.verify:
+                pool_manager_options["assert_hostname"] = self.server_host_name
         if self.connection_pool_options:
             pool_manager_options.update(self.connection_pool_options)
         pool_mgr = httputil.get_pool_manager(**pool_manager_options)
@@ -1845,6 +2060,9 @@ class AthenaConnectionConfig(ConnectionConfig):
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
+    DIALECT: t.ClassVar[t.Literal["athena"]] = "athena"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Athena"]] = "Athena"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[15]] = 15
 
     _engine_import_validator = _get_engine_import_validator("pyathena", "athena")
 
@@ -1913,6 +2131,9 @@ class RisingwaveConnectionConfig(ConnectionConfig):
     pre_ping: bool = True
 
     type_: t.Literal["risingwave"] = Field(alias="type", default="risingwave")
+    DIALECT: t.ClassVar[t.Literal["risingwave"]] = "risingwave"
+    DISPLAY_NAME: t.ClassVar[t.Literal["RisingWave"]] = "RisingWave"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[16]] = 16
 
     _engine_import_validator = _get_engine_import_validator("psycopg2", "risingwave")
 
@@ -1950,6 +2171,27 @@ class RisingwaveConnectionConfig(ConnectionConfig):
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
+    for tpe in subclasses(
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+    )
+}
+
+DIALECT_TO_TYPE = {
+    tpe.all_field_infos()["type_"].default: tpe.DIALECT
+    for tpe in subclasses(
+        __name__,
+        ConnectionConfig,
+        exclude=(ConnectionConfig, BaseDuckDBConnectionConfig),
+    )
+}
+
+INIT_DISPLAY_INFO_TO_TYPE = {
+    tpe.all_field_infos()["type_"].default: (
+        tpe.DISPLAY_ORDER,
+        tpe.DISPLAY_NAME,
+    )
     for tpe in subclasses(
         __name__,
         ConnectionConfig,

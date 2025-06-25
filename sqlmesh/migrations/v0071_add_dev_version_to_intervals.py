@@ -2,7 +2,6 @@
 
 import typing as t
 import json
-import pandas as pd
 import zlib
 
 from sqlglot import exp
@@ -62,6 +61,8 @@ def _migrate_intervals(
     used_snapshot_ids: t.Set[t.Tuple[str, str]],
     snapshot_ids_to_dev_versions: t.Dict[t.Tuple[str, str], str],
 ) -> None:
+    import pandas as pd
+
     index_type = index_text_type(engine_adapter.dialect)
     intervals_columns_to_types = {
         "id": exp.DataType.build(index_type),
@@ -148,6 +149,8 @@ def _migrate_snapshots(
     used_snapshot_ids: t.Set[t.Tuple[str, str]],
     snapshot_ids_to_dev_versions: t.Dict[t.Tuple[str, str], str],
 ) -> None:
+    import pandas as pd
+
     index_type = index_text_type(engine_adapter.dialect)
     blob_type = blob_text_type(engine_adapter.dialect)
     snapshots_columns_to_types = {

@@ -1,6 +1,6 @@
 import typing as t
 
-import pandas as pd
+import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -98,6 +98,7 @@ def test_session(
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
     adapter.cursor.fetchone.return_value = (current_warehouse,)
 
+    # Test normal execution
     with adapter.session({"warehouse": configured_warehouse}):
         pass
 
@@ -113,6 +114,27 @@ def test_session(
         )
 
     assert to_sql_calls(adapter) == expected_calls
+
+    # Test exception handling - warehouse should still be reset
+    if should_change:
+        adapter.cursor.execute.reset_mock()
+        adapter.cursor.fetchone.return_value = (current_warehouse,)
+
+        try:
+            with adapter.session({"warehouse": configured_warehouse}):
+                adapter.execute("SELECT 1")
+                raise RuntimeError("Test exception")
+        except RuntimeError:
+            pass
+
+        expected_exception_calls = [
+            "SELECT CURRENT_WAREHOUSE()",
+            f"USE WAREHOUSE {configured_warehouse_exp}",
+            "SELECT 1",
+            f"USE WAREHOUSE {current_warehouse_exp}",
+        ]
+
+        assert to_sql_calls(adapter) == expected_exception_calls
 
 
 def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
@@ -791,4 +813,23 @@ def test_create_view_with_schema_and_grants(
         """CREATE OR REPLACE VIEW "target_view" ("ID", "NAME") COPY GRANTS COMMENT='normal **view** from integration test' AS SELECT 1 AS "ID", 'foo' AS "NAME\"""",
         # materialized view - COPY GRANTS goes before the column list
         """CREATE OR REPLACE MATERIALIZED VIEW "target_materialized_view" COPY GRANTS ("ID", "NAME") COMMENT='materialized **view** from integration test' AS SELECT 1 AS "ID", 'foo' AS "NAME\"""",
+    ]
+
+
+def test_create_catalog(snowflake_mocked_engine_adapter: SnowflakeEngineAdapter) -> None:
+    adapter = snowflake_mocked_engine_adapter
+    adapter.create_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == [
+        "CREATE DATABASE IF NOT EXISTS \"foo\" COMMENT='sqlmesh_managed'"
+    ]
+
+
+def test_drop_catalog(snowflake_mocked_engine_adapter: SnowflakeEngineAdapter) -> None:
+    adapter = snowflake_mocked_engine_adapter
+    adapter.drop_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == [
+        """SELECT 1 FROM "INFORMATION_SCHEMA"."DATABASES" WHERE "DATABASE_NAME" = 'foo' AND "COMMENT" = 'sqlmesh_managed'""",
+        'DROP DATABASE IF EXISTS "foo"',
     ]
