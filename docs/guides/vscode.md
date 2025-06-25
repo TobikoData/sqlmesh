@@ -168,7 +168,7 @@ You can verify that the environment variables are being passed to the language s
 3. You should see the environment variables printed in the terminal
    ![terminal_env_vars](./vscode/terminal_env_vars.png)
 
-If you change your environment variables in the terminal during development (e.g. `export DATABASE_PASSWORD='XYZ'`), you must restart the language server for the changes to take effect. You can do this by running the following command in the terminal:
+If you change your setup during development (e.g., add variables to your shell config), you must restart the language server for the changes to take effect. You can do this by running the following command in the terminal:
 
 1. `Cmd +Shift + P` (`Ctrl + Shift + P` in case of Windows) to start the VSCode command bar
 2. Select the option: `SQLMesh: Restart Servers`
