@@ -4,25 +4,26 @@ import logging
 import os
 import sys
 import typing as t
+from pathlib import Path
 
 import click
+
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.project_init import (
+    InitCliMode,
     ProjectTemplate,
     init_example_project,
-    InitCliMode,
     interactive_init,
 )
 from sqlmesh.core.analytics import cli_analytics
-from sqlmesh.core.console import configure_console, get_console
-from sqlmesh.utils import Verbosity
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.core.context import Context
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,7 @@ def evaluate(
     "--append-newline",
     is_flag=True,
     help="Include a newline at the end of each file.",
+    default=None,
 )
 @opt.format_options
 @click.pass_context
@@ -805,7 +807,11 @@ def check_intervals(
     context = ctx.obj
     context.console.show_intervals(
         context.check_intervals(
-            environment, no_signals=no_signals, select_models=select_model, start=start, end=end
+            environment,
+            no_signals=no_signals,
+            select_models=select_model,
+            start=start,
+            end=end,
         )
     )
 
@@ -1107,7 +1113,10 @@ def clean(obj: Context) -> None:
 @error_handler
 @cli_analytics
 def table_name(
-    obj: Context, model_name: str, environment: t.Optional[str] = None, prod: bool = False
+    obj: Context,
+    model_name: str,
+    environment: t.Optional[str] = None,
+    prod: bool = False,
 ) -> None:
     """Prints the name of the physical table for the given model."""
     print(obj.table_name(model_name, environment, prod))
