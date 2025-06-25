@@ -14,7 +14,7 @@ interface RenderModelRequest {
   textDocumentUri: string
 }
 
-interface RenderModelResponse {
+interface RenderModelResponse extends BaseResponse {
   models: RenderModelEntry[]
 }
 
@@ -25,7 +25,6 @@ export interface RenderModelEntry {
   rendered_query: string
 }
 
-// @eslint-disable-next-line  @typescript-eslint/consistent-type-definition
 export type CustomLSPMethods =
   | AllModelsMethod
   | AbstractAPICall
@@ -40,7 +39,7 @@ interface AllModelsRequest {
   }
 }
 
-interface AllModelsResponse {
+interface AllModelsResponse extends BaseResponse {
   models: string[]
   keywords: string[]
 }
@@ -55,8 +54,10 @@ export interface AbstractAPICallRequest {
 export interface AbstractAPICall {
   method: 'sqlmesh/api'
   request: AbstractAPICallRequest
-  response: object
+  response: AbstractAPICallResponse
 }
+
+type AbstractAPICallResponse = object & BaseResponse
 
 export interface AllModelsForRenderMethod {
   method: 'sqlmesh/all_models_for_render'
@@ -67,7 +68,7 @@ export interface AllModelsForRenderMethod {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface AllModelsForRenderRequest {}
 
-interface AllModelsForRenderResponse {
+interface AllModelsForRenderResponse extends BaseResponse {
   models: ModelForRendering[]
 }
 
@@ -87,7 +88,7 @@ export interface SupportedMethodsMethod {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface SupportedMethodsRequest {}
 
-interface SupportedMethodsResponse {
+interface SupportedMethodsResponse extends BaseResponse {
   methods: CustomMethod[]
 }
 
@@ -105,4 +106,8 @@ export interface FormatProjectMethod {
 interface FormatProjectRequest {}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface FormatProjectResponse {}
+interface FormatProjectResponse extends BaseResponse {}
+
+interface BaseResponse {
+  response_error?: string
+}

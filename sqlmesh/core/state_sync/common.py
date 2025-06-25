@@ -30,7 +30,9 @@ def cleanup_expired_views(
     console: t.Optional[Console] = None,
 ) -> None:
     expired_schema_environments = [
-        environment for environment in environments if environment.suffix_target.is_schema
+        environment
+        for environment in environments
+        if environment.suffix_target.is_schema or environment.suffix_target.is_catalog
     ]
     expired_table_environments = [
         environment for environment in environments if environment.suffix_target.is_table
@@ -42,8 +44,10 @@ def cleanup_expired_views(
             return engine_adapters.get(gateway, default_adapter)
         return default_adapter
 
+    catalogs_to_drop: t.Set[t.Tuple[EngineAdapter, str]] = set()
+
     # Drop the schemas for the expired environments
-    for engine_adapter, expired_catalog, expired_schema in {
+    for engine_adapter, expired_catalog, expired_schema, suffix_target in {
         (
             (engine_adapter := get_adapter(environment.gateway_managed, snapshot.model_gateway)),
             snapshot.qualified_view_name.catalog_for_environment(
@@ -52,6 +56,7 @@ def cleanup_expired_views(
             snapshot.qualified_view_name.schema_for_environment(
                 environment.naming_info, dialect=engine_adapter.dialect
             ),
+            environment.suffix_target,
         )
         for environment in expired_schema_environments
         for snapshot in environment.snapshots
@@ -64,6 +69,10 @@ def cleanup_expired_views(
                 ignore_if_not_exists=True,
                 cascade=True,
             )
+
+            if suffix_target.is_catalog and expired_catalog:
+                catalogs_to_drop.add((engine_adapter, expired_catalog))
+
             if console:
                 console.update_cleanup_progress(schema.sql(dialect=engine_adapter.dialect))
         except Exception as e:
@@ -95,6 +104,21 @@ def cleanup_expired_views(
                 logger.warning(message)
             else:
                 raise SQLMeshError(message) from e
+
+    # Drop any catalogs that were associated with a snapshot where the engine adapter supports dropping catalogs
+    # catalogs_to_drop is only populated when environment_suffix_target is set to 'catalog'
+    for engine_adapter, catalog in catalogs_to_drop:
+        if engine_adapter.SUPPORTS_CREATE_DROP_CATALOG:
+            try:
+                engine_adapter.drop_catalog(catalog)
+                if console:
+                    console.update_cleanup_progress(catalog)
+            except Exception as e:
+                message = f"Failed to drop the expired environment catalog '{catalog}': {e}"
+                if warn_on_delete_failure:
+                    logger.warning(message)
+                else:
+                    raise SQLMeshError(message) from e
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:

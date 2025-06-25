@@ -8,7 +8,6 @@ import pathlib
 import re
 import traceback
 import typing as t
-import unittest
 from enum import Enum
 from typing import List
 from pathlib import Path
@@ -20,6 +19,7 @@ from sqlglot.helper import seq_get
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, get_console, MarkdownConsole
 from sqlmesh.core.context import Context
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import Plan, PlanBuilder
 from sqlmesh.core.snapshot.definition import (
@@ -409,6 +409,13 @@ class GithubController:
         return self._pr_plan_builder.build()
 
     @property
+    def pr_plan_or_none(self) -> t.Optional[Plan]:
+        try:
+            return self.pr_plan
+        except:
+            return None
+
+    @property
     def prod_plan(self) -> Plan:
         if not self._prod_plan_builder:
             self._prod_plan_builder = self._context.plan_builder(
@@ -494,7 +501,7 @@ class GithubController:
         except PlanError as e:
             return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
 
-    def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
+    def run_tests(self) -> t.Tuple[ModelTextTestResult, str]:
         """
         Run tests for the PR
         """
@@ -734,8 +741,8 @@ class GithubController:
         self,
         status: GithubCheckStatus,
         conclusion: t.Optional[GithubCheckConclusion] = None,
-        result: t.Optional[unittest.result.TestResult] = None,
-        output: t.Optional[str] = None,
+        result: t.Optional[ModelTextTestResult] = None,
+        traceback: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of tests for code in the PR
@@ -743,15 +750,13 @@ class GithubController:
 
         def conclusion_handler(
             conclusion: GithubCheckConclusion,
-            result: t.Optional[unittest.result.TestResult],
-            output: t.Optional[str],
+            result: t.Optional[ModelTextTestResult],
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if result:
                 # Clear out console
                 self._console.consume_captured_output()
                 self._console.log_test_results(
                     result,
-                    output,
                     self._context.test_connection_config._engine_adapter.DIALECT,
                 )
                 test_summary = self._console.consume_captured_output()
@@ -762,8 +767,11 @@ class GithubController:
                     else GithubCheckConclusion.FAILURE
                 )
                 return test_conclusion, test_title, test_summary
+            if traceback:
+                self._console._print(traceback)
+
             test_title = "Skipped Tests" if conclusion.is_skipped else "Tests Failed"
-            return conclusion, test_title, output
+            return conclusion, test_title, traceback
 
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",
@@ -776,7 +784,7 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
+            conclusion_handler=functools.partial(conclusion_handler, result=result),
         )
 
     def update_required_approval_check(
@@ -822,6 +830,7 @@ class GithubController:
         self,
         status: GithubCheckStatus,
         exception: t.Optional[Exception] = None,
+        plan: t.Optional[Plan] = None,
     ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
@@ -925,6 +934,14 @@ class GithubController:
                 if captured_errors:
                     logger.debug(f"Captured errors: {captured_errors}")
                     failure_msg = f"**Errors:**\n{captured_errors}\n"
+                elif isinstance(exception, UncategorizedPlanError) and plan:
+                    failure_msg = f"The following models could not be categorized automatically:\n"
+                    for snapshot in plan.uncategorized:
+                        failure_msg += f"- {snapshot.name}\n"
+                    failure_msg += (
+                        f"\nRun `sqlmesh plan {self.pr_environment_name}` locally to apply these changes.\n\n"
+                        "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+                    )
                 elif isinstance(exception, PlanError):
                     failure_msg = f"Plan application failed.\n\n{self._console.captured_output}"
                 elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
@@ -939,11 +956,12 @@ class GithubController:
                         + traceback.format_exc()
                     )
                     failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
+
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
                     GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n\n{failure_msg}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
+                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:\n\n{failure_msg}",
                 }
                 summary = conclusion_to_summary.get(
                     conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
@@ -1021,7 +1039,7 @@ class GithubController:
             conclusion_to_title = {
                 GithubCheckConclusion.SUCCESS: "Deployed to Prod",
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
-                GithubCheckConclusion.SKIPPED: skip_reason,
+                GithubCheckConclusion.SKIPPED: "Skipped deployment",
                 GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
                 GithubCheckConclusion.ACTION_REQUIRED: "Failed due to error applying plan",
             }
@@ -1030,7 +1048,7 @@ class GithubController:
                 or f"Got an unexpected conclusion: {conclusion.value}"
             )
             if conclusion.is_skipped:
-                summary = title
+                summary = skip_reason
             elif conclusion.is_failure:
                 captured_errors = self._console.consume_captured_errors()
                 summary = (

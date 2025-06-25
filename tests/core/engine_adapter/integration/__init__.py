@@ -205,6 +205,9 @@ class TestContext:
         self._schemas: t.List[
             str
         ] = []  # keep track of any schemas returned from self.schema() / self.table() so we can drop them at the end
+        self._catalogs: t.List[
+            str
+        ] = []  # keep track of any catalogs created via self.create_catalog() so we can drop them at the end
 
     @property
     def test_type(self) -> str:
@@ -685,6 +688,8 @@ class TestContext:
             except Exception:
                 pass
 
+        self._catalogs.append(catalog_name)
+
     def drop_catalog(self, catalog_name: str):
         if self.dialect == "bigquery":
             return  # bigquery cannot create/drop catalogs
@@ -706,6 +711,9 @@ class TestContext:
             self.engine_adapter.drop_schema(
                 schema_name=schema_name, ignore_if_not_exists=True, cascade=True
             )
+
+        for catalog_name in set(self._catalogs):
+            self.drop_catalog(catalog_name)
 
         self.engine_adapter.close()
 

@@ -90,18 +90,18 @@ class MSSQLEngineAdapter(
 
         sql = (
             exp.select(
-                "column_name",
-                "data_type",
-                "character_maximum_length",
-                "numeric_precision",
-                "numeric_scale",
+                "COLUMN_NAME",
+                "DATA_TYPE",
+                "CHARACTER_MAXIMUM_LENGTH",
+                "NUMERIC_PRECISION",
+                "NUMERIC_SCALE",
             )
-            .from_("information_schema.columns")
-            .where(f"table_name = '{table.name}'")
+            .from_("INFORMATION_SCHEMA.COLUMNS")
+            .where(f"TABLE_NAME = '{table.name}'")
         )
         database_name = table.db
         if database_name:
-            sql = sql.where(f"table_schema = '{database_name}'")
+            sql = sql.where(f"TABLE_SCHEMA = '{database_name}'")
 
         columns_raw = self.fetchall(sql, quote_identifiers=True)
 
@@ -145,12 +145,12 @@ class MSSQLEngineAdapter(
 
         sql = (
             exp.select("1")
-            .from_("information_schema.tables")
-            .where(f"table_name = '{table.alias_or_name}'")
+            .from_("INFORMATION_SCHEMA.TABLES")
+            .where(f"TABLE_NAME = '{table.alias_or_name}'")
         )
         database_name = table.db
         if database_name:
-            sql = sql.where(f"table_schema = '{database_name}'")
+            sql = sql.where(f"TABLE_SCHEMA = '{database_name}'")
 
         result = self.fetchone(sql, quote_identifiers=True)
 
@@ -172,15 +172,18 @@ class MSSQLEngineAdapter(
         if cascade:
             objects = self._get_data_objects(schema_name)
             for obj in objects:
+                # Build properly quoted table for MSSQL using square brackets when needed
+                object_table = exp.table_(obj.name, obj.schema_name)
+
                 # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
                 if obj.type == DataObjectType.VIEW:
                     self.drop_view(
-                        ".".join([obj.schema_name, obj.name]),
+                        object_table,
                         ignore_if_not_exists=ignore_if_not_exists,
                     )
                 else:
                     self.drop_table(
-                        ".".join([obj.schema_name, obj.name]),
+                        object_table,
                         exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)

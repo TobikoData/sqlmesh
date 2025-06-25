@@ -149,6 +149,16 @@ Because the VSCode extension establishes a long-running process connected to the
 
 Therefore, we do not recommend using DuckDB as a state store with the VSCode extension.
 
+### Environment variables
+
+The VSCode extension is based on a [language server](https://en.wikipedia.org/wiki/Language_Server_Protocol) that runs in the background as a separate process. When the VSCode extension starts the background language server, the server inherits environment variables from the environment where you started VSCode. The server does *not* inherit environment variables from your terminal instance in VSCode, so it may not have access to variables you use when calling SQLMesh from the CLI.
+
+If you have environment variables that are needed by the context and the language server, you can use one of these approaches to pass variables to the language server:
+
+- Open VSCode from a terminal that has the variables set
+- Use environment variables pulled from somewhere else dynamically (e.g. a `.env` file) in your config 
+- Set the environment variables in the python environment that the extension uses. You can find detailed instructions [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
+
 ### Python environment woes
 
 The most common problem is the extension not using the correct Python interpreter.

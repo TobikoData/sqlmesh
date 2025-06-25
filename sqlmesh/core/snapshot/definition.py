@@ -274,13 +274,19 @@ class QualifiedViewName(PydanticModel, frozen=True):
     def catalog_for_environment(
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> t.Optional[str]:
-        if environment_naming_info.catalog_name_override:
+        catalog_name: t.Optional[str] = None
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_catalog:
+            catalog_name = f"{self.catalog}__{environment_naming_info.name}"
+        elif environment_naming_info.catalog_name_override:
             catalog_name = environment_naming_info.catalog_name_override
+
+        if catalog_name:
             return (
                 normalize_identifiers(catalog_name, dialect=dialect).name
                 if environment_naming_info.normalize_name
                 else catalog_name
             )
+
         return self.catalog
 
     def schema_for_environment(
@@ -295,10 +301,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
             if normalize:
                 schema = normalize_identifiers(schema, dialect=dialect).name
 
-        if (
-            environment_naming_info.name.lower() != c.PROD
-            and environment_naming_info.suffix_target.is_schema
-        ):
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_schema:
             env_name = environment_naming_info.name
             if normalize:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name
@@ -311,10 +314,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> str:
         table = self.table
-        if (
-            environment_naming_info.name.lower() != c.PROD
-            and environment_naming_info.suffix_target.is_table
-        ):
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_table:
             env_name = environment_naming_info.name
             if environment_naming_info.normalize_name:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name

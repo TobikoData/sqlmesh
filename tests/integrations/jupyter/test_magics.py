@@ -134,7 +134,7 @@ def test_context(notebook, convert_all_html_output_to_text, get_all_html_output,
 def test_init(tmp_path, notebook, convert_all_html_output_to_text, get_all_html_output):
     with pytest.raises(UsageError, match="the following arguments are required: path"):
         notebook.run_line_magic(magic_name="init", line="")
-    with pytest.raises(UsageError, match="the following arguments are required: sql_dialect"):
+    with pytest.raises(UsageError, match="the following arguments are required: engine"):
         notebook.run_line_magic(magic_name="init", line="foo")
     with capture_output() as output:
         notebook.run_line_magic(magic_name="init", line=f"{tmp_path} duckdb")
@@ -707,20 +707,6 @@ def test_test(notebook, sushi_context):
     assert test_file.read_text() == """test_customer_revenue_by_day: TESTING\n"""
 
 
-def test_run_test(notebook, sushi_context):
-    with capture_output() as output:
-        notebook.run_line_magic(
-            magic_name="run_test",
-            line=f"{sushi_context.path / 'tests' / 'test_customer_revenue_by_day.yaml'}::test_customer_revenue_by_day",
-        )
-
-    assert not output.stdout
-    # TODO: Does it make sense for this to go to stderr?
-    assert "Ran 1 test" in output.stderr
-    assert "OK" in output.stderr
-    assert not output.outputs
-
-
 @pytest.mark.slow
 def test_audit(notebook, loaded_sushi_context, convert_all_html_output_to_text):
     with capture_output() as output:
@@ -759,16 +745,16 @@ def test_info(notebook, sushi_context, convert_all_html_output_to_text, get_all_
         "Models: 20",
         "Macros: 8",
         "",
-        "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}\n  secrets: None",
-        "Test Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}\n  secrets: None",
+        "Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}\n  secrets: None\n  filesystems: []",
+        "Test Connection:\n  type: duckdb\n  concurrent_tasks: 1\n  register_comments: true\n  pre_ping: false\n  pretty_sql: false\n  extensions: []\n  connector_config: {}\n  secrets: None\n  filesystems: []",
         "Data warehouse connection succeeded",
     ]
     assert get_all_html_output(output) == [
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Models: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">20</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Macros: <span style=\"color: #008080; text-decoration-color: #008080; font-weight: bold\">8</span></pre>",
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"></pre>",
-        '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span>  secrets: <span style="color: #800080; text-decoration-color: #800080; font-style: italic">None</span></pre>',
-        '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Test Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span>  secrets: <span style="color: #800080; text-decoration-color: #800080; font-style: italic">None</span></pre>',
+        '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span>  secrets: <span style="color: #800080; text-decoration-color: #800080; font-style: italic">None</span>  filesystems: <span style="font-weight: bold">[]</span></pre>',
+        '<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">Test Connection:  type: duckdb  concurrent_tasks: <span style="color: #008080; text-decoration-color: #008080; font-weight: bold">1</span>  register_comments: true  pre_ping: false  pretty_sql: false  extensions: <span style="font-weight: bold">[]</span>  connector_config: <span style="font-weight: bold">{}</span>  secrets: <span style="color: #800080; text-decoration-color: #800080; font-style: italic">None</span>  filesystems: <span style="font-weight: bold">[]</span></pre>',
         "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">Data warehouse connection <span style=\"color: #008000; text-decoration-color: #008000\">succeeded</span></pre>",
     ]
 

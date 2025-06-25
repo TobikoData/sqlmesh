@@ -90,16 +90,16 @@ class RichExplainerConsole(ExplainerConsole):
         return Tree("[bold]Execute after all statements[/bold]")
 
     def visit_physical_layer_update_stage(self, stage: stages.PhysicalLayerUpdateStage) -> Tree:
-        if not stage.snapshots:
+        snapshots = [
+            s for s in stage.snapshots if s.snapshot_id in stage.snapshots_with_missing_intervals
+        ]
+        if not snapshots:
             return Tree("[bold]SKIP: No physical layer updates to perform[/bold]")
 
         tree = Tree(
             "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
         )
-        for snapshot in stage.snapshots:
-            if snapshot.snapshot_id not in stage.snapshots_with_missing_intervals:
-                continue
-
+        for snapshot in snapshots:
             is_deployable = (
                 stage.deployability_index.is_deployable(snapshot)
                 if self.environment_naming_info.name != c.PROD

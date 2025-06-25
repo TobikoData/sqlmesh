@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from io import StringIO
+
 import functools
 import logging
 import typing as t
@@ -24,15 +26,16 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from IPython.utils.process import arg_split
 from rich.jupyter import JupyterRenderable
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core import analytics
 from sqlmesh.core.config import load_configs
+from sqlmesh.core.config.connection import INIT_DISPLAY_INFO_TO_TYPE
 from sqlmesh.core.console import create_console, set_console, configure_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata
-from sqlmesh.utils import sqlglot_dialects, yaml, Verbosity, optional_import
+from sqlmesh.utils import yaml, Verbosity, optional_import
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -89,6 +92,43 @@ def pass_sqlmesh_context(func: t.Callable) -> t.Callable:
         set_console(old_console)
 
     return wrapper
+
+
+def format_arguments(func: t.Callable) -> t.Callable:
+    """Decorator to add common format arguments to magic commands."""
+    func = argument(
+        "--normalize",
+        action="store_true",
+        help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
+    )(func)
+    func = argument(
+        "--pad",
+        type=int,
+        help="Determines the pad size in a formatted string.",
+    )(func)
+    func = argument(
+        "--indent",
+        type=int,
+        help="Determines the indentation size in a formatted string.",
+    )(func)
+    func = argument(
+        "--normalize-functions",
+        type=str,
+        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
+    )(func)
+    func = argument(
+        "--leading-comma",
+        action="store_true",
+        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
+        default=None,
+    )(func)
+    func = argument(
+        "--max-text-width",
+        type=int,
+        help="The max number of characters in a segment before creating new lines in pretty mode.",
+    )(func)
+    return func
 
 
 @magics_class
@@ -159,9 +199,9 @@ class SQLMeshMagics(Magics):
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
-        "sql_dialect",
+        "engine",
         type=str,
-        help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
+        help=f"Project SQL engine. Supported values: '{', '.join([info[1] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])])}'.",  # type: ignore
     )
     @argument(
         "--template",
@@ -190,7 +230,12 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(
-            args.path, args.sql_dialect, project_template, args.dlt_pipeline, args.dlt_path
+            path=args.path,
+            engine_type=args.engine,
+            dialect=None,
+            template=project_template,
+            pipeline=args.dlt_pipeline,
+            dlt_path=args.dlt_path,
         )
         html = str(
             h(
@@ -577,23 +622,39 @@ class SQLMeshMagics(Magics):
     )
     @argument("--dialect", type=str, help="SQL dialect to render.")
     @argument("--no-format", action="store_true", help="Disable fancy formatting of the query.")
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def render(self, context: Context, line: str) -> None:
         """Renders a model's query, optionally expanding referenced models."""
         context.refresh()
-        args = parse_argstring(self.render, line)
+        render_opts = vars(parse_argstring(self.render, line))
+        model = render_opts.pop("model")
+        dialect = render_opts.pop("dialect", None)
 
         query = context.render(
-            args.model,
-            start=args.start,
-            end=args.end,
-            execution_time=args.execution_time,
-            expand=args.expand,
+            model,
+            start=render_opts.pop("start", None),
+            end=render_opts.pop("end", None),
+            execution_time=render_opts.pop("execution_time", None),
+            expand=render_opts.pop("expand", False),
         )
 
-        sql = query.sql(pretty=True, dialect=args.dialect or context.config.dialect)
-        if args.no_format:
+        no_format = render_opts.pop("no_format", False)
+
+        format_config = context.config_for_node(model).format
+        format_options = {
+            **format_config.generator_options,
+            **{k: v for k, v in render_opts.items() if v is not None},
+        }
+
+        sql = query.sql(
+            pretty=True,
+            dialect=context.config.dialect if dialect is None else dialect,
+            **format_options,
+        )
+
+        if no_format:
             context.console.log_status_update(sql)
         else:
             context.console.show_sql(sql)
@@ -851,55 +912,24 @@ class SQLMeshMagics(Magics):
         help="Transpile project models to the specified dialect.",
     )
     @argument(
-        "--append-newline",
-        action="store_true",
-        help="Whether or not to append a newline to the end of the file.",
-        default=None,
-    )
-    @argument(
-        "--no-rewrite-casts",
-        action="store_true",
-        help="Whether or not to preserve the existing casts, without rewriting them to use the :: syntax.",
-        default=None,
-    )
-    @argument(
-        "--normalize",
-        action="store_true",
-        help="Whether or not to normalize identifiers to lowercase.",
-        default=None,
-    )
-    @argument(
-        "--pad",
-        type=int,
-        help="Determines the pad size in a formatted string.",
-    )
-    @argument(
-        "--indent",
-        type=int,
-        help="Determines the indentation size in a formatted string.",
-    )
-    @argument(
-        "--normalize-functions",
-        type=str,
-        help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
-    )
-    @argument(
-        "--leading-comma",
-        action="store_true",
-        help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-        default=None,
-    )
-    @argument(
-        "--max-text-width",
-        type=int,
-        help="The max number of characters in a segment before creating new lines in pretty mode.",
-    )
-    @argument(
         "--check",
         action="store_true",
         help="Whether or not to check formatting (but not actually format anything).",
         default=None,
     )
+    @argument(
+        "--append-newline",
+        action="store_true",
+        help="Include a newline at the end of the output.",
+        default=None,
+    )
+    @argument(
+        "--no-rewrite-casts",
+        action="store_true",
+        help="Preserve the existing casts, without rewriting them to use the :: syntax.",
+        default=None,
+    )
+    @format_arguments
     @line_magic
     @pass_sqlmesh_context
     def format(self, context: Context, line: str) -> bool:
@@ -1032,6 +1062,7 @@ class SQLMeshMagics(Magics):
             tests=args.tests,
             verbosity=Verbosity(args.verbose),
             preserve_fixtures=args.preserve_fixtures,
+            stream=StringIO(),  # consume the output instead of redirecting to stdout
         )
 
     @magic_arguments()

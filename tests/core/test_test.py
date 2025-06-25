@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 import unittest
 from unittest.mock import call, patch
-from shutil import copyfile
+from shutil import copyfile, rmtree
 
 import pandas as pd  # noqa: TID253
 import pytest
@@ -14,7 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from IPython.utils.capture import capture_output
 
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
@@ -31,6 +31,7 @@ from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
@@ -1405,7 +1406,7 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
 
 
 def test_generate_input_data_using_sql(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -1591,7 +1592,7 @@ test_pyspark_model:
 
 
 def test_variable_usage(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     variables = {"gold": "gold_db", "silver": "silver_db"}
     incorrect_variables = {"gold": "foo", "silver": "bar"}
@@ -1872,7 +1873,7 @@ outputs:
 
 
 def test_test_generation(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2003,7 +2004,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
         )
         return load_yaml(context.path / c.TESTS / "test_foo.yaml")
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2022,7 +2023,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
 
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2059,7 +2060,7 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
 def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> None:
     from decimal import Decimal
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2095,7 +2096,7 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
 
 
 def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2127,7 +2128,7 @@ def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
 
 
 def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         gateways={
@@ -2218,8 +2219,9 @@ test_resolve_template_macro:
     _check_successful_or_raise(context.test())
 
 
+@use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     original_test_file = tmp_path / "tests" / "test_full_model.yaml"
 
@@ -2243,8 +2245,8 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
-      - item_id: 2
-        num_orders: 2 
+      - item_id: 4
+        num_orders: 3
         """
     )
 
@@ -2255,45 +2257,135 @@ test_example_full_model:
     )
     context = Context(paths=tmp_path, config=config)
 
-    # Case 1: Assert the log report is structured correctly
-    with capture_output() as output:
+    # Case 1: Ensure the log report is structured correctly
+    with capture_output() as captured_output:
         context.test()
 
-    # Order may change due to concurrent execution
-    assert "F." in output.stderr or ".F" in output.stderr
-    assert (
-        f"""======================================================================
-FAIL: test_example_full_model ({new_test_file})
-This is a test
-----------------------------------------------------------------------
-AssertionError: Data mismatch (exp: expected, act: actual)
+    output = captured_output.stdout
 
-  num_orders     
-         exp  act
-1        2.0  1.0
+    # Order may change due to concurrent execution
+    assert "F." in output or ".F" in output
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃     ┃ item_id:        ┃                 ┃ num_orders:     ┃ num_orders:      ┃
+┃ Row ┃ Expected        ┃ item_id: Actual ┃ Expected        ┃ Actual           ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│  0  │       4.0       │       2.0       │       3.0       │       1.0        │
+└─────┴─────────────────┴─────────────────┴─────────────────┴──────────────────┘
 
 ----------------------------------------------------------------------"""
-        in output.stderr
+        in output
     )
 
-    assert "Ran 2 tests" in output.stderr
-    assert "FAILED (failures=1)" in output.stderr
+    assert "Ran 2 tests" in output
+    assert "Failed tests (1):" in output
 
-    # Case 2: Assert that concurrent execution is working properly
+    # Case 2: Ensure that the verbose log report is structured correctly
+    with capture_output() as captured_output:
+        context.test(verbosity=Verbosity.VERBOSE)
+
+    output = captured_output.stdout
+
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                 Column 'item_id' mismatch                  
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      0      │          4.0           │        2.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+                Column 'num_orders' mismatch                
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      0      │          3.0           │        1.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+----------------------------------------------------------------------"""
+        in output
+    )
+
+    # Case 3: Assert that concurrent execution is working properly
     for i in range(50):
         copyfile(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml")
         copyfile(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml")
 
-    with capture_output() as output:
+    with capture_output() as captured_output:
         context.test()
 
-    assert "Ran 102 tests" in output.stderr
-    assert "FAILED (failures=51)" in output.stderr
+    output = captured_output.stdout
+
+    assert "Ran 102 tests" in output
+    assert "Failed tests (51):" in output
+
+    # Case 4: Test that wide tables are split into even chunks for default verbosity
+    rmtree(tmp_path / "tests")
+
+    wide_model_query = (
+        "SELECT 1 AS col_1, 2 AS col_2, 3 AS col_3, 4 AS col_4, 5 AS col_5, 6 AS col_6, 7 AS col_7"
+    )
+
+    context.upsert_model(
+        _create_model(
+            meta="MODEL(name test.test_wide_model)",
+            query=wide_model_query,
+            default_catalog=context.default_catalog,
+        )
+    )
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    wide_test_file = tmp_path / "tests" / "test_wide_model.yaml"
+    wide_test_file_content = """
+    test_wide_model:
+      model: test.test_wide_model
+      outputs:
+        query:
+          rows:
+          - col_1: 6
+            col_2: 5
+            col_3: 4
+            col_4: 3
+            col_5: 2
+            col_6: 1
+            col_7: 0
+ 
+    """
+
+    wide_test_file.write_text(wide_test_file_content)
+
+    with capture_output() as captured_output:
+        context.test()
+
+    assert (
+        """Data mismatch                                  
+┏━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
+┃     ┃ col_1: ┃ col_1: ┃ col_2: ┃ col_2: ┃ col_3: ┃ col_3: ┃ col_4:  ┃ col_4: ┃
+┃ Row ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expect… ┃ Actual ┃
+┡━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│  0  │   6    │   1    │   5    │   2    │   4    │   3    │    3    │   4    │
+└─────┴────────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┘
+
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃     ┃ col_5:    ┃ col_5:    ┃ col_6:    ┃ col_6:    ┃ col_7:    ┃ col_7:     ┃
+┃ Row ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual     ┃
+┡━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│  0  │     2     │     5     │     1     │     6     │     0     │     7      │
+└─────┴───────────┴───────────┴───────────┴───────────┴───────────┴────────────┘"""
+        in captured_output.stdout
+    )
 
 
 @use_terminal_console
 def test_test_output_with_invalid_model_name(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     wrong_test_file = tmp_path / "tests" / "test_incorrect_model_name.yaml"
     wrong_test_file.write_text(
@@ -2330,19 +2422,15 @@ test_example_full_model:
         with capture_output() as output:
             context.test()
 
-        assert (
-            f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
-            in mock_logger.call_args[0][0]
-        )
-        assert (
-            ".\n----------------------------------------------------------------------\nRan 1 test in"
-            in output.stderr
-        )
-        assert "OK" in output.stderr
+    assert (
+        f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
+        in mock_logger.call_args[0][0]
+    )
+    assert "Successfully Ran 1 test" in output.stdout
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     # Example project contains 1 test and we add a new file with 2 tests
     test_file = tmp_path / "tests" / "test_new.yaml"
@@ -2420,7 +2508,7 @@ from sqlmesh.core.macros import macro
 @macro()
 def test_datetime_now(evaluator):
   return exp.cast(exp.Literal.string(datetime.datetime.now(tz=datetime.timezone.utc)), exp.DataType.Type.DATE)
-  
+
 @macro()
 def test_sqlglot_expr(evaluator):
   return exp.CurrentDate().sql(evaluator.dialect)
@@ -2553,6 +2641,7 @@ test_test_upstream_table_python:
     )
 
 
+@use_terminal_console
 @pytest.mark.parametrize("is_error", [True, False])
 def test_model_test_text_result_reporting_no_traceback(
     sushi_context: Context, full_model_with_two_ctes: SqlModel, is_error: bool
@@ -2596,10 +2685,14 @@ test_foo:
         else:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
-    result.log_test_report(0)
+        # Since we're simulating an error/failure, this doesn't go through the
+        # test runner logic, so we need to manually set how many tests were ran
+        result.testsRun = 1
 
-    stream.seek(0)
-    output = stream.read()
+    with capture_output() as captured_output:
+        get_console().log_test_results(result, "duckdb")
+
+    output = captured_output.stdout
 
     # Make sure that the traceback is not printed
     assert "Traceback" not in output
@@ -2640,3 +2733,23 @@ def test_timestamp_normalization() -> None:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run()
     )
+
+
+@use_terminal_console
+def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_test_connection=DuckDBConnectionConfig(concurrent_tasks=8),
+    )
+
+    rmtree(tmp_path / "tests")
+
+    with capture_output() as captured_output:
+        context = Context(paths=tmp_path, config=config)
+        context.plan(no_prompts=True, auto_apply=True)
+
+    output = captured_output.stdout
+    assert "test" not in output.lower()

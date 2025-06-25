@@ -11,11 +11,12 @@ import time_machine
 import json
 from unittest.mock import MagicMock
 from sqlmesh import RuntimeEnv
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime, yesterday_ds
+from sqlmesh.core.config.connection import DIALECT_TO_TYPE
 
 FREEZE_TIME = "2023-01-01 00:00:00 UTC"
 
@@ -47,7 +48,7 @@ def create_example_project(temp_dir) -> None:
         - Creating the SQLMesh example project in the temp_dir directory
         - Overwriting the config.yaml file so the duckdb database file will be created in the temp_dir directory
     """
-    init_example_project(temp_dir, "duckdb")
+    init_example_project(temp_dir, engine_type="duckdb")
     with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
@@ -885,7 +886,7 @@ def test_dlt_pipeline_errors(runner, tmp_path):
     # Error if no pipeline is provided
     result = runner.invoke(cli, ["--paths", tmp_path, "init", "-t", "dlt", "duckdb"])
     assert (
-        "Error: DLT pipeline is a required argument to generate a SQLMesh project from DLT"
+        "Error: Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT"
         in result.output
     )
 
@@ -913,7 +914,9 @@ def test_dlt_filesystem_pipeline(tmp_path):
     info = filesystem_pipeline.run([{"item_id": 1}], table_name="equipment")
     assert not info.has_failed_jobs
 
-    init_example_project(tmp_path, "athena", ProjectTemplate.DLT, "filesystem_pipeline")
+    init_example_project(
+        tmp_path, "athena", template=ProjectTemplate.DLT, pipeline="filesystem_pipeline"
+    )
 
     # Validate generated sqlmesh config and models
     config_path = tmp_path / "config.yaml"
@@ -948,11 +951,12 @@ WHERE
     assert incremental_model == expected_incremental_model
 
     expected_config = (
+        "# --- Gateway Connection ---\n"
         "gateways:\n"
         "  athena:\n"
         "    connection:\n"
         "      # For more information on configuring the connection to your execution engine, visit:\n"
-        "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n"
+        "      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection\n"
         "      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/athena/#connection-options\n"
         "      type: athena\n"
         "      # concurrent_tasks: 4\n"
@@ -968,11 +972,22 @@ WHERE
         "      # s3_staging_dir: \n"
         "      # schema_name: \n"
         "      # catalog_name: \n"
-        "      # s3_warehouse_location: \n\n\n"
+        "      # s3_warehouse_location: \n\n"
         "default_gateway: athena\n\n"
+        "# --- Model Defaults ---\n"
+        "# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults\n\n"
         "model_defaults:\n"
         "  dialect: athena\n"
-        f"  start: {yesterday_ds()}\n"
+        f"  start: {yesterday_ds()} # Start date for backfill history\n"
+        "  cron: '@daily'    # Run models daily at 12am UTC (can override per model)\n\n"
+        "# --- Linting Rules ---\n"
+        "# Enforce standards for your team\n"
+        "# https://sqlmesh.readthedocs.io/en/stable/guides/linter/\n\n"
+        "linter:\n"
+        "  enabled: true\n"
+        "  rules:\n"
+        "    - ambiguousorinvalidcolumn\n"
+        "    - invalidselectstarexpansion\n"
     )
 
     with open(config_path) as file:
@@ -985,7 +1000,7 @@ WHERE
 
 
 @time_machine.travel(FREEZE_TIME)
-def test_plan_dlt(runner, tmp_path):
+def test_dlt_pipeline(runner, tmp_path):
     from dlt.common.pipeline import get_dlt_pipelines_dir
 
     root_dir = path.abspath(getcwd())
@@ -1001,24 +1016,44 @@ def test_plan_dlt(runner, tmp_path):
     # This should fail since it won't be able to locate the pipeline in this path
     with pytest.raises(ClickException, match=r".*Could not attach to pipeline*"):
         init_example_project(
-            tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path="./dlt2/pipelines"
+            tmp_path,
+            "duckdb",
+            template=ProjectTemplate.DLT,
+            pipeline="sushi",
+            dlt_path="./dlt2/pipelines",
         )
 
     # By setting the pipelines path where the pipeline directory is located, it should work
     dlt_path = get_dlt_pipelines_dir()
-    init_example_project(tmp_path, "duckdb", ProjectTemplate.DLT, "sushi", dlt_path=dlt_path)
+    init_example_project(
+        tmp_path, "duckdb", template=ProjectTemplate.DLT, pipeline="sushi", dlt_path=dlt_path
+    )
 
-    expected_config = f"""gateways:
+    expected_config = f"""# --- Gateway Connection ---
+gateways:
   duckdb:
     connection:
       type: duckdb
       database: {dataset_path}
-
 default_gateway: duckdb
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 
 model_defaults:
   dialect: duckdb
-  start: {yesterday_ds()}
+  start: {yesterday_ds()} # Start date for backfill history
+  cron: '@daily'    # Run models daily at 12am UTC (can override per model)
+
+# --- Linting Rules ---
+# Enforce standards for your team
+# https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+linter:
+  enabled: true
+  rules:
+    - ambiguousorinvalidcolumn
+    - invalidselectstarexpansion
 """
 
     with open(tmp_path / "config.yaml") as file:
@@ -1165,30 +1200,6 @@ WHERE
         assert dlt_sushi_twice_nested_model_path.exists()
     finally:
         remove(dataset_path)
-
-
-@time_machine.travel(FREEZE_TIME)
-def test_init_project_dialects(tmp_path):
-    dialect_to_config = {
-        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n      # enable_merge: ",
-        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # impersonated_service_account: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
-        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # host: \n      # port: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
-        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
-        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: \n      # application_name: ",
-    }
-
-    for dialect, expected_config in dialect_to_config.items():
-        init_example_project(tmp_path, dialect=dialect)
-
-        config_start = f"gateways:\n  {dialect}:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connections\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{dialect}/#connection-options\n      type: {dialect}\n      "
-        config_end = f"\n\n\ndefault_gateway: {dialect}\n\nmodel_defaults:\n  dialect: {dialect}\n  start: {yesterday_ds()}\n"
-
-        with open(tmp_path / "config.yaml") as file:
-            config = file.read()
-
-            assert config == f"{config_start}{expected_config}{config_end}"
-
-            remove(tmp_path / "config.yaml")
 
 
 @time_machine.travel(FREEZE_TIME)
@@ -1340,8 +1351,6 @@ def test_state_export(runner: CliRunner, tmp_path: Path) -> None:
         catch_exceptions=False,
     )
     assert result.exit_code == 0
-
-    # verify output
     assert "Gateway: local" in result.output
     assert "Type: duckdb" in result.output
     assert "Exporting versions" in result.output
@@ -1688,27 +1697,6 @@ def test_state_import_local(runner: CliRunner, tmp_path: Path) -> None:
     assert "Aborting" in result.output
 
 
-def test_dbt_init(tmp_path):
-    # The dbt init project doesn't require a dialect
-    init_example_project(tmp_path, dialect=None, template=ProjectTemplate.DBT)
-
-    config_path = tmp_path / "config.py"
-    assert config_path.exists()
-
-    with open(config_path) as file:
-        config = file.read()
-
-    assert (
-        config
-        == """from pathlib import Path
-
-from sqlmesh.dbt.loader import sqlmesh_config
-
-config = sqlmesh_config(Path(__file__).parent)
-"""
-    )
-
-
 def test_ignore_warnings(runner: CliRunner, tmp_path: Path) -> None:
     create_example_project(tmp_path)
 
@@ -1791,3 +1779,268 @@ def test_table_diff_schema_diff_ignore_case(runner: CliRunner, tmp_path: Path):
     assert result.exit_code == 0
     stripped_output = "".join((x for x in result.output if x in string.printable))
     assert "Schema Diff Between 'T1' and 'T2':\n Schemas match" in stripped_output
+
+
+# passing an invalid engine_type errors
+def test_init_bad_engine_type(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "invalid"],
+    )
+    assert result.exit_code == 1
+    assert "Invalid engine 'invalid'. Please specify one of " in result.output
+
+
+# passing an invalid template errors
+def test_init_bad_template(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "invalid_template"],
+    )
+    assert result.exit_code == 1
+    assert "Invalid project template 'invalid_template'. Please specify one of " in result.output
+
+
+# empty template should not produce example project files
+def test_init_empty_template(runner: CliRunner, tmp_path: Path):
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "duckdb", "-t", "empty"],
+    )
+    assert result.exit_code == 0
+
+    # Directories should exist, but example project files should not.
+    assert (tmp_path / "models").exists()
+    assert not (tmp_path / "models" / "full_model.sql").exists()
+    assert not (tmp_path / "models" / "incremental_model.sql").exists()
+    assert not (tmp_path / "seeds" / "seed_data.csv").exists()
+
+
+# interactive init begins when no engine_type is provided and template is not dbt
+def test_init_interactive_start(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "Choose your SQL engine" in result.output
+
+    # dbt template passed, so no interactive
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "dbt"],
+    )
+    assert "Choose your SQL engine" not in result.output
+
+
+# passing an invalid integer response displays error
+def test_init_interactive_invalid_int(runner: CliRunner, tmp_path: Path):
+    # First response is invalid (0) followed by valid selections.
+    # Input: 0 (invalid), 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="0\n1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        "'0' is not a valid project type number - please enter a number between 1" in result.output
+    )
+
+
+# interactive init template step should not appear if a template is passed
+def test_init_interactive_template_passed(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "empty"],
+        input="1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "What type of project do you want to set up?" not in result.output
+
+
+def test_init_interactive_cli_mode_default(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    assert "no_diff: true" not in config_path.read_text()
+
+
+def test_init_interactive_cli_mode_simple(runner: CliRunner, tmp_path: Path):
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 2 (SIMPLE CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n2\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "config.yaml"
+    assert config_path.exists()
+    assert "no_diff: true" in config_path.read_text()
+
+
+def test_init_interactive_engine_install_msg(runner: CliRunner, tmp_path: Path):
+    # Engine install text should not appear for built-in engines like DuckDB
+    # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n1\n1\n",
+    )
+    assert result.exit_code == 0
+    assert "Run command in CLI to install your SQL engine" not in result.output
+
+    remove(tmp_path / "config.yaml")
+
+    # Input: 1 (DEFAULT template), 13 (gcp postgres engine), 1 (DEFAULT CLI mode)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="1\n13\n1\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        'Run command in CLI to install your SQL engine\'s Python dependencies: pip \ninstall "sqlmesh[gcppostgres]"'
+        in result.output
+    )
+
+
+# dbt template without dbt_project.yml in directory should error
+def test_init_dbt_template_no_dbt_project(runner: CliRunner, tmp_path: Path):
+    # template passed to init
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init", "-t", "dbt"],
+    )
+    assert result.exit_code == 1
+    assert (
+        "Required dbt project file 'dbt_project.yml' not found in the current directory."
+        in result.output
+    )
+
+    # interactive init
+    # Input: 2 (dbt template)
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="2\n",
+    )
+    assert result.exit_code == 1
+    assert (
+        "Required dbt project file 'dbt_project.yml' not found in the current directory."
+        in result.output
+    )
+
+
+def test_init_dbt_template(runner: CliRunner, tmp_path: Path):
+    Path(tmp_path / "dbt_project.yml").touch()
+    result = runner.invoke(
+        cli,
+        ["--paths", str(tmp_path), "init"],
+        input="2\n",
+    )
+    assert result.exit_code == 0
+
+    config_path = tmp_path / "config.py"
+    assert config_path.exists()
+
+    with open(config_path) as file:
+        config = file.read()
+
+    assert (
+        config
+        == """from pathlib import Path
+
+from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config(Path(__file__).parent)
+"""
+    )
+
+
+@time_machine.travel(FREEZE_TIME)
+def test_init_project_engine_configs(tmp_path):
+    engine_type_to_config = {
+        "redshift": "# concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # database: \n      # host: \n      # port: \n      # source_address: \n      # unix_sock: \n      # ssl: \n      # sslmode: \n      # timeout: \n      # tcp_keepalive: \n      # application_name: \n      # preferred_role: \n      # principal_arn: \n      # credentials_provider: \n      # region: \n      # cluster_identifier: \n      # iam: \n      # is_serverless: \n      # serverless_acct_id: \n      # serverless_work_group: \n      # enable_merge: ",
+        "bigquery": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # method: oauth\n      # project: \n      # execution_project: \n      # quota_project: \n      # location: \n      # keyfile: \n      # keyfile_json: \n      # token: \n      # refresh_token: \n      # client_id: \n      # client_secret: \n      # token_uri: \n      # scopes: \n      # impersonated_service_account: \n      # job_creation_timeout_seconds: \n      # job_execution_timeout_seconds: \n      # job_retries: 1\n      # job_retry_deadline_seconds: \n      # priority: \n      # maximum_bytes_billed: ",
+        "snowflake": "account: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # user: \n      # password: \n      # warehouse: \n      # database: \n      # role: \n      # authenticator: \n      # token: \n      # host: \n      # port: \n      # application: Tobiko_SQLMesh\n      # private_key: \n      # private_key_path: \n      # private_key_passphrase: \n      # session_parameters: ",
+        "databricks": "# concurrent_tasks: 1\n      # register_comments: True\n      # pre_ping: False\n      # pretty_sql: False\n      # server_hostname: \n      # http_path: \n      # access_token: \n      # auth_type: \n      # oauth_client_id: \n      # oauth_client_secret: \n      # catalog: \n      # http_headers: \n      # session_configuration: \n      # databricks_connect_server_hostname: \n      # databricks_connect_access_token: \n      # databricks_connect_cluster_id: \n      # databricks_connect_use_serverless: False\n      # force_databricks_connect: False\n      # disable_databricks_connect: False\n      # disable_spark_session: False",
+        "postgres": "host: \n      user: \n      password: \n      port: \n      database: \n      # concurrent_tasks: 4\n      # register_comments: True\n      # pre_ping: True\n      # pretty_sql: False\n      # keepalives_idle: \n      # connect_timeout: 10\n      # role: \n      # sslmode: \n      # application_name: ",
+    }
+
+    for engine_type, expected_config in engine_type_to_config.items():
+        init_example_project(tmp_path, engine_type=engine_type)
+
+        config_start = f"# --- Gateway Connection ---\ngateways:\n  {engine_type}:\n    connection:\n      # For more information on configuring the connection to your execution engine, visit:\n      # https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#connection\n      # https://sqlmesh.readthedocs.io/en/stable/integrations/engines/{engine_type}/#connection-options\n      type: {engine_type}\n      "
+        config_end = f"""
+
+default_gateway: {engine_type}
+
+# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
+
+model_defaults:
+  dialect: {DIALECT_TO_TYPE.get(engine_type)}
+  start: {yesterday_ds()} # Start date for backfill history
+  cron: '@daily'    # Run models daily at 12am UTC (can override per model)
+
+# --- Linting Rules ---
+# Enforce standards for your team
+# https://sqlmesh.readthedocs.io/en/stable/guides/linter/
+
+linter:
+  enabled: true
+  rules:
+    - ambiguousorinvalidcolumn
+    - invalidselectstarexpansion
+"""
+
+        with open(tmp_path / "config.yaml") as file:
+            config = file.read()
+
+            assert config == f"{config_start}{expected_config}{config_end}"
+
+            remove(tmp_path / "config.yaml")
+
+
+def test_render(runner: CliRunner, tmp_path: Path):
+    create_example_project(tmp_path)
+
+    ctx = Context(paths=tmp_path)
+
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "render",
+            "sqlmesh_example.full_model",
+            "--max-text-width",
+            "10",
+        ],
+    )
+    assert result.exit_code == 0
+
+    cleaned_output = "\n".join(l.rstrip(" ") for l in result.output.split("\n"))
+    expected = """SELECT
+  "incremental_model"."item_id" AS "item_id",
+  COUNT(
+    DISTINCT "incremental_model"."id"
+  ) AS "num_orders"
+FROM "db"."sqlmesh_example"."incremental_model" AS "incremental_model"
+GROUP BY
+  "incremental_model"."item_id"
+"""
+
+    assert expected in cleaned_output

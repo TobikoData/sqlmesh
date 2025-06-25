@@ -567,6 +567,7 @@ class ModelConfig(BaseModelConfig):
             kind=kind,
             start=self.start,
             audit_definitions=audit_definitions,
+            path=model_kwargs.pop("path", self.path),
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
             # dependencies from the model's SQL.
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.

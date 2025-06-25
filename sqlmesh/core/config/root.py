@@ -39,7 +39,7 @@ from sqlmesh.core.config.scheduler import (
     scheduler_config_validator,
 )
 from sqlmesh.core.config.ui import UIConfig
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.loader import Loader, SqlMeshLoader, MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
@@ -219,6 +219,13 @@ class Config(BaseConfig):
                 f"^{k}$": v for k, v in physical_schema_override.items()
             }
 
+        if (
+            (variables := data.get("variables", ""))
+            and isinstance(variables, dict)
+            and c.MIGRATED_DBT_PROJECT_NAME in variables
+        ):
+            data["loader"] = MigratedDbtProjectLoader
+
         return data
 
     @model_validator(mode="after")
@@ -233,6 +240,15 @@ class Config(BaseConfig):
                     k: normalize_identifiers(v, dialect=dialect).name
                     for k, v in getattr(self, key, {}).items()
                 },
+            )
+
+        if (
+            self.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+            and self.environment_catalog_mapping
+        ):
+            raise ConfigError(
+                f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
+                "Please specify one or the other"
             )
 
         if self.environment_catalog_mapping:

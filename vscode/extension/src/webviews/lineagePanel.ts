@@ -10,6 +10,7 @@ import {
 } from 'vscode'
 import { getWorkspaceFolders } from '../utilities/common/vscodeapi'
 import { LSPClient } from '../lsp/lsp'
+import { isErr } from '@bus/result'
 
 export class LineagePanel implements WebviewViewProvider, Disposable {
   public static readonly viewType = 'sqlmesh.lineage'
@@ -97,12 +98,40 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
                   'sqlmesh/api',
                   payload.params,
                 )
-                const responseCallback: CallbackEvent = {
-                  key: 'rpcResponse',
-                  payload: {
-                    requestId,
-                    result: response,
-                  },
+                let responseCallback: CallbackEvent
+                if (isErr(response)) {
+                  let errorMessage: string
+                  switch (response.error.type) {
+                    case 'generic':
+                      errorMessage = response.error.message
+                      break
+                    case 'invalid_state':
+                      errorMessage = `Invalid state: ${response.error.message}`
+                      break
+                    case 'sqlmesh_outdated':
+                      errorMessage = `SQLMesh version issue: ${response.error.message}`
+                      break
+                    default:
+                      errorMessage = 'Unknown error'
+                  }
+                  responseCallback = {
+                    key: 'rpcResponse',
+                    payload: {
+                      requestId,
+                      result: {
+                        ok: false,
+                        error: errorMessage,
+                      },
+                    },
+                  }
+                } else {
+                  responseCallback = {
+                    key: 'rpcResponse',
+                    payload: {
+                      requestId,
+                      result: response,
+                    },
+                  }
                 }
                 await webviewView.webview.postMessage(responseCallback)
                 break

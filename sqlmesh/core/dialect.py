@@ -346,12 +346,14 @@ def _parse_select(
     table: bool = False,
     parse_subquery_alias: bool = True,
     parse_set_operation: bool = True,
+    consume_pipe: bool = True,
 ) -> t.Optional[exp.Expression]:
     select = self.__parse_select(  # type: ignore
         nested=nested,
         table=table,
         parse_subquery_alias=parse_subquery_alias,
         parse_set_operation=parse_set_operation,
+        consume_pipe=consume_pipe,
     )
 
     if (

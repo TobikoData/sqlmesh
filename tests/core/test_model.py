@@ -12,9 +12,10 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
-from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from pydantic import ValidationError
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator, ValidationError
@@ -42,6 +43,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
+    IncrementalByUniqueKeyKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -63,7 +65,13 @@ from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroExtractor,
+    MacroReference,
+    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+)
 from sqlmesh.utils.metaprogramming import Executable, SqlValue
 from sqlmesh.core.macros import RuntimeStage
 from tests.utils.test_helpers import use_terminal_console
@@ -473,7 +481,7 @@ def test_model_missing_audits(tmp_path: Path):
 
 
 def test_project_is_set_in_standalone_audit(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -689,7 +697,7 @@ def test_no_model_statement(tmp_path: Path):
         load_sql_based_model(expressions)
 
     # Name inference is enabled => MODEL (...) not required
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     test_sql_file = tmp_path / "models/test_schema/test_model.sql"
     test_sql_file.parent.mkdir(parents=True, exist_ok=True)
@@ -3080,7 +3088,7 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     db_path = str(tmp_path / "db.db")
     config = Config(
@@ -3103,7 +3111,7 @@ def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     Context(paths=tmp_path)
 
     patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
@@ -5295,6 +5303,30 @@ def test_signals():
     )
 
 
+def test_load_python_model_with_signals():
+    @signal()
+    def always_true(batch):
+        return True
+
+    @model(
+        name="model_with_signal",
+        kind="full",
+        columns={'"COL"': "int"},
+        signals=[("always_true", {})],
+    )
+    def model_with_signal(context, **kwargs):
+        return pd.DataFrame([{"COL": 1}])
+
+    models = model.get_registry()["model_with_signal"].models(
+        get_variables=lambda _: {},
+        path=Path("."),
+        module_path=Path("."),
+        signal_definitions=signal.get_registry(),
+    )
+    assert len(models) == 1
+    assert models[0].signals == [("always_true", {})]
+
+
 def test_null_column_type():
     expressions = d.parse(
         """
@@ -6169,6 +6201,58 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
+
+
+def test_variables_migrated_dbt_package_macro():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('TEST_VAR_A') }}' as a, '{{ test.test_macro_var() }}' as b
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+        packages={
+            "test": {
+                "test_macro_var": MacroInfo(
+                    definition="""
+                    {% macro test_macro_var() %}
+                        {{- var('test_var_b', __dbt_package='test') }}
+                    {%- endmacro %}""",
+                    depends_on=[MacroReference(name="var")],
+                )
+            }
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={
+            "test_var_a": "test_var_a_value",
+            c.MIGRATED_DBT_PACKAGES: {
+                "test": {"test_var_b": "test_var_b_value", "unused": "unused_value"},
+            },
+            "test_var_c": "test_var_c_value",
+        },
+        jinja_macros=jinja_macros,
+        migrated_dbt_project_name="test",
+        dialect="bigquery",
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"}
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_var_a_value' AS `a`, 'test_var_b_value' AS `b`"
+    )
 
 
 def test_load_external_model_python(sushi_context) -> None:
@@ -7221,7 +7305,7 @@ def test_model_table_name_inference(
     ],
 )
 def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7241,7 +7325,7 @@ def my_model(context, **kwargs):
 
 
 def test_python_model_name_inference_multiple_models(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7727,6 +7811,37 @@ materialized TRUE
     )
 
 
+def test_incremental_by_unique_key_batch_concurrency():
+    with pytest.raises(ValidationError, match=r"Input should be 1"):
+        load_sql_based_model(
+            d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 2
+            )
+        );
+        select 1;
+        """)
+        )
+
+    model = load_sql_based_model(
+        d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 1
+            )
+        );
+        select 1;
+        """)
+    )
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert model.kind.batch_concurrency == 1
+
+
 def test_bad_model_kind():
     with pytest.raises(
         SQLMeshError,
@@ -8148,7 +8263,7 @@ def test_cache():
 
 
 def test_snowflake_macro_func_as_table(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     custom_macro_file = tmp_path / "macros/custom_macros.py"
     custom_macro_file.parent.mkdir(parents=True, exist_ok=True)
@@ -8819,7 +8934,7 @@ def test_partition_interval_unit():
 
 
 def test_model_blueprinting(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -8980,7 +9095,7 @@ def entrypoint(evaluator):
 
 
 def test_dynamic_blueprinting_using_custom_macro(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_custom_macro.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -9043,7 +9158,7 @@ def gen_blueprints(evaluator):
 
 
 def test_dynamic_blueprinting_using_each(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_each.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -9090,7 +9205,7 @@ def entrypoint(evaluator):
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     single_blueprint = tmp_path / "models/single_blueprint.sql"
     single_blueprint.parent.mkdir(parents=True, exist_ok=True)
@@ -9115,7 +9230,7 @@ def test_single_blueprint(tmp_path: Path) -> None:
 
 
 def test_blueprinting_with_quotes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     template_with_quoted_vars = tmp_path / "models/template_with_quoted_vars.sql"
     template_with_quoted_vars.parent.mkdir(parents=True, exist_ok=True)
@@ -9148,7 +9263,7 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
 
 
 def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9233,7 +9348,7 @@ def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Call
 
 
 def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9282,7 +9397,7 @@ def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> 
 
 
 def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.py"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9507,7 +9622,7 @@ def test_data_hash_unchanged_when_column_type_uses_default_dialect():
 
 
 def test_transitive_dependency_of_metadata_only_object_is_metadata_only(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9586,7 +9701,7 @@ def metadata_macro(evaluator):
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9642,7 +9757,7 @@ def m2(evaluator):
 def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_only(
     tmp_path: Path,
 ) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9909,7 +10024,7 @@ def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path
     # in sqlmesh.utils.metaprogramming.import_python_file. Depending on the module loading
     # order, we could get a "duplicate symbol in python env" error, even though the references
     # essentially pointed to the same definition (e.g. function or class).
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -9991,7 +10106,7 @@ def second_macro(evaluator):
 
 
 def test_unequal_duplicate_python_env_references_are_prohibited(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -10032,7 +10147,7 @@ def f():
 
 
 def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
     config = Config(
@@ -10272,7 +10387,7 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
 
 
 def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
@@ -10315,7 +10430,7 @@ def check_self_schema(evaluator):
 
 
 def test_model_relies_on_os_getenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     (tmp_path / "macros" / "getenv_macro.py").write_text(
         """
@@ -10354,7 +10469,7 @@ def test_invalid_sql_model_query() -> None:
             load_sql_based_model(expressions)
 
 
-def test_query_label_and_authorization_macro():
+def test_query_label_and_authorization_macro() -> None:
     @macro()
     def test_query_label_macro(evaluator):
         return "[('key', 'value')]"
@@ -10387,3 +10502,19 @@ def test_query_label_and_authorization_macro():
         "query_label": d.parse_one("[('key', 'value')]"),
         "authorization": d.parse_one("'test_authorization'"),
     }
+
+
+def test_boolean_property_validation() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           enabled @IF(TRUE, TRUE, FALSE),
+           dialect tsql
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="tsql")
+    assert model.enabled

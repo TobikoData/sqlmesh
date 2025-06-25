@@ -814,3 +814,22 @@ def test_create_view_with_schema_and_grants(
         # materialized view - COPY GRANTS goes before the column list
         """CREATE OR REPLACE MATERIALIZED VIEW "target_materialized_view" COPY GRANTS ("ID", "NAME") COMMENT='materialized **view** from integration test' AS SELECT 1 AS "ID", 'foo' AS "NAME\"""",
     ]
+
+
+def test_create_catalog(snowflake_mocked_engine_adapter: SnowflakeEngineAdapter) -> None:
+    adapter = snowflake_mocked_engine_adapter
+    adapter.create_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == [
+        "CREATE DATABASE IF NOT EXISTS \"foo\" COMMENT='sqlmesh_managed'"
+    ]
+
+
+def test_drop_catalog(snowflake_mocked_engine_adapter: SnowflakeEngineAdapter) -> None:
+    adapter = snowflake_mocked_engine_adapter
+    adapter.drop_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == [
+        """SELECT 1 FROM "INFORMATION_SCHEMA"."DATABASES" WHERE "DATABASE_NAME" = 'foo' AND "COMMENT" = 'sqlmesh_managed'""",
+        'DROP DATABASE IF EXISTS "foo"',
+    ]

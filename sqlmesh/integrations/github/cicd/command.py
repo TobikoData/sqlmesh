@@ -63,20 +63,19 @@ def check_required_approvers(ctx: click.Context) -> None:
 def _run_tests(controller: GithubController) -> bool:
     controller.update_test_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
-        result, output = controller.run_tests()
+        result, _ = controller.run_tests()
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             # Conclusion will be updated with final status based on test results
             conclusion=GithubCheckConclusion.NEUTRAL,
             result=result,
-            output=output,
         )
         return result.wasSuccessful()
     except Exception:
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.FAILURE,
-            output=traceback.format_exc(),
+            traceback=traceback.format_exc(),
         )
         return False
 
@@ -117,7 +116,7 @@ def _update_pr_environment(controller: GithubController) -> bool:
         return conclusion is not None and conclusion.is_success
     except Exception as e:
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, exception=e
+            status=GithubCheckStatus.COMPLETED, exception=e, plan=controller.pr_plan_or_none
         )
         return (
             conclusion is not None
@@ -277,7 +276,9 @@ def _run_all(controller: GithubController) -> None:
     if has_required_approval and prod_plan_generated and controller.pr_targets_prod_branch:
         deployed_to_prod = _deploy_production(controller)
     elif is_auto_deploying_prod:
-        if not has_required_approval:
+        if controller.deploy_command_enabled and not has_required_approval:
+            skip_reason = "Skipped Deploying to Production because a `/deploy` command has not been detected yet"
+        elif controller.do_required_approval_check and not has_required_approval:
             skip_reason = (
                 "Skipped Deploying to Production because a required approver has not approved"
             )

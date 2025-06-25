@@ -101,6 +101,7 @@ class EngineAdapter:
     SUPPORTS_VIEW_SCHEMA = True
     SUPPORTS_CLONING = False
     SUPPORTS_MANAGED_MODELS = False
+    SUPPORTS_CREATE_DROP_CATALOG = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     HAS_VIEW_BINDING = False
@@ -1215,6 +1216,22 @@ class EngineAdapter:
             kind="VIEW",
             materialized=materialized and self.SUPPORTS_MATERIALIZED_VIEWS,
             **kwargs,
+        )
+
+    def create_catalog(self, catalog_name: str | exp.Identifier) -> None:
+        return self._create_catalog(exp.parse_identifier(catalog_name, dialect=self.dialect))
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        raise SQLMeshError(
+            f"Unable to create catalog '{catalog_name.sql(dialect=self.dialect)}' as automatic catalog management is not implemented in the {self.dialect} engine."
+        )
+
+    def drop_catalog(self, catalog_name: str | exp.Identifier) -> None:
+        return self._drop_catalog(exp.parse_identifier(catalog_name, dialect=self.dialect))
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        raise SQLMeshError(
+            f"Unable to drop catalog '{catalog_name.sql(dialect=self.dialect)}' as automatic catalog management is not implemented in the {self.dialect} engine."
         )
 
     def columns(

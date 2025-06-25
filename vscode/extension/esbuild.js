@@ -18,6 +18,14 @@ async function main() {
     plugins: [
       /* add to the end of plugins array */
       esbuildProblemMatcherPlugin,
+      {
+        name: 'exclude-tests',
+        setup(build) {
+          build.onResolve({ filter: /\.test\.ts$/ }, args => {
+            return { external: true }
+          })
+        },
+      },
     ],
   })
   if (watch) {

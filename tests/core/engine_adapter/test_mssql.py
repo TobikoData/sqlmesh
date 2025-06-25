@@ -79,7 +79,7 @@ def test_columns(adapter: MSSQLEngineAdapter):
     }
 
     adapter.cursor.execute.assert_called_once_with(
-        """SELECT [column_name], [data_type], [character_maximum_length], [numeric_precision], [numeric_scale] FROM [information_schema].[columns] WHERE [table_name] = 'table' AND [table_schema] = 'db';"""
+        """SELECT [COLUMN_NAME], [DATA_TYPE], [CHARACTER_MAXIMUM_LENGTH], [NUMERIC_PRECISION], [NUMERIC_SCALE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = 'table' AND [TABLE_SCHEMA] = 'db';"""
     )
 
 
@@ -149,8 +149,8 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     resp = adapter.table_exists("db.table")
     adapter.cursor.execute.assert_called_once_with(
         """SELECT 1 """
-        """FROM [information_schema].[tables] """
-        """WHERE [table_name] = 'table' AND [table_schema] = 'db';"""
+        """FROM [INFORMATION_SCHEMA].[TABLES] """
+        """WHERE [TABLE_NAME] = 'table' AND [TABLE_SCHEMA] = 'db';"""
     )
     assert resp
     adapter.cursor.fetchone.return_value = None
@@ -506,7 +506,7 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM [information_schema].[tables] WHERE [table_name] = 'test_table';""",
+        """SELECT 1 FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_NAME] = 'test_table';""",
         "TRUNCATE TABLE [test_table];",
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]
@@ -652,6 +652,36 @@ def test_drop_schema(make_mocked_engine_adapter: t.Callable):
     assert to_sql_calls(adapter) == [
         """DROP VIEW IF EXISTS [test_schema].[test_view];""",
         """DROP SCHEMA IF EXISTS [test_schema];""",
+    ]
+
+
+def test_drop_schema_with_special_identifiers(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter._get_data_objects = mock.Mock()
+    adapter._get_data_objects.return_value = [
+        DataObject(
+            catalog="test_catalog",
+            schema="test schema",  # Schema with space
+            name="test view",  # Object with space
+            type=DataObjectType.from_str("VIEW"),
+        ),
+        DataObject(
+            catalog="test_catalog",
+            schema="test schema",
+            name="test table",  # Table with space
+            type=DataObjectType.from_str("TABLE"),
+        ),
+    ]
+
+    schema_name = exp.to_table("[test schema]", dialect="tsql")
+    adapter.drop_schema(schema_name, cascade=True)
+
+    # Validate that names with spaces/special chars are properly quoted with square brackets
+    assert to_sql_calls(adapter) == [
+        """DROP VIEW IF EXISTS [test schema].[test view];""",
+        """DROP TABLE IF EXISTS [test schema].[test table];""",
+        """DROP SCHEMA IF EXISTS [test schema];""",
     ]
 
 

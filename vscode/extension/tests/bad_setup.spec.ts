@@ -111,3 +111,56 @@ test('lineage, no sqlmesh found', async ({}) => {
     await fs.remove(tempDir)
   }
 })
+
+// Checks that if you have another file open like somewhere else, it still checks the workspace first for a successful context
+// it's very flaky but runs when debugging
+// - the typing in of the file name is very flaky
+test('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({}) => {
+  const tempDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+  )
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+  const pythonEnvDir = path.join(tempDir, '.venv')
+  const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
+  const sqlmeshWithExtras = `${REPO_ROOT}[lsp, bigquery]`
+  const custom_materializations = path.join(
+    REPO_ROOT,
+    'examples',
+    'custom_materializations',
+  )
+  await pipInstall(pythonDetails, [sqlmeshWithExtras, custom_materializations])
+
+  // Configure VS Code settings to use our Python environment
+  const settings = {
+    'python.defaultInterpreterPath': pythonDetails.pythonPath,
+    'sqlmesh.environmentPath': pythonEnvDir,
+  }
+  await fs.ensureDir(path.join(tempDir, '.vscode'))
+  await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
+    spaces: 2,
+  })
+
+  // Write a sql file in another folder
+  const tempDir2 = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-2-'),
+  )
+  const sqlFile = path.join(tempDir2, 'models', 'customers.sql')
+  await fs.ensureDir(path.dirname(sqlFile))
+  await fs.writeFile(sqlFile, 'SELECT 1')
+
+  const { window, close } = await startVSCode(tempDir)
+  try {
+    // Open the SQL file from the other directory
+    await window.keyboard.press('Meta+P')
+    await window.waitForTimeout(100)
+    await window.keyboard.type(sqlFile.toString(), { delay: 10 })
+    await window.waitForTimeout(100)
+    await window.keyboard.press('Enter')
+    await window.waitForTimeout(100)
+
+    await window.waitForSelector('text=Loaded SQLMesh context')
+  } finally {
+    await close()
+    await fs.remove(tempDir)
+  }
+})

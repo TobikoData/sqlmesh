@@ -73,7 +73,11 @@ function Lineage() {
   const { on } = useEventBus()
   const queryClient = useQueryClient()
 
-  const { data: models, isLoading: isLoadingModels } = useApiModels()
+  const {
+    data: models,
+    isLoading: isLoadingModels,
+    error: modelsError,
+  } = useApiModels()
   const rpc = useRpc()
   React.useEffect(() => {
     const fetchFirstTimeModelIfNotSet = async (
@@ -142,6 +146,10 @@ function Lineage() {
       if (offSavedFile) offSavedFile()
     }
   }, [on, queryClient, modelsRecord])
+
+  if (modelsError) {
+    return <div>Error: {modelsError.message}</div>
+  }
 
   if (
     isLoadingModels ||

@@ -251,6 +251,8 @@ class SnapshotEvaluator:
 
         # A schema can be shared across multiple engines, so we need to group by gateway
         for gateway, tables in tables_by_gateway.items():
+            if environment_naming_info.suffix_target.is_catalog:
+                self._create_catalogs(tables=tables, gateway=gateway)
             self._create_schemas(tables=tables, gateway=gateway)
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
@@ -909,39 +911,40 @@ class SnapshotEvaluator:
         ):
             return
 
+        deployability_index = DeployabilityIndex.all_deployable()
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            engine_adapter=adapter,
+            snapshots=parent_snapshots_by_name(snapshot, snapshots),
+            runtime_stage=RuntimeStage.CREATING,
+            deployability_index=deployability_index,
+        )
         target_table_name = snapshot.table_name()
-        if adapter.table_exists(target_table_name):
-            evaluation_strategy = _evaluation_strategy(snapshot, adapter)
-            tmp_table_name = snapshot.table_name(is_deployable=False)
-            logger.info(
-                "Migrating table schema from '%s' to '%s'",
-                tmp_table_name,
-                target_table_name,
-            )
-            evaluation_strategy.migrate(
-                target_table_name=target_table_name,
-                source_table_name=tmp_table_name,
-                snapshot=snapshot,
-                snapshots=parent_snapshots_by_name(snapshot, snapshots),
-                allow_destructive_snapshots=allow_destructive_snapshots,
-            )
-        else:
-            logger.info(
-                "Creating table '%s' for the snapshot of the forward-only model %s",
-                target_table_name,
-                snapshot.snapshot_id,
-            )
-            deployability_index = DeployabilityIndex.all_deployable()
-            render_kwargs: t.Dict[str, t.Any] = dict(
-                engine_adapter=adapter,
-                snapshots=parent_snapshots_by_name(snapshot, snapshots),
-                runtime_stage=RuntimeStage.CREATING,
-                deployability_index=deployability_index,
-            )
-            with (
-                adapter.transaction(),
-                adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
-            ):
+
+        with (
+            adapter.transaction(),
+            adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
+        ):
+            if adapter.table_exists(target_table_name):
+                evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+                tmp_table_name = snapshot.table_name(is_deployable=False)
+                logger.info(
+                    "Migrating table schema from '%s' to '%s'",
+                    tmp_table_name,
+                    target_table_name,
+                )
+                evaluation_strategy.migrate(
+                    target_table_name=target_table_name,
+                    source_table_name=tmp_table_name,
+                    snapshot=snapshot,
+                    snapshots=parent_snapshots_by_name(snapshot, snapshots),
+                    allow_destructive_snapshots=allow_destructive_snapshots,
+                )
+            else:
+                logger.info(
+                    "Creating table '%s' for the snapshot of the forward-only model %s",
+                    target_table_name,
+                    snapshot.snapshot_id,
+                )
                 self._execute_create(
                     snapshot=snapshot,
                     table_name=target_table_name,
@@ -1113,6 +1116,18 @@ class SnapshotEvaluator:
             query=query,
             blocking=blocking,
         )
+
+    def _create_catalogs(
+        self,
+        tables: t.Iterable[t.Union[exp.Table, str]],
+        gateway: t.Optional[str] = None,
+    ) -> None:
+        # attempt to create catalogs for the virtual layer if possible
+        adapter = self.get_adapter(gateway)
+        if adapter.SUPPORTS_CREATE_DROP_CATALOG:
+            unique_catalogs = {t.catalog for t in [exp.to_table(maybe_t) for maybe_t in tables]}
+            for catalog_name in unique_catalogs:
+                adapter.create_catalog(catalog_name)
 
     def _create_schemas(
         self,

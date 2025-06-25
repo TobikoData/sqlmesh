@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from sqlglot import exp
+from pathlib import Path
 
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -35,6 +36,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
     )
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
+    SUPPORTS_CREATE_DROP_CATALOG = True
 
     @property
     def catalog_support(self) -> CatalogSupport:
@@ -43,6 +45,18 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        db_filename = f"{catalog_name.output_name}.db"
+        self.execute(
+            exp.Attach(this=exp.alias_(exp.Literal.string(db_filename), catalog_name), exists=True)
+        )
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        db_file_path = Path(f"{catalog_name.output_name}.db")
+        self.execute(exp.Detach(this=catalog_name, exists=True))
+        if db_file_path.exists():
+            db_file_path.unlink()
 
     def _df_to_source_queries(
         self,

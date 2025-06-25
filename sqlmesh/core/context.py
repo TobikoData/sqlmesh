@@ -40,7 +40,6 @@ import sys
 import time
 import traceback
 import typing as t
-import unittest.result
 from functools import cached_property
 from io import StringIO
 from itertools import chain
@@ -734,11 +733,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     raise SQLMeshError(f"Environment '{environment}' was not found.")
                 if environment_state.finalized_ts:
                     return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
+                self.console.log_warning(
+                    f"Environment '{environment}' is being updated by plan '{environment_state.plan_id}'. "
+                    f"Retrying in {self.config.run.environment_check_interval} seconds..."
                 )
                 time.sleep(self.config.run.environment_check_interval)
             raise SQLMeshError(
@@ -775,9 +772,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 done = True
             except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' modified while running. Restarting the run...",
-                    environment,
+                self.console.log_warning(
+                    f"Environment '{environment}' modified while running. Restarting the run..."
                 )
                 if exit_on_env_update:
                     interrupted = True
@@ -1430,9 +1426,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
 
-        if run and is_dev:
-            raise ConfigError("The '--run' flag is only supported for the production environment.")
-
         if not skip_linter:
             self.lint_models()
 
@@ -2064,7 +2057,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-        return run_tests(
+        result = run_tests(
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
@@ -2076,6 +2069,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
             default_catalog_dialect=self.config.dialect or "",
         )
+
+        self.console.log_test_results(
+            result,
+            self.test_connection_config._engine_adapter.DIALECT,
+        )
+
+        return result
 
     @python_api_analytics
     def audit(
@@ -2435,7 +2435,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def clear_caches(self) -> None:
         for path in self.configs:
-            rmtree(path / c.CACHE)
+            cache_path = path / c.CACHE
+            if cache_path.exists():
+                rmtree(cache_path)
         if isinstance(self.state_sync, CachingStateSync):
             self.state_sync.clear_cache()
 
@@ -2499,28 +2501,20 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
-    ) -> t.Tuple[unittest.result.TestResult, str]:
+    ) -> t.Tuple[ModelTextTestResult, str]:
         test_output_io = StringIO()
         result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
-    def _run_plan_tests(
-        self, skip_tests: bool = False
-    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+    def _run_plan_tests(self, skip_tests: bool = False) -> t.Optional[ModelTextTestResult]:
         if not skip_tests:
-            result, test_output = self._run_tests()
-            if result.testsRun > 0:
-                self.console.log_test_results(
-                    result,
-                    test_output,
-                    self.test_connection_config._engine_adapter.DIALECT,
-                )
+            result = self.test()
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again."
                 )
-            return result, test_output
-        return None, None
+            return result
+        return None
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:
@@ -2701,15 +2695,21 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:
         current_ts = current_ts or now_timestamp()
 
-        expired_environments = self.state_sync.get_expired_environments(current_ts=current_ts)
-
-        cleanup_expired_views(
-            default_adapter=self.engine_adapter,
-            engine_adapters=self.engine_adapters,
-            environments=expired_environments,
-            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
-            console=self.console,
+        expired_environments_summaries = self.state_sync.get_expired_environments(
+            current_ts=current_ts
         )
+
+        for expired_env_summary in expired_environments_summaries:
+            expired_env = self.state_reader.get_environment(expired_env_summary.name)
+
+            if expired_env:
+                cleanup_expired_views(
+                    default_adapter=self.engine_adapter,
+                    engine_adapters=self.engine_adapters,
+                    environments=[expired_env],
+                    warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
+                    console=self.console,
+                )
 
         self.state_sync.delete_expired_environments(current_ts=current_ts)
 

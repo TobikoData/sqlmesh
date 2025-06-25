@@ -6,11 +6,15 @@ import sys
 import typing as t
 
 import click
-
 from sqlmesh import configure_logging, remove_excess_logs
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.cli.project_init import (
+    ProjectTemplate,
+    init_example_project,
+    InitCliMode,
+    interactive_init,
+)
 from sqlmesh.core.analytics import cli_analytics
 from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.utils import Verbosity
@@ -21,6 +25,7 @@ from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
 
 SKIP_LOAD_COMMANDS = (
     "clean",
@@ -33,6 +38,7 @@ SKIP_LOAD_COMMANDS = (
     "rollback",
     "run",
     "table_name",
+    "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
@@ -137,7 +143,7 @@ def cli(
 
 
 @cli.command("init")
-@click.argument("sql_dialect", required=False)
+@click.argument("engine", required=False)
 @click.option(
     "-t",
     "--template",
@@ -159,23 +165,82 @@ def cli(
 @cli_analytics
 def init(
     ctx: click.Context,
-    sql_dialect: t.Optional[str] = None,
+    engine: t.Optional[str] = None,
     template: t.Optional[str] = None,
     dlt_pipeline: t.Optional[str] = None,
     dlt_path: t.Optional[str] = None,
 ) -> None:
     """Create a new SQLMesh repository."""
-    try:
-        project_template = ProjectTemplate(template.lower() if template else "default")
-    except ValueError:
-        raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(
-        ctx.obj,
-        dialect=sql_dialect,
+    project_template = None
+    if template:
+        try:
+            project_template = ProjectTemplate(template.lower())
+        except ValueError:
+            template_strings = "', '".join([template.value for template in ProjectTemplate])
+            raise click.ClickException(
+                f"Invalid project template '{template}'. Please specify one of '{template_strings}'."
+            )
+
+    if engine or project_template == ProjectTemplate.DBT:
+        init_example_project(
+            path=ctx.obj,
+            template=project_template or ProjectTemplate.DEFAULT,
+            engine_type=engine,
+            pipeline=dlt_pipeline,
+            dlt_path=dlt_path,
+        )
+        return
+
+    import sqlmesh.utils.rich as srich
+
+    console = srich.console
+
+    project_template, engine_type, cli_mode = interactive_init(ctx.obj, console, project_template)
+
+    config_path = init_example_project(
+        path=ctx.obj,
         template=project_template,
+        engine_type=engine_type,
+        cli_mode=cli_mode or InitCliMode.DEFAULT,
         pipeline=dlt_pipeline,
         dlt_path=dlt_path,
     )
+
+    engine_install_text = ""
+    if engine_type and engine_type not in ("duckdb", "motherduck"):
+        install_text = (
+            "pyspark" if engine_type == "spark" else f"sqlmesh\\[{engine_type.replace('_', '')}]"
+        )
+        engine_install_text = f'• Run command in CLI to install your SQL engine\'s Python dependencies: pip install "{install_text}"\n'
+    # interactive init does not support DLT template
+    next_step_text = {
+        ProjectTemplate.DEFAULT: f"{engine_install_text}• Update your gateway connection settings (e.g., username/password) in the project configuration file:\n    {config_path}",
+        ProjectTemplate.DBT: "",
+    }
+    next_step_text[ProjectTemplate.EMPTY] = next_step_text[ProjectTemplate.DEFAULT]
+
+    quickstart_text = {
+        ProjectTemplate.DEFAULT: "Quickstart guide:\nhttps://sqlmesh.readthedocs.io/en/stable/quickstart/cli/",
+        ProjectTemplate.DBT: "dbt guide:\nhttps://sqlmesh.readthedocs.io/en/stable/integrations/dbt/",
+    }
+    quickstart_text[ProjectTemplate.EMPTY] = quickstart_text[ProjectTemplate.DEFAULT]
+
+    console.print(f"""──────────────────────────────
+
+Your SQLMesh project is ready!
+
+Next steps:
+{next_step_text[project_template]}
+• Run command in CLI: sqlmesh plan
+• (Optional) Explain a plan: sqlmesh plan --explain
+
+{quickstart_text[project_template]}
+
+Need help?
+• Docs:   https://sqlmesh.readthedocs.io
+• Slack:  https://www.tobikodata.com/slack
+• GitHub: https://github.com/TobikoData/sqlmesh/issues
+""")
 
 
 @cli.command("render")
@@ -190,6 +255,7 @@ def init(
     help="The SQL dialect to render the query as.",
 )
 @click.option("--no-format", is_flag=True, help="Disable fancy formatting of the query.")
+@opt.format_options
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -202,6 +268,7 @@ def render(
     expand: t.Optional[t.Union[bool, t.Iterable[str]]] = None,
     dialect: t.Optional[str] = None,
     no_format: bool = False,
+    **format_kwargs: t.Any,
 ) -> None:
     """Render a model's query, optionally expanding referenced models."""
     rendered = ctx.obj.render(
@@ -212,7 +279,17 @@ def render(
         expand=expand,
     )
 
-    sql = rendered.sql(pretty=True, dialect=ctx.obj.config.dialect if dialect is None else dialect)
+    format_config = ctx.obj.config_for_node(model).format
+    format_kwargs = {
+        **format_config.generator_options,
+        **{k: v for k, v in format_kwargs.items() if v is not None},
+    }
+
+    sql = rendered.sql(
+        pretty=True,
+        dialect=ctx.obj.config.dialect if dialect is None else dialect,
+        **format_kwargs,
+    )
     if no_format:
         print(sql)
     else:
@@ -263,55 +340,23 @@ def evaluate(
     help="Transpile project models to the specified dialect.",
 )
 @click.option(
-    "--append-newline",
-    is_flag=True,
-    help="Include a newline at the end of each file.",
-    default=None,
-)
-@click.option(
-    "--no-rewrite-casts",
-    is_flag=True,
-    help="Preserve the existing casts, without rewriting them to use the :: syntax.",
-    default=None,
-)
-@click.option(
-    "--normalize",
-    is_flag=True,
-    help="Whether or not to normalize identifiers to lowercase.",
-    default=None,
-)
-@click.option(
-    "--pad",
-    type=int,
-    help="Determines the pad size in a formatted string.",
-)
-@click.option(
-    "--indent",
-    type=int,
-    help="Determines the indentation size in a formatted string.",
-)
-@click.option(
-    "--normalize-functions",
-    type=str,
-    help="Whether or not to normalize all function names. Possible values are: 'upper', 'lower'",
-)
-@click.option(
-    "--leading-comma",
-    is_flag=True,
-    help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
-    default=None,
-)
-@click.option(
-    "--max-text-width",
-    type=int,
-    help="The max number of characters in a segment before creating new lines in pretty mode.",
-)
-@click.option(
     "--check",
     is_flag=True,
     help="Whether or not to check formatting (but not actually format anything).",
     default=None,
 )
+@click.option(
+    "--rewrite-casts/--no-rewrite-casts",
+    is_flag=True,
+    help="Rewrite casts to use the :: syntax.",
+    default=None,
+)
+@click.option(
+    "--append-newline",
+    is_flag=True,
+    help="Include a newline at the end of each file.",
+)
+@opt.format_options
 @click.pass_context
 @error_handler
 @cli_analytics
@@ -319,9 +364,6 @@ def format(
     ctx: click.Context, paths: t.Optional[t.Tuple[str, ...]] = None, **kwargs: t.Any
 ) -> None:
     """Format all SQL models and audits."""
-    if kwargs.pop("no_rewrite_casts", None):
-        kwargs["rewrite_casts"] = False
-
     if not ctx.obj.format(**{k: v for k, v in kwargs.items() if v is not None}, paths=paths):
         ctx.exit(1)
 
@@ -1219,3 +1261,39 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
+
+
+@cli.group(no_args_is_help=True, hidden=True)
+def dbt() -> None:
+    """Commands for doing dbt-specific things"""
+    pass
+
+
+@dbt.command("convert")
+@click.option(
+    "-i",
+    "--input-dir",
+    help="Path to the DBT project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "-o",
+    "--output-dir",
+    required=True,
+    help="Path to write out the converted SQLMesh project",
+    type=click.Path(exists=False, dir_okay=True, file_okay=False, readable=True, path_type=Path),
+)
+@click.option("--no-prompts", is_flag=True, help="Disable interactive prompts", default=False)
+@click.pass_obj
+@error_handler
+@cli_analytics
+def dbt_convert(obj: Context, input_dir: Path, output_dir: Path, no_prompts: bool) -> None:
+    """Convert a DBT project to a SQLMesh project"""
+    from sqlmesh.dbt.converter.convert import convert_project_files
+
+    convert_project_files(
+        input_dir.absolute(),
+        output_dir.absolute(),
+        no_prompts=no_prompts,
+    )
