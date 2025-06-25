@@ -1,5 +1,6 @@
 import { isFalse, isNil, isStringEmptyOrNil, toID } from '@/utils/index'
 import { type Lineage } from '@/domain/lineage'
+import type { ModelEncodedFQN } from '@/domain/models'
 
 export interface ConnectedNode {
   id?: string
@@ -47,7 +48,7 @@ async function mergeLineageWithModels(
       key = encodeURI(key)
 
       acc[key] = {
-        models: models.map(encodeURI),
+        models: models.map(encodeURI) as ModelEncodedFQN[],
         columns: currentLineage?.[key]?.columns ?? undefined,
       }
 
@@ -88,7 +89,7 @@ function getConnectedNodes(
 
   if (isDownstream) {
     models = Object.keys(lineage).filter(key =>
-      lineage[key]!.models.includes(node),
+      lineage[key]!.models.includes(node as ModelEncodedFQN),
     )
   } else {
     models = lineage[node]?.models ?? []
