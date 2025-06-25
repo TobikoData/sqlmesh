@@ -1788,6 +1788,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
+                start=kwargs["start"],
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1805,6 +1806,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
+                start=kwargs["start"],
             )
         else:
             raise SQLMeshError(

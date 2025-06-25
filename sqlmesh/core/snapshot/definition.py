@@ -797,6 +797,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             removal_interval = expanded_removal_interval
 
+        # SCD Type 2 validation that end date is the latest interval if it was provided
+        if not is_preview and self.is_scd_type_2 and self.intervals:
+            requested_start, requested_end = removal_interval
+            latest_end = max(interval[1] for interval in self.intervals)
+            if requested_end != latest_end:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"SCD Type 2 model '{self.model.name}' does not support end date in restatements.\n"
+                    f"Requested end date [{to_ts(requested_end)}] doesn't match latest interval end date [{to_ts(latest_end)}].\n"
+                    f"You can set start date but end date must be the latest interval so ."
+                )
+
+                removal_interval = self.inclusive_exclusive(requested_start, latest_end, strict)
+
         return removal_interval
 
     @property

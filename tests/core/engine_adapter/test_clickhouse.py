@@ -606,6 +606,8 @@ def test_scd_type_2_by_time(
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
+        truncate=True,
     )
 
     assert to_sql_calls(adapter)[4] == parse_one(
@@ -637,7 +639,7 @@ WITH "source" AS (
     TRUE AS "_exists"
   FROM ""__temp_target_efgh""
   WHERE
-    NOT "test_valid_to" IS NULL
+    NOT "test_valid_to" IS NULL LIMIT 0
 ), "latest" AS (
   SELECT
     "id",
@@ -649,7 +651,7 @@ WITH "source" AS (
     TRUE AS "_exists"
   FROM ""__temp_target_efgh""
   WHERE
-    "test_valid_to" IS NULL
+    "test_valid_to" IS NULL LIMIT 0
 ), "deleted" AS (
   SELECT
     "static"."id",
@@ -811,6 +813,8 @@ def test_scd_type_2_by_column(
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
+        truncate=True,
     )
 
     assert to_sql_calls(adapter)[4] == parse_one(
@@ -840,7 +844,7 @@ WITH "source" AS (
     TRUE AS "_exists"
   FROM "__temp_target_efgh"
   WHERE
-    NOT "test_valid_to" IS NULL
+    NOT ("test_valid_to" IS NULL) LIMIT 0
 ), "latest" AS (
   SELECT
     "id",
@@ -851,7 +855,7 @@ WITH "source" AS (
     TRUE AS "_exists"
   FROM "__temp_target_efgh"
   WHERE
-    "test_valid_to" IS NULL
+    "test_valid_to" IS NULL LIMIT 0
 ), "deleted" AS (
   SELECT
     "static"."id",
@@ -907,7 +911,7 @@ WITH "source" AS (
     COALESCE("joined"."t_id", "joined"."id") AS "id",
     COALESCE("joined"."t_name", "joined"."name") AS "name",
     COALESCE("joined"."t_price", "joined"."price") AS "price",
-    COALESCE("t_test_VALID_from", CAST('2020-01-01 00:00:00' AS Nullable(DateTime64(6)))) AS "test_VALID_from",
+    COALESCE("t_test_VALID_from", CAST('1970-01-01 00:00:00' AS Nullable(DateTime64(6)))) AS "test_VALID_from",
     CASE
       WHEN "joined"."_exists" IS NULL
       OR (
