@@ -39,6 +39,22 @@ class Range:
     end: Position
 
 
+@dataclass(frozen=True)
+class TextEdit:
+    """A text edit to apply to a file."""
+
+    range: Range
+    new_text: str
+
+
+@dataclass(frozen=True)
+class Fix:
+    """A fix that can be applied to resolve a rule violation."""
+
+    title: str
+    edits: t.List[TextEdit]
+
+
 class _Rule(abc.ABCMeta):
     def __new__(cls: Type[_Rule], clsname: str, bases: t.Tuple, attrs: t.Dict) -> _Rule:
         attrs["name"] = clsname.lower()
@@ -66,10 +82,14 @@ class Rule(abc.ABC, metaclass=_Rule):
         self,
         violation_msg: t.Optional[str] = None,
         violation_range: t.Optional[Range] = None,
+        fixes: t.Optional[t.List[Fix]] = None,
     ) -> RuleViolation:
         """Create a RuleViolation instance for this rule"""
         return RuleViolation(
-            rule=self, violation_msg=violation_msg or self.summary, violation_range=violation_range
+            rule=self,
+            violation_msg=violation_msg or self.summary,
+            violation_range=violation_range,
+            fixes=fixes,
         )
 
     def get_definition_location(self) -> RuleLocation:
@@ -103,11 +123,16 @@ class Rule(abc.ABC, metaclass=_Rule):
 
 class RuleViolation:
     def __init__(
-        self, rule: Rule, violation_msg: str, violation_range: t.Optional[Range] = None
+        self,
+        rule: Rule,
+        violation_msg: str,
+        violation_range: t.Optional[Range] = None,
+        fixes: t.Optional[t.List[Fix]] = None,
     ) -> None:
         self.rule = rule
         self.violation_msg = violation_msg
         self.violation_range = violation_range
+        self.fixes = fixes or []
 
     def __repr__(self) -> str:
         return f"{self.rule.name}: {self.violation_msg}"
