@@ -1,0 +1,44 @@
+name: Release VSCode Extension
+on:
+  push:
+    tags:
+      - 'vscode@v*'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/vscode@v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      - name: Update package.json version
+        working-directory: vscode/extension
+        run: |
+          npm version ${{ steps.extract_version.outputs.VERSION }} --no-git-tag-version
+      - name: Install dependencies
+        working-directory: vscode/extension
+        run: pnpm install
+      - name: Run CI
+        run: pnpm run ci
+      - name: Build extension
+        working-directory: vscode/extension
+        run: pnpm run vscode:package
+      - name: Upload extension to Marketplace
+        working-directory: vscode/extension
+        run: |
+          pnpx vsce publish --packagePath sqlmesh-${{ steps.extract_version.outputs.VERSION }}.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

@@ -8,7 +8,7 @@ from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
 from sqlmesh.core.linter.helpers import TokenPositionDetails
-from sqlmesh.core.linter.rule import Rule, RuleViolation, Range
+from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
 
@@ -22,7 +22,8 @@ class NoSelectStar(Rule):
             return None
         if model.query.is_star:
             violation_range = self._get_range(model)
-            return self.violation(violation_range=violation_range)
+            fixes = self._create_fixes(model, violation_range)
+            return self.violation(violation_range=violation_range, fixes=fixes)
         return None
 
     def _get_range(self, model: SqlModel) -> t.Optional[Range]:
@@ -36,6 +37,28 @@ class NoSelectStar(Rule):
             pass
 
         return None
+
+    def _create_fixes(
+        self, model: SqlModel, violation_range: t.Optional[Range]
+    ) -> t.Optional[t.List[Fix]]:
+        """Create fixes for the SELECT * violation."""
+        if not violation_range:
+            return None
+        columns = model.columns_to_types
+        if not columns:
+            return None
+        new_text = ", ".join(columns.keys())
+        return [
+            Fix(
+                title="Replace SELECT * with explicit column list",
+                edits=[
+                    TextEdit(
+                        range=violation_range,
+                        new_text=new_text,
+                    )
+                ],
+            )
+        ]
 
 
 class InvalidSelectStarExpansion(Rule):

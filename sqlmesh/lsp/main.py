@@ -8,11 +8,13 @@ from pathlib import Path
 import urllib.parse
 
 from lsprotocol import types
+from lsprotocol.types import (
+    WorkspaceDiagnosticRefreshRequest,
+    WorkspaceInlayHintRefreshRequest,
+)
 from pygls.server import LanguageServer
-
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
-from sqlmesh.core.linter.definition import AnnotatedRuleViolation
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
@@ -216,6 +218,79 @@ class SQLMeshLanguageServer:
             ]
         )
 
+    def _reload_context_and_publish_diagnostics(
+        self, ls: LanguageServer, uri: URI, document_uri: str
+    ) -> None:
+        """Helper method to reload context and publish diagnostics."""
+        if isinstance(self.context_state, NoContext):
+            return
+
+        if isinstance(self.context_state, ContextFailed):
+            if self.context_state.context:
+                try:
+                    self.context_state.context.load()
+                    # Creating a new LSPContext will naturally create fresh caches
+                    self.context_state = ContextLoaded(
+                        lsp_context=LSPContext(self.context_state.context)
+                    )
+                except Exception as e:
+                    ls.log_trace(f"Error loading context: {e}")
+                    if not isinstance(self.context_state, ContextFailed):
+                        raise Exception("Context state should be failed")
+                    self.context_state = ContextFailed(
+                        error_message=str(e), context=self.context_state.context
+                    )
+                    return
+            else:
+                # If there's no context, try to create one from scratch
+                try:
+                    self._ensure_context_for_document(uri)
+                    # If successful, context_state will be ContextLoaded
+                    if isinstance(self.context_state, ContextLoaded):
+                        ls.show_message(
+                            "Successfully loaded SQLMesh context",
+                            types.MessageType.Info,
+                        )
+                except Exception as e:
+                    ls.log_trace(f"Still cannot load context: {e}")
+                return
+
+        # Reload the context if it was successfully loaded
+        try:
+            context = self.context_state.lsp_context.context
+            context.load()
+            # Create new LSPContext which will have fresh, empty caches
+            self.context_state = ContextLoaded(lsp_context=LSPContext(context))
+        except Exception as e:
+            ls.log_trace(f"Error loading context: {e}")
+            self.context_state = ContextFailed(
+                error_message=str(e), context=self.context_state.lsp_context.context
+            )
+            return
+
+        # Send a workspace diagnostic refresh request to the client. This is used to notify the client that the diagnostics have changed.
+        ls.lsp.send_request(
+            types.WORKSPACE_DIAGNOSTIC_REFRESH,
+            WorkspaceDiagnosticRefreshRequest(
+                id=self.context_state.lsp_context.version_id,
+            ),
+        )
+
+        ls.lsp.send_request(
+            types.WORKSPACE_INLAY_HINT_REFRESH,
+            WorkspaceInlayHintRefreshRequest(
+                id=self.context_state.lsp_context.version_id,
+            ),
+        )
+
+        # Only publish diagnostics if client doesn't support pull diagnostics
+        if not self.client_supports_pull_diagnostics:
+            diagnostics = self.context_state.lsp_context.lint_model(uri)
+            ls.publish_diagnostics(
+                document_uri,
+                LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
+            )
+
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
         for name, method in self._supported_custom_methods.items():
@@ -278,63 +353,13 @@ class SQLMeshLanguageServer:
                 diagnostics = context.lint_model(uri)
                 ls.publish_diagnostics(
                     params.text_document.uri,
-                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
+                    LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
                 )
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
-            if isinstance(self.context_state, NoContext):
-                return
-
-            if isinstance(self.context_state, ContextFailed):
-                if self.context_state.context:
-                    try:
-                        self.context_state.context.load()
-                        self.context_state = ContextLoaded(
-                            lsp_context=LSPContext(self.context_state.context)
-                        )
-                    except Exception as e:
-                        ls.log_trace(f"Error loading context: {e}")
-                        if not isinstance(self.context_state, ContextFailed):
-                            raise Exception("Context state should be failed")
-                        self.context_state = ContextFailed(
-                            error_message=str(e), context=self.context_state.context
-                        )
-                        return
-                else:
-                    # If there's no context, try to create one from scratch
-                    try:
-                        self._ensure_context_for_document(uri)
-                        # If successful, context_state will be ContextLoaded
-                        if isinstance(self.context_state, ContextLoaded):
-                            ls.show_message(
-                                "Successfully loaded SQLMesh context",
-                                types.MessageType.Info,
-                            )
-                    except Exception as e:
-                        ls.log_trace(f"Still cannot load context: {e}")
-                    return
-
-            # Reload the context if was successfully
-            try:
-                context = self.context_state.lsp_context.context
-                context.load()
-                self.context_state = ContextLoaded(lsp_context=LSPContext(context))
-            except Exception as e:
-                ls.log_trace(f"Error loading context: {e}")
-                self.context_state = ContextFailed(
-                    error_message=str(e), context=self.context_state.lsp_context.context
-                )
-                return
-
-            # Only publish diagnostics if client doesn't support pull diagnostics
-            if not self.client_supports_pull_diagnostics:
-                diagnostics = self.context_state.lsp_context.lint_model(uri)
-                ls.publish_diagnostics(
-                    params.text_document.uri,
-                    SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics),
-                )
+            self._reload_context_and_publish_diagnostics(ls, uri, params.text_document.uri)
 
         @self.server.feature(types.TEXT_DOCUMENT_FORMATTING)
         def formatting(
@@ -630,6 +655,21 @@ class SQLMeshLanguageServer:
                 )
                 return types.WorkspaceDiagnosticReport(items=[])
 
+        @self.server.feature(types.TEXT_DOCUMENT_CODE_ACTION)
+        def code_action(
+            ls: LanguageServer, params: types.CodeActionParams
+        ) -> t.Optional[t.List[t.Union[types.Command, types.CodeAction]]]:
+            try:
+                ls.log_trace(f"Codeactionrequest: {params}")
+                uri = URI(params.text_document.uri)
+                context = self._context_get_or_load(uri)
+                code_actions = context.get_code_actions(uri, params)
+                return code_actions
+
+            except Exception as e:
+                ls.log_trace(f"Error getting code actions: {e}")
+                return None
+
         @self.server.feature(
             types.TEXT_DOCUMENT_COMPLETION,
             types.CompletionOptions(trigger_characters=["@"]),  # advertise "@" for macros
@@ -718,7 +758,7 @@ class SQLMeshLanguageServer:
         try:
             context = self._context_get_or_load(uri)
             diagnostics = context.lint_model(uri)
-            return SQLMeshLanguageServer._diagnostics_to_lsp_diagnostics(diagnostics), 0
+            return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
         except Exception:
             return [], 0
 
@@ -828,71 +868,6 @@ class SQLMeshLanguageServer:
                 context = self.context_state.context
             self.context_state = ContextFailed(error_message=str(e), context=context)
             return None
-
-    @staticmethod
-    def _diagnostic_to_lsp_diagnostic(
-        diagnostic: AnnotatedRuleViolation,
-    ) -> t.Optional[types.Diagnostic]:
-        if diagnostic.model._path is None:
-            return None
-        if not diagnostic.violation_range:
-            with open(diagnostic.model._path, "r", encoding="utf-8") as file:
-                lines = file.readlines()
-            range = types.Range(
-                start=types.Position(line=0, character=0),
-                end=types.Position(line=len(lines) - 1, character=len(lines[-1])),
-            )
-        else:
-            range = types.Range(
-                start=types.Position(
-                    line=diagnostic.violation_range.start.line,
-                    character=diagnostic.violation_range.start.character,
-                ),
-                end=types.Position(
-                    line=diagnostic.violation_range.end.line,
-                    character=diagnostic.violation_range.end.character,
-                ),
-            )
-
-        # Get rule definition location for diagnostics link
-        rule_location = diagnostic.rule.get_definition_location()
-        rule_uri_wihout_extension = URI.from_path(rule_location.file_path)
-        rule_uri = f"{rule_uri_wihout_extension.value}#L{rule_location.start_line}"
-
-        # Use URI format to create a link for "related information"
-        return types.Diagnostic(
-            range=range,
-            message=diagnostic.violation_msg,
-            severity=types.DiagnosticSeverity.Error
-            if diagnostic.violation_type == "error"
-            else types.DiagnosticSeverity.Warning,
-            source="sqlmesh",
-            code=diagnostic.rule.name,
-            code_description=types.CodeDescription(href=rule_uri),
-        )
-
-    @staticmethod
-    def _diagnostics_to_lsp_diagnostics(
-        diagnostics: t.List[AnnotatedRuleViolation],
-    ) -> t.List[types.Diagnostic]:
-        """
-        Converts a list of AnnotatedRuleViolations to a list of LSP diagnostics. It will remove duplicates based on the message and range.
-        """
-        lsp_diagnostics = {}
-        for diagnostic in diagnostics:
-            lsp_diagnostic = SQLMeshLanguageServer._diagnostic_to_lsp_diagnostic(diagnostic)
-            if lsp_diagnostic is not None:
-                # Create a unique key combining message and range
-                diagnostic_key = (
-                    lsp_diagnostic.message,
-                    lsp_diagnostic.range.start.line,
-                    lsp_diagnostic.range.start.character,
-                    lsp_diagnostic.range.end.line,
-                    lsp_diagnostic.range.end.character,
-                )
-                if diagnostic_key not in lsp_diagnostics:
-                    lsp_diagnostics[diagnostic_key] = lsp_diagnostic
-        return list(lsp_diagnostics.values())
 
     @staticmethod
     def _uri_to_path(uri: str) -> Path:
