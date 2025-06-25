@@ -157,8 +157,8 @@ If you have environment variables that are needed by the context and the languag
 
 - Open VSCode from a terminal that has the variables set already. 
   - If you have `export ENV_VAR=value` in your shell configuration file (e.g. `.zshrc` or `.bashrc`) when initializing the terminal by default, the variables will be picked up by the language server if opened from that terminal.
-- Use environment variables pulled from somewhere else dynamically (e.g. a `.env` file) in your root project directory. This will automatically be picked up by the language server through the python environment that the extension uses.
-- Set the environment variables in the python environment that the extension uses. You can find detailed instructions [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
+- Use environment variables pulled from somewhere else dynamically in your `config.py` for example by connecting to a secret store
+- By default, a `.env` file in your root project directory will automatically be picked up by the language server through the python environment that the extension uses. For exact details on how to set the environment variables in the Python environment that the extension uses, see [here](https://code.visualstudio.com/docs/python/environments#_environment-variables)
 
 You can verify that the environment variables are being passed to the language server by printing them in your terminal. 
 
