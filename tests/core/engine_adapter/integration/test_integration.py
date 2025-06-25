@@ -744,6 +744,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=True,
+        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -807,6 +808,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=False,
+        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -899,6 +901,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=True,
+        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -970,6 +973,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=False,
+        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0

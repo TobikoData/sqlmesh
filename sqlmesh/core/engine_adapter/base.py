@@ -1514,6 +1514,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
+        start: TimeLike,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
@@ -1710,6 +1711,22 @@ class EngineAdapter:
         )
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
+        else:
+            # If truncate is false it is not the first insert
+            # Determine the cleanup timestamp for restatement or a regular incremental run
+            cleanup_ts = to_time_column(start, time_data_type, self.dialect, nullable=True)
+
+            # Delete records that were created at or after cleanup point
+            self.delete_from(table_name=target_table, where=valid_from_col > cleanup_ts)
+
+            # "Re-open" records that were closed at or after cleanup point
+            self.update_table(
+                table_name=target_table,
+                properties={valid_to_col.name: exp.Null()},
+                where=exp.and_(
+                    valid_to_col > cleanup_ts,
+                ),
+            )
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []

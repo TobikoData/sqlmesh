@@ -1222,6 +1222,7 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -1421,6 +1422,7 @@ def test_scd_type_2_by_time_no_invalidate_hard_deletes(make_mocked_engine_adapte
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -1609,6 +1611,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "test_valid_to": exp.DataType.build("TIMESTAMPTZ"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -1790,6 +1793,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
         extra_col_ignore="testing",
     )
 
@@ -1972,6 +1976,7 @@ def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callab
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -2164,6 +2169,7 @@ def test_scd_type_2_truncate(make_mocked_engine_adapter: t.Callable):
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         truncate=True,
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -2346,6 +2352,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
@@ -2541,6 +2548,7 @@ def test_scd_type_2_by_column_no_invalidate_hard_deletes(make_mocked_engine_adap
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
     )
 
     assert (
