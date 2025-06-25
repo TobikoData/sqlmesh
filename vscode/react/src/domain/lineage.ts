@@ -1,6 +1,7 @@
 import { type LineageColumn } from '@/api/client'
+import type { ModelEncodedFQN, ModelName } from '@/domain/models'
 
 export interface Lineage {
-  models: string[]
-  columns?: Record<string, LineageColumn>
+  models: ModelEncodedFQN[]
+  columns?: Record<ModelName, LineageColumn>
 }
