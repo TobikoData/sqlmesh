@@ -28,11 +28,6 @@ jobs:
         working-directory: vscode/extension
         run: |
           npm version ${{ steps.extract_version.outputs.VERSION }} --no-git-tag-version
-      - name: Install dependencies
-        working-directory: vscode/extension
-        run: pnpm install
-      - name: Run CI
-        run: pnpm run ci
       - name: Build extension
         working-directory: vscode/extension
         run: pnpm run vscode:package
@@ -42,3 +37,7 @@ jobs:
           pnpx vsce publish --packagePath sqlmesh-${{ steps.extract_version.outputs.VERSION }}.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Upload extension to OpenVSX
+        working-directory: vscode/extension
+        run: |
+          pnpx ovsx publish -p ${{ secrets.OPEN_VSX_TOKEN }} sqlmesh-${{ steps.extract_version.outputs.VERSION }}.vsix
