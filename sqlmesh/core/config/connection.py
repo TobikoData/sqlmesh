@@ -1687,9 +1687,9 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     """
 
     type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
-    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric"
-    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"
-    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17
+    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric" # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric" # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17 # type: ignore
     driver: t.Literal["pyodbc"] = "pyodbc"
     autocommit: t.Optional[bool] = True
 
