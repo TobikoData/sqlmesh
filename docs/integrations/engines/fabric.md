@@ -3,6 +3,8 @@
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `fabric`
 
+NOTE: Fabric Warehouse is not recommended to be used for the SQLMesh [state connection](../../reference/configuration.md#connections).
+
 ### Installation
 #### Microsoft Entra ID / Azure Active Directory Authentication:
 ```
