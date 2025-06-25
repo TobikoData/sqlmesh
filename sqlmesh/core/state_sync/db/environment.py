@@ -165,20 +165,6 @@ class EnvironmentState:
             where=environment_filter,
         )
 
-    def _fetch_environment_summaries(
-        self, where: t.Optional[str | exp.Expression] = None
-    ) -> t.List[EnvironmentSummary]:
-        return [
-            self._environment_summmary_from_row(row)
-            for row in fetchall(
-                self.engine_adapter,
-                self._environments_query(
-                    where=where,
-                    required_fields=list(EnvironmentSummary.all_fields()),
-                ),
-            )
-        ]
-
     def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         """Returns the expired environments.
 
@@ -330,6 +316,20 @@ class EnvironmentState:
             this=exp.column("expiration_ts"),
             expression=exp.Literal.number(current_ts),
         )
+
+    def _fetch_environment_summaries(
+        self, where: t.Optional[str | exp.Expression] = None
+    ) -> t.List[EnvironmentSummary]:
+        return [
+            self._environment_summmary_from_row(row)
+            for row in fetchall(
+                self.engine_adapter,
+                self._environments_query(
+                    where=where,
+                    required_fields=list(EnvironmentSummary.all_fields()),
+                ),
+            )
+        ]
 
 
 def _environment_to_df(environment: Environment) -> pd.DataFrame:
