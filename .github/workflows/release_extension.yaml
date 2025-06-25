@@ -2,7 +2,7 @@ name: Release VSCode Extension
 on:
   push:
     tags:
-      - 'vscode@v*'
+      - 'code@v*'
 jobs:
   release:
     runs-on: ubuntu-latest
