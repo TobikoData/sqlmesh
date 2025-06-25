@@ -2886,6 +2886,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
             for name, args in values
         )
     ),
+    "formatting": str,
 }
 
 
