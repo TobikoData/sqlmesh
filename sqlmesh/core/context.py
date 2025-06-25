@@ -619,11 +619,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 for snapshot in self.state_reader.get_snapshots(prod.snapshots).values():
                     if snapshot.node.project in self._projects:
                         uncached.add(snapshot.name)
-                    elif snapshot.name not in (
-                        set(project.models) | set(project.standalone_audits)
-                    ):
-                        store = self._standalone_audits if snapshot.is_audit else self._models
-                        store[snapshot.name] = snapshot.node  # type: ignore
+                    else:
+                        local_store = self._standalone_audits if snapshot.is_audit else self._models
+                        if snapshot.name in local_store:
+                            uncached.add(snapshot.name)
+                        else:
+                            local_store[snapshot.name] = snapshot.node  # type: ignore
 
         for model in self._models.values():
             self.dag.add(model.fqn, model.depends_on)
