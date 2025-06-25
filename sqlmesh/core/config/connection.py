@@ -1682,12 +1682,14 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
 class FabricConnectionConfig(MSSQLConnectionConfig):
     """
     Fabric Connection Configuration.
-
     Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
     It is recommended to use the 'pyodbc' driver for Fabric.
     """
 
     type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric"
+    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17
     driver: t.Literal["pyodbc"] = "pyodbc"
     autocommit: t.Optional[bool] = True
 

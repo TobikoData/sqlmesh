@@ -53,9 +53,7 @@ def test_table_exists(adapter: FabricAdapter):
     assert not adapter.table_exists("db.table")
 
 
-def test_insert_overwrite_by_time_partition(
-    adapter: FabricAdapter, assert_exp_eq
-):  # Add assert_exp_eq fixture
+def test_insert_overwrite_by_time_partition(adapter: FabricAdapter):
     adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
@@ -66,27 +64,11 @@ def test_insert_overwrite_by_time_partition(
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
-    # Get the list of generated SQL strings
-    actual_sql_calls = to_sql_calls(adapter)
-
-    # There should be two calls: DELETE and INSERT
-    assert len(actual_sql_calls) == 2
-
-    # Assert the DELETE statement is correct (string comparison is fine for this simple one)
-    assert (
-        actual_sql_calls[0]
-        == "DELETE FROM [test_table] WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';"
-    )
-
-    # Assert the INSERT statement is semantically correct
-    expected_insert_sql = """
-        INSERT INTO [test_table] ([a], [b])
-        SELECT [a], [b] FROM (SELECT [a], [b] FROM [tbl]) AS [_subquery]
-        WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';
-    """
-
-    # Use assert_exp_eq to compare the parsed SQL expressions
-    assert_exp_eq(actual_sql_calls[1], expected_insert_sql)
+    # Fabric adapter should use DELETE/INSERT strategy, not MERGE.
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM [test_table] WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';""",
+        """INSERT INTO [test_table] ([a], [b]) SELECT [a], [b] FROM (SELECT [a] AS [a], [b] AS [b] FROM [tbl]) AS [_subquery] WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';""",
+    ]
 
 
 def test_replace_query(adapter: FabricAdapter):
