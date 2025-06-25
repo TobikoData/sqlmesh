@@ -165,6 +165,20 @@ class EnvironmentState:
             where=environment_filter,
         )
 
+    def _fetch_environment_summaries(
+        self, where: t.Optional[str | exp.Expression] = None
+    ) -> t.List[EnvironmentSummary]:
+        return [
+            self._environment_summmary_from_row(row)
+            for row in fetchall(
+                self.engine_adapter,
+                self._environments_query(
+                    where=where,
+                    required_fields=list(EnvironmentSummary.all_fields()),
+                ),
+            )
+        ]
+
     def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         """Returns the expired environments.
 
@@ -172,13 +186,9 @@ class EnvironmentState:
         Returns:
             The list of environment summaries to remove.
         """
-
-        environment_summaries = self.get_environments_summary()
-        return [
-            env_summary
-            for env_summary in environment_summaries
-            if env_summary.expiration_ts is not None and env_summary.expiration_ts <= current_ts
-        ]
+        return self._fetch_environment_summaries(
+            where=self._create_expiration_filter_expr(current_ts)
+        )
 
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
@@ -225,13 +235,7 @@ class EnvironmentState:
         Returns:
             A list of all environment summaries.
         """
-        return [
-            self._environment_summmary_from_row(row)
-            for row in fetchall(
-                self.engine_adapter,
-                self._environments_query(required_fields=list(EnvironmentSummary.all_fields())),
-            )
-        ]
+        return self._fetch_environment_summaries()
 
     def get_environment(
         self, environment: str, lock_for_update: bool = False
