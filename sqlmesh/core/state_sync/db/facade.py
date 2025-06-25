@@ -69,10 +69,6 @@ logger = logging.getLogger(__name__)
 T = t.TypeVar("T")
 
 
-if t.TYPE_CHECKING:
-    pass
-
-
 class EngineAdapterStateSync(StateSync):
     """Manages state of nodes and snapshot with an existing engine adapter.
 
