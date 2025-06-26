@@ -2178,6 +2178,21 @@ def test_deployability_index_missing_parent(make_snapshot):
             "snowflake",
             "CATALOG_OVERRIDE.test_db.test_model__DEV",
         ),
+        # EnvironmentSuffixTarget.CATALOG
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.CATALOG),
+            "default_catalog",
+            "duckdb",
+            "default_catalog__dev.test_db.test_model",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.CATALOG),
+            "default_catalog",
+            "snowflake",
+            "DEFAULT_CATALOG__DEV.test_db.test_model",
+        ),
     ),
 )
 def test_display_name(
