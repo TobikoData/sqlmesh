@@ -110,6 +110,8 @@ function Lineage() {
       fetchFirstTimeModelIfNotSet(models).then(modelName => {
         if (modelName && selectedModel === undefined) {
           setSelectedModel(modelName)
+        } else {
+          setSelectedModel(models[0].name)
         }
       })
     }
