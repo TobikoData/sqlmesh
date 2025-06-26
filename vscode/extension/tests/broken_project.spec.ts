@@ -137,7 +137,7 @@ test('working project, then broken through adding double model, then refixed', a
         if (activeFrame) {
           try {
             await activeFrame
-              .getByText('raw.demographics')
+              .getByText('sushi.customers')
               .waitFor({ timeout: 1000 })
             raw_demographicsCount++
           } catch {

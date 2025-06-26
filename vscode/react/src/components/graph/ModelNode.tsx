@@ -141,7 +141,10 @@ export default function ModelNode({
   const isModelExternal = nodeType === EnumLineageNodeModelType.external
   const isModelSeed = nodeType === EnumLineageNodeModelType.seed
   const isModelUnknown = nodeType === EnumLineageNodeModelType.unknown
-  const showColumns = isArrayNotEmpty(columns) && isFalse(hasHighlightedNodes)
+  const showColumns =
+    nodeData.withColumns &&
+    isArrayNotEmpty(columns) &&
+    isFalse(hasHighlightedNodes)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
       ? isSelected ||
