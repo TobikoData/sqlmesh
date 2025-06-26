@@ -5,9 +5,9 @@ import { ModelType, type Model } from '@/api/client'
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
-import { type Column } from '@/api/client'
 import ModelNodeHeaderHandles from './ModelNodeHeaderHandles'
 import ModelColumns from './ModelColumns'
+import { fromAPIColumn, type Column } from '@/domain/column'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
@@ -53,7 +53,7 @@ export default function ModelNode({
     const modelsArray = Object.values(models)
     const decodedId = decodeURIComponent(id)
     const model = modelsArray.find((m: Model) => m.fqn === decodedId)
-    const modelColumns = model?.columns ?? []
+    const modelColumns = model?.columns?.map(fromAPIColumn) ?? []
 
     Object.keys(lineage[decodedId]?.columns ?? {}).forEach((column: string) => {
       const found = modelColumns.find(({ name }: any) => {
@@ -65,7 +65,9 @@ export default function ModelNode({
       })
 
       if (isNil(found)) {
-        modelColumns.push({ name: column, type: EnumColumnType.UNKNOWN })
+        modelColumns.push(
+          fromAPIColumn({ name: column, type: EnumColumnType.UNKNOWN }),
+        )
       }
     })
 

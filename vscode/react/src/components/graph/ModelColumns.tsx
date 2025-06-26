@@ -28,7 +28,6 @@ import {
 import clsx from 'clsx'
 import {
   type ColumnDescription,
-  type Column,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   type LineageColumn,
   type LineageColumnSource,
@@ -47,6 +46,7 @@ import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
 import type { ModelName } from '@/domain/models'
+import type { Column } from '@/domain/column'
 
 export default function ModelColumns({
   nodeId,
@@ -207,7 +207,7 @@ export default function ModelColumns({
               id={toID(nodeId, column.name)}
               nodeId={nodeId}
               column={column}
-              disabled={true}
+              disabled={disabled}
               updateColumnLineage={updateColumnLineage}
               removeEdges={removeEdges}
               isActive={true}
