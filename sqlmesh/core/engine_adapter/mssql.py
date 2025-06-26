@@ -6,11 +6,13 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import to_schema, add_table
 from sqlmesh.core.engine_adapter.base import (
     EngineAdapterWithIndexSupport,
     EngineAdapter,
     InsertOverwriteStrategy,
+    MERGE_SOURCE_ALIAS,
+    MERGE_TARGET_ALIAS,
 )
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -32,7 +34,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
 
 @set_catalog()
@@ -187,6 +189,87 @@ class MSSQLEngineAdapter(
                         exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
+
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        unique_key: t.Sequence[exp.Expression],
+        when_matched: t.Optional[exp.Whens] = None,
+        merge_filter: t.Optional[exp.Expression] = None,
+    ) -> None:
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            source_table, columns_to_types, target_table=target_table
+        )
+        columns_to_types = columns_to_types or self.columns(target_table)
+        on = exp.and_(
+            *(
+                add_table(part, MERGE_TARGET_ALIAS).eq(add_table(part, MERGE_SOURCE_ALIAS))
+                for part in unique_key
+            )
+        )
+        if merge_filter:
+            on = exp.and_(merge_filter, on)
+
+        if not when_matched:
+            match_condition = None
+            unique_key_names = [y.name for y in unique_key]
+            columns_to_types_no_keys = [c for c in columns_to_types if c not in unique_key_names]
+
+            target_columns_no_keys = [
+                exp.column(c, MERGE_TARGET_ALIAS) for c in columns_to_types_no_keys
+            ]
+            source_columns_no_keys = [
+                exp.column(c, MERGE_SOURCE_ALIAS) for c in columns_to_types_no_keys
+            ]
+
+            match_condition = exp.Exists(
+                this=exp.select(*target_columns_no_keys).except_(
+                    exp.select(*source_columns_no_keys)
+                )
+            )
+
+            match_expressions = [
+                exp.When(
+                    matched=True,
+                    source=False,
+                    condition=match_condition,
+                    then=exp.Update(
+                        expressions=[
+                            exp.column(col, MERGE_TARGET_ALIAS).eq(
+                                exp.column(col, MERGE_SOURCE_ALIAS)
+                            )
+                            for col in columns_to_types_no_keys
+                        ],
+                    ),
+                )
+            ]
+        else:
+            match_expressions = when_matched.copy().expressions
+
+        match_expressions.append(
+            exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=[exp.column(col) for col in columns_to_types]),
+                    expression=exp.Tuple(
+                        expressions=[
+                            exp.column(col, MERGE_SOURCE_ALIAS) for col in columns_to_types
+                        ]
+                    ),
+                ),
+            )
+        )
+        for source_query in source_queries:
+            with source_query as query:
+                self._merge(
+                    target_table=target_table,
+                    query=query,
+                    on=on,
+                    whens=exp.Whens(expressions=match_expressions),
+                )
 
     def _convert_df_datetime(self, df: DF, columns_to_types: t.Dict[str, exp.DataType]) -> None:
         import pandas as pd
