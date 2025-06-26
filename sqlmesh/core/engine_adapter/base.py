@@ -1709,24 +1709,14 @@ class EngineAdapter:
         existing_rows_query = exp.select(*table_columns, exp.true().as_("_exists")).from_(
             target_table
         )
+
+        cleanup_ts = None
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
         else:
             # If truncate is false it is not the first insert
             # Determine the cleanup timestamp for restatement or a regular incremental run
             cleanup_ts = to_time_column(start, time_data_type, self.dialect, nullable=True)
-
-            # Delete records that were created at or after cleanup point
-            self.delete_from(table_name=target_table, where=valid_from_col > cleanup_ts)
-
-            # "Re-open" records that were closed at or after cleanup point
-            self.update_table(
-                table_name=target_table,
-                properties={valid_to_col.name: exp.Null()},
-                where=exp.and_(
-                    valid_to_col > cleanup_ts,
-                ),
-            )
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
@@ -1764,12 +1754,40 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
+                    if truncate
+                    else existing_rows_query.where(
+                        exp.and_(
+                            valid_from_col <= cleanup_ts,
+                            exp.and_(
+                                valid_to_col.is_(exp.Null().not_()),
+                                valid_to_col < cleanup_ts,
+                            ),
+                        ),
+                    ),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null())),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()))
+                    if truncate
+                    else exp.select(
+                        *(
+                            exp.Null().as_(col) if col == valid_to_col.name else exp.column(col)
+                            for col in columns_to_types
+                        ),
+                        exp.true().as_("_exists"),
+                    )
+                    .from_(target_table)
+                    .where(
+                        exp.and_(
+                            valid_from_col <= cleanup_ts,
+                            exp.or_(
+                                valid_to_col.is_(exp.Null()),
+                                valid_to_col >= cleanup_ts,
+                            ),
+                        )
+                    ),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(
