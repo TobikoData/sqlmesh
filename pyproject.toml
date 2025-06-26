@@ -132,7 +132,7 @@ lsp = [
     "sse-starlette>=0.2.2",
     "pyarrow",
     # For lsp
-    "pygls",
+    "pygls>=1.2.0,<2.0.0",
     "lsprotocol",
 ]
 risingwave = ["psycopg2"]
