@@ -1040,7 +1040,7 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
-    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_neutral
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_failure
     assert approval_checks_runs[2]["output"]["title"] == "Need a Required Approval"
     assert (
         approval_checks_runs[2]["output"]["summary"]
@@ -1068,7 +1068,7 @@ def test_no_merge_since_no_deploy_signal(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+            == "run_unit_tests=success\nhas_required_approval=failure\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
         )
 
 

@@ -44,7 +44,7 @@ def _check_required_approvers(controller: GithubController) -> bool:
         )
         return True
     controller.update_required_approval_check(
-        status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.NEUTRAL
+        status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.FAILURE
     )
     return False
 
