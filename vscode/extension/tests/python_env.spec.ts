@@ -6,12 +6,12 @@ import {
   pipInstall,
   PythonEnvironment,
   REPO_ROOT,
-  startVSCode,
   SUSHI_SOURCE_PATH,
 } from './utils'
 import os from 'os'
 import path from 'path'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
+import { startCodeServer, stopCodeServer } from './utils_code_server'
 
 function writeEnvironmentConfig(sushiPath: string) {
   const configPath = path.join(sushiPath, 'config.py')
@@ -57,29 +57,44 @@ async function setupEnvironment(): Promise<[string, PythonEnvironment]> {
 }
 
 test.describe('python environment variable injection on sqlmesh_lsp', () => {
-  test('normal setup - error ', async () => {
+  test('normal setup - error ', async ({ page }, testInfo) => {
+    testInfo.setTimeout(120_000)
+
     const [tempDir, _] = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
-    const { window, close } = await startVSCode(tempDir)
+
+    const context = await startCodeServer({
+      tempDir,
+    })
+
     try {
-      await openLineageView(window)
-      await window.waitForSelector('text=Error creating context')
+      await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+
+      await page.waitForSelector('text=models')
+      await page.waitForTimeout(5_000)
+      await openLineageView(page)
+      await page.waitForSelector('text=Error creating context')
     } finally {
-      await close()
+      await stopCodeServer(context)
     }
   })
 
-  test('normal setup - set', async () => {
+  test('normal setup - set', async ({ page }) => {
     const [tempDir, _] = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
-    const { window, close } = await startVSCode(tempDir)
+    const context = await startCodeServer({
+      tempDir,
+    })
     try {
-      await openLineageView(window)
-      await window.waitForSelector('text=Loaded SQLMesh context')
+      await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+      await page.waitForSelector('text=models')
+      await page.waitForTimeout(5_000)
+      await openLineageView(page)
+      await page.waitForSelector('text=Loaded SQLMesh context')
     } finally {
-      await close()
+      await stopCodeServer(context)
     }
   })
 })
@@ -109,31 +124,41 @@ async function setupTcloudProject(
 }
 
 test.describe('tcloud version', () => {
-  test('normal setup - error ', async () => {
+  test('normal setup - error ', async ({ page }) => {
     const [tempDir, pythonDetails] = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
-    const { window, close } = await startVSCode(tempDir)
+    const context = await startCodeServer({
+      tempDir,
+    })
     try {
-      await openLineageView(window)
-      await window.waitForSelector('text=Error creating context')
+      await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+      await page.waitForSelector('text=models')
+      await page.waitForTimeout(5_000)
+      await openLineageView(page)
+      await page.waitForSelector('text=Error creating context')
     } finally {
-      await close()
+      await stopCodeServer(context)
     }
   })
 
-  test('normal setup - set', async () => {
+  test('normal setup - set', async ({ page }) => {
     const [tempDir, pythonDetails] = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
-    const { window, close } = await startVSCode(tempDir)
+    const context = await startCodeServer({
+      tempDir,
+    })
     try {
-      await openLineageView(window)
-      await window.waitForSelector('text=Loaded SQLMesh context')
+      await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+      await page.waitForSelector('text=models')
+      await page.waitForTimeout(5_000)
+      await openLineageView(page)
+      await page.waitForSelector('text=Loaded SQLMesh context')
     } finally {
-      await close()
+      await stopCodeServer(context)
     }
   })
 })

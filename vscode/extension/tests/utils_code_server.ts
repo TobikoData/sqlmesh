@@ -1,11 +1,13 @@
 import { spawn, ChildProcess, execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
+import os from 'os'
 
 export interface CodeServerContext {
   codeServerProcess: ChildProcess
   codeServerPort: number
   tempDir: string
+  defaultPythonInterpreter: string
 }
 
 /**
@@ -13,12 +15,28 @@ export interface CodeServerContext {
  * @param placeFileWithPythonInterpreter - Whether to place a vscode/settings.json file in the temp directory that points to the python interpreter of the environmen the test is running in.
  * @returns The code-server context
  */
-export async function startCodeServer(
-  tempDir: string,
-  placeFileWithPythonInterpreter: boolean = false,
-): Promise<CodeServerContext> {
+export async function startCodeServer({
+  tempDir,
+  placeFileWithPythonInterpreter = false,
+}: {
+  tempDir: string
+  placeFileWithPythonInterpreter?: boolean
+}): Promise<CodeServerContext> {
   // Find an available port
   const codeServerPort = Math.floor(Math.random() * 10000) + 50000
+  const defaultPythonInterpreter = path.join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    '.venv',
+    'bin',
+    'python',
+  )
+
+  const userDataDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-sushi-user-data-dir-'),
+  )
 
   // Create .vscode/settings.json with Python interpreter if requested
   if (placeFileWithPythonInterpreter) {
@@ -31,15 +49,7 @@ export async function startCodeServer(
     }).trim()
 
     const settings = {
-      'python.defaultInterpreterPath': path.join(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        '.venv',
-        'bin',
-        'python',
-      ),
+      'python.defaultInterpreterPath': defaultPythonInterpreter,
     }
 
     await fs.writeJson(path.join(vscodeDir, 'settings.json'), settings, {
@@ -74,8 +84,11 @@ export async function startCodeServer(
   const extensionsDir = path.join(tempDir, 'extensions')
   console.log('Installing extension...')
   execSync(
-    `pnpm run code-server --user-data-dir "${tempDir}" --extensions-dir "${extensionsDir}" --install-extension "${vsixPath}"`,
-    { stdio: 'inherit' },
+    `pnpm run code-server --user-data-dir "${userDataDir}" --extensions-dir "${extensionsDir}" --install-extension "${vsixPath}"`,
+    {
+      stdio: 'inherit',
+      cwd: path.join(__dirname, '..'),
+    },
   )
 
   // Start code-server instance
@@ -92,7 +105,7 @@ export async function startCodeServer(
       '--disable-update-check',
       '--disable-workspace-trust',
       '--user-data-dir',
-      tempDir,
+      userDataDir,
       '--extensions-dir',
       extensionsDir,
       tempDir,
@@ -135,7 +148,12 @@ export async function startCodeServer(
     })
   })
 
-  return { codeServerProcess, codeServerPort, tempDir }
+  return {
+    codeServerProcess,
+    codeServerPort,
+    tempDir,
+    defaultPythonInterpreter,
+  }
 }
 
 export async function stopCodeServer(
