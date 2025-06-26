@@ -147,7 +147,7 @@ class EngineAdapter:
         self._multithreaded = multithreaded
         self._job_id = job_id
 
-    def with_log_level(self, level: int, job_id: t.Optional[str] = None) -> EngineAdapter:
+    def with_settings(self, level: int, **kwargs: t.Any) -> EngineAdapter:
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
@@ -158,8 +158,8 @@ class EngineAdapter:
             null_connection=True,
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
-            job_id=job_id,
             **self._extra_config,
+            **kwargs,
         )
 
         return adapter

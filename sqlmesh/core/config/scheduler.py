@@ -28,14 +28,11 @@ class SchedulerConfig(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
-    def create_plan_evaluator(
-        self, context: GenericContext, job_id: t.Optional[str] = None
-    ) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         """Creates a Plan Evaluator instance.
 
         Args:
             context: The SQLMesh Context.
-            job_id: The plan ID.
         """
 
     @abc.abstractmethod
@@ -130,12 +127,9 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
 
     type_: t.Literal["builtin"] = Field(alias="type", default="builtin")
 
-    def create_plan_evaluator(
-        self, context: GenericContext, job_id: t.Optional[str] = None
-    ) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
-            snapshot_evaluator=context.snapshot_evaluator(job_id),
             create_scheduler=context.create_scheduler,
             default_catalog=context.default_catalog,
             console=context.console,

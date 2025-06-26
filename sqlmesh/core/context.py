@@ -453,7 +453,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         ):
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_log_level(logging.INFO, job_id)
+                    gateway: adapter.with_settings(level=logging.INFO, job_id=job_id)
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
@@ -1592,7 +1592,10 @@ class GenericContext(BaseContext, t.Generic[C]):
                 default_catalog=self.default_catalog,
                 console=self.console,
             )
-            explainer.evaluate(plan.to_evaluatable())
+            explainer.evaluate(
+                plan.to_evaluatable(),
+                snapshot_evaluator=self.snapshot_evaluator(job_id=plan.plan_id),
+            )
             return
 
         self.notification_target_manager.notify(
@@ -1905,7 +1908,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_log_level(logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -2392,8 +2395,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         return completion_status
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
-        self._scheduler.create_plan_evaluator(self, job_id=plan.plan_id).evaluate(
-            plan.to_evaluatable(), circuit_breaker=circuit_breaker
+        self._scheduler.create_plan_evaluator(self).evaluate(
+            plan.to_evaluatable(),
+            snapshot_evaluator=self.snapshot_evaluator(job_id=plan.plan_id),
+            circuit_breaker=circuit_breaker,
         )
 
     @python_api_analytics

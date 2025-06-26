@@ -266,10 +266,10 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(
         context.state_sync,
-        context.snapshot_evaluator(),
         context.create_scheduler,
         context.default_catalog,
     )
+    plan_evaluator.snapshot_evaluator = context.snapshot_evaluator(job_id=plan.plan_id)
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
     evaluatable_plan = plan.to_evaluatable()
     stages = plan_stages.build_plan_stages(
