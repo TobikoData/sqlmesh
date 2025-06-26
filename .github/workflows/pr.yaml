@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - uses: pnpm/action-setup@v4
         with:
           version: latest
@@ -25,3 +25,38 @@ jobs:
         run: pnpm install
       - name: Run CI
         run: pnpm run ci
+  test-vscode-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - name: Install dependencies
+        run: pnpm install
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install python dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          make install-dev
+      - name: Fetch VS Code
+        working-directory: ./vscode/extension
+        run: pnpm run fetch-vscode
+
+      - name: Install code-server
+        run: curl -fsSL https://code-server.dev/install.sh | sh
+      - name: Install Playwright browsers
+        working-directory: ./vscode/extension
+        run: pnpm exec playwright install
+      - name: Run e2e tests
+        working-directory: ./vscode/extension
+        run: |
+          source ../../.venv/bin/activate
+          pnpm run test:e2e tests/stop.spec.ts
