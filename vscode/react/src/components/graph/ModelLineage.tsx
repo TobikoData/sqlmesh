@@ -390,14 +390,8 @@ function ModelColumnLineage(): JSX.Element {
           showInteractive={false}
         >
           <SettingsControl
-            settings={{
-              showColumns: withColumns,
-            }}
-            onSettingChange={(setting, value) => {
-              if (setting === 'showColumns') {
-                setWithColumns(value)
-              }
-            }}
+            showColumns={withColumns}
+            onWithColumnsChange={setWithColumns}
           />
         </Controls>
         <Background
