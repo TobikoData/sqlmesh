@@ -20,6 +20,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.snapshot.evaluator import SnapshotEvaluator
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,10 @@ class PlanExplainer(PlanEvaluator):
         self.console = console or get_console()
 
     def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self,
+        plan: EvaluatablePlan,
+        snapshot_evaluator: SnapshotEvaluator,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         plan_stages = stages.build_plan_stages(plan, self.state_reader, self.default_catalog)
         explainer_console = _get_explainer_console(
