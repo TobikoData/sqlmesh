@@ -1773,7 +1773,11 @@ class EngineAdapter:
                     if truncate
                     else exp.select(
                         *(
-                            exp.Null().as_(col) if col == valid_to_col.name else exp.column(col)
+                            to_time_column(
+                                exp.null(), time_data_type, self.dialect, nullable=True
+                            ).as_(col)
+                            if col == valid_to_col.name
+                            else exp.column(col)
                             for col in columns_to_types
                         ),
                         exp.true().as_("_exists"),
@@ -1783,7 +1787,7 @@ class EngineAdapter:
                         exp.and_(
                             valid_from_col <= cleanup_ts,
                             exp.or_(
-                                valid_to_col.is_(exp.Null()),
+                                valid_to_col.is_(exp.null()),
                                 valid_to_col >= cleanup_ts,
                             ),
                         )

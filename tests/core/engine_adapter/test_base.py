@@ -1264,7 +1264,7 @@ WITH "source" AS (
     "price",
     "test_UPDATED_at",
     "test_valid_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
   WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -1464,7 +1464,7 @@ WITH "source" AS (
     "price",
     "test_updated_at",
     "test_valid_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
   WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -1661,7 +1661,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
     "price",
     "test_updated_at",
     "test_valid_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMPTZ) AS "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
     WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
@@ -1839,7 +1839,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
     "name",
     "price",
     "test_VALID_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
     WHERE "test_VALID_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -2034,7 +2034,7 @@ def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callab
     "name",
     "price",
     "test_VALID_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
     WHERE "test_VALID_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -2394,7 +2394,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
     "name",
     "price",
     "test_valid_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
     WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
@@ -2570,7 +2570,7 @@ WITH "source" AS (
     "name",
     "price",
     "test_valid_from",
-    NULL AS "test_valid_to",
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
   WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
