@@ -446,12 +446,14 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._engine_adapter = self.connection_config.create_engine_adapter()
         return self._engine_adapter
 
-    @property
-    def snapshot_evaluator(self) -> SnapshotEvaluator:
-        if not self._snapshot_evaluator:
+    def snapshot_evaluator(self, job_id: t.Optional[str] = None) -> SnapshotEvaluator:
+        # Cache snapshot evaluators by job_id to avoid old job_ids being attached to future Context operations
+        if not self._snapshot_evaluator or any(
+            adapter._job_id != job_id for adapter in self._snapshot_evaluator.adapters.values()
+        ):
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_log_level(logging.INFO)
+                    gateway: adapter.with_log_level(logging.INFO, job_id)
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
@@ -538,7 +540,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return self.create_scheduler(snapshots)
 
-    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
+    def create_scheduler(
+        self, snapshots: t.Iterable[Snapshot], job_id: t.Optional[str] = None
+    ) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -549,7 +553,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            self.snapshot_evaluator,
+            self.snapshot_evaluator(job_id),
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
@@ -714,7 +718,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             NotificationEvent.RUN_START, environment=environment
         )
         analytics_run_id = analytics.collector.on_run_start(
-            engine_type=self.snapshot_evaluator.adapter.dialect,
+            engine_type=self.snapshot_evaluator().adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
         self._load_materializations()
@@ -1076,7 +1080,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             and not parent_snapshot.categorized
         ]
 
-        df = self.snapshot_evaluator.evaluate_and_fetch(
+        df = self.snapshot_evaluator().evaluate_and_fetch(
             snapshot,
             start=start,
             end=end,
@@ -2110,7 +2114,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         errors = []
         skipped_count = 0
         for snapshot in snapshots:
-            for audit_result in self.snapshot_evaluator.audit(
+            for audit_result in self.snapshot_evaluator().audit(
                 snapshot=snapshot,
                 start=start,
                 end=end,
@@ -2142,7 +2146,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             if error.query:
                 self.console.show_sql(
-                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                    f"{error.query.sql(dialect=self.snapshot_evaluator().adapter.dialect)}"
                 )
 
         self.console.log_status_update("Done.")
@@ -2388,7 +2392,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         return completion_status
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
-        self._scheduler.create_plan_evaluator(self).evaluate(
+        self._scheduler.create_plan_evaluator(self, job_id=plan.plan_id).evaluate(
             plan.to_evaluatable(), circuit_breaker=circuit_breaker
         )
 
@@ -2682,7 +2686,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
         # Remove the expired snapshots tables
-        self.snapshot_evaluator.cleanup(
+        self.snapshot_evaluator().cleanup(
             target_snapshots=cleanup_targets,
             on_complete=self.console.update_cleanup_progress,
         )

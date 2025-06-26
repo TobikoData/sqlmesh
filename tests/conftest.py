@@ -266,7 +266,7 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(
         context.state_sync,
-        context.snapshot_evaluator,
+        context.snapshot_evaluator(),
         context.create_scheduler,
         context.default_catalog,
     )

@@ -123,6 +123,7 @@ class EngineAdapter:
         pre_ping: bool = False,
         pretty_sql: bool = False,
         shared_connection: bool = False,
+        job_id: t.Optional[str] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -144,8 +145,9 @@ class EngineAdapter:
         self._pre_ping = pre_ping
         self._pretty_sql = pretty_sql
         self._multithreaded = multithreaded
+        self._job_id = job_id
 
-    def with_log_level(self, level: int) -> EngineAdapter:
+    def with_log_level(self, level: int, job_id: t.Optional[str] = None) -> EngineAdapter:
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
@@ -156,6 +158,7 @@ class EngineAdapter:
             null_connection=True,
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
+            job_id=job_id,
             **self._extra_config,
         )
 
@@ -2174,6 +2177,9 @@ class EngineAdapter:
                     sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                 else:
                     sql = t.cast(str, e)
+
+                if self._job_id:
+                    sql = f"/* sqlmesh_ref: {self._job_id} */ {sql}"
 
                 self._log_sql(
                     sql,

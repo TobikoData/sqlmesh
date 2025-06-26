@@ -1137,7 +1137,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     init_and_plan_context: t.Callable, has_view_binding: bool
 ):
     context, plan = init_and_plan_context("examples/sushi")
-    context.snapshot_evaluator.adapter.HAS_VIEW_BINDING = has_view_binding
+    context.snapshot_evaluator().adapter.HAS_VIEW_BINDING = has_view_binding
     context.apply(plan)
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -6467,3 +6467,25 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     for environment in ["dev", "prod"]:
         context_diff = ctx._context_diff(environment)
         assert context_diff.environment == environment
+
+
+def test_plan_evaluator_job_id(tmp_path: Path, mocker: MockerFixture):
+    def _to_sqls(mock_logger):
+        return [call[0][0] for call in mock_logger.call_args_list]
+
+    create_temp_file(
+        tmp_path, Path("models") / "test.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
+    )
+
+    # Case 1: Ensure that the job id (plan_id) is included in the SQL
+    with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
+        ctx = Context(paths=[tmp_path], config=Config())
+        plan = ctx.plan(auto_apply=True, no_prompts=True)
+
+    assert any(f"/* sqlmesh_ref: {plan.plan_id} */" in sql for sql in _to_sqls(mock_logger))
+
+    # Case 2: Ensure that the previous job id is not included in the SQL for other operations
+    with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
+        ctx.snapshot_evaluator().adapter.execute("SELECT 1")
+
+    assert not any(f"/* sqlmesh_ref: {plan.plan_id} */" in sql for sql in _to_sqls(mock_logger))
