@@ -11,7 +11,7 @@ export default defineConfig({
       use: {
         // ⭢ we'll launch Electron ourselves – no browser needed
         browserName: 'chromium',
-        headless: false, // headed makes screenshots deterministic
+        headless: true, // headless mode for tests
         launchOptions: {
           slowMo: process.env.CI ? 0 : 100,
         },
