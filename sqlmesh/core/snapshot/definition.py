@@ -783,7 +783,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             # only warn if the requested removal interval was a subset of the actual model intervals and was automatically expanded
             # if the requested interval was the same or wider than the actual model intervals, no need to warn
-            if requested_start > expanded_start or requested_end < expanded_end:
+            if (
+                requested_start > expanded_start or requested_end < expanded_end
+            ) and self.is_incremental:
                 from sqlmesh.core.console import get_console
 
                 get_console().log_warning(
