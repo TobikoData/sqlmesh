@@ -39,7 +39,7 @@ jobs:
           command: unset TWINE_USERNAME TWINE_PASSWORD && make publish-tests
   gh-release:
     docker:
-      - image: cimg/node:16.14
+      - image: cimg/node:20.19.0
     resource_class: small
     steps:
       - run:
@@ -54,7 +54,7 @@ jobs:
 
   ui-build:
     docker:
-      - image: cimg/node:19.8
+      - image: cimg/node:20.19.0
     resource_class: medium
     steps:
       - checkout
