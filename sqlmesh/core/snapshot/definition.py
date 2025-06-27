@@ -807,7 +807,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 get_console().log_warning(
                     f"SCD Type 2 model '{self.model.name}' does not support end date in restatements.\n"
                     f"Requested end date [{to_ts(requested_end)}] doesn't match latest interval end date [{to_ts(latest_end)}].\n"
-                    f"You can set start date but end date must be the latest interval so ."
                 )
 
                 removal_interval = self.inclusive_exclusive(requested_start, latest_end, strict)
