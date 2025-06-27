@@ -98,7 +98,32 @@ All software runs within a system environment that stores information as "enviro
 
 SQLMesh can access environment variables during configuration, which enables approaches like storing passwords/secrets outside the configuration file and changing configuration parameters dynamically based on which user is running SQLMesh.
 
-You can use environment variables in two ways: specifying them in the configuration file or creating properly named variables to override configuration file values.
+You can specify environment variables in the configuration file or by storing them in a `.env` file.
+
+### .env files
+
+SQLMesh automatically loads environment variables from a `.env` file in your project directory. This provides a convenient way to manage environment variables without having to set them in your shell.
+
+Create a `.env` file in your project root with key-value pairs:
+
+```bash
+# .env file
+SNOWFLAKE_PW=my_secret_password
+S3_BUCKET=s3://my-data-bucket/warehouse
+DATABASE_URL=postgresql://user:pass@localhost/db
+
+# Override specific SQLMesh configuration values
+SQLMESH__DEFAULT_GATEWAY=production
+SQLMESH__MODEL_DEFAULTS__DIALECT=snowflake
+```
+
+See the [overrides](#overrides) section for a detailed explanation of how these are defined.
+
+The rest of the `.env` file variables can be used in your configuration files with `{{ env_var('VARIABLE_NAME') }}` syntax in YAML or accessed via `os.environ['VARIABLE_NAME']` in Python.
+
+**Important considerations:**
+- Add `.env` to your `.gitignore` file to avoid committing sensitive information
+- SQLMesh will only load the `.env` file if it exists in the project directory
 
 ### Configuration file
 
