@@ -84,7 +84,7 @@ test('Go to definition for model', async ({ page }) => {
       .locator('text=sushi.waiter_revenue_by_day')
       .first()
       .click({
-        modifiers: ['Meta'],
+        modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'],
       })
     await expect(
       page.locator('text=SUM(oi.quantity * i.price)::DOUBLE AS revenue'),

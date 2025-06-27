@@ -6,6 +6,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  globalSetup: './tests/global-setup.ts',
   projects: [
     {
       name: 'electron-vscode',

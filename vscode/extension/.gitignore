@@ -2,6 +2,7 @@ node_modules
 dist
 out
 .vscode-test
+.test_setup
 *.vsix
 LICENSE
 src_react

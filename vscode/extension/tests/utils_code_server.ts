@@ -11,6 +11,23 @@ export interface CodeServerContext {
 }
 
 /**
+ * Get the path to the extensions directory set up by global setup
+ * @returns The extensions directory path
+ */
+function getExtensionsDir(): string {
+  const extensionDir = path.join(__dirname, '..')
+  const extensionsDir = path.join(extensionDir, '.test_setup', 'extensions')
+
+  if (!fs.existsSync(extensionsDir)) {
+    throw new Error(
+      `Extensions directory not found at ${extensionsDir}. Make sure global setup has run.`,
+    )
+  }
+
+  return extensionsDir
+}
+
+/**
  * @param tempDir - The temporary directory to use for the code-server instance
  * @param placeFileWithPythonInterpreter - Whether to place a vscode/settings.json file in the temp directory that points to the python interpreter of the environmen the test is running in.
  * @returns The code-server context
@@ -22,6 +39,9 @@ export async function startCodeServer({
   tempDir: string
   placeFileWithPythonInterpreter?: boolean
 }): Promise<CodeServerContext> {
+  // Get the extensions directory set up by global setup
+  const extensionsDir = getExtensionsDir()
+
   // Find an available port
   const codeServerPort = Math.floor(Math.random() * 10000) + 50000
   const defaultPythonInterpreter = path.join(
@@ -60,38 +80,7 @@ export async function startCodeServer({
     )
   }
 
-  // Get the extension version from package.json
-  const extensionDir = path.join(__dirname, '..')
-  const packageJson = JSON.parse(
-    fs.readFileSync(path.join(extensionDir, 'package.json'), 'utf-8'),
-  )
-  const version = packageJson.version
-  const extensionName = packageJson.name || 'sqlmesh'
-
-  // Look for the specific version .vsix file
-  const vsixFileName = `${extensionName}-${version}.vsix`
-  const vsixPath = path.join(extensionDir, vsixFileName)
-
-  if (!fs.existsSync(vsixPath)) {
-    throw new Error(
-      `Extension file ${vsixFileName} not found. Run "pnpm run vscode:package" first.`,
-    )
-  }
-
-  console.log(`Using extension: ${vsixFileName}`)
-
-  // Install the extension first
-  const extensionsDir = path.join(tempDir, 'extensions')
-  console.log('Installing extension...')
-  execSync(
-    `pnpm run code-server --user-data-dir "${userDataDir}" --extensions-dir "${extensionsDir}" --install-extension "${vsixPath}"`,
-    {
-      stdio: 'inherit',
-      cwd: path.join(__dirname, '..'),
-    },
-  )
-
-  // Start code-server instance
+  // Start code-server instance using the shared extensions directory
   const codeServerProcess = spawn(
     'pnpm',
     [

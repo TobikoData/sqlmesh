@@ -92,8 +92,9 @@ test('working project, then broken through adding double model, then refixed', a
       .locator('a')
       .click()
     // Save to refresh the context
-    await page.keyboard.press('Control+S')
-    await page.keyboard.press('Meta+S')
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+S' : 'Control+S',
+    )
 
     // Wait for the error to appear
     // TODO: Selector doesn't work in the linage view
@@ -103,8 +104,9 @@ test('working project, then broken through adding double model, then refixed', a
     await fs.remove(path.join(tempDir, 'models', 'customers_duplicated.sql'))
 
     // Save again to refresh the context
-    await page.keyboard.press('Control+S')
-    await page.keyboard.press('Meta+S')
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+S' : 'Control+S',
+    )
 
     // Wait for the error to go away and context to reload
     // TODO: Selector doesn't work in the linage view
