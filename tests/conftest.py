@@ -42,7 +42,7 @@ from sqlmesh.core.snapshot import (
     SnapshotDataVersion,
     SnapshotFingerprint,
 )
-from sqlmesh.utils import random_id
+from sqlmesh.utils import random_id, CorrelationId
 from sqlmesh.utils.date import TimeLike, to_date
 from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 from sqlmesh.core.engine_adapter.shared import CatalogSupport
@@ -266,10 +266,10 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(
         context.state_sync,
-        context.snapshot_evaluator,
         context.create_scheduler,
         context.default_catalog,
     )
+    plan_evaluator.snapshot_evaluator = context.snapshot_evaluator(CorrelationId.from_plan(plan))
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
     evaluatable_plan = plan.to_evaluatable()
     stages = plan_stages.build_plan_stages(
