@@ -1,57 +1,67 @@
 import path from 'path'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { SUSHI_SOURCE_PATH } from './utils'
 import os from 'os'
 import { test } from '@playwright/test'
 import fs from 'fs-extra'
+import { startCodeServer, stopCodeServer } from './utils_code_server'
 
-test('Stop server works', async () => {
+test('Stop server works', async ({ page }) => {
+  test.setTimeout(120000) // Increase timeout to 2 minutes
+
+  console.log('Starting test: Stop server works')
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
-  try {
-    const { window, close } = await startVSCode(tempDir)
+  const context = await startCodeServer(tempDir, true)
 
-    //   Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+  try {
+    // Navigate to code-server instance
+    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+
+    // Wait for code-server to load
+    await page.waitForLoadState('networkidle')
+    await page.waitForSelector('[role="application"]', { timeout: 10000 })
+
+    // Wait for the models folder to be visible in the file explorer
+    await page.waitForSelector('text=models')
 
     // Click on the models folder, excluding external_models
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
-    // Open the customer_revenue_lifetime model
-    await window
+    // Open the customers.sql model
+    await page
       .getByRole('treeitem', { name: 'customers.sql', exact: true })
       .locator('a')
       .click()
 
-    await window.waitForSelector('text=grain')
-    await window.waitForSelector('text=Loaded SQLMesh Context')
+    await page.waitForSelector('text=grain')
+    await page.waitForSelector('text=Loaded SQLMesh Context')
 
     // Stop the server
-    await window.keyboard.press(
+    await page.keyboard.press(
       process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
     )
-    await window.keyboard.type('SQLMesh: Stop Server')
-    await window.keyboard.press('Enter')
+    await page.keyboard.type('SQLMesh: Stop Server')
+    await page.keyboard.press('Enter')
 
     // Await LSP server stopped message
-    await window.waitForSelector('text=LSP server stopped')
+    await page.waitForSelector('text=LSP server stopped')
 
     // Render the model
-    await window.keyboard.press(
+    await page.keyboard.press(
       process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
     )
-    await window.keyboard.type('Render Model')
-    await window.keyboard.press('Enter')
+    await page.keyboard.type('Render Model')
+    await page.keyboard.press('Enter')
 
     // Await error message
-    await window.waitForSelector(
+    await page.waitForSelector(
       'text="Failed to render model: LSP client not ready."',
     )
-    await close()
   } finally {
-    await fs.remove(tempDir)
+    await stopCodeServer(context)
   }
 })

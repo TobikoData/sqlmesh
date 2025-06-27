@@ -9973,9 +9973,9 @@ def test_formatting_flag_serde():
     )
 
     model = load_sql_based_model(expressions)
+    assert model.render_definition()[0].sql() == "MODEL (\nname test_model,\nformatting False\n)"
 
     model_json = model.json()
-
     assert "formatting" not in json.loads(model_json)
 
     deserialized_model = SqlModel.parse_raw(model_json)

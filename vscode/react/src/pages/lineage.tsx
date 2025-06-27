@@ -16,6 +16,12 @@ import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
 import type { Model } from '@/api/client'
 import { useRpc } from '@/utils/rpc'
+import type {
+  ModelEncodedFQN,
+  ModelName,
+  ModelPath,
+  ModelFullPath,
+} from '@/domain/models'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -104,6 +110,8 @@ function Lineage() {
       fetchFirstTimeModelIfNotSet(models).then(modelName => {
         if (modelName && selectedModel === undefined) {
           setSelectedModel(modelName)
+        } else {
+          setSelectedModel(models[0].name)
         }
       })
     }
@@ -198,7 +206,13 @@ export function LineageComponentFromWeb({
   }
 
   const sqlmModel = new ModelSQLMeshModel()
-  sqlmModel.update(model)
+  sqlmModel.update({
+    ...model,
+    name: model.name as ModelName,
+    fqn: model.fqn as ModelEncodedFQN,
+    path: model.path as ModelPath,
+    full_path: model.full_path as ModelFullPath,
+  })
 
   return (
     <div className="h-[100vh] w-[100vw]">

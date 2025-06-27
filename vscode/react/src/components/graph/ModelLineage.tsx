@@ -383,7 +383,10 @@ function ModelColumnLineage(): JSX.Element {
             <Divider />
           </Panel>
         )}
-        <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
+        <Controls
+          className="bg-light p-1 rounded-md !border-none !shadow-lg"
+          showInteractive={false}
+        />
         <Background
           variant={BackgroundVariant.Cross}
           gap={32}

@@ -382,7 +382,7 @@ def test_run_all_missing_approval(
     assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
-    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_neutral
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_failure
 
     assert len(controller._context.apply.call_args_list) == 1
     pr_plan = controller._context.apply.call_args_list[0][0]
@@ -402,7 +402,7 @@ def test_run_all_missing_approval(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+            == "run_unit_tests=success\nhas_required_approval=failure\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
         )
 
 

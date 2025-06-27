@@ -8,12 +8,24 @@ import {
   type ModelDefaultCatalog,
   type ModelDefinition,
 } from '@/api/client'
+import type {
+  ModelEncodedFQN,
+  ModelName,
+  ModelPath,
+  ModelEncodedName,
+  ModelFullPath,
+} from '@/domain/models'
 import { isArrayNotEmpty } from '@/utils/index'
 import { ModelInitial } from './initial'
 import type { Lineage } from './lineage'
 
-export interface InitialSQLMeshModel extends Model {
-  lineage?: Record<string, Lineage>
+export interface InitialSQLMeshModel
+  extends Omit<Model, 'name' | 'fqn' | 'path' | 'full_path'> {
+  name: ModelName
+  fqn: ModelEncodedFQN
+  path: ModelPath
+  full_path: ModelFullPath
+  lineage?: Record<ModelName, Lineage>
 }
 
 export class ModelSQLMeshModel<
@@ -22,9 +34,10 @@ export class ModelSQLMeshModel<
   _details: ModelDetails = {}
   _detailsIndex: string = ''
 
-  name: string
-  fqn: string
-  path: string
+  name: ModelEncodedName
+  fqn: ModelEncodedFQN
+  path: ModelPath
+  full_path: ModelFullPath
   dialect: string
   type: ModelType
   columns: Column[]
@@ -46,10 +59,11 @@ export class ModelSQLMeshModel<
           },
     )
 
-    this.name = encodeURI(this.initial.name)
-    this.fqn = encodeURI(this.initial.fqn)
+    this.name = encodeURI(this.initial.name) as ModelEncodedName
+    this.fqn = encodeURI(this.initial.fqn) as ModelEncodedFQN
     this.default_catalog = this.initial.default_catalog
-    this.path = this.initial.path
+    this.path = this.initial.path as ModelPath
+    this.full_path = this.initial.full_path as ModelFullPath
     this.dialect = this.initial.dialect
     this.description = this.initial.description
     this.sql = this.initial.sql
@@ -127,17 +141,21 @@ export class ModelSQLMeshModel<
       } else if (key === 'details') {
         this.details = value as ModelDetails
       } else if (key === 'name') {
-        this.name = encodeURI(value as string)
+        this.name = encodeURI(value as string) as ModelEncodedName
       } else if (key === 'fqn') {
-        this.fqn = encodeURI(value as string)
+        this.fqn = encodeURI(value as string) as ModelEncodedFQN
       } else if (key === 'type') {
         this.type = value as ModelType
       } else if (key === 'default_catalog') {
         this.default_catalog = value as ModelDefaultCatalog
       } else if (key === 'description') {
         this.description = value as ModelDescription
+      } else if (key === 'full_path') {
+        this.full_path = value as ModelFullPath
+      } else if (key === 'path') {
+        this.path = value as ModelPath
       } else if (key in this) {
-        this[key as 'path' | 'dialect' | 'sql'] = value as string
+        this[key as 'dialect' | 'sql'] = value as string
       }
     }
   }

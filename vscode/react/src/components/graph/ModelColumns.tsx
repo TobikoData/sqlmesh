@@ -46,6 +46,7 @@ import { Popover, Transition } from '@headlessui/react'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
+import type { ModelName } from '@/domain/models'
 
 export default function ModelColumns({
   nodeId,
@@ -732,5 +733,5 @@ function getColumnFromLineage(
   nodeId: string,
   columnName: string,
 ): LineageColumn | undefined {
-  return lineage?.[nodeId]?.columns?.[encodeURI(columnName)]
+  return lineage?.[nodeId]?.columns?.[encodeURI(columnName) as ModelName]
 }
