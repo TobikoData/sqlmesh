@@ -6,6 +6,7 @@ import typing as t
 from pathlib import Path
 
 from pydantic import ValidationError
+from dotenv import load_dotenv
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import constants as c
@@ -34,6 +35,9 @@ def load_configs(
         for path in ensure_list(paths)
         for p in (glob.glob(str(path)) or [str(path)])
     ]
+
+    for path in absolute_paths:
+        load_dotenv(dotenv_path=path / ".env", override=True)
 
     if not isinstance(config, str):
         if type(config) != config_type:
