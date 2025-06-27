@@ -140,7 +140,6 @@ class ModelKindMixin:
             self.is_incremental_unmanaged
             or self.is_incremental_by_unique_key
             or self.is_incremental_by_partition
-            or self.is_scd_type_2
             or self.is_managed
             or self.is_full
             or self.is_view

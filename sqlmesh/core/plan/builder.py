@@ -405,7 +405,7 @@ class PlanBuilder:
                 elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
                     self._console.log_warning(
                         f"Cannot restate model '{snapshot.name}'. "
-                        "Restatement is disabled for this model to prevent possible data loss."
+                        "Restatement is disabled for this model to prevent possible data loss. "
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue
