@@ -67,6 +67,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError, ConfigError
 from sqlmesh.utils.pydantic import validate_string
@@ -6469,23 +6470,27 @@ def test_plan_always_recreate_environment(tmp_path: Path):
         assert context_diff.environment == environment
 
 
-def test_plan_evaluator_job_id(tmp_path: Path, mocker: MockerFixture):
-    def _to_sqls(mock_logger):
-        return [call[0][0] for call in mock_logger.call_args_list]
+def test_plan_evaluator_correlation_id(tmp_path: Path):
+    def _correlation_id_in_sqls(correlation_id: CorrelationId, mock_logger):
+        sqls = [call[0][0] for call in mock_logger.call_args_list]
+        return any(f"/* {correlation_id} */" in sql for sql in sqls)
 
     create_temp_file(
         tmp_path, Path("models") / "test.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
     )
 
-    # Case 1: Ensure that the job id (plan_id) is included in the SQL
+    # Case 1: Ensure that the correlation id (plan_id) is included in the SQL
     with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
         ctx = Context(paths=[tmp_path], config=Config())
         plan = ctx.plan(auto_apply=True, no_prompts=True)
 
-    assert any(f"/* sqlmesh_ref: {plan.plan_id} */" in sql for sql in _to_sqls(mock_logger))
+    correlation_id = CorrelationId.from_plan(plan)
+    assert str(correlation_id) == f"PLAN: {plan.plan_id}"
 
-    # Case 2: Ensure that the previous job id is not included in the SQL for other operations
+    assert _correlation_id_in_sqls(correlation_id, mock_logger)
+
+    # Case 2: Ensure that the previous correlation id is not included in the SQL for other operations
     with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
         ctx.snapshot_evaluator().adapter.execute("SELECT 1")
 
-    assert not any(f"/* sqlmesh_ref: {plan.plan_id} */" in sql for sql in _to_sqls(mock_logger))
+    assert not _correlation_id_in_sqls(correlation_id, mock_logger)

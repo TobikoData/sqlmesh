@@ -13,6 +13,7 @@ import traceback
 import types
 import typing as t
 import uuid
+from dataclasses import dataclass
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
@@ -24,6 +25,9 @@ from sqlglot import exp
 from sqlglot.dialects.dialect import Dialects
 
 logger = logging.getLogger(__name__)
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.plan import Plan
 
 T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
@@ -382,3 +386,23 @@ def to_snake_case(name: str) -> str:
     return "".join(
         f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
     )
+
+
+class JobType(Enum):
+    PLAN = "PLAN"
+    RUN = "RUN"
+
+
+@dataclass(frozen=True)
+class CorrelationId:
+    """ID that is added to each query in order to identify the job that created it."""
+
+    job_type: JobType
+    job_id: str
+
+    def __str__(self) -> str:
+        return f"{self.job_type.value}: {self.job_id}"
+
+    @classmethod
+    def from_plan(cls, plan: Plan) -> CorrelationId:
+        return CorrelationId(JobType.PLAN, plan.plan_id)

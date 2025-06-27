@@ -116,7 +116,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, Verbosity
+from sqlmesh.utils import UniqueKeyDict, Verbosity, CorrelationId
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -418,7 +418,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.config.get_state_connection(self.gateway) or self.connection_config
         )
 
-        self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
+        self._snapshot_evaluators: t.Dict[t.Optional[CorrelationId], SnapshotEvaluator] = {}
 
         self.console = get_console()
         setattr(self.console, "dialect", self.config.dialect)
@@ -446,12 +446,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._engine_adapter = self.connection_config.create_engine_adapter()
         return self._engine_adapter
 
-    def snapshot_evaluator(self, job_id: t.Optional[str] = None) -> SnapshotEvaluator:
+    def snapshot_evaluator(self, job_id: t.Optional[CorrelationId] = None) -> SnapshotEvaluator:
         # Cache snapshot evaluators by job_id to avoid old job_ids being attached to future Context operations
-        if not self._snapshot_evaluator or any(
-            adapter._job_id != job_id for adapter in self._snapshot_evaluator.adapters.values()
-        ):
-            self._snapshot_evaluator = SnapshotEvaluator(
+        if job_id not in self._snapshot_evaluators:
+            self._snapshot_evaluators[job_id] = SnapshotEvaluator(
                 {
                     gateway: adapter.with_settings(level=logging.INFO, job_id=job_id)
                     for gateway, adapter in self.engine_adapters.items()
@@ -459,7 +457,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
             )
-        return self._snapshot_evaluator
+        return self._snapshot_evaluators[job_id]
 
     def execution_context(
         self,
@@ -541,7 +539,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         return self.create_scheduler(snapshots)
 
     def create_scheduler(
-        self, snapshots: t.Iterable[Snapshot], job_id: t.Optional[str] = None
+        self, snapshots: t.Iterable[Snapshot], job_id: t.Optional[CorrelationId] = None
     ) -> Scheduler:
         """Creates the built-in scheduler.
 
@@ -1594,7 +1592,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             explainer.evaluate(
                 plan.to_evaluatable(),
-                snapshot_evaluator=self.snapshot_evaluator(job_id=plan.plan_id),
+                snapshot_evaluator=self.snapshot_evaluator(job_id=CorrelationId.from_plan(plan)),
             )
             return
 
@@ -2341,8 +2339,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
-        if self._snapshot_evaluator:
-            self._snapshot_evaluator.close()
+        for evaluator in self._snapshot_evaluators.values():
+            evaluator.close()
         if self._state_sync:
             self._state_sync.close()
 
@@ -2397,7 +2395,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
         self._scheduler.create_plan_evaluator(self).evaluate(
             plan.to_evaluatable(),
-            snapshot_evaluator=self.snapshot_evaluator(job_id=plan.plan_id),
+            snapshot_evaluator=self.snapshot_evaluator(job_id=CorrelationId.from_plan(plan)),
             circuit_breaker=circuit_breaker,
         )
 

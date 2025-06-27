@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
 from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
@@ -123,7 +123,7 @@ class EngineAdapter:
         pre_ping: bool = False,
         pretty_sql: bool = False,
         shared_connection: bool = False,
-        job_id: t.Optional[str] = None,
+        job_id: t.Optional[CorrelationId] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -2179,7 +2179,7 @@ class EngineAdapter:
                     sql = t.cast(str, e)
 
                 if self._job_id:
-                    sql = f"/* sqlmesh_ref: {self._job_id} */ {sql}"
+                    sql = f"/* {self._job_id} */ {sql}"
 
                 self._log_sql(
                     sql,

@@ -11,6 +11,7 @@ from sqlmesh.core.plan import (
     stages as plan_stages,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.utils import CorrelationId
 
 
 @pytest.fixture
@@ -63,7 +64,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         sushi_context.default_catalog,
         console=sushi_context.console,
     )
-    evaluator.snapshot_evaluator = sushi_context.snapshot_evaluator(job_id=plan.plan_id)
+    evaluator.snapshot_evaluator = sushi_context.snapshot_evaluator(CorrelationId.from_plan(plan))
 
     evaluatable_plan = plan.to_evaluatable()
     stages = plan_stages.build_plan_stages(
