@@ -451,7 +451,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if job_id not in self._snapshot_evaluators:
             self._snapshot_evaluators[job_id] = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_settings(level=logging.INFO, job_id=job_id)
+                    gateway: adapter.with_settings(log_level=logging.INFO, job_id=job_id)
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,

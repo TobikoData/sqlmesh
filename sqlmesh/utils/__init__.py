@@ -389,8 +389,10 @@ def to_snake_case(name: str) -> str:
 
 
 class JobType(Enum):
-    PLAN = "PLAN"
-    RUN = "RUN"
+    PLAN = "SQLMESH_PLAN"
+
+
+RUN = "SQLMESH_RUN"
 
 
 @dataclass(frozen=True)

@@ -6485,7 +6485,7 @@ def test_plan_evaluator_correlation_id(tmp_path: Path):
         plan = ctx.plan(auto_apply=True, no_prompts=True)
 
     correlation_id = CorrelationId.from_plan(plan)
-    assert str(correlation_id) == f"PLAN: {plan.plan_id}"
+    assert str(correlation_id) == f"SQLMESH_PLAN: {plan.plan_id}"
 
     assert _correlation_id_in_sqls(correlation_id, mock_logger)
 
