@@ -44,7 +44,7 @@ test('bad project, double model', async ({ page }) => {
 
     await page.waitForSelector('text=Error creating context')
 
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(500)
   } finally {
     await stopCodeServer(context)
   }
@@ -64,10 +64,7 @@ test('working project, then broken through adding double model, then refixed', a
   })
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-    // First, verify the project is working correctly
-    await page.waitForSelector('text=models')
-    await page.waitForTimeout(5_000)
+    await page.waitForLoadState('networkidle')
 
     // Open the lineage view to confirm it loads properly
     await openLineageView(page)
@@ -194,9 +191,7 @@ test('bad project, double model, check lineage', async ({ page }) => {
   })
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-    await page.waitForTimeout(5_000)
-    await page.waitForSelector('text=models')
+    await page.waitForLoadState('networkidle')
 
     // Open the lineage view
     await openLineageView(page)
@@ -204,7 +199,7 @@ test('bad project, double model, check lineage', async ({ page }) => {
     await page.waitForSelector('text=Error creating context')
     await page.waitForSelector('text=Error:')
 
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(500)
   } finally {
     await stopCodeServer(context)
   }

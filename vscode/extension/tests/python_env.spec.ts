@@ -69,9 +69,7 @@ test.describe('python environment variable injection on sqlmesh_lsp', () => {
 
     try {
       await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-      await page.waitForSelector('text=models')
-      await page.waitForTimeout(5_000)
+      await page.waitForLoadState('networkidle')
       await openLineageView(page)
       await page.waitForSelector('text=Error creating context')
     } finally {
@@ -89,8 +87,8 @@ test.describe('python environment variable injection on sqlmesh_lsp', () => {
     })
     try {
       await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-      await page.waitForSelector('text=models')
-      await page.waitForTimeout(5_000)
+      await page.waitForLoadState('networkidle')
+
       await openLineageView(page)
       await page.waitForSelector('text=Loaded SQLMesh context')
     } finally {
@@ -133,8 +131,7 @@ test.describe('tcloud version', () => {
     })
     try {
       await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-      await page.waitForSelector('text=models')
-      await page.waitForTimeout(5_000)
+      await page.waitForLoadState('networkidle')
       await openLineageView(page)
       await page.waitForSelector('text=Error creating context')
     } finally {
@@ -153,8 +150,7 @@ test.describe('tcloud version', () => {
     })
     try {
       await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-      await page.waitForSelector('text=models')
-      await page.waitForTimeout(5_000)
+      await page.waitForLoadState('networkidle')
       await openLineageView(page)
       await page.waitForSelector('text=Loaded SQLMesh context')
     } finally {

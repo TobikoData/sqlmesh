@@ -105,9 +105,7 @@ test('lineage, no sqlmesh found', async ({ page }) => {
 
     // navigate to code-server instance
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-    await page.waitForSelector('text=models')
-    await page.waitForTimeout(5000)
+    await page.waitForLoadState('networkidle')
 
     // Open lineage view
     await openLineageView(page)
@@ -164,9 +162,7 @@ test('check that the LSP runs correctly by opening lineage when looking at anoth
   })
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-    await page.waitForSelector('text=models')
-    await page.waitForTimeout(5_000)
+    await page.waitForLoadState('networkidle')
 
     // Open the SQL file from the other directory
     await openFile(page, sqlFile)

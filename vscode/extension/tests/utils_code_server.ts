@@ -179,5 +179,10 @@ export async function stopCodeServer(
   })
 
   // Clean up temporary directory
-  await fs.remove(tempDir)
+  try {
+    await fs.remove(tempDir)
+  } catch (error) {
+    // Ignore errors when removing temp directory
+    console.warn(`Failed to remove temp directory ${tempDir}:`, error)
+  }
 }

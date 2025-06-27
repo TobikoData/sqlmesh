@@ -159,10 +159,7 @@ test('Render shows model picker when no active editor is open', async ({
   try {
     // Navigate to code-server instance
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-
-    // Wait for the models folder to be visible
-    await page.waitForSelector('text=models')
-    await page.waitForTimeout(5_000)
+    await page.waitForLoadState('networkidle')
 
     // Load the lineage view to initialize SQLMesh context (like lineage.spec.ts does)
     await openLineageView(page)

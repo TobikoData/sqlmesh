@@ -85,12 +85,13 @@ export const pipInstall = async (
 /**
  * Open the lineage view in the given window.
  */
-export const openLineageView = async (window: Page): Promise<void> => {
-  await window.keyboard.press(
+export const openLineageView = async (page: Page): Promise<void> => {
+  await page.keyboard.press(
     process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
   )
-  await window.keyboard.type('Lineage: Focus On View')
-  await window.keyboard.press('Enter')
+  await page.keyboard.type('Lineage: Focus On View')
+  await page.locator('a').filter({ hasText: 'Lineage: Focus on View' }).click()
+  await page.keyboard.press('Enter')
 }
 
 /**

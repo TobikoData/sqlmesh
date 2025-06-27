@@ -96,7 +96,7 @@ test('not signed in, shows sign in window', async ({ page }, testInfo) => {
       .click()
 
     // Wait for the file to open
-    await page.waitForTimeout(2000)
+    await page.waitForLoadState('networkidle')
 
     await page.waitForSelector(
       'text=Please sign in to Tobiko Cloud to use SQLMesh',

@@ -57,10 +57,9 @@ test.describe('CTE Rename', () => {
       // Type new name and confirm
       await page.keyboard.type('new_marketing')
       await page.keyboard.press('Enter')
-      await page.waitForTimeout(1000)
 
       // Verify the rename was applied
-      await expect(page.locator('text=WITH new_marketing AS')).toBeVisible()
+      await page.waitForSelector('text=WITH new_marketing AS')
     } finally {
       await stopCodeServer(context)
     }
@@ -88,15 +87,9 @@ test.describe('CTE Rename', () => {
 
       // Confirm rename
       await page.keyboard.press('Enter')
-      await page.waitForTimeout(1000)
 
-      // Verify both definition and usage were renamed
-      await expect(
-        page.locator('text=WITH updated_marketing_out AS'),
-      ).toBeVisible()
-      await expect(
-        page.locator('text=FROM updated_marketing_out'),
-      ).toBeVisible()
+      await page.waitForSelector('text=WITH updated_marketing_out AS')
+      await page.waitForSelector('text=FROM updated_marketing_out')
     } finally {
       await stopCodeServer(context)
     }

@@ -10,7 +10,7 @@ import { startCodeServer, stopCodeServer } from './utils_code_server'
  * Helper function to launch VS Code and test lineage with given project path config
  */
 async function testLineageWithProjectPath(page: Page): Promise<void> {
-  await page.waitForTimeout(5000)
+  await page.waitForLoadState('networkidle')
   await openLineageView(page)
   await page.waitForSelector('text=Loaded SQLMesh context')
 }
