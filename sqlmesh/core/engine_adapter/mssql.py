@@ -212,6 +212,7 @@ class MSSQLEngineAdapter(
         if merge_filter:
             on = exp.and_(merge_filter, on)
 
+        match_expressions = []
         if not when_matched:
             match_condition = None
             unique_key_names = [y.name for y in unique_key]
@@ -230,23 +231,24 @@ class MSSQLEngineAdapter(
                 )
             )
 
-            match_expressions = [
-                exp.When(
-                    matched=True,
-                    source=False,
-                    condition=match_condition,
-                    then=exp.Update(
-                        expressions=[
-                            exp.column(col, MERGE_TARGET_ALIAS).eq(
-                                exp.column(col, MERGE_SOURCE_ALIAS)
-                            )
-                            for col in columns_to_types_no_keys
-                        ],
-                    ),
+            if target_columns_no_keys:
+                match_expressions.append(
+                    exp.When(
+                        matched=True,
+                        source=False,
+                        condition=match_condition,
+                        then=exp.Update(
+                            expressions=[
+                                exp.column(col, MERGE_TARGET_ALIAS).eq(
+                                    exp.column(col, MERGE_SOURCE_ALIAS)
+                                )
+                                for col in columns_to_types_no_keys
+                            ],
+                        ),
+                    )
                 )
-            ]
         else:
-            match_expressions = when_matched.copy().expressions
+            match_expressions.extend(when_matched.copy().expressions)
 
         match_expressions.append(
             exp.When(
