@@ -10518,3 +10518,28 @@ def test_boolean_property_validation() -> None:
     )
     model = load_sql_based_model(expressions, dialect="tsql")
     assert model.enabled
+
+
+def test_datetime_without_timezone_variable_redshift() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column test_time_col,
+                batch_size 1,
+                batch_concurrency 1
+            ),
+            start '2025-06-01',
+            dialect redshift
+        );
+
+        SELECT @start_dtntz AS test_time_col
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="redshift")
+
+    assert (
+        model.render_query_or_raise().sql("redshift")
+        == '''SELECT CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS "test_time_col"'''
+    )

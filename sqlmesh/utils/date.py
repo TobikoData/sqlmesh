@@ -253,8 +253,12 @@ def date_dict(
 
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
+        dtntz = dt.replace(tzinfo=None)
+
         millis = to_timestamp(time_like)
+
         kwargs[f"{prefix}_dt"] = dt
+        kwargs[f"{prefix}_dtntz"] = dtntz
         kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = to_ts(dt)
@@ -262,6 +266,7 @@ def date_dict(
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
         kwargs[f"{prefix}_hour"] = dt.hour
+
     return kwargs
 
 
