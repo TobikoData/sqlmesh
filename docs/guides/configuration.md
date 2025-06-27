@@ -121,9 +121,19 @@ See the [overrides](#overrides) section for a detailed explanation of how these 
 
 The rest of the `.env` file variables can be used in your configuration files with `{{ env_var('VARIABLE_NAME') }}` syntax in YAML or accessed via `os.environ['VARIABLE_NAME']` in Python.
 
+#### Custom dot env file location and name
+
+By default, SQLMesh loads `.env` files from each project directory. Alternatively, you can export the `SQLMESH_DOTENV_PATH` environment variable to specify a custom path and persist it across commands:
+
+```bash
+export SQLMESH_DOTENV_PATH=/path/to/custom/.custom_env
+sqlmesh plan
+```
+
 **Important considerations:**
 - Add `.env` to your `.gitignore` file to avoid committing sensitive information
-- SQLMesh will only load the `.env` file if it exists in the project directory
+- SQLMesh will only load the `.env` file if it exists in the project directory (unless a custom path is specified)
+- When using a custom path, that specific file takes precedence over any `.env` file in the project directory.
 
 ### Configuration file
 

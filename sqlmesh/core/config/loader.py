@@ -26,6 +26,7 @@ def load_configs(
     config_type: t.Type[C],
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
+    dotenv_path: t.Optional[Path] = None,
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
@@ -36,8 +37,11 @@ def load_configs(
         for p in (glob.glob(str(path)) or [str(path)])
     ]
 
-    for path in absolute_paths:
-        load_dotenv(dotenv_path=path / ".env", override=True)
+    if dotenv_path:
+        load_dotenv(dotenv_path=dotenv_path, override=True)
+    else:
+        for path in absolute_paths:
+            load_dotenv(dotenv_path=path / ".env", override=True)
 
     if not isinstance(config, str):
         if type(config) != config_type:

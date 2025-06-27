@@ -79,6 +79,7 @@ dev = [
     "PyAthena[Pandas]",
     "PyGithub>=2.6.0",
     "pyperf",
+    "python-dotenv",
     "pyspark~=3.5.0",
     "pytest",
     "pytest-asyncio",

@@ -1236,3 +1236,60 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="athena"
         default_gateway="duckdb_gateway",
         model_defaults=ModelDefaultsConfig(dialect="athena"),
     )
+
+
+def test_load_yaml_config_custom_dotenv_path(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("yaml_config_2")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: {{ env_var('DB_NAME') }}
+"""
+        )
+
+    # Create a custom dot env file in a different location
+    custom_env_dir = tmp_path_factory.mktemp("custom_env")
+    custom_env_path = custom_env_dir / ".my_env"
+    with open(custom_env_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """DB_NAME="custom_database.db"
+SQLMESH__DEFAULT_GATEWAY="test_gateway"
+SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
+"""
+        )
+
+    # Test that without custom dotenv path, env vars are not loaded
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(
+            ConfigError, match=r"Default model SQL dialect is a required configuratio*"
+        ):
+            load_configs(
+                "config",
+                Config,
+                paths=[main_dir],
+            )
+
+    # Test that with custom dotenv path, env vars are loaded correctly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+            dotenv_path=custom_env_path,
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "test_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    database="custom_database.db",
+                ),
+            ),
+        },
+        default_gateway="test_gateway",
+        model_defaults=ModelDefaultsConfig(dialect="postgres"),
+    )
