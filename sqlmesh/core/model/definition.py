@@ -2431,7 +2431,7 @@ def _create_model(
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
 
-    statements = []
+    statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
@@ -2453,7 +2453,7 @@ def _create_model(
             statements.extend(property_values.expressions)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(gen(e) for e in statements)
+        *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
     if jinja_macros:
