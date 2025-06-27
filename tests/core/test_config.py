@@ -990,6 +990,7 @@ def test_environment_statements_config(tmp_path):
 def test_pydantic_import_error() -> None:
     class TestConfig(DuckDBConnectionConfig):
         pass
+    TestConfig.model_rebuild()
 
     TestConfig()
 
