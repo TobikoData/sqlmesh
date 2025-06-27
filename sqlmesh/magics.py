@@ -8,6 +8,7 @@ import typing as t
 from argparse import Namespace, SUPPRESS
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 from hyperscript import h
 
@@ -166,6 +167,9 @@ class SQLMeshMagics(Magics):
     @argument("--ignore-warnings", action="store_true", help="Ignore warnings.")
     @argument("--debug", action="store_true", help="Enable debug mode.")
     @argument("--log-file-dir", type=str, help="The directory to write the log file to.")
+    @argument(
+        "--dotenv", type=str, help="Path to a custom .env file to load environment variables from."
+    )
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
@@ -181,7 +185,10 @@ class SQLMeshMagics(Magics):
         )
         configure_console(ignore_warnings=args.ignore_warnings)
 
-        configs = load_configs(args.config, Context.CONFIG_TYPE, args.paths)
+        dotenv_path = Path(args.dotenv) if args.dotenv else None
+        configs = load_configs(
+            args.config, Context.CONFIG_TYPE, args.paths, dotenv_path=dotenv_path
+        )
         log_limit = list(configs.values())[0].log_limit
 
         remove_excess_logs(log_file_dir, log_limit)
