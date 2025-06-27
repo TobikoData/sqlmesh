@@ -9383,14 +9383,8 @@ def entrypoint(evaluator):
             assert "blueprints" not in model.all_fields()
 
             python_env = model.python_env
-            serialized_blueprint = (
-                SqlValue(sql=blueprint_value) if model_name == "test_model_sql" else blueprint_value
-            )
-            assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
-            assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-                {"blueprint": serialized_blueprint}
-            )
 
+            assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
     multi_variable_blueprint_example = tmp_path / "models" / "multi_variable_blueprint_example.sql"
@@ -10051,6 +10045,63 @@ def metadata_macro(evaluator):
 
     new_snapshot, _ = ctx_diff.modified_snapshots['"test_model"']
     assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_vars_are_taken_into_account_when_propagating_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL);"
+        "@m1_with_var();"  # metadata macro, references v1 internally => v1 metadata
+        "@m2_without_var(@v2, @v3);"  # metadata macro => v2 metadata, v3 metadata
+        "@m3_without_var(@v3);"  # non-metadata macro => v3 is not metadata, ^ changes
+        "SELECT 1 AS c"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_with_var(evaluator):
+    evaluator.var("v1")
+    return None
+
+@macro(metadata_only=True)
+def m2_without_var(evaluator, *args):
+    return None
+
+@macro()
+def m3_without_var(evaluator, *args):
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"v1": 1, "v2": 2, "v3": 3},
+        ),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+    empty_executable = Executable(payload="")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 5
+    assert "m1_with_var" in python_env
+    assert "m2_without_var" in python_env
+    assert "m3_without_var" in python_env
+
+    variables = python_env.get(c.SQLMESH_VARS)
+    metadata_variables = python_env.get(c.SQLMESH_VARS_METADATA)
+
+    assert variables == Executable.value({"v1": 1, "v3": 3})
+    assert metadata_variables == Executable.value({"v2": 2}, is_metadata=True)
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:

@@ -210,7 +210,12 @@ class MacroEvaluator:
                 self.macros[normalize_macro_name(k)] = self.env[k]
             elif v.is_value:
                 value = self.env[k]
-                if k in (c.SQLMESH_VARS, c.SQLMESH_BLUEPRINT_VARS):
+                if k in (
+                    c.SQLMESH_VARS,
+                    c.SQLMESH_VARS_METADATA,
+                    c.SQLMESH_BLUEPRINT_VARS,
+                    c.SQLMESH_BLUEPRINT_VARS_METADATA,
+                ):
                     value = {
                         var_name: (
                             self.parse_one(var_value.sql)
@@ -557,17 +562,25 @@ class MacroEvaluator:
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_VARS) or {}).get(var_name.lower(), default)
+        return (
+            self.locals.get(c.SQLMESH_VARS) or self.locals.get(c.SQLMESH_VARS_METADATA) or {}
+        ).get(var_name.lower(), default)
 
     def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified blueprint variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}).get(var_name.lower(), default)
+        return (
+            self.locals.get(c.SQLMESH_BLUEPRINT_VARS)
+            or self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
+            or {}
+        ).get(var_name.lower(), default)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:
         return {
             **self.locals.get(c.SQLMESH_VARS, {}),
+            **self.locals.get(c.SQLMESH_VARS_METADATA, {}),
             **self.locals.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+            **self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
         }
 
     def _coerce(self, expr: exp.Expression, typ: t.Any, strict: bool = False) -> t.Any:

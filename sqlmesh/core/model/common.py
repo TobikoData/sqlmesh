@@ -5,6 +5,7 @@ import typing as t
 from pathlib import Path
 
 from astor import to_source
+from collections import defaultdict
 from difflib import get_close_matches
 from sqlglot import exp
 from sqlglot.helper import ensure_list
@@ -28,7 +29,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.utils import registry_decorator
     from sqlmesh.utils.jinja import MacroReference
 
-    MacroCallable = registry_decorator
+    MacroCallable = t.Union[Executable, registry_decorator]
 
 
 def make_python_env(
@@ -48,13 +49,17 @@ def make_python_env(
     dialect: DialectType = None,
 ) -> t.Dict[str, Executable]:
     python_env = {} if python_env is None else python_env
-    variables = variables or {}
     env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
-    used_macros: t.Dict[
-        str,
-        t.Tuple[t.Union[Executable | MacroCallable], t.Optional[bool]],
-    ] = {}
-    used_variables = (used_variables or set()).copy()
+
+    variables = variables or {}
+    blueprint_variables = blueprint_variables or {}
+
+    used_macros: t.Dict[str, t.Tuple[MacroCallable, t.Optional[bool]]] = {}
+    used_variable_referenced_in_metadata_expression = dict.fromkeys(used_variables or set(), False)
+
+    # For an expression like @foo(@v1, @bar(@v1, @v2), @v3), the following mapping would be:
+    # v1 -> {"foo", "bar"}, v2 -> {"bar"}, v3 -> "foo"
+    macro_funcs_by_used_var: t.DefaultDict[str, t.Set[str]] = defaultdict(set)
 
     expressions = ensure_list(expressions)
     for expression_metadata in expressions:
@@ -77,16 +82,27 @@ def make_python_env(
                     macros[name],
                     used_macros.get(name, (None, is_metadata))[1] and is_metadata,
                 )
-                if name == c.VAR:
+                if name in (c.VAR, c.BLUEPRINT_VAR):
                     args = macro_func_or_var.this.expressions
                     if len(args) < 1:
-                        raise_config_error("Macro VAR requires at least one argument", path)
+                        raise_config_error(
+                            f"Macro {name.upper()} requires at least one argument", path
+                        )
+
                     if not args[0].is_string:
                         raise_config_error(
                             f"The variable name must be a string literal, '{args[0].sql()}' was given instead",
                             path,
                         )
-                    used_variables.add(args[0].this.lower())
+
+                    var_name = args[0].this.lower()
+                    used_variable_referenced_in_metadata_expression[var_name] = (
+                        used_variable_referenced_in_metadata_expression.get(var_name, True)
+                        and bool(is_metadata)
+                    )
+                else:
+                    for var_ref in _extract_macro_func_variable_references(macro_func_or_var):
+                        macro_funcs_by_used_var[var_ref].add(name)
             elif macro_func_or_var.__class__ is d.MacroVar:
                 name = macro_func_or_var.name.lower()
                 if name in macros:
@@ -95,8 +111,11 @@ def make_python_env(
                         macros[name],
                         used_macros.get(name, (None, is_metadata))[1] and is_metadata,
                     )
-                elif name in variables:
-                    used_variables.add(name)
+                elif name in variables or name in blueprint_variables:
+                    used_variable_referenced_in_metadata_expression[name] = (
+                        used_variable_referenced_in_metadata_expression.get(name, True)
+                        and bool(is_metadata)
+                    )
             elif (
                 isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
             ) and "@" in macro_func_or_var.name:
@@ -104,8 +123,11 @@ def make_python_env(
                     macro_func_or_var.name
                 ):
                     var_name = braced_identifier or identifier
-                    if var_name in variables:
-                        used_variables.add(var_name)
+                    if var_name in variables or var_name in blueprint_variables:
+                        used_variable_referenced_in_metadata_expression[var_name] = (
+                            used_variable_referenced_in_metadata_expression.get(var_name, True)
+                            and bool(is_metadata)
+                        )
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
@@ -126,43 +148,101 @@ def make_python_env(
     python_env.update(serialize_env(env, path=module_path))
     return _add_variables_to_python_env(
         python_env,
-        used_variables,
+        used_variable_referenced_in_metadata_expression,
         variables,
         blueprint_variables=blueprint_variables,
         dialect=dialect,
         strict_resolution=strict_resolution,
+        macro_funcs_by_used_var=macro_funcs_by_used_var,
     )
+
+
+def _extract_macro_func_variable_references(macro_func: exp.Expression) -> t.Set[str]:
+    references = set()
+
+    for n in macro_func.walk():
+        if n is macro_func:
+            continue
+
+        # Don't descend into nested MacroFunc nodes besides @VAR() and @BLUEPRINT_VAR(), because
+        # they will be handled in a separate call of _extract_macro_func_variable_references.
+        if isinstance(n, d.MacroFunc):
+            this = n.this
+            if this.name.lower() in (c.VAR, c.BLUEPRINT_VAR) and this.expressions:
+                references.add(this.expressions[0].this.lower())
+        elif isinstance(n, d.MacroVar):
+            references.add(n.name.lower())
+        elif isinstance(n, (exp.Identifier, d.MacroStrReplace, d.MacroSQL)) and "@" in n.name:
+            references.update(
+                (braced_identifier or identifier).lower()
+                for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(n.name)
+            )
+
+    return references
 
 
 def _add_variables_to_python_env(
     python_env: t.Dict[str, Executable],
-    used_variables: t.Optional[t.Set[str]],
+    used_variable_referenced_in_metadata_expression: t.Dict[str, bool],
     variables: t.Optional[t.Dict[str, t.Any]],
     strict_resolution: bool = True,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     dialect: DialectType = None,
+    macro_funcs_by_used_var: t.Optional[t.DefaultDict[str, t.Set[str]]] = None,
 ) -> t.Dict[str, Executable]:
-    _, python_used_variables = parse_dependencies(
+    _, python_used_variable_referenced_in_metadata_expression = parse_dependencies(
         python_env,
         None,
         strict_resolution=strict_resolution,
         variables=variables,
         blueprint_variables=blueprint_variables,
     )
-    used_variables = (used_variables or set()) | python_used_variables
+    for var_name, is_metadata in python_used_variable_referenced_in_metadata_expression.items():
+        used_variable_referenced_in_metadata_expression[var_name] = (
+            used_variable_referenced_in_metadata_expression.get(var_name, True) and is_metadata
+        )
 
-    variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
+    metadata_used_variables = set()
+    for used_var, macro_names in (macro_funcs_by_used_var or {}).items():
+        if used_variable_referenced_in_metadata_expression.get(used_var) or all(
+            name in python_env and python_env[name].is_metadata for name in macro_names
+        ):
+            metadata_used_variables.add(used_var)
+
+    used_variables = set(used_variable_referenced_in_metadata_expression)
+    non_metadata_used_variables = used_variables - metadata_used_variables
+
+    metadata_variables = {
+        k: v for k, v in (variables or {}).items() if k in metadata_used_variables
+    }
+    variables = {k: v for k, v in (variables or {}).items() if k in non_metadata_used_variables}
+
     if variables:
         python_env[c.SQLMESH_VARS] = Executable.value(variables, sort_root_dict=True)
+    if metadata_variables:
+        python_env[c.SQLMESH_VARS_METADATA] = Executable.value(
+            metadata_variables, sort_root_dict=True, is_metadata=True
+        )
 
     if blueprint_variables:
+        metadata_blueprint_variables = {
+            k: SqlValue(sql=v.sql(dialect=dialect)) if isinstance(v, exp.Expression) else v
+            for k, v in blueprint_variables.items()
+            if k in metadata_used_variables
+        }
         blueprint_variables = {
             k.lower(): SqlValue(sql=v.sql(dialect=dialect)) if isinstance(v, exp.Expression) else v
             for k, v in blueprint_variables.items()
+            if k in non_metadata_used_variables
         }
-        python_env[c.SQLMESH_BLUEPRINT_VARS] = Executable.value(
-            blueprint_variables, sort_root_dict=True
-        )
+        if blueprint_variables:
+            python_env[c.SQLMESH_BLUEPRINT_VARS] = Executable.value(
+                blueprint_variables, sort_root_dict=True
+            )
+        if metadata_blueprint_variables:
+            python_env[c.SQLMESH_BLUEPRINT_VARS_METADATA] = Executable.value(
+                blueprint_variables, sort_root_dict=True, is_metadata=True
+            )
 
     return python_env
 
@@ -173,7 +253,7 @@ def parse_dependencies(
     strict_resolution: bool = True,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
-) -> t.Tuple[t.Set[str], t.Set[str]]:
+) -> t.Tuple[t.Set[str], t.Dict[str, bool]]:
     """
     Parses the source of a model function and finds upstream table dependencies
     and referenced variables based on calls to context / evaluator.
@@ -187,7 +267,8 @@ def parse_dependencies(
         blueprint_variables: The blueprint variables available to the python environment.
 
     Returns:
-        A tuple containing the set of upstream table dependencies and the set of referenced variables.
+        A tuple containing the set of upstream table dependencies and a mapping of
+        the referenced variables associated with their metadata status.
     """
 
     class VariableResolutionContext:
@@ -205,12 +286,16 @@ def parse_dependencies(
     local_env = dict.fromkeys(("context", "evaluator"), VariableResolutionContext)
 
     depends_on = set()
-    used_variables = set()
+    used_variable_referenced_in_metadata_expression: t.Dict[str, bool] = {}
 
     for executable in python_env.values():
         if not executable.is_definition:
             continue
+
+        is_metadata = executable.is_metadata
         for node in ast.walk(ast.parse(executable.payload)):
+            next_variables = set()
+
             if isinstance(node, ast.Call):
                 func = node.func
                 if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
@@ -241,8 +326,11 @@ def parse_dependencies(
 
                 if func.value.id == "context" and func.attr in ("table", "resolve_table"):
                     depends_on.add(get_first_arg("model_name"))
-                elif func.value.id in ("context", "evaluator") and func.attr == c.VAR:
-                    used_variables.add(get_first_arg("var_name").lower())
+                elif func.value.id in ("context", "evaluator") and func.attr in (
+                    c.VAR,
+                    c.BLUEPRINT_VAR,
+                ):
+                    next_variables.add(get_first_arg("var_name").lower())
             elif (
                 isinstance(node, ast.Attribute)
                 and isinstance(node.value, ast.Name)
@@ -250,9 +338,9 @@ def parse_dependencies(
                 and node.attr == c.GATEWAY
             ):
                 # Check whether the gateway attribute is referenced.
-                used_variables.add(c.GATEWAY)
+                next_variables.add(c.GATEWAY)
             elif isinstance(node, ast.FunctionDef) and node.name == entrypoint:
-                used_variables.update(
+                next_variables.update(
                     [
                         arg.arg
                         for arg in [*node.args.args, *node.args.kwonlyargs]
@@ -260,7 +348,13 @@ def parse_dependencies(
                     ]
                 )
 
-    return depends_on, used_variables
+            for var_name in next_variables:
+                used_variable_referenced_in_metadata_expression[var_name] = (
+                    used_variable_referenced_in_metadata_expression.get(var_name, True)
+                    and bool(is_metadata)
+                )
+
+    return depends_on, used_variable_referenced_in_metadata_expression
 
 
 def validate_extra_and_required_fields(
