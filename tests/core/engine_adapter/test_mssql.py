@@ -456,6 +456,8 @@ def test_merge_pandas(
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"id": [1, 2, 3], "ts": [1, 2, 3], "val": [4, 5, 6]})
+
+    # 1 key
     adapter.merge(
         target_table=table_name,
         source_table=df,
@@ -476,6 +478,7 @@ def test_merge_pandas(
         f"DROP TABLE IF EXISTS [__temp_target_{temp_table_id}];",
     ]
 
+    # 2 keys
     adapter.cursor.reset_mock()
     adapter._connection_pool.get().reset_mock()
     temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
@@ -496,6 +499,29 @@ def test_merge_pandas(
     assert to_sql_calls(adapter) == [
         f"""IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '__temp_target_{temp_table_id}') EXEC('CREATE TABLE [__temp_target_{temp_table_id}] ([id] INTEGER, [ts] DATETIME2, [val] INTEGER)');""",
         f"MERGE INTO [target] AS [__MERGE_TARGET__] USING (SELECT CAST([id] AS INTEGER) AS [id], CAST([ts] AS DATETIME2) AS [ts], CAST([val] AS INTEGER) AS [val] FROM [__temp_target_{temp_table_id}]) AS [__MERGE_SOURCE__] ON [__MERGE_TARGET__].[id] = [__MERGE_SOURCE__].[id] AND [__MERGE_TARGET__].[ts] = [__MERGE_SOURCE__].[ts] WHEN MATCHED AND EXISTS(SELECT [__MERGE_TARGET__].[val] EXCEPT SELECT [__MERGE_SOURCE__].[val]) THEN UPDATE SET [__MERGE_TARGET__].[val] = [__MERGE_SOURCE__].[val] WHEN NOT MATCHED THEN INSERT ([id], [ts], [val]) VALUES ([__MERGE_SOURCE__].[id], [__MERGE_SOURCE__].[ts], [__MERGE_SOURCE__].[val]);",
+        f"DROP TABLE IF EXISTS [__temp_target_{temp_table_id}];",
+    ]
+
+    # all model columns are keys
+    adapter.cursor.reset_mock()
+    adapter._connection_pool.get().reset_mock()
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+    adapter.merge(
+        target_table=table_name,
+        source_table=df,
+        columns_to_types={
+            "id": exp.DataType.build("int"),
+            "ts": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=[exp.to_identifier("id"), exp.to_column("ts")],
+    )
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f"__temp_target_{temp_table_id}", [(1, 1), (2, 2), (3, 3)]
+    )
+
+    assert to_sql_calls(adapter) == [
+        f"""IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '__temp_target_{temp_table_id}') EXEC('CREATE TABLE [__temp_target_{temp_table_id}] ([id] INTEGER, [ts] DATETIME2)');""",
+        f"MERGE INTO [target] AS [__MERGE_TARGET__] USING (SELECT CAST([id] AS INTEGER) AS [id], CAST([ts] AS DATETIME2) AS [ts] FROM [__temp_target_{temp_table_id}]) AS [__MERGE_SOURCE__] ON [__MERGE_TARGET__].[id] = [__MERGE_SOURCE__].[id] AND [__MERGE_TARGET__].[ts] = [__MERGE_SOURCE__].[ts] WHEN NOT MATCHED THEN INSERT ([id], [ts]) VALUES ([__MERGE_SOURCE__].[id], [__MERGE_SOURCE__].[ts]);",
         f"DROP TABLE IF EXISTS [__temp_target_{temp_table_id}];",
     ]
 
