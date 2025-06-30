@@ -1986,6 +1986,7 @@ def test_insert_into_scd_type_2_by_time(
         column_descriptions={},
         updated_at_as_valid_from=False,
         truncate=truncate,
+        start="2020-01-01",
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -2158,6 +2159,7 @@ def test_insert_into_scd_type_2_by_column(
         table_description=None,
         column_descriptions={},
         truncate=truncate,
+        start="2020-01-01",
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 

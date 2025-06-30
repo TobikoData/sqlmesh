@@ -1514,6 +1514,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
+        start: TimeLike,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
@@ -1708,8 +1709,14 @@ class EngineAdapter:
         existing_rows_query = exp.select(*table_columns, exp.true().as_("_exists")).from_(
             target_table
         )
+
+        cleanup_ts = None
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
+        else:
+            # If truncate is false it is not the first insert
+            # Determine the cleanup timestamp for restatement or a regular incremental run
+            cleanup_ts = to_time_column(start, time_data_type, self.dialect, nullable=True)
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
@@ -1747,12 +1754,41 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
+                    if truncate
+                    else existing_rows_query.where(
+                        exp.and_(
+                            valid_to_col.is_(exp.Null().not_()),
+                            valid_to_col < cleanup_ts,
+                        ),
+                    ),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null())),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()))
+                    if truncate
+                    else exp.select(
+                        *(
+                            to_time_column(
+                                exp.null(), time_data_type, self.dialect, nullable=True
+                            ).as_(col)
+                            if col == valid_to_col.name
+                            else exp.column(col)
+                            for col in columns_to_types
+                        ),
+                        exp.true().as_("_exists"),
+                    )
+                    .from_(target_table)
+                    .where(
+                        exp.and_(
+                            valid_from_col <= cleanup_ts,
+                            exp.or_(
+                                valid_to_col.is_(exp.null()),
+                                valid_to_col >= cleanup_ts,
+                            ),
+                        )
+                    ),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(

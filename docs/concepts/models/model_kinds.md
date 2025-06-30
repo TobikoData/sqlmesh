@@ -935,7 +935,13 @@ SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your mod
 
 Therefore, you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
 
-**Note**: Partial data [restatement](../plans.md#restatement-plans) is not supported for this model kind, which means that the entire table will be recreated from scratch if restated. This may lead to data loss, so data restatement is disabled for models of this kind by default.
+**Note**: SCD Type 2 models support [restatements](../plans.md#restatement-plans) with specific limitations:
+
+- **Full restatements**: The entire table will be recreated from scratch when no start date is specified
+- **Partial restatements**: You can specify a start date to restate data from a certain point onwards to the latest interval. The end date will always be set to the latest interval's end date, regardless of what end date you specify
+- **Partial sections**: Restatements of specific sections (discontinued ranges) of the table are not supported
+
+Data restatement is disabled for models of this kind by default (`disable_restatement true`). To enable restatements, set `disable_restatement false` in your model configuration.
 
 There are two ways to tracking changes: By Time (Recommended) or By Column.
 
@@ -1283,11 +1289,11 @@ This is the most accurate representation of the menu based on the source data pr
 
 ### Processing Source Table with Historical Data
 
-The most common case for SCD Type 2 is creating history for a table that it doesn't have it already. 
+The most common case for SCD Type 2 is creating history for a table that it doesn't have it already.
 In the example of the restaurant menu, the menu just tells you what is offered right now, but you want to know what was offered over time.
 In this case, the default setting of `None` for `batch_size` is the best option.
 
-Another use case though is processing a source table that already has history in it. 
+Another use case though is processing a source table that already has history in it.
 A common example of this is a "daily snapshot" table that is created by a source system that takes a snapshot of the data at the end of each day.
 If your source table has historical records, like a "daily snapshot" table, then set `batch_size` to `1` to process each interval (each day if a `@daily` cron) in sequential order.
 That way the historical records will be properly captured in the SCD Type 2 table.
@@ -1433,11 +1439,14 @@ GROUP BY
   id
 ```
 
-### Reset SCD Type 2 Model (clearing history)
+### SCD Type 2 Restatements
 
 SCD Type 2 models are designed by default to protect the data that has been captured because it is not possible to recreate the history once it has been lost.
 However, there are cases where you may want to clear the history and start fresh.
-For this use use case you will want to start by setting `disable_restatement` to `false` in the model definition.
+
+#### Enabling Restatements
+
+To enable restatements for an SCD Type 2 model, set `disable_restatement` to `false` in the model definition:
 
 ```sql linenums="1" hl_lines="5"
 MODEL (
@@ -1449,8 +1458,9 @@ MODEL (
 );
 ```
 
-Plan/apply this change to production.
-Then you will want to [restate the model](../plans.md#restatement-plans).
+#### Full Restatements (Clearing All History)
+
+To clear all history and recreate the entire table from scratch:
 
 ```bash
 sqlmesh plan --restate-model db.menu_items
@@ -1458,7 +1468,29 @@ sqlmesh plan --restate-model db.menu_items
 
 !!! warning
 
-    This will remove the historical data on the model which in most situations cannot be recovered.
+    This will remove **all** historical data on the model which in most situations cannot be recovered.
+
+#### Partial Restatements (From a Specific Date)
+
+You can restate data from a specific start date onwards. This will:
+- Delete all records with `valid_from >= start_date`
+- Reprocess the data from the start date to the latest interval
+
+```bash
+sqlmesh plan --restate-model db.menu_items --start "2023-01-15"
+```
+
+!!! note
+
+    If you specify an end date for SCD Type 2 restatements, it will be ignored and automatically set to the latest interval's end date.
+
+```bash
+# This end date will be ignored and set to the latest interval
+sqlmesh plan --restate-model db.menu_items --start "2023-01-15" --end "2023-01-20"
+```
+
+
+#### Re-enabling Protection
 
 Once complete you will want to remove `disable_restatement` on the model definition which will set it back to `true` and prevent accidental data loss.
 
