@@ -1758,11 +1758,8 @@ class EngineAdapter:
                     if truncate
                     else existing_rows_query.where(
                         exp.and_(
-                            valid_from_col <= cleanup_ts,
-                            exp.and_(
-                                valid_to_col.is_(exp.Null().not_()),
-                                valid_to_col < cleanup_ts,
-                            ),
+                            valid_to_col.is_(exp.Null().not_()),
+                            valid_to_col < cleanup_ts,
                         ),
                     ),
                 )

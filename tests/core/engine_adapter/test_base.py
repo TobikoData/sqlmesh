@@ -1255,8 +1255,7 @@ WITH "source" AS (
     "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
-  WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+  WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
 ), "latest" AS (
   SELECT
     "id",
@@ -1455,8 +1454,7 @@ WITH "source" AS (
     "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
-  WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+  WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
 ), "latest" AS (
   SELECT
     "id",
@@ -1651,8 +1649,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
     "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
-    WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ))
+    WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00+00:00' AS TIMESTAMPTZ)
   ), "latest" AS (
     SELECT
     "id1",
@@ -1831,8 +1828,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
     "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
-    WHERE "test_VALID_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+    WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
   ), "latest" AS (
     SELECT
     "id",
@@ -2025,8 +2021,7 @@ def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callab
     "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
-    WHERE "test_VALID_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+    WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
   ), "latest" AS (
     SELECT
     "id_a",
@@ -2386,8 +2381,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
     "test_valid_to",
     TRUE AS "_exists"
     FROM "target"
-    WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+    WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
   ), "latest" AS (
     SELECT
     "id",
@@ -2562,8 +2556,7 @@ WITH "source" AS (
     "test_valid_to",
     TRUE AS "_exists"
   FROM "target"
-  WHERE "test_valid_from" <= CAST('2020-01-01 00:00:00' AS TIMESTAMP)
-    AND (NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP))
+  WHERE NOT "test_valid_to" IS NULL AND "test_valid_to" < CAST('2020-01-01 00:00:00' AS TIMESTAMP)
 ), "latest" AS (
   SELECT
     "id",
