@@ -121,7 +121,6 @@ from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    now_ds,
     to_timestamp,
     format_tz_datetime,
     now_timestamp,
@@ -1001,7 +1000,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The rendered expression.
         """
-        execution_time = execution_time or now_ds()
+        execution_time = execution_time or now()
 
         model = self.get_model(model_or_snapshot, raise_if_missing=True)
 
