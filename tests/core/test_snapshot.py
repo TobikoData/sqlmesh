@@ -551,6 +551,50 @@ def test_missing_intervals_past_end_date_with_lookback(make_snapshot):
     assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
 
 
+def test_missing_intervals_start_override_per_model(make_snapshot: t.Callable[..., Snapshot]):
+    snapshot = make_snapshot(
+        load_sql_based_model(
+            parse("""
+            MODEL (
+                name a,
+                kind FULL,
+                start '2023-02-01',
+                cron '@daily'
+            );
+            SELECT 1;
+            """)
+        ),
+        version="a",
+    )
+
+    # base case - no override
+    assert list(
+        missing_intervals(execution_time="2023-02-08 00:05:07", snapshots=[snapshot]).values()
+    )[0] == [
+        (to_timestamp("2023-02-01"), to_timestamp("2023-02-02")),
+        (to_timestamp("2023-02-02"), to_timestamp("2023-02-03")),
+        (to_timestamp("2023-02-03"), to_timestamp("2023-02-04")),
+        (to_timestamp("2023-02-04"), to_timestamp("2023-02-05")),
+        (to_timestamp("2023-02-05"), to_timestamp("2023-02-06")),
+        (to_timestamp("2023-02-06"), to_timestamp("2023-02-07")),
+        (to_timestamp("2023-02-07"), to_timestamp("2023-02-08")),
+    ]
+
+    # with override, should use the overridden start date when calculating missing intervals
+    assert list(
+        missing_intervals(
+            start="1 day ago",
+            execution_time="2023-02-08 00:05:07",
+            snapshots=[snapshot],
+            start_override_per_model={snapshot.name: to_datetime("2023-02-05 00:00:00")},
+        ).values()
+    )[0] == [
+        (to_timestamp("2023-02-05"), to_timestamp("2023-02-06")),
+        (to_timestamp("2023-02-06"), to_timestamp("2023-02-07")),
+        (to_timestamp("2023-02-07"), to_timestamp("2023-02-08")),
+    ]
+
+
 def test_incremental_time_self_reference(make_snapshot):
     snapshot = make_snapshot(
         SqlModel(

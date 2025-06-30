@@ -524,6 +524,7 @@ class PlanStagesBuilder:
             },
             deployability_index=deployability_index,
             end_bounded=plan.end_bounded,
+            start_override_per_model=plan.start_override_per_model,
             interval_end_per_model=plan.interval_end_per_model,
         )
 
