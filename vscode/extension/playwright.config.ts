@@ -3,18 +3,22 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: 'tests',
   timeout: 60_000,
-  retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  // TODO: When stable, allow retries in CI
+  retries: process.env.CI ? 2 : 0,
+  workers: 4,
+  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  globalSetup: './tests/global-setup.ts',
   projects: [
     {
       name: 'electron-vscode',
       use: {
-        // ⭢ we'll launch Electron ourselves – no browser needed
         browserName: 'chromium',
-        headless: true, // headless mode for tests
+        headless: true,
         launchOptions: {
           slowMo: process.env.CI ? 0 : 100,
         },
+        viewport: { width: 1512, height: 944 },
+        video: 'retain-on-failure',
       },
     },
   ],

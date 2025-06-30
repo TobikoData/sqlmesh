@@ -20,6 +20,9 @@ vscode/extension/out
 vscode/extension/src_react
 vscode/extension/tsconfig.tsbuildinfo
 vscode/extension/.vscode-test/
+vscode/extension/playwright-report/
+vscode/extension/test-results/
+vscode/extension/.test_setup
 
 sqlmesh
 docs

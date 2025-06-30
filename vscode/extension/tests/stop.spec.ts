@@ -1,18 +1,18 @@
 import path from 'path'
-import { SUSHI_SOURCE_PATH } from './utils'
+import { runCommand, SUSHI_SOURCE_PATH } from './utils'
 import os from 'os'
 import { test } from '@playwright/test'
 import fs from 'fs-extra'
 import { startCodeServer, stopCodeServer } from './utils_code_server'
 
 test('Stop server works', async ({ page }) => {
-  test.setTimeout(120000) // Increase timeout to 2 minutes
-
-  console.log('Starting test: Stop server works')
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
-  const context = await startCodeServer(tempDir, true)
+  const context = await startCodeServer({
+    tempDir,
+    placeFileWithPythonInterpreter: true,
+  })
 
   try {
     // Navigate to code-server instance
@@ -41,21 +41,13 @@ test('Stop server works', async ({ page }) => {
     await page.waitForSelector('text=Loaded SQLMesh Context')
 
     // Stop the server
-    await page.keyboard.press(
-      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-    )
-    await page.keyboard.type('SQLMesh: Stop Server')
-    await page.keyboard.press('Enter')
+    await runCommand(page, 'SQLMesh: Stop Server')
 
     // Await LSP server stopped message
     await page.waitForSelector('text=LSP server stopped')
 
     // Render the model
-    await page.keyboard.press(
-      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-    )
-    await page.keyboard.type('Render Model')
-    await page.keyboard.press('Enter')
+    await runCommand(page, 'SQLMesh: Render Model')
 
     // Await error message
     await page.waitForSelector(

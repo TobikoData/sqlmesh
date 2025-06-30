@@ -9,16 +9,9 @@ This directory contains end-to-end tests for the SQLMesh VS Code extension using
    pnpm install
    ```
 
-2. **Download VS Code executable (one-time setup):**
+2. **Install Playwright browsers:**
    ```bash
-   pnpm run fetch-vscode
-   ```
-   
-   This downloads VS Code and caches it in `.vscode-test/` directory. The paths are saved to `.vscode-test/paths.json` for Playwright to use.
-
-3. **Install Playwright browsers:**
-   ```bash
-   npx playwright install
+   pnpm run playwright:install
    ```
 
 ## Running Tests
