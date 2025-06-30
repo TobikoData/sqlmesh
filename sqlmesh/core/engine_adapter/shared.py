@@ -173,9 +173,16 @@ class DataObject(PydanticModel):
 
 
 class CatalogSupport(Enum):
+    # The engine has no concept of catalogs
     UNSUPPORTED = 1
+
+    # The engine has a concept of catalogs, but they are isolated from each other and cannot reference each others tables
     SINGLE_CATALOG_ONLY = 2
+
+    # The engine supports multiple catalogs but some operations require a SET CATALOG query to set the active catalog before proceeding
     REQUIRES_SET_CATALOG = 3
+
+    # The engine supports multiple catalogs and can unambiguously target a specific catalog when performing operations (without running SET CATALOG first)
     FULL_SUPPORT = 4
 
     @property

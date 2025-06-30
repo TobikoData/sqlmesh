@@ -19,10 +19,11 @@ dependencies = [
     "packaging",
     "pandas",
     "pydantic>=2.0.0",
+    "python-dotenv",
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.27.1",
+    "sqlglot[rs]~=26.31.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -132,7 +133,7 @@ lsp = [
     "sse-starlette>=0.2.2",
     "pyarrow",
     # For lsp
-    "pygls",
+    "pygls>=1.2.0,<2.0.0",
     "lsprotocol",
 ]
 risingwave = ["psycopg2"]

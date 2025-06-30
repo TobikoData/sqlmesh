@@ -400,7 +400,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
 
-        for env in self.state_sync.get_environments():
+        for env_summary in self.state_sync.get_environments_summary():
+            # Fetch the full environment object one at a time to avoid loading all environments into memory at once
+            env = self.state_sync.get_environment(env_summary.name)
+            if not env:
+                logger.warning("Environment %s not found", env_summary.name)
+                continue
+
             keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
 
             # We dont just restate matching snapshots, we also have to restate anything downstream of them

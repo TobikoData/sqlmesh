@@ -665,7 +665,7 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
         pr_checks_runs[2]["output"]["summary"]
-        == ":warning: Action Required to create or update PR Environment `hello_world_2`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+        == """:warning: Action Required to create or update PR Environment `hello_world_2` :warning:\n\nThe following models could not be categorized automatically:\n- "memory"."sushi"."waiter_revenue_by_day"\n\nRun `sqlmesh plan hello_world_2` locally to apply these changes.\n\nIf you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."""
     )
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
@@ -691,9 +691,11 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
     assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
-    skip_reason = "Skipped Deploying to Production because the PR environment was not updated"
-    assert prod_checks_runs[1]["output"]["title"] == skip_reason
-    assert prod_checks_runs[1]["output"]["summary"] == skip_reason
+    assert prod_checks_runs[1]["output"]["title"] == "Skipped deployment"
+    assert (
+        prod_checks_runs[1]["output"]["summary"]
+        == "Skipped Deploying to Production because the PR environment was not updated"
+    )
 
     assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
     approval_checks_runs = controller._check_run_mapping[
@@ -1024,9 +1026,11 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
     assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
-    skip_reason = "Skipped Deploying to Production because a required approver has not approved"
-    assert prod_checks_runs[1]["output"]["title"] == skip_reason
-    assert prod_checks_runs[1]["output"]["summary"] == skip_reason
+    assert prod_checks_runs[1]["output"]["title"] == "Skipped deployment"
+    assert (
+        prod_checks_runs[1]["output"]["summary"]
+        == "Skipped Deploying to Production because a required approver has not approved"
+    )
 
     assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
     approval_checks_runs = controller._check_run_mapping[
@@ -1036,7 +1040,7 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
     assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
-    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_neutral
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_failure
     assert approval_checks_runs[2]["output"]["title"] == "Need a Required Approval"
     assert (
         approval_checks_runs[2]["output"]["summary"]
@@ -1064,7 +1068,7 @@ def test_no_merge_since_no_deploy_signal(
         output = f.read()
         assert (
             output
-            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+            == "run_unit_tests=success\nhas_required_approval=failure\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
         )
 
 
@@ -1528,9 +1532,11 @@ def test_error_msg_when_applying_plan_with_bug(
     assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
     assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
     assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_skipped
-    skip_reason = "Skipped Deploying to Production because the PR environment was not updated"
-    assert prod_checks_runs[1]["output"]["title"] == skip_reason
-    assert prod_checks_runs[1]["output"]["summary"] == skip_reason
+    assert prod_checks_runs[1]["output"]["title"] == "Skipped deployment"
+    assert (
+        prod_checks_runs[1]["output"]["summary"]
+        == "Skipped Deploying to Production because the PR environment was not updated"
+    )
 
     assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
     approval_checks_runs = controller._check_run_mapping[
@@ -1853,6 +1859,7 @@ def test_pr_delete_model(
     assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_success
     assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
+    print(test_checks_runs[2]["output"]["summary"])
     assert (
         test_checks_runs[2]["output"]["summary"].strip()
         == "**Successfully Ran `3` Tests Against `duckdb`**"

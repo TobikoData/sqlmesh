@@ -11,6 +11,7 @@ import os
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
+from pytest import MonkeyPatch
 from pathlib import Path
 from sqlmesh.core.console import set_console, get_console, TerminalConsole
 from sqlmesh.core.config.naming import NameInferenceConfig
@@ -24,7 +25,7 @@ from IPython.utils.capture import capture_output
 
 
 from sqlmesh import CustomMaterialization
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config import (
@@ -34,6 +35,7 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
+from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
@@ -4003,7 +4005,7 @@ def test_run_auto_restatement_failure(init_and_plan_context: t.Callable):
 
 
 def test_plan_twice_with_star_macro_yields_no_diff(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     star_model_definition = """
         MODEL (
@@ -5259,7 +5261,9 @@ def test_invalidating_environment(sushi_context: Context):
 
 
 def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi", config="environment_suffix_config")
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="environment_suffix_table_config"
+    )
     context.apply(plan)
     metadata = DuckDBMetadata.from_context(context)
     environments_schemas = {"sushi"}
@@ -5293,6 +5297,116 @@ def test_environment_suffix_target_table(init_and_plan_context: t.Callable):
     assert {x.sql(dialect="duckdb") for x in prod_views} - {
         x.sql(dialect="duckdb") for x in views_after_janitor
     } == set()
+
+
+def test_environment_suffix_target_catalog(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(catalogs={"main_warehouse": ":memory:"}),
+        environment_suffix_target=EnvironmentSuffixTarget.CATALOG,
+    )
+
+    assert config.default_connection
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    (models_dir / "model.sql").write_text("""
+    MODEL (
+        name example_schema.test_model,
+        kind FULL
+    );
+
+    SELECT '1' as a""")
+
+    (models_dir / "fqn_model.sql").write_text("""
+    MODEL (
+        name memory.example_fqn_schema.test_model_fqn,
+        kind FULL
+    );
+
+    SELECT '1' as a""")
+
+    ctx = Context(config=config, paths=tmp_path)
+
+    metadata = DuckDBMetadata.from_context(ctx)
+    assert ctx.default_catalog == "main_warehouse"
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+
+    ctx.plan(auto_apply=True)
+
+    # prod should go to the default catalog and not be overridden to a catalog called 'prod'
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse.example_schema.test_model")[0]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory.example_fqn_schema.test_model_fqn")[0]  # type: ignore
+        == "1"
+    )
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+
+    # dev should be overridden to go to a catalogs called 'main_warehouse__dev' and 'memory__dev'
+    ctx.plan(environment="dev", include_unmodified=True, auto_apply=True)
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse__dev.example_schema.test_model")[
+            0
+        ]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory__dev.example_fqn_schema.test_model_fqn")[
+            0
+        ]  # type: ignore
+        == "1"
+    )
+    assert metadata.catalogs == {"main_warehouse", "main_warehouse__dev", "memory", "memory__dev"}
+
+    # schemas in dev envs should match prod and not have a suffix
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("main_warehouse__dev") == ["example_schema"]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory__dev") == ["example_fqn_schema"]
+
+    ctx.invalidate_environment("dev", sync=True)
+
+    # dev catalogs cleaned up
+    assert metadata.catalogs == {"main_warehouse", "memory"}
+
+    # prod catalogs still contain physical layer and views still work
+    assert metadata.schemas_in_catalog("main_warehouse") == [
+        "example_schema",
+        "sqlmesh__example_schema",
+    ]
+    assert metadata.schemas_in_catalog("memory") == [
+        "example_fqn_schema",
+        "sqlmesh__example_fqn_schema",
+    ]
+
+    assert (
+        ctx.engine_adapter.fetchone("select * from main_warehouse.example_schema.test_model")[0]  # type: ignore
+        == "1"
+    )
+    assert (
+        ctx.engine_adapter.fetchone("select * from memory.example_fqn_schema.test_model_fqn")[0]  # type: ignore
+        == "1"
+    )
 
 
 def test_environment_catalog_mapping(init_and_plan_context: t.Callable):

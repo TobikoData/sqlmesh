@@ -2,26 +2,33 @@ import { test, expect } from '@playwright/test'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { SUSHI_SOURCE_PATH } from './utils'
+import { startCodeServer, stopCodeServer } from './utils_code_server'
 
-test('Model type hinting', async () => {
+test('Model type hinting', async ({ page }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
+  const context = await startCodeServer({
+    tempDir,
+    placeFileWithPythonInterpreter: true,
+  })
+
   try {
-    const { window, close } = await startVSCode(tempDir)
+    // Navigate to code-server instance
+    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
     // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+    await page.waitForSelector('text=models')
 
     // Click on the models folder
-    await window
+    await page
       .getByRole('treeitem', { name: 'models', exact: true })
       .locator('a')
       .click()
 
     // Open the customers_revenue_by_day model
-    await window
+    await page
       .getByRole('treeitem', {
         name: 'customer_revenue_by_day.sql',
         exact: true,
@@ -29,17 +36,15 @@ test('Model type hinting', async () => {
       .locator('a')
       .click()
 
-    await window.waitForSelector('text=grain')
-    await window.waitForSelector('text=Loaded SQLMesh Context')
+    await page.waitForSelector('text=grain')
+    await page.waitForSelector('text=Loaded SQLMesh Context')
 
     // Wait a moment for hints to appear
-    await window.waitForTimeout(500)
+    await page.waitForTimeout(500)
 
     // Check if the hint is visible
-    expect(await window.locator('text="country code"::INT').count()).toBe(1)
-
-    await close()
+    expect(await page.locator('text="country code"::INT').count()).toBe(1)
   } finally {
-    await fs.remove(tempDir)
+    await stopCodeServer(context)
   }
 })

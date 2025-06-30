@@ -336,10 +336,18 @@ def parse_expression(
 
 
 def parse_bool(v: t.Any) -> bool:
-    if isinstance(v, exp.Boolean):
-        return v.this
     if isinstance(v, exp.Expression):
+        if not isinstance(v, exp.Boolean):
+            from sqlglot.optimizer.simplify import simplify
+
+            # Try to reduce expressions like (1 = 1) (see: T-SQL boolean generation)
+            v = simplify(v)
+
+        if isinstance(v, exp.Boolean):
+            return v.this
+
         return str_to_bool(v.name)
+
     return str_to_bool(str(v or ""))
 
 

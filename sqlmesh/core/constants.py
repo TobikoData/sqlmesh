@@ -7,6 +7,7 @@ import typing as t
 from pathlib import Path
 
 SQLMESH = "sqlmesh"
+SQLMESH_MANAGED = "sqlmesh_managed"
 SQLMESH_PATH = Path.home() / ".sqlmesh"
 
 PROD = "prod"

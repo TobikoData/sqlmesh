@@ -1954,29 +1954,36 @@ class TerminalConsole(Console):
             plan_builder.apply()
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         divider_length = 70
 
         self._log_test_details(result)
-        self._print("\n")
 
+        message = (
+            f"Ran {result.testsRun} tests against {target_dialect} in {result.duration} seconds."
+        )
         if result.wasSuccessful():
             self._print("=" * divider_length)
             self._print(
-                f"Successfully Ran {str(result.testsRun)} tests against {target_dialect}",
+                f"Successfully {message}",
                 style="green",
             )
             self._print("-" * divider_length)
         else:
             self._print("-" * divider_length)
-            self._print("Test Failure Summary")
+            self._print("Test Failure Summary", style="red")
             self._print("=" * divider_length)
-            self._print(
-                f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}"
-            )
+            failures = len(result.failures) + len(result.errors)
+            self._print(f"{message} \n")
+
+            self._print(f"Failed tests ({failures}):")
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"Failure Test: {test.path}::{test.test_name}")
-            self._print("=" * divider_length)
+                    self._print(f" • {test.path}::{test.test_name}")
+            self._print("=" * divider_length, end="\n\n")
 
     def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
         with self.console.capture() as capture:
@@ -2499,7 +2506,9 @@ class TerminalConsole(Console):
         else:
             self.log_warning(msg)
 
-    def _log_test_details(self, result: ModelTextTestResult) -> None:
+    def _log_test_details(
+        self, result: ModelTextTestResult, unittest_char_separator: bool = True
+    ) -> None:
         """
         This is a helper method that encapsulates the logic for logging the relevant unittest for the result.
         The top level method (`log_test_results`) reuses `_log_test_details` differently based on the console.
@@ -2507,11 +2516,14 @@ class TerminalConsole(Console):
         Args:
             result: The unittest test result that contains metrics like num success, fails, ect.
         """
-        tests_run = result.testsRun
+
+        if result.wasSuccessful():
+            self._print("\n", end="")
+            return
+
         errors = result.errors
         failures = result.failures
         skipped = result.skipped
-        is_success = not (errors or failures)
 
         infos = []
         if failures:
@@ -2521,12 +2533,13 @@ class TerminalConsole(Console):
         if skipped:
             infos.append(f"skipped={skipped}")
 
-        self._print("\n", end="")
+        if unittest_char_separator:
+            self._print(f"\n{unittest.TextTestResult.separator1}\n\n", end="")
 
         for (test_case, failure), test_failure_tables in zip_longest(  # type: ignore
             failures, result.failure_tables
         ):
-            self._print(unittest.TextTestResult.separator1)
+            self._print(unittest.TextTestResult.separator2)
             self._print(f"FAIL: {test_case}")
 
             if test_description := test_case.shortDescription():
@@ -2541,20 +2554,10 @@ class TerminalConsole(Console):
                     self._print("\n", end="")
 
         for test_case, error in errors:
-            self._print(unittest.TextTestResult.separator1)
+            self._print(unittest.TextTestResult.separator2)
             self._print(f"ERROR: {test_case}")
             self._print(f"{unittest.TextTestResult.separator2}")
             self._print(error)
-
-        # Output final report
-        self._print(unittest.TextTestResult.separator2)
-        test_duration_msg = f" in {result.duration:.3f}s" if result.duration else ""
-        self._print(
-            f"\nRan {tests_run} {'tests' if tests_run > 1 else 'test'}{test_duration_msg} \n"
-        )
-        self._print(
-            f"{'OK' if is_success else 'FAILED'}{' (' + ', '.join(infos) + ')' if infos else ''}"
-        )
 
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
@@ -2828,6 +2831,10 @@ class NotebookMagicConsole(TerminalConsole):
         self.display(radio)
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         import ipywidgets as widgets
 
         divider_length = 70
@@ -2836,6 +2843,11 @@ class NotebookMagicConsole(TerminalConsole):
             "font-weight": "bold",
             "font-family": "Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace",
         }
+
+        message = (
+            f"Ran {result.testsRun} tests against {target_dialect} in {result.duration} seconds."
+        )
+
         if result.wasSuccessful():
             success_color = {"color": "#008000"}
             header = str(h("span", {"style": shared_style}, "-" * divider_length))
@@ -2843,7 +2855,7 @@ class NotebookMagicConsole(TerminalConsole):
                 h(
                     "span",
                     {"style": {**shared_style, **success_color}},
-                    f"Successfully Ran {str(result.testsRun)} tests against {target_dialect}",
+                    f"Successfully {message}",
                 )
             )
             footer = str(h("span", {"style": shared_style}, "=" * divider_length))
@@ -2855,31 +2867,31 @@ class NotebookMagicConsole(TerminalConsole):
             fail_shared_style = {**shared_style, **fail_color}
             header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
             message = str(h("span", {"style": fail_shared_style}, "Test Failure Summary"))
-            num_success = str(
-                h(
-                    "span",
-                    {"style": fail_shared_style},
-                    f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}",
+            failed_tests = [
+                str(
+                    h(
+                        "span",
+                        {"style": fail_shared_style},
+                        f"Failed tests ({len(result.failures) + len(result.errors)}):",
+                    )
                 )
-            )
-            failure_tests = []
+            ]
+
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    failure_tests.append(
+                    failed_tests.append(
                         str(
                             h(
                                 "span",
                                 {"style": fail_shared_style},
-                                f"Failure Test: {test.model.name} {test.test_name}",
+                                f" • {test.model.name}::{test.test_name}",
                             )
                         )
                     )
-            failures = "<br>".join(failure_tests)
+            failures = "<br>".join(failed_tests)
             footer = str(h("span", {"style": fail_shared_style}, "=" * divider_length))
             error_output = widgets.Textarea(output, layout={"height": "300px", "width": "100%"})
-            test_info = widgets.HTML(
-                "<br>".join([header, message, footer, num_success, failures, footer])
-            )
+            test_info = widgets.HTML("<br>".join([header, message, footer, failures, footer]))
             self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
@@ -3202,21 +3214,25 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(message)
 
     def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
+        message = f"Ran `{result.testsRun}` Tests Against `{target_dialect}`"
+
         if result.wasSuccessful():
-            self._print(
-                f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
-            )
+            self._print(f"**Successfully {message}**\n\n")
         else:
             self._print("```")
-            self._log_test_details(result)
+            self._log_test_details(result, unittest_char_separator=False)
             self._print("```\n\n")
 
-            self._print(
-                f"**Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}**\n\n"
-            )
+            failures = len(result.failures) + len(result.errors)
+            self._print(f"**{message}**\n")
+            self._print(f"**Failed tests ({failures}):**")
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
+                    self._print(f" • `{test.model.name}`::`{test.test_name}`\n\n")
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:

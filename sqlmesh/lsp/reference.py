@@ -208,6 +208,17 @@ def get_model_definitions_for_a_path(
                                     target_range=target_range,
                                 )
                             )
+
+                            column_references = _process_column_references(
+                                scope=scope,
+                                reference_name=table.name,
+                                read_file=read_file,
+                                referenced_model_uri=document_uri,
+                                description="",
+                                reference_type="cte",
+                                cte_target_range=target_range,
+                            )
+                            references.extend(column_references)
                     continue
 
                 # For non-CTE tables, process as before (external model references)
@@ -276,6 +287,19 @@ def get_model_definitions_for_a_path(
                             target_range=yaml_target_range,
                         )
                     )
+
+                    column_references = _process_column_references(
+                        scope=scope,
+                        reference_name=normalized_reference_name,
+                        read_file=read_file,
+                        referenced_model_uri=referenced_model_uri,
+                        description=description,
+                        yaml_target_range=yaml_target_range,
+                        reference_type="external_model",
+                        default_catalog=lint_context.context.default_catalog,
+                        dialect=dialect,
+                    )
+                    references.extend(column_references)
                 else:
                     references.append(
                         LSPModelReference(
@@ -287,6 +311,18 @@ def get_model_definitions_for_a_path(
                             markdown_description=description,
                         )
                     )
+
+                    column_references = _process_column_references(
+                        scope=scope,
+                        reference_name=normalized_reference_name,
+                        read_file=read_file,
+                        referenced_model_uri=referenced_model_uri,
+                        description=description,
+                        reference_type="model",
+                        default_catalog=lint_context.context.default_catalog,
+                        dialect=dialect,
+                    )
+                    references.extend(column_references)
 
     return references
 
@@ -733,6 +769,104 @@ def _position_within_range(position: Position, range: Range) -> bool:
         range.end.line > position.line
         or (range.end.line == position.line and range.end.character >= position.character)
     )
+
+
+def _get_column_table_range(column: exp.Column, read_file: t.List[str]) -> Range:
+    """
+    Get the range for a column's table reference, handling both simple and qualified table names.
+
+    Args:
+        column: The column expression
+        read_file: The file content as list of lines
+
+    Returns:
+        The Range covering the table reference in the column
+    """
+
+    table_parts = column.parts[:-1]
+
+    start_range = TokenPositionDetails.from_meta(table_parts[0].meta).to_range(read_file)
+    end_range = TokenPositionDetails.from_meta(table_parts[-1].meta).to_range(read_file)
+
+    return Range(
+        start=to_lsp_position(start_range.start),
+        end=to_lsp_position(end_range.end),
+    )
+
+
+def _process_column_references(
+    scope: t.Any,
+    reference_name: str,
+    read_file: t.List[str],
+    referenced_model_uri: URI,
+    description: t.Optional[str] = None,
+    yaml_target_range: t.Optional[Range] = None,
+    reference_type: t.Literal["model", "external_model", "cte"] = "model",
+    default_catalog: t.Optional[str] = None,
+    dialect: t.Optional[str] = None,
+    cte_target_range: t.Optional[Range] = None,
+) -> t.List[Reference]:
+    """
+    Process column references for a given table and create appropriate reference objects.
+
+    Args:
+        scope: The SQL scope to search for columns
+        reference_name: The full reference name (may include database/catalog)
+        read_file: The file content as list of lines
+        referenced_model_uri: URI of the referenced model
+        description: Markdown description for the reference
+        yaml_target_range: Target range for external models (YAML files)
+        reference_type: Type of reference - "model", "external_model", or "cte"
+        default_catalog: Default catalog for normalization
+        dialect: SQL dialect for normalization
+        cte_target_range: Target range for CTE references
+
+    Returns:
+        List of table references for column usages
+    """
+
+    references: t.List[Reference] = []
+    for column in scope.find_all(exp.Column):
+        if column.table:
+            if reference_type == "cte":
+                if column.table == reference_name:
+                    table_range = _get_column_table_range(column, read_file)
+                    references.append(
+                        LSPCteReference(
+                            uri=referenced_model_uri.value,
+                            range=table_range,
+                            target_range=cte_target_range,
+                        )
+                    )
+            else:
+                table_parts = [part.sql(dialect) for part in column.parts[:-1]]
+                table_ref = ".".join(table_parts)
+                normalized_reference_name = normalize_model_name(
+                    table_ref,
+                    default_catalog=default_catalog,
+                    dialect=dialect,
+                )
+                if normalized_reference_name == reference_name:
+                    table_range = _get_column_table_range(column, read_file)
+                    if reference_type == "external_model":
+                        references.append(
+                            LSPExternalModelReference(
+                                uri=referenced_model_uri.value,
+                                range=table_range,
+                                markdown_description=description,
+                                target_range=yaml_target_range,
+                            )
+                        )
+                    else:
+                        references.append(
+                            LSPModelReference(
+                                uri=referenced_model_uri.value,
+                                range=table_range,
+                                markdown_description=description,
+                            )
+                        )
+
+    return references
 
 
 def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:

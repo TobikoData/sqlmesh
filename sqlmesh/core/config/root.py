@@ -242,6 +242,15 @@ class Config(BaseConfig):
                 },
             )
 
+        if (
+            self.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+            and self.environment_catalog_mapping
+        ):
+            raise ConfigError(
+                f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
+                "Please specify one or the other"
+            )
+
         if self.environment_catalog_mapping:
             _normalize_identifiers("environment_catalog_mapping")
         if self.physical_schema_mapping:

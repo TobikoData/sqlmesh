@@ -15,6 +15,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
+from sqlmesh.core.environment import EnvironmentSuffixTarget
 from sqlmesh.core.macros import call_macro
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
 from sqlmesh.core.model.definition import _Model
@@ -274,13 +275,19 @@ class QualifiedViewName(PydanticModel, frozen=True):
     def catalog_for_environment(
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> t.Optional[str]:
-        if environment_naming_info.catalog_name_override:
+        catalog_name: t.Optional[str] = None
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_catalog:
+            catalog_name = f"{self.catalog}__{environment_naming_info.name}"
+        elif environment_naming_info.catalog_name_override:
             catalog_name = environment_naming_info.catalog_name_override
+
+        if catalog_name:
             return (
                 normalize_identifiers(catalog_name, dialect=dialect).name
                 if environment_naming_info.normalize_name
                 else catalog_name
             )
+
         return self.catalog
 
     def schema_for_environment(
@@ -295,10 +302,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
             if normalize:
                 schema = normalize_identifiers(schema, dialect=dialect).name
 
-        if (
-            environment_naming_info.name.lower() != c.PROD
-            and environment_naming_info.suffix_target.is_schema
-        ):
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_schema:
             env_name = environment_naming_info.name
             if normalize:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name
@@ -311,10 +315,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
         self, environment_naming_info: EnvironmentNamingInfo, dialect: DialectType = None
     ) -> str:
         table = self.table
-        if (
-            environment_naming_info.name.lower() != c.PROD
-            and environment_naming_info.suffix_target.is_table
-        ):
+        if environment_naming_info.is_dev and environment_naming_info.suffix_target.is_table:
             env_name = environment_naming_info.name
             if environment_naming_info.normalize_name:
                 env_name = normalize_identifiers(env_name, dialect=dialect).name
@@ -783,7 +784,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             # only warn if the requested removal interval was a subset of the actual model intervals and was automatically expanded
             # if the requested interval was the same or wider than the actual model intervals, no need to warn
-            if requested_start > expanded_start or requested_end < expanded_end:
+            if (
+                requested_start > expanded_start or requested_end < expanded_end
+            ) and self.is_incremental:
                 from sqlmesh.core.console import get_console
 
                 get_console().log_warning(
@@ -1589,12 +1592,18 @@ def display_name(
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
     view_name = exp.to_table(snapshot_info_like.name)
+
+    catalog = (
+        None
+        if (
+            environment_naming_info.suffix_target != EnvironmentSuffixTarget.CATALOG
+            and view_name.catalog == default_catalog
+        )
+        else view_name.catalog
+    )
+
     qvn = QualifiedViewName(
-        catalog=(
-            view_name.catalog
-            if view_name.catalog and view_name.catalog != default_catalog
-            else None
-        ),
+        catalog=catalog,
         schema_name=view_name.db or None,
         table=view_name.name,
     )

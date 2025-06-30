@@ -1,6 +1,6 @@
 import path from 'path'
 import { traceInfo, traceLog, traceVerbose } from '../common/log'
-import { getInterpreterDetails } from '../common/python'
+import { getInterpreterDetails, getPythonEnvVariables } from '../common/python'
 import { Result, err, isErr, ok } from '@bus/result'
 import { getProjectRoot } from '../common/utilities'
 import { isPythonModuleInstalled } from '../python'
@@ -12,12 +12,48 @@ import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 import { IS_WINDOWS } from '../isWindows'
 import { resolveProjectPath } from '../config'
+import { isSemVerGreaterThanOrEqual } from '../semver'
 
 export interface SqlmeshExecInfo {
   workspacePath: string
   bin: string
   env: Record<string, string | undefined>
   args: string[]
+}
+
+/**
+ * Gets the current SQLMesh environment variables that would be used for execution.
+ * This is useful for debugging and understanding the environment configuration.
+ * 
+ * @returns A Result containing the environment variables or an error
+ */
+export async function getSqlmeshEnvironment(): Promise<Result<Record<string, string>, string>> {
+  const interpreterDetails = await getInterpreterDetails()
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err(envVariables.error)
+  }
+
+  const binPath = interpreterDetails.binPath
+  const virtualEnvPath = binPath && interpreterDetails.isVirtualEnvironment
+    ? path.dirname(path.dirname(binPath)) // binPath points to bin dir in venv
+    : binPath ? path.dirname(binPath) : undefined
+
+  const env: Record<string, string> = {
+    ...process.env,
+    ...envVariables.value,
+    PYTHONPATH: interpreterDetails.path?.[0] ?? '',
+  }
+
+  if (virtualEnvPath) {
+    env['VIRTUAL_ENV'] = virtualEnvPath
+  }
+
+  if (binPath) {
+    env['PATH'] = `${binPath}${path.delimiter}${process.env.PATH || ''}`
+  }
+
+  return ok(env)
 }
 
 /**
@@ -54,7 +90,7 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
  *
  * @returns The tcloud executable for the current Python environment.
  */
-export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
+export const getTcloudBin = async (): Promise<Result<SqlmeshExecInfo, ErrorType>> => {
   const tcloud = IS_WINDOWS ? 'tcloud.exe' : 'tcloud'
   const interpreterDetails = await getInterpreterDetails()
   if (!interpreterDetails.path) {
@@ -67,7 +103,19 @@ export const getTcloudBin = async (): Promise<Result<string, ErrorType>> => {
   if (!fs.existsSync(binPath)) {
     return err({type: 'tcloud_bin_not_found'})
   }
-  return ok(binPath)
+  const env = await getSqlmeshEnvironment()
+  if (isErr(env)) {
+    return err({
+      type: 'generic',
+      message: env.error,
+    })
+  }
+  return ok({
+    bin: binPath,
+    workspacePath: interpreterDetails.resource?.fsPath ?? '',
+    env: env.value,
+    args: [],
+  })
 }
 
 const isSqlmeshInstalledSchema = z.object({
@@ -95,8 +143,9 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
       message: resolvedPath.error,
     })
   }
-  const called = await execAsync(tcloudBin.value, ['is_sqlmesh_installed'], {
+  const called = await execAsync(tcloudBin.value.bin, ['is_sqlmesh_installed'], {
     cwd: resolvedPath.value,
+    env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
     return err({
@@ -134,9 +183,10 @@ export const installSqlmeshEnterprise = async (
       message: resolvedPath.error,
     })
   }
-  const called = await execAsync(tcloudBin.value, ['install_sqlmesh'], {
+  const called = await execAsync(tcloudBin.value.bin, ['install_sqlmesh'], {
     signal: abortController.signal,
     cwd: resolvedPath.value,
+    env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
     return err({
@@ -229,6 +279,13 @@ export const sqlmeshExec = async (): Promise<
       message: resolvedPath.error,
     })
   }
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
   const workspacePath = resolvedPath.value
   const interpreterDetails = await getInterpreterDetails()
   traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
@@ -264,26 +321,25 @@ export const sqlmeshExec = async (): Promise<
         return ensured
       }
       return ok({
-        bin: `${tcloudBin.value} sqlmesh`,
+        bin: tcloudBin.value.bin,
         workspacePath,
-        env: {
-          PYTHONPATH: interpreterDetails.path?.[0],
-          VIRTUAL_ENV: path.dirname(interpreterDetails.binPath!),
-          PATH: interpreterDetails.binPath!,
-        },
-        args: [],
+        env: tcloudBin.value.env,
+        args: ["sqlmesh"],
       })
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmesh)
     traceLog(`Bin path: ${binPath}`)
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: binPath,
       workspacePath,
-      env: {
-        PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: interpreterDetails.binPath!,
-      },
+      env: env.value,
       args: [],
     })
   } else {
@@ -293,10 +349,17 @@ export const sqlmeshExec = async (): Promise<
         type: 'sqlmesh_not_found',
       })
     }
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: sqlmesh,
       workspacePath,
-      env: {},
+      env: env.value,
       args: [],
     })
   }
@@ -352,6 +415,13 @@ export const sqlmeshLspExec = async (): Promise<
 > => {
   const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
   const projectRoot = await getProjectRoot()
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
   const resolvedPath = resolveProjectPath(projectRoot)
   if (isErr(resolvedPath)) {
     return err({
@@ -394,6 +464,19 @@ export const sqlmeshLspExec = async (): Promise<
       if (isErr(ensured)) {
         return ensured
       }
+      const tcloudBinVersion = await getTcloudBinVersion()
+      if (isErr(tcloudBinVersion)) {
+        return tcloudBinVersion
+      }
+      // TODO: Remove this once we have a stable version of tcloud that supports sqlmesh_lsp.
+      if (isSemVerGreaterThanOrEqual(tcloudBinVersion.value, [2, 10, 1])) {
+        return ok ({
+          bin: tcloudBin.value.bin,
+          workspacePath,
+          env: tcloudBin.value.env,
+          args: ['sqlmesh_lsp'],
+        })
+      }
     }
     const binPath = path.join(interpreterDetails.binPath!, sqlmeshLSP)
     traceLog(`Bin path: ${binPath}`)
@@ -406,17 +489,27 @@ export const sqlmeshLspExec = async (): Promise<
     if (isErr(ensuredDependencies)) {
       return ensuredDependencies
     }
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     return ok({
       bin: binPath,
       workspacePath,
-      env: {
-        PYTHONPATH: interpreterDetails.path?.[0],
-        VIRTUAL_ENV: path.dirname(path.dirname(interpreterDetails.binPath!)), // binPath now points to bin dir
-        PATH: interpreterDetails.binPath!, // binPath already points to the bin directory
-      },
+      env: env.value,
       args: [],
     })
   } else {
+    const env = await getSqlmeshEnvironment()
+    if (isErr(env)) {
+      return err({
+        type: 'generic',
+        message: env.error,
+      })
+    }
     const exists = await doesExecutableExist(sqlmeshLSP)
     if (!exists) {
       return err({
@@ -426,7 +519,7 @@ export const sqlmeshLspExec = async (): Promise<
     return ok({
       bin: sqlmeshLSP,
       workspacePath,
-      env: {},
+      env: env.value,
       args: [],
     })
   }
@@ -445,4 +538,33 @@ async function doesExecutableExist(executable: string): Promise<boolean> {
     traceLog(`Checked if ${executable} exists with ${command}, errored, returning false`)
     return false
   }
+}
+
+/**
+ * Get the version of the tcloud bin.
+ *
+ * @returns The version of the tcloud bin.
+ */
+async function getTcloudBinVersion(): Promise<Result<[number, number, number], ErrorType>> {
+  const tcloudBin = await getTcloudBin()
+  if (isErr(tcloudBin)) {
+    return tcloudBin
+  }
+  const called = await execAsync(tcloudBin.value.bin, ['--version'], {
+    env: tcloudBin.value.env,
+  })
+  if (called.exitCode !== 0) {
+    return err({
+      type: 'generic',
+      message: `Failed to get tcloud bin version: ${called.stderr}`,
+    })
+  }
+  const version = called.stdout.split('.').map(Number)
+  if (version.length !== 3) {
+    return err({
+      type: 'generic',
+      message: `Failed to get tcloud bin version: ${called.stdout}`,
+    })
+  }
+  return ok(version as [number, number, number])
 }

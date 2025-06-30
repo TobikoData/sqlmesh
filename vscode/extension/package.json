@@ -74,6 +74,11 @@
         "description": "SQLMesh"
       },
       {
+        "command": "sqlmesh.printEnvironment",
+        "title": "SQLMesh: Print Environment Variables",
+        "description": "SQLMesh"
+      },
+      {
         "command": "sqlmesh.signin",
         "title": "SQLMesh: Sign in to Tobiko Cloud",
         "description": "SQLMesh"
@@ -93,6 +98,11 @@
         "title": "SQLMesh: Render Model",
         "description": "SQLMesh",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "sqlmesh.stop",
+        "title": "SQLMesh: Stop Server",
+        "description": "SQLMesh"
       }
     ],
     "menus": {
@@ -110,10 +120,10 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "fetch-vscode": "tsx scripts/fetch-vscode.ts",
+    "code-server": "code-server",
+    "test:e2e": "pnpm run vscode:package && playwright test",
+    "test:e2e:ui": "pnpm run vscode:package && playwright test --ui",
+    "test:e2e:headed": "pnpm run vscode:package && playwright test --headed",
     "compile": "pnpm run check-types && node esbuild.js",
     "check-types": "tsc --noEmit -p ./tsconfig.build.json",
     "watch": "node esbuild.js --watch",
@@ -141,7 +151,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.5.0",
     "esbuild": "^0.25.5",
-    "eslint": "^9.28.0",
+    "eslint": "^9.29.0",
     "ts-loader": "^9.5.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",

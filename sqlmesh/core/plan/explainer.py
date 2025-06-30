@@ -90,16 +90,16 @@ class RichExplainerConsole(ExplainerConsole):
         return Tree("[bold]Execute after all statements[/bold]")
 
     def visit_physical_layer_update_stage(self, stage: stages.PhysicalLayerUpdateStage) -> Tree:
-        if not stage.snapshots:
+        snapshots = [
+            s for s in stage.snapshots if s.snapshot_id in stage.snapshots_with_missing_intervals
+        ]
+        if not snapshots:
             return Tree("[bold]SKIP: No physical layer updates to perform[/bold]")
 
         tree = Tree(
             "[bold]Validate SQL and create physical layer tables and views if they do not exist[/bold]"
         )
-        for snapshot in stage.snapshots:
-            if snapshot.snapshot_id not in stage.snapshots_with_missing_intervals:
-                continue
-
+        for snapshot in snapshots:
             is_deployable = (
                 stage.deployability_index.is_deployable(snapshot)
                 if self.environment_naming_info.name != c.PROD
@@ -161,7 +161,8 @@ class RichExplainerConsole(ExplainerConsole):
         for snapshot, intervals in stage.snapshot_to_intervals.items():
             display_name = self._display_name(snapshot)
             if snapshot.is_model:
-                table_name = snapshot.table_name(stage.deployability_index.is_deployable(snapshot))
+                is_deployable = stage.deployability_index.is_deployable(snapshot)
+                table_name = snapshot.table_name(is_deployable)
                 model_tree = Tree(f"{display_name} -> {table_name}")
 
                 for signal_name, _ in snapshot.model.signals:
@@ -170,26 +171,30 @@ class RichExplainerConsole(ExplainerConsole):
                 if snapshot.model.pre_statements:
                     model_tree.add("Run pre-statements")
 
+                backfill_tree = Tree("Fully refresh table")
                 if snapshot.is_incremental:
                     current_intervals = (
                         snapshot.intervals
                         if stage.deployability_index.is_deployable(snapshot)
                         else snapshot.dev_intervals
                     )
+                    # If there are no intervals, the table will be fully refreshed
                     if current_intervals:
                         formatted_range = SnapshotIntervals(
                             snapshot_id=snapshot.snapshot_id, intervals=intervals
                         ).format_intervals(snapshot.node.interval_unit)
-                        model_tree.add(
+                        backfill_tree = Tree(
                             f"Incrementally insert records within the range [{formatted_range}]"
                         )
-                    else:
-                        # If there are no intervals, the table will be fully refreshed
-                        model_tree.add("Fully refresh table")
                 elif snapshot.is_view:
-                    model_tree.add("Recreate view")
-                else:
-                    model_tree.add("Fully refresh table")
+                    backfill_tree = Tree("Recreate view")
+
+                if not is_deployable:
+                    backfill_tree.add(
+                        "[orange1]preview[/orange1]: data will NOT be reused in production"
+                    )
+
+                model_tree.add(backfill_tree)
 
                 if snapshot.model.post_statements:
                     model_tree.add("Run post-statements")

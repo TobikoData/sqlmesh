@@ -30,8 +30,8 @@ def test_find_references_for_model_usages():
     # Click on the model reference
     position = Position(line=ranges[0].start.line, character=ranges[0].start.character + 6)
     references = get_model_find_all_references(lsp_context, URI.from_path(customers_path), position)
-    assert len(references) >= 6, (
-        f"Expected at least 6 references to sushi.orders, found {len(references)}"
+    assert len(references) >= 7, (
+        f"Expected at least 7 references to sushi.orders (including column prefix), found {len(references)}"
     )
 
     # Verify expected files are present
@@ -50,15 +50,18 @@ def test_find_references_for_model_usages():
         )
 
     # Verify exact ranges for each reference pattern
+    # Note: customers file has multiple references due to column prefix support
     expected_ranges = {
-        "orders": (0, 0, 0, 0),  # the start for the model itself
-        "customers": (30, 7, 30, 19),
-        "waiter_revenue_by_day": (19, 5, 19, 17),
-        "customer_revenue_lifetime": (38, 7, 38, 19),
-        "customer_revenue_by_day": (33, 5, 33, 17),
-        "latest_order": (12, 5, 12, 17),
+        "orders": [(0, 0, 0, 0)],  # the start for the model itself
+        "customers": [(30, 7, 30, 19), (44, 6, 44, 18)],  # FROM clause and WHERE clause
+        "waiter_revenue_by_day": [(19, 5, 19, 17)],
+        "customer_revenue_lifetime": [(38, 7, 38, 19)],
+        "customer_revenue_by_day": [(33, 5, 33, 17)],
+        "latest_order": [(12, 5, 12, 17)],
     }
 
+    # Group references by file pattern
+    refs_by_pattern = {}
     for ref in references:
         matched_pattern = None
         for pattern in expected_patterns:
@@ -66,28 +69,43 @@ def test_find_references_for_model_usages():
                 matched_pattern = pattern
                 break
 
-        assert matched_pattern is not None, (
-            f"Reference URI {ref.uri} doesn't match any expected pattern"
+        if matched_pattern:
+            if matched_pattern not in refs_by_pattern:
+                refs_by_pattern[matched_pattern] = []
+            refs_by_pattern[matched_pattern].append(ref)
+
+    # Verify each pattern has the expected references
+    for pattern, expected_range_list in expected_ranges.items():
+        assert pattern in refs_by_pattern, f"Missing references for pattern '{pattern}'"
+
+        actual_refs = refs_by_pattern[pattern]
+        assert len(actual_refs) == len(expected_range_list), (
+            f"Expected {len(expected_range_list)} references for {pattern}, found {len(actual_refs)}"
         )
 
-        # Get expected range for this model
-        expected_start_line, expected_start_char, expected_end_line, expected_end_char = (
-            expected_ranges[matched_pattern]
+        # Sort both actual and expected by line number for consistent comparison
+        actual_refs_sorted = sorted(
+            actual_refs, key=lambda r: (r.range.start.line, r.range.start.character)
         )
+        expected_sorted = sorted(expected_range_list, key=lambda r: (r[0], r[1]))
 
-        # Assert exact range match
-        assert ref.range.start.line == expected_start_line, (
-            f"Expected {matched_pattern} reference start line {expected_start_line}, found {ref.range.start.line}"
-        )
-        assert ref.range.start.character == expected_start_char, (
-            f"Expected {matched_pattern} reference start character {expected_start_char}, found {ref.range.start.character}"
-        )
-        assert ref.range.end.line == expected_end_line, (
-            f"Expected {matched_pattern} reference end line {expected_end_line}, found {ref.range.end.line}"
-        )
-        assert ref.range.end.character == expected_end_char, (
-            f"Expected {matched_pattern} reference end character {expected_end_char}, found {ref.range.end.character}"
-        )
+        for i, (ref, expected_range) in enumerate(zip(actual_refs_sorted, expected_sorted)):
+            expected_start_line, expected_start_char, expected_end_line, expected_end_char = (
+                expected_range
+            )
+
+            assert ref.range.start.line == expected_start_line, (
+                f"Expected {pattern} reference #{i + 1} start line {expected_start_line}, found {ref.range.start.line}"
+            )
+            assert ref.range.start.character == expected_start_char, (
+                f"Expected {pattern} reference #{i + 1} start character {expected_start_char}, found {ref.range.start.character}"
+            )
+            assert ref.range.end.line == expected_end_line, (
+                f"Expected {pattern} reference #{i + 1} end line {expected_end_line}, found {ref.range.end.line}"
+            )
+            assert ref.range.end.character == expected_end_char, (
+                f"Expected {pattern} reference #{i + 1} end character {expected_end_char}, found {ref.range.end.character}"
+            )
 
 
 def test_find_references_for_marketing_model():

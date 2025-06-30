@@ -105,10 +105,23 @@ class DuckDBMetadata:
 
     @property
     def schemas(self) -> t.List[str]:
+        return self.schemas_in_catalog(self.engine_adapter.get_current_catalog() or "")
+
+    def schemas_in_catalog(self, catalog_name: str) -> t.List[str]:
         return self._get_single_col(
-            f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{self.engine_adapter.get_current_catalog()}' and {self._system_schema_filter('schema_name')}",
+            f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{catalog_name}' and {self._system_schema_filter('schema_name')}",
             "schema_name",
             self.engine_adapter,
+        )
+
+    @property
+    def catalogs(self) -> t.Set[str]:
+        return set(
+            self._get_single_col(
+                f"SELECT database_name FROM duckdb_databases() WHERE internal=false",
+                "database_name",
+                self.engine_adapter,
+            )
         )
 
     def _system_schema_filter(self, col: str) -> str:
