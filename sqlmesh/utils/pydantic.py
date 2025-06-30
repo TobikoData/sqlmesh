@@ -16,6 +16,8 @@ from sqlmesh.core import dialect as d
 from sqlmesh.utils import str_to_bool
 
 if t.TYPE_CHECKING:
+    from sqlglot._typing import E
+
     Model = t.TypeVar("Model", bound="PydanticModel")
 
 
@@ -191,6 +193,12 @@ def validate_string(v: t.Any) -> str:
     if isinstance(v, exp.Expression):
         return v.name
     return str(v)
+
+
+def validate_expression(expression: E, dialect: str) -> E:
+    # this normalizes and quotes identifiers in the given expression according the specified dialect
+    # it also sets expression.meta["dialect"] so that when we serialize for state, the expression is serialized in the correct dialect
+    return _get_field(expression, {"dialect": dialect})  # type: ignore
 
 
 def bool_validator(v: t.Any) -> bool:
