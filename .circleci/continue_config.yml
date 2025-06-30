@@ -306,6 +306,7 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
+                - "3.13"
       - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>
