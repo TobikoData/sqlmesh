@@ -2304,3 +2304,17 @@ def test_dev_environment_virtual_update_with_environment_statements(tmp_path: Pa
         updated_statements[0].before_all[1]
         == "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)"
     )
+
+
+def test_table_diff_ignores_extra_args(sushi_context: Context):
+    sushi_context.plan(environment="dev", auto_apply=True, include_unmodified=True)
+
+    # the test fails if this call throws an exception
+    sushi_context.table_diff(
+        source="prod",
+        target="dev",
+        select_models=["sushi.customers"],
+        on=["customer_id"],
+        show_sample=True,
+        some_tcloud_option=1_000,
+    )
