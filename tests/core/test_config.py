@@ -24,6 +24,7 @@ from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
     load_config_from_python_module,
+    load_configs,
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
@@ -1132,3 +1133,163 @@ def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
             Config,
             project_paths=[config_path],
         )
+
+
+def test_load_python_config_dot_env_vars(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("python_config")
+    config_path = main_dir / "config.py"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig())}, model_defaults=ModelDefaultsConfig(dialect=''))
+        """
+        )
+
+    # The environment variable value from the dot env file should be set
+    # SQLMESH__ variables override config fields directly if they follow the naming structure
+    dot_path = main_dir / ".env"
+    with open(dot_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__TYPE="bigquery"
+SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__CHECK_IMPORT="false"
+SQLMESH__DEFAULT_GATEWAY="duckdb_gateway"
+        """
+        )
+
+    # Use mock.patch.dict to isolate environment variables between the tests
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(),
+                state_connection=BigQueryConnectionConfig(check_import=False),
+            ),
+        },
+        model_defaults=ModelDefaultsConfig(dialect=""),
+        default_gateway="duckdb_gateway",
+    )
+
+
+def test_load_yaml_config_dot_env_vars(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("yaml_config")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  duckdb_gateway:
+    connection:
+      type: duckdb
+      catalogs:
+        local: local.db
+        cloud_sales: {{ env_var('S3_BUCKET') }}
+      extensions:
+        - name: httpfs
+      secrets:
+        - type: "s3"
+          key_id: {{ env_var('S3_KEY') }}
+          secret: {{ env_var('S3_SECRET') }}
+model_defaults:
+  dialect: ""
+"""
+        )
+
+    # This test checks both using SQLMESH__ prefixed environment variables with underscores
+    # and setting a regular environment variable for use with env_var().
+    dot_path = main_dir / ".env"
+    with open(dot_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """S3_BUCKET="s3://metrics_bucket/sales.db"
+S3_KEY="S3_KEY_ID"
+S3_SECRET="XXX_S3_SECRET_XXX"
+SQLMESH__DEFAULT_GATEWAY="duckdb_gateway"
+SQLMESH__MODEL_DEFAULTS__DIALECT="athena"
+"""
+        )
+
+    # Use mock.patch.dict to isolate environment variables between the tests
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    catalogs={
+                        "local": "local.db",
+                        "cloud_sales": "s3://metrics_bucket/sales.db",
+                    },
+                    extensions=[{"name": "httpfs"}],
+                    secrets=[{"type": "s3", "key_id": "S3_KEY_ID", "secret": "XXX_S3_SECRET_XXX"}],
+                ),
+            ),
+        },
+        default_gateway="duckdb_gateway",
+        model_defaults=ModelDefaultsConfig(dialect="athena"),
+    )
+
+
+def test_load_yaml_config_custom_dotenv_path(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("yaml_config_2")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: {{ env_var('DB_NAME') }}
+"""
+        )
+
+    # Create a custom dot env file in a different location
+    custom_env_dir = tmp_path_factory.mktemp("custom_env")
+    custom_env_path = custom_env_dir / ".my_env"
+    with open(custom_env_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """DB_NAME="custom_database.db"
+SQLMESH__DEFAULT_GATEWAY="test_gateway"
+SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
+"""
+        )
+
+    # Test that without custom dotenv path, env vars are not loaded
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(
+            ConfigError, match=r"Default model SQL dialect is a required configuratio*"
+        ):
+            load_configs(
+                "config",
+                Config,
+                paths=[main_dir],
+            )
+
+    # Test that with custom dotenv path, env vars are loaded correctly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+            dotenv_path=custom_env_path,
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "test_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    database="custom_database.db",
+                ),
+            ),
+        },
+        default_gateway="test_gateway",
+        model_defaults=ModelDefaultsConfig(dialect="postgres"),
+    )
