@@ -46,6 +46,7 @@ from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
+from datetime import datetime
 
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
@@ -126,6 +127,8 @@ from sqlmesh.utils.date import (
     format_tz_datetime,
     now_timestamp,
     now,
+    to_datetime,
+    make_exclusive,
 )
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
@@ -1215,6 +1218,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        min_intervals: t.Optional[int] = None,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1261,6 +1265,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered: Whether the diff should compare raw vs rendered models
             skip_linter: Linter runs by default so this will skip it if enabled
             explain: Whether to explain the plan instead of applying it.
+            min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
+                on every model when checking for missing intervals
 
         Returns:
             The populated Plan object.
@@ -1289,6 +1295,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
             explain=explain,
+            min_intervals=min_intervals,
         )
 
         plan = plan_builder.build()
@@ -1338,6 +1345,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        min_intervals: t.Optional[int] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1374,6 +1382,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
+            min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
+                on every model when checking for missing intervals
 
         Returns:
             The plan builder.
@@ -1401,6 +1411,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             "run": run,
             "diff_rendered": diff_rendered,
             "skip_linter": skip_linter,
+            "min_intervals": min_intervals,
         }
         user_provided_flags: t.Dict[str, UserProvidedFlags] = {
             k: v for k, v in kwargs.items() if v is not None
@@ -1523,6 +1534,15 @@ class GenericContext(BaseContext, t.Generic[C]):
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
             self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
+        start_override_per_model = self._calculate_start_override_per_model(
+            min_intervals,
+            start or default_start,
+            end or default_end,
+            execution_time or now(),
+            backfill_models,
+            snapshots,
+        )
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
@@ -1553,6 +1573,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            start_override_per_model=start_override_per_model,
             interval_end_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
@@ -2863,6 +2884,58 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_end = to_timestamp(execution_time)
 
         return default_start, default_end
+
+    def _calculate_start_override_per_model(
+        self,
+        min_intervals: t.Optional[int],
+        plan_start: t.Optional[TimeLike],
+        plan_end: t.Optional[TimeLike],
+        plan_execution_time: TimeLike,
+        backfill_model_fqns: t.Optional[t.Set[str]],
+        snapshots_by_model_fqn: t.Dict[str, Snapshot],
+    ) -> t.Dict[str, datetime]:
+        if not min_intervals or not backfill_model_fqns or not plan_start:
+            # If there are no models to backfill, there are no intervals to consider for backfill, so we dont need to consider a minimum number
+            # If the plan doesnt have a start date, all intervals are considered already so we dont need to consider a minimum number
+            # If we dont have a minimum number of intervals to consider, then we dont need to adjust the start date on a per-model basis
+            return {}
+
+        start_overrides = {}
+
+        plan_execution_time_dt = to_datetime(plan_execution_time)
+        plan_start_dt = to_datetime(plan_start, relative_base=plan_execution_time_dt)
+        plan_end_dt = to_datetime(
+            plan_end or plan_execution_time_dt, relative_base=plan_execution_time_dt
+        )
+
+        for model_fqn in backfill_model_fqns:
+            snapshot = snapshots_by_model_fqn.get(model_fqn)
+            if not snapshot:
+                continue
+
+            starting_point = plan_end_dt
+            if node_end := snapshot.node.end:
+                # if we dont do this, if the node end is a date (as opposed to a timestamp)
+                # we end up incorrectly winding back an extra day
+                node_end_dt = make_exclusive(node_end)
+
+                if node_end_dt < plan_end_dt:
+                    # if the model has an end date that has already elapsed, use that as a starting point for calculating min_intervals
+                    # instead of the plan end. If we use the plan end, we will return intervals in the future which are invalid
+                    starting_point = node_end_dt
+
+            snapshot_start = snapshot.node.cron_floor(starting_point)
+
+            for _ in range(min_intervals):
+                # wind back the starting point by :min_intervals intervals to arrive at the minimum snapshot start date
+                snapshot_start = snapshot.node.cron_prev(snapshot_start)
+
+            # only consider this an override if the wound-back start date is earlier than the plan start date
+            # if it isnt then the plan already covers :min_intervals intervals for this snapshot
+            if snapshot_start < plan_start_dt:
+                start_overrides[model_fqn] = snapshot_start
+
+        return start_overrides
 
     def _get_max_interval_end_per_model(
         self, snapshots: t.Dict[str, Snapshot], backfill_models: t.Optional[t.Set[str]]

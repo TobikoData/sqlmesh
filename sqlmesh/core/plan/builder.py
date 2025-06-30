@@ -5,6 +5,7 @@ import re
 import typing as t
 from collections import defaultdict
 from functools import cached_property
+from datetime import datetime
 
 
 from sqlmesh.core.console import PlanBuilderConsole, get_console
@@ -85,6 +86,7 @@ class PlanBuilder:
         ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
+        start_override_per_model: The mapping from model FQN's to model-specific start dates
         interval_end_per_model: The mapping from model FQNs to target end dates.
         explain: Whether to explain the plan instead of applying it.
     """
@@ -117,6 +119,7 @@ class PlanBuilder:
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
         explain: bool = False,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
         user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
@@ -133,6 +136,7 @@ class PlanBuilder:
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
+        self._start_override_per_model = start_override_per_model
         self._interval_end_per_model = interval_end_per_model
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
@@ -280,7 +284,11 @@ class PlanBuilder:
         self._adjust_new_snapshot_intervals()
 
         deployability_index = (
-            DeployabilityIndex.create(self._context_diff.snapshots.values(), start=self._start)
+            DeployabilityIndex.create(
+                self._context_diff.snapshots.values(),
+                start=self._start,
+                start_override_per_model=self._start_override_per_model,
+            )
             if self._is_dev
             else DeployabilityIndex.all_deployable()
         )
@@ -322,6 +330,7 @@ class PlanBuilder:
             indirectly_modified=indirectly_modified,
             deployability_index=deployability_index,
             restatements=restatements,
+            start_override_per_model=self._start_override_per_model,
             interval_end_per_model=interval_end_per_model,
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,

@@ -57,6 +57,7 @@ class Plan(PydanticModel, frozen=True):
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
+    start_override_per_model: t.Optional[t.Dict[str, datetime]]
     interval_end_per_model: t.Optional[t.Dict[str, int]]
 
     selected_models_to_backfill: t.Optional[t.Set[str]] = None
@@ -177,6 +178,7 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
+                start_override_per_model=self.start_override_per_model,
                 interval_end_per_model=self.interval_end_per_model,
                 end_bounded=self.end_bounded,
             ).items()
@@ -265,6 +267,7 @@ class Plan(PydanticModel, frozen=True):
             removed_snapshots=sorted(self.context_diff.removed_snapshots),
             requires_backfill=self.requires_backfill,
             models_to_backfill=self.models_to_backfill,
+            start_override_per_model=self.start_override_per_model,
             interval_end_per_model=self.interval_end_per_model,
             execution_time=self.execution_time,
             disabled_restatement_models={
@@ -303,6 +306,7 @@ class EvaluatablePlan(PydanticModel):
     removed_snapshots: t.List[SnapshotId]
     requires_backfill: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None
     interval_end_per_model: t.Optional[t.Dict[str, int]] = None
     execution_time: t.Optional[TimeLike] = None
     disabled_restatement_models: t.Set[str]

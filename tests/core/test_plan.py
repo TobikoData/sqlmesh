@@ -743,6 +743,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         restatements={},
         end_bounded=False,
         ensure_finalized_snapshots=False,
+        start_override_per_model=None,
         interval_end_per_model=None,
         explain=False,
     )
