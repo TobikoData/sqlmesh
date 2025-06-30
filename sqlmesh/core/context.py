@@ -1679,6 +1679,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         warn_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
         schema_diff_ignore_case: bool = False,
+        **kwargs: t.Any,  # catch-all to prevent an 'unexpected keyword argument' error if an table_diff extension passes in some extra arguments
     ) -> t.List[TableDiff]:
         """Show a diff between two tables.
 
