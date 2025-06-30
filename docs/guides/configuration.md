@@ -123,11 +123,21 @@ The rest of the `.env` file variables can be used in your configuration files wi
 
 #### Custom dot env file location and name
 
-By default, SQLMesh loads `.env` files from each project directory. Alternatively, you can export the `SQLMESH_DOTENV_PATH` environment variable to specify a custom path and persist it across commands:
+By default, SQLMesh loads `.env` files from each project directory. However, you can specify a custom path using the `--dotenv` CLI flag directly when running a command:
+
+```bash
+sqlmesh --dotenv /path/to/custom/.env plan
+```
+
+!!! note
+    The `--dotenv` flag is a global option and must be placed **before** the subcommand (e.g. `plan`, `run`), not after.
+
+Alternatively, you can export the `SQLMESH_DOTENV_PATH` environment variable once, to persist a custom path across all subsequent commands in your shell session:
 
 ```bash
 export SQLMESH_DOTENV_PATH=/path/to/custom/.custom_env
 sqlmesh plan
+sqlmesh run
 ```
 
 **Important considerations:**
