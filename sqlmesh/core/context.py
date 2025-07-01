@@ -116,7 +116,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, Verbosity
+from sqlmesh.utils import UniqueKeyDict, Verbosity, CorrelationId
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -418,7 +418,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.config.get_state_connection(self.gateway) or self.connection_config
         )
 
-        self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
+        self._snapshot_evaluators: t.Dict[t.Optional[CorrelationId], SnapshotEvaluator] = {}
 
         self.console = get_console()
         setattr(self.console, "dialect", self.config.dialect)
@@ -446,18 +446,22 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._engine_adapter = self.connection_config.create_engine_adapter()
         return self._engine_adapter
 
-    @property
-    def snapshot_evaluator(self) -> SnapshotEvaluator:
-        if not self._snapshot_evaluator:
-            self._snapshot_evaluator = SnapshotEvaluator(
+    def snapshot_evaluator(
+        self, correlation_id: t.Optional[CorrelationId] = None
+    ) -> SnapshotEvaluator:
+        # Cache snapshot evaluators by correlation_id to avoid old correlation_ids being attached to future Context operations
+        if correlation_id not in self._snapshot_evaluators:
+            self._snapshot_evaluators[correlation_id] = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_log_level(logging.INFO)
+                    gateway: adapter.with_settings(
+                        log_level=logging.INFO, correlation_id=correlation_id
+                    )
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
             )
-        return self._snapshot_evaluator
+        return self._snapshot_evaluators[correlation_id]
 
     def execution_context(
         self,
@@ -538,7 +542,9 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return self.create_scheduler(snapshots)
 
-    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
+    def create_scheduler(
+        self, snapshots: t.Iterable[Snapshot], correlation_id: t.Optional[CorrelationId] = None
+    ) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -549,7 +555,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            self.snapshot_evaluator,
+            self.snapshot_evaluator(correlation_id),
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
@@ -714,7 +720,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             NotificationEvent.RUN_START, environment=environment
         )
         analytics_run_id = analytics.collector.on_run_start(
-            engine_type=self.snapshot_evaluator.adapter.dialect,
+            engine_type=self.snapshot_evaluator().adapter.dialect,
             state_sync_type=self.state_sync.state_type(),
         )
         self._load_materializations()
@@ -1076,7 +1082,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             and not parent_snapshot.categorized
         ]
 
-        df = self.snapshot_evaluator.evaluate_and_fetch(
+        df = self.snapshot_evaluator().evaluate_and_fetch(
             snapshot,
             start=start,
             end=end,
@@ -1588,7 +1594,12 @@ class GenericContext(BaseContext, t.Generic[C]):
                 default_catalog=self.default_catalog,
                 console=self.console,
             )
-            explainer.evaluate(plan.to_evaluatable())
+            explainer.evaluate(
+                plan.to_evaluatable(),
+                snapshot_evaluator=self.snapshot_evaluator(
+                    correlation_id=CorrelationId.from_plan_id(plan.plan_id)
+                ),
+            )
             return
 
         self.notification_target_manager.notify(
@@ -1902,7 +1913,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_log_level(logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -2111,7 +2122,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         errors = []
         skipped_count = 0
         for snapshot in snapshots:
-            for audit_result in self.snapshot_evaluator.audit(
+            for audit_result in self.snapshot_evaluator().audit(
                 snapshot=snapshot,
                 start=start,
                 end=end,
@@ -2143,7 +2154,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             if error.query:
                 self.console.show_sql(
-                    f"{error.query.sql(dialect=self.snapshot_evaluator.adapter.dialect)}"
+                    f"{error.query.sql(dialect=self.snapshot_evaluator().adapter.dialect)}"
                 )
 
         self.console.log_status_update("Done.")
@@ -2335,10 +2346,13 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
-        if self._snapshot_evaluator:
-            self._snapshot_evaluator.close()
+        for evaluator in self._snapshot_evaluators.values():
+            evaluator.close()
+
         if self._state_sync:
             self._state_sync.close()
+
+        self._snapshot_evaluators.clear()
 
     def _run(
         self,
@@ -2390,7 +2404,11 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _apply(self, plan: Plan, circuit_breaker: t.Optional[t.Callable[[], bool]]) -> None:
         self._scheduler.create_plan_evaluator(self).evaluate(
-            plan.to_evaluatable(), circuit_breaker=circuit_breaker
+            plan.to_evaluatable(),
+            snapshot_evaluator=self.snapshot_evaluator(
+                correlation_id=CorrelationId.from_plan_id(plan.plan_id)
+            ),
+            circuit_breaker=circuit_breaker,
         )
 
     @python_api_analytics
@@ -2683,7 +2701,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
         # Remove the expired snapshots tables
-        self.snapshot_evaluator.cleanup(
+        self.snapshot_evaluator().cleanup(
             target_snapshots=cleanup_targets,
             on_complete=self.console.update_cleanup_progress,
         )
