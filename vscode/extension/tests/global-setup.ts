@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
+import { createHash } from 'crypto'
 
 async function globalSetup() {
   console.log('Setting up extension for Playwright tests...')
@@ -10,8 +11,6 @@ async function globalSetup() {
   const extensionsDir = path.join(testSetupDir, 'extensions')
 
   // Clean up any existing test setup directory
-  await fs.remove(testSetupDir)
-  await fs.ensureDir(extensionsDir)
 
   // Get the extension version from package.json
   const packageJson = JSON.parse(
@@ -30,14 +29,32 @@ async function globalSetup() {
     )
   }
 
-  console.log(`Installing extension: ${vsixFileName}`)
-
   // Create a temporary user data directory for the installation
   const tempUserDataDir = await fs.mkdtemp(
     path.join(require('os').tmpdir(), 'vscode-test-install-user-data-'),
   )
 
   try {
+    // Check if in .test_setup there is a extension hash file which contains the hash of the extension
+    // If it does, check if the hash is the same as the hash of the extension in the vsix file
+    // If it is, skip the installation
+    // If it is not, remove the extension hash file and install the extension
+    const extensionHashFile = path.join(testSetupDir, 'extension-hash.txt')
+    console.log('extensionHashFile', extensionHashFile)
+    if (fs.existsSync(extensionHashFile)) {
+      const extensionHash = fs.readFileSync(extensionHashFile, 'utf-8')
+      const vsixHash = await hashFile(vsixPath)
+      if (extensionHash === vsixHash) {
+        console.log('Extension already installed')
+        return
+      }
+    }
+
+    await fs.remove(testSetupDir)
+    await fs.ensureDir(testSetupDir)
+    await fs.ensureDir(extensionsDir)
+
+    console.log(`Installing extension: ${vsixFileName}`)
     execSync(
       `pnpm run code-server --user-data-dir "${tempUserDataDir}" --extensions-dir "${extensionsDir}" --install-extension "${vsixPath}"`,
       {
@@ -45,11 +62,19 @@ async function globalSetup() {
         cwd: extensionDir,
       },
     )
-    console.log('Extension installed successfully to .test_setup/extensions')
+
+    // Write the hash of the extension to the extension hash file
+    const extensionHash = await hashFile(vsixPath)
+    await fs.writeFile(extensionHashFile, extensionHash)
   } finally {
     // Clean up temporary user data directory
     await fs.remove(tempUserDataDir)
   }
+}
+
+async function hashFile(filePath: string): Promise<string> {
+  const fileBuffer = await fs.readFile(filePath)
+  return createHash('sha256').update(fileBuffer).digest('hex')
 }
 
 export default globalSetup
