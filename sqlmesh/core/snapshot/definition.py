@@ -1905,7 +1905,7 @@ def missing_intervals(
     return missing
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.List[int]:
     croniter = interval_unit.croniter(start_ts)
     timestamps = [start_ts]
@@ -1922,7 +1922,7 @@ def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.L
     return timestamps
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def compute_missing_intervals(
     interval_unit: IntervalUnit,
     intervals: t.Tuple[Interval, ...],
@@ -1984,7 +1984,7 @@ def compute_missing_intervals(
     return sorted(missing)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def inclusive_exclusive(
     start: TimeLike,
     end: TimeLike,
