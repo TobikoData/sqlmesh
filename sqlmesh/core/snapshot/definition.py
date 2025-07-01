@@ -991,7 +991,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if console:
             console.start_signal_progress(
                 self,
-                len(signals),
                 default_catalog,
                 environment_naming_info or EnvironmentNamingInfo(),
             )
@@ -1033,7 +1032,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         # Stop signal progress tracking
         if console:
-            console.stop_signal_progress(self)
+            console.stop_signal_progress()
 
         return intervals
 

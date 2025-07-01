@@ -335,7 +335,6 @@ class SignalConsole(abc.ABC):
     def start_signal_progress(
         self,
         snapshot: Snapshot,
-        total_signals: int,
         default_catalog: t.Optional[str],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
@@ -355,7 +354,7 @@ class SignalConsole(abc.ABC):
         """Updates the signal checking progress."""
 
     @abc.abstractmethod
-    def stop_signal_progress(self, snapshot: Snapshot) -> None:
+    def stop_signal_progress(self) -> None:
         """Indicates that signal checking has completed for a snapshot."""
 
 
@@ -569,7 +568,6 @@ class NoopConsole(Console):
     def start_signal_progress(
         self,
         snapshot: Snapshot,
-        total_signals: int,
         default_catalog: t.Optional[str],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
@@ -587,7 +585,7 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def stop_signal_progress(self, snapshot: Snapshot) -> None:
+    def stop_signal_progress(self) -> None:
         pass
 
     def start_creation_progress(
@@ -1112,7 +1110,6 @@ class TerminalConsole(Console):
     def start_signal_progress(
         self,
         snapshot: Snapshot,
-        total_signals: int,
         default_catalog: t.Optional[str],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
@@ -1183,7 +1180,7 @@ class TerminalConsole(Console):
         if self.signal_status_tree is not None:
             self.signal_status_tree.add(tree)
 
-    def stop_signal_progress(self, snapshot: Snapshot) -> None:
+    def stop_signal_progress(self) -> None:
         """Indicates that signal checking has completed for a snapshot."""
         if self.signal_status_tree is not None:
             self._print(self.signal_status_tree)
