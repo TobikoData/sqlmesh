@@ -208,6 +208,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 "Invalid value for `session_properties.query_label`. Must be an array or tuple."
             )
 
+        if self.correlation_id:
+            parsed_query_label.append(
+                (self.correlation_id.job_type.value.lower(), self.correlation_id.job_id)
+            )
+
         if parsed_query_label:
             query_label_str = ",".join([":".join(label) for label in parsed_query_label])
             query = f'SET @@query_label = "{query_label_str}";SELECT 1;'
