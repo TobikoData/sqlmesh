@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import typing as t
 import time
+from datetime import datetime
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -105,7 +106,8 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -123,7 +125,8 @@ class Scheduler:
             execution_time: The date/time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
-            interval_end_per_model: The mapping from model FQNs to target end dates.
+            start_override_per_model: A mapping of model FQNs to target start dates.
+            end_override_per_model: A mapping of model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -136,7 +139,8 @@ class Scheduler:
             execution_time=execution_time,
             deployability_index=deployability_index,
             restatements=restatements,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
         )
@@ -212,7 +216,8 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -227,7 +232,8 @@ class Scheduler:
             end=end,
             execution_time=execution_time,
             remove_intervals=restatements,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -243,7 +249,8 @@ class Scheduler:
         start: TimeLike,
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -266,7 +273,8 @@ class Scheduler:
             end=end,
             execution_time=execution_time,
             remove_intervals=remove_intervals,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -565,7 +573,8 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         remove_intervals: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -586,7 +595,8 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             remove_intervals: A dict of snapshots to their intervals. For evaluation, these are the intervals that will be restated. For audits,
                               these are the intervals that will be reaudited
-            interval_end_per_model: The mapping from model FQNs to target end dates.
+            start_override_per_model: A mapping of model FQNs to target start dates.
+            end_override_per_model: A mapping of model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -634,7 +644,8 @@ class Scheduler:
             execution_time,
             deployability_index=deployability_index,
             restatements=remove_intervals,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -797,7 +808,8 @@ def merged_missing_intervals(
     execution_time: t.Optional[TimeLike] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> SnapshotToIntervals:
@@ -815,7 +827,8 @@ def merged_missing_intervals(
         execution_time: The date/time reference to use for execution time. Defaults to now.
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         restatements: A set of snapshot names being restated.
-        interval_end_per_model: The mapping from model FQNs to target end dates.
+        start_override_per_model: A mapping of model FQNs to target start dates.
+        end_override_per_model: A mapping of model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
         end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -830,7 +843,8 @@ def merged_missing_intervals(
         deployability_index=deployability_index,
         execution_time=execution_time or now_timestamp(),
         restatements=restatements,
-        interval_end_per_model=interval_end_per_model,
+        start_override_per_model=start_override_per_model,
+        end_override_per_model=end_override_per_model,
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     )
@@ -844,7 +858,8 @@ def compute_interval_params(
     deployability_index: t.Optional[DeployabilityIndex] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> SnapshotToIntervals:
@@ -862,7 +877,8 @@ def compute_interval_params(
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         execution_time: The date/time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
-        interval_end_per_model: The mapping from model FQNs to target end dates.
+        start_override_per_model: A mapping of model FQNs to target start dates.
+        end_override_per_model: A mapping of model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
         end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -879,7 +895,8 @@ def compute_interval_params(
         execution_time=execution_time,
         restatements=restatements,
         deployability_index=deployability_index,
-        interval_end_per_model=interval_end_per_model,
+        start_override_per_model=start_override_per_model,
+        end_override_per_model=end_override_per_model,
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():

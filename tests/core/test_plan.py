@@ -756,7 +756,8 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         restatements={},
         end_bounded=False,
         ensure_finalized_snapshots=False,
-        interval_end_per_model=None,
+        start_override_per_model=None,
+        end_override_per_model=None,
         explain=False,
     )
 
@@ -2697,7 +2698,7 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
     assert plan_builder.build().start == default_start_for_preview
 
 
-def test_interval_end_per_model(make_snapshot):
+def test_end_override_per_model(make_snapshot):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -2725,20 +2726,18 @@ def test_interval_end_per_model(make_snapshot):
 
     plan_builder = PlanBuilder(
         context_diff,
-        interval_end_per_model={snapshot.name: to_timestamp("2023-01-09")},
+        end_override_per_model={snapshot.name: to_datetime("2023-01-09")},
     )
-    assert plan_builder.build().interval_end_per_model == {
-        snapshot.name: to_timestamp("2023-01-09")
-    }
+    assert plan_builder.build().end_override_per_model == {snapshot.name: to_datetime("2023-01-09")}
 
     # User-provided end should take precedence.
     plan_builder = PlanBuilder(
         context_diff,
-        interval_end_per_model={snapshot.name: to_timestamp("2023-01-09")},
+        end_override_per_model={snapshot.name: to_datetime("2023-01-09")},
         end="2023-01-10",
         is_dev=True,
     )
-    assert plan_builder.build().interval_end_per_model is None
+    assert plan_builder.build().end_override_per_model is None
 
 
 def test_unaligned_start_model_with_forward_only_preview(make_snapshot):

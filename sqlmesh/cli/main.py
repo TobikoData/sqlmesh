@@ -520,6 +520,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Explain the plan instead of applying it.",
     default=None,
 )
+@click.option(
+    "--min-intervals",
+    default=0,
+    help="For every model, ensure at least this many intervals are covered by a missing intervals check regardless of the plan start date",
+)
 @opt.verbose
 @click.pass_context
 @error_handler

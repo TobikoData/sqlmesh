@@ -2,7 +2,7 @@ import logging
 import pathlib
 import typing as t
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
 
@@ -36,6 +36,7 @@ from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
@@ -2184,6 +2185,7 @@ def test_plan_audit_intervals(tmp_path: pathlib.Path, caplog):
     plan = ctx.plan(
         environment="dev", auto_apply=True, no_prompts=True, start="2025-02-01", end="2025-02-01"
     )
+    assert plan.missing_intervals
 
     date_snapshot = next(s for s in plan.new_snapshots if "date_example" in s.name)
     timestamp_snapshot = next(s for s in plan.new_snapshots if "timestamp_example" in s.name)
@@ -2408,3 +2410,160 @@ def test_table_diff_ignores_extra_args(sushi_context: Context):
         show_sample=True,
         some_tcloud_option=1_000,
     )
+
+
+def test_plan_min_intervals(tmp_path: Path):
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+
+    current_time = to_datetime("2020-02-01 00:00:01")
+
+    # initial state of example project
+    context.plan(auto_apply=True, execution_time=current_time)
+
+    (tmp_path / "models" / "daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@daily'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "weekly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.weekly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@weekly'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                        
+    """)
+
+    (tmp_path / "models" / "monthly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.monthly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@monthly'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                         
+    """)
+
+    (tmp_path / "models" / "ended_daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.ended_daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      end '2020-01-18',
+      cron '@daily'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                 
+    """)
+
+    context.load()
+
+    # initial state - backfill from 2020-01-01 -> now() (2020-01-02 00:00:01) on new models
+    plan = context.plan(execution_time=current_time)
+
+    assert to_datetime(plan.start) == to_datetime("2020-01-01 00:00:00")
+    assert to_datetime(plan.end) == to_datetime("2020-02-01 00:00:00")
+    assert to_datetime(plan.execution_time) == to_datetime("2020-02-01 00:00:01")
+
+    def _get_missing_intervals(plan: Plan, name: str) -> t.List[t.Tuple[datetime, datetime]]:
+        snapshot_id = context.get_snapshot(name, raise_if_missing=True).snapshot_id
+        snapshot_intervals = next(
+            si for si in plan.missing_intervals if si.snapshot_id == snapshot_id
+        )
+        return [(to_datetime(s), to_datetime(e)) for s, e in snapshot_intervals.merged_intervals]
+
+    # check initial intervals - should be full time range between start and execution time
+    assert len(plan.missing_intervals) == 4
+
+    assert _get_missing_intervals(plan, "sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.weekly_model") == [
+        (
+            to_datetime("2020-01-01 00:00:00"),
+            to_datetime("2020-01-26 00:00:00"),
+        )  # last week in 2020-01 hasnt fully elapsed yet
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.monthly_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.ended_daily_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-19 00:00:00"))
+    ]
+
+    # now, create a dev env for "1 day ago" with min_intervals=1
+    plan = context.plan(
+        environment="pr_env",
+        start="1 day ago",
+        execution_time=current_time,
+        min_intervals=1,
+    )
+
+    # this should pick up last day for daily model, last week for weekly model, last month for the monthly model and the last day of "ended_daily_model" before it ended
+    assert len(plan.missing_intervals) == 4
+
+    assert _get_missing_intervals(plan, "sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-31 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.weekly_model") == [
+        (
+            to_datetime("2020-01-19 00:00:00"),  # last completed week
+            to_datetime("2020-01-26 00:00:00"),
+        )
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.monthly_model") == [
+        (
+            to_datetime("2020-01-01 00:00:00"),  # last completed month
+            to_datetime("2020-02-01 00:00:00"),
+        )
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.ended_daily_model") == [
+        (
+            to_datetime("2020-01-18 00:00:00"),  # last day before the model end date
+            to_datetime("2020-01-19 00:00:00"),
+        )
+    ]
+
+    # run the plan for '1 day ago' but min_intervals=1
+    context.apply(plan)
+
+    # show that the data was created (which shows that when the Plan became an EvaluatablePlan and eventually evaluated, the start date overrides didnt get dropped)
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.daily_model"
+    ) == [(to_datetime("2020-01-31 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.weekly_model"
+    ) == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-25 23:59:59.999999")),
+    ]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.monthly_model"
+    ) == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-31 23:59:59.999999")),
+    ]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.ended_daily_model"
+    ) == [
+        (to_datetime("2020-01-18 00:00:00"), to_datetime("2020-01-18 23:59:59.999999")),
+    ]
