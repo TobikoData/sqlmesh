@@ -1135,39 +1135,51 @@ class TerminalConsole(Console):
         duration: float,
     ) -> None:
         """Updates the signal checking progress."""
-        # Format checked intervals
-        check_display = []
-        for interval in check_intervals[:3]:  # Show first 3 intervals
-            interval_str = _format_signal_interval(snapshot, interval)
-            if interval_str:
-                check_display.append(interval_str)
-        if len(check_intervals) > 3:
-            check_display.append(f"... and {len(check_intervals) - 3} more")
-
-        # Format ready intervals
-        ready_display = []
-        for interval in ready_intervals[:3]:  # Show first 3 intervals
-            interval_str = _format_signal_interval(snapshot, interval)
-            if interval_str:
-                ready_display.append(interval_str)
-        if len(ready_intervals) > 3:
-            ready_display.append(f"... and {len(ready_intervals) - 3} more")
-
-        # Display signal name
         tree = Tree(f"[{signal_idx + 1}/{total_signals}] {signal_name} {duration:.2f}s")
 
-        check_str = ", ".join(check_display) if check_display else "no intervals"
-        tree.add(f"check: {check_str}")
+        formatted_check_intervals = [_format_signal_interval(snapshot, i) for i in check_intervals]
+        formatted_ready_intervals = [_format_signal_interval(snapshot, i) for i in ready_intervals]
 
-        ready_str = ", ".join(ready_display) if ready_display else "no intervals"
+        if not formatted_check_intervals:
+            formatted_check_intervals = ["no intervals"]
+        if not formatted_ready_intervals:
+            formatted_ready_intervals = ["no intervals"]
+
+        # Color coding to help detect partial interval ranges quickly
         if ready_intervals == check_intervals:
-            ready_str = f"[green]ready: {ready_str}[/green]"
+            color = "green"
         elif ready_intervals:
-            ready_str = f"[yellow]ready: {ready_str}[/yellow]"
+            color = "yellow"
         else:
-            ready_str = f"[red]ready: {ready_str}[/red]"
+            color = "red"
 
-        tree.add(ready_str)
+        if self.verbosity < Verbosity.VERY_VERBOSE:
+            num_check_intervals = len(formatted_check_intervals)
+            if num_check_intervals > 3:
+                formatted_check_intervals = formatted_check_intervals[:3]
+                formatted_check_intervals.append(f"... and {num_check_intervals - 3} more")
+
+            num_ready_intervals = len(formatted_ready_intervals)
+            if num_ready_intervals > 3:
+                formatted_ready_intervals = formatted_ready_intervals[:3]
+                formatted_ready_intervals.append(f"... and {num_ready_intervals - 3} more")
+
+            check = ", ".join(formatted_check_intervals)
+            tree.add(f"check: {check}")
+
+            ready = ", ".join(formatted_ready_intervals)
+            tree.add(f"[{color}]ready: {ready}[/{color}]")
+        else:
+            check_tree = Tree("check")
+            tree.add(check_tree)
+            for interval in formatted_check_intervals:
+                check_tree.add(interval)
+
+            ready_tree = Tree(f"[{color}]ready[/{color}]")
+            tree.add(ready_tree)
+            for interval in formatted_ready_intervals:
+                ready_tree.add(interval)
+
         if self.signal_status_tree is not None:
             self.signal_status_tree.add(tree)
 
