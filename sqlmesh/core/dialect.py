@@ -1175,7 +1175,7 @@ def set_default_catalog(
     return table
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
     default_catalog: t.Optional[str],
