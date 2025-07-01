@@ -37,11 +37,13 @@ def load_configs(
         for p in (glob.glob(str(path)) or [str(path)])
     ]
 
-    if dotenv_path:
+    if dotenv_path and dotenv_path.exists() and dotenv_path.is_file():
         load_dotenv(dotenv_path=dotenv_path, override=True)
     else:
         for path in absolute_paths:
-            load_dotenv(dotenv_path=path / ".env", override=True)
+            env_file = path / ".env"
+            if env_file.exists() and env_file.is_file():
+                load_dotenv(dotenv_path=env_file, override=True)
 
     if not isinstance(config, str):
         if type(config) != config_type:

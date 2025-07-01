@@ -1238,6 +1238,66 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="athena"
     )
 
 
+def test_load_config_dotenv_directory_not_loaded(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("config_with_env_dir")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    # Create a .env directory instead of a file  to simulate a Python virtual environment
+    env_dir = main_dir / ".env"
+    env_dir.mkdir()
+    (env_dir / "pyvenv.cfg").touch()
+
+    # Also create a regular .env file in another project directory
+    other_dir = tmp_path_factory.mktemp("config_with_env_file")
+    other_config_path = other_dir / "config.yaml"
+    with open(other_config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    env_file = other_dir / ".env"
+    with open(env_file, "w", encoding="utf-8") as fd:
+        fd.write('TEST_ENV_VAR="from_dotenv_file"')
+
+    # Test that the .env directory doesn't cause an error and is skipped
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+        # Should succeed without loading any env vars from the directory
+        assert "TEST_ENV_VAR" not in os.environ
+
+    # Test that a real .env file is still loaded properly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[other_dir],
+        )
+        # The env var should be loaded from the file
+        assert os.environ.get("TEST_ENV_VAR") == "from_dotenv_file"
+
+
 def test_load_yaml_config_custom_dotenv_path(tmp_path_factory):
     main_dir = tmp_path_factory.mktemp("yaml_config_2")
     config_path = main_dir / "config.yaml"
