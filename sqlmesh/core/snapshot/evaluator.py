@@ -1614,6 +1614,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                     end=kwargs.get("end"),
                     execution_time=kwargs.get("execution_time"),
                 ),
+                physical_properties=kwargs.get("physical_properties", model.physical_properties),
             )
 
     def append(
@@ -1634,6 +1635,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                 end=kwargs.get("end"),
                 execution_time=kwargs.get("execution_time"),
             ),
+            physical_properties=kwargs.get("physical_properties", model.physical_properties),
         )
 
 

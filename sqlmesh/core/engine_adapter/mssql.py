@@ -198,7 +198,10 @@ class MSSQLEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        **kwargs: t.Any,
     ) -> None:
+        mssql_merge_exists = kwargs.get("physical_properties", {}).get("mssql_merge_exists")
+
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
         )
@@ -214,7 +217,6 @@ class MSSQLEngineAdapter(
 
         match_expressions = []
         if not when_matched:
-            match_condition = None
             unique_key_names = [y.name for y in unique_key]
             columns_to_types_no_keys = [c for c in columns_to_types if c not in unique_key_names]
 
@@ -225,10 +227,14 @@ class MSSQLEngineAdapter(
                 exp.column(c, MERGE_SOURCE_ALIAS) for c in columns_to_types_no_keys
             ]
 
-            match_condition = exp.Exists(
-                this=exp.select(*target_columns_no_keys).except_(
-                    exp.select(*source_columns_no_keys)
+            match_condition = (
+                exp.Exists(
+                    this=exp.select(*target_columns_no_keys).except_(
+                        exp.select(*source_columns_no_keys)
+                    )
                 )
+                if mssql_merge_exists
+                else None
             )
 
             if target_columns_no_keys:
