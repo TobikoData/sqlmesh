@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
@@ -95,8 +95,29 @@ test('working project, then broken through adding double model, then refixed', a
     await saveFile(page)
 
     // Wait for the error to appear
-    // TODO: Selector doesn't work in the linage view
-    // await window.waitForSelector('text=Error')
+    const iframes = page.locator('iframe')
+    const iframeCount = await iframes.count()
+    let errorCount = 0
+
+    for (let i = 0; i < iframeCount; i++) {
+      const iframe = iframes.nth(i)
+      const contentFrame = iframe.contentFrame()
+      if (contentFrame) {
+        const activeFrame = contentFrame.locator('#active-frame').contentFrame()
+        if (activeFrame) {
+          try {
+            await activeFrame
+              .getByText('Error: Failed to load model')
+              .waitFor({ timeout: 1000 })
+            errorCount++
+          } catch {
+            // Continue to next iframe if this one doesn't have the error
+            continue
+          }
+        }
+      }
+    }
+    expect(errorCount).toBeGreaterThan(0)
 
     // Remove the duplicated model to fix the project
     await fs.remove(path.join(tempDir, 'models', 'customers_duplicated.sql'))
@@ -104,9 +125,29 @@ test('working project, then broken through adding double model, then refixed', a
     // Save again to refresh the context
     await saveFile(page)
 
-    // Wait for the error to go away and context to reload
-    // TODO: Selector doesn't work in the linage view
-    // await page.waitForSelector('text=raw.demographics')
+    const iframes2 = page.locator('iframe')
+    const iframeCount2 = await iframes2.count()
+    let raw_demographicsCount = 0
+
+    for (let i = 0; i < iframeCount2; i++) {
+      const iframe = iframes2.nth(i)
+      const contentFrame = iframe.contentFrame()
+      if (contentFrame) {
+        const activeFrame = contentFrame.locator('#active-frame').contentFrame()
+        if (activeFrame) {
+          try {
+            await activeFrame
+              .getByText('raw.demographics')
+              .waitFor({ timeout: 1000 })
+            raw_demographicsCount++
+          } catch {
+            // Continue to next iframe if this one doesn't have the error
+            continue
+          }
+        }
+      }
+    }
+    expect(raw_demographicsCount).toBeGreaterThan(0)
   } finally {
     await stopCodeServer(context)
   }
@@ -158,8 +199,28 @@ test('bad project, double model, then fixed', async ({ page }) => {
     await openLineageView(page)
 
     // Wait for the error to go away
-    // TODO: Selector doesn't work in the linage view
-    // await page.waitForSelector('text=raw.demographics')
+    const iframes = page.locator('iframe')
+    const iframeCount = await iframes.count()
+    let raw_demographicsCount = 0
+
+    for (let i = 0; i < iframeCount; i++) {
+      const iframe = iframes.nth(i)
+      const contentFrame = iframe.contentFrame()
+      if (contentFrame) {
+        const activeFrame = contentFrame.locator('#active-frame').contentFrame()
+        if (activeFrame) {
+          try {
+            await activeFrame
+              .getByText('sushi.customers')
+              .waitFor({ timeout: 1000 })
+            raw_demographicsCount++
+          } catch {
+            continue
+          }
+        }
+      }
+    }
+    expect(raw_demographicsCount).toBeGreaterThan(0)
   } finally {
     await stopCodeServer(context)
   }
