@@ -652,6 +652,96 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
 
 
+def test_cache_path_configurations(tmp_path: pathlib.Path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(parents=True)
+    config_file = project_dir / "config.yaml"
+
+    # Test relative path
+    config_file.write_text("model_defaults:\n  dialect: duckdb\ncache_dir: .my_cache")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == project_dir / ".my_cache"
+
+    # Test absolute path
+    abs_cache = tmp_path / "abs_cache"
+    config_file.write_text(f"model_defaults:\n  dialect: duckdb\ncache_dir: {abs_cache}")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == abs_cache
+
+    # Test default
+    config_file.write_text("model_defaults:\n  dialect: duckdb")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == project_dir / ".cache"
+
+
+def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
+    sushi_paths = copy_to_temp_path("examples/sushi")
+    sushi_path = sushi_paths[0]
+    custom_cache_dir = sushi_path.parent / "custom_cache"
+
+    # Modify the existing config.py to add cache_dir to test_config
+    config_py_path = sushi_path / "config.py"
+    with open(config_py_path, "r") as f:
+        config_content = f.read()
+
+    # Add cache_dir to the test_config definition
+    config_content = config_content.replace(
+        'test_config = Config(\n    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},\n    default_gateway="in_memory",\n    plan=PlanConfig(\n        auto_categorize_changes=CategorizerConfig(\n            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF\n        )\n    ),\n    model_defaults=model_defaults,\n)',
+        f"""test_config = Config(
+    gateways={{"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())}},
+    default_gateway="in_memory",
+    plan=PlanConfig(
+        auto_categorize_changes=CategorizerConfig(
+            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF
+        )
+    ),
+    model_defaults=model_defaults,
+    cache_dir="{custom_cache_dir}",
+)""",
+    )
+
+    with open(config_py_path, "w") as f:
+        f.write(config_content)
+
+    # Create context with the test config
+    context = Context(paths=sushi_path, config="test_config")
+    custom_cache_dir = context.cache_dir
+    assert "custom_cache" in str(custom_cache_dir)
+    assert (custom_cache_dir / "optimized_query").exists()
+    assert (custom_cache_dir / "model_definition").exists()
+    assert not (custom_cache_dir / "snapshot").exists()
+
+    # Clear the cache
+    context.clear_caches()
+    assert not custom_cache_dir.exists()
+
+    plan = context.plan("dev", create_from="prod", skip_tests=True)
+    context.apply(plan)
+
+    # Cache directory should now exist again
+    assert custom_cache_dir.exists()
+    assert any(custom_cache_dir.iterdir())
+
+    # Since the cache has been deleted post loading here only snapshot should exist
+    assert (custom_cache_dir / "snapshot").exists()
+    assert not (custom_cache_dir / "optimized_query").exists()
+    assert not (custom_cache_dir / "model_definition").exists()
+
+    # New context should load same models and create the cache for optimized_query and model_definition
+    initial_model_count = len(context.models)
+    context2 = Context(paths=context.path, config="test_config")
+    cached_model_count = len(context2.models)
+
+    assert initial_model_count == cached_model_count > 0
+    assert (custom_cache_dir / "optimized_query").exists()
+    assert (custom_cache_dir / "model_definition").exists()
+    assert (custom_cache_dir / "snapshot").exists()
+
+    # Clear caches should remove the custom cache directory
+    context.clear_caches()
+    assert not custom_cache_dir.exists()
+
+
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(
         sqlmesh.core.constants,
@@ -1831,7 +1921,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         ctx.plan_builder("dev")
 
     # Case: Ensure error violations are cached if the model did not pass linting
-    cache = OptimizedQueryCache(tmp_path / c.CACHE)
+    cache = OptimizedQueryCache(ctx.cache_dir)
 
     assert_cached_violations_exist(cache, error_model)
 

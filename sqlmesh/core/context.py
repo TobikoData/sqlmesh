@@ -504,7 +504,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path)
+        update_model_schemas(
+            self.dag,
+            models=self._models,
+            cache_path=self.cache_dir,
+        )
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
@@ -640,7 +644,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            update_model_schemas(
+                self.dag,
+                models=self._models,
+                cache_path=self.cache_dir,
+            )
 
             models = self.models.values()
             for model in models:
@@ -2439,6 +2447,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             cache_path = path / c.CACHE
             if cache_path.exists():
                 rmtree(cache_path)
+        if self.cache_dir.exists():
+            rmtree(self.cache_dir)
+
         if isinstance(self.state_sync, CachingStateSync):
             self.state_sync.clear_cache()
 
@@ -2537,6 +2548,17 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
             for fqn, snapshot in self.snapshots.items()
         }
+
+    @cached_property
+    def cache_dir(self) -> Path:
+        if self.config.cache_dir:
+            cache_path = Path(self.config.cache_dir)
+            if cache_path.is_absolute():
+                return cache_path
+            return self.path / cache_path
+
+        # Default to .cache directory in the project path
+        return self.path / c.CACHE
 
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
@@ -2735,6 +2757,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             dag=dag,
             default_catalog=self.default_catalog,
             dialect=self.default_dialect,
+            cache_path=self.cache_dir,
         )
 
     def _register_notification_targets(self) -> None:

@@ -5,7 +5,6 @@ import sys
 import typing as t
 import sqlmesh.core.dialect as d
 from pathlib import Path
-from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -330,7 +329,7 @@ class DbtLoader(Loader):
             self._yaml_max_mtimes = yaml_max_mtimes
 
             target = t.cast(TargetConfig, project.context.target)
-            cache_path = loader.config_path / c.CACHE / target.name
+            cache_path = loader.context.cache_dir / target.name
             self._model_cache = ModelCache(cache_path)
 
         def get_or_load_models(

@@ -887,7 +887,7 @@ class SqlMeshLoader(Loader):
         def __init__(self, loader: SqlMeshLoader, config_path: Path):
             self._loader = loader
             self.config_path = config_path
-            self._model_cache = ModelCache(self.config_path / c.CACHE)
+            self._model_cache = ModelCache(self._loader.context.cache_dir)
 
         def get_or_load_models(
             self, target_path: Path, loader: t.Callable[[], t.List[Model]]

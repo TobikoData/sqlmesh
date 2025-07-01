@@ -10,6 +10,7 @@ from sqlglot.tokens import Token, TokenType, Tokenizer as BaseTokenizer
 from sqlglot.dialects.dialect import Dialect, DialectType
 from sqlglot.helper import seq_get
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import update_model_schemas
@@ -34,10 +35,12 @@ class Selector:
         dag: t.Optional[DAG[str]] = None,
         default_catalog: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
+        cache_path: t.Optional[Path] = None,
     ):
         self._state_reader = state_reader
         self._models = models
         self._context_path = context_path
+        self._cache_path = cache_path if cache_path else context_path / c.CACHE
         self._default_catalog = default_catalog
         self._dialect = dialect
         self._git_client = GitClient(context_path)
@@ -157,7 +160,7 @@ class Selector:
             models[model.fqn] = model
 
         if needs_update:
-            update_model_schemas(dag, models=models, context_path=self._context_path)
+            update_model_schemas(dag, models=models, cache_path=self._cache_path)
 
         return models
 
