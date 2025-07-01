@@ -77,7 +77,7 @@ def get_batched_missing_intervals(
         execution_time: t.Optional[TimeLike] = None,
     ) -> SnapshotToIntervals:
         merged_intervals = scheduler.merged_missing_intervals(start, end, execution_time)
-        return scheduler.batch_intervals(merged_intervals, mocker.Mock())
+        return scheduler.batch_intervals(merged_intervals, mocker.Mock(), mocker.Mock())
 
     return _get_batched_missing_intervals
 
