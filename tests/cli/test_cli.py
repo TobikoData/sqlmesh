@@ -2141,12 +2141,12 @@ WHERE ds::DATE BETWEEN @start_ds AND @end_ds
 
     assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
     assert "[1/1] only_first_two_ready" in result.output
-    assert "check: 2022-12-28 - 2022-12-31" in result.output
-    assert "ready: 2022-12-28 - 2022-12-29" in result.output
+    assert "Check: 2022-12-28 - 2022-12-31" in result.output
+    assert "Some ready: 2022-12-28 - 2022-12-29" in result.output
 
     assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
     assert "[1/1] none_ready" in result.output
-    assert "ready: no intervals" in result.output
+    assert "None ready: no intervals" in result.output
 
     # Test 2: Run command with start and end dates
     result = runner.invoke(
@@ -2165,13 +2165,13 @@ WHERE ds::DATE BETWEEN @start_ds AND @end_ds
 
     assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
     assert "[1/1] only_first_two_ready" in result.output
-    assert "check: 2022-12-30 - 2022-12-31" in result.output
-    assert "ready: 2022-12-30 - 2022-12-31" in result.output
+    assert "Check: 2022-12-30 - 2022-12-31" in result.output
+    assert "All ready: 2022-12-30 - 2022-12-31" in result.output
 
     assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
     assert "[1/1] none_ready" in result.output
-    assert "check: 2022-12-29 - 2022-12-31" in result.output
-    assert "ready: no intervals" in result.output
+    assert "Check: 2022-12-29 - 2022-12-31" in result.output
+    assert "None ready: no intervals" in result.output
 
     # Only one model was executed
     assert "100.0% • 1/1 • 0:00:00" in result.output

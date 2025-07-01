@@ -1144,10 +1144,13 @@ class TerminalConsole(Console):
 
         # Color coding to help detect partial interval ranges quickly
         if ready_intervals == check_intervals:
+            msg = "All ready"
             color = "green"
         elif ready_intervals:
+            msg = "Some ready"
             color = "yellow"
         else:
+            msg = "None ready"
             color = "red"
 
         if self.verbosity < Verbosity.VERY_VERBOSE:
@@ -1162,20 +1165,20 @@ class TerminalConsole(Console):
                 formatted_ready_intervals.append(f"... and {num_ready_intervals - 3} more")
 
             check = ", ".join(formatted_check_intervals)
-            tree.add(f"check: {check}")
+            tree.add(f"Check: {check}")
 
             ready = ", ".join(formatted_ready_intervals)
-            tree.add(f"[{color}]ready: {ready}[/{color}]")
+            tree.add(f"[{color}]{msg}: {ready}[/{color}]")
         else:
-            check_tree = Tree("check")
+            check_tree = Tree("Check")
             tree.add(check_tree)
             for interval in formatted_check_intervals:
                 check_tree.add(interval)
 
-            ready_tree = Tree(f"[{color}]ready[/{color}]")
+            ready_tree = Tree(f"[{color}]{msg}[/{color}]")
             tree.add(ready_tree)
             for interval in formatted_ready_intervals:
-                ready_tree.add(interval)
+                ready_tree.add(f"[{color}]{interval}[/{color}]")
 
         if self.signal_status_tree is not None:
             self.signal_status_tree.add(tree)
