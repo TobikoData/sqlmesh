@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
 from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
@@ -123,6 +123,7 @@ class EngineAdapter:
         pre_ping: bool = False,
         pretty_sql: bool = False,
         shared_connection: bool = False,
+        correlation_id: t.Optional[CorrelationId] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -144,19 +145,21 @@ class EngineAdapter:
         self._pre_ping = pre_ping
         self._pretty_sql = pretty_sql
         self._multithreaded = multithreaded
+        self.correlation_id = correlation_id
 
-    def with_log_level(self, level: int) -> EngineAdapter:
+    def with_settings(self, log_level: int, **kwargs: t.Any) -> EngineAdapter:
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
-            execute_log_level=level,
+            execute_log_level=log_level,
             register_comments=self._register_comments,
             null_connection=True,
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
             **self._extra_config,
+            **kwargs,
         )
 
         return adapter
@@ -2210,6 +2213,9 @@ class EngineAdapter:
                     sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                 else:
                     sql = t.cast(str, e)
+
+                if self.correlation_id:
+                    sql = f"/* {self.correlation_id} */ {sql}"
 
                 self._log_sql(
                     sql,

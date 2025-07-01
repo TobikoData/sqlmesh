@@ -67,6 +67,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError, ConfigError
 from sqlmesh.utils.pydantic import validate_string
@@ -1137,7 +1138,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     init_and_plan_context: t.Callable, has_view_binding: bool
 ):
     context, plan = init_and_plan_context("examples/sushi")
-    context.snapshot_evaluator.adapter.HAS_VIEW_BINDING = has_view_binding
+    context.snapshot_evaluator().adapter.HAS_VIEW_BINDING = has_view_binding
     context.apply(plan)
 
     model = context.get_model("sushi.waiter_revenue_by_day")
@@ -6793,3 +6794,29 @@ def test_scd_type_2_full_restatement_no_start_date(init_and_plan_context: t.Call
             # valid_from should be the epoch, valid_to should be NaT
             assert str(row["valid_from"]) == "1970-01-01 00:00:00"
             assert pd.isna(row["valid_to"])
+
+
+def test_plan_evaluator_correlation_id(tmp_path: Path):
+    def _correlation_id_in_sqls(correlation_id: CorrelationId, mock_logger):
+        sqls = [call[0][0] for call in mock_logger.call_args_list]
+        return any(f"/* {correlation_id} */" in sql for sql in sqls)
+
+    create_temp_file(
+        tmp_path, Path("models") / "test.sql", "MODEL (name test.a, kind FULL); SELECT 1 AS col"
+    )
+
+    # Case 1: Ensure that the correlation id (plan_id) is included in the SQL
+    with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
+        ctx = Context(paths=[tmp_path], config=Config())
+        plan = ctx.plan(auto_apply=True, no_prompts=True)
+
+    correlation_id = CorrelationId.from_plan_id(plan.plan_id)
+    assert str(correlation_id) == f"SQLMESH_PLAN: {plan.plan_id}"
+
+    assert _correlation_id_in_sqls(correlation_id, mock_logger)
+
+    # Case 2: Ensure that the previous correlation id is not included in the SQL for other operations
+    with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
+        ctx.snapshot_evaluator().adapter.execute("SELECT 1")
+
+    assert not _correlation_id_in_sqls(correlation_id, mock_logger)
