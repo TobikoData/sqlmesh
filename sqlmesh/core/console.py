@@ -1156,7 +1156,6 @@ class TerminalConsole(Console):
         # Display signal name
         tree = Tree(f"[{signal_idx + 1}/{total_signals}] {signal_name} {duration:.2f}s")
 
-        # TODO: what about full models and other cases where these lists can be empty?
         check_str = ", ".join(check_display) if check_display else "no intervals"
         tree.add(f"check: {check_str}")
 
@@ -3938,23 +3937,17 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
     return "  " + "\n".join(error_messages)
 
 
-def _format_interval(snapshot: Snapshot, interval: Interval, prefix: str = "") -> str:
+def _format_interval(snapshot: Snapshot, interval: Interval) -> str:
     """Format an interval with an optional prefix."""
-    if snapshot.is_model and (
-        snapshot.model.kind.is_incremental
-        or snapshot.model.kind.is_managed
-        or snapshot.model.kind.is_custom
-    ):
-        inclusive_interval = make_inclusive(interval[0], interval[1])
-        if snapshot.model.interval_unit.is_date_granularity:
-            base = f"{to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
-        elif inclusive_interval[0].date() == inclusive_interval[1].date():
-            # omit end date if interval start/end on same day
-            base = f"{to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
-        else:
-            base = f"{inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
-        return f"{prefix} {base}" if prefix else base
-    return ""
+    inclusive_interval = make_inclusive(interval[0], interval[1])
+    if snapshot.model.interval_unit.is_date_granularity:
+        return f"{to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
+
+    if inclusive_interval[0].date() == inclusive_interval[1].date():
+        # omit end date if interval start/end on same day
+        return f"{to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+
+    return f"{inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 def _format_signal_interval(snapshot: Snapshot, interval: Interval) -> str:
@@ -3964,7 +3957,15 @@ def _format_signal_interval(snapshot: Snapshot, interval: Interval) -> str:
 
 def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
     """Format an interval for evaluation output (with 'insert' prefix)."""
-    return _format_interval(snapshot, interval, prefix="insert")
+    if snapshot.is_model and (
+        snapshot.model.kind.is_incremental
+        or snapshot.model.kind.is_managed
+        or snapshot.model.kind.is_custom
+    ):
+        formatted_interval = _format_interval(snapshot, interval)
+        return f"insert {formatted_interval}"
+
+    return ""
 
 
 def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Optional[str]) -> str:
