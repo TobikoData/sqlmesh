@@ -99,8 +99,9 @@ function Lineage() {
       }
       // @ts-ignore
       const fileUri: string = activeFile.fileUri
-      const filePath = URI.parse(fileUri).fsPath
-      const model = models.find((m: Model) => m.full_path === filePath)
+      const filePath = URI.file(fileUri).path
+      console.log("active file", activeFile, models, filePath, models.map(m => URI.file(m.full_path).path))
+      const model = models.find((m: Model) => URI.file(m.full_path).path === filePath)
       if (model) {
         return model.name
       }
@@ -129,9 +130,11 @@ function Lineage() {
 
   React.useEffect(() => {
     const handleChangeFocusedFile = (fileUri: { fileUri: string }) => {
-      const full_path = URI.parse(fileUri.fileUri).fsPath
+      console.log('changeFocusedFile', fileUri, modelsRecord)
+      const full_path = URI.parse(fileUri.fileUri).path
+      console.log('full_path', full_path, Object.values(modelsRecord).map(m => URI.file(m.full_path).path))
       const model = Object.values(modelsRecord).find(
-        m => m.full_path === full_path,
+        m => URI.file(m.full_path).path === full_path,
       )
       if (model) {
         setSelectedModel(model.name)
