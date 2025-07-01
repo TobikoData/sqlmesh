@@ -65,7 +65,6 @@ dev = [
     "dbt-clickhouse",
     "dbt-databricks",
     "dbt-redshift",
-    "dbt-sqlserver>=1.7.0;python_version<'3.13'",
     "dbt-trino",
     "Faker",
     "google-auth",
