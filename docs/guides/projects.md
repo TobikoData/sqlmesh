@@ -27,18 +27,18 @@ To create a project from the command line, follow these steps:
 1. To scaffold a project, it is recommended that you use a python virtual environment by running the following commands:
 
     ```bash
-    python -m venv .env
+    python -m venv .venv
     ```
 
     ```bash
-    source .env/bin/activate
+    source .venv/bin/activate
     ```
 
     ```bash
     pip install sqlmesh
     ```
 
-    **Note:** When using a python virtual environment, you must ensure that it is activated first. You should see `(.env)` in your command line; if you don't, run `source .env/bin/activate` from your project directory to activate your environment.
+    **Note:** When using a python virtual environment, you must ensure that it is activated first. You should see `(.venv)` in your command line; if you don't, run `source .venv/bin/activate` from your project directory to activate your environment.
 
 1. Once you have activated your environment, run the following command and SQLMesh will build out your project:
 
