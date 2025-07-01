@@ -31,7 +31,7 @@ In this quickstart, you'll use the SQLMesh browser user interface to get up and 
 
 Before beginning, ensure that you meet all the [prerequisites](../prerequisites.md) for using SQLMesh. The SQLMesh browser UI requires additional Python libraries not included in the base SQLMesh installation.
 
-To use the UI, install SQLMesh with the `web` add-on. First, if using a python virtual environment, ensure it's activated by running `source .env/bin/activate` command from the folder used during [installation](../installation.md).
+To use the UI, install SQLMesh with the `web` add-on. First, if using a python virtual environment, ensure it's activated by running `source .venv/bin/activate` command from the folder used during [installation](../installation.md).
 
 Next, install the UI with `pip`:
 
@@ -52,7 +52,7 @@ Navigate to the directory on the command line:
 cd sqlmesh-example
 ```
 
-If using a python virtual environment, ensure it's activated by running `source .env/bin/activate` from the folder used during [installation](../installation.md).
+If using a python virtual environment, ensure it's activated by running `source .venv/bin/activate` from the folder used during [installation](../installation.md).
 
 Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
