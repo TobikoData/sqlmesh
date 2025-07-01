@@ -13,8 +13,9 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.table_diff import TableDiff
-from tests.core.engine_adapter.integration import TestContext
+from sqlmesh.utils import CorrelationId
 from pytest import FixtureRequest
+from tests.core.engine_adapter.integration import TestContext
 from tests.core.engine_adapter.integration import (
     TestContext,
     generate_pytest_params,
@@ -400,3 +401,24 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
+
+
+def test_correlation_id_in_bigquery_job_labels(ctx: TestContext):
+    model_name = ctx.table("test")
+
+    sqlmesh = ctx.create_context()
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(d.parse(f"MODEL (name {model_name}, kind FULL); SELECT 1 AS col"))
+    )
+
+    plan: Plan = sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    correlation_id = CorrelationId.from_plan_id(plan.plan_id)
+    snapshot_evaluator = sqlmesh.snapshot_evaluator(correlation_id)
+    adapter = t.cast(BigQueryEngineAdapter, snapshot_evaluator.adapter)
+
+    assert adapter.correlation_id is not None
+
+    labels = adapter._job_params.get("labels")
+    assert labels == {correlation_id.job_type.value.lower(): correlation_id.job_id}

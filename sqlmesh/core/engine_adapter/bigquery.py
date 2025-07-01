@@ -134,6 +134,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         }
         if self._extra_config.get("maximum_bytes_billed"):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
+        if self.correlation_id:
+            # BigQuery label keys must be lowercase
+            key = self.correlation_id.job_type.value.lower()
+            params["labels"] = {key: self.correlation_id.job_id}
         return params
 
     @property
