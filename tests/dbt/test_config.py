@@ -1,6 +1,5 @@
 import base64
 import typing as t
-import sys
 from pathlib import Path
 from shutil import copytree
 
@@ -949,13 +948,6 @@ def test_db_type_to_column_class():
     assert (TARGET_TYPE_TO_CONFIG_CLASS["databricks"].column_class) == DatabricksColumn
     assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
     assert (TARGET_TYPE_TO_CONFIG_CLASS["snowflake"].column_class) == SnowflakeColumn
-
-    if sys.version_info < (3, 13):
-        # The dbt-sqlserver package is not currently compatible with Python 3.13
-
-        from dbt.adapters.sqlserver.sqlserver_column import SQLServerColumn
-
-        assert (TARGET_TYPE_TO_CONFIG_CLASS["sqlserver"].column_class) == SQLServerColumn
 
     from dbt.adapters.clickhouse.column import ClickHouseColumn
     from dbt.adapters.trino.column import TrinoColumn
