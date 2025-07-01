@@ -696,7 +696,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
         )
     ),
     model_defaults=model_defaults,
-    cache_dir="{custom_cache_dir}",
+    cache_dir="{custom_cache_dir.as_posix()}",
 )""",
     )
 
