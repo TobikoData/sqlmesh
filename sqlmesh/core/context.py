@@ -2674,6 +2674,10 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _destroy(self) -> None:
+        # Create state_sync directly to avoid potential errors from get_versions() in the property
+        if not self._state_sync:
+            self._state_sync = self._new_state_sync()
+
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
             self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
