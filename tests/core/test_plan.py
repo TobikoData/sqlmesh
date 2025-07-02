@@ -87,6 +87,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(context_diff, forward_only=True)
@@ -140,6 +141,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.builder.yesterday_ds")
@@ -200,6 +202,7 @@ def test_forward_only_metadata_change_dev(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.builder.yesterday_ds")
@@ -249,6 +252,7 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
@@ -295,6 +299,7 @@ def test_forward_only_plan_categorizes_change_model_kind_as_breaking(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
@@ -343,6 +348,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, forward_only=False).build()
@@ -372,6 +378,7 @@ def test_forward_only_plan_allow_destructive_models(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -448,6 +455,7 @@ def test_forward_only_plan_allow_destructive_models(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -501,6 +509,7 @@ def test_forward_only_model_on_destructive_change(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -561,6 +570,7 @@ def test_forward_only_model_on_destructive_change(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff_2).build()
@@ -647,6 +657,7 @@ def test_forward_only_model_on_destructive_change(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff_3).build()
@@ -683,6 +694,7 @@ def test_forward_only_model_on_destructive_change_no_column_types(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     logger = logging.getLogger("sqlmesh.core.plan.builder")
@@ -721,6 +733,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = Plan(
@@ -918,6 +931,7 @@ def test_restate_symbolic_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff, restate_models=[snapshot_a.name]).build()
@@ -952,6 +966,7 @@ def test_restate_seed_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff, restate_models=[snapshot_a.name]).build()
@@ -976,6 +991,7 @@ def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -1005,6 +1021,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -1040,6 +1057,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     dev_plan_builder = PlanBuilder(context_diff, end="2022-01-03", is_dev=True)
@@ -1105,6 +1123,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -1164,6 +1183,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
@@ -1200,6 +1220,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     snapshot_b.add_interval("2022-01-01", now())
@@ -1239,6 +1260,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff).build()
@@ -1287,6 +1309,7 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff).build()
@@ -1319,6 +1342,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     # Make sure the downstream snapshot doesn't have any parents,
@@ -1356,6 +1380,7 @@ def test_broken_references_external_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     # Make sure the downstream snapshot doesn't have any parents,
@@ -1399,6 +1424,7 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -1482,6 +1508,7 @@ def test_effective_from_non_evaluatble_model(make_snapshot, mocker: MockerFixtur
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(
@@ -1518,6 +1545,7 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     with pytest.raises(
@@ -1562,6 +1590,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     # Modified the existing model.
@@ -1641,6 +1670,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
@@ -1686,6 +1716,7 @@ def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFix
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
@@ -1765,6 +1796,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff, is_dev=True).build()
@@ -1821,6 +1853,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
@@ -1861,6 +1894,7 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     PlanBuilder(context_diff).build()
@@ -1895,6 +1929,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff, restate_models=['"a"']).build()
@@ -1961,6 +1996,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(context_diff)
@@ -2175,6 +2211,7 @@ def test_add_restatements(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(
@@ -2253,6 +2290,7 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     dev_plan_start_aligned = PlanBuilder(
@@ -2357,6 +2395,7 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     def new_builder(start, end):
@@ -2423,6 +2462,7 @@ def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff).build()
@@ -2475,6 +2515,7 @@ def test_categorized_uncategorized(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(context_diff, auto_categorization_enabled=False)
@@ -2530,6 +2571,7 @@ def test_environment_previous_finalized_snapshots(make_snapshot, mocker: MockerF
         previous_finalized_snapshots=[snapshot_c.table_info, snapshot_d.table_info],
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff).build()
@@ -2585,6 +2627,7 @@ def test_metadata_change(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(context_diff, is_dev=True).build()
@@ -2627,6 +2670,7 @@ def test_plan_start_when_preview_enabled(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     default_start_for_preview = "2024-06-09"
@@ -2676,6 +2720,7 @@ def test_interval_end_per_model(make_snapshot):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(
@@ -2751,6 +2796,7 @@ def test_unaligned_start_model_with_forward_only_preview(make_snapshot):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(
@@ -2802,6 +2848,7 @@ def test_restate_production_model_in_dev(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     mock_console = mocker.Mock()
@@ -2904,6 +2951,7 @@ def test_restate_daily_to_monthly(make_snapshot, mocker: MockerFixture):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan = PlanBuilder(
@@ -3039,6 +3087,7 @@ def test_set_choice_for_forward_only_model(make_snapshot):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     plan_builder = PlanBuilder(context_diff, is_dev=True)
@@ -3085,6 +3134,7 @@ def test_user_provided_flags(sushi_context: Context):
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
     plan_builder = PlanBuilder(
         context_diff,
@@ -3181,6 +3231,7 @@ def test_plan_dates_relative_to_execution_time(
         previous_finalized_snapshots=None,
         previous_gateway_managed_virtual_layer=False,
         gateway_managed_virtual_layer=False,
+        environment_statements=[],
     )
 
     input_execution_time, input_start, input_end = input
