@@ -535,11 +535,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not snapshots:
             raise ConfigError("No models were found")
 
-        return self.create_scheduler(snapshots, self.snapshot_evaluator)
+        return self.create_scheduler(snapshots)
 
-    def create_scheduler(
-        self, snapshots: t.Iterable[Snapshot], snapshot_evaluator: SnapshotEvaluator
-    ) -> Scheduler:
+    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -550,7 +548,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            snapshot_evaluator,
+            self.snapshot_evaluator,
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
