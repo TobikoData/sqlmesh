@@ -2231,6 +2231,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
                 )
             ]
         ),
+        physical_properties={},
     )
 
 
@@ -2327,6 +2328,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
                 ),
             ],
         ),
+        physical_properties={},
     )
 
 
@@ -2478,6 +2480,7 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
                 expression=exp.Literal(this="2020-01-01", is_string=True),
             ),
         ),
+        physical_properties={},
     )
 
 

@@ -353,6 +353,7 @@ class RedshiftEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        **kwargs: t.Any,
     ) -> None:
         if self.enable_merge:
             # By default we use the logical merge unless the user has opted in
