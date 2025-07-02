@@ -403,3 +403,7 @@ class CorrelationId:
     @classmethod
     def from_plan_id(cls, plan_id: str) -> CorrelationId:
         return CorrelationId(JobType.PLAN, plan_id)
+
+    @classmethod
+    def from_run_id(cls, run_id: str) -> CorrelationId:
+        return CorrelationId(JobType.RUN, run_id)
