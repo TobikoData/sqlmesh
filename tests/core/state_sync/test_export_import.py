@@ -33,7 +33,7 @@ def state_sync(tmp_path: Path, example_project_config: Config) -> StateSync:
     return EngineAdapterStateSync(
         engine_adapter=example_project_config.get_state_connection("main").create_engine_adapter(),  # type: ignore
         schema=c.SQLMESH,
-        context_path=tmp_path,
+        cache_dir=tmp_path / c.CACHE,
     )
 
 
