@@ -11,6 +11,7 @@ import typing as t
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
+from functools import cached_property
 
 import requests
 from sqlglot.helper import seq_get
@@ -1122,7 +1123,7 @@ class GithubController:
         section = "<details>\n\n<summary>Plan flags</summary>\n\n"
         for flag_name, flag_value in user_provided_flags.items():
             section += f"- `{flag_name}` = `{flag_value}`\n"
-        section += "\n</summary>"
+        section += "\n</details>"
 
         return section
 
@@ -1203,7 +1204,7 @@ class SnapshotSummaryRecord:
             raise ValueError("Removed snapshots only have SnapshotTableInfo available")
         return self.plan.snapshots[self.snapshot_id]
 
-    @property
+    @cached_property
     def snapshot_table_info(self) -> SnapshotTableInfo:
         if self.is_removed:
             return self.plan.modified_snapshots[self.snapshot_id].table_info
