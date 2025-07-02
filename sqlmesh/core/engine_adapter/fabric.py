@@ -10,7 +10,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
 
 
-class FabricAdapter(MSSQLEngineAdapter):
+from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
+
+class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
     """
