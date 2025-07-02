@@ -105,7 +105,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
 
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(
-            engine_adapter, schema=schema, context_path=context.cache_dir, console=context.console
+            engine_adapter, schema=schema, cache_dir=context.cache_dir, console=context.console
         )
 
     def state_sync_fingerprint(self, context: GenericContext) -> str:

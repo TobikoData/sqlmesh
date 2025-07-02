@@ -22,10 +22,10 @@ if t.TYPE_CHECKING:
 def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
-    cache_path: Path,
+    cache_dir: Path,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(cache_path)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(cache_dir)
 
     _update_model_schemas(dag, models, schema, optimized_query_cache)
 

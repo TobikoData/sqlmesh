@@ -507,7 +507,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         update_model_schemas(
             self.dag,
             models=self._models,
-            cache_path=self.cache_dir,
+            cache_dir=self.cache_dir,
         )
 
         if model.dialect:
@@ -647,7 +647,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             update_model_schemas(
                 self.dag,
                 models=self._models,
-                cache_path=self.cache_dir,
+                cache_dir=self.cache_dir,
             )
 
             models = self.models.values()
@@ -2757,7 +2757,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             dag=dag,
             default_catalog=self.default_catalog,
             dialect=self.default_dialect,
-            cache_path=self.cache_dir,
+            cache_dir=self.cache_dir,
         )
 
     def _register_notification_targets(self) -> None:

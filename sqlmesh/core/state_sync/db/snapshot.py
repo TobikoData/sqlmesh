@@ -52,7 +52,7 @@ class SnapshotState:
         self,
         engine_adapter: EngineAdapter,
         schema: t.Optional[str] = None,
-        context_path: Path = Path(),
+        cache_dir: Path = Path(),
     ):
         self.engine_adapter = engine_adapter
         self.snapshots_table = exp.table_("_snapshots", db=schema)
@@ -78,7 +78,7 @@ class SnapshotState:
             "next_auto_restatement_ts": exp.DataType.build("bigint"),
         }
 
-        self._snapshot_cache = SnapshotCache(context_path)
+        self._snapshot_cache = SnapshotCache(cache_dir)
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         """Pushes snapshots to the state store.
