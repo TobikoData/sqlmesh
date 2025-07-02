@@ -2567,3 +2567,167 @@ def test_plan_min_intervals(tmp_path: Path):
     ) == [
         (to_datetime("2020-01-18 00:00:00"), to_datetime("2020-01-18 23:59:59.999999")),
     ]
+
+
+def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
+    """
+    Scenario:
+        A(hourly) <- B(daily) <- C(weekly)
+                  <- D(two-hourly)
+        E(monthly)
+
+    We need to ensure that :min_intervals covers at least :min_intervals of all downstream models for the dag to be valid
+    In this scenario, if min_intervals=1:
+        - A would need to cover at least (7 days * 24 hours) because its downstream model C is weekly. It should also be unaffected by its sibling, E
+        - B would need to cover at least 7 days because its downstream model C is weekly
+        - C would need to cover at least 1 week because min_intervals: 1
+        - D would need to cover at least 2 hours because min_intervals: 1 and should be unaffected by C
+        - E is unrelated to A, B, C and D so would need to cover 1 month satisfy min_intervals: 1.
+            - It also ensures that each tree branch has a unique cumulative date, because
+              if the dag is iterated purely in topological order with a global min date it would set A to to 1 month instead if 1 week
+    """
+
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+
+    current_time = to_datetime("2020-02-01 00:00:01")
+
+    # initial state of example project
+    context.plan(auto_apply=True, execution_time=current_time)
+
+    (tmp_path / "models" / "hourly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.hourly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt,
+        batch_size 1
+      ),
+      start '2020-01-01',
+      cron '@hourly'
+    );                        
+
+    select @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "two_hourly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.two_hourly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt        
+      ),
+      start '2020-01-01',
+      cron '0 */2 * * *'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    (tmp_path / "models" / "unrelated_monthly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.unrelated_monthly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt        
+      ),
+      start '2020-01-01',
+      cron '@monthly'
+    );                        
+
+    select @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@daily'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    (tmp_path / "models" / "weekly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.weekly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@weekly'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.daily_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    context.load()
+
+    # create a dev env for "1 day ago" with min_intervals=1
+    # this should force a weeks worth of intervals for every model
+    plan = context.plan(
+        environment="pr_env",
+        start="1 day ago",
+        execution_time=current_time,
+        min_intervals=1,
+    )
+
+    def _get_missing_intervals(name: str) -> t.List[t.Tuple[datetime, datetime]]:
+        snapshot_id = context.get_snapshot(name, raise_if_missing=True).snapshot_id
+        snapshot_intervals = next(
+            si for si in plan.missing_intervals if si.snapshot_id == snapshot_id
+        )
+        return [(to_datetime(s), to_datetime(e)) for s, e in snapshot_intervals.merged_intervals]
+
+    # We only operate on completed intervals, so given the current_time this is the range of the last completed week
+    _get_missing_intervals("sqlmesh_example.weekly_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-26 00:00:00"))
+    ]
+
+    # The daily model needs to cover the week, so it gets its start date moved back to line up
+    _get_missing_intervals("sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The hourly model needs to cover both the daily model and the weekly model, so it also gets its start date moved back to line up with the weekly model
+    assert _get_missing_intervals("sqlmesh_example.hourly_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The two-hourly model only needs to cover 2 hours and should be unaffected by the fact its sibling node has a weekly child node
+    # However it still gets backfilled for 24 hours because the plan start is 1 day and this satisfies min_intervals: 1
+    assert _get_missing_intervals("sqlmesh_example.two_hourly_model") == [
+        (to_datetime("2020-01-31 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The unrelated model has no upstream constraints, so its start date doesnt get moved to line up with the weekly model
+    # However it still gets backfilled for 24 hours because the plan start is 1 day and this satisfies min_intervals: 1
+    _get_missing_intervals("sqlmesh_example.unrelated_monthly_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # Check that actually running the plan produces the correct result, since missing intervals are re-calculated in the evaluator
+    context.apply(plan)
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.weekly_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-25 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.daily_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.hourly_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.two_hourly_model"
+    ) == [(to_datetime("2020-01-31 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.unrelated_monthly_model"
+    ) == [(to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]

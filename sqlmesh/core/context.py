@@ -2925,7 +2925,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             # If we dont have a minimum number of intervals to consider, then we dont need to adjust the start date on a per-model basis
             return {}
 
-        start_overrides = {}
+        start_overrides: t.Dict[str, datetime] = {}
         end_override_per_model = end_override_per_model or {}
 
         plan_execution_time_dt = to_datetime(plan_execution_time)
@@ -2934,14 +2934,42 @@ class GenericContext(BaseContext, t.Generic[C]):
             plan_end or plan_execution_time_dt, relative_base=plan_execution_time_dt
         )
 
-        for model_fqn in backfill_model_fqns:
+        # we need to take the DAG into account so that parent models can be expanded to cover at least as much as their children
+        # for example, A(hourly) <- B(daily)
+        # if min_intervals=1, A would have 1 hour and B would have 1 day
+        # but B depends on A so in order for B to have 1 valid day, A needs to be expanded to 24 hours
+        backfill_dag: DAG[str] = DAG()
+        for fqn in backfill_model_fqns:
+            backfill_dag.add(
+                fqn,
+                [
+                    p.name
+                    for p in snapshots_by_model_fqn[fqn].parents
+                    if p.name in backfill_model_fqns
+                ],
+            )
+
+        # start from the leaf nodes and work back towards the root because the min_start at the root node is determined by the calculated starts in the leaf nodes
+        reversed_dag = backfill_dag.reversed
+        graph = reversed_dag.graph
+
+        for model_fqn in reversed_dag:
+            # Get the earliest start from all immediate children of this snapshot
+            # this works because topological ordering guarantees that they've already been visited
+            # and we always set a start override
+            min_child_start = min(
+                [start_overrides[immediate_child_fqn] for immediate_child_fqn in graph[model_fqn]],
+                default=plan_start_dt,
+            )
+
             snapshot = snapshots_by_model_fqn.get(model_fqn)
+
             if not snapshot:
                 continue
 
             starting_point = end_override_per_model.get(model_fqn, plan_end_dt)
             if node_end := snapshot.node.end:
-                # if we dont do this, if the node end is a date (as opposed to a timestamp)
+                # if we dont do this, if the node end is a *date* (as opposed to a timestamp)
                 # we end up incorrectly winding back an extra day
                 node_end_dt = make_exclusive(node_end)
 
@@ -2956,10 +2984,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 # wind back the starting point by :min_intervals intervals to arrive at the minimum snapshot start date
                 snapshot_start = snapshot.node.cron_prev(snapshot_start)
 
-            # only consider this an override if the wound-back start date is earlier than the plan start date
-            # if it isnt then the plan already covers :min_intervals intervals for this snapshot
-            if snapshot_start < plan_start_dt:
-                start_overrides[model_fqn] = snapshot_start
+            start_overrides[model_fqn] = min(min_child_start, snapshot_start)
 
         return start_overrides
 
