@@ -12,6 +12,7 @@ if t.TYPE_CHECKING:
 
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 
+
 class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
