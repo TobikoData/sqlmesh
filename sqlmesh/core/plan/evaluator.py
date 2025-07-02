@@ -41,7 +41,6 @@ from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.date import now
 
 logger = logging.getLogger(__name__)
@@ -73,7 +72,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def __init__(
         self,
         state_sync: StateSync,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot], t.Optional[CorrelationId]], Scheduler],
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
@@ -231,9 +230,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(
-            stage.all_snapshots.values(), CorrelationId.from_plan_id(plan.plan_id)
-        )
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -254,7 +251,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots, CorrelationId.from_plan_id(plan.plan_id))
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
