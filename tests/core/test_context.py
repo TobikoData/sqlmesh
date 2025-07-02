@@ -2118,7 +2118,7 @@ def test_check_intervals(sushi_context, mocker):
     ):
         sushi_context.check_intervals(environment="dev", no_signals=False, select_models=[])
 
-    spy = mocker.spy(sqlmesh.core.snapshot.definition, "_check_ready_intervals")
+    spy = mocker.spy(sqlmesh.core.snapshot.definition, "check_ready_intervals")
     intervals = sushi_context.check_intervals(environment=None, no_signals=False, select_models=[])
 
     min_intervals = 19

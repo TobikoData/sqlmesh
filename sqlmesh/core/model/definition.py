@@ -627,14 +627,22 @@ class _Model(ModelMeta, frozen=True):
             {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
         ]
 
-    def render_signal_calls(self) -> t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]:
-        return {
+    def render_signal_calls(self) -> EvaluatableSignals:
+        python_env = self.python_env
+        env = prepare_env(python_env)
+        signals_to_kwargs = {
             name: {
                 k: seq_get(self._create_renderer(v).render() or [], 0) for k, v in kwargs.items()
             }
             for name, kwargs in self.signals
             if name
         }
+
+        return EvaluatableSignals(
+            signals_to_kwargs=signals_to_kwargs,
+            python_env=python_env,
+            prepared_python_env=env,
+        )
 
     def render_merge_filter(
         self,
@@ -1855,6 +1863,15 @@ class AuditResult(PydanticModel):
     skipped: bool = False
     """Whether or not the audit was blocking. This can be overriden by the user."""
     blocking: bool = True
+
+
+class EvaluatableSignals(PydanticModel):
+    signals_to_kwargs: t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]
+    """A mapping of signal names to the kwargs passed to the signal."""
+    python_env: t.Dict[str, Executable]
+    """The Python environment that should be used to evaluated the rendered signal calls."""
+    prepared_python_env: t.Dict[str, t.Any]
+    """The prepared Python environment that should be used to evaluated the rendered signal calls."""
 
 
 def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:

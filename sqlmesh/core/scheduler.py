@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import typing as t
+import time
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -24,6 +25,7 @@ from sqlmesh.core.snapshot import (
     snapshots_to_dag,
     Intervals,
 )
+from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
@@ -39,7 +41,16 @@ from sqlmesh.utils.date import (
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, NodeAuditsErrors, CircuitBreakerError, SQLMeshError
+from sqlmesh.utils.errors import (
+    AuditError,
+    NodeAuditsErrors,
+    CircuitBreakerError,
+    SQLMeshError,
+    SignalEvalError,
+)
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import ExecutionContext
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -304,12 +315,11 @@ class Scheduler:
                 default_catalog=self.default_catalog,
             )
 
-            intervals = snapshot.check_ready_intervals(
+            intervals = self._check_ready_intervals(
+                snapshot,
                 intervals,
                 context,
-                console=self.console,
-                default_catalog=self.default_catalog,
-                environment_naming_info=environment_naming_info,
+                environment_naming_info,
             )
             unready -= set(intervals)
 
@@ -708,6 +718,76 @@ class Scheduler:
                 )
 
         return audit_results
+
+    def _check_ready_intervals(
+        self,
+        snapshot: Snapshot,
+        intervals: Intervals,
+        context: ExecutionContext,
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> Intervals:
+        """Checks if the intervals are ready for evaluation for the given snapshot.
+
+        This implementation also includes the signal progress tracking.
+        Note that this will handle gaps in the provided intervals. The returned intervals
+        may introduce new gaps.
+
+        Args:
+            snapshot: The snapshot to check.
+            intervals: The intervals to check.
+            context: The context to use.
+            environment_naming_info: The environment naming info to use.
+
+        Returns:
+            The intervals that are ready for evaluation.
+        """
+        signals = snapshot.is_model and snapshot.model.render_signal_calls()
+
+        if not signals:
+            return intervals
+
+        self.console.start_signal_progress(
+            snapshot,
+            self.default_catalog,
+            environment_naming_info or EnvironmentNamingInfo(),
+        )
+
+        for signal_idx, (signal_name, kwargs) in enumerate(signals.signals_to_kwargs.items()):
+            # Capture intervals before signal check for display
+            intervals_to_check = merge_intervals(intervals)
+
+            signal_start_ts = time.perf_counter()
+
+            try:
+                intervals = check_ready_intervals(
+                    signals.prepared_python_env[signal_name],
+                    intervals,
+                    context,
+                    python_env=signals.python_env,
+                    dialect=snapshot.model.dialect,
+                    path=snapshot.model._path,
+                    kwargs=kwargs,
+                )
+            except SQLMeshError as e:
+                raise SignalEvalError(
+                    f"{e} '{signal_name}' for '{snapshot.model.name}' at {snapshot.model._path}"
+                )
+
+            duration = time.perf_counter() - signal_start_ts
+
+            self.console.update_signal_progress(
+                snapshot=snapshot,
+                signal_name=signal_name,
+                signal_idx=signal_idx,
+                total_signals=len(signals.signals_to_kwargs),
+                ready_intervals=merge_intervals(intervals),
+                check_intervals=intervals_to_check,
+                duration=duration,
+            )
+
+        self.console.stop_signal_progress()
+
+        return intervals
 
 
 def merged_missing_intervals(
