@@ -5653,6 +5653,28 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_should_not_override_environment_statements(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+    context.config.before_all = ["SELECT 'test_before_all';"]
+    context.load()
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+
+    context.plan(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-07",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_shouldnt_backfill_beyond_prod_intervals(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
