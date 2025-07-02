@@ -36,6 +36,7 @@ import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
 import { Divider } from '@/components/divider/Divider'
 import { type ModelLineageApiLineageModelNameGet200 } from '@/api/client'
+import { SettingsControl } from '@/components/graph/SettingsControl'
 import './Graph.css'
 
 const WITH_COLUMNS_LIMIT = 30
@@ -203,6 +204,7 @@ function ModelColumnLineage(): JSX.Element {
     showControls,
     handleError,
     setActiveNodes,
+    setWithColumns,
   } = useLineageFlow()
 
   const { setCenter } = useReactFlow()
@@ -386,7 +388,12 @@ function ModelColumnLineage(): JSX.Element {
         <Controls
           className="bg-light p-1 rounded-md !border-none !shadow-lg"
           showInteractive={false}
-        />
+        >
+          <SettingsControl
+            showColumns={withColumns}
+            onWithColumnsChange={setWithColumns}
+          />
+        </Controls>
         <Background
           variant={BackgroundVariant.Cross}
           gap={32}
