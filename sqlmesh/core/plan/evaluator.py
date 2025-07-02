@@ -51,7 +51,6 @@ class PlanEvaluator(abc.ABC):
     def evaluate(
         self,
         plan: EvaluatablePlan,
-        snapshot_evaluator: SnapshotEvaluator,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
@@ -63,7 +62,6 @@ class PlanEvaluator(abc.ABC):
 
         Args:
             plan: The plan to evaluate.
-            snapshot_evaluator: The snapshot evaluator to use.
             circuit_breaker: The circuit breaker to use.
         """
 
@@ -72,11 +70,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def __init__(
         self,
         state_sync: StateSync,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
+        snapshot_evaluator: SnapshotEvaluator,
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
         self.state_sync = state_sync
+        self.snapshot_evaluator = snapshot_evaluator
         self.create_scheduler = create_scheduler
         self.default_catalog = default_catalog
         self.console = console or get_console()
@@ -85,11 +85,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def evaluate(
         self,
         plan: EvaluatablePlan,
-        snapshot_evaluator: SnapshotEvaluator,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self._circuit_breaker = circuit_breaker
-        self.snapshot_evaluator = snapshot_evaluator
 
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
@@ -230,7 +228,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(stage.all_snapshots.values())
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -251,7 +249,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots)
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
