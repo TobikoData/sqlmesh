@@ -653,7 +653,7 @@ class _Model(ModelMeta, frozen=True):
         )
         if len(rendered_exprs) != 1:
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
-        return rendered_exprs[0].transform(d.replace_merge_table_aliases)
+        return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
         self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
