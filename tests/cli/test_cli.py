@@ -1,15 +1,16 @@
+import json
 import logging
+import pytest
 import string
+import time_machine
 from contextlib import contextmanager
 from os import getcwd, path, remove
 from pathlib import Path
 from shutil import rmtree
-from click import ClickException
-import pytest
-from click.testing import CliRunner
-import time_machine
-import json
 from unittest.mock import MagicMock
+
+from click import ClickException
+from click.testing import CliRunner
 from sqlmesh import RuntimeEnv
 from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.cli.main import cli
@@ -42,13 +43,13 @@ def disable_logging():
         logging.disable(logging.NOTSET)
 
 
-def create_example_project(temp_dir) -> None:
+def create_example_project(temp_dir, template=ProjectTemplate.DEFAULT) -> None:
     """
     Sets up CLI tests requiring a real SQLMesh project by:
         - Creating the SQLMesh example project in the temp_dir directory
         - Overwriting the config.yaml file so the duckdb database file will be created in the temp_dir directory
     """
-    init_example_project(temp_dir, engine_type="duckdb")
+    init_example_project(temp_dir, engine_type="duckdb", template=template)
     with open(temp_dir / "config.yaml", "w", encoding="utf-8") as f:
         f.write(
             f"""gateways:
@@ -2044,3 +2045,133 @@ GROUP BY
 """
 
     assert expected in cleaned_output
+
+
+@time_machine.travel(FREEZE_TIME)
+def test_signals(runner: CliRunner, tmp_path: Path):
+    create_example_project(tmp_path, template=ProjectTemplate.EMPTY)
+
+    # Create signals module
+    signals_dir = tmp_path / "signals"
+    signals_dir.mkdir(exist_ok=True)
+
+    # Create signal definitions
+    (signals_dir / "signal.py").write_text(
+        """from sqlmesh import signal
+@signal()
+def only_first_two_ready(batch):
+    if len(batch) > 2:
+        return batch[:2]
+    return batch
+
+@signal()
+def none_ready(batch):
+    return False
+"""
+    )
+
+    # Create model with signals
+    (tmp_path / "models" / "model_with_signals.sql").write_text(
+        """MODEL (
+  name sqlmesh_example.model_with_signals,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds
+  ),
+  start '2022-12-28',
+  cron '@daily',
+  signals [
+    only_first_two_ready()
+  ]
+);
+
+SELECT
+  ds::DATE as ds,
+  'test' as value
+FROM VALUES
+  ('2022-12-28'),
+  ('2022-12-29'),
+  ('2022-12-30'),
+  ('2022-12-31'),
+  ('2023-01-01')
+AS t(ds)
+WHERE ds::DATE BETWEEN @start_ds AND @end_ds
+"""
+    )
+
+    # Create model with no ready intervals
+    (tmp_path / "models" / "model_with_unready.sql").write_text(
+        """MODEL (
+  name sqlmesh_example.model_with_unready,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds
+  ),
+  start '2022-12-28',
+  cron '@daily',
+  signals [
+    none_ready()
+  ]
+);
+
+SELECT
+  ds::DATE as ds,
+  'unready' as value
+FROM VALUES
+  ('2022-12-28'),
+  ('2022-12-29'),
+  ('2022-12-30'),
+  ('2022-12-31'),
+  ('2023-01-01')
+AS t(ds)
+WHERE ds::DATE BETWEEN @start_ds AND @end_ds
+"""
+    )
+
+    # Test 1: Normal plan flow with --no-prompts --auto-apply
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "plan",
+            "--no-prompts",
+            "--auto-apply",
+        ],
+    )
+    assert result.exit_code == 0
+
+    assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
+    assert "[1/1] only_first_two_ready" in result.output
+    assert "Check: 2022-12-28 - 2022-12-31" in result.output
+    assert "Some ready: 2022-12-28 - 2022-12-29" in result.output
+
+    assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
+    assert "[1/1] none_ready" in result.output
+    assert "None ready: no intervals" in result.output
+
+    # Test 2: Run command with start and end dates
+    result = runner.invoke(
+        cli,
+        [
+            "--paths",
+            str(tmp_path),
+            "run",
+            "--start",
+            "2022-12-29",
+            "--end",
+            "2022-12-31",
+        ],
+    )
+    assert result.exit_code == 0
+
+    assert "Checking signals for sqlmesh_example.model_with_signals" in result.output
+    assert "[1/1] only_first_two_ready" in result.output
+    assert "Check: 2022-12-30 - 2022-12-31" in result.output
+    assert "All ready: 2022-12-30 - 2022-12-31" in result.output
+
+    assert "Checking signals for sqlmesh_example.model_with_unready" in result.output
+    assert "[1/1] none_ready" in result.output
+    assert "Check: 2022-12-29 - 2022-12-31" in result.output
+    assert "None ready: no intervals" in result.output
+
+    # Only one model was executed
+    assert "100.0% • 1/1 • 0:00:00" in result.output

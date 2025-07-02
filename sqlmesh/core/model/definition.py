@@ -653,7 +653,7 @@ class _Model(ModelMeta, frozen=True):
         )
         if len(rendered_exprs) != 1:
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
-        return rendered_exprs[0].transform(d.replace_merge_table_aliases)
+        return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
         self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
@@ -2431,7 +2431,7 @@ def _create_model(
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
 
-    statements = []
+    statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
@@ -2453,7 +2453,7 @@ def _create_model(
             statements.extend(property_values.expressions)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(gen(e) for e in statements)
+        *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
     if jinja_macros:

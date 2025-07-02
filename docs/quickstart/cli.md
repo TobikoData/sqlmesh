@@ -41,7 +41,7 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
-If using a Python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
+If using a Python virtual environment, ensure it's activated first by running the `source .venv/bin/activate` command from the folder used during [installation](../installation.md).
 
 ### 1.1 Initialize the project
 

@@ -75,7 +75,7 @@ class MacroExtractor(Parser):
         """
         self.reset()
         self.sql = jinja
-        self._tokens = Dialect.get_or_raise(dialect).tokenizer.tokenize(jinja)
+        self._tokens = Dialect.get_or_raise(dialect).tokenize(jinja)
         self._index = -1
         self._advance()
 

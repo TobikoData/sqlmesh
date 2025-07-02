@@ -68,6 +68,7 @@ Prefixes:
 Postfixes:
 
 * dt - A python datetime object that converts into a native SQL `TIMESTAMP` (or SQL engine equivalent)
+* dtntz - A python datetime object that converts into a native SQL `TIMESTAMP WITHOUT TIME ZONE` (or SQL engine equivalent)
 * date - A python date object that converts into a native SQL `DATE`
 * ds - A date string with the format: '%Y-%m-%d'
 * ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'
@@ -82,6 +83,11 @@ All predefined temporal macro variables:
     * @start_dt
     * @end_dt
     * @execution_dt
+
+* dtntz
+    * @start_dtntz
+    * @end_dtntz
+    * @execution_dtntz
 
 * date
     * @start_date

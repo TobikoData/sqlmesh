@@ -25,3 +25,5 @@ tsconfig.build.json
 src/test/**
 tests/**
 .claude
+.idea
+.test_setup

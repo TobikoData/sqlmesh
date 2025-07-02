@@ -84,6 +84,12 @@ def _sqlmesh_version() -> str:
     type=str,
     help="The directory to write log files to.",
 )
+@click.option(
+    "--dotenv",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to a custom .env file to load environment variables.",
+    envvar="SQLMESH_DOTENV_PATH",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -95,6 +101,7 @@ def cli(
     debug: bool = False,
     log_to_stdout: bool = False,
     log_file_dir: t.Optional[str] = None,
+    dotenv: t.Optional[Path] = None,
 ) -> None:
     """SQLMesh command line tool."""
     if "--help" in sys.argv:
@@ -118,7 +125,7 @@ def cli(
     )
     configure_console(ignore_warnings=ignore_warnings)
 
-    configs = load_configs(config, Context.CONFIG_TYPE, paths)
+    configs = load_configs(config, Context.CONFIG_TYPE, paths, dotenv_path=dotenv)
     log_limit = list(configs.values())[0].log_limit
 
     remove_excess_logs(log_file_dir, log_limit)

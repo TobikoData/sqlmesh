@@ -34,6 +34,7 @@ from sqlmesh.utils.pydantic import (
     get_dialect,
     validate_string,
     positive_int_validator,
+    validate_expression,
 )
 
 
@@ -140,7 +141,6 @@ class ModelKindMixin:
             self.is_incremental_unmanaged
             or self.is_incremental_by_unique_key
             or self.is_incremental_by_partition
-            or self.is_scd_type_2
             or self.is_managed
             or self.is_full
             or self.is_view
@@ -468,15 +468,20 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
             return v
         if isinstance(v, list):
             v = " ".join(v)
+
+        dialect = get_dialect(info.data)
+
         if isinstance(v, str):
             # Whens wrap the WHEN clauses, but the parentheses aren't parsed by sqlglot
             v = v.strip()
             if v.startswith("("):
                 v = v[1:-1]
 
-            return t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=get_dialect(info.data)))
+            v = t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=dialect))
+        else:
+            v = t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
-        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases))
+        return validate_expression(v, dialect=dialect)
 
     @field_validator("merge_filter", mode="before")
     def _merge_filter_validator(
@@ -486,11 +491,16 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     ) -> t.Optional[exp.Expression]:
         if v is None:
             return v
+
+        dialect = get_dialect(info.data)
+
         if isinstance(v, str):
             v = v.strip()
-            return d.parse_one(v, dialect=get_dialect(info.data))
+            v = d.parse_one(v, dialect=dialect)
+        else:
+            v = v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
-        return v.transform(d.replace_merge_table_aliases)
+        return validate_expression(v, dialect=dialect)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

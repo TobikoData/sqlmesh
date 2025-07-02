@@ -46,7 +46,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         self, *args: t.Any, s3_warehouse_location: t.Optional[str] = None, **kwargs: t.Any
     ):
         # Need to pass s3_warehouse_location to the superclass so that it goes into _extra_config
-        # which means that EngineAdapter.with_log_level() keeps this property when it makes a clone
+        # which means that EngineAdapter.with_settings() keeps this property when it makes a clone
         super().__init__(*args, s3_warehouse_location=s3_warehouse_location, **kwargs)
         self.s3_warehouse_location = s3_warehouse_location
 

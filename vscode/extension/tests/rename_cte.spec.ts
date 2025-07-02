@@ -1,222 +1,196 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { findAllReferences, renameSymbol, SUSHI_SOURCE_PATH } from './utils'
+import { startCodeServer, stopCodeServer } from './utils_code_server'
 
-// Keyboard shortcuts
-const RENAME_KEY = 'F2'
-const FIND_ALL_REFERENCES_KEY =
-  process.platform === 'darwin' ? 'Alt+Shift+F12' : 'Ctrl+Shift+F12'
-
-// Helper function to set up a test environment
-async function setupTestEnvironment() {
+async function setupTestEnvironment({ page }: { page: Page }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
-  const { window, close } = await startVSCode(tempDir)
+
+  const context = await startCodeServer({
+    tempDir,
+    placeFileWithPythonInterpreter: true,
+  })
+
+  // Navigate to code-server instance
+  await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
   // Navigate to customers.sql which contains CTEs
-  await window.waitForSelector('text=models')
-  await window
+  await page.waitForSelector('text=models')
+  await page
     .getByRole('treeitem', { name: 'models', exact: true })
     .locator('a')
     .click()
-  await window
+  await page
     .getByRole('treeitem', { name: 'customers.sql', exact: true })
     .locator('a')
     .click()
-  await window.waitForSelector('text=grain')
-  await window.waitForSelector('text=Loaded SQLMesh Context')
+  await page.waitForSelector('text=grain')
+  await page.waitForSelector('text=Loaded SQLMesh Context')
 
-  return { window, close, tempDir }
+  return { context }
 }
 
 test.describe('CTE Rename', () => {
-  test('Rename CTE from definition', async () => {
-    const { window, close, tempDir } = await setupTestEnvironment()
+  test('Rename CTE from definition', async ({ page }) => {
+    const { context } = await setupTestEnvironment({ page })
 
     try {
       // Click on the inner CTE definition "current_marketing" (not the outer one)
-      await window.locator('text=WITH current_marketing AS').click({
+      await page.locator('text=WITH current_marketing AS').click({
         position: { x: 100, y: 5 },
       })
 
-      // Press F2 to trigger rename
-      await window.keyboard.press(RENAME_KEY)
-      await expect(window.locator('text=Rename')).toBeVisible()
-      const renameInput = window.locator('input:focus')
-      await expect(renameInput).toBeVisible()
+      // Open rename
+      await renameSymbol(page)
+      await page.waitForSelector('text=Rename')
+      await page.waitForSelector('input:focus')
 
       // Type new name and confirm
-      await window.keyboard.type('new_marketing')
-      await window.keyboard.press('Enter')
-      await window.waitForTimeout(1000)
+      await page.keyboard.type('new_marketing')
+      await page.keyboard.press('Enter')
 
       // Verify the rename was applied
-      await expect(window.locator('text=WITH new_marketing AS')).toBeVisible()
+      await page.waitForSelector('text=WITH new_marketing AS')
     } finally {
-      await close()
-      await fs.remove(tempDir)
+      await stopCodeServer(context)
     }
   })
 
-  test('Rename CTE from usage', async () => {
-    const { window, close, tempDir } = await setupTestEnvironment()
+  test('Rename CTE from usage', async ({ page }) => {
+    const { context } = await setupTestEnvironment({ page })
 
     try {
       // Click on CTE usage in FROM clause
-      await window.locator('text=FROM current_marketing_outer').click({
+      await page.locator('text=FROM current_marketing_outer').click({
         position: { x: 80, y: 5 },
       })
 
-      // Press F2 to trigger rename
-      await window.keyboard.press(RENAME_KEY)
-
-      // Wait for rename input to appear
-      await expect(window.locator('text=Rename')).toBeVisible()
-      const renameInput = window.locator('input:focus')
-      await expect(renameInput).toBeVisible()
+      // Open rename
+      await renameSymbol(page)
+      await page.waitForSelector('text=Rename')
+      await page.waitForSelector('input:focus')
 
       // Type new name
-      await window.keyboard.type('updated_marketing_out')
+      await page.keyboard.type('updated_marketing_out')
 
       // Confirm rename
-      await window.keyboard.press('Enter')
-      await window.waitForTimeout(1000)
+      await page.keyboard.press('Enter')
 
-      // Verify both definition and usage were renamed
-      await expect(
-        window.locator('text=WITH updated_marketing_out AS'),
-      ).toBeVisible()
-      await expect(
-        window.locator('text=FROM updated_marketing_out'),
-      ).toBeVisible()
+      await page.waitForSelector('text=WITH updated_marketing_out AS')
+      await page.waitForSelector('text=FROM updated_marketing_out')
     } finally {
-      await close()
-      await fs.remove(tempDir)
+      await stopCodeServer(context)
     }
   })
 
-  test('Cancel CTE rename', async () => {
-    const { window, close, tempDir } = await setupTestEnvironment()
+  test('Cancel CTE rename', async ({ page }) => {
+    const { context } = await setupTestEnvironment({ page })
 
     try {
       // Click on the CTE to rename
-      await window.locator('text=current_marketing_outer').first().click()
+      await page.locator('text=current_marketing_outer').first().click()
 
-      // Press F2 to trigger rename
-      await window.keyboard.press(RENAME_KEY)
-
-      // Wait for rename input to appear
-      await expect(window.locator('text=Rename')).toBeVisible()
-      const renameInput = window.locator('input:focus')
-      await expect(renameInput).toBeVisible()
+      // Open rename
+      await renameSymbol(page)
+      await page.waitForSelector('text=Rename')
+      await page.waitForSelector('input:focus')
 
       // Type new name but cancel
-      await window.keyboard.type('cancelled_name')
-      await window.keyboard.press('Escape')
+      await page.keyboard.type('cancelled_name')
+      await page.keyboard.press('Escape')
 
       // Wait for UI to update
-      await window.waitForTimeout(500)
+      await page.waitForTimeout(500)
 
       // Verify CTE name was NOT changed
       await expect(
-        window.locator('text=current_marketing_outer').first(),
+        page.locator('text=current_marketing_outer').first(),
       ).toBeVisible()
-      await expect(window.locator('text=cancelled_name')).not.toBeVisible()
+      await expect(page.locator('text=cancelled_name')).not.toBeVisible()
     } finally {
-      await close()
-      await fs.remove(tempDir)
+      await stopCodeServer(context)
     }
   })
 
-  test('Rename CTE updates all references', async () => {
-    const { window, close, tempDir } = await setupTestEnvironment()
+  test('Rename CTE updates all references', async ({ page }) => {
+    const { context } = await setupTestEnvironment({ page })
 
     try {
       // Click on the CTE definition
-      await window.locator('text=WITH current_marketing AS').click({
+      await page.locator('text=WITH current_marketing AS').click({
         position: { x: 100, y: 5 },
       })
 
-      // Press F2 to trigger rename
-      await window.keyboard.press(RENAME_KEY)
-      // Wait for rename input to appear
-      await expect(window.locator('text=Rename')).toBeVisible()
-      const renameInput = window.locator('input:focus')
-      await expect(renameInput).toBeVisible()
+      // Open rename
+      await renameSymbol(page)
+      await page.waitForSelector('text=Rename')
+      await page.waitForSelector('input:focus')
 
       // Type new name and confirm
-      await window.keyboard.type('renamed_cte')
-      await window.keyboard.press('Enter')
+      await page.keyboard.type('renamed_cte')
+      await page.keyboard.press('Enter')
 
       // Click on the renamed CTE
-      await window.locator('text=WITH renamed_cte AS').click({
+      await page.locator('text=WITH renamed_cte AS').click({
         position: { x: 100, y: 5 },
       })
 
       // Find all references using keyboard shortcut
-      await window.keyboard.press(FIND_ALL_REFERENCES_KEY)
+      await findAllReferences(page)
 
       // Verify references panel shows all occurrences
-      await window.waitForSelector('text=References')
-      await expect(window.locator('text=customers.sql').first()).toBeVisible()
-      await window.waitForSelector('text=WITH renamed_cte AS')
-      await window.waitForSelector('text=renamed_cte.*')
-      await window.waitForSelector('text=FROM renamed_cte')
-      await window.waitForSelector('text=renamed_cte.customer_id != 100')
+      await page.waitForSelector('text=References')
+      await expect(page.locator('text=customers.sql').first()).toBeVisible()
+      await page.waitForSelector('text=WITH renamed_cte AS')
+      await page.waitForSelector('text=renamed_cte.*')
+      await page.waitForSelector('text=FROM renamed_cte')
+      await page.waitForSelector('text=renamed_cte.customer_id != 100')
     } finally {
-      await close()
-      await fs.remove(tempDir)
+      await stopCodeServer(context)
     }
   })
 
-  test('Rename CTE with preview', async () => {
-    const { window, close, tempDir } = await setupTestEnvironment()
+  test('Rename CTE with preview', async ({ page }) => {
+    const { context } = await setupTestEnvironment({ page })
 
     try {
       // Click on the CTE to rename
-      await window.locator('text=WITH current_marketing AS').click({
+      await page.locator('text=WITH current_marketing AS').click({
         position: { x: 100, y: 5 },
       })
 
-      // Press F2 to trigger rename
-      await window.keyboard.press(RENAME_KEY)
-      await expect(window.locator('text=Rename')).toBeVisible()
-      const renameInput = window.locator('input:focus')
-      await expect(renameInput).toBeVisible()
+      // Open rename
+      await renameSymbol(page)
+      await page.waitForSelector('text=Rename')
+      await page.waitForSelector('input:focus')
 
       // Type new name
-      await window.keyboard.type('preview_marketing')
+      await page.keyboard.type('preview_marketing')
 
       // Press Cmd+Enter (Meta+Enter) to preview changes
-      await window.keyboard.press('Meta+Enter')
+      await page.keyboard.press(
+        process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter',
+      )
 
       // Verify preview UI is showing
-      await expect(
-        window.locator('text=Refactor Preview').first(),
-      ).toBeVisible()
-      await expect(window.locator('text=Apply').first()).toBeVisible()
-      await expect(window.locator('text=Discard').first()).toBeVisible()
+      await expect(page.locator('text=Refactor Preview').first()).toBeVisible()
+      await expect(page.locator('text=Apply').first()).toBeVisible()
+      await expect(page.locator('text=Discard').first()).toBeVisible()
 
       // Verify the preview shows both old and new names
-      await expect(
-        window.locator('text=current_marketing').first(),
-      ).toBeVisible()
-      await expect(
-        window.locator('text=preview_marketing').first(),
-      ).toBeVisible()
+      await expect(page.locator('text=current_marketing').first()).toBeVisible()
+      await expect(page.locator('text=preview_marketing').first()).toBeVisible()
 
       // Apply the changes
-      await window.locator('text=Apply').click()
+      await page.locator('text=Apply').click()
 
       // Verify the rename was applied
-      await expect(
-        window.locator('text=WITH preview_marketing AS'),
-      ).toBeVisible()
+      await expect(page.locator('text=WITH preview_marketing AS')).toBeVisible()
     } finally {
-      await close()
-      await fs.remove(tempDir)
+      await stopCodeServer(context)
     }
   })
 })

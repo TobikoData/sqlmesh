@@ -878,7 +878,7 @@ def parse(
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
 
-    tokens = dialect.tokenizer.tokenize(sql)
+    tokens = dialect.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
 
@@ -1175,7 +1175,7 @@ def set_default_catalog(
     return table
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
     default_catalog: t.Optional[str],
@@ -1388,17 +1388,27 @@ def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
 
-def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
+def replace_merge_table_aliases(
+    expression: exp.Expression, dialect: t.Optional[str] = None
+) -> exp.Expression:
     """
     Resolves references from the "source" and "target" tables (or their DBT equivalents)
     with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
     """
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
+    normalized_merge_source_alias = quote_identifiers(
+        normalize_identifiers(exp.to_identifier(MERGE_SOURCE_ALIAS), dialect), dialect=dialect
+    )
+
+    normalized_merge_target_alias = quote_identifiers(
+        normalize_identifiers(exp.to_identifier(MERGE_TARGET_ALIAS), dialect), dialect=dialect
+    )
+
     if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
         if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS))
+            first_part.replace(normalized_merge_target_alias)
         elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS))
+            first_part.replace(normalized_merge_source_alias)
 
     return expression
