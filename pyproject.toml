@@ -103,6 +103,7 @@ dev = [
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
 duckdb = []
+fabric = ["pyodbc"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
