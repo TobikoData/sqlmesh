@@ -451,7 +451,14 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
-            self._snapshot_evaluator = self._create_snapshot_evaluator(log_level=logging.INFO)
+            self._snapshot_evaluator = SnapshotEvaluator(
+                {
+                    gateway: adapter.with_settings(log_level=logging.INFO)
+                    for gateway, adapter in self.engine_adapters.items()
+                },
+                ddl_concurrent_tasks=self.concurrent_tasks,
+                selected_gateway=self.selected_gateway,
+            )
 
         return self._snapshot_evaluator
 
@@ -1931,7 +1938,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_settings(logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(log_level=logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -3063,16 +3070,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
 
         return model_tests
-
-    def _create_snapshot_evaluator(self, **kwargs: t.Any) -> SnapshotEvaluator:
-        return SnapshotEvaluator(
-            {
-                gateway: adapter.with_settings(**kwargs)
-                for gateway, adapter in self.engine_adapters.items()
-            },
-            ddl_concurrent_tasks=self.concurrent_tasks,
-            selected_gateway=self.selected_gateway,
-        )
 
 
 class Context(GenericContext[Config]):

@@ -89,8 +89,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self._circuit_breaker = circuit_breaker
+        self.snapshot_evaluator = self.snapshot_evaluator.set_correlation_id(
+            CorrelationId.from_plan_id(plan.plan_id)
+        )
 
-        self.set_correlation_id(CorrelationId.from_plan_id(plan.plan_id))
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
@@ -350,13 +352,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self, stage: stages.FinalizeEnvironmentStage, plan: EvaluatablePlan
     ) -> None:
         self.state_sync.finalize(plan.environment)
-
-    def set_correlation_id(self, correlation_id: CorrelationId) -> None:
-        for key, adapter in self.snapshot_evaluator.adapters.items():
-            if correlation_id != adapter.correlation_id:
-                self.snapshot_evaluator.adapters[key] = adapter.with_settings(
-                    correlation_id=correlation_id
-                )
 
     def _promote_snapshots(
         self,
