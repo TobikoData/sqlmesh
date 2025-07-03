@@ -1,9 +1,10 @@
+import { test as setup } from '@playwright/test'
 import { execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
 import { createHash } from 'crypto'
 
-async function globalSetup() {
+setup('prepare extension', async () => {
   console.log('Setting up extension for Playwright tests...')
 
   const extensionDir = path.join(__dirname, '..')
@@ -70,11 +71,9 @@ async function globalSetup() {
     // Clean up temporary user data directory
     await fs.remove(tempUserDataDir)
   }
-}
+})
 
 async function hashFile(filePath: string): Promise<string> {
   const fileBuffer = await fs.readFile(filePath)
   return createHash('sha256').update(fileBuffer).digest('hex')
 }
-
-export default globalSetup
