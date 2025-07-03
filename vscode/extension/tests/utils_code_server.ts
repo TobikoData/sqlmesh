@@ -105,7 +105,7 @@ export async function startCodeServer({
       reject(new Error('Code-server failed to start within timeout'))
     }, 30000)
 
-    codeServerProcess.stdout?.on('data', data => {
+    codeServerProcess.stdout?.on('data', (data: Buffer) => {
       output += data.toString()
       if (output.includes('HTTP server listening on')) {
         clearTimeout(timeout)
@@ -113,7 +113,7 @@ export async function startCodeServer({
       }
     })
 
-    codeServerProcess.stderr?.on('data', data => {
+    codeServerProcess.stderr?.on('data', (data: Buffer) => {
       console.error('Code-server stderr:', data.toString())
     })
 

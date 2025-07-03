@@ -173,8 +173,8 @@ test('signed in and not installed shows installation window', async ({
       .click()
 
     await page.waitForSelector('text=Installing enterprise python package')
-    expect(
-      await page.locator('text=Installing enterprise python package'),
+    await expect(
+      page.locator('text=Installing enterprise python package'),
     ).toHaveCount(2)
 
     await page.waitForSelector('text=Loaded SQLMesh context')
