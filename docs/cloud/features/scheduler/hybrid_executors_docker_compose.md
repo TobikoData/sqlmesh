@@ -19,7 +19,7 @@ Both executors must be properly configured with environment variables to connect
 
 - Access to a [data warehouse supported by Tobiko Cloud](../../../integrations/overview.md#execution-engines) (e.g., Postgres, Snowflake, BigQuery)
 - Docker and Docker Compose
-- A Tobiko Cloud account with [client ID and client secret](../single_sign_on.md#provisioning-client-credentials)
+- A Tobiko Cloud account with [client ID and client secret](../security/single_sign_on.md#provisioning-client-credentials)
 
 ## Quick start guide
 
