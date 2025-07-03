@@ -1,4 +1,4 @@
-import { Menu } from '@headlessui/react'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { CheckIcon } from '@heroicons/react/24/outline'
 import { CogIcon } from '@/components/graph/CogIcon'
 import clsx from 'clsx'
@@ -17,7 +17,7 @@ export function SettingsControl({
       as="div"
       className="relative"
     >
-      <Menu.Button
+      <MenuButton
         className="react-flow__controls-button"
         title="Settings"
       >
@@ -25,31 +25,26 @@ export function SettingsControl({
           className="h-3 w-3"
           aria-hidden="true"
         />
-      </Menu.Button>
-      <Menu.Items className="absolute bottom-0 left-full ml-2 w-56 origin-bottom-left divide-y bg-theme shadow-lg focus:outline-none z-50">
-        <Menu.Item>
-          {({ active }) => (
-            <button
-              className={clsx(
-                'group flex w-full items-center px-2 py-1 text-sm',
-                'text-[var(--vscode-button-foreground)]',
-                active
-                  ? 'bg-[var(--vscode-button-background)]'
-                  : 'bg-[var(--vscode-button-hoverBackground)]',
-              )}
-              onClick={() => onWithColumnsChange(!showColumns)}
-            >
-              <span className="flex-1 text-left">Show Columns</span>
-              {showColumns && (
-                <CheckIcon
-                  className="h-4 w-4 text-primary-500"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
+      </MenuButton>
+      <MenuItems className="absolute bottom-0 left-full ml-2 w-56 origin-bottom-left divide-y bg-theme shadow-lg focus:outline-none z-50">
+        <MenuItem
+          as="button"
+          className={clsx(
+            'group flex w-full items-center px-2 py-1 text-sm',
+            'text-[var(--vscode-button-foreground)]',
+            'hover:bg-[var(--vscode-button-background)] bg-[var(--vscode-button-hoverBackground)]',
           )}
-        </Menu.Item>
-      </Menu.Items>
+          onClick={() => onWithColumnsChange(!showColumns)}
+        >
+          <span className="flex-1 text-left">Show Columns</span>
+          {showColumns && (
+            <CheckIcon
+              className="h-4 w-4 text-primary-500"
+              aria-hidden="true"
+            />
+          )}
+        </MenuItem>
+      </MenuItems>
     </Menu>
   )
 }
