@@ -34,7 +34,6 @@ nav:
       - guides/tablediff.md
       - guides/linter.md
       - guides/ui.md
-      - guides/observer.md
     - Advanced usage:
       - guides/customizing_sqlmesh.md
       - guides/signals.md
