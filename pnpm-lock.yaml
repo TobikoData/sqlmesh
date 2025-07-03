@@ -75,9 +75,6 @@ importers:
       ts-loader:
         specifier: ^9.5.2
         version: 9.5.2(typescript@5.8.3)(webpack@5.99.8(esbuild@0.25.5))
-      tsx:
-        specifier: ^4.19.4
-        version: 4.19.4
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
