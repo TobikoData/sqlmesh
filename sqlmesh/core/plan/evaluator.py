@@ -38,6 +38,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
@@ -71,7 +72,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
@@ -89,6 +90,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     ) -> None:
         self._circuit_breaker = circuit_breaker
 
+        self.set_correlation_id(CorrelationId.from_plan_id(plan.plan_id))
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
@@ -228,7 +230,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(stage.all_snapshots.values())
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -249,7 +251,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots)
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
@@ -348,6 +350,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self, stage: stages.FinalizeEnvironmentStage, plan: EvaluatablePlan
     ) -> None:
         self.state_sync.finalize(plan.environment)
+
+    def set_correlation_id(self, correlation_id: CorrelationId) -> None:
+        for key, adapter in self.snapshot_evaluator.adapters.items():
+            if correlation_id != adapter.correlation_id:
+                self.snapshot_evaluator.adapters[key] = adapter.with_settings(
+                    correlation_id=correlation_id
+                )
 
     def _promote_snapshots(
         self,

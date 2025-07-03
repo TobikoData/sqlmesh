@@ -451,14 +451,8 @@ class GenericContext(BaseContext, t.Generic[C]):
     @property
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
-            self._snapshot_evaluator = SnapshotEvaluator(
-                {
-                    gateway: adapter.with_settings(log_level=logging.INFO)
-                    for gateway, adapter in self.engine_adapters.items()
-                },
-                ddl_concurrent_tasks=self.concurrent_tasks,
-                selected_gateway=self.selected_gateway,
-            )
+            self._snapshot_evaluator = self._create_snapshot_evaluator(log_level=logging.INFO)
+
         return self._snapshot_evaluator
 
     def execution_context(
@@ -520,7 +514,11 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return model
 
-    def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
+    def scheduler(
+        self,
+        environment: t.Optional[str] = None,
+        snapshot_evaluator: t.Optional[SnapshotEvaluator] = None,
+    ) -> Scheduler:
         """Returns the built-in scheduler.
 
         Args:
@@ -542,9 +540,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not snapshots:
             raise ConfigError("No models were found")
 
-        return self.create_scheduler(snapshots)
+        return self.create_scheduler(snapshots, snapshot_evaluator or self.snapshot_evaluator)
 
-    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
+    def create_scheduler(
+        self, snapshots: t.Iterable[Snapshot], snapshot_evaluator: SnapshotEvaluator
+    ) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -555,7 +555,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            self.snapshot_evaluator,
+            snapshot_evaluator,
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
@@ -3063,6 +3063,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             model_tests.extend(loader.load_model_tests(tests=tests, patterns=patterns))
 
         return model_tests
+
+    def _create_snapshot_evaluator(self, **kwargs: t.Any) -> SnapshotEvaluator:
+        return SnapshotEvaluator(
+            {
+                gateway: adapter.with_settings(**kwargs)
+                for gateway, adapter in self.engine_adapters.items()
+            },
+            ddl_concurrent_tasks=self.concurrent_tasks,
+            selected_gateway=self.selected_gateway,
+        )
 
 
 class Context(GenericContext[Config]):
