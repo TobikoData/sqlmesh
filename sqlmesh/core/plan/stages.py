@@ -361,11 +361,14 @@ class PlanStagesBuilder:
             # Otherwise, unpause right after updatig the environment record.
             stages.append(UnpauseStage(promoted_snapshots=promoted_snapshots))
 
+        full_demoted_snapshots = self.state_reader.get_snapshots(
+            s.snapshot_id for s in demoted_snapshots if s.snapshot_id not in snapshots
+        )
         virtual_layer_update_stage = self._get_virtual_layer_update_stage(
             promoted_snapshots,
             demoted_snapshots,
             demoted_environment_naming_info,
-            snapshots,
+            snapshots | full_demoted_snapshots,
             deployability_index,
         )
         if virtual_layer_update_stage:
