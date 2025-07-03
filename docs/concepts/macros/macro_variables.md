@@ -132,7 +132,8 @@ SQLMesh provides additional predefined variables used to modify model behavior b
     * 'loading' - The project is being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The model query logic is being evaluated.
-    * 'promoting' - The model is being promoted in the target environment (virtual layer update).
+    * 'promoting' - The model is being promoted in the target environment (view created during virtual layer update).
+    * 'demoting' - The model is being demoted in the target environment (view dropped during virtual layer update).
     * 'auditing' - The audit is being run.
     * 'testing' - The model query logic is being evaluated in the context of a unit test.
 * @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).
