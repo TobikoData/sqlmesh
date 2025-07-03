@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
 )
 
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -31,6 +32,32 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_TRANSACTIONS = False
     MAX_IDENTIFIER_LENGTH = None
+
+    def columns(
+        self, table_name: TableName, include_pseudo_columns: bool = False
+    ) -> t.Dict[str, exp.DataType]:
+        """Fetches column names and types for the target_table"""
+        table = exp.to_table(table_name)
+
+        sql = (
+            exp.select("rw_columns.name AS column_name", "rw_columns.data_type AS data_type")
+            .from_("rw_catalog.rw_columns")
+            .join("rw_catalog.rw_relations", on="rw_relations.id=rw_columns.relation_id")
+            .join("rw_catalog.rw_schemas", on="rw_schemas.id=rw_relations.schema_id")
+            .where(exp.column("rw_relations.name", quoted=False).eq(table.alias_or_name))
+        )
+
+        if table.args.get("db"):
+            sql = sql.where(exp.column("rw_schemas.name").eq(table.args["db"].name))
+
+        self.execute(sql)
+        resp = self.cursor.fetchall()
+        if not resp:
+            raise SQLMeshError(f"Could not get columns for table {table_name}. Table not found.")
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
+            for column_name, data_type in resp
+        }
 
     def _truncate_table(self, table_name: TableName) -> None:
         return self.execute(exp.Delete(this=exp.to_table(table_name)))
