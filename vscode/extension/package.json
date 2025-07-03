@@ -153,7 +153,6 @@
     "esbuild": "^0.25.5",
     "eslint": "^9.29.0",
     "ts-loader": "^9.5.2",
-    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.0",
     "vitest": "^3.2.3"
