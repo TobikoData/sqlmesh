@@ -1,6 +1,7 @@
-import { isFalse, isNil, isStringEmptyOrNil, toID } from '@/utils/index'
+import { isFalse, isNil } from '@/utils/index'
 import { type Lineage } from '@/domain/lineage'
 import type { ModelEncodedFQN } from '@/domain/models'
+import { toID, type NodeId } from '@/components/graph/types'
 
 export interface ConnectedNode {
   id?: string
@@ -96,7 +97,7 @@ function getConnectedNodes(
   }
 
   if (isFalse(node in result)) {
-    result[node] = createConnectedNode()
+    result[node] = { edges: [] }
   }
 
   for (const model of models) {
@@ -114,14 +115,10 @@ function getConnectedNodes(
 }
 
 function createConnectedNode(
-  source?: string,
-  target?: string,
+  source: NodeId,
+  target: NodeId,
   edges: ConnectedNode[] = [],
 ): ConnectedNode {
   const id = toID(source, target)
-
-  return {
-    id: isStringEmptyOrNil(id) ? undefined : id,
-    edges,
-  }
+  return { id, edges }
 }

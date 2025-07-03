@@ -8,6 +8,7 @@ import { Position, type NodeProps } from 'reactflow'
 import { ModelNodeHeaderHandles } from './ModelNodeHeaderHandles'
 import { ModelColumns } from './ModelColumns'
 import { fromAPIColumn, type Column } from '@/domain/column'
+import type { ModelEncodedFQN } from '@/domain/models'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
@@ -150,7 +151,7 @@ export default function ModelNode({
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
       ? isSelected ||
-        activeNodes.has(id) ||
+        activeNodes.has(id as ModelEncodedFQN) ||
         (withConnected && connectedNodes.has(id))
       : connectedNodes.has(id)
   const isInteractive = true

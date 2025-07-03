@@ -1,5 +1,4 @@
 import {
-  type Column,
   type ModelDetails,
   type Model,
   type ModelDescription,
@@ -18,6 +17,7 @@ import type {
 import { isArrayNotEmpty } from '@/utils/index'
 import { ModelInitial } from './initial'
 import type { Lineage } from './lineage'
+import { fromAPIColumn, type Column } from '@/domain/column'
 
 export interface InitialSQLMeshModel
   extends Omit<Model, 'name' | 'fqn' | 'path' | 'full_path'> {
@@ -68,7 +68,7 @@ export class ModelSQLMeshModel<
     this.description = this.initial.description
     this.sql = this.initial.sql
     this.definition = this.initial.definition
-    this.columns = this.initial.columns ?? []
+    this.columns = this.initial.columns?.map(fromAPIColumn) ?? []
     this.type = this.initial.type
     this.hash = this.initial.hash
     this.details = this.initial.details ?? {}
