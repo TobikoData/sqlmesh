@@ -278,7 +278,7 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
-        snapshots: t.Dict[SnapshotId, Snapshot],
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
@@ -1018,7 +1018,7 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
-        snapshots: t.Dict[SnapshotId, Snapshot],
+        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]],
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
@@ -1038,7 +1038,7 @@ class SnapshotEvaluator:
                         engine_adapter=adapter,
                         snapshots=snapshots,
                         deployability_index=deployability_index,
-                        runtime_stage=RuntimeStage.PROMOTING,
+                        runtime_stage=RuntimeStage.DEMOTING,
                     )
                 ),
             ):
