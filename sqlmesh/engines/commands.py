@@ -48,8 +48,10 @@ class PromoteCommandPayload(PydanticModel):
 
 
 class DemoteCommandPayload(PydanticModel):
-    snapshots: t.List[Snapshot]
+    target_snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
+    snapshots: t.Dict[SnapshotId, Snapshot]
+    deployability_index: DeployabilityIndex
 
 
 class CleanupCommandPayload(PydanticModel):
@@ -128,8 +130,10 @@ def demote(
     if isinstance(command_payload, str):
         command_payload = DemoteCommandPayload.parse_raw(command_payload)
     evaluator.demote(
-        command_payload.snapshots,
+        command_payload.target_snapshots,
         command_payload.environment_naming_info,
+        snapshots=command_payload.snapshots,
+        deployability_index=command_payload.deployability_index,
     )
 
 
