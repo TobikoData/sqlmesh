@@ -340,7 +340,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             )
             if stage.demoted_environment_naming_info:
                 self._demote_snapshots(
-                    stage.demoted_snapshots,
+                    [stage.all_snapshots[s.snapshot_id] for s in stage.demoted_snapshots],
                     stage.demoted_environment_naming_info,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
                 )
@@ -382,7 +382,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _demote_snapshots(
         self,
-        target_snapshots: t.Iterable[SnapshotTableInfo],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:

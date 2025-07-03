@@ -276,7 +276,7 @@ class SnapshotEvaluator:
 
     def demote(
         self,
-        target_snapshots: t.Iterable[SnapshotInfoLike],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
@@ -989,25 +989,30 @@ class SnapshotEvaluator:
                 table_mapping=table_mapping,
                 runtime_stage=RuntimeStage.PROMOTING,
             )
-            _evaluation_strategy(snapshot, adapter).promote(
-                table_name=table_name,
-                view_name=view_name,
-                model=snapshot.model,
-                environment=environment_naming_info.name,
-                snapshots=snapshots,
-                **render_kwargs,
-            )
 
-            snapshot_by_name = {s.name: s for s in (snapshots or {}).values()}
-            render_kwargs["snapshots"] = snapshot_by_name
-            adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
+            with (
+                adapter.transaction(),
+                adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
+            ):
+                _evaluation_strategy(snapshot, adapter).promote(
+                    table_name=table_name,
+                    view_name=view_name,
+                    model=snapshot.model,
+                    environment=environment_naming_info.name,
+                    snapshots=snapshots,
+                    **render_kwargs,
+                )
+
+                snapshot_by_name = {s.name: s for s in (snapshots or {}).values()}
+                render_kwargs["snapshots"] = snapshot_by_name
+                adapter.execute(snapshot.model.render_on_virtual_update(**render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
 
     def _demote_snapshot(
         self,
-        snapshot: SnapshotInfoLike,
+        snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
@@ -1019,7 +1024,18 @@ class SnapshotEvaluator:
         view_name = snapshot.qualified_view_name.for_environment(
             environment_naming_info, dialect=adapter.dialect
         )
-        _evaluation_strategy(snapshot, adapter).demote(view_name)
+        session_properties = (
+            snapshot.model.render_session_properties(
+                engine_adapter=adapter, runtime_stage=RuntimeStage.PROMOTING
+            )
+            if snapshot.is_model
+            else {}
+        )
+        with (
+            adapter.transaction(),
+            adapter.session(session_properties),
+        ):
+            _evaluation_strategy(snapshot, adapter).demote(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
