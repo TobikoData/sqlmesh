@@ -9,7 +9,6 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotId,
     SnapshotTableCleanupTask,
-    SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync import cleanup_expired_views
 from sqlmesh.utils.date import TimeLike
@@ -49,7 +48,7 @@ class PromoteCommandPayload(PydanticModel):
 
 
 class DemoteCommandPayload(PydanticModel):
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
 
 
