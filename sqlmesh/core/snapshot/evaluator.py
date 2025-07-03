@@ -1016,29 +1016,27 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        adapter = (
-            self.get_adapter(snapshot.model_gateway)
-            if environment_naming_info.gateway_managed
-            else self.adapter
-        )
-        view_name = snapshot.qualified_view_name.for_environment(
-            environment_naming_info, dialect=adapter.dialect
-        )
-        session_properties = (
-            snapshot.model.render_session_properties(
-                engine_adapter=adapter, runtime_stage=RuntimeStage.PROMOTING
+        if snapshot.is_model:
+            adapter = (
+                self.get_adapter(snapshot.model_gateway)
+                if environment_naming_info.gateway_managed
+                else self.adapter
             )
-            if snapshot.is_model
-            else {}
-        )
-        with (
-            adapter.transaction(),
-            adapter.session(session_properties),
-        ):
-            _evaluation_strategy(snapshot, adapter).demote(view_name)
+            view_name = snapshot.qualified_view_name.for_environment(
+                environment_naming_info, dialect=adapter.dialect
+            )
+            with (
+                adapter.transaction(),
+                adapter.session(
+                    snapshot.model.render_session_properties(
+                        engine_adapter=adapter, runtime_stage=RuntimeStage.PROMOTING
+                    )
+                ),
+            ):
+                _evaluation_strategy(snapshot, adapter).demote(view_name)
 
-        if on_complete is not None:
-            on_complete(snapshot)
+            if on_complete is not None:
+                on_complete(snapshot)
 
     def _cleanup_snapshot(
         self,
