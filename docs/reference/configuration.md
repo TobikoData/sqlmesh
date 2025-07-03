@@ -20,6 +20,7 @@ Configuration options for SQLMesh project directories.
 | ------------------ | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
 | `ignore_patterns`  | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
 | `project`          | The project name of this config. Used for [multi-repo setups](../guides/multi_repo.md).                            | string       |    N     |
+| `cache_dir`        | The directory to store the SQLMesh cache. Can be an absolute path or relative to the project directory. (Default: `.cache`) | string       |    N     |
 
 ### Environments
 

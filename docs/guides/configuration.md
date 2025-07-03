@@ -288,6 +288,34 @@ Conceptually, we can group the root level parameters into the following types. E
 
 The rest of this page provides additional detail for some of the configuration options and provides brief examples. Comprehensive lists of configuration options are at the [configuration reference page](../reference/configuration.md).
 
+### Cache directory
+
+By default, the SQLMesh cache is stored in a `.cache` directory within your project folder. You can customize the cache location using the `cache_dir` configuration option:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    # Relative path to project directory
+    cache_dir: my_custom_cache
+
+    # Absolute path
+    cache_dir: /tmp/sqlmesh_cache
+
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        cache_dir="/tmp/sqlmesh_cache",
+    )
+    ```
+
+The cache directory is automatically created if it doesn't exist. You can clear the cache using the `sqlmesh clean` command.
+
 ### Table/view storage locations
 
 SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
