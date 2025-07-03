@@ -57,7 +57,7 @@ Dagster recommends [injecting secret values using Environment Variables](https:/
 
 On this page, we demonstrate the secrets method Dagster recommends for **local development**.
 
-First, provision an OAuth Client for Dagster to use by following the guide on how to [provision client credentials](../single_sign_on.md#provisioning-client-credentials).
+First, provision an OAuth Client for Dagster to use by following the guide on how to [provision client credentials](../security/single_sign_on.md#provisioning-client-credentials).
 
 After provisioning the credentials, you can obtain the `Client ID` and `Client Secret` values for Dagster to use to connect to Tobiko Cloud.
 
@@ -374,8 +374,8 @@ customer_revenue_by_day = AssetKey(["postgres", "sushi", "customer_revenue_by_da
 | Option                     | Description                                                                                                                                                                            | Type | Required |
 |----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
 | `url`                      | The Base URL to your Tobiko Cloud instance                                                                                                                                             | str  | Y        |
-| `oauth_client_id`          | OAuth Client ID of the credentials you [provisioned](../single_sign_on.md#provisioning-client-credentials) for Dagster                                                                 | str  | N        |
-| `oauth_client_secret`      | OAuth Client Secret of the credentials you [provisioned](../single_sign_on.md#provisioning-client-credentials) for Dagster                                                             | str  | N        |
+| `oauth_client_id`          | OAuth Client ID of the credentials you [provisioned](../security/single_sign_on.md#provisioning-client-credentials) for Dagster                                                                 | str  | N        |
+| `oauth_client_secret`      | OAuth Client Secret of the credentials you [provisioned](../security/single_sign_on.md#provisioning-client-credentials) for Dagster                                                             | str  | N        |
 | `dagster_graphql_host`     | Hostname of the Dagster Webserver GraphQL endpoint                                                                                                                                     | str  | N        |
 | `dagster_graphql_port`     | Port of the Dagster Webserver GraphQL endpoint                                                                                                                                         | int  | N        |
 | `dagster_graphql_kwargs`   | Extra args to pass to the [DagsterGraphQLClient](https://docs.dagster.io/api/python-api/libraries/dagster-graphql#dagster_graphql.DagsterGraphQLClient) class when it is instantiated  | dict | N        |

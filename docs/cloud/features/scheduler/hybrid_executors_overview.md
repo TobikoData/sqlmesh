@@ -57,7 +57,7 @@ One important type of environment variable is the `TCLOUD` variables used for co
 
 The first required `TCLOUD` variable is a unique Tobiko Cloud URL for your project, which your Solutions Architect will provide after your project is created.
 
-You also need the Client ID and Client Secret variables, which are generated when you [create an OAuth Client](../single_sign_on.md#provisioning-client-credentials) in the Tobiko Cloud UI.
+You also need the Client ID and Client Secret variables, which are generated when you [create an OAuth Client](../security/single_sign_on.md#provisioning-client-credentials) in the Tobiko Cloud UI.
 
 Specify the URL, Client ID, and Client Secret in these environment variables:
 
