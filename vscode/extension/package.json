@@ -117,8 +117,8 @@
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run compile && pnpm run test:unit",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint src tests --fix",
     "test:unit": "vitest run",
     "code-server": "code-server",
     "test:e2e": "pnpm run vscode:package && playwright test",

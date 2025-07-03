@@ -3,6 +3,7 @@ import { execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
 import { createHash } from 'crypto'
+import { tmpdir } from 'os'
 
 setup('prepare extension', async () => {
   console.log('Setting up extension for Playwright tests...')
@@ -32,7 +33,7 @@ setup('prepare extension', async () => {
 
   // Create a temporary user data directory for the installation
   const tempUserDataDir = await fs.mkdtemp(
-    path.join(require('os').tmpdir(), 'vscode-test-install-user-data-'),
+    path.join(tmpdir(), 'vscode-test-install-user-data-'),
   )
 
   try {

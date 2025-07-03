@@ -38,7 +38,10 @@ async function runTest(page: Page, context: CodeServerContext): Promise<void> {
   await openLineageView(page)
 }
 
-async function setupEnvironment(): Promise<[string, PythonEnvironment]> {
+async function setupEnvironment(): Promise<{
+  tempDir: string
+  pythonDetails: PythonEnvironment
+}> {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -61,15 +64,14 @@ async function setupEnvironment(): Promise<[string, PythonEnvironment]> {
   await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
     spaces: 2,
   })
-
-  return [tempDir, pythonDetails]
+  return { tempDir, pythonDetails }
 }
 
 test.describe('python environment variable injection on sqlmesh_lsp', () => {
   test('normal setup - error ', async ({ page }, testInfo) => {
     testInfo.setTimeout(120_000)
 
-    const [tempDir, _] = await setupEnvironment()
+    const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
 
     const context = await startCodeServer({
@@ -87,7 +89,7 @@ test.describe('python environment variable injection on sqlmesh_lsp', () => {
   test('normal setup - set', async ({ page }, testInfo) => {
     testInfo.setTimeout(120_000)
 
-    const [tempDir, _] = await setupEnvironment()
+    const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
@@ -131,7 +133,7 @@ test.describe('tcloud version', () => {
   test('normal setup - error ', async ({ page }, testInfo) => {
     testInfo.setTimeout(120_000)
 
-    const [tempDir, pythonDetails] = await setupEnvironment()
+    const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     const context = await startCodeServer({
@@ -148,7 +150,7 @@ test.describe('tcloud version', () => {
   test('normal setup - set', async ({ page }, testInfo) => {
     testInfo.setTimeout(120_000)
 
-    const [tempDir, pythonDetails] = await setupEnvironment()
+    const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
