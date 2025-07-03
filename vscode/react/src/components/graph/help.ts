@@ -28,23 +28,7 @@ export interface GraphNodeData {
   [key: string]: any
 }
 
-export {
-  getNodeMap,
-  getEdges,
-  createGraphLayout,
-  mergeLineageWithColumns,
-  mergeConnections,
-  getLineageIndex,
-  getActiveNodes,
-  getUpdatedNodes,
-  getUpdatedEdges,
-  hasActiveEdge,
-  hasActiveEdgeConnector,
-  getModelNodeTypeTitle,
-  getModelAncestors,
-}
-
-function createGraphLayout({
+export function createGraphLayout({
   nodesMap,
   nodes = [],
   edges = [],
@@ -97,7 +81,7 @@ function createGraphLayout({
   }
 }
 
-function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
+export function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
   const modelNames = Object.keys(lineage)
   const outputEdges: Edge[] = []
 
@@ -151,7 +135,7 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
   return outputEdges
 }
 
-function getNodeMap({
+export function getNodeMap({
   lineage,
   models,
   unknownModels,
@@ -321,7 +305,7 @@ function createGraphEdge<TData = any>(
   return output
 }
 
-function mergeLineageWithColumns(
+export function mergeLineageWithColumns(
   currentLineage: Record<string, Lineage> = {},
   newLineage: Record<string, Record<string, LineageColumn>> = {},
 ): Record<string, Lineage> {
@@ -380,7 +364,7 @@ function mergeLineageWithColumns(
   return currentLineage
 }
 
-function mergeConnections(
+export function mergeConnections(
   connections: Map<string, Connections>,
   lineage: Record<string, Record<string, LineageColumn>> = {},
 ): {
@@ -472,7 +456,7 @@ function mergeConnections(
   }
 }
 
-function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
+export function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
   return Object.keys(lineage)
     .reduce((acc: string[], key) => {
       const { models = [], columns = {} } = lineage[key]!
@@ -496,7 +480,7 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
     .join('')
 }
 
-function getModelAncestors(
+export function getModelAncestors(
   lineage: Record<string, Lineage> = {},
   name: string,
   output = new Set<string>(),
@@ -513,7 +497,7 @@ function getModelAncestors(
   return output
 }
 
-function getActiveNodes(
+export function getActiveNodes(
   edges: Edge[] = [],
   activeEdges: ActiveEdges,
   selectedEdges: ConnectedNode[],
@@ -563,7 +547,7 @@ function getActiveNodes(
   )
 }
 
-function getUpdatedEdges(
+export function getUpdatedEdges(
   edges: Edge[] = [],
   connections: Map<string, Connections>,
   activeEdges: ActiveEdges,
@@ -655,7 +639,7 @@ function getUpdatedEdges(
   return tempEdges
 }
 
-function getUpdatedNodes(
+export function getUpdatedNodes(
   nodes: Node[] = [],
   activeNodes: Set<string>,
   mainNode: string,
@@ -696,7 +680,7 @@ function getUpdatedNodes(
   })
 }
 
-function hasActiveEdge(
+export function hasActiveEdge(
   activeEdges: ActiveEdges = new Map(),
   [leftConnect, rightConnect]: [
     string | undefined | null,
@@ -720,14 +704,14 @@ function hasActiveEdge(
   return inLeft || inRight
 }
 
-function hasActiveEdgeConnector(
+export function hasActiveEdgeConnector(
   activeEdges: ActiveEdges = new Map(),
   connector: string,
 ): boolean {
   return (activeEdges.get(connector) ?? []).length > 0
 }
 
-function getModelNodeTypeTitle(type: LineageNodeModelType): string {
+export function getModelNodeTypeTitle(type: LineageNodeModelType): string {
   if (type === EnumLineageNodeModelType.python) return 'PYTHON'
   if (type === EnumLineageNodeModelType.sql) return 'SQL'
   if (type === EnumLineageNodeModelType.seed) return 'SEED'
