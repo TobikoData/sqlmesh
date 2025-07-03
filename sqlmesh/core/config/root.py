@@ -120,6 +120,7 @@ class Config(BaseConfig):
         disable_anonymized_analytics: Whether to disable the anonymized analytics collection.
         before_all: SQL statements or macros to be executed at the start of the `sqlmesh plan` and `sqlmesh run` commands.
         after_all: SQL statements or macros to be executed at the end of the `sqlmesh plan` and `sqlmesh run` commands.
+        cache_dir: The directory to store the SQLMesh cache. Defaults to .cache in the project folder.
     """
 
     gateways: GatewayDict = {"": GatewayConfig()}
@@ -165,6 +166,7 @@ class Config(BaseConfig):
     after_all: t.Optional[t.List[str]] = None
     linter: LinterConfig = LinterConfig()
     janitor: JanitorConfig = JanitorConfig()
+    cache_dir: t.Optional[str] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,

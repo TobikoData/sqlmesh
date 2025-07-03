@@ -8,7 +8,6 @@ from collections import defaultdict
 from sqlglot import exp
 from pydantic import Field
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
@@ -53,7 +52,7 @@ class SnapshotState:
         self,
         engine_adapter: EngineAdapter,
         schema: t.Optional[str] = None,
-        context_path: Path = Path(),
+        cache_dir: Path = Path(),
     ):
         self.engine_adapter = engine_adapter
         self.snapshots_table = exp.table_("_snapshots", db=schema)
@@ -79,7 +78,7 @@ class SnapshotState:
             "next_auto_restatement_ts": exp.DataType.build("bigint"),
         }
 
-        self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
+        self._snapshot_cache = SnapshotCache(cache_dir)
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         """Pushes snapshots to the state store.

@@ -105,7 +105,7 @@ class _EngineAdapterStateSyncSchedulerConfig(SchedulerConfig):
 
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(
-            engine_adapter, schema=schema, context_path=context.path, console=context.console
+            engine_adapter, schema=schema, cache_dir=context.cache_dir, console=context.console
         )
 
     def state_sync_fingerprint(self, context: GenericContext) -> str:
@@ -130,6 +130,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
     def create_plan_evaluator(self, context: GenericContext) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
+            snapshot_evaluator=context.snapshot_evaluator,
             create_scheduler=context.create_scheduler,
             default_catalog=context.default_catalog,
             console=context.console,

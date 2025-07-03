@@ -115,8 +115,12 @@ def _update_pr_environment(controller: GithubController) -> bool:
         conclusion = controller.update_pr_environment_check(status=GithubCheckStatus.COMPLETED)
         return conclusion is not None and conclusion.is_success
     except Exception as e:
+        logger.exception("Error occurred when updating PR environment")
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, exception=e, plan=controller.pr_plan_or_none
+            status=GithubCheckStatus.COMPLETED,
+            exception=e,
+            plan=controller.pr_plan_or_none,
+            plan_flags=controller.pr_plan_flags,
         )
         return (
             conclusion is not None
@@ -147,6 +151,7 @@ def _gen_prod_plan(controller: GithubController) -> bool:
         )
         return bool(plan_summary)
     except Exception as e:
+        logger.exception("Error occurred generating prod plan")
         controller.update_prod_plan_preview_check(
             status=GithubCheckStatus.COMPLETED,
             conclusion=GithubCheckConclusion.FAILURE,
@@ -211,6 +216,8 @@ def deploy_production(ctx: click.Context) -> None:
 
 
 def _run_all(controller: GithubController) -> None:
+    click.echo(f"SQLMesh Version: {controller.version_info}")
+
     has_required_approval = False
     is_auto_deploying_prod = (
         controller.deploy_command_enabled or controller.do_required_approval_check

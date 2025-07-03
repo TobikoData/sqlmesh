@@ -55,7 +55,9 @@ pytestmark = pytest.mark.slow
 @pytest.fixture
 def state_sync(duck_conn, tmp_path):
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
     state_sync.migrate(default_catalog=None)
     return state_sync
@@ -2082,7 +2084,9 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
     with pytest.raises(
@@ -2203,7 +2207,9 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
     state_sync.migrate(default_catalog=None)
@@ -2254,7 +2260,9 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
 
 def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> None:
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
     mocker.patch.object(state_sync.migrator, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(
