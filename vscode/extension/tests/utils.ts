@@ -1,7 +1,6 @@
 import path from 'path'
 import { Page } from '@playwright/test'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import { execAsync } from '../src/utilities/exec'
 
 // Where your extension lives on disk
 export const EXT_PATH = path.resolve(__dirname, '..')
@@ -34,8 +33,6 @@ export const clickExplorerTab = async (page: Page): Promise<void> => {
   }
 }
 
-const execAsync = promisify(exec)
-
 export interface PythonEnvironment {
   pythonPath: string
   pipPath: string
@@ -49,8 +46,10 @@ export const createVirtualEnvironment = async (
   venvDir: string,
 ): Promise<PythonEnvironment> => {
   const pythonCmd = process.platform === 'win32' ? 'python' : 'python3'
-  const { stderr } = await execAsync(`${pythonCmd} -m venv "${venvDir}"`)
-  if (stderr && !stderr.includes('WARNING')) {
+  const { stderr, exitCode } = await execAsync(
+    `${pythonCmd} -m venv "${venvDir}"`,
+  )
+  if (exitCode !== 0) {
     throw new Error(`Failed to create venv: ${stderr}`)
   }
   // Get paths
@@ -76,8 +75,8 @@ export const pipInstall = async (
 ): Promise<void> => {
   const { pipPath } = pythonDetails
   const execString = `"${pipPath}" install -e "${packagePaths.join('" -e "')}"`
-  const { stderr } = await execAsync(execString)
-  if (stderr && !stderr.includes('WARNING') && !stderr.includes('notice')) {
+  const { stderr, exitCode } = await execAsync(execString)
+  if (exitCode !== 0) {
     throw new Error(`Failed to install package: ${stderr}`)
   }
 }
