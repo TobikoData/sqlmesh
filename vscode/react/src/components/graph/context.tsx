@@ -1,4 +1,3 @@
-import { type Model } from '@/api/client'
 import {
   createContext,
   useState,
@@ -12,6 +11,8 @@ import { type Node } from 'reactflow'
 import type { Lineage } from '@/domain/lineage'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import type { Column } from '@/domain/column'
+import type { ModelEncodedFQN } from '@/domain/models'
+import type { Model } from '@/api/client'
 
 export interface Connections {
   left: string[]
@@ -19,7 +20,7 @@ export interface Connections {
 }
 export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
 export type ActiveEdges = Map<string, Array<[string, string]>>
-export type ActiveNodes = Set<string>
+export type ActiveNodes = Set<ModelEncodedFQN>
 export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
 
@@ -32,8 +33,8 @@ interface LineageFlow {
   activeNodes: ActiveNodes
   selectedNodes: SelectedNodes
   selectedEdges: any[]
-  models: Record<string, Model>
-  unknownModels: Set<string>
+  models: Record<string, ModelSQLMeshModel>
+  unknownModels: Set<ModelEncodedFQN>
   connections: Map<string, Connections>
   withConnected: boolean
   withColumns: boolean
@@ -58,7 +59,7 @@ interface LineageFlow {
   addActiveEdges: (edges: Array<[string, string]>) => void
   removeActiveEdges: (edges: Array<[string, string]>) => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
-  setUnknownModels: React.Dispatch<React.SetStateAction<Set<string>>>
+  setUnknownModels: React.Dispatch<React.SetStateAction<Set<ModelEncodedFQN>>>
   setLineage: React.Dispatch<React.SetStateAction<Record<string, Lineage>>>
   setLineageCache: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
@@ -135,7 +136,7 @@ export default function LineageFlowProvider({
   models: Record<string, Model>
 }): JSX.Element {
   const [lineage, setLineage] = useState<Record<string, Lineage>>({})
-  const [unknownModels, setUnknownModels] = useState(new Set<string>())
+  const [unknownModels, setUnknownModels] = useState(new Set<ModelEncodedFQN>())
   const [lineageCache, setLineageCache] = useState<
     Record<string, Lineage> | undefined
   >(undefined)
@@ -162,6 +163,7 @@ export default function LineageFlowProvider({
     () =>
       getNodeMap({
         lineage,
+        // @ts-expect-error TODO: fix this, should move to internal representation
         models,
         unknownModels,
         withColumns,
@@ -278,6 +280,7 @@ export default function LineageFlowProvider({
         connections,
         lineage,
         lineageCache,
+        // @ts-expect-error TODO: fix this, should move to internal representation
         models,
         manuallySelectedColumn,
         withColumns,

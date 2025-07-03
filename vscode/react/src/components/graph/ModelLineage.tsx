@@ -35,9 +35,14 @@ import {
 import { Popover } from '@headlessui/react'
 import ModelLineageDetails from './ModelLineageDetails'
 import { Divider } from '@/components/divider/Divider'
-import { type ModelLineageApiLineageModelNameGet200 } from '@/api/client'
 import { SettingsControl } from '@/components/graph/SettingsControl'
+import {
+  toModelLineage,
+  type ModelLineage as ModelLineageType,
+} from '@/domain/lineage'
 import './Graph.css'
+import { toKeys } from './types'
+import { encode } from '@/domain/models'
 
 const WITH_COLUMNS_LIMIT = 30
 
@@ -81,7 +86,7 @@ export function ModelLineage({
 
   const [isMergingModels, setIsMergingModels] = useState(false)
   const [modelLineage, setModelLineage] = useState<
-    ModelLineageApiLineageModelNameGet200 | undefined
+    ModelLineageType | undefined
   >(undefined)
 
   useEffect(() => {
@@ -91,7 +96,7 @@ export function ModelLineage({
 
     getModelLineage()
       .then(({ data }) => {
-        setModelLineage(data)
+        setModelLineage(data ? toModelLineage(data) : undefined)
         if (isNil(data)) return
 
         setIsMergingModels(true)
@@ -129,13 +134,16 @@ export function ModelLineage({
   }, [model.name, model.hash])
 
   useEffect(() => {
-    Object.keys(modelLineage ?? {}).forEach(modelName => {
-      modelName = encodeURI(modelName)
-
-      if (isFalse(modelName in models) && isFalse(modelName in unknownModels)) {
-        unknownModels.add(modelName)
+    const modelNames = toKeys(modelLineage ?? {})
+    for (const modelName of modelNames) {
+      const encodedModelName = encode(modelName)
+      if (
+        isFalse(encodedModelName in models) &&
+        isFalse(encodedModelName in unknownModels)
+      ) {
+        unknownModels.add(encodedModelName)
       }
-    })
+    }
 
     setUnknownModels(new Set(unknownModels))
   }, [modelLineage, models])
@@ -329,6 +337,7 @@ function ModelColumnLineage(): JSX.Element {
 
     setEdges(newEdges)
     setNodes(newNodes)
+    console.log('newActiveNodes', newActiveNodes)
     setActiveNodes(newActiveNodes)
   }, [
     connections,

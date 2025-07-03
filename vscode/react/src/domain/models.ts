@@ -30,6 +30,20 @@ export type ModelURI = Branded<string, 'ModelURI'>
  */
 export type ModelEncodedURI = Branded<string, 'ModelEncodedURI'>
 
+export function encode(fqn: ModelName): ModelEncodedName
+export function encode(fqn: ModelURI): ModelEncodedURI
+export function encode(fqn: ModelFQN): ModelEncodedFQN
+export function encode(s: string): string {
+  return encodeURI(s)
+}
+
+export function decode(fqn: ModelEncodedName): ModelName
+export function decode(fqn: ModelEncodedURI): ModelURI
+export function decode(fqn: ModelEncodedFQN): ModelFQN
+export function decode(s: string): string {
+  return decodeURI(s)
+}
+
 /**
  * ModelPath is a type that represents the path of a model.
  * A model path is relative to the project root.

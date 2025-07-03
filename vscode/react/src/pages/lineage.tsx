@@ -16,11 +16,11 @@ import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
 import type { Model } from '@/api/client'
 import { useRpc } from '@/utils/rpc'
-import type {
-  ModelEncodedFQN,
-  ModelName,
-  ModelPath,
-  ModelFullPath,
+import {
+  type ModelPath,
+  type ModelFullPath,
+  type ModelName,
+  type ModelEncodedFQN,
 } from '@/domain/models'
 
 export function LineagePage() {
