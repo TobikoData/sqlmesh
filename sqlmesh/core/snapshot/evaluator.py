@@ -278,6 +278,8 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
@@ -290,7 +292,9 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._demote_snapshot(s, environment_naming_info, on_complete),
+                lambda s: self._demote_snapshot(
+                    s, environment_naming_info, snapshots, deployability_index, on_complete
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -1014,6 +1018,8 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         if snapshot.is_model:
@@ -1029,7 +1035,10 @@ class SnapshotEvaluator:
                 adapter.transaction(),
                 adapter.session(
                     snapshot.model.render_session_properties(
-                        engine_adapter=adapter, runtime_stage=RuntimeStage.PROMOTING
+                        engine_adapter=adapter,
+                        snapshots=snapshots,
+                        deployability_index=deployability_index,
+                        runtime_stage=RuntimeStage.PROMOTING,
                     )
                 ),
             ):

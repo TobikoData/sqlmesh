@@ -320,7 +320,7 @@ def test_demote(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"), snapshots={})
 
     adapter_mock.transaction.assert_called()
     adapter_mock.session.assert_called()
@@ -2694,7 +2694,7 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.session.assert_not_called()
 
     # Demote
-    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"), snapshots={})
 
     adapter_mock.assert_not_called()
     adapter_mock.transaction.assert_not_called()
@@ -3837,7 +3837,7 @@ def test_multiple_engine_creation(snapshot: Snapshot, adapters, make_snapshot):
     assert len(post_calls) == 1
     assert post_calls[0].sql(dialect="postgres") == expected_call
 
-    evaluator.demote([snapshot_2], EnvironmentNamingInfo(name="test_env"))
+    evaluator.demote([snapshot_2], EnvironmentNamingInfo(name="test_env"), snapshots={})
     engine_adapters["secondary"].drop_view.assert_not_called()
     engine_adapters["default"].drop_view.assert_called_once_with(
         "test_schema__test_env.test_model",
@@ -4083,7 +4083,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     engine_adapters["default"].get_catalog_type.assert_not_called()
     assert len(engine_adapters["secondary"].get_catalog_type.call_args_list) == 2
 
-    evaluator.demote([snapshot], environment_naming_info)
+    evaluator.demote([snapshot], environment_naming_info, snapshots={})
     engine_adapters["default"].drop_view.assert_called_once_with(
         "db__test_env.multi_engine_test_model",
         cascade=False,
@@ -4097,7 +4097,7 @@ def test_multi_engine_python_model_with_macros(adapters, make_snapshot):
     assert view_args[0][0][0] == "db__test_env.multi_engine_test_model"
 
     # Similarly for demotion
-    evaluator.demote([snapshot], environment_naming_info_gw)
+    evaluator.demote([snapshot], environment_naming_info_gw, snapshots={})
     engine_adapters["secondary"].drop_view.assert_called_once_with(
         "db__test_env.multi_engine_test_model",
         cascade=False,
@@ -4155,7 +4155,7 @@ def test_multiple_engine_virtual_layer(snapshot: Snapshot, adapters, make_snapsh
     assert view_args_secondary[0][0][0] == "test_schema__test_env.test_model"
 
     # Demotion will follow with the same pattern
-    evaluator.demote([snapshot_2, snapshot], environment_naming_info)
+    evaluator.demote([snapshot_2, snapshot], environment_naming_info, snapshots={})
     engine_adapters["default"].drop_view.assert_called_once_with(
         "db__test_env.model",
         cascade=False,
