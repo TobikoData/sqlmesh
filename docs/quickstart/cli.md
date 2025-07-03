@@ -116,6 +116,7 @@ Choose your SQL engine:
     [14] MySQL
     [15] Athena
     [16] RisingWave
+    [17] Doris
 
 Enter a number: 1
 ```

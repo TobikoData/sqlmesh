@@ -313,6 +313,7 @@ workflows:
           matrix:
             parameters:
               engine:
+                - doris
                 - duckdb
                 - postgres
                 - mysql

@@ -104,7 +104,7 @@ make ui-down   # Stop UI
 - Tests are marked with pytest markers:
   - **Type markers**: `fast`, `slow`, `docker`, `remote`, `cicdonly`, `isolated`, `registry_isolation`
   - **Domain markers**: `cli`, `dbt`, `github`, `jupyter`, `web`
-  - **Engine markers**: `engine`, `athena`, `bigquery`, `clickhouse`, `databricks`, `duckdb`, `motherduck`, `mssql`, `mysql`, `postgres`, `redshift`, `snowflake`, `spark`, `trino`, `risingwave`
+  - **Engine markers**: `engine`, `athena`, `bigquery`, `clickhouse`, `databricks`, `doris`, `duckdb`, `motherduck`, `mssql`, `mysql`, `postgres`, `redshift`, `snowflake`, `spark`, `trino`, `risingwave`
 - Default to `fast` tests during development
 - Engine tests use real connections when available, mocks otherwise
 - The `sushi` example project is used extensively in tests

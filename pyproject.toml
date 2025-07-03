@@ -102,6 +102,7 @@ dev = [
 ]
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
+doris = ["pymysql"]
 duckdb = []
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
@@ -251,6 +252,7 @@ markers = [
     "clickhouse: test for Clickhouse (standalone mode / cluster mode)",
     "clickhouse_cloud: test for Clickhouse (cloud mode)",
     "databricks: test for Databricks",
+    "doris: test for Doris",
     "duckdb: test for DuckDB",
     "motherduck: test for MotherDuck",
     "mssql: test for MSSQL",

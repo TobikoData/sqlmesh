@@ -75,6 +75,7 @@ ENGINES = [
     IntegrationTestEngine("spark", native_dataframe_type="pyspark"),
     IntegrationTestEngine("clickhouse", catalog_types=["standalone", "cluster"]),
     IntegrationTestEngine("risingwave"),
+    IntegrationTestEngine("doris"),
     # Cloud engines that need paid accounts / special credentials
     IntegrationTestEngine("clickhouse_cloud", cloud=True),
     IntegrationTestEngine("redshift", cloud=True),
@@ -492,7 +493,21 @@ class TestContext:
                     AND {kind}_name = '{table_name}'
             """
         elif self.dialect == "clickhouse":
-            query = f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
+            query = (
+                f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
+            )
+        elif self.dialect == "doris":
+            # Doris uses MySQL-compatible information_schema
+            query = f"""
+                SELECT
+                    table_name,
+                    table_comment
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE
+                    table_schema='{schema_name}'
+                    AND table_name='{table_name}'
+                    AND table_type='{table_kind}'
+            """
         elif self.dialect == "risingwave":
             query = f"""
                 SELECT
@@ -588,6 +603,18 @@ class TestContext:
         elif self.dialect in ["spark", "databricks", "clickhouse"]:
             query = f"DESCRIBE TABLE {schema_name}.{table_name}"
             comment_index = 2 if self.dialect in ["spark", "databricks"] else 4
+        elif self.dialect == "doris":
+            # Doris uses MySQL-compatible information_schema
+            query = f"""
+                SELECT
+                    column_name,
+                    column_comment
+                FROM
+                    information_schema.columns
+                WHERE
+                    table_schema = '{schema_name}'
+                    AND table_name = '{table_name}'
+            """
         elif self.dialect == "duckdb":
             query = f"""
                 SELECT

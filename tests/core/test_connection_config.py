@@ -11,6 +11,7 @@ from sqlmesh.core.config.connection import (
     ClickhouseConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
+    DorisConnectionConfig,
     DuckDBAttachOptions,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
@@ -102,24 +103,16 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
     config = make_config(type="snowflake", account="test", authenticator="externalbrowser")
     assert isinstance(config, SnowflakeConnectionConfig)
     # No auth and no user raises
-    with pytest.raises(
-        ConfigError, match="User and password must be provided if using default authentication"
-    ):
+    with pytest.raises(ConfigError, match="User and password must be provided if using default authentication"):
         make_config(type="snowflake", account="test", password="test")
     # No auth and no password raises
-    with pytest.raises(
-        ConfigError, match="User and password must be provided if using default authentication"
-    ):
+    with pytest.raises(ConfigError, match="User and password must be provided if using default authentication"):
         make_config(type="snowflake", account="test", user="test")
     # No auth and no user/password raises
-    with pytest.raises(
-        ConfigError, match="User and password must be provided if using default authentication"
-    ):
+    with pytest.raises(ConfigError, match="User and password must be provided if using default authentication"):
         make_config(type="snowflake", account="test")
     # Private key and username with no authenticator is fine
-    config = make_config(
-        type="snowflake", account="test", private_key=snowflake_key_passphrase_bytes, user="test"
-    )
+    config = make_config(type="snowflake", account="test", private_key=snowflake_key_passphrase_bytes, user="test")
     assert isinstance(config, SnowflakeConnectionConfig)
     # Private key with jwt auth is fine
     config = make_config(
@@ -131,9 +124,7 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
     )
     assert isinstance(config, SnowflakeConnectionConfig)
     # Private key without username raises
-    with pytest.raises(
-        ConfigError, match=r"User must be provided when using SNOWFLAKE_JWT authentication"
-    ):
+    with pytest.raises(ConfigError, match=r"User must be provided when using SNOWFLAKE_JWT authentication"):
         make_config(
             type="snowflake",
             account="test",
@@ -141,9 +132,7 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
             authenticator="snowflake_jwt",
         )
     # Private key with password raises
-    with pytest.raises(
-        ConfigError, match=r"Password cannot be provided when using SNOWFLAKE_JWT authentication"
-    ):
+    with pytest.raises(ConfigError, match=r"Password cannot be provided when using SNOWFLAKE_JWT authentication"):
         make_config(
             type="snowflake",
             account="test",
@@ -164,9 +153,7 @@ def test_snowflake(make_config, snowflake_key_passphrase_bytes, snowflake_oauth_
             authenticator="externalbrowser",
         )
     # Private key and private key both combined raises
-    with pytest.raises(
-        ConfigError, match=r"Cannot specify both `private_key` and `private_key_path`"
-    ):
+    with pytest.raises(ConfigError, match=r"Cannot specify both `private_key` and `private_key_path`"):
         make_config(
             type="snowflake",
             account="test",
@@ -279,9 +266,7 @@ def test_validator():
     assert _connection_config_validator(None, snowflake_config) == snowflake_config
 
     assert (
-        _connection_config_validator(
-            None, dict(type="snowflake", account="test", authenticator="externalbrowser")
-        )
+        _connection_config_validator(None, dict(type="snowflake", account="test", authenticator="externalbrowser"))
         == snowflake_config
     )
 
@@ -289,9 +274,7 @@ def test_validator():
         _connection_config_validator(None, dict(account="test", authenticator="externalbrowser"))
 
     with pytest.raises(ConfigError, match="Unknown connection type 'invalid'."):
-        _connection_config_validator(
-            None, dict(type="invalid", account="test", authenticator="externalbrowser")
-        )
+        _connection_config_validator(None, dict(type="invalid", account="test", authenticator="externalbrowser"))
 
 
 def test_trino(make_config):
@@ -320,18 +303,14 @@ def test_trino(make_config):
     assert config.host == "host"
     assert config.catalog == "catalog"
 
-    with pytest.raises(
-        ConfigError, match="Username and Password must be provided if using basic authentication"
-    ):
+    with pytest.raises(ConfigError, match="Username and Password must be provided if using basic authentication"):
         make_config(method="basic", **required_kwargs)
 
     # Validate LDAP
     config = make_config(method="ldap", password="password", **required_kwargs)
     assert config.method == TrinoAuthenticationMethod.LDAP
 
-    with pytest.raises(
-        ConfigError, match="Username and Password must be provided if using ldap authentication"
-    ):
+    with pytest.raises(ConfigError, match="Username and Password must be provided if using ldap authentication"):
         make_config(method="ldap", **required_kwargs)
 
     # Validate Kerberos
@@ -389,9 +368,7 @@ def test_trino(make_config):
     assert config.method == TrinoAuthenticationMethod.BASIC
     assert config.http_scheme == "http"
 
-    with pytest.raises(
-        ConfigError, match="HTTP scheme can only be used with no-auth or basic method"
-    ):
+    with pytest.raises(ConfigError, match="HTTP scheme can only be used with no-auth or basic method"):
         make_config(method="ldap", http_scheme="http", **required_kwargs)
 
 
@@ -403,9 +380,7 @@ def test_trino_schema_location_mapping(make_config):
         catalog="catalog",
     )
 
-    with pytest.raises(
-        ConfigError, match=r".*needs to include the '@\{schema_name\}' placeholder.*"
-    ):
+    with pytest.raises(ConfigError, match=r".*needs to include the '@\{schema_name\}' placeholder.*"):
         make_config(**required_kwargs, schema_location_mapping={".*": "s3://foo"})
 
     config = make_config(
@@ -644,9 +619,7 @@ def test_duckdb_attach_ducklake_catalog(make_config):
 
 
 def test_duckdb_attach_options():
-    options = DuckDBAttachOptions(
-        type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
-    )
+    options = DuckDBAttachOptions(type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True)
 
     assert (
         options.to_sql(alias="db")
@@ -699,9 +672,7 @@ def test_motherduck_attach_catalog(make_config):
 
 
 def test_motherduck_attach_options():
-    options = DuckDBAttachOptions(
-        type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True
-    )
+    options = DuckDBAttachOptions(type="postgres", path="dbname=postgres user=postgres host=127.0.0.1", read_only=True)
 
     assert (
         options.to_sql(alias="db")
@@ -786,9 +757,7 @@ def test_motherduck_token_mask(make_config):
         == "md:whodunnit?motherduck_token=*****"
     )
     assert (
-        config_1._mask_motherduck_token(
-            f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}"
-        )
+        config_1._mask_motherduck_token(f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}")
         == "md:whodunnit?attach_mode=single&motherduck_token=*****"
     )
     assert (
@@ -796,25 +765,17 @@ def test_motherduck_token_mask(make_config):
         == "md:whodunnit?motherduck_token=******************"
     )
     assert (
-        config_3._mask_motherduck_token(f"md:?motherduck_token={config_3.token}")
-        == "md:?motherduck_token=**********"
+        config_3._mask_motherduck_token(f"md:?motherduck_token={config_3.token}") == "md:?motherduck_token=**********"
     )
+    assert config_1._mask_motherduck_token("?motherduck_token=secret1235") == "?motherduck_token=**********"
     assert (
-        config_1._mask_motherduck_token("?motherduck_token=secret1235")
-        == "?motherduck_token=**********"
-    )
-    assert (
-        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=short")
-        == "md:whodunnit?motherduck_token=*****"
+        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=short") == "md:whodunnit?motherduck_token=*****"
     )
     assert (
         config_1._mask_motherduck_token("md:whodunnit?motherduck_token=longtoken123456789")
         == "md:whodunnit?motherduck_token=******************"
     )
-    assert (
-        config_1._mask_motherduck_token("md:whodunnit?motherduck_token=")
-        == "md:whodunnit?motherduck_token="
-    )
+    assert config_1._mask_motherduck_token("md:whodunnit?motherduck_token=") == "md:whodunnit?motherduck_token="
     assert config_1._mask_motherduck_token(":memory:") == ":memory:"
 
 
@@ -905,6 +866,62 @@ def test_mysql(make_config):
     assert config.is_recommended_for_state_sync is True
 
 
+def test_doris(make_config):
+    """Test DorisConnectionConfig basic functionality"""
+    # Basic configuration
+    config = make_config(
+        type="doris",
+        host="localhost",
+        user="root",
+        password="password",
+        port=9030,
+        database="demo",
+        check_import=False,
+    )
+    assert isinstance(config, DorisConnectionConfig)
+    assert config.type_ == "doris"
+    assert config.host == "localhost"
+    assert config.user == "root"
+    assert config.password == "password"
+    assert config.port == 9030
+    assert config.database == "demo"
+    assert config.DIALECT == "mysql"  # Doris uses MySQL protocol
+    assert config.DISPLAY_NAME == "Apache Doris"
+    assert config.DISPLAY_ORDER == 17
+    assert config.is_recommended_for_state_sync is True  # Same as MySQL
+
+    # Test with minimal configuration (using default port)
+    minimal_config = make_config(
+        type="doris",
+        host="fe.doris.cluster",
+        user="doris_user",
+        password="doris_pass",
+        check_import=False,
+    )
+    assert isinstance(minimal_config, DorisConnectionConfig)
+    assert minimal_config.port == 9030  # Default Doris FE port
+    assert minimal_config.host == "fe.doris.cluster"
+    assert minimal_config.user == "doris_user"
+
+    # Test with additional MySQL-compatible options
+    advanced_config = make_config(
+        type="doris",
+        host="doris-fe",
+        user="admin",
+        password="admin123",
+        port=9030,
+        database="analytics",
+        charset="utf8mb4",
+        ssl_disabled=True,
+        concurrent_tasks=10,
+        check_import=False,
+    )
+    assert isinstance(advanced_config, DorisConnectionConfig)
+    assert advanced_config.charset == "utf8mb4"
+    assert advanced_config.ssl_disabled is True
+    assert advanced_config.concurrent_tasks == 10
+
+
 def test_clickhouse(make_config):
     from sqlmesh import __version__
 
@@ -986,9 +1003,7 @@ def test_athena_catalog(make_config):
 
 
 def test_athena_s3_staging_dir_or_workgroup(make_config):
-    with pytest.raises(
-        ConfigError, match=r"At least one of work_group or s3_staging_dir must be set"
-    ):
+    with pytest.raises(ConfigError, match=r"At least one of work_group or s3_staging_dir must be set"):
         config = make_config(type="athena")
 
     config = make_config(type="athena", s3_staging_dir="s3://foo")
@@ -1006,9 +1021,7 @@ def test_athena_s3_staging_dir_or_workgroup(make_config):
 
 def test_athena_s3_locations_valid(make_config):
     with pytest.raises(ConfigError, match=r".*must be a s3:// URI.*"):
-        make_config(
-            type="athena", work_group="primary", s3_warehouse_location="hdfs://legacy/location"
-        )
+        make_config(type="athena", work_group="primary", s3_warehouse_location="hdfs://legacy/location")
 
     with pytest.raises(ConfigError, match=r".*must be a s3:// URI.*"):
         make_config(type="athena", s3_staging_dir="alskdjlskadgj")
@@ -1023,9 +1036,7 @@ def test_athena_s3_locations_valid(make_config):
     assert config.s3_staging_dir == "s3://bucket/query-results/"
     assert config.s3_warehouse_location == "s3://bucket/prod/warehouse/"
 
-    config = make_config(
-        type="athena", work_group="primary", s3_staging_dir=None, s3_warehouse_location=None
-    )
+    config = make_config(type="athena", work_group="primary", s3_staging_dir=None, s3_warehouse_location=None)
 
     assert isinstance(config, AthenaConnectionConfig)
     assert config.s3_staging_dir is None
@@ -1082,9 +1093,7 @@ def test_databricks(make_config):
 
     # auth_type must match the AuthType enum if specified
     with pytest.raises(ConfigError, match=r".*nonexist does not match a valid option.*"):
-        make_config(
-            type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist"
-        )
+        make_config(type="databricks", server_hostname="dbc-test.cloud.databricks.com", auth_type="nonexist")
 
     # if client_secret is specified, client_id must also be specified
     with pytest.raises(ConfigError, match=r"`oauth_client_id` is required.*"):
@@ -1131,9 +1140,7 @@ def test_engine_import_validator():
     ):
 
         class TestConfigB(PydanticModel):
-            _engine_import_validator = _get_engine_import_validator(
-                "missing", "bigquery", "bigquery_extra"
-            )
+            _engine_import_validator = _get_engine_import_validator("missing", "bigquery", "bigquery_extra")
 
         TestConfigB()
 
@@ -1150,9 +1157,7 @@ def test_engine_display_order():
 
     This test ensures that those integers begin with 1, are unique, and are sequential.
     """
-    display_numbers = [
-        info[0] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])
-    ]
+    display_numbers = [info[0] for info in sorted(INIT_DISPLAY_INFO_TO_TYPE.values(), key=lambda x: x[0])]
     assert display_numbers == list(range(1, len(display_numbers) + 1))
 
 
@@ -1417,3 +1422,72 @@ def test_mssql_pymssql_connection_factory():
         # Clean up the mock module
         if "pymssql" in sys.modules:
             del sys.modules["pymssql"]
+
+
+def test_doris_table_models():
+    """Test Doris table model functionality."""
+    from sqlglot import exp
+
+    doris_config = _connection_config_validator(
+        None, {"type": "doris", "host": "localhost", "user": "root", "password": "password"}
+    )
+    adapter = doris_config.create_engine_adapter()
+
+    # Test default UNIQUE model
+    assert adapter.DEFAULT_TABLE_MODEL == "UNIQUE"
+    assert adapter.DEFAULT_UNIQUE_KEY_MERGE_ON_WRITE is True
+
+    # Test table properties generation
+    columns_to_types = {
+        "user_id": exp.DataType.build("BIGINT"),
+        "username": exp.DataType.build("VARCHAR(50)"),
+        "email": exp.DataType.build("VARCHAR(100)"),
+    }
+
+    # Test UNIQUE table creation
+    create_exp = adapter._build_create_table_exp(
+        table_name_or_schema="test_users",
+        expression=None,
+        columns_to_types=columns_to_types,
+        table_properties={"TABLE_MODEL": "UNIQUE"},
+    )
+
+    sql = adapter._generate_doris_create_table_sql(create_exp)
+
+    # Verify UNIQUE KEY syntax
+    assert "UNIQUE KEY(user_id, username)" in sql
+    assert "DISTRIBUTED BY HASH(user_id) BUCKETS 10" in sql
+    assert '"enable_unique_key_merge_on_write" = "true"' in sql
+
+    # Test DUPLICATE table creation
+    create_exp_dup = adapter._build_create_table_exp(
+        table_name_or_schema="test_logs",
+        expression=None,
+        columns_to_types=columns_to_types,
+        table_properties={"TABLE_MODEL": "DUPLICATE", "DISTRIBUTED_BY": "HASH(user_id)", "BUCKETS": "32"},
+    )
+
+    sql_dup = adapter._generate_doris_create_table_sql(create_exp_dup)
+
+    # Verify DUPLICATE table doesn't have UNIQUE KEY or merge-on-write
+    assert "UNIQUE KEY" not in sql_dup
+    assert "enable_unique_key_merge_on_write" not in sql_dup
+    assert "DISTRIBUTED BY HASH(user_id) BUCKETS 32" in sql_dup
+
+    # Test custom UNIQUE KEY columns
+    create_exp_custom = adapter._build_create_table_exp(
+        table_name_or_schema="test_orders",
+        expression=None,
+        columns_to_types={
+            "order_id": exp.DataType.build("BIGINT"),
+            "user_id": exp.DataType.build("BIGINT"),
+            "amount": exp.DataType.build("DECIMAL(10,2)"),
+        },
+        table_properties={"UNIQUE_KEY": ["order_id"], "DISTRIBUTED_BY": "HASH(order_id)", "BUCKETS": "20"},
+    )
+
+    sql_custom = adapter._generate_doris_create_table_sql(create_exp_custom)
+
+    # Verify custom UNIQUE KEY
+    assert "UNIQUE KEY(order_id)" in sql_custom
+    assert "DISTRIBUTED BY HASH(order_id) BUCKETS 20" in sql_custom

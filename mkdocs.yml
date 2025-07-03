@@ -83,6 +83,7 @@ nav:
       - integrations/engines/bigquery.md
       - integrations/engines/clickhouse.md
       - integrations/engines/databricks.md
+      - integrations/engines/doris.md
       - integrations/engines/duckdb.md
       - integrations/engines/motherduck.md
       - integrations/engines/mssql.md

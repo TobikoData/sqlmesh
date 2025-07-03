@@ -60,9 +60,7 @@ def _get_engine_import_validator(
     extra_name = extra_name or engine_type
 
     def validate(cls: t.Any, data: t.Any) -> t.Any:
-        check_import = (
-            str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
-        )
+        check_import = str_to_bool(str(data.pop("check_import", True))) if isinstance(data, dict) else True
         if not check_import:
             return data
         try:
@@ -251,9 +249,7 @@ class DuckDBAttachOptions(BaseConfig):
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
 
         # MotherDuck does not support aliasing
-        alias_sql = (
-            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
-        )
+        alias_sql = f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         return f"ATTACH IF NOT EXISTS '{self.path}'{alias_sql}{options_sql}"
 
 
@@ -382,14 +378,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     fs = filesystem(fs, **options)
                     cursor.register_filesystem(fs)
 
-            for i, (alias, path_options) in enumerate(
-                (getattr(self, "catalogs", None) or {}).items()
-            ):
+            for i, (alias, path_options) in enumerate((getattr(self, "catalogs", None) or {}).items()):
                 # we parse_identifier and generate to ensure that `alias` has exactly one set of quotes
                 # regardless of whether it comes in quoted or not
-                alias = exp.parse_identifier(alias, dialect="duckdb").sql(
-                    identify=True, dialect="duckdb"
-                )
+                alias = exp.parse_identifier(alias, dialect="duckdb").sql(identify=True, dialect="duckdb")
                 try:
                     if isinstance(path_options, DuckDBAttachOptions):
                         query = path_options.to_sql(alias)
@@ -404,13 +396,10 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                     # set it as the default catalog.
                     # If a user tried to attach a MotherDuck database/share which has already by attached via
                     # `ATTACH 'md:'`, then we don't want to raise since this is expected.
-                    if (
-                        not (
-                            'database with name "memory" already exists' in str(e)
-                            and path_options == ":memory:"
-                        )
-                        and f"""database with name "{path_options.path.replace("md:", "")}" already exists"""
-                        not in str(e)
+                    if not (
+                        'database with name "memory" already exists' in str(e) and path_options == ":memory:"
+                    ) and f"""database with name "{path_options.path.replace("md:", "")}" already exists""" not in str(
+                        e
                     ):
                         raise e
                 if i == 0 and not getattr(self, "database", None):
@@ -427,10 +416,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         data_files = set((self.catalogs or {}).values())
         if self.database:
             if isinstance(self, MotherDuckConnectionConfig):
-                data_files.add(
-                    f"md:{self.database}"
-                    + (f"?motherduck_token={self.token}" if self.token else "")
-                )
+                data_files.add(f"md:{self.database}" + (f"?motherduck_token={self.token}" if self.token else ""))
             else:
                 data_files.add(self.database)
         data_files.discard(":memory:")
@@ -445,15 +431,12 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
         if data_files:
             masked_files = {
-                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
-                for file in data_files
+                self._mask_motherduck_token(file if isinstance(file, str) else file.path) for file in data_files
             }
             logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
         else:
             logger.info("Creating new DuckDB adapter for in-memory database")
-        adapter = super().create_engine_adapter(
-            register_comments_override, concurrent_tasks=concurrent_tasks
-        )
+        adapter = super().create_engine_adapter(register_comments_override, concurrent_tasks=concurrent_tasks)
         for data_file in data_files:
             key = data_file if isinstance(data_file, str) else data_file.path
             BaseDuckDBConnectionConfig._data_file_to_adapter[key] = adapter
@@ -468,9 +451,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return None
 
     def _mask_motherduck_token(self, string: str) -> str:
-        return MOTHERDUCK_TOKEN_REGEX.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string
-        )
+        return MOTHERDUCK_TOKEN_REGEX.sub(lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string)
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
@@ -576,11 +557,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         password = data.get("password")
         data["private_key"] = cls._get_private_key(data, auth)  # type: ignore
 
-        if (
-            auth == DEFAULT_AUTHENTICATOR
-            and not data.get("private_key")
-            and (not user or not password)
-        ):
+        if auth == DEFAULT_AUTHENTICATOR and not data.get("private_key") and (not user or not password):
             raise ConfigError("User and password must be provided if using default authentication")
 
         if auth == OAUTH_AUTHENTICATOR and not data.get("token"):
@@ -588,9 +565,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
 
         return data
 
-    _engine_import_validator = _get_engine_import_validator(
-        "snowflake.connector.network", "snowflake"
-    )
+    _engine_import_validator = _get_engine_import_validator("snowflake.connector.network", "snowflake")
 
     @classmethod
     def _get_private_key(cls, values: t.Dict[str, t.Optional[str]], auth: str) -> t.Optional[bytes]:
@@ -623,13 +598,9 @@ class SnowflakeConnectionConfig(ConnectionConfig):
                 f"Private key or private key path can only be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
             )
         if not user:
-            raise ConfigError(
-                f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
-            )
+            raise ConfigError(f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication")
         if password:
-            raise ConfigError(
-                f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
-            )
+            raise ConfigError(f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication")
 
         if isinstance(private_key, bytes):
             return private_key
@@ -776,9 +747,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-        if DatabricksEngineAdapter.can_access_spark_session(
-            bool(data.get("disable_spark_session"))
-        ):
+        if DatabricksEngineAdapter.can_access_spark_session(bool(data.get("disable_spark_session"))):
             return data
 
         databricks_connect_use_serverless = data.get("databricks_connect_use_serverless")
@@ -803,16 +772,12 @@ class DatabricksConnectionConfig(ConnectionConfig):
             raise ValueError(
                 "`server_hostname` or `databricks_connect_server_hostname` is required when `databricks_connect_use_serverless` is set"
             )
-        if DatabricksEngineAdapter.can_access_databricks_connect(
-            bool(data.get("disable_databricks_connect"))
-        ):
+        if DatabricksEngineAdapter.can_access_databricks_connect(bool(data.get("disable_databricks_connect"))):
             if not data.get("databricks_connect_access_token"):
                 data["databricks_connect_access_token"] = access_token
             if not data.get("databricks_connect_server_hostname"):
                 data["databricks_connect_server_hostname"] = f"https://{server_hostname}"
-            if not databricks_connect_use_serverless and not data.get(
-                "databricks_connect_cluster_id"
-            ):
+            if not databricks_connect_use_serverless and not data.get("databricks_connect_cluster_id"):
                 if t.TYPE_CHECKING:
                     assert http_path is not None
                 data["databricks_connect_cluster_id"] = http_path.split("/")[-1]
@@ -822,17 +787,13 @@ class DatabricksConnectionConfig(ConnectionConfig):
 
             all_data = [m.value for m in AuthType]
             if auth_type not in all_data:
-                raise ValueError(
-                    f"`auth_type` {auth_type} does not match a valid option: {all_data}"
-                )
+                raise ValueError(f"`auth_type` {auth_type} does not match a valid option: {all_data}")
 
             client_id = data.get("oauth_client_id")
             client_secret = data.get("oauth_client_secret")
 
             if client_secret and not client_id:
-                raise ValueError(
-                    "`oauth_client_id` is required when `oauth_client_secret` is specified"
-                )
+                raise ValueError("`oauth_client_id` is required when `oauth_client_secret` is specified")
 
             if not http_path:
                 raise ValueError("`http_path` is still required when using `auth_type`")
@@ -1064,13 +1025,9 @@ class BigQueryConnectionConfig(ConnectionConfig):
         if self.method == BigQueryConnectionMethod.OAUTH:
             creds, _ = google.auth.default(scopes=self.scopes)
         elif self.method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
-            creds = service_account.Credentials.from_service_account_file(
-                self.keyfile, scopes=self.scopes
-            )
+            creds = service_account.Credentials.from_service_account_file(self.keyfile, scopes=self.scopes)
         elif self.method == BigQueryConnectionMethod.SERVICE_ACCOUNT_JSON:
-            creds = service_account.Credentials.from_service_account_info(
-                self.keyfile_json, scopes=self.scopes
-            )
+            creds = service_account.Credentials.from_service_account_info(self.keyfile_json, scopes=self.scopes)
         elif self.method == BigQueryConnectionMethod.OAUTH_SECRETS:
             creds = credentials.Credentials(
                 token=self.token,
@@ -1168,9 +1125,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     register_comments: bool = True
     pre_ping: bool = True
 
-    _engine_import_validator = _get_engine_import_validator(
-        "google.cloud.sql", "gcp_postgres", "gcppostgres"
-    )
+    _engine_import_validator = _get_engine_import_validator("google.cloud.sql", "gcp_postgres", "gcppostgres")
 
     @model_validator(mode="before")
     def _validate_auth_method(cls, data: t.Any) -> t.Any:
@@ -1218,13 +1173,9 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
 
         creds = None
         if self.keyfile:
-            creds = service_account.Credentials.from_service_account_file(
-                self.keyfile, scopes=self.scopes
-            )
+            creds = service_account.Credentials.from_service_account_file(self.keyfile, scopes=self.scopes)
         elif self.keyfile_json:
-            creds = service_account.Credentials.from_service_account_info(
-                self.keyfile_json, scopes=self.scopes
-            )
+            creds = service_account.Credentials.from_service_account_info(self.keyfile_json, scopes=self.scopes)
 
         kwargs = {
             "credentials": creds,
@@ -1505,9 +1456,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
 
         # Use _get_engine_import_validator with decorate=False to get the raw validation function
         # This avoids the __wrapped__ issue in Python 3.9
-        validator_func = _get_engine_import_validator(
-            import_module, driver, extra_name, decorate=False
-        )
+        validator_func = _get_engine_import_validator(import_module, driver, extra_name, decorate=False)
 
         # Call the raw validation function directly
         return validator_func(cls, data)
@@ -1684,9 +1633,7 @@ class SparkConnectionConfig(ConnectionConfig):
         if self.config_dir:
             os.environ["SPARK_CONF_DIR"] = self.config_dir
         return {
-            "spark": SparkSession.builder.config(conf=spark_config)
-            .enableHiveSupport()
-            .getOrCreate(),
+            "spark": SparkSession.builder.config(conf=spark_config).enableHiveSupport().getOrCreate(),
         }
 
 
@@ -1778,9 +1725,7 @@ class TrinoConnectionConfig(ConnectionConfig):
 
     @field_validator("schema_location_mapping", mode="before")
     @classmethod
-    def _validate_regex_keys(
-        cls, value: t.Dict[str | re.Pattern, str]
-    ) -> t.Dict[re.Pattern, t.Any]:
+    def _validate_regex_keys(cls, value: t.Dict[str | re.Pattern, str]) -> t.Dict[re.Pattern, t.Any]:
         compiled = compile_regex_mapping(value)
         for replacement in compiled.values():
             if "@{schema_name}" not in replacement:
@@ -1799,23 +1744,15 @@ class TrinoConnectionConfig(ConnectionConfig):
             self.port = 80 if self.http_scheme == "http" else 443
 
         if (self.method.is_ldap or self.method.is_basic) and (not self.password or not self.user):
-            raise ConfigError(
-                f"Username and Password must be provided if using {self.method.value} authentication"
-            )
+            raise ConfigError(f"Username and Password must be provided if using {self.method.value} authentication")
 
-        if self.method.is_kerberos and (
-            not self.principal or not self.keytab or not self.krb5_config
-        ):
-            raise ConfigError(
-                "Kerberos requires the following fields: principal, keytab, and krb5_config"
-            )
+        if self.method.is_kerberos and (not self.principal or not self.keytab or not self.krb5_config):
+            raise ConfigError("Kerberos requires the following fields: principal, keytab, and krb5_config")
 
         if self.method.is_jwt and not self.jwt_token:
             raise ConfigError("JWT requires `jwt_token` to be set")
 
-        if self.method.is_certificate and (
-            not self.cert or not self.client_certificate or not self.client_private_key
-        ):
+        if self.method.is_certificate and (not self.cert or not self.client_certificate or not self.client_private_key):
             raise ConfigError(
                 "Certificate requires the following fields: cert, client_certificate, and client_private_key"
             )
@@ -2054,9 +1991,7 @@ class AthenaConnectionConfig(ConnectionConfig):
     # SQLMesh options
     s3_warehouse_location: t.Optional[str] = None
     concurrent_tasks: int = 4
-    register_comments: t.Literal[False] = (
-        False  # because Athena doesnt support comments in most cases
-    )
+    register_comments: t.Literal[False] = False  # because Athena doesnt support comments in most cases
     pre_ping: t.Literal[False] = False
 
     type_: t.Literal["athena"] = Field(alias="type", default="athena")
@@ -2079,9 +2014,7 @@ class AthenaConnectionConfig(ConnectionConfig):
             self.s3_staging_dir = validate_s3_uri(s3_staging_dir, base=True, error_type=ConfigError)
 
         if s3_warehouse_location:
-            self.s3_warehouse_location = validate_s3_uri(
-                s3_warehouse_location, base=True, error_type=ConfigError
-            )
+            self.s3_warehouse_location = validate_s3_uri(s3_warehouse_location, base=True, error_type=ConfigError)
 
         return self
 
@@ -2168,6 +2101,76 @@ class RisingwaveConnectionConfig(ConnectionConfig):
         return init
 
 
+class DorisConnectionConfig(ConnectionConfig):
+    """Configuration for the Apache Doris connection.
+
+    Apache Doris uses MySQL network protocol and is compatible with MySQL ecosystem tools,
+    JDBC/ODBC drivers, and various visualization tools.
+
+    Args:
+        host: The hostname of the Doris FE (Frontend) node.
+        user: The Doris username.
+        password: The Doris password.
+        port: The port number of the Doris FE node. Default is 9030.
+        database: The optional database name.
+        charset: The optional character set.
+        collation: The optional collation.
+        ssl_disabled: Whether to disable SSL connection.
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+        register_comments: Whether or not to register model comments with the SQL engine.
+        pre_ping: Whether or not to pre-ping the connection before starting a new transaction to ensure it is still alive.
+    """
+
+    host: str
+    user: str
+    password: str
+    port: t.Optional[int] = 9030  # Default Doris FE port
+    database: t.Optional[str] = None
+    charset: t.Optional[str] = None
+    collation: t.Optional[str] = None
+    ssl_disabled: t.Optional[bool] = None
+
+    concurrent_tasks: int = 4
+    register_comments: bool = True
+    pre_ping: bool = True
+
+    type_: t.Literal["doris"] = Field(alias="type", default="doris")
+    DIALECT: t.ClassVar[t.Literal["mysql"]] = "mysql"  # Doris uses MySQL protocol
+    DISPLAY_NAME: t.ClassVar[t.Literal["Apache Doris"]] = "Apache Doris"
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17
+
+    _engine_import_validator = _get_engine_import_validator("pymysql", "doris")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        connection_keys = {
+            "host",
+            "user",
+            "password",
+        }
+        if self.port is not None:
+            connection_keys.add("port")
+        if self.database is not None:
+            connection_keys.add("database")
+        if self.charset is not None:
+            connection_keys.add("charset")
+        if self.collation is not None:
+            connection_keys.add("collation")
+        if self.ssl_disabled is not None:
+            connection_keys.add("ssl_disabled")
+        return connection_keys
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.DorisEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from pymysql import connect
+
+        return connect
+
+
 CONNECTION_CONFIG_TO_TYPE = {
     # Map all subclasses of ConnectionConfig to the value of their `type_` field.
     tpe.all_field_infos()["type_"].default: tpe
@@ -2223,8 +2226,7 @@ def _connection_config_validator(
         return parse_connection_config(v)
     except pydantic.ValidationError as e:
         raise ConfigError(
-            validation_error_message(e, f"Invalid '{v['type']}' connection config:")
-            + check_config_and_vars_msg
+            validation_error_message(e, f"Invalid '{v['type']}' connection config:") + check_config_and_vars_msg
         )
     except ConfigError as e:
         raise ConfigError(str(e) + check_config_and_vars_msg)

@@ -460,6 +460,7 @@ With the example configuration above, SQLMesh would evaluate environment names a
 
 *Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 
+* [Doris](../integrations/engines/doris.md) (Doris supports external catalogs but uses 'internal' as the default environment)
 * [MySQL](../integrations/engines/mysql.md)
 * [Postgres](../integrations/engines/postgres.md)
 * [GCP Postgres](../integrations/engines/gcp-postgres.md)
@@ -738,6 +739,7 @@ These pages describe the connection configuration options for each execution eng
 * [Athena](../integrations/engines/athena.md)
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
+* [Doris](../integrations/engines/doris.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [MotherDuck](../integrations/engines/motherduck.md)
 * [MySQL](../integrations/engines/mysql.md)

@@ -9,6 +9,7 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig as BigQueryConnectionConfig,
     ConnectionConfig as ConnectionConfig,
     DatabricksConnectionConfig as DatabricksConnectionConfig,
+    DorisConnectionConfig as DorisConnectionConfig,
     DuckDBConnectionConfig as DuckDBConnectionConfig,
     GCPPostgresConnectionConfig as GCPPostgresConnectionConfig,
     MotherDuckConnectionConfig as MotherDuckConnectionConfig,

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  doris-fe:
+    image: apache/doris:2.0.3-fe-x86_64
+    hostname: doris-fe
+    container_name: doris-fe
+    environment:
+      - FE_SERVERS=fe1:doris-fe:9010
+      - FE_ID=1
+    ports:
+      - "8030:8030"  # Web UI
+      - "9030:9030"  # MySQL protocol port
+    volumes:
+      - doris-fe-data:/opt/apache-doris/fe/doris-meta
+      - doris-fe-log:/opt/apache-doris/fe/log
+    networks:
+      - doris-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8030/api/bootstrap"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  doris-be:
+    image: apache/doris:2.0.3-be-x86_64
+    hostname: doris-be
+    container_name: doris-be
+    environment:
+      - FE_SERVERS=fe1:doris-fe:9010
+      - BE_ADDR=doris-be:9050
+    ports:
+      - "8040:8040"  # Web UI
+    volumes:
+      - doris-be-data:/opt/apache-doris/be/storage
+      - doris-be-log:/opt/apache-doris/be/log
+    depends_on:
+      doris-fe:
+        condition: service_healthy
+    networks:
+      - doris-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  doris-fe-data:
+  doris-fe-log:
+  doris-be-data:
+  doris-be-log:
+
+networks:
+  doris-net:
+    driver: bridge
