@@ -277,7 +277,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
-    secrets: t.List[t.Dict[str, t.Any]] = []
+    secrets: t.Union[t.List[t.Dict[str, t.Any]], t.Dict[str, t.Dict[str, t.Any]]] = []
     filesystems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
@@ -362,14 +362,22 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         "More info: https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html"
                     )
                 else:
-                    for secrets in self.secrets:
+                    if isinstance(self.secrets, list):
+                        secrets_items = [(secret_dict, "") for secret_dict in self.secrets]
+                    else:
+                        secrets_items = [
+                            (secret_dict, secret_name)
+                            for secret_name, secret_dict in self.secrets.items()
+                        ]
+
+                    for secret_dict, secret_name in secrets_items:
                         secret_settings: t.List[str] = []
-                        for field, setting in secrets.items():
+                        for field, setting in secret_dict.items():
                             secret_settings.append(f"{field} '{setting}'")
                         if secret_settings:
                             secret_clause = ", ".join(secret_settings)
                             try:
-                                cursor.execute(f"CREATE SECRET ({secret_clause});")
+                                cursor.execute(f"CREATE SECRET {secret_name} ({secret_clause});")
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
