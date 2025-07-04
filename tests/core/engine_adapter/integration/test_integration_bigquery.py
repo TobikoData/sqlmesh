@@ -400,3 +400,50 @@ def test_table_diff_table_name_matches_column_name(ctx: TestContext):
 
     assert row_diff.stats["join_count"] == 1
     assert row_diff.full_match_count == 1
+
+
+def test_materialized_view_evaluation(ctx: TestContext, engine_adapter: BigQueryEngineAdapter):
+    model_name = ctx.table("test_tbl")
+    mview_name = ctx.table("test_mview")
+
+    sqlmesh = ctx.create_context()
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {model_name}, kind FULL);
+
+                SELECT 1 AS col
+                """
+            )
+        )
+    )
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {mview_name}, kind VIEW (materialized true));
+
+                SELECT * FROM {model_name}
+                """
+            )
+        )
+    )
+
+    # Case 1: Ensure that plan is successful and we can query the materialized view
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    df = engine_adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=ctx.dialect)}")
+    assert df["col"][0] == 1
+
+    # Case 2: Ensure that we can change the underlying table and the materialized view is recreated
+    sqlmesh.upsert_model(
+        load_sql_based_model(d.parse(f"""MODEL (name {model_name}, kind FULL); SELECT 2 AS col"""))
+    )
+
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    df = engine_adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=ctx.dialect)}")
+    assert df["col"][0] == 2
