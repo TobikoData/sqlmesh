@@ -337,9 +337,9 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
 
     # make with_settings() return the current instance of engine_adapter so we can still spy on _execute
     mocker.patch.object(
-        engine_adapter, "with_settings", new_callable=lambda: lambda _: engine_adapter
+        engine_adapter, "with_settings", new_callable=lambda: lambda **kwargs: engine_adapter
     )
-    assert engine_adapter.with_settings(1) == engine_adapter
+    assert engine_adapter.with_settings() == engine_adapter
 
     spy_execute = mocker.spy(engine_adapter, "_execute")
     mocker.patch("sqlmesh.core.engine_adapter.base.random_id", return_value="abcdefgh")

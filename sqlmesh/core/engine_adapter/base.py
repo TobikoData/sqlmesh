@@ -147,15 +147,15 @@ class EngineAdapter:
         self._multithreaded = multithreaded
         self.correlation_id = correlation_id
 
-    def with_settings(self, log_level: int, **kwargs: t.Any) -> EngineAdapter:
+    def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
-            execute_log_level=log_level,
+            execute_log_level=kwargs.pop("log_level", self._execute_log_level),
             register_comments=self._register_comments,
-            null_connection=True,
+            null_connection=self._extra_config.pop("null_connection", True),
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
             **self._extra_config,

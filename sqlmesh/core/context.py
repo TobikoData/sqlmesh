@@ -459,6 +459,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
             )
+
         return self._snapshot_evaluator
 
     def execution_context(
@@ -520,7 +521,11 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return model
 
-    def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
+    def scheduler(
+        self,
+        environment: t.Optional[str] = None,
+        snapshot_evaluator: t.Optional[SnapshotEvaluator] = None,
+    ) -> Scheduler:
         """Returns the built-in scheduler.
 
         Args:
@@ -542,9 +547,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not snapshots:
             raise ConfigError("No models were found")
 
-        return self.create_scheduler(snapshots)
+        return self.create_scheduler(snapshots, snapshot_evaluator or self.snapshot_evaluator)
 
-    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
+    def create_scheduler(
+        self, snapshots: t.Iterable[Snapshot], snapshot_evaluator: SnapshotEvaluator
+    ) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -555,7 +562,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            self.snapshot_evaluator,
+            snapshot_evaluator,
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
@@ -1931,7 +1938,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_settings(logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(log_level=logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
