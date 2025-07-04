@@ -25,7 +25,7 @@ def test_get_lineage(client: TestClient, web_sushi_context: Context) -> None:
   CAST("o"."event_date" AS DATE) AS "event_date"
 FROM "memory"."sushi"."orders" AS "o"
 WHERE
-  "o"."event_date" <= CAST('1970-01-01' AS DATE)
+  "o"."event_date" <= CAST('1970-01-02' AS DATE)
   AND "o"."event_date" >= CAST('1970-01-01' AS DATE)""",
                 "expression": 'CAST("o"."event_date" AS DATE) AS "event_date"',
                 "models": {'"memory"."sushi"."orders"': ["event_date"]},
