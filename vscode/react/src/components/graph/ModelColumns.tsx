@@ -8,10 +8,9 @@ import {
   isFalse,
   isNil,
   isNotNil,
-  toID,
   truncate,
 } from '@/utils/index'
-import { EnumSide, type Side } from './types'
+import { EnumSide, toID, type Side } from './types'
 import { NoSymbolIcon } from '@heroicons/react/24/solid'
 import { ClockIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
@@ -31,8 +30,7 @@ import { useLineageFlow } from './context'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
-import type { ModelName } from '@/domain/models'
-import type { Column } from '@/domain/column'
+import type { Column, ColumnName } from '@/domain/column'
 
 export function ModelColumns({
   nodeId,
@@ -590,5 +588,5 @@ function getColumnFromLineage(
   nodeId: string,
   columnName: string,
 ): LineageColumn | undefined {
-  return lineage?.[nodeId]?.columns?.[encodeURI(columnName) as ModelName]
+  return lineage?.[nodeId]?.columns?.[columnName as ColumnName]
 }

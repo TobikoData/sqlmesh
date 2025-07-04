@@ -2091,7 +2091,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     with pytest.raises(
         SQLMeshError,
-        match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '0'",
+        match=rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
     ):
         state_sync.get_versions()
 
