@@ -5,8 +5,8 @@ import { ModelType, type Model } from '@/api/client'
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
-import ModelNodeHeaderHandles from './ModelNodeHeaderHandles'
-import ModelColumns from './ModelColumns'
+import { ModelNodeHeaderHandles } from './ModelNodeHeaderHandles'
+import { ModelColumns } from './ModelColumns'
 import { fromAPIColumn, type Column } from '@/domain/column'
 
 export const EnumLineageNodeModelType = {
@@ -229,7 +229,6 @@ export default function ModelNode({
           columns={columns}
           disabled={shouldDisableColumns}
           withHandles={true}
-          withSource={true}
           withDescription={false}
           maxHeight="10rem"
         />

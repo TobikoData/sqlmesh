@@ -8,7 +8,7 @@ import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type LineageNodeModelType } from './ModelNode'
 
-export default function ModelNodeHeaderHandles({
+export function ModelNodeHeaderHandles({
   id,
   className,
   hasLeft = false,
