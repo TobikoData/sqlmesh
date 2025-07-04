@@ -91,7 +91,9 @@ class EngineAdapterStateSync(StateSync):
         cache_dir: Path = Path(),
     ):
         config = MigrationConfig()
-        self.plan_dags_table = exp.table_(config.state_tables.get("plan_dags_table", "_plan_dags"), db=schema)
+        self.plan_dags_table = exp.table_(
+            config.state_tables.get("plan_dags_table", "_plan_dags"), db=schema
+        )
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)
@@ -168,11 +170,17 @@ class EngineAdapterStateSync(StateSync):
         """
         logger.info("Promoting environment '%s'", environment.name)
 
-        missing = {s.snapshot_id for s in environment.snapshots} - self.snapshots_exist(environment.snapshots)
+        missing = {s.snapshot_id for s in environment.snapshots} - self.snapshots_exist(
+            environment.snapshots
+        )
         if missing:
-            raise SQLMeshError(f"Missing snapshots {missing}. Make sure to push and backfill your snapshots.")
+            raise SQLMeshError(
+                f"Missing snapshots {missing}. Make sure to push and backfill your snapshots."
+            )
 
-        existing_environment = self.environment_state.get_environment(environment.name, lock_for_update=True)
+        existing_environment = self.environment_state.get_environment(
+            environment.name, lock_for_update=True
+        )
 
         existing_table_infos = (
             {table_info.name: table_info for table_info in existing_environment.promoted_snapshots}
@@ -186,7 +194,9 @@ class EngineAdapterStateSync(StateSync):
                 existing_table_info
                 for name, existing_table_info in existing_table_infos.items()
                 if name in table_infos
-                and existing_table_info.qualified_view_name.for_environment(existing_environment.naming_info)
+                and existing_table_info.qualified_view_name.for_environment(
+                    existing_environment.naming_info
+                )
                 != table_infos[name].qualified_view_name.for_environment(environment.naming_info)
             }
             if not existing_environment.expired:
@@ -206,7 +216,9 @@ class EngineAdapterStateSync(StateSync):
             # Update the updated_at attribute.
             self.snapshot_state.touch_snapshots(demoted_snapshots)
 
-        missing_models = set(existing_table_infos) - {snapshot.name for snapshot in environment.promoted_snapshots}
+        missing_models = set(existing_table_infos) - {
+            snapshot.name for snapshot in environment.promoted_snapshots
+        }
 
         added_table_infos = set(table_infos.values())
         if existing_environment and environment.can_partially_promote(existing_environment):
@@ -222,7 +234,9 @@ class EngineAdapterStateSync(StateSync):
                 environment.name, environment.plan_id, environment_statements
             )
 
-        removed = {existing_table_infos[name] for name in missing_models}.union(views_that_changed_location)
+        removed = {existing_table_infos[name] for name in missing_models}.union(
+            views_that_changed_location
+        )
 
         return PromotionResult(
             added=sorted(added_table_infos),
@@ -243,13 +257,17 @@ class EngineAdapterStateSync(StateSync):
         self.environment_state.finalize(environment)
 
     @transactional()
-    def unpause_snapshots(self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike) -> None:
+    def unpause_snapshots(
+        self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
+    ) -> None:
         self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
 
     def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         self.environment_state.invalidate_environment(name, protect_prod)
 
-    def get_expired_snapshots(self, current_ts: int, ignore_ttl: bool = False) -> t.List[SnapshotTableCleanupTask]:
+    def get_expired_snapshots(
+        self, current_ts: int, ignore_ttl: bool = False
+    ) -> t.List[SnapshotTableCleanupTask]:
         return self.snapshot_state.get_expired_snapshots(
             self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
         )
@@ -272,7 +290,9 @@ class EngineAdapterStateSync(StateSync):
         return cleanup_targets
 
     @transactional()
-    def delete_expired_environments(self, current_ts: t.Optional[int] = None) -> t.List[EnvironmentSummary]:
+    def delete_expired_environments(
+        self, current_ts: t.Optional[int] = None
+    ) -> t.List[EnvironmentSummary]:
         current_ts = current_ts or now_timestamp()
         return self.environment_state.delete_expired_environments(current_ts=current_ts)
 
@@ -308,7 +328,9 @@ class EngineAdapterStateSync(StateSync):
         self.migrate(default_catalog)
 
     @transactional()
-    def update_auto_restatements(self, next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]]) -> None:
+    def update_auto_restatements(
+        self, next_auto_restatement_ts: t.Dict[SnapshotNameVersion, t.Optional[int]]
+    ) -> None:
         self.snapshot_state.update_auto_restatements(next_auto_restatement_ts)
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
@@ -406,7 +428,9 @@ class EngineAdapterStateSync(StateSync):
         if not env:
             return {}
 
-        snapshots = env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
+        snapshots = (
+            env.snapshots if not ensure_finalized_snapshots else env.finalized_or_current_snapshots
+        )
         if models is not None:
             snapshots = [s for s in snapshots if s.name in models]
 
@@ -467,7 +491,9 @@ class EngineAdapterStateSync(StateSync):
 
         def _export_environments() -> t.Iterator[EnvironmentWithStatements]:
             for env in selected_environments:
-                yield EnvironmentWithStatements(environment=env, statements=self.get_environment_statements(env.name))
+                yield EnvironmentWithStatements(
+                    environment=env, statements=self.get_environment_statements(env.name)
+                )
 
         return StateStream.from_iterators(
             versions=versions,
@@ -485,7 +511,10 @@ class EngineAdapterStateSync(StateSync):
                 # is compatible with our Pydantic model definitions. Patch versions dont need to match because the assumption
                 # is that they dont contain any breaking changes
                 incoming_versions = state_chunk.versions
-                if incoming_versions.minor_sqlmesh_version != existing_versions.minor_sqlmesh_version:
+                if (
+                    incoming_versions.minor_sqlmesh_version
+                    != existing_versions.minor_sqlmesh_version
+                ):
                     raise SQLMeshError(
                         f"SQLMesh version mismatch. You are running '{existing_versions.sqlmesh_version}' but the state file was created with '{incoming_versions.sqlmesh_version}'.\n"
                         "Please upgrade/downgrade your SQLMesh version to match the state file before performing the import."
@@ -497,12 +526,16 @@ class EngineAdapterStateSync(StateSync):
             if isinstance(state_chunk, SnapshotsChunk):
                 auto_restatements: t.Dict[SnapshotNameVersion, t.Optional[int]] = {}
 
-                for snapshot_chunk in chunk_iterable(state_chunk, SnapshotState.SNAPSHOT_BATCH_SIZE):
+                for snapshot_chunk in chunk_iterable(
+                    state_chunk, SnapshotState.SNAPSHOT_BATCH_SIZE
+                ):
                     snapshot_chunk = list(snapshot_chunk)
                     overwrite_existing_snapshots = (
                         not clear
                     )  # if clear=True, all existing snapshots were dropped anyway
-                    self.snapshot_state.push_snapshots(snapshot_chunk, overwrite=overwrite_existing_snapshots)
+                    self.snapshot_state.push_snapshots(
+                        snapshot_chunk, overwrite=overwrite_existing_snapshots
+                    )
                     self.add_snapshots_intervals((s.snapshot_intervals for s in snapshot_chunk))
 
                     auto_restatements.update(
@@ -542,10 +575,13 @@ class EngineAdapterStateSync(StateSync):
         changed_version_prev_snapshots_by_name = {
             s.name: s
             for s in target_environment.snapshots
-            if s.name in target_snapshots_by_name and target_snapshots_by_name[s.name].version != s.version
+            if s.name in target_snapshots_by_name
+            and target_snapshots_by_name[s.name].version != s.version
         }
 
-        prev_snapshots = self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values()
+        prev_snapshots = self.get_snapshots(
+            changed_version_prev_snapshots_by_name.values()
+        ).values()
         cache: t.Dict[str, datetime] = {}
 
         for prev_snapshot in prev_snapshots:
@@ -556,11 +592,15 @@ class EngineAdapterStateSync(StateSync):
                 and prev_snapshot.is_incremental
                 and prev_snapshot.intervals
             ):
-                start = to_timestamp(start_date(target_snapshot, target_snapshots_by_name.values(), cache))
+                start = to_timestamp(
+                    start_date(target_snapshot, target_snapshots_by_name.values(), cache)
+                )
                 end = prev_snapshot.intervals[-1][1]
 
                 if start < end:
-                    missing_intervals = target_snapshot.missing_intervals(start, end, end_bounded=True)
+                    missing_intervals = target_snapshot.missing_intervals(
+                        start, end, end_bounded=True
+                    )
 
                     if missing_intervals:
                         raise SQLMeshError(

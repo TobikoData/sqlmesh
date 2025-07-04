@@ -316,6 +316,7 @@ class StateReader(abc.ABC):
 
 class StateSync(StateReader, abc.ABC):
     """Abstract base class for snapshot and environment state management."""
+
     def __init__(self, config: MigrationConfig):
         self.state_tables = config.state_tables
 

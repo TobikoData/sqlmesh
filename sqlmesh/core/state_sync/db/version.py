@@ -26,7 +26,9 @@ class VersionState:
     def __init__(self, engine_adapter: EngineAdapter, schema: t.Optional[str] = None):
         self.engine_adapter = engine_adapter
         config = MigrationConfig()
-        self.versions_table = exp.table_(config.state_tables.get("versions_table", "_versions"), db=schema)
+        self.versions_table = exp.table_(
+            config.state_tables.get("versions_table", "_versions"), db=schema
+        )
 
         index_type = index_text_type(engine_adapter.dialect)
         self._version_columns_to_types = {

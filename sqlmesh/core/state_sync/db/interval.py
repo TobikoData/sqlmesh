@@ -48,7 +48,7 @@ class IntervalState:
         config = MigrationConfig()
         self.intervals_table = exp.table_(
             config.state_tables.get("intervals_table", "_intervals"),
-            db=self.engine_adapter.schema,
+            db=schema,
         )
 
         index_type = index_text_type(engine_adapter.dialect)
