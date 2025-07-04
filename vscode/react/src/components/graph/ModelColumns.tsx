@@ -30,24 +30,24 @@ import { useLineageFlow } from './context'
 import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
-import type { Column, ColumnName } from '@/domain/column'
-import type { ModelEncodedFQN } from '@/domain/models'
+import type { Column, ColumnEncodedName, ColumnName } from '@/domain/column'
+import { encode, type ModelEncodedFQN } from '@/domain/models'
 
 export function ModelColumns({
   nodeId,
   columns,
   disabled,
   className,
-  limit = 5,
+  limit,
   withHandles = false,
   withDescription = true,
   maxHeight = '50vh',
 }: {
   nodeId: ModelEncodedFQN
   columns: Column[]
+  limit: number
   disabled?: boolean
   className?: string
-  limit?: number
   withHandles?: boolean
   withDescription?: boolean
   maxHeight?: string
@@ -292,10 +292,12 @@ export function ModelColumns({
                 withHandles={withHandles}
                 withDescription={withDescription}
                 isEmpty={
-                  isNotNil(getColumnFromLineage(lineage, nodeId, item.name)) &&
+                  isNotNil(
+                    getColumnFromLineage(lineage, nodeId, encode(item.name)),
+                  ) &&
                   Object.keys(
-                    getColumnFromLineage(lineage, nodeId, item.name)?.models ??
-                      {},
+                    getColumnFromLineage(lineage, nodeId, encode(item.name))
+                      ?.models ?? {},
                   ).length === 0
                 }
                 className="border-t border-neutral-10 first:border-0 rounded-md"
@@ -585,9 +587,9 @@ function ColumnStatus({
 }
 
 function getColumnFromLineage(
-  lineage: Record<string, Lineage>,
-  nodeId: string,
-  columnName: string,
+  lineage: Record<ModelEncodedFQN, Lineage>,
+  nodeId: ModelEncodedFQN,
+  columnName: ColumnEncodedName,
 ): LineageColumn | undefined {
-  return lineage?.[nodeId]?.columns?.[columnName as ColumnName]
+  return lineage?.[nodeId]?.columns?.[columnName]
 }

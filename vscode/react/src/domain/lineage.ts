@@ -3,11 +3,11 @@ import {
   type ModelLineageApiLineageModelNameGet200,
 } from '@/api/client'
 import type { ModelEncodedFQN, ModelFQN } from '@/domain/models'
-import type { ColumnName } from './column'
+import type { ColumnEncodedName, ColumnName } from './column'
 
 export interface Lineage {
   models: ModelEncodedFQN[]
-  columns?: Record<ColumnName, LineageColumn>
+  columns?: Record<ColumnEncodedName, LineageColumn>
 }
 
 export interface LineageColumn {

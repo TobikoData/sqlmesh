@@ -3,6 +3,8 @@ import { type Branded } from '@bus/brand'
 
 export type ColumnName = Branded<string, 'ColumnName'>
 
+export type ColumnEncodedName = Branded<string, 'ColumnEncodedName'>
+
 export type Column = {
   name: ColumnName
   type: string

@@ -6,7 +6,6 @@ import {
   isNotNil,
   isObjectEmpty,
 } from '@/utils/index'
-import { type LineageColumn } from '@/api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type ActiveEdges, type Connections } from './context'
 import { EnumSide, toID, toKeys } from './types'
@@ -14,28 +13,33 @@ import {
   EnumLineageNodeModelType,
   type LineageNodeModelType,
 } from './ModelNode'
-import type { Lineage } from '@/domain/lineage'
+import type { Lineage, LineageColumn } from '@/domain/lineage'
 import type { ConnectedNode } from '@/workers/lineage'
-import { encode, type ModelEncodedFQN, type ModelURI } from '@/domain/models'
+import {
+  encode,
+  type ModelEncodedFQN,
+  type ModelName,
+  type ModelURI,
+} from '@/domain/models'
 import type { Column, ColumnName } from '@/domain/column'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 
 /**
  * Space between nodes.
  */
-const NODE_BALANCE_SPACE = 64
+export const NODE_BALANCE_SPACE = 64
 /**
  * Height of a column line.
  */
-const COLUMN_LINE_HEIGHT = 24
+export const COLUMN_LINE_HEIGHT = 24
 /**
  * Assumed width of a character.
  */
-const CHAR_WIDTH = 8
+export const CHAR_WIDTH = 8
 /**
  * Maximum number of columns that can be visible in a node.
  */
-const MAX_VISIBLE_COLUMNS = 5
+export const MAX_VISIBLE_COLUMNS = 5
 
 export interface GraphNodeData {
   label: string
@@ -327,10 +331,10 @@ function createGraphEdge<Data>(
 
 export function mergeLineageWithColumns(
   currentLineage: Record<string, Lineage> = {},
-  newLineage: Record<string, Record<string, LineageColumn>> = {},
+  newLineage: Record<ModelName, Record<ColumnName, LineageColumn>> = {},
 ): Record<string, Lineage> {
-  for (const targetModelName in newLineage) {
-    const targetModelNameEncoded = encodeURI(targetModelName)
+  for (const targetModelName of toKeys(newLineage)) {
+    const targetModelNameEncoded = encode(targetModelName)
 
     if (isNil(currentLineage[targetModelNameEncoded])) {
       currentLineage[targetModelNameEncoded] = { columns: {}, models: [] }
@@ -339,8 +343,8 @@ export function mergeLineageWithColumns(
     const currentLineageModel = currentLineage[targetModelNameEncoded]!
     const newLineageModel = newLineage[targetModelName]!
 
-    for (const targetColumnName in newLineageModel) {
-      const targetColumnNameEncoded = encodeURI(targetColumnName)
+    for (const targetColumnName of toKeys(newLineageModel)) {
+      const targetColumnNameEncoded = encode(targetColumnName)
       const newLineageModelColumn = newLineageModel[targetColumnName]!
 
       if (isNil(currentLineageModel.columns)) {
@@ -348,7 +352,7 @@ export function mergeLineageWithColumns(
       }
 
       // New Column Lineage delivers fresh data, so we can just assign it
-      currentLineageModel.columns[targetColumnNameEncoded as ColumnName] = {
+      currentLineageModel.columns[targetColumnNameEncoded] = {
         expression: newLineageModelColumn.expression ?? undefined,
         source: newLineageModelColumn.source ?? undefined,
         models: {},
@@ -362,7 +366,7 @@ export function mergeLineageWithColumns(
       const currentLineageModelColumnModels = currentLineageModelColumn.models
 
       for (const sourceColumnName in newLineageModelColumn.models) {
-        const sourceColumnNameEncoded = encodeURI(sourceColumnName)
+        const sourceColumnNameEncoded = encode(sourceColumnName)
         const currentLineageModelColumnModel =
           currentLineageModelColumnModels[
             sourceColumnNameEncoded as ModelEncodedFQN
@@ -400,11 +404,11 @@ export function mergeConnections(
 
   // We are getting lineage in format of target -> source
   for (const targetModelName in lineage) {
-    const targetModelNameEncoded = encodeURI(targetModelName)
+    const targetModelNameEncoded = encode(targetModelName)
     const model = lineage[targetModelName]!
 
     for (const targetColumnName in model) {
-      const targetColumnNameEncoded = encodeURI(targetColumnName)
+      const targetColumnNameEncoded = encode(targetColumnName)
       const column = model[targetColumnName]
 
       // We don't have any connectins so we skip
@@ -426,9 +430,9 @@ export function mergeConnections(
       }
 
       Object.entries(column.models).forEach(([sourceModelName, columns]) => {
-        const sourceModelNameEncoded = encodeURI(sourceModelName)
+        const sourceModelNameEncoded = encode(sourceModelName)
         columns.forEach(sourceColumnName => {
-          const sourceColumnNameEncoded = encodeURI(sourceColumnName)
+          const sourceColumnNameEncoded = encode(sourceColumnName)
           // It is a source (right handler)
           // but it can also be a target (left handler) for other connections
           const modelColumnIdSource = toID(
