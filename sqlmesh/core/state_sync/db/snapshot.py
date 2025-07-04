@@ -57,9 +57,9 @@ class SnapshotState:
     ):
         self.engine_adapter = engine_adapter
         config = MigrationConfig()
-        self.snapshots_table = exp.table_(config.state_tables["snapshots_table"], db=schema)
+        self.snapshots_table = exp.table_(config.state_tables.get("snapshots_table", "_snapshots"), db=schema)
         self.auto_restatements_table = exp.table_(
-            config.state_tables["auto_restatements_table"], db=schema
+            config.state_tables.get("auto_restatements_table", "_auto_restatements"), db=schema
         )
 
         index_type = index_text_type(engine_adapter.dialect)

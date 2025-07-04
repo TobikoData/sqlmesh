@@ -27,10 +27,10 @@ class MigrationConfig(BaseConfig):
     }
 
     promoted_snapshots_only: bool = True
-    state_tables: t.Optional[dict[str, str]] = None
+    state_tables: dict[str, str] = DEFAULT_STATE_TABLES
 
     @root_validator(pre=True)
-    def validate_and_merge_state_tables(cls, values):
+    def validate_and_merge_state_tables(cls, values: dict) -> dict:
         external = values.get("state_tables", {})
         merged = cls.DEFAULT_STATE_TABLES.copy()
         if isinstance(external, dict):

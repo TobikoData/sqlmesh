@@ -91,7 +91,7 @@ class EngineAdapterStateSync(StateSync):
         cache_dir: Path = Path(),
     ):
         config = MigrationConfig()
-        self.plan_dags_table = exp.table_(config.state_tables["plan_dags_table"], db=schema)
+        self.plan_dags_table = exp.table_(config.state_tables.get("plan_dags_table", "_plan_dags"), db=schema)
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)

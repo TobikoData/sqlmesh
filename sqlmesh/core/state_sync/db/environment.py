@@ -33,10 +33,10 @@ class EnvironmentState:
         self.engine_adapter = engine_adapter
         config = MigrationConfig()
         self.environments_table = exp.table_(
-            config.state_tables["environments_table"], db=schema
+            config.state_tables.get("environments_table", "_environments"), db=schema
         )
         self.environment_statements_table = exp.table_(
-            config.state_tables["environment_statements_table"], db=schema
+            config.state_tables.get("environment_statements_table", "_environment_statements"), db=schema
         )
 
         index_type = index_text_type(engine_adapter.dialect)
