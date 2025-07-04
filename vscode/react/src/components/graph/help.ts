@@ -9,7 +9,7 @@ import {
 import { type LineageColumn } from '@/api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type ActiveEdges, type Connections } from './context'
-import { EnumSide, toID, toKeys } from './types'
+import { toID, toKeys } from './types'
 import {
   EnumLineageNodeModelType,
   type LineageNodeModelType,
@@ -19,23 +19,12 @@ import type { ConnectedNode } from '@/workers/lineage'
 import { encode, type ModelEncodedFQN, type ModelURI } from '@/domain/models'
 import type { Column, ColumnName } from '@/domain/column'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
-
-/**
- * Space between nodes.
- */
-const NODE_BALANCE_SPACE = 64
-/**
- * Height of a column line.
- */
-const COLUMN_LINE_HEIGHT = 24
-/**
- * Assumed width of a character.
- */
-const CHAR_WIDTH = 8
-/**
- * Maximum number of columns that can be visible in a node.
- */
-const MAX_VISIBLE_COLUMNS = 5
+import {
+  CHAR_WIDTH,
+  COLUMN_LINE_HEIGHT,
+  MAX_VISIBLE_COLUMNS,
+  NODE_BALANCE_SPACE,
+} from './constants'
 
 export interface GraphNodeData {
   label: string
@@ -125,17 +114,8 @@ export function getEdges(
         if (isNil(sourceColumns)) continue
 
         for (const sourceColumnName of sourceColumns) {
-          const sourceHandler = toID(
-            EnumSide.Right,
-            sourceModelName,
-            sourceColumnName,
-          )
-          const targetHandler = toID(
-            EnumSide.Left,
-            targetModelName,
-            targetColumnName,
-          )
-
+          const sourceHandler = toID('right', sourceModelName, sourceColumnName)
+          const targetHandler = toID('left', targetModelName, targetColumnName)
           outputEdges.push(
             createGraphEdge(
               sourceModelName,
@@ -460,14 +440,14 @@ export function mergeConnections(
           // And right bucket contains references to all targets (left handlers)
           connectionsModelSource.left.forEach(id => {
             activeEdges.push([
-              toID(EnumSide.Left, modelColumnIdSource),
-              toID(EnumSide.Right, id),
+              toID('left', modelColumnIdSource),
+              toID('right', id),
             ])
           })
           connectionsModelSource.right.forEach(id => {
             activeEdges.push([
-              toID(EnumSide.Left, id),
-              toID(EnumSide.Right, modelColumnIdSource),
+              toID('left', id),
+              toID('right', modelColumnIdSource),
             ])
           })
         })
