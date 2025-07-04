@@ -31,6 +31,7 @@ import { useApiColumnLineage } from '@/api/index'
 import SourceList from '@/components/sourceList/SourceList'
 import type { Lineage } from '@/domain/lineage'
 import type { Column, ColumnName } from '@/domain/column'
+import type { ModelEncodedFQN } from '@/domain/models'
 
 export function ModelColumns({
   nodeId,
@@ -42,7 +43,7 @@ export function ModelColumns({
   withDescription = true,
   maxHeight = '50vh',
 }: {
-  nodeId: string
+  nodeId: ModelEncodedFQN
   columns: Column[]
   disabled?: boolean
   className?: string
@@ -131,7 +132,7 @@ export function ModelColumns({
 
       if (isNil(selectedModel) || isNil(selectedColumn)) return false
 
-      return selectedModel.name === nodeId && selectedColumn.name === columnName
+      return selectedModel.fqn === nodeId && selectedColumn.name === columnName
     },
     [nodeId, manuallySelectedColumn],
   )

@@ -11,7 +11,8 @@ import { type Node } from 'reactflow'
 import type { Lineage } from '@/domain/lineage'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import type { Column } from '@/domain/column'
-import type { ModelEncodedFQN } from '@/domain/models'
+import type { ModelEncodedFQN, ModelName } from '@/domain/models'
+import type { ColumnName } from '@/domain/column'
 import type { Model } from '@/api/client'
 
 export interface Connections {
@@ -27,13 +28,13 @@ export type HighlightedNodes = Record<string, string[]>
 interface LineageFlow {
   lineage: Record<string, Lineage>
   lineageCache?: Record<string, Lineage>
-  mainNode?: string
+  mainNode?: ModelEncodedFQN
   connectedNodes: Set<string>
   activeEdges: ActiveEdges
   activeNodes: ActiveNodes
   selectedNodes: SelectedNodes
   selectedEdges: any[]
-  models: Record<string, ModelSQLMeshModel>
+  models: Record<ModelName, ModelSQLMeshModel>
   unknownModels: Set<ModelEncodedFQN>
   connections: Map<string, Connections>
   withConnected: boolean
@@ -41,14 +42,13 @@ interface LineageFlow {
   hasBackground: boolean
   withImpacted: boolean
   withSecondary: boolean
-  showControls: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   highlightedNodes: HighlightedNodes
   nodesMap: Record<string, Node>
   setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setWithConnected: React.Dispatch<React.SetStateAction<boolean>>
-  setMainNode: React.Dispatch<React.SetStateAction<string | undefined>>
+  setMainNode: React.Dispatch<React.SetStateAction<ModelEncodedFQN | undefined>>
   setSelectedNodes: React.Dispatch<React.SetStateAction<SelectedNodes>>
   setWithColumns: React.Dispatch<React.SetStateAction<boolean>>
   setHasBackground: React.Dispatch<React.SetStateAction<boolean>>
@@ -70,7 +70,10 @@ interface LineageFlow {
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
   >
   setNodeConnections: React.Dispatch<Record<string, any>>
-  isActiveColumn: (modelName: string, columnName: string) => boolean
+  isActiveColumn: (
+    modelName: ModelEncodedFQN,
+    columnName: ColumnName,
+  ) => boolean
 }
 
 export const LineageFlowContext = createContext<LineageFlow>({
@@ -93,7 +96,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   connectedNodes: new Set(),
   highlightedNodes: {},
   nodesMap: {},
-  showControls: true,
   setHighlightedNodes: () => {},
   setWithColumns: () => false,
   setHasBackground: () => false,
@@ -144,7 +146,7 @@ export default function LineageFlowProvider({
     {},
   )
   const [withColumns, setWithColumns] = useState(showColumns)
-  const [mainNode, setMainNode] = useState<string | undefined>()
+  const [mainNode, setMainNode] = useState<ModelEncodedFQN | undefined>()
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
   const [activeEdges, setActiveEdges] = useState<ActiveEdges>(new Map())
@@ -242,7 +244,10 @@ export default function LineageFlowProvider({
   )
 
   const isActiveColumn = useCallback(
-    function isActive(modelName: string, columnName: string): boolean {
+    function isActive(
+      modelName: ModelEncodedFQN,
+      columnName: ColumnName,
+    ): boolean {
       const leftConnector = [EnumSide.Left, modelName, columnName].join('__')
       const rightConnector = [EnumSide.Right, modelName, columnName].join('__')
 

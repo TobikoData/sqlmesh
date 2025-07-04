@@ -130,13 +130,11 @@ export function getEdges(
             sourceModelName,
             sourceColumnName,
           )
-          console.log('sourceHandler', sourceHandler)
           const targetHandler = toID(
             EnumSide.Left,
             targetModelName,
             targetColumnName,
           )
-          console.log('targetHandler', targetHandler)
 
           outputEdges.push(
             createGraphEdge(
@@ -668,7 +666,7 @@ export function getUpdatedEdges(
 export function getUpdatedNodes(
   nodes: Node[] = [],
   activeNodes: Set<string>,
-  mainNode: string,
+  mainNode: ModelEncodedFQN,
   connectedNodes: Set<string>,
   selectedNodes: Set<string>,
   connections: Map<string, Connections>,
