@@ -77,8 +77,6 @@ PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
-    "description",
-    "cron",
     "merge_filter",
 } | PROPERTIES
 
@@ -2469,6 +2467,9 @@ def _create_model(
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+        statements.append(kwargs["kind"].merge_filter)
+
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
@@ -2749,23 +2750,37 @@ def render_meta_fields(
 
         return value
 
+    def parse_strings_with_macro_refs(value: t.Any) -> t.Any:
+        if isinstance(value, str) and "@" in value:
+            return exp.maybe_parse(value, dialect=dialect)
+
+        if isinstance(value, dict):
+            for k, v in dict(value).items():
+                value[k] = parse_strings_with_macro_refs(v)
+        elif isinstance(value, list):
+            value = [parse_strings_with_macro_refs(v) for v in value]
+
+        return value
+
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
+        field_value = fields.get(field)
 
-        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+        if field in ("cron", "description") or field_value is None:
             continue
 
-        field_value = fields.get(field)
-        if field_value is None:
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            fields[field] = parse_strings_with_macro_refs(field_value)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = value
+                    rendered_dict[key] = parse_strings_with_macro_refs(value)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
+
             if rendered_dict:
                 fields[field] = rendered_dict
             else:
