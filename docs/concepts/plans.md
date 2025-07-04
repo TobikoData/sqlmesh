@@ -246,6 +246,63 @@ Models needing backfill (missing dates):
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until '2024-09-27 00:00:00':
 ```
 
+#### Minimum intervals
+
+When you run a plan with a fixed `--start` or `--end` date, you create a virtual data environment with a limited subset of data. However, if the time range specified is less than the size of an interval on one of your models, that model will be skipped by default.
+
+For example, if you have a model like so:
+
+```sql
+MODEL(
+    name sqlmesh_example.monthly_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column month
+    ),
+    cron '@monthly'
+);
+
+SELECT SUM(a) AS sum_a, MONTH(day) AS month
+FROM sqlmesh_example.upstream_model
+WHERE day BETWEEN @start_ds AND @end_ds
+```
+
+make a change to it and run the following:
+
+```bash linenums="1" hl_lines="8"
+$ sqlmesh plan dev --start '1 day ago' 
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+SKIP: No model batches to execute
+```
+
+No data will be backfilled because `1 day ago` does not contain a complete month. However, you can use the `--min-intervals` option to override this behaviour like so:
+
+```bash linenums="1" hl_lines="11"
+$ sqlmesh plan dev --start '1 day ago' --min-intervals 1
+
+Models:
+└── Added:
+    └── sqlmesh_example__dev.monthly_model
+Apply - Virtual Update [y/n]: y
+
+[1/1] sqlmesh_example__dev.monthly_model   [insert 2025-06-01 - 2025-06-30]   0.08s   
+Executing model batches ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00                                                             
+                                                                                                                                                    
+✔ Model batches executed
+```
+
+This will ensure that regardless of the plan `--start` date, all added or modified models will have at least `--min-intervals` intervals considered for backfill.
+
+!!! info
+
+    If you are running plans manually you can just adjust the `--start` date to be wide enough to cover the models in question.
+
+    The `--min-intervals` option is primarily intended for [automation scenarios](../integrations/github.md) where the plan is always run with a default relative start date and you always want (for example) "2 weeks worth of data" in the target environment.
+
 ### Data preview for forward-only changes
 As mentioned earlier, the data output produced by [forward-only changes](#forward-only-change) in a development environment can only be used for preview and will not be reused in production.
 

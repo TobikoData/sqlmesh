@@ -12,6 +12,7 @@ from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.user import User, UserRole
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
@@ -251,6 +252,18 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
     assert controller._pr_plan_builder._categorizer_config == custom_categorizer_config
     assert controller.pr_plan.start == default_start_absolute
+    assert not controller.pr_plan.start_override_per_model
+
+
+def test_pr_plan_min_intervals(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(default_pr_start="1 day ago", pr_min_intervals=1),
+    )
+    assert controller.pr_plan.environment.name == "hello_world_2"
+    assert isinstance(controller.pr_plan, Plan)
+    assert controller.pr_plan.start_override_per_model
 
 
 def test_prod_plan(github_client, make_controller):

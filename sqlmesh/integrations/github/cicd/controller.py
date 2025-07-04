@@ -402,6 +402,7 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
+                min_intervals=self.bot_config.pr_min_intervals,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
             )
