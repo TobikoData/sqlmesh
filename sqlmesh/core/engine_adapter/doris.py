@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class DorisEngineAdapter(
     LogicalMergeMixin, PandasNativeFetchDFSupportMixin, NonTransactionalTruncateMixin, RowDiffMixin
 ):
-    DIALECT = "mysql"  # Doris uses MySQL protocol for connection
+    DIALECT = "doris"  # Doris uses MySQL protocol for connection
     DEFAULT_BATCH_SIZE = 200
     SUPPORTS_TRANSACTIONS = False  # Doris doesn't support transactions
     SUPPORTS_INDEXES = True  # Doris supports various indexes (inverted, bloom filter, etc.)
@@ -521,6 +521,7 @@ class DorisEngineAdapter(
             properties_sql = "PROPERTIES (\n    " + ",\n    ".join(properties_list) + "\n)"
             parts.append(properties_sql)
 
+        logger.info(f"Doris create table sql: {'\n'.join(parts)}")
         return "\n".join(parts)
 
     def create_view(
@@ -590,3 +591,33 @@ class DorisEngineAdapter(
         else:
             sql = f"DROP VIEW {'IF EXISTS ' if ignore_if_not_exists else ''}{view_name}"
         self.execute(sql)
+
+    def create_state_table(
+        self,
+        table_name: str,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+    ) -> None:
+        """Create a table to store SQLMesh internal state with Doris-specific optimizations.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            columns_to_types: A mapping between the column name and its data type.
+            primary_key: Determines the table primary key.
+        """
+        logger.info(f"Creating state table {table_name} with columns {columns_to_types} and primary key {primary_key}")
+        # Use UNIQUE KEY model for state tables to support updates
+        table_properties = {
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": list(primary_key) if primary_key else list(columns_to_types.keys())[:2],
+            "DISTRIBUTED_BY": f"HASH({primary_key[0] if primary_key else list(columns_to_types.keys())[0]})",
+            "BUCKETS": "10",  # Small bucket count for state tables
+        }
+
+        # Create the table with Doris-specific properties
+        self.create_table(
+            table_name,
+            columns_to_types,
+            table_properties=table_properties,
+            table_description="SQLMesh state table",
+        )
