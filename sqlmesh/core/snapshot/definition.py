@@ -1469,7 +1469,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     def create(
         cls,
         snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot],
-        start: t.Optional[TimeLike] = None,
+        start: t.Optional[TimeLike] = None,  # plan start
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ) -> DeployabilityIndex:
         if not isinstance(snapshots, dict):
             snapshots = {s.snapshot_id: s for s in snapshots}
@@ -1477,6 +1478,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         deployability_mapping: t.Dict[SnapshotId, bool] = {}
         children_deployability_mapping: t.Dict[SnapshotId, bool] = {}
         representative_shared_version_ids: t.Set[SnapshotId] = set()
+        start_override_per_model = start_override_per_model or {}
 
         start_date_cache: t.Optional[t.Dict[str, datetime]] = {}
 
@@ -1499,12 +1501,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     snapshot.is_model and snapshot.model.auto_restatement_cron is not None
                 )
 
+                snapshot_start = start_override_per_model.get(
+                    node.name, start_date(snapshot, snapshots.values(), cache=start_date_cache)
+                )
+
                 is_valid_start = (
-                    snapshot.is_valid_start(
-                        start, start_date(snapshot, snapshots.values(), start_date_cache)
-                    )
-                    if start is not None
-                    else True
+                    snapshot.is_valid_start(start, snapshot_start) if start is not None else True
                 )
 
                 if (
@@ -1800,7 +1802,8 @@ def missing_intervals(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
@@ -1817,13 +1820,15 @@ def missing_intervals(
         else earliest_start_date(snapshots, cache=cache, relative_to=end_date)
     )
     restatements = restatements or {}
-    interval_end_per_model = interval_end_per_model or {}
+    start_override_per_model = start_override_per_model or {}
+    end_override_per_model = end_override_per_model or {}
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
     for snapshot in snapshots.values():
         if not snapshot.evaluatable:
             continue
-        snapshot_start_date = start_dt
+
+        snapshot_start_date = start_override_per_model.get(snapshot.name, start_dt)
         snapshot_end_date: TimeLike = end_date
 
         restated_interval = restatements.get(snapshot.snapshot_id)
@@ -1833,9 +1838,9 @@ def missing_intervals(
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(restated_interval)
 
-        existing_interval_end = interval_end_per_model.get(snapshot.name)
+        existing_interval_end = end_override_per_model.get(snapshot.name)
         if existing_interval_end:
-            if to_timestamp(snapshot_start_date) >= existing_interval_end:
+            if snapshot_start_date >= existing_interval_end:
                 # The start exceeds the provided interval end, so we can skip this snapshot
                 # since it doesn't have missing intervals by definition
                 continue

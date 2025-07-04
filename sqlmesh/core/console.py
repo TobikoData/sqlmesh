@@ -2073,8 +2073,8 @@ class TerminalConsole(Console):
             if not plan_builder.override_end:
                 if plan.provided_end:
                     blank_meaning = f"'{time_like_to_str(plan.provided_end)}'"
-                elif plan.interval_end_per_model:
-                    max_end = max(plan.interval_end_per_model.values())
+                elif plan.end_override_per_model:
+                    max_end = max(plan.end_override_per_model.values())
                     blank_meaning = f"'{time_like_to_str(max_end)}'"
                 else:
                     blank_meaning = "now"
