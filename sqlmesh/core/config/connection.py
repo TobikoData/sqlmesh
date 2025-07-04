@@ -232,7 +232,7 @@ class DuckDBAttachOptions(BaseConfig):
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
         # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type not in ("duckdb", "motherduck"):
+        if self.type not in ("duckdb", "ducklake", "motherduck"):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
