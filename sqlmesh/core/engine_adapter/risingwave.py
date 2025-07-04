@@ -44,11 +44,11 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
             .from_("rw_catalog.rw_columns")
             .join("rw_catalog.rw_relations", on="rw_relations.id=rw_columns.relation_id")
             .join("rw_catalog.rw_schemas", on="rw_schemas.id=rw_relations.schema_id")
-            .where(exp.column("rw_relations.name", quoted=False).eq(table.alias_or_name))
+            .where(exp.column("name",db="rw_relations",quoted=False).eq(table.alias_or_name))
         )
 
         if table.args.get("db"):
-            sql = sql.where(exp.column("rw_schemas.name").eq(table.args["db"].name))
+            sql = sql.where(exp.column("name",db="rw_schemas",quoted=False).eq(table.args["db"].name))
 
         self.execute(sql)
         resp = self.cursor.fetchall()
