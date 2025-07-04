@@ -10,7 +10,7 @@ import {
   isNotNil,
   truncate,
 } from '@/utils/index'
-import { EnumSide, toID, type Side } from './types'
+import { toID, type PartialColumnHandleId, type Side } from './types'
 import { NoSymbolIcon } from '@heroicons/react/24/solid'
 import { ClockIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
@@ -38,7 +38,7 @@ export function ModelColumns({
   columns,
   disabled,
   className,
-  limit = 5,
+  limit,
   withHandles = false,
   withDescription = true,
   maxHeight = '50vh',
@@ -47,7 +47,7 @@ export function ModelColumns({
   columns: Column[]
   disabled?: boolean
   className?: string
-  limit?: number
+  limit: number
   withHandles?: boolean
   withDescription?: boolean
   maxHeight?: string
@@ -125,7 +125,7 @@ export function ModelColumns({
   }
 
   const isSelectManually = useCallback(
-    function isSelectManually(columnName: string): boolean {
+    function isSelectManually(columnName: ColumnName): boolean {
       if (isNil(manuallySelectedColumn)) return false
 
       const [selectedModel, selectedColumn] = manuallySelectedColumn
@@ -138,12 +138,10 @@ export function ModelColumns({
   )
 
   const removeEdges = useCallback(
-    function removeEdges(columnId: string): void {
+    function removeEdges(columnId: PartialColumnHandleId): void {
       const visited = new Set<string>()
 
-      removeActiveEdges(
-        walk(columnId, EnumSide.Left).concat(walk(columnId, EnumSide.Right)),
-      )
+      removeActiveEdges(walk(columnId, 'left').concat(walk(columnId, 'right')))
 
       if (connections.size === 0 && isNotNil(lineageCache)) {
         setLineage(lineageCache)
@@ -164,12 +162,12 @@ export function ModelColumns({
         return edges
           .map(edge =>
             [
-              side === EnumSide.Left
-                ? [toID(EnumSide.Left, id), toID(EnumSide.Right, edge)]
-                : [toID(EnumSide.Left, edge), toID(EnumSide.Right, id)],
+              side === 'left'
+                ? [toID('left', id), toID('right', edge)]
+                : [toID('left', edge), toID('right', id)],
             ].concat(walk(edge, side)),
           )
-          .flat() as Array<[string, string]>
+          .flat() as Array<[PartialColumnHandleId, PartialColumnHandleId]>
       }
     },
     [removeActiveEdges, connections],
@@ -324,8 +322,8 @@ function ModelColumn({
   withHandles = false,
   withDescription = true,
 }: {
-  id: string
-  nodeId: string
+  id: PartialColumnHandleId
+  nodeId: ModelEncodedFQN
   column: Column
   disabled?: boolean
   isActive?: boolean
@@ -337,7 +335,7 @@ function ModelColumn({
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
-  removeEdges: (columnId: string) => void
+  removeEdges: (columnId: PartialColumnHandleId) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
       [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
@@ -454,8 +452,8 @@ function ColumnHandles({
   children,
   className,
 }: {
-  nodeId: string
-  id: string
+  nodeId: ModelEncodedFQN
+  id: PartialColumnHandleId
   children: React.ReactNode
   className?: string
   hasLeft?: boolean
@@ -482,7 +480,7 @@ function ColumnHandles({
       {hasLeft && (
         <Handle
           type="target"
-          id={toID(EnumSide.Left, id)}
+          id={toID('left', id)}
           position={Position.Left}
           isConnectable={false}
           className="w-2 h-2 rounded-full"
@@ -492,7 +490,7 @@ function ColumnHandles({
       {hasRight && (
         <Handle
           type="source"
-          id={toID(EnumSide.Right, id)}
+          id={toID('right', id)}
           position={Position.Right}
           isConnectable={false}
           className="w-2 h-2 rounded-full"
@@ -510,19 +508,13 @@ function ColumnDisplay({
   disabled = false,
   withDescription = true,
 }: {
-  columnName: string
+  columnName: ColumnName
   columnType: string
   columnDescription?: ColumnDescription
   disabled?: boolean
   withDescription?: boolean
   className?: string
 }): JSX.Element {
-  let decodedColumnName = columnName
-
-  try {
-    decodedColumnName = decodeURI(columnName)
-  } catch {}
-
   return (
     <div
       className={clsx(
@@ -533,7 +525,7 @@ function ColumnDisplay({
     >
       <div className="w-full flex justify-between items-center">
         <span
-          title={decodedColumnName}
+          title={columnName}
           className={clsx('flex items-center', disabled && 'opacity-50')}
         >
           {disabled && (
@@ -542,7 +534,7 @@ function ColumnDisplay({
               className="w-3 h-3 mr-2"
             />
           )}
-          {truncate(decodedColumnName, 50, 20)}
+          {truncate(columnName, 50, 20)}
         </span>
         <span
           title={columnType}

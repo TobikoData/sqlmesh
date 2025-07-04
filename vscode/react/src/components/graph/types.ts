@@ -1,16 +1,20 @@
 import type { ColumnName } from '@/domain/column'
 import type { ModelEncodedFQN } from '@/domain/models'
+import type { Branded } from '@bus/brand'
 
-export const EnumSide = {
-  Left: 'left',
-  Right: 'right',
-} as const
-
-export type Side = (typeof EnumSide)[keyof typeof EnumSide]
+export type Side = 'left' | 'right'
 
 export type NodeId = string
 
 export type EdgeId = string
+
+/**
+ * Partial column handle id that isn't complete yet as it's missing the left/right side
+ * definition.
+ */
+export type PartialColumnHandleId = Branded<string, 'PartialColumnHandleId'>
+export type ColumnHandleId = Branded<string, 'ColumnHandleId'>
+export type ModelHandleId = Branded<string, 'ModelHandleId'>
 
 /**
  * Converts a list of strings to a single string with a double underscore
@@ -19,15 +23,23 @@ export type EdgeId = string
  * @returns
  */
 export function toID(
-  leftOrRight: 'left' | 'right',
+  leftOrRight: Side,
   modelName: ModelEncodedFQN,
   columnName: ColumnName,
 ): NodeId
-export function toID(source: NodeId, target: NodeId): NodeId
 export function toID(
-  leftOrRight: 'left' | 'right',
   modelName: ModelEncodedFQN,
-): NodeId
+  columnName: ColumnName,
+): PartialColumnHandleId
+export function toID(
+  leftOrRight: Side,
+  partialColumnHandleId: PartialColumnHandleId,
+): ColumnHandleId
+export function toID(
+  leftOrRight: Side,
+  modelName: ModelEncodedFQN,
+): ModelHandleId
+export function toID(source: NodeId, target: NodeId): NodeId
 export function toID(
   source: NodeId,
   target: NodeId,

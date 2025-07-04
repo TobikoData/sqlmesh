@@ -6,7 +6,6 @@ import {
   useMemo,
 } from 'react'
 import { getNodeMap, hasActiveEdge, hasActiveEdgeConnector } from './help'
-import { EnumSide } from './types'
 import { type Node } from 'reactflow'
 import type { Lineage } from '@/domain/lineage'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
@@ -14,6 +13,8 @@ import type { Column } from '@/domain/column'
 import type { ModelEncodedFQN, ModelName } from '@/domain/models'
 import type { ColumnName } from '@/domain/column'
 import type { Model } from '@/api/client'
+import { toID, toKeys } from './types'
+import type { ConnectedNode } from '@/workers/lineage'
 
 export interface Connections {
   left: string[]
@@ -22,18 +23,18 @@ export interface Connections {
 export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
 export type ActiveEdges = Map<string, Array<[string, string]>>
 export type ActiveNodes = Set<ModelEncodedFQN>
-export type SelectedNodes = Set<string>
+export type SelectedNodes = Set<ModelEncodedFQN>
 export type HighlightedNodes = Record<string, string[]>
 
 interface LineageFlow {
   lineage: Record<string, Lineage>
   lineageCache?: Record<string, Lineage>
   mainNode?: ModelEncodedFQN
-  connectedNodes: Set<string>
+  connectedNodes: Set<ModelEncodedFQN>
   activeEdges: ActiveEdges
   activeNodes: ActiveNodes
   selectedNodes: SelectedNodes
-  selectedEdges: any[]
+  selectedEdges: ConnectedNode[]
   models: Record<ModelName, ModelSQLMeshModel>
   unknownModels: Set<ModelEncodedFQN>
   connections: Map<string, Connections>
@@ -44,7 +45,7 @@ interface LineageFlow {
   withSecondary: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   highlightedNodes: HighlightedNodes
-  nodesMap: Record<string, Node>
+  nodesMap: Record<ModelEncodedFQN, Node>
   setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setWithConnected: React.Dispatch<React.SetStateAction<boolean>>
@@ -64,7 +65,7 @@ interface LineageFlow {
   setLineageCache: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
   >
-  handleClickModel?: (modelName: string) => void
+  handleClickModel?: (modelName: ModelEncodedFQN) => void
   handleError?: (error: any) => void
   setManuallySelectedColumn: React.Dispatch<
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
@@ -130,7 +131,7 @@ export default function LineageFlowProvider({
   models,
 }: {
   children: React.ReactNode
-  handleClickModel?: (modelName: string) => void
+  handleClickModel?: (modelName: ModelEncodedFQN) => void
   handleError?: (error: any) => void
   showColumns?: boolean
   showConnected?: boolean
@@ -142,9 +143,9 @@ export default function LineageFlowProvider({
   const [lineageCache, setLineageCache] = useState<
     Record<string, Lineage> | undefined
   >(undefined)
-  const [nodesConnections, setNodeConnections] = useState<Record<string, any>>(
-    {},
-  )
+  const [nodesConnections, setNodeConnections] = useState<
+    Record<ModelEncodedFQN, any>
+  >({})
   const [withColumns, setWithColumns] = useState(showColumns)
   const [mainNode, setMainNode] = useState<ModelEncodedFQN | undefined>()
   const [manuallySelectedColumn, setManuallySelectedColumn] =
@@ -248,9 +249,8 @@ export default function LineageFlowProvider({
       modelName: ModelEncodedFQN,
       columnName: ColumnName,
     ): boolean {
-      const leftConnector = [EnumSide.Left, modelName, columnName].join('__')
-      const rightConnector = [EnumSide.Right, modelName, columnName].join('__')
-
+      const leftConnector = toID('left', modelName, columnName)
+      const rightConnector = toID('right', modelName, columnName)
       return (
         hasActiveEdgeConnector(activeEdges, leftConnector) ||
         hasActiveEdgeConnector(activeEdges, rightConnector)
@@ -259,8 +259,8 @@ export default function LineageFlowProvider({
     [checkActiveEdge, activeEdges],
   )
 
-  const connectedNodes: Set<string> = useMemo(
-    () => new Set(Object.keys(nodesConnections)),
+  const connectedNodes = useMemo(
+    () => new Set(toKeys(nodesConnections)),
     [nodesConnections],
   )
 
