@@ -223,7 +223,7 @@ def test_pr_plan(github_client, make_controller):
         "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
     assert controller.pr_plan.environment.name == "hello_world_2"
-    assert controller.pr_plan.skip_backfill
+    assert not controller.pr_plan.skip_backfill
     assert not controller.pr_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
@@ -241,7 +241,9 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
         "tests/fixtures/github/pull_request_synchronized.json",
         github_client,
         bot_config=GithubCICDBotConfig(
-            auto_categorize_changes=custom_categorizer_config, default_pr_start=default_start
+            auto_categorize_changes=custom_categorizer_config,
+            default_pr_start=default_start,
+            skip_pr_backfill=True,
         ),
     )
     assert controller.pr_plan.environment.name == "hello_world_2"

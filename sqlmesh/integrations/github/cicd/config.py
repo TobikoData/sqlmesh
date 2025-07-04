@@ -22,10 +22,12 @@ class GithubCICDBotConfig(BaseConfig):
     enable_deploy_command: bool = False
     merge_method: t.Optional[MergeMethod] = None
     command_namespace: t.Optional[str] = None
-    auto_categorize_changes: CategorizerConfig = CategorizerConfig.all_off()
+    auto_categorize_changes_: t.Optional[CategorizerConfig] = Field(
+        default=None, alias="auto_categorize_changes"
+    )
     default_pr_start: t.Optional[TimeLike] = None
-    skip_pr_backfill: bool = True
-    pr_include_unmodified: t.Optional[bool] = None
+    skip_pr_backfill: bool = False  # to align with the CLI default
+    pr_include_unmodified_: t.Optional[bool] = Field(default=None, alias="pr_include_unmodified")
     run_on_deploy_to_prod: bool = False
     pr_environment_name: t.Optional[str] = None
     prod_branch_names_: t.Optional[str] = Field(default=None, alias="prod_branch_name")
@@ -48,6 +50,14 @@ class GithubCICDBotConfig(BaseConfig):
         if self.prod_branch_names_:
             return [self.prod_branch_names_]
         return ["main", "master"]
+
+    @property
+    def auto_categorize_changes(self) -> CategorizerConfig:
+        return self.auto_categorize_changes_ or CategorizerConfig.all_off()
+
+    @property
+    def pr_include_unmodified(self) -> bool:
+        return self.pr_include_unmodified_ or False
 
     FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
         "invalidate_environment_after_deploy",
