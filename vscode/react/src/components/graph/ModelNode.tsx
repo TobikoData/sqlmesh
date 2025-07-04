@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { useMemo, useCallback, useState } from 'react'
 import { ModelType, type Model } from '@/api/client'
 import { useLineageFlow } from './context'
-import { type GraphNodeData } from './help'
+import { MAX_VISIBLE_COLUMNS, type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
 import { ModelNodeHeaderHandles } from './ModelNodeHeaderHandles'
 import { ModelColumns } from './ModelColumns'
@@ -37,7 +37,6 @@ export default function ModelNode({
     withColumns: false,
   }
   const {
-    // connections,
     models,
     handleClickModel,
     lineage,
@@ -229,6 +228,7 @@ export default function ModelNode({
           className="nowheel rounded-b-lg bg-theme-lighter text-xs"
           nodeId={id}
           columns={columns}
+          limit={MAX_VISIBLE_COLUMNS}
           disabled={shouldDisableColumns}
           withHandles={true}
           withDescription={false}

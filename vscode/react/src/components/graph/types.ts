@@ -1,4 +1,4 @@
-import type { ColumnName } from '@/domain/column'
+import type { ColumnEncodedName } from '@/domain/column'
 import type { ModelEncodedFQN } from '@/domain/models'
 
 export const EnumSide = {
@@ -21,7 +21,7 @@ export type EdgeId = string
 export function toID(
   leftOrRight: 'left' | 'right',
   modelName: ModelEncodedFQN,
-  columnName: ColumnName,
+  columnName: ColumnEncodedName,
 ): NodeId
 export function toID(source: NodeId, target: NodeId): NodeId
 export function toID(

@@ -7,6 +7,7 @@ import { EnumSide, toID } from './types'
 import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type LineageNodeModelType } from './ModelNode'
+import type { ModelEncodedFQN } from '@/domain/models'
 
 export function ModelNodeHeaderHandles({
   id,
@@ -21,7 +22,7 @@ export function ModelNodeHeaderHandles({
   handleClick,
   handleSelect,
 }: {
-  id: string
+  id: ModelEncodedFQN
   label: string
   type?: LineageNodeModelType
   hasLeft?: boolean

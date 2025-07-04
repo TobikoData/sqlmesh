@@ -1,4 +1,5 @@
 import type { Branded } from '@bus/brand'
+import type { ColumnEncodedName, ColumnName } from './column'
 
 /**
  * ModelName is a type that represents the name of a model.
@@ -30,13 +31,15 @@ export type ModelURI = Branded<string, 'ModelURI'>
  */
 export type ModelEncodedURI = Branded<string, 'ModelEncodedURI'>
 
-export function encode(fqn: ModelName): ModelEncodedName
-export function encode(fqn: ModelURI): ModelEncodedURI
+export function encode(columnName: ColumnName): ColumnEncodedName
+export function encode(name: ModelName): ModelEncodedName
+export function encode(uri: ModelURI): ModelEncodedURI
 export function encode(fqn: ModelFQN): ModelEncodedFQN
 export function encode(s: string): string {
   return encodeURI(s)
 }
 
+export function decode(columnName: ColumnEncodedName): ColumnName
 export function decode(fqn: ModelEncodedName): ModelName
 export function decode(fqn: ModelEncodedURI): ModelURI
 export function decode(fqn: ModelEncodedFQN): ModelFQN
