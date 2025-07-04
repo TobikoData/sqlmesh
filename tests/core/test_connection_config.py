@@ -4,7 +4,7 @@ import typing as t
 
 import pytest
 from _pytest.fixtures import FixtureRequest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -453,6 +453,110 @@ def test_duckdb(make_config):
     assert config.filesystems
     assert isinstance(config, DuckDBConnectionConfig)
     assert not config.is_recommended_for_state_sync
+
+
+@patch("duckdb.connect")
+def test_duckdb_multiple_secrets(mock_connect, make_config):
+    """Test that multiple secrets are correctly converted to CREATE SECRET SQL statements."""
+    mock_cursor = MagicMock()
+    mock_connection = MagicMock()
+    mock_connection.cursor.return_value = mock_cursor
+    mock_connection.execute = mock_cursor.execute
+    mock_connect.return_value = mock_connection
+
+    # Create config with 2 secrets
+    config = make_config(
+        type="duckdb",
+        secrets=[
+            {
+                "type": "s3",
+                "region": "us-east-1",
+                "key_id": "my_aws_key",
+                "secret": "my_aws_secret",
+            },
+            {
+                "type": "azure",
+                "account_name": "myaccount",
+                "account_key": "myaccountkey",
+            },
+        ],
+    )
+
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert len(config.secrets) == 2
+
+    # Create cursor which triggers _cursor_init
+    cursor = config.create_engine_adapter().cursor
+
+    execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
+    create_secret_calls = [call for call in execute_calls if call.startswith("CREATE SECRET")]
+
+    # Should have exactly 2 CREATE SECRET calls
+    assert len(create_secret_calls) == 2
+
+    # Verify the SQL for the first secret (S3)
+    assert (
+        create_secret_calls[0]
+        == "CREATE SECRET  (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+    )
+
+    # Verify the SQL for the second secret (Azure)
+    assert (
+        create_secret_calls[1]
+        == "CREATE SECRET  (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+    )
+
+
+@patch("duckdb.connect")
+def test_duckdb_named_secrets(mock_connect, make_config):
+    """Test that named secrets are correctly converted to CREATE SECRET SQL statements."""
+    mock_cursor = MagicMock()
+    mock_connection = MagicMock()
+    mock_connection.cursor.return_value = mock_cursor
+    mock_connection.execute = mock_cursor.execute
+    mock_connect.return_value = mock_connection
+
+    # Create config with named secrets using dictionary format
+    config = make_config(
+        type="duckdb",
+        secrets={
+            "my_s3_secret": {
+                "type": "s3",
+                "region": "us-east-1",
+                "key_id": "my_aws_key",
+                "secret": "my_aws_secret",
+            },
+            "my_azure_secret": {
+                "type": "azure",
+                "account_name": "myaccount",
+                "account_key": "myaccountkey",
+            },
+        },
+    )
+
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert len(config.secrets) == 2
+
+    # Create cursor which triggers _cursor_init
+    cursor = config.create_engine_adapter().cursor
+
+    execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
+    create_secret_calls = [call for call in execute_calls if call.startswith("CREATE SECRET")]
+
+    # Should have exactly 2 CREATE SECRET calls
+    assert len(create_secret_calls) == 2
+
+    # Verify the SQL for the first secret (S3) includes the secret name
+    assert (
+        create_secret_calls[0]
+        == "CREATE SECRET my_s3_secret (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+    )
+
+    # Verify the SQL for the second secret (Azure) includes the secret name
+    assert (
+        create_secret_calls[1]
+        == "CREATE SECRET my_azure_secret (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+    )
 
 
 @pytest.mark.parametrize(
