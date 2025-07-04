@@ -1876,6 +1876,9 @@ class ViewStrategy(PromotableStrategy):
         )
         snapshot = kwargs["snapshot"]
         snapshots = kwargs["snapshots"]
+
+        # We must replace a materialized view if its query has changed or if it depends on a table.
+        # The latter is because if the underlying table is replaced, the materialized view is invalidated in some of the engines.
         if (
             (
                 isinstance(query_or_df, exp.Expression)
@@ -1887,6 +1890,7 @@ class ViewStrategy(PromotableStrategy):
                     engine_adapter=self.adapter,
                 )
                 == query_or_df
+                and not model.depends_on
             )
             or self.adapter.HAS_VIEW_BINDING
         ) and self.adapter.table_exists(table_name):
