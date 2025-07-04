@@ -8,7 +8,7 @@ import { Position, type NodeProps } from 'reactflow'
 import { ModelNodeHeaderHandles } from './ModelNodeHeaderHandles'
 import { ModelColumns } from './ModelColumns'
 import { fromAPIColumn, type Column } from '@/domain/column'
-import type { ModelEncodedFQN } from '@/domain/models'
+import { decode, type ModelEncodedFQN } from '@/domain/models'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
@@ -25,11 +25,12 @@ export type LineageNodeModelType = keyof typeof EnumLineageNodeModelType
 export type ColumnType = keyof typeof EnumColumnType
 
 export default function ModelNode({
-  id,
+  id: idProp,
   data,
   sourcePosition,
   targetPosition,
 }: NodeProps<GraphNodeData>): JSX.Element {
+  const id = idProp as ModelEncodedFQN
   const nodeData: GraphNodeData = data ?? {
     label: '',
     type: EnumLineageNodeModelType.unknown,
@@ -52,7 +53,7 @@ export default function ModelNode({
 
   const columns: Column[] = useMemo(() => {
     const modelsArray = Object.values(models)
-    const decodedId = decodeURIComponent(id)
+    const decodedId = decode(id)
     const model = modelsArray.find((m: Model) => m.fqn === decodedId)
     const modelColumns = model?.columns?.map(fromAPIColumn) ?? []
 
