@@ -5,6 +5,7 @@ import logging
 
 from sqlglot import exp
 
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
@@ -44,7 +45,8 @@ class IntervalState:
         table_name: t.Optional[str] = None,
     ):
         self.engine_adapter = engine_adapter
-        self.intervals_table = exp.table_(table_name or "_intervals", db=schema)
+        config = MigrationConfig()
+        self.intervals_table = exp.table_(table_name or config.state_tables["intervals_table"], db=schema)
 
         index_type = index_text_type(engine_adapter.dialect)
         self._interval_columns_to_types = {

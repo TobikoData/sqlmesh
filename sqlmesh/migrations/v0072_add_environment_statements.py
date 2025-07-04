@@ -8,7 +8,8 @@ from sqlmesh.utils.migration import blob_text_type, index_text_type
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    environment_statements_table = "_environment_statements"
+    state_tables = getattr(state_sync, "state_tables", {})
+    environment_statements_table = state_tables.get("environment_statements_table", "_environment_statements")
 
     if schema:
         environment_statements_table = f"{schema}.{environment_statements_table}"

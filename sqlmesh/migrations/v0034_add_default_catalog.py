@@ -68,10 +68,11 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
 
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    snapshots_table = "_snapshots"
-    environments_table = "_environments"
-    intervals_table = "_intervals"
-    seeds_table = "_seeds"
+    state_tables = getattr(state_sync, "state_tables", {})
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
+    environments_table = state_tables.get("environments_table", "_environments")
+    intervals_table = state_tables.get("intervals_table", "_intervals")
+    seeds_table = state_tables.get("seeds_table", "_seeds")
 
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"

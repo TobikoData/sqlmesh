@@ -9,6 +9,7 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.environment import (
     Environment,
     EnvironmentNamingInfo,
@@ -315,6 +316,8 @@ class StateReader(abc.ABC):
 
 class StateSync(StateReader, abc.ABC):
     """Abstract base class for snapshot and environment state management."""
+    def __init__(self, config: MigrationConfig):
+        self.state_tables = config.state_tables
 
     @abc.abstractmethod
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:

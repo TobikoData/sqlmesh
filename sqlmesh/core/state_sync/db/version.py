@@ -7,6 +7,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     fetchone,
@@ -24,7 +25,10 @@ logger = logging.getLogger(__name__)
 class VersionState:
     def __init__(self, engine_adapter: EngineAdapter, schema: t.Optional[str] = None):
         self.engine_adapter = engine_adapter
-        self.versions_table = exp.table_("_versions", db=schema)
+        config = MigrationConfig()
+        self.versions_table = exp.table_(
+            config.state_tables["versions_table"], db=schema
+        )
 
         index_type = index_text_type(engine_adapter.dialect)
         self._version_columns_to_types = {

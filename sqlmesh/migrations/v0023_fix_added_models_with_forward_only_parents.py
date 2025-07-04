@@ -11,8 +11,9 @@ from sqlmesh.utils.dag import DAG
 def migrate(state_sync: t.Any, **kwargs) -> None:  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    snapshots_table = "_snapshots"
-    environments_table = "_environments"
+    state_tables = getattr(state_sync, "state_tables", {})
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
+    environments_table = state_tables.get("environments_table", "_environments")
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
         environments_table = f"{schema}.{environments_table}"

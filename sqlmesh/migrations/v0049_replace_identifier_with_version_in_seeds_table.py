@@ -8,8 +8,9 @@ from sqlmesh.utils.migration import index_text_type
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
 
-    snapshots_table = "_snapshots"
-    seeds_table = "_seeds"
+    state_tables = getattr(state_sync, "state_tables", {})
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
+    seeds_table = state_tables.get("seeds_table", "_seeds")
     new_seeds_table = f"{seeds_table}_v49"
 
     if state_sync.schema:

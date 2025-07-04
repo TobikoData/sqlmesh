@@ -8,8 +8,9 @@ from sqlmesh.utils.migration import index_text_type
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    auto_restatements_table = "_auto_restatements"
-    intervals_table = "_intervals"
+    state_tables = getattr(state_sync, "state_tables", {})
+    auto_restatements_table = state_tables.get("auto_restatements_table", "_auto_restatements")
+    intervals_table = state_tables.get("intervals_table", "_intervals")
 
     if schema:
         auto_restatements_table = f"{schema}.{auto_restatements_table}"

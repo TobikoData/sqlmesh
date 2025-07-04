@@ -11,8 +11,9 @@ from sqlmesh.utils.migration import index_text_type, blob_text_type
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    intervals_table = "_intervals"
-    snapshots_table = "_snapshots"
+    state_tables = getattr(state_sync, "state_tables", {})
+    intervals_table = state_tables.get("intervals_table", "_intervals")
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
     if schema:
         intervals_table = f"{schema}.{intervals_table}"
         snapshots_table = f"{schema}.{snapshots_table}"
