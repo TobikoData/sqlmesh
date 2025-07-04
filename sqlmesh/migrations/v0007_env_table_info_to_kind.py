@@ -17,8 +17,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    environments_table = "_environments"
-    snapshots_table = "_snapshots"
+    state_tables = getattr(state_sync, "state_tables", {})
+    environments_table = state_tables.get("environments_table", "_environments")
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
     if schema:
         environments_table = f"{schema}.{environments_table}"
         snapshots_table = f"{schema}.{snapshots_table}"

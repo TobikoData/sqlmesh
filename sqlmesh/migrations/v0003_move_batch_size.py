@@ -6,7 +6,8 @@ from sqlglot import exp
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
-    snapshots_table = "_snapshots"
+    state_tables = getattr(state_sync, "state_tables", {})
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
     if state_sync.schema:
         snapshots_table = f"{state_sync.schema}.{snapshots_table}"
 

@@ -7,7 +7,8 @@ from sqlmesh.utils.migration import index_text_type
 
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
-    intervals_table = "_intervals"
+    state_tables = getattr(state_sync, "state_tables", {})
+    intervals_table = state_tables.get("intervals_table", "_intervals")
     if state_sync.schema:
         intervals_table = f"{state_sync.schema}.{intervals_table}"
 

@@ -4,7 +4,8 @@
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    plan_dags_table = "_plan_dags"
+    state_tables = getattr(state_sync, "state_tables", {})
+    plan_dags_table = state_tables.get("plan_dags_table", "_plan_dags")
     if state_sync.schema:
         plan_dags_table = f"{schema}.{plan_dags_table}"
 

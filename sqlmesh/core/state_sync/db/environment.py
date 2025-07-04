@@ -6,6 +6,7 @@ import logging
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     fetchall,
@@ -30,8 +31,14 @@ class EnvironmentState:
         schema: t.Optional[str] = None,
     ):
         self.engine_adapter = engine_adapter
-        self.environments_table = exp.table_("_environments", db=schema)
-        self.environment_statements_table = exp.table_("_environment_statements", db=schema)
+        config = MigrationConfig()
+        self.environments_table = exp.table_(
+            config.state_tables.get("environments_table", "_environments"), db=schema
+        )
+        self.environment_statements_table = exp.table_(
+            config.state_tables.get("environment_statements_table", "_environment_statements"),
+            db=schema,
+        )
 
         index_type = index_text_type(engine_adapter.dialect)
         blob_type = blob_text_type(engine_adapter.dialect)

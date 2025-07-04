@@ -3,7 +3,8 @@
 
 def migrate(state_sync, **kwargs):  # type: ignore
     schema = state_sync.schema
-    intervals_table = "_intervals"
+    state_tables = getattr(state_sync, "state_tables", {})
+    intervals_table = state_tables.get("intervals_table", "_intervals")
     if schema:
         intervals_table = f"{schema}.{intervals_table}"
 

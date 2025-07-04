@@ -24,6 +24,7 @@ from datetime import datetime
 
 from sqlglot import exp
 
+from sqlmesh.core.config.migration import MigrationConfig
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements, EnvironmentSummary
@@ -89,7 +90,10 @@ class EngineAdapterStateSync(StateSync):
         console: t.Optional[Console] = None,
         cache_dir: Path = Path(),
     ):
-        self.plan_dags_table = exp.table_("_plan_dags", db=schema)
+        config = MigrationConfig()
+        self.plan_dags_table = exp.table_(
+            config.state_tables.get("plan_dags_table", "_plan_dags"), db=schema
+        )
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)

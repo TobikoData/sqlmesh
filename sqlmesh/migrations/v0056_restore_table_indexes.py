@@ -12,9 +12,10 @@ def migrate(state_sync, **kwargs):  # type: ignore
     if not engine_adapter.SUPPORTS_INDEXES:
         return
 
-    intervals_table = "_intervals"
-    snapshots_table = "_snapshots"
-    environments_table = "_environments"
+    state_tables = getattr(state_sync, "state_tables", {})
+    intervals_table = state_tables.get("intervals_table", "_intervals")
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
+    environments_table = state_tables.get("environments_table", "_environments")
     if state_sync.schema:
         intervals_table = f"{schema}.{intervals_table}"
         snapshots_table = f"{schema}.{snapshots_table}"

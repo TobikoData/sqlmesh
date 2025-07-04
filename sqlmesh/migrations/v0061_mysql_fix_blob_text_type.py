@@ -15,9 +15,10 @@ def migrate(state_sync, **kwargs):  # type: ignore
         return
 
     schema = state_sync.schema
-    environments_table = "_environments"
-    snapshots_table = "_snapshots"
-    plan_dags_table = "_plan_dags"
+    state_tables = getattr(state_sync, "state_tables", {})
+    environments_table = state_tables.get("environments_table", "_environments")
+    snapshots_table = state_tables.get("snapshots_table", "_snapshots")
+    plan_dags_table = state_tables.get("plan_dags_table", "_plan_dags")
 
     if schema:
         environments_table = f"{schema}.{environments_table}"

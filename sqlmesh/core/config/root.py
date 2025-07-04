@@ -185,6 +185,7 @@ class Config(BaseConfig):
         "before_all": UpdateStrategy.EXTEND,
         "after_all": UpdateStrategy.EXTEND,
         "linter": UpdateStrategy.NESTED_UPDATE,
+        "migration": UpdateStrategy.KEY_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
