@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
-    set_console(MarkdownConsole())
+    # set a larger width because if none is specified, it auto-detects 80 characters when running in GitHub Actions
+    # which can result in surprise newlines when outputting dates to backfill
+    set_console(MarkdownConsole(width=1000))
     ctx.obj["github"] = GithubController(
         paths=ctx.obj["paths"],
         token=token,

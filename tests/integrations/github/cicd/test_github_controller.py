@@ -1,4 +1,5 @@
 # type: ignore
+import typing as t
 import os
 import pathlib
 from unittest import mock
@@ -17,6 +18,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
     MergeStateStatus,
 )
+from sqlmesh.integrations.github.cicd.controller import GithubController
 from sqlmesh.integrations.github.cicd.command import _update_pr_environment
 from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
@@ -591,3 +593,39 @@ def test_uncategorized(
     assert "The following models could not be categorized automatically" in summary
     assert '- "b"' in summary
     assert "Run `sqlmesh plan hello_world_2` locally to apply these changes" in summary
+
+
+def test_get_plan_summary_doesnt_truncate_backfill_list(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    summary = controller.get_plan_summary(controller.prod_plan)
+
+    assert "more ...." not in summary
+
+    assert (
+        """**Models needing backfill:**
+* `memory.raw.demographics`: [full refresh]
+* `memory.sushi.active_customers`: [full refresh]
+* `memory.sushi.count_customers_active`: [full refresh]
+* `memory.sushi.count_customers_inactive`: [full refresh]
+* `memory.sushi.customer_revenue_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customer_revenue_lifetime`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customers`: [full refresh]
+* `memory.sushi.items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.latest_order`: [full refresh]
+* `memory.sushi.marketing`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.order_items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.orders`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.raw_marketing`: [full refresh]
+* `memory.sushi.top_waiters`: [recreate view]
+* `memory.sushi.waiter_as_customer_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.waiter_names`: [full refresh]
+* `memory.sushi.waiter_revenue_by_day`: [2025-06-30 - 2025-07-06]"""
+        in summary
+    )

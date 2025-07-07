@@ -485,6 +485,12 @@ class GithubController:
                 print(f"{key}={value}", file=fh)
 
     def get_plan_summary(self, plan: Plan) -> str:
+        # use Verbosity.VERY_VERBOSE to prevent the list of models from being truncated
+        # this is particularly important for the "Models needing backfill" list because
+        # there is no easy way to tell this otherwise
+        orig_verbosity = self._console.verbosity
+        self._console.verbosity = Verbosity.VERY_VERBOSE
+
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
@@ -517,7 +523,10 @@ class GithubController:
 
             return f"{difference_summary}\n{missing_dates}{plan_flags_section}"
         except PlanError as e:
+            logger.exception("Plan failed to generate")
             return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
+        finally:
+            self._console.verbosity = orig_verbosity
 
     def run_tests(self) -> t.Tuple[ModelTextTestResult, str]:
         """
