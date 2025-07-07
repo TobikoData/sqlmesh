@@ -56,6 +56,7 @@ from sqlmesh.lsp.reference import (
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
+from sqlmesh.utils.errors import ConfigError
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
@@ -76,11 +77,14 @@ class ContextLoaded:
     lsp_context: LSPContext
 
 
+type ContextFailedError = str | ConfigError
+
+
 @dataclass
 class ContextFailed:
     """State when context failed to load with an error message."""
 
-    error_message: str
+    error_message: ContextFailedError
     context: t.Optional[Context] = None
 
 
@@ -137,7 +141,7 @@ class SQLMeshLanguageServer:
         except Exception:
             pass
         try:
-            context = self._context_get_or_load(uri)
+            context = self._context_get_or_load(ls, uri)
             return LSPContext.get_completions(context, uri, content)
         except Exception as e:
             from sqlmesh.lsp.completions import get_sql_completions
@@ -148,13 +152,13 @@ class SQLMeshLanguageServer:
         self, ls: LanguageServer, params: RenderModelRequest
     ) -> RenderModelResponse:
         uri = URI(params.textDocumentUri)
-        context = self._context_get_or_load(uri)
+        context = self._context_get_or_load(ls, uri)
         return RenderModelResponse(models=context.render_model(uri))
 
     def _custom_all_models_for_render(
         self, ls: LanguageServer, params: AllModelsForRenderRequest
     ) -> AllModelsForRenderResponse:
-        context = self._context_get_or_load()
+        context = self._context_get_or_load(ls)
         return AllModelsForRenderResponse(models=context.list_of_models_for_rendering())
 
     def _custom_format_project(
@@ -162,7 +166,7 @@ class SQLMeshLanguageServer:
     ) -> FormatProjectResponse:
         """Format all models in the current project."""
         try:
-            context = self._context_get_or_load()
+            context = self._context_get_or_load(ls)
             context.context.format()
             return FormatProjectResponse()
         except Exception as e:
@@ -173,7 +177,7 @@ class SQLMeshLanguageServer:
         self, ls: LanguageServer, request: ApiRequest
     ) -> t.Union[ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage]:
         ls.log_trace(f"API request: {request}")
-        context = self._context_get_or_load()
+        context = self._context_get_or_load(ls)
 
         parsed_url = urllib.parse.urlparse(request.url)
         path_parts = parsed_url.path.strip("/").split("/")
@@ -244,7 +248,7 @@ class SQLMeshLanguageServer:
             else:
                 # If there's no context, try to create one from scratch
                 try:
-                    self._ensure_context_for_document(uri)
+                    self._ensure_context_for_document(ls, uri)
                     # If successful, context_state will be ContextLoaded
                     if isinstance(self.context_state, ContextLoaded):
                         ls.show_message(
@@ -335,7 +339,10 @@ class SQLMeshLanguageServer:
                         for ext in ("py", "yml", "yaml"):
                             config_path = folder_path / f"config.{ext}"
                             if config_path.exists():
-                                if self._create_lsp_context([folder_path]):
+                                if self._create_lsp_context(
+                                    ls,
+                                    [folder_path],
+                                ):
                                     loaded_sqlmesh_message(ls, folder_path)
                                     return  # Exit after successfully loading any config
             except Exception as e:
@@ -346,7 +353,7 @@ class SQLMeshLanguageServer:
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
-            context = self._context_get_or_load(uri)
+            context = self._context_get_or_load(ls, uri)
 
             # Only publish diagnostics if client doesn't support pull diagnostics
             if not self.client_supports_pull_diagnostics:
@@ -368,7 +375,7 @@ class SQLMeshLanguageServer:
             """Format the document using SQLMesh `format_model_expressions`."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
                 before = document.source
 
@@ -412,7 +419,7 @@ class SQLMeshLanguageServer:
             """Provide hover information for an object."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
 
                 references = get_references(context, uri, params.position)
@@ -439,10 +446,10 @@ class SQLMeshLanguageServer:
         def inlay_hint(
             ls: LanguageServer, params: types.InlayHintParams
         ) -> t.List[types.InlayHint]:
-            """Implement type hints for sql columns as inlay hints"""
+            """Implement type hints for SQL columns as inlay hints"""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
 
                 start_line = params.range.start.line
                 end_line = params.range.end.line
@@ -459,7 +466,7 @@ class SQLMeshLanguageServer:
             """Jump to an object's definition."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
 
                 references = get_references(context, uri, params.position)
                 location_links = []
@@ -513,7 +520,7 @@ class SQLMeshLanguageServer:
             """Find all references of a symbol (supporting CTEs, models for now)"""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
 
                 all_references = get_all_references(context, uri, params.position)
 
@@ -532,7 +539,7 @@ class SQLMeshLanguageServer:
             """Prepare for rename operation by checking if the symbol can be renamed."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 result = prepare_rename(context, uri, params.position)
                 return result
             except Exception as e:
@@ -546,7 +553,7 @@ class SQLMeshLanguageServer:
             """Perform rename operation on the symbol at the given position."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 workspace_edit = rename_symbol(context, uri, params.position, params.new_name)
                 return workspace_edit
             except Exception as e:
@@ -560,7 +567,7 @@ class SQLMeshLanguageServer:
             """Highlight all occurrences of the symbol at the given position."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 highlights = get_document_highlights(context, uri, params.position)
                 return highlights
             except Exception as e:
@@ -574,7 +581,7 @@ class SQLMeshLanguageServer:
             """Handle diagnostic pull requests from the client."""
             try:
                 uri = URI(params.text_document.uri)
-                diagnostics, result_id = self._get_diagnostics_for_uri(uri)
+                diagnostics, result_id = self._get_diagnostics_for_uri(ls, uri)
 
                 # Check if client provided a previous result ID
                 if hasattr(params, "previous_result_id") and params.previous_result_id == result_id:
@@ -604,7 +611,7 @@ class SQLMeshLanguageServer:
         ) -> types.WorkspaceDiagnosticReport:
             """Handle workspace-wide diagnostic pull requests from the client."""
             try:
-                context = self._context_get_or_load()
+                context = self._context_get_or_load(ls)
 
                 items: t.List[
                     t.Union[
@@ -617,7 +624,7 @@ class SQLMeshLanguageServer:
                 for path, target in context.map.items():
                     if isinstance(target, ModelTarget):
                         uri = URI.from_path(path)
-                        diagnostics, result_id = self._get_diagnostics_for_uri(uri)
+                        diagnostics, result_id = self._get_diagnostics_for_uri(ls, uri)
 
                         # Check if we have a previous result ID for this file
                         previous_result_id = None
@@ -662,7 +669,7 @@ class SQLMeshLanguageServer:
             try:
                 ls.log_trace(f"Codeactionrequest: {params}")
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
                 code_actions = context.get_code_actions(uri, params)
                 return code_actions
 
@@ -680,7 +687,7 @@ class SQLMeshLanguageServer:
             """Handle completion requests from the client."""
             try:
                 uri = URI(params.text_document.uri)
-                context = self._context_get_or_load(uri)
+                context = self._context_get_or_load(ls, uri)
 
                 # Get the document content
                 content = None
@@ -749,30 +756,35 @@ class SQLMeshLanguageServer:
                 get_sql_completions(None, URI(params.text_document.uri))
                 return None
 
-    def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
+    def _get_diagnostics_for_uri(
+        self, ls: LanguageServer, uri: URI
+    ) -> t.Tuple[t.List[types.Diagnostic], int]:
         """Get diagnostics for a specific URI, returning (diagnostics, result_id).
 
         Since we no longer track version numbers, we always return 0 as the result_id.
         This means pull diagnostics will always fetch fresh results.
         """
         try:
-            context = self._context_get_or_load(uri)
+            context = self._context_get_or_load(ls, uri)
             diagnostics = context.lint_model(uri)
             return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
         except Exception:
             return [], 0
 
-    def _context_get_or_load(self, document_uri: t.Optional[URI] = None) -> LSPContext:
+    def _context_get_or_load(
+        self, ls: LanguageServer, document_uri: t.Optional[URI] = None
+    ) -> LSPContext:
         if isinstance(self.context_state, ContextFailed):
             raise RuntimeError(self.context_state.error_message)
         if isinstance(self.context_state, NoContext):
-            self._ensure_context_for_document(document_uri)
+            self._ensure_context_for_document(ls, document_uri)
         if not isinstance(self.context_state, ContextLoaded):
             raise RuntimeError("Context is not loaded")
         return self.context_state.lsp_context
 
     def _ensure_context_for_document(
         self,
+        ls: LanguageServer,
         document_uri: t.Optional[URI] = None,
     ) -> None:
         """
@@ -784,12 +796,14 @@ class SQLMeshLanguageServer:
             if document_path.is_file() and document_path.suffix in (".sql", ".py"):
                 document_folder = document_path.parent
                 if document_folder.is_dir():
-                    self._ensure_context_in_folder(document_folder)
+                    self._ensure_context_in_folder(ls, document_folder)
                     return
 
-        self._ensure_context_in_folder()
+        self._ensure_context_in_folder(ls)
 
-    def _ensure_context_in_folder(self, folder_path: t.Optional[Path] = None) -> None:
+    def _ensure_context_in_folder(
+        self, ls: LanguageServer, folder_path: t.Optional[Path] = None
+    ) -> None:
         if not isinstance(self.context_state, NoContext):
             return
 
@@ -798,7 +812,7 @@ class SQLMeshLanguageServer:
             for ext in ("py", "yml", "yaml"):
                 config_path = workspace_folder / f"config.{ext}"
                 if config_path.exists():
-                    if self._create_lsp_context([workspace_folder]):
+                    if self._create_lsp_context(ls, [workspace_folder]):
                         return
 
         #  Then , check the provided folder recursively
@@ -809,7 +823,7 @@ class SQLMeshLanguageServer:
             for ext in ("py", "yml", "yaml"):
                 config_path = path / f"config.{ext}"
                 if config_path.exists():
-                    if self._create_lsp_context([path]):
+                    if self._create_lsp_context(ls, [path]):
                         return
 
             path = path.parent
@@ -821,7 +835,9 @@ class SQLMeshLanguageServer:
             + (f" or in {folder_path}" if folder_path else "")
         )
 
-    def _create_lsp_context(self, paths: t.List[Path]) -> t.Optional[LSPContext]:
+    def _create_lsp_context(
+        self, ls: LanguageServer, paths: t.List[Path]
+    ) -> t.Optional[LSPContext]:
         """Create a new LSPContext instance using the configured context class.
 
         On success, sets self.context_state to ContextLoaded and returns the created context.
@@ -857,16 +873,33 @@ class SQLMeshLanguageServer:
                     types.MessageType.Error,
                 )
                 self.has_raised_loading_error = True
-
             self.server.log_trace(f"Error creating context: {e}")
-            # Store the error in context state so subsequent requests show the actual error
-            # Try to preserve any partially loaded context if it exists
+            error_message = e if isinstance(e, ConfigError) else str(e)
+            if isinstance(error_message, ConfigError) and error_message.location is not None:
+                uri = URI.from_path(error_message.location)
+                ls.publish_diagnostics(
+                    uri.value,
+                    [
+                        types.Diagnostic(
+                            range=types.Range(
+                                start=types.Position(line=0, character=0),
+                                end=types.Position(line=0, character=0),
+                            ),
+                            message=str(error_message),
+                            severity=types.DiagnosticSeverity.Error,
+                        )
+                    ],
+                )
+
+            # Store the error in context state such that later requests can
+            # show the actual error. Try to preserve any partially loaded context
+            # if it exists
             context = None
             if isinstance(self.context_state, ContextLoaded):
                 context = self.context_state.lsp_context.context
             elif isinstance(self.context_state, ContextFailed) and self.context_state.context:
                 context = self.context_state.context
-            self.context_state = ContextFailed(error_message=str(e), context=context)
+            self.context_state = ContextFailed(error_message=error_message, context=context)
             return None
 
     @staticmethod

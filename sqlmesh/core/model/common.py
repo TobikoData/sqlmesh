@@ -41,7 +41,7 @@ def make_python_env(
     macros: MacroRegistry,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     used_variables: t.Optional[t.Set[str]] = None,
-    path: t.Optional[str | Path] = None,
+    path: t.Optional[Path] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     strict_resolution: bool = True,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,

@@ -1005,7 +1005,7 @@ class MigratedDbtProjectLoader(SqlMeshLoader):
                         package=package,
                     )
                 except Exception as e:
-                    raise ConfigError(f"Failed to load macro file: {path}", e)
+                    raise ConfigError(f"Failed to load macro file:  {e}", path)
 
         self._macros_max_mtime = macros_max_mtime
 

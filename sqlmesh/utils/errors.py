@@ -24,7 +24,12 @@ class SQLMeshError(Exception):
 
 
 class ConfigError(SQLMeshError):
-    pass
+    location: t.Optional[Path] = None
+
+    def __init__(self, message: str | Exception, location: t.Optional[Path] = None) -> None:
+        super().__init__(message)
+        if location:
+            self.location = Path(location) if isinstance(location, str) else location
 
 
 class MissingDependencyError(SQLMeshError):
@@ -188,12 +193,12 @@ class SignalEvalError(SQLMeshError):
 
 def raise_config_error(
     msg: str,
-    location: t.Optional[str | Path] = None,
+    location: t.Optional[Path] = None,
     error_type: t.Type[ConfigError] = ConfigError,
 ) -> None:
     if location:
         raise error_type(f"{msg} at '{location}'")
-    raise error_type(msg)
+    raise error_type(msg, location=location)
 
 
 def raise_for_status(response: Response) -> None:
