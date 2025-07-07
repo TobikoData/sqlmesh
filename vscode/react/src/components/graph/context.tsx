@@ -14,7 +14,7 @@ import type { ModelEncodedFQN, ModelName } from '@/domain/models'
 import type { ColumnName } from '@/domain/column'
 import type { Model } from '@/api/client'
 import { toID, toKeys } from './types'
-import type { ConnectedNode } from '@/workers/lineage'
+import type { ConnectedNode } from '@/components/graph/types'
 
 export interface Connections {
   left: string[]

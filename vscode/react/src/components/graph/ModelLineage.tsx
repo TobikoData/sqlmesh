@@ -17,7 +17,7 @@ import ReactFlow, {
 } from 'reactflow'
 import Loading from '@/components/loading/Loading'
 import Spinner from '@/components/logo/Spinner'
-import { createLineageWorker } from '@/workers/index'
+import { createLineageWorker } from '@/components/graph/workers/index'
 import { isArrayEmpty, isFalse, isNil, isNotNil } from '@/utils/index'
 import clsx from 'clsx'
 import ModelNode from './ModelNode'
@@ -35,7 +35,13 @@ import {
   type ModelLineage as ModelLineageType,
 } from '@/domain/lineage'
 import './Graph.css'
-import { toKeys } from './types'
+import {
+  toKeys,
+  type LineageWorkerMessage,
+  type LineageWorkerRequestMessage,
+  type LineageWorkerResponseMessage,
+  type LineageWorkerErrorMessage,
+} from './types'
 import { encode } from '@/domain/models'
 
 const WITH_COLUMNS_LIMIT = 30
@@ -95,14 +101,15 @@ export function ModelLineage({
 
         setIsMergingModels(true)
 
-        lineageWorker.postMessage({
+        const message: LineageWorkerRequestMessage = {
           topic: 'lineage',
           payload: {
             currentLineage: {},
             newLineage: data,
             mainNode: model.fqn,
           },
-        })
+        }
+        lineageWorker.postMessage(message)
       })
       .catch(error => {
         handleError?.(error)
@@ -146,21 +153,25 @@ export function ModelLineage({
     setHighlightedNodes(highlightedNodes ?? {})
   }, [highlightedNodes])
 
-  function handleLineageWorkerMessage(e: MessageEvent): void {
+  function handleLineageWorkerMessage(
+    e: MessageEvent<LineageWorkerMessage>,
+  ): void {
     if (e.data.topic === 'lineage') {
+      const message = e.data as LineageWorkerResponseMessage
       setIsMergingModels(false)
-      setNodeConnections(e.data.payload.nodesConnections)
-      setLineage(e.data.payload.lineage)
+      setNodeConnections(message.payload.nodesConnections)
+      setLineage(message.payload.lineage)
 
       if (
-        Object.values(e.data.payload?.lineage ?? {}).length > WITH_COLUMNS_LIMIT
+        Object.values(message.payload.lineage ?? {}).length > WITH_COLUMNS_LIMIT
       ) {
         setWithColumns(false)
       }
     }
 
     if (e.data.topic === 'error') {
-      handleError?.(e.data.error)
+      const message = e.data as LineageWorkerErrorMessage
+      handleError?.(message.error)
       setIsMergingModels(false)
     }
   }

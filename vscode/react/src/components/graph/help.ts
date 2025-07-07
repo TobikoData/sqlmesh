@@ -15,7 +15,7 @@ import {
   type LineageNodeModelType,
 } from './ModelNode'
 import type { Lineage } from '@/domain/lineage'
-import type { ConnectedNode } from '@/workers/lineage'
+import type { ConnectedNode } from '@/components/graph/types'
 import { encode, type ModelEncodedFQN, type ModelURI } from '@/domain/models'
 import type { Column, ColumnName } from '@/domain/column'
 import type { ModelSQLMeshModel } from '@/domain/sqlmesh-model'

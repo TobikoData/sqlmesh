@@ -1,8 +1,11 @@
 import type { ColumnName } from '@/domain/column'
 import type { ModelEncodedFQN } from '@/domain/models'
 import type { Branded } from '@bus/brand'
+import type { Lineage } from '@/domain/lineage'
 
 export type Side = 'left' | 'right'
+
+export type Direction = 'upstream' | 'downstream'
 
 export type NodeId = string
 
@@ -55,3 +58,44 @@ export function toKeys<K extends string, V>(obj: Record<K, V>): K[] {
 }
 
 export type ModelLineage = Record<ModelEncodedFQN, ModelEncodedFQN[]>
+
+// Worker Message Types
+export interface ConnectedNode {
+  id?: string
+  edges: ConnectedNode[]
+}
+
+export interface LineageWorkerRequestPayload {
+  currentLineage: Record<string, Lineage>
+  newLineage: Record<string, string[]>
+  mainNode: string
+}
+
+export interface LineageWorkerResponsePayload {
+  lineage: Record<string, Lineage>
+  nodesConnections: Record<string, ConnectedNode>
+}
+
+export interface LineageWorkerErrorPayload {
+  error: Error
+}
+
+export interface LineageWorkerRequestMessage {
+  topic: 'lineage'
+  payload: LineageWorkerRequestPayload
+}
+
+export interface LineageWorkerResponseMessage {
+  topic: 'lineage'
+  payload: LineageWorkerResponsePayload
+}
+
+export interface LineageWorkerErrorMessage {
+  topic: 'error'
+  error: Error
+}
+
+export type LineageWorkerMessage =
+  | LineageWorkerRequestMessage
+  | LineageWorkerResponseMessage
+  | LineageWorkerErrorMessage
