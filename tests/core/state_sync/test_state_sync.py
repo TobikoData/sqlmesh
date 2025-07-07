@@ -324,9 +324,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     remove_records_count = state_sync.engine_adapter.fetchone(
         "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
     )[0]  # type: ignore
-    assert (
-        remove_records_count == num_of_removals * 4
-    )  # (1 dev record + 1 prod record) * 2 snapshots
+    assert remove_records_count == num_of_removals * 2  # 2 * snapshots
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
@@ -1632,7 +1630,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check old snapshot's intervals
@@ -1641,7 +1639,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1663,7 +1661,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,
@@ -1679,7 +1677,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1707,7 +1705,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,

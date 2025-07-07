@@ -111,12 +111,11 @@ class IntervalState:
             snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in intervals_to_remove)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
-        for is_dev in (True, False):
-            self.engine_adapter.insert_append(
-                self.intervals_table,
-                _intervals_to_df(intervals_to_remove, is_dev=is_dev, is_removed=True),
-                columns_to_types=self._interval_columns_to_types,
-            )
+        self.engine_adapter.insert_append(
+            self.intervals_table,
+            _intervals_to_df(intervals_to_remove, is_dev=False, is_removed=True),
+            columns_to_types=self._interval_columns_to_types,
+        )
 
     def get_snapshot_intervals(
         self, snapshots: t.Collection[SnapshotNameVersionLike]
