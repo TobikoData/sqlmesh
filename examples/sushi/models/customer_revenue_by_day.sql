@@ -6,9 +6,11 @@ MODEL (
     batch_size 10,
   ),
   owner jen,
+  owners test,
   cron '@daily',
   dialect hive,
   tags expensive,
+  tag sadf,
   grain (customer_id, event_date),
 );
 

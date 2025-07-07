@@ -287,7 +287,8 @@ class SQLMeshLanguageServer:
             ),
         )
 
-        # Only publish diagnostics if client doesn't support pull diagnostics
+        # Only publish diagnostics if the client doesn't support pull
+        # diagnostics
         if not self.client_supports_pull_diagnostics:
             diagnostics = self.context_state.lsp_context.lint_model(uri)
             ls.publish_diagnostics(
@@ -869,15 +870,15 @@ class SQLMeshLanguageServer:
             # Only show the error message once
             if not self.has_raised_loading_error:
                 self.server.show_message(
-                    f"Error creating context: {e}",
+                    f"Error creating context error type {type(e)}: {e.location} {e}",
                     types.MessageType.Error,
                 )
                 self.has_raised_loading_error = True
-            self.server.log_trace(f"Error creating context: {e}")
             error_message = e if isinstance(e, ConfigError) else str(e)
-            if isinstance(error_message, ConfigError) and error_message.location is not None:
+            if isinstance(e, ConfigError) and error_message.location is not None:
+                self.server.show_message("hello", types.MessageType.Error)
                 uri = URI.from_path(error_message.location)
-                ls.publish_diagnostics(
+                self.server.publish_diagnostics(
                     uri.value,
                     [
                         types.Diagnostic(
@@ -889,6 +890,7 @@ class SQLMeshLanguageServer:
                             severity=types.DiagnosticSeverity.Error,
                         )
                     ],
+                str(1),
                 )
 
             # Store the error in context state such that later requests can

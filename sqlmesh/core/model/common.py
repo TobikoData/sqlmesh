@@ -265,6 +265,7 @@ def validate_extra_and_required_fields(
     klass: t.Type[PydanticModel],
     provided_fields: t.Set[str],
     entity_name: str,
+    path: t.Optional[Path] = None,
 ) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
@@ -293,7 +294,8 @@ def validate_extra_and_required_fields(
             similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
 
         raise_config_error(
-            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}"
+            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}",
+            path,
         )
 
 
