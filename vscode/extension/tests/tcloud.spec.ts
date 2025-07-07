@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
