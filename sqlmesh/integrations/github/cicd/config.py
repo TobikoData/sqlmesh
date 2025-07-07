@@ -28,6 +28,7 @@ class GithubCICDBotConfig(BaseConfig):
     pr_include_unmodified: t.Optional[bool] = None
     run_on_deploy_to_prod: bool = False
     pr_environment_name: t.Optional[str] = None
+    pr_min_intervals: t.Optional[int] = None
     prod_branch_names_: t.Optional[str] = Field(default=None, alias="prod_branch_name")
 
     @model_validator(mode="before")
