@@ -486,7 +486,7 @@ class GithubController:
 
     def get_plan_summary(self, plan: Plan) -> str:
         # use Verbosity.VERY_VERBOSE to prevent the list of models from being truncated
-        # this is particularly importanmt for the "Models needing backfill" list because
+        # this is particularly important for the "Models needing backfill" list because
         # there is no easy way to tell this otherwise
         orig_verbosity = self._console.verbosity
         self._console.verbosity = Verbosity.VERY_VERBOSE
