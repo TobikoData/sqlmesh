@@ -278,7 +278,7 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
-        snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
@@ -293,7 +293,11 @@ class SnapshotEvaluator:
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._demote_snapshot(
-                    s, environment_naming_info, deployability_index, on_complete
+                    s,
+                    environment_naming_info,
+                    deployability_index=deployability_index,
+                    on_complete=on_complete,
+                    table_mapping=table_mapping,
                 ),
                 self.ddl_concurrent_tasks,
             )
@@ -1022,6 +1026,7 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
         if not snapshot.is_model:
             return
@@ -1040,6 +1045,7 @@ class SnapshotEvaluator:
                 snapshot.model.render_session_properties(
                     engine_adapter=adapter,
                     deployability_index=deployability_index,
+                    table_mapping=table_mapping,
                     runtime_stage=RuntimeStage.DEMOTING,
                 )
             ),
