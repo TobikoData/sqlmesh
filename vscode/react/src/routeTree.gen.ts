@@ -9,9 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TablediffRouteImport } from './routes/tablediff'
 import { Route as LineageRouteImport } from './routes/lineage'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TablediffRoute = TablediffRouteImport.update({
+  id: '/tablediff',
+  path: '/tablediff',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LineageRoute = LineageRouteImport.update({
   id: '/lineage',
   path: '/lineage',
@@ -26,31 +32,42 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/lineage': typeof LineageRoute
+  '/tablediff': typeof TablediffRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/lineage'
+  fullPaths: '/' | '/lineage' | '/tablediff'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/lineage'
-  id: '__root__' | '/' | '/lineage'
+  to: '/' | '/lineage' | '/tablediff'
+  id: '__root__' | '/' | '/lineage' | '/tablediff'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LineageRoute: typeof LineageRoute
+  TablediffRoute: typeof TablediffRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tablediff': {
+      id: '/tablediff'
+      path: '/tablediff'
+      fullPath: '/tablediff'
+      preLoaderRoute: typeof TablediffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lineage': {
       id: '/lineage'
       path: '/lineage'
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LineageRoute: LineageRoute,
+  TablediffRoute: TablediffRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

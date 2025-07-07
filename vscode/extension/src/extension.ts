@@ -30,6 +30,8 @@ import { handleError } from './utilities/errors'
 import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
 import { RenderedModelProvider } from './providers/renderedModelProvider'
+import { showTableDiff } from './commands/tableDiff'
+import { sleep } from './utilities/sleep'
 
 import {
   controller as testController,
@@ -148,6 +150,15 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(
       LineagePanel.viewType,
       lineagePanel,
+    ),
+  )
+
+
+  // Register the table diff command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sqlmesh.showTableDiff',
+      showTableDiff(lspClient, context.extensionUri),
     ),
   )
 

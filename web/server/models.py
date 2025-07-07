@@ -402,14 +402,26 @@ class SchemaDiff(PydanticModel):
         return v
 
 
+class ProcessedSampleData(PydanticModel):
+    column_differences: t.List[t.Dict[str, t.Any]]
+    source_only: t.List[t.Dict[str, t.Any]]
+    target_only: t.List[t.Dict[str, t.Any]]
+
+
 class RowDiff(PydanticModel):
     source: str
     target: str
     stats: t.Dict[str, float]
     sample: t.Dict[str, t.Any]
+    joined_sample: t.Dict[str, t.Any]
+    s_sample: t.Dict[str, t.Any]
+    t_sample: t.Dict[str, t.Any]
+    column_stats: t.Dict[str, t.Any]
     source_count: int
     target_count: int
     count_pct_change: float
+    decimals: int
+    processed_sample_data: t.Optional[ProcessedSampleData] = None
 
 
 class TableDiff(PydanticModel):
