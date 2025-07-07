@@ -122,12 +122,6 @@ def serialize_model(context: Context, model: Model, render_query: bool = False) 
         sql = query.sql(pretty=True, dialect=model.dialect)
 
     path = model._path
-    if not path:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail=f"Model {model.name} does not have a file path.",
-        )
-
     return models.Model(
         name=model.name,
         fqn=model.fqn,

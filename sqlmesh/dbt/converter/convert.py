@@ -208,7 +208,7 @@ def _convert_models(
         if model.kind.is_seed:
             # this will produce the original seed file, eg "items.csv"
             if model._path is None:
-                raise ValueError(f"Unhandled model path: {model._path}")
+                raise ValueError(f"Unhandled model path for model {model_name}")
             seed_filename = model._path.relative_to(input_paths.seeds)
 
             # seed definition - rename "items.csv" -> "items.sql"

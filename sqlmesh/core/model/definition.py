@@ -2174,7 +2174,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
     name = meta_fields.pop("name", "")
     if not name and infer_names:
         if path is None:
-            raise ValueError("Model must have a name", path)
+            raise ValueError(f"Model {name} must have a name")
         name = get_model_name(path)
 
     if not name:
