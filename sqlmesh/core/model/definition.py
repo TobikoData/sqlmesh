@@ -27,6 +27,7 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
+    parse_strings_with_macro_refs,
     single_value_or_tuple,
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
@@ -72,13 +73,14 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+UNRENDERABLE_MODEL_FIELDS = {"cron", "description"}
+
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
-    "description",
-    "cron",
     "merge_filter",
 } | PROPERTIES
 
@@ -2469,6 +2471,9 @@ def _create_model(
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+        statements.append(kwargs["kind"].merge_filter)
+
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
@@ -2751,21 +2756,24 @@ def render_meta_fields(
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
+        field_value = fields.get(field)
 
-        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+        # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
+        if field == "cron" or field_value is None:
             continue
 
-        field_value = fields.get(field)
-        if field_value is None:
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = value
+                    rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
+
             if rendered_dict:
                 fields[field] = rendered_dict
             else:
