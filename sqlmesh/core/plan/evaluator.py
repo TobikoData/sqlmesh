@@ -110,6 +110,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         else:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
         finally:
+            self.snapshot_evaluator.recycle()
             self.console.stop_plan_evaluation()
 
     def _evaluate_stages(
