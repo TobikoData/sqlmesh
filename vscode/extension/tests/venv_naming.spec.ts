@@ -10,8 +10,7 @@ import {
   SUSHI_SOURCE_PATH,
 } from './utils'
 
-test('venv being named .env', async ({ page, sharedCodeServer }, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+test('venv being named .env', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )

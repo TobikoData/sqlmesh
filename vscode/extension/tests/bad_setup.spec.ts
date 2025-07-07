@@ -14,8 +14,7 @@ import {
 test('missing LSP dependencies shows install prompt', async ({
   page,
   sharedCodeServer,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -111,8 +110,7 @@ test('lineage, no sqlmesh found', async ({
 test.skip('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({
   page,
   sharedCodeServer,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )

@@ -71,12 +71,7 @@ async function setupEnvironment(): Promise<{
 }
 
 test.describe('python environment variable injection on sqlmesh_lsp', () => {
-  test('normal setup - error ', async ({
-    page,
-    sharedCodeServer,
-  }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
     const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
     await runTest(page, sharedCodeServer, tempDir)
@@ -120,12 +115,7 @@ async function setupTcloudProject(
 }
 
 test.describe('tcloud version', () => {
-  test('normal setup - error ', async ({
-    page,
-    sharedCodeServer,
-  }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
     const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
@@ -133,9 +123,7 @@ test.describe('tcloud version', () => {
     await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page, sharedCodeServer }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - set', async ({ page, sharedCodeServer }) => {
     const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
