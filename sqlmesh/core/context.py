@@ -459,7 +459,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 selected_gateway=self.selected_gateway,
             )
-
         return self._snapshot_evaluator
 
     def execution_context(

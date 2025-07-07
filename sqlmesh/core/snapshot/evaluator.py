@@ -122,6 +122,11 @@ class SnapshotEvaluator:
         self.adapters = (
             adapters if isinstance(adapters, t.Dict) else {selected_gateway or "": adapters}
         )
+        self.adapter = (
+            next(iter(self.adapters.values()))
+            if not selected_gateway
+            else self.adapters[selected_gateway]
+        )
         self.selected_gateway = selected_gateway
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
@@ -598,14 +603,6 @@ class SnapshotEvaluator:
                 adapter.close()
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
-
-    @property
-    def adapter(self) -> EngineAdapter:
-        return (
-            next(iter(self.adapters.values()))
-            if not self.selected_gateway
-            else self.adapters[self.selected_gateway]
-        )
 
     def _evaluate_snapshot(
         self,
