@@ -46,16 +46,16 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
             .join("rw_catalog.rw_schemas", on="rw_schemas.id=rw_relations.schema_id")
             .where(
                 exp.and_(
-                    exp.column("name", db="rw_relations").eq(table.alias_or_name),
-                    exp.column("name", db="rw_columns").neq("_row_id"),
-                    exp.column("name", db="rw_columns").neq("_rw_timestamp"),
+                    exp.column("name", table="rw_relations").eq(table.alias_or_name),
+                    exp.column("name", table="rw_columns").neq("_row_id"),
+                    exp.column("name", table="rw_columns").neq("_rw_timestamp"),
                 )
             )
         )
 
         if table.args.get("db"):
             sql = sql.where(
-                exp.column("name", db="rw_schemas", quoted=False).eq(table.args["db"].name)
+                exp.column("name", table="rw_schemas", quoted=False).eq(table.args["db"].name)
             )
 
         self.execute(sql)
