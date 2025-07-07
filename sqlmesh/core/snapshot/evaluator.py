@@ -1876,20 +1876,12 @@ class ViewStrategy(PromotableStrategy):
         )
         snapshot = kwargs["snapshot"]
         snapshots = kwargs["snapshots"]
+
         if (
-            (
-                isinstance(query_or_df, exp.Expression)
-                and snapshot.is_materialized_view
-                and deployability_index.is_deployable(snapshot)
-                and model.render_query(
-                    snapshots=snapshots,
-                    deployability_index=deployability_index,
-                    engine_adapter=self.adapter,
-                )
-                == query_or_df
-            )
-            or self.adapter.HAS_VIEW_BINDING
-        ) and self.adapter.table_exists(table_name):
+            not snapshot.is_materialized_view
+            and self.adapter.HAS_VIEW_BINDING
+            and self.adapter.table_exists(table_name)
+        ):
             logger.info("Skipping creation of the view '%s'", table_name)
             return
 
