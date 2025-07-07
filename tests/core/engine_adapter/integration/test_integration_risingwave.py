@@ -11,9 +11,6 @@ from tests.core.engine_adapter.integration import (
 )
 
 
-pytestmark = [pytest.mark.risingwave, pytest.mark.engine, pytest.mark.slow]
-
-
 @pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["risingwave"])))
 def ctx(
     request: FixtureRequest,
