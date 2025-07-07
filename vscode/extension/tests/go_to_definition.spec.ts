@@ -3,7 +3,11 @@ import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
 import { goToDefinition, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 test('Stop server works', async ({ page }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
@@ -11,8 +15,8 @@ test('Stop server works', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   try {
     // Navigate to code-server instance
@@ -53,8 +57,8 @@ test('Go to definition for model', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   try {
     // Navigate to code-server instance

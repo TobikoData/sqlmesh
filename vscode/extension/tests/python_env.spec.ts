@@ -35,6 +35,7 @@ if test_var is None or test_var == "":
 
 async function runTest(page: Page, context: CodeServerContext): Promise<void> {
   await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+  await page.waitForSelector('text=models')
   await openLineageView(page)
 }
 

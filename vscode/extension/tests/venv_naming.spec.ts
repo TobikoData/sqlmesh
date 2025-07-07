@@ -40,6 +40,7 @@ test('venv being named .env', async ({ page }, testInfo) => {
 
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await page.waitForSelector('text=models')
     await openLineageView(page)
     await page.waitForSelector('text=Loaded SQLMesh Context')
   } finally {

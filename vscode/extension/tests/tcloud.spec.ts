@@ -9,7 +9,11 @@ import {
   SUSHI_SOURCE_PATH,
 } from './utils'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 /**
  * Helper function to create and set up a Python virtual environment
@@ -384,8 +388,8 @@ test.skip('tcloud not signed in and not installed, shows sign in window and then
   // Start VS Code
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
   try {

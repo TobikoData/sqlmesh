@@ -3,7 +3,11 @@ import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
 import { runCommand, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 test('Workspace diagnostics show up in the diagnostics panel', async ({
   page,
@@ -13,8 +17,8 @@ test('Workspace diagnostics show up in the diagnostics panel', async ({
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   const configPath = path.join(tempDir, 'config.py')
   const configContent = await fs.readFile(configPath, 'utf8')

@@ -3,7 +3,11 @@ import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
 import { runCommand, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 test('Format project works correctly', async ({ page }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
@@ -11,8 +15,8 @@ test('Format project works correctly', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)

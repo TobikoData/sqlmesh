@@ -4,7 +4,11 @@ import fs from 'fs-extra'
 import os from 'os'
 import { openLineageView, SUSHI_SOURCE_PATH } from './utils'
 import { writeFileSync } from 'fs'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 /**
  * Helper function to launch VS Code and test lineage with given project path config
@@ -24,8 +28,8 @@ test('Lineage panel renders correctly - no project path config (default)', async
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
@@ -146,8 +150,8 @@ test('Lineage panel renders correctly - absolute path project outside of workspa
   await fs.ensureDir(workspaceDir)
   const context = await startCodeServer({
     tempDir: workspaceDir,
-    placeFileWithPythonInterpreter: false,
   })
+  await createPythonInterpreterSettingsSpecifier(workspaceDir)
 
   const settings = {
     'sqlmesh.projectPath': projectDir,
@@ -203,8 +207,8 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
 
   const context = await startCodeServer({
     tempDir: workspaceDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(workspaceDir)
 
   const settings = {
     'python.defaultInterpreterPath': context.defaultPythonInterpreter,
