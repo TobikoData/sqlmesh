@@ -222,17 +222,13 @@ def _convert_models(
             model.kind.path = str(Path("../seeds", seed_filename))
         else:
             if model._path is None:
-                raise ValueError(f"Unhandled model path: {model._path}")
+                raise ValueError(f"Unhandled model path for model {model_name}")
             if input_paths.models in model._path.parents:
                 model_filename = model._path.relative_to(input_paths.models)
             elif input_paths.snapshots in model._path.parents:
                 # /base/path/snapshots/foo.sql -> /output/path/models/dbt_snapshots/foo.sql
                 model_filename = "dbt_snapshots" / model._path.relative_to(input_paths.snapshots)
-            elif input_paths.tests in model._path.parents:
-                # /base/path/tests/foo.sql -> /output/path/audits/foo.sql
-                model_filename = "dbt_tests" / model._path.relative_to(input_paths.tests)
             elif input_paths.packages in model._path.parents:
-                # /base/path/dbt_packages/foo/models/bar.sql -> /output/path/models/dbt_packages/foo/models/bar.sql
                 model_filename = c.MIGRATED_DBT_PACKAGES / model._path.relative_to(
                     input_paths.packages
                 )
