@@ -34,7 +34,6 @@ nav:
       - guides/tablediff.md
       - guides/linter.md
       - guides/ui.md
-      - guides/observer.md
     - Advanced usage:
       - guides/customizing_sqlmesh.md
       - guides/signals.md
@@ -114,7 +113,6 @@ nav:
       - "Alerts & Notifications": cloud/features/alerts_notifications.md
       - cloud/features/debugger_view.md
       - cloud/features/data_catalog.md
-      - cloud/features/single_sign_on.md
       - Scheduler:
         - "Cloud": cloud/features/scheduler/scheduler.md
         - "Cloud Hybrid Deployments":
@@ -124,8 +122,10 @@ nav:
         - cloud/features/scheduler/airflow.md
         - cloud/features/scheduler/dagster.md
       - Security:
-        - "Security Overview": cloud/features/security/security.md
-      - "Incident Reporting": cloud/features/incident_reporting.md
+        - cloud/features/security/security.md
+        - cloud/features/security/single_sign_on.md
+      - cloud/features/incident_reporting.md
+      - cloud/features/xdb_diffing.md
 #      - Observability:
 #        - cloud/features/observability/overview.md
 #        - cloud/features/observability/model_freshness.md

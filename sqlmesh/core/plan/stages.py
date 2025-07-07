@@ -524,7 +524,8 @@ class PlanStagesBuilder:
             },
             deployability_index=deployability_index,
             end_bounded=plan.end_bounded,
-            interval_end_per_model=plan.interval_end_per_model,
+            start_override_per_model=plan.start_override_per_model,
+            end_override_per_model=plan.end_override_per_model,
         )
 
     def _get_audit_only_snapshots(

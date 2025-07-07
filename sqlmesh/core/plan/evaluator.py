@@ -256,7 +256,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan.end,
             execution_time=plan.execution_time,
             end_bounded=plan.end_bounded,
-            interval_end_per_model=plan.interval_end_per_model,
+            start_override_per_model=plan.start_override_per_model,
+            end_override_per_model=plan.end_override_per_model,
         )
 
         if completion_status.is_failure:

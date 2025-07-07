@@ -1,17 +1,17 @@
-# SSO (Single Sign-On) 
+# SSO (Single Sign-On)
 
 ## Overview
 
-Tobiko Cloud supports single sign-on (SSO) through OpenID and SAML 2.0 providers. 
+Tobiko Cloud supports single sign-on (SSO) through OpenID and SAML 2.0 providers.
 
-This makes it easy to provision access to users and simplifies authentication. 
+This makes it easy to provision access to users and simplifies authentication.
 
 
-## Setup & Prerequsites 
+## Setup & Prerequsites
 
-You must have an active Tobiko Cloud instance with SSO enabled. Please contact your account team to ensure this is enabled. 
+You must have an active Tobiko Cloud instance with SSO enabled. Please contact your account team to ensure this is enabled.
 
-If your Tobiko Cloud instance is setup to require SSO, then you won't need to provide a token in your `tcloud.yml` configuration. 
+If your Tobiko Cloud instance is setup to require SSO, then you won't need to provide a token in your `tcloud.yml` configuration.
 
 Below is an example of a `tcloud.yml` configuration:
 ```yaml
@@ -27,7 +27,7 @@ default_project: <The name of a project to use by default>
 
 ## Identity Providers
 
-Tobiko Cloud currently supports OpenID and SAML 2.0. 
+Tobiko Cloud currently supports OpenID and SAML 2.0.
 
 ### OpenID
 
@@ -37,17 +37,17 @@ to login with most OAuth2 login providers.
 
 There are two ways to use OpenID Providers. The first is a
 if you use a shared provider like Google, Github,
-Microsoft, etc. 
+Microsoft, etc.
 
 #### Google OAuth
 
-To enable Google OAuth, all we need is your domain (ex: `yourname@companyname.com`, `companyname.com` is the domain). From here, we can switch SSO on with Google OAuth. 
+To enable Google OAuth, all we need is your domain (ex: `yourname@companyname.com`, `companyname.com` is the domain). From here, we can switch SSO on with Google OAuth.
 
-The login  flow will look like the following if you access [cloud.tobikodata.com/auth/login](https://cloud.tobikodata.com/auth/login) directly from your browser. If authenticating through CLI see [here](https://sqlmesh.readthedocs.io/en/stable/cloud/features/single_sign_on/#status) for more details. 
+The login  flow will look like the following if you access [cloud.tobikodata.com/auth/login](https://cloud.tobikodata.com/auth/login) directly from your browser. If authenticating through CLI see [here](../security/single_sign_on.md#status) for more details.
 
 <div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/71da13d6fa284daca7ebc0c1f68758fe?sid=85e5f795-f40b-496d-bdf7-098ee6093468" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
 
-#### Other OAuth Providers 
+#### Other OAuth Providers
 
 If you use Okta and other custom OpenID/OAuth2 providers you need to add us
 as an Application or Client (terms differ across providers).
@@ -69,9 +69,9 @@ We will need the following information from you once you set us up:
 |---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
 | Client ID                 | The random ID we use to communicate with their OAuth service                                                                                                                                                     | `<random string>`                                                                       |
 | Client Secret             | The random secret we use to authentication with their OAuth service                                                                                                                                              | `<random string>`                                                                       |
-| Open ID Configuration URL | This is the URL we use to gather the rest of their OpenID Configuration. We can often find this on our own and don't need to request it from them, check with the onboarding engineer to make sure we know this. | 
+| Open ID Configuration URL | This is the URL we use to gather the rest of their OpenID Configuration. We can often find this on our own and don't need to request it from them, check with the onboarding engineer to make sure we know this. |
 
-Once we have the above information, we can enable SSO on your account. You will then follow the login flow through your provider such as logging in through Okta. 
+Once we have the above information, we can enable SSO on your account. You will then follow the login flow through your provider such as logging in through Okta.
 
 ### SAML V2.0
 
@@ -107,34 +107,34 @@ a provider named `acme`:
 
 ### Okta Integration
 
-The following instructions will walk you through configuring Okta as your identity provider. 
+The following instructions will walk you through configuring Okta as your identity provider.
 Log into your Okta account. Navigate to Application and create a new app. You will want to select SAML 2.0
 
 ![okta_setup_1](./single_sign_on/okta_setup_1.png)
 
-Next, name your app "Tobiko Cloud". You can add the app logo by downloading the image [here](https://avatars.githubusercontent.com/u/113925670?s=200&v=4). 
+Next, name your app "Tobiko Cloud". You can add the app logo by downloading the image [here](https://avatars.githubusercontent.com/u/113925670?s=200&v=4).
 
 ![okta_setup_2](./single_sign_on/okta_setup_2.png)
 
 #### SAML Configurations and Settings
 
-1. We now need to fill in the SAML Settings. Please enter the following values: 
+1. We now need to fill in the SAML Settings. Please enter the following values:
 
 
-    - **Single sign-on URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`   
+    - **Single sign-on URL**: `https://cloud.tobikodata.com/auth/saml/callback/acme`
     - **Audience URI (SP Entity ID)**: `https://cloud.tobikodata.com/auth/saml/metadata/acme`
 
     ![okta_setup_3](./single_sign_on/okta_setup_3.png)
 
-2. Fill in the Attribute Statements section with email, firstName, and lastName: These are required to properly map to your users. 
+2. Fill in the Attribute Statements section with email, firstName, and lastName: These are required to properly map to your users.
 
     ![okta_setup_4](./single_sign_on/okta_setup_4.png)
 
-3. Click next and now you are on the last step. Check off the box `Contact app vendor` and hit `Finish`. Now you're all set! 
+3. Click next and now you are on the last step. Check off the box `Contact app vendor` and hit `Finish`. Now you're all set!
 
     ![okta_setup_5](./single_sign_on/okta_setup_5.png)
 
-Here is what you will see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application. 
+Here is what you will see if you are accessing Tobiko Cloud via Okta. Click on the Tobiko Cloud icon to be redirected to the application.
 
 ![sso_okta](./single_sign_on/sso_okta.png)
 
@@ -142,7 +142,7 @@ Here is what you will see if you are accessing Tobiko Cloud via Okta. Click on t
 
 ### Status
 
-You can see what the status of your session is with the `status` command: 
+You can see what the status of your session is with the `status` command:
 
 ``` bash
 $ tcloud auth status
@@ -192,11 +192,11 @@ Not currently authenticated
 
 ![tcloud_logout](./single_sign_on/tcloud_logout.png)
 
-Otherwise, you will be logged out automatically when the SSO session expires (every 24 hours). 
+Otherwise, you will be logged out automatically when the SSO session expires (every 24 hours).
 
 ## OAuth Clients
 
-Sometimes, you want to grant an external service access to your Tobiko Cloud project. For example, the external service could be the [CICD bot](../../integrations/github.md) or a [scheduler integration](./scheduler/airflow.md).
+Sometimes, you want to grant an external service access to your Tobiko Cloud project. For example, the external service could be the [CICD bot](../../../integrations/github.md) or a [scheduler integration](../scheduler/airflow.md).
 
 These services take `Client ID` and `Client Secret` credentials.
 
