@@ -279,6 +279,8 @@ def render(
     **format_kwargs: t.Any,
 ) -> None:
     """Render a model's query, optionally expanding referenced models."""
+    model = ctx.obj.get_model(model, raise_if_missing=True)
+
     rendered = ctx.obj.render(
         model,
         start=start,

@@ -946,11 +946,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 pass
         return self.config, self.path
 
-    def config_for_node(self, node: str | Model | Audit) -> Config:
-        if isinstance(node, str):
-            path = self.get_snapshot(node, raise_if_missing=True).node._path
-        else:
-            path = node._path
+    def config_for_node(self, node: Model | Audit) -> Config:
+        path = node._path
         if path is None:
             return self.config
         return self.config_for_path(path)[0]  # type: ignore

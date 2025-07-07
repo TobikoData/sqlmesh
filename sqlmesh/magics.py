@@ -641,6 +641,8 @@ class SQLMeshMagics(Magics):
         model = render_opts.pop("model")
         dialect = render_opts.pop("dialect", None)
 
+        model = context.get_model(model, raise_if_missing=True)
+
         query = context.render(
             model,
             start=render_opts.pop("start", None),
