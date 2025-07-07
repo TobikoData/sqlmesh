@@ -340,9 +340,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             )
             if stage.demoted_environment_naming_info:
                 self._demote_snapshots(
-                    stage.demoted_snapshots,
+                    [stage.all_snapshots[s.snapshot_id] for s in stage.demoted_snapshots],
                     stage.demoted_environment_naming_info,
+                    deployability_index=stage.deployability_index,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
+                    snapshots=stage.all_snapshots,
                 )
 
             completed = True
@@ -382,12 +384,23 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _demote_snapshots(
         self,
-        target_snapshots: t.Iterable[SnapshotTableInfo],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         self.snapshot_evaluator.demote(
-            target_snapshots, environment_naming_info, on_complete=on_complete
+            target_snapshots,
+            environment_naming_info,
+            table_mapping=to_view_mapping(
+                snapshots.values(),
+                environment_naming_info,
+                default_catalog=self.default_catalog,
+                dialect=self.snapshot_evaluator.adapter.dialect,
+            ),
+            deployability_index=deployability_index,
+            on_complete=on_complete,
         )
 
     def _restatement_intervals_across_all_environments(

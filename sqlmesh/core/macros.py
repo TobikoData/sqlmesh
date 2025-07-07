@@ -67,6 +67,7 @@ class RuntimeStage(Enum):
     CREATING = "creating"
     EVALUATING = "evaluating"
     PROMOTING = "promoting"
+    DEMOTING = "demoting"
     AUDITING = "auditing"
     TESTING = "testing"
     BEFORE_ALL = "before_all"

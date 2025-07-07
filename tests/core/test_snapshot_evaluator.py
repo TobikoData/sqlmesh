@@ -294,6 +294,8 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
@@ -320,6 +322,8 @@ def test_demote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.drop_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         cascade=False,
