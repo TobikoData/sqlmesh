@@ -1190,9 +1190,7 @@ class SnapshotEvaluator:
     def set_correlation_id(self, correlation_id: CorrelationId) -> SnapshotEvaluator:
         return SnapshotEvaluator(
             {
-                gateway: adapter.with_settings(
-                    log_level=adapter._execute_log_level, correlation_id=correlation_id
-                )
+                gateway: adapter.with_settings(correlation_id=correlation_id)
                 for gateway, adapter in self.adapters.items()
             },
             self.ddl_concurrent_tasks,

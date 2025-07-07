@@ -453,7 +453,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not self._snapshot_evaluator:
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_settings(log_level=logging.INFO)
+                    gateway: adapter.with_settings(execute_log_level=logging.INFO)
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
@@ -1937,7 +1937,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_settings(log_level=logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(execute_log_level=logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,

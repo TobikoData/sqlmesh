@@ -153,7 +153,7 @@ class EngineAdapter:
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
-            execute_log_level=kwargs.pop("log_level", self._execute_log_level),
+            execute_log_level=kwargs.pop("execute_log_level", self._execute_log_level),
             register_comments=self._register_comments,
             null_connection=self._extra_config.pop("null_connection", True),
             multithreaded=self._multithreaded,
