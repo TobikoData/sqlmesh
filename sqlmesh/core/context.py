@@ -948,10 +948,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def config_for_node(self, node: str | Model | Audit) -> Config:
         if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
-                0
-            ]  # type: ignore
-        return self.config_for_path(node._path)[0]  # type: ignore
+            path = self.get_snapshot(node, raise_if_missing=True).node._path
+        else:
+            path = node._path
+        if path is None:
+            return self.config
+        return self.config_for_path(path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:

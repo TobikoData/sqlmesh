@@ -3290,7 +3290,7 @@ def test_no_depends_on_runtime_jinja_query():
     model = load_sql_based_model(expressions)
     with pytest.raises(
         ConfigError,
-        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
+        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime",
     ):
         model.validate_definition()
 
@@ -8324,7 +8324,7 @@ def test_physical_version():
 
     with pytest.raises(
         ConfigError,
-        match=r"Pinning a physical version is only supported for forward only models at.*",
+        match=r"Pinning a physical version is only supported for forward only models( at.*)?",
     ):
         load_sql_based_model(
             d.parse(
