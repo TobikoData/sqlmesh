@@ -175,10 +175,6 @@ export function uid(): string {
   return time + random
 }
 
-export function toID(...args: Array<string | undefined>): string {
-  return args.filter(Boolean).join('__')
-}
-
 export function toUniqueName(prefix?: string, suffix?: string): string {
   // Should be enough for now
   const hex = (Date.now() % 100000).toString(16)

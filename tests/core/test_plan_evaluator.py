@@ -64,6 +64,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         sushi_context.default_catalog,
         console=sushi_context.console,
     )
+
     evaluatable_plan = plan.to_evaluatable()
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, sushi_context.state_sync, sushi_context.default_catalog

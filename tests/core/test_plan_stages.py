@@ -112,7 +112,6 @@ def test_build_plan_stages_basic(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -138,6 +137,10 @@ def test_build_plan_stages_basic(
     assert isinstance(physical_stage, PhysicalLayerUpdateStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
+    assert {s.snapshot_id for s in physical_stage.snapshots_with_missing_intervals} == {
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
@@ -220,7 +223,6 @@ def test_build_plan_stages_with_before_all_and_after_all(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=environment_statements,
@@ -329,7 +331,6 @@ def test_build_plan_stages_select_models(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill={snapshot_a.name},
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -357,6 +358,7 @@ def test_build_plan_stages_select_models(
     assert len(physical_stage.snapshots) == 1
     assert {s.snapshot_id for s in physical_stage.snapshots} == {snapshot_a.snapshot_id}
     assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
+    assert physical_stage.snapshots_with_missing_intervals == {snapshot_a.snapshot_id}
 
     # Verify BackfillStage
     backfill_stage = stages[2]
@@ -429,7 +431,6 @@ def test_build_plan_stages_basic_no_backfill(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -539,7 +540,6 @@ def test_build_plan_stages_restatement(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -651,7 +651,6 @@ def test_build_plan_stages_forward_only(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -780,7 +779,6 @@ def test_build_plan_stages_forward_only_dev(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -904,7 +902,6 @@ def test_build_plan_stages_audit_only(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -1028,7 +1025,6 @@ def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -1101,7 +1097,6 @@ def test_build_plan_stages_removed_model(
         removed_snapshots=[snapshot_b.snapshot_id],
         requires_backfill=False,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -1183,7 +1178,6 @@ def test_build_plan_stages_environment_suffix_target_changed(
         removed_snapshots=[],
         requires_backfill=False,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -1283,7 +1277,6 @@ def test_build_plan_stages_indirect_non_breaking_no_migration(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,
@@ -1371,7 +1364,6 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
         removed_snapshots=[],
         requires_backfill=True,
         models_to_backfill=None,
-        interval_end_per_model=None,
         execution_time="2023-01-02",
         disabled_restatement_models=set(),
         environment_statements=None,

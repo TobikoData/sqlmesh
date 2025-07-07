@@ -1558,6 +1558,6 @@ def _convert_sql(v: t.Any, dialect: DialectType) -> t.Any:
     return v
 
 
-@lru_cache(maxsize=1028)
+@lru_cache(maxsize=16384)
 def _cache_convert_sql(v: t.Any, dialect: DialectType, t: type) -> t.Any:
     return _convert_sql(v, dialect)

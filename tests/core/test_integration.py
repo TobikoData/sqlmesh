@@ -71,6 +71,7 @@ from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError, ConfigError
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
+from sqlmesh.utils import CorrelationId
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
@@ -5653,6 +5654,28 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_should_not_override_environment_statements(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+    context.config.before_all = ["SELECT 'test_before_all';"]
+    context.load()
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+
+    context.plan(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-07",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_shouldnt_backfill_beyond_prod_intervals(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
 
@@ -6467,3 +6490,354 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     for environment in ["dev", "prod"]:
         context_diff = ctx._context_diff(environment)
         assert context_diff.environment == environment
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_scd_type_2_restatement(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    raw_employee_status = d.parse("""
+    MODEL (
+        name memory.hr_system.raw_employee_status,
+        kind FULL
+    );
+
+    SELECT
+        1001 AS employee_id,
+        'engineering' AS department,
+        'EMEA' AS region,
+        '2023-01-08 15:00:00 UTC' AS last_modified;
+    """)
+
+    # Create SCD Type 2 model for employee history tracking
+    employee_history = d.parse("""
+    MODEL (
+        name memory.hr_system.employee_history,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key employee_id,
+            updated_at_name last_modified,
+            disable_restatement false
+        ),
+        owner hr_analytics,
+        cron '*/5 * * * *',
+        grain employee_id,
+        description 'Historical tracking of employee status changes'
+    );
+
+    SELECT
+        employee_id::INT AS employee_id,
+        department::TEXT AS department,
+        region::TEXT AS region,
+        last_modified AS last_modified
+    FROM
+        memory.hr_system.raw_employee_status;
+    """)
+
+    raw_employee_status_model = load_sql_based_model(raw_employee_status)
+    employee_history_model = load_sql_based_model(employee_history)
+    context.upsert_model(raw_employee_status_model)
+    context.upsert_model(employee_history_model)
+
+    # Initial plan and apply
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    query = "SELECT employee_id, department, region, valid_from, valid_to FROM memory.hr_system.employee_history ORDER BY employee_id, valid_from"
+    initial_data = context.engine_adapter.fetchdf(query)
+
+    assert len(initial_data) == 1
+    assert initial_data["valid_to"].isna().all()
+    assert initial_data["department"].tolist() == ["engineering"]
+    assert initial_data["region"].tolist() == ["EMEA"]
+
+    # Apply a future plan with source changes
+    with time_machine.travel("2023-01-08 15:10:00 UTC"):
+        # Update source model, employee 1001 changed region
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'engineering' AS department,
+            'AMER' AS region,
+            '2023-01-08 15:10:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    with time_machine.travel("2023-01-08 15:20:00 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history for employee 1001
+        assert len(data_after_change) == 2
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
+        assert pd.isna(data_after_change.iloc[1]["valid_to"])
+
+        # Update source model, employee 1001 changed region again and department
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'sales' AS department,
+            'ANZ' AS region,
+            '2023-01-08 15:26:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    with time_machine.travel("2023-01-08 15:35:00 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history for employee 1001 after second change
+        assert len(data_after_change) == 3
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
+        assert str(data_after_change.iloc[1]["valid_to"]) == "2023-01-08 15:26:00"
+        assert data_after_change.iloc[2]["employee_id"] == 1001
+        assert data_after_change.iloc[2]["department"] == "sales"
+        assert data_after_change.iloc[2]["region"] == "ANZ"
+        assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-08 15:26:00"
+        assert pd.isna(data_after_change.iloc[2]["valid_to"])
+
+    # Now test restatement cleanup by restating from 15:10 (first change)
+    with time_machine.travel("2023-01-08 15:38:00 UTC"):
+        plan = context.plan_builder(
+            "prod",
+            skip_tests=True,
+            restate_models=["memory.hr_system.employee_history"],
+            start="2023-01-08 15:09:00",
+        ).build()
+        context.apply(plan)
+        restated_data = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history after restatement
+        assert len(restated_data) == 2
+        assert restated_data.iloc[0]["employee_id"] == 1001
+        assert restated_data.iloc[0]["department"] == "engineering"
+        assert restated_data.iloc[0]["region"] == "EMEA"
+        assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-08 15:26:00"
+        assert restated_data.iloc[1]["employee_id"] == 1001
+        assert restated_data.iloc[1]["department"] == "sales"
+        assert restated_data.iloc[1]["region"] == "ANZ"
+        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-08 15:26:00"
+        assert pd.isna(restated_data.iloc[1]["valid_to"])
+
+
+@time_machine.travel("2020-01-01 00:00:00 UTC")
+def test_scd_type_2_full_restatement_no_start_date(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Initial product catalog of 3 products
+    raw_products = d.parse("""
+    MODEL (
+        name memory.store.raw_products,
+        kind FULL
+    );
+
+    SELECT * FROM VALUES
+        (101, 'Laptop Pro', 1299.99, 'Electronics', '2020-01-01 00:00:00'::TIMESTAMP),
+        (102, 'Wireless Mouse', 49.99, 'Electronics', '2020-01-01 00:00:00'::TIMESTAMP),
+        (103, 'Office Chair', 199.99, 'Furniture', '2020-01-01 00:00:00'::TIMESTAMP)
+    AS t(product_id, product_name, price, category, last_updated);
+    """)
+
+    # SCD Type 2 model for product history tracking
+    product_history = d.parse("""
+    MODEL (
+        name memory.store.product_history,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key product_id,
+            updated_at_name last_updated,
+            disable_restatement false
+        ),
+        owner catalog_team,
+        cron '0 */6 * * *',
+        grain product_id,
+        description 'Product catalog change history'
+    );
+
+    SELECT
+        product_id::INT AS product_id,
+        product_name::TEXT AS product_name,
+        price::DECIMAL(10,2) AS price,
+        category::TEXT AS category,
+        last_updated AS last_updated
+    FROM
+        memory.store.raw_products;
+    """)
+
+    raw_products_model = load_sql_based_model(raw_products)
+    product_history_model = load_sql_based_model(product_history)
+    context.upsert_model(raw_products_model)
+    context.upsert_model(product_history_model)
+
+    # Initial plan and apply
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    query = "SELECT product_id, product_name, price, category, last_updated, valid_from, valid_to FROM memory.store.product_history ORDER BY product_id, valid_from"
+    initial_data = context.engine_adapter.fetchdf(query)
+
+    # Validate initial state of 3 products all active
+    assert len(initial_data) == 3
+    assert initial_data["valid_to"].isna().all()
+    initial_product_names = set(initial_data["product_name"].tolist())
+    assert initial_product_names == {"Laptop Pro", "Wireless Mouse", "Office Chair"}
+
+    # Price update and category change
+    with time_machine.travel("2020-01-15 12:00:00 UTC"):
+        raw_products_v2 = d.parse("""
+        MODEL (
+            name memory.store.raw_products,
+            kind FULL
+        );
+
+        SELECT * FROM VALUES
+            (101, 'Laptop Pro', 1199.99, 'Electronics', '2020-01-15 00:00:00'::TIMESTAMP),
+            (102, 'Wireless Mouse', 49.99, 'Electronics', '2020-01-01 00:00:00'::TIMESTAMP),
+            (103, 'Ergonomic Office Chair', 229.99, 'Office Furniture', '2020-01-15 00:00:00'::TIMESTAMP)
+        AS t(product_id, product_name, price, category, last_updated);
+        """)
+        raw_products_v2_model = load_sql_based_model(raw_products_v2)
+        context.upsert_model(raw_products_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+        context.run()
+
+        data_after_first_change = context.engine_adapter.fetchdf(query)
+
+        # Should have 5 records (3 original closed,  2 new activε, 1 unchanged)
+        assert len(data_after_first_change) == 5
+
+    # Second change
+    with time_machine.travel("2020-02-01 10:00:00 UTC"):
+        raw_products_v3 = d.parse("""
+        MODEL (
+            name memory.store.raw_products,
+            kind FULL
+        );
+
+        SELECT * FROM VALUES
+            (101, 'Laptop Pro Max', 1399.99, 'Electronics', '2020-02-01 00:00:00'::TIMESTAMP),
+            (103, 'Ergonomic Office Chair', 229.99, 'Office Furniture', '2020-01-15 00:00:00'::TIMESTAMP),
+            (102, 'Wireless Mouse', 49.99, 'Electronics', '2020-01-01 00:00:00'::TIMESTAMP)
+        AS t(product_id, product_name, price, category, last_updated);
+        """)
+        raw_products_v3_model = load_sql_based_model(raw_products_v3)
+        context.upsert_model(raw_products_v3_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+        context.run()
+        data_after_second_change = context.engine_adapter.fetchdf(query)
+        assert len(data_after_second_change) == 6
+
+    # Store the current state before full restatement
+    data_before_full_restatement = data_after_second_change.copy()
+
+    # Perform full restatement (no start date provided)
+    with time_machine.travel("2020-02-01 15:00:00 UTC"):
+        plan = context.plan_builder(
+            "prod", skip_tests=True, restate_models=["memory.store.product_history"]
+        ).build()
+        context.apply(plan)
+        data_after_full_restatement = context.engine_adapter.fetchdf(query)
+        assert len(data_after_full_restatement) == 3
+
+        # Check that all currently active products before restatement are still active after restatement
+        active_before = data_before_full_restatement[
+            data_before_full_restatement["valid_to"].isna()
+        ]
+        active_after = data_after_full_restatement
+        assert set(active_before["product_id"]) == set(active_after["product_id"])
+
+        expected_products = {
+            101: {
+                "product_name": "Laptop Pro Max",
+                "price": 1399.99,
+                "category": "Electronics",
+                "last_updated": "2020-02-01",
+            },
+            102: {
+                "product_name": "Wireless Mouse",
+                "price": 49.99,
+                "category": "Electronics",
+                "last_updated": "2020-01-01",
+            },
+            103: {
+                "product_name": "Ergonomic Office Chair",
+                "price": 229.99,
+                "category": "Office Furniture",
+                "last_updated": "2020-01-15",
+            },
+        }
+        for _, row in data_after_full_restatement.iterrows():
+            pid = row["product_id"]
+            assert pid in expected_products
+            expected = expected_products[pid]
+            assert row["product_name"] == expected["product_name"]
+            assert float(row["price"]) == expected["price"]
+            assert row["category"] == expected["category"]
+
+            # valid_from should be the epoch, valid_to should be NaT
+            assert str(row["valid_from"]) == "1970-01-01 00:00:00"
+            assert pd.isna(row["valid_to"])
+
+
+def test_plan_evaluator_correlation_id(tmp_path: Path):
+    def _correlation_id_in_sqls(correlation_id: CorrelationId, mock_logger):
+        sqls = [call[0][0] for call in mock_logger.call_args_list]
+        return any(f"/* {correlation_id} */" in sql for sql in sqls)
+
+    ctx = Context(paths=[tmp_path], config=Config())
+
+    # Case: Ensure that the correlation id (plan_id) is included in the SQL for each plan
+    for i in range(2):
+        create_temp_file(
+            tmp_path,
+            Path("models", "test.sql"),
+            f"MODEL (name test.a, kind FULL); SELECT {i} AS col",
+        )
+
+        with mock.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._log_sql") as mock_logger:
+            ctx.load()
+            plan = ctx.plan(auto_apply=True, no_prompts=True)
+
+        correlation_id = CorrelationId.from_plan_id(plan.plan_id)
+        assert str(correlation_id) == f"SQLMESH_PLAN: {plan.plan_id}"
+
+        assert _correlation_id_in_sqls(correlation_id, mock_logger)

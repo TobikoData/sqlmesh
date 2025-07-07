@@ -77,6 +77,7 @@ class ManifestHelper:
         profile_name: str,
         target: TargetConfig,
         variable_overrides: t.Optional[t.Dict[str, t.Any]] = None,
+        cache_dir: t.Optional[str] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
@@ -99,8 +100,16 @@ class ManifestHelper:
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
         self._disabled_refs: t.Optional[t.Set[str]] = None
         self._disabled_sources: t.Optional[t.Set[str]] = None
+
+        if cache_dir is not None:
+            cache_path = Path(cache_dir)
+            if not cache_path.is_absolute():
+                cache_path = self.project_path / cache_path
+        else:
+            cache_path = self.project_path / c.CACHE
+
         self._call_cache: FileCache[t.Dict[str, t.List[CallNames]]] = FileCache(
-            self.project_path / c.CACHE, "jinja_calls"
+            cache_path, "jinja_calls"
         )
 
         self._on_run_start_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)

@@ -172,7 +172,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.52.0-jammy
+      - image: mcr.microsoft.com/playwright:v1.53.2-jammy
     resource_class: medium
     steps:
       - halt_unless_client
@@ -306,6 +306,7 @@ workflows:
                 - "3.10"
                 - "3.11"
                 - "3.12"
+                - "3.13"
       - cicd_tests_windows
       - engine_tests_docker:
           name: engine_<< matrix.engine >>

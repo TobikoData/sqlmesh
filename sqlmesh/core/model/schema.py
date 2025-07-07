@@ -7,7 +7,6 @@ from pathlib import Path
 from sqlglot.errors import SchemaError
 from sqlglot.schema import MappingSchema
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.model.cache import (
     load_optimized_query_and_mapping,
     optimized_query_cache_pool,
@@ -23,10 +22,10 @@ if t.TYPE_CHECKING:
 def update_model_schemas(
     dag: DAG[str],
     models: UniqueKeyDict[str, Model],
-    context_path: Path,
+    cache_dir: Path,
 ) -> None:
     schema = MappingSchema(normalize=False)
-    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(cache_dir)
 
     _update_model_schemas(dag, models, schema, optimized_query_cache)
 

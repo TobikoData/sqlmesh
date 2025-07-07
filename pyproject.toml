@@ -19,10 +19,11 @@ dependencies = [
     "packaging",
     "pandas",
     "pydantic>=2.0.0",
+    "python-dotenv",
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.30.0",
+    "sqlglot[rs]~=26.33.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -64,7 +65,6 @@ dev = [
     "dbt-clickhouse",
     "dbt-databricks",
     "dbt-redshift",
-    "dbt-sqlserver>=1.7.0",
     "dbt-trino",
     "Faker",
     "google-auth",
@@ -78,6 +78,7 @@ dev = [
     "pydantic",
     "PyAthena[Pandas]",
     "PyGithub>=2.6.0",
+    "pyodbc",
     "pyperf",
     "pyspark~=3.5.0",
     "pytest",
@@ -101,9 +102,11 @@ dev = [
 ]
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
+duckdb = []
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
+motherduck = ["duckdb>=1.2.0"]
 mssql = ["pymssql"]
 mssql-odbc = ["pyodbc"]
 mysql = ["pymysql"]
@@ -132,7 +135,7 @@ lsp = [
     "sse-starlette>=0.2.2",
     "pyarrow",
     # For lsp
-    "pygls",
+    "pygls>=1.2.0,<2.0.0",
     "lsprotocol",
 ]
 risingwave = ["psycopg2"]

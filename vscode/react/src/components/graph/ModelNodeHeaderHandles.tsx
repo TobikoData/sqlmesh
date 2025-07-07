@@ -2,13 +2,14 @@ import { type MouseEvent } from 'react'
 import { Handle, Position } from 'reactflow'
 import 'reactflow/dist/base.css'
 import { getModelNodeTypeTitle } from './help'
-import { isNotNil, toID, truncate } from '@/utils/index'
-import { EnumSide } from './types'
+import { isNotNil, truncate } from '@/utils/index'
+import { toID } from './types'
 import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type LineageNodeModelType } from './ModelNode'
+import type { ModelEncodedFQN } from '@/domain/models'
 
-export default function ModelNodeHeaderHandles({
+export function ModelNodeHeaderHandles({
   id,
   className,
   hasLeft = false,
@@ -17,16 +18,16 @@ export default function ModelNodeHeaderHandles({
   isDraggable = false,
   label,
   type,
-  count,
+  numberOfColumns,
   handleClick,
   handleSelect,
 }: {
-  id: string
+  id: ModelEncodedFQN
   label: string
   type?: LineageNodeModelType
   hasLeft?: boolean
   hasRight?: boolean
-  count?: number
+  numberOfColumns?: number
   className?: string
   isSelected?: boolean
   isDraggable?: boolean
@@ -38,7 +39,7 @@ export default function ModelNodeHeaderHandles({
       {hasLeft && (
         <Handle
           type="target"
-          id={toID(EnumSide.Left, id)}
+          id={toID('left', id)}
           position={Position.Left}
           isConnectable={false}
           className="-ml-2 border rounded-full overflow-hidden border-current"
@@ -87,9 +88,9 @@ export default function ModelNodeHeaderHandles({
           >
             {truncate(decodeURI(label), 50, 20)}
           </span>
-          {isNotNil(count) && (
+          {isNotNil(numberOfColumns) && (
             <span className="flex justify-between ml-2 mr-1 px-2 rounded-full bg-neutral-10">
-              {count}
+              {numberOfColumns}
             </span>
           )}
         </span>
@@ -97,7 +98,7 @@ export default function ModelNodeHeaderHandles({
       {hasRight && (
         <Handle
           type="source"
-          id={toID(EnumSide.Right, id)}
+          id={toID('right', id)}
           position={Position.Right}
           isConnectable={false}
           className="-mr-2 border rounded-full overflow-hidden border-current"

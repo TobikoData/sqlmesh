@@ -1,57 +1,54 @@
 import path from 'path'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { runCommand, SUSHI_SOURCE_PATH } from './utils'
 import os from 'os'
-import { test } from '@playwright/test'
+import { test } from './fixtures'
 import fs from 'fs-extra'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Stop server works', async () => {
+test('Stop server works', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
-  try {
-    const { window, close } = await startVSCode(tempDir)
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
-    //   Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+  // Navigate to code-server instance
+  await page.goto(
+    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+  )
 
-    // Click on the models folder, excluding external_models
-    await window
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
+  // Wait for code-server to load
+  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[role="application"]', { timeout: 10000 })
 
-    // Open the customer_revenue_lifetime model
-    await window
-      .getByRole('treeitem', { name: 'customers.sql', exact: true })
-      .locator('a')
-      .click()
+  // Wait for the models folder to be visible in the file explorer
+  await page.waitForSelector('text=models')
 
-    await window.waitForSelector('text=grain')
-    await window.waitForSelector('text=Loaded SQLMesh Context')
+  // Click on the models folder, excluding external_models
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
 
-    // Stop the server
-    await window.keyboard.press(
-      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-    )
-    await window.keyboard.type('SQLMesh: Stop Server')
-    await window.keyboard.press('Enter')
+  // Open the customers.sql model
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
 
-    // Await LSP server stopped message
-    await window.waitForSelector('text=LSP server stopped')
+  await page.waitForSelector('text=grain')
+  await page.waitForSelector('text=Loaded SQLMesh Context')
 
-    // Render the model
-    await window.keyboard.press(
-      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-    )
-    await window.keyboard.type('Render Model')
-    await window.keyboard.press('Enter')
+  // Stop the server
+  await runCommand(page, 'SQLMesh: Stop Server')
 
-    // Await error message
-    await window.waitForSelector(
-      'text="Failed to render model: LSP client not ready."',
-    )
-    await close()
-  } finally {
-    await fs.remove(tempDir)
-  }
+  // Await LSP server stopped message
+  await page.waitForSelector('text=LSP server stopped')
+
+  // Render the model
+  await runCommand(page, 'SQLMesh: Render Model')
+
+  // Await error message
+  await page.waitForSelector(
+    'text="Failed to render model: LSP client not ready."',
+  )
 })

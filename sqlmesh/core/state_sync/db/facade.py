@@ -69,10 +69,6 @@ logger = logging.getLogger(__name__)
 T = t.TypeVar("T")
 
 
-if t.TYPE_CHECKING:
-    pass
-
-
 class EngineAdapterStateSync(StateSync):
     """Manages state of nodes and snapshot with an existing engine adapter.
 
@@ -83,7 +79,7 @@ class EngineAdapterStateSync(StateSync):
         engine_adapter: The EngineAdapter to use to store and fetch snapshots.
         schema: The schema to store state metadata in. If None or empty string then no schema is defined
         console: The console to log information to.
-        context_path: The context path, used for caching snapshot models.
+        cache_dir: The cache path, used for caching snapshot models.
     """
 
     def __init__(
@@ -91,14 +87,12 @@ class EngineAdapterStateSync(StateSync):
         engine_adapter: EngineAdapter,
         schema: t.Optional[str],
         console: t.Optional[Console] = None,
-        context_path: Path = Path(),
+        cache_dir: Path = Path(),
     ):
         self.plan_dags_table = exp.table_("_plan_dags", db=schema)
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
-        self.snapshot_state = SnapshotState(
-            engine_adapter, schema=schema, context_path=context_path
-        )
+        self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)
         self.version_state = VersionState(engine_adapter, schema=schema)
         self.migrator = StateMigrator(
             engine_adapter,

@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id
+from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
 from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
@@ -123,6 +123,7 @@ class EngineAdapter:
         pre_ping: bool = False,
         pretty_sql: bool = False,
         shared_connection: bool = False,
+        correlation_id: t.Optional[CorrelationId] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -144,19 +145,25 @@ class EngineAdapter:
         self._pre_ping = pre_ping
         self._pretty_sql = pretty_sql
         self._multithreaded = multithreaded
+        self.correlation_id = correlation_id
 
-    def with_log_level(self, level: int) -> EngineAdapter:
+    def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
+        extra_kwargs = {
+            "null_connection": True,
+            "execute_log_level": kwargs.pop("execute_log_level", self._execute_log_level),
+            **self._extra_config,
+            **kwargs,
+        }
+
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
-            execute_log_level=level,
             register_comments=self._register_comments,
-            null_connection=True,
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
-            **self._extra_config,
+            **extra_kwargs,
         )
 
         return adapter
@@ -1514,6 +1521,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
+        start: TimeLike,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
@@ -1708,8 +1716,14 @@ class EngineAdapter:
         existing_rows_query = exp.select(*table_columns, exp.true().as_("_exists")).from_(
             target_table
         )
+
+        cleanup_ts = None
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
+        else:
+            # If truncate is false it is not the first insert
+            # Determine the cleanup timestamp for restatement or a regular incremental run
+            cleanup_ts = to_time_column(start, time_data_type, self.dialect, nullable=True)
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
@@ -1747,12 +1761,41 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
+                    if truncate
+                    else existing_rows_query.where(
+                        exp.and_(
+                            valid_to_col.is_(exp.Null().not_()),
+                            valid_to_col < cleanup_ts,
+                        ),
+                    ),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null())),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()))
+                    if truncate
+                    else exp.select(
+                        *(
+                            to_time_column(
+                                exp.null(), time_data_type, self.dialect, nullable=True
+                            ).as_(col)
+                            if col == valid_to_col.name
+                            else exp.column(col)
+                            for col in columns_to_types
+                        ),
+                        exp.true().as_("_exists"),
+                    )
+                    .from_(target_table)
+                    .where(
+                        exp.and_(
+                            valid_from_col <= cleanup_ts,
+                            exp.or_(
+                                valid_to_col.is_(exp.null()),
+                                valid_to_col >= cleanup_ts,
+                            ),
+                        )
+                    ),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(
@@ -1900,6 +1943,7 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        **kwargs: t.Any,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -2174,6 +2218,9 @@ class EngineAdapter:
                     sql = self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                 else:
                     sql = t.cast(str, e)
+
+                if self.correlation_id:
+                    sql = f"/* {self.correlation_id} */ {sql}"
 
                 self._log_sql(
                     sql,

@@ -11,14 +11,13 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
-    GithubCheckStatus,
     MergeStateStatus,
 )
+from sqlmesh.integrations.github.cicd.command import _update_pr_environment
 from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
 
@@ -545,16 +544,11 @@ def test_uncategorized(
     make_mock_issue_comment,
     tmp_path: pathlib.Path,
 ):
-    snapshot_categrozied = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot_categrozied.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_uncategorized = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
     mocker.patch(
-        "sqlmesh.core.plan.Plan.modified_snapshots",
+        "sqlmesh.core.plan.Plan.uncategorized",
         PropertyMock(
-            return_value={
-                snapshot_categrozied.snapshot_id: snapshot_categrozied,
-                snapshot_uncategorized.snapshot_id: snapshot_uncategorized,
-            },
+            return_value=[snapshot_uncategorized],
         ),
     )
     mock_repo = github_client.get_repo()
@@ -570,21 +564,30 @@ def test_uncategorized(
         )
     )
     mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    # note: context is deliberately not mocked out so that context.apply() throws UncategorizedPlanError due to the uncategorized snapshot
     controller = make_controller(
-        "tests/fixtures/github/pull_request_synchronized.json", github_client
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
     )
+    assert controller.pr_plan.uncategorized
 
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        controller.update_pr_environment_check(GithubCheckStatus.COMPLETED)
+        _update_pr_environment(controller)
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
     pr_environment_check_run = controller._check_run_mapping[
         "SQLMesh - PR Environment Synced"
     ].all_kwargs
-    assert len(pr_environment_check_run) == 1
-    assert (
-        pr_environment_check_run[0]["output"]["summary"]
-        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>a</td><td>Breaking</td><td>N/A</td></tr><tr><td>b</td><td>Uncategorized</td><td>N/A</td></tr></tbody></table>"""
-    )
+    assert len(pr_environment_check_run) == 2
+    assert pr_environment_check_run[0]["status"] == "in_progress"
+    assert pr_environment_check_run[1]["status"] == "completed"
+    assert pr_environment_check_run[1]["conclusion"] == "action_required"
+    summary = pr_environment_check_run[1]["output"]["summary"]
+    assert "Action Required to create or update PR Environment" in summary
+    assert "The following models could not be categorized automatically" in summary
+    assert '- "b"' in summary
+    assert "Run `sqlmesh plan hello_world_2` locally to apply these changes" in summary

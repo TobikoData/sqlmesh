@@ -330,7 +330,36 @@ class UnitTestConsole(abc.ABC):
         """
 
 
+class SignalConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+
+    @abc.abstractmethod
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+
+    @abc.abstractmethod
+    def stop_signal_progress(self) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+
+
 class Console(
+    SignalConsole,
     PlanBuilderConsole,
     LinterConsole,
     StateExporterConsole,
@@ -534,6 +563,29 @@ class NoopConsole(Console):
         pass
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        pass
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        pass
+
+    def stop_signal_progress(self) -> None:
         pass
 
     def start_creation_progress(
@@ -860,6 +912,8 @@ class TerminalConsole(Console):
         self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
         self.table_diff_progress_live: t.Optional[Live] = None
 
+        self.signal_status_tree: t.Optional[Tree] = None
+
         self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
@@ -901,6 +955,9 @@ class TerminalConsole(Console):
         audit_only: bool = False,
     ) -> None:
         """Indicates that a new snapshot evaluation/auditing progress has begun."""
+        # Add a newline to separate signal checking from evaluation
+        self._print("")
+
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
                 "Executing model batches" if not audit_only else "Auditing models", self.console
@@ -1049,6 +1106,88 @@ class TerminalConsole(Console):
         self.evaluation_column_widths = {}
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
+
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+        display_name = snapshot.display_name(
+            environment_naming_info,
+            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            dialect=self.dialect,
+        )
+        self.signal_status_tree = Tree(f"Checking signals for {display_name}")
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+        tree = Tree(f"[{signal_idx + 1}/{total_signals}] {signal_name} {duration:.2f}s")
+
+        formatted_check_intervals = [_format_signal_interval(snapshot, i) for i in check_intervals]
+        formatted_ready_intervals = [_format_signal_interval(snapshot, i) for i in ready_intervals]
+
+        if not formatted_check_intervals:
+            formatted_check_intervals = ["no intervals"]
+        if not formatted_ready_intervals:
+            formatted_ready_intervals = ["no intervals"]
+
+        # Color coding to help detect partial interval ranges quickly
+        if ready_intervals == check_intervals:
+            msg = "All ready"
+            color = "green"
+        elif ready_intervals:
+            msg = "Some ready"
+            color = "yellow"
+        else:
+            msg = "None ready"
+            color = "red"
+
+        if self.verbosity < Verbosity.VERY_VERBOSE:
+            num_check_intervals = len(formatted_check_intervals)
+            if num_check_intervals > 3:
+                formatted_check_intervals = formatted_check_intervals[:3]
+                formatted_check_intervals.append(f"... and {num_check_intervals - 3} more")
+
+            num_ready_intervals = len(formatted_ready_intervals)
+            if num_ready_intervals > 3:
+                formatted_ready_intervals = formatted_ready_intervals[:3]
+                formatted_ready_intervals.append(f"... and {num_ready_intervals - 3} more")
+
+            check = ", ".join(formatted_check_intervals)
+            tree.add(f"Check: {check}")
+
+            ready = ", ".join(formatted_ready_intervals)
+            tree.add(f"[{color}]{msg}: {ready}[/{color}]")
+        else:
+            check_tree = Tree("Check")
+            tree.add(check_tree)
+            for interval in formatted_check_intervals:
+                check_tree.add(interval)
+
+            ready_tree = Tree(f"[{color}]{msg}[/{color}]")
+            tree.add(ready_tree)
+            for interval in formatted_ready_intervals:
+                ready_tree.add(f"[{color}]{interval}[/{color}]")
+
+        if self.signal_status_tree is not None:
+            self.signal_status_tree.add(tree)
+
+    def stop_signal_progress(self) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+        if self.signal_status_tree is not None:
+            self._print(self.signal_status_tree)
+            self.signal_status_tree = None
 
     def start_creation_progress(
         self,
@@ -1934,8 +2073,8 @@ class TerminalConsole(Console):
             if not plan_builder.override_end:
                 if plan.provided_end:
                     blank_meaning = f"'{time_like_to_str(plan.provided_end)}'"
-                elif plan.interval_end_per_model:
-                    max_end = max(plan.interval_end_per_model.values())
+                elif plan.end_override_per_model:
+                    max_end = max(plan.end_override_per_model.values())
                     blank_meaning = f"'{time_like_to_str(max_end)}'"
                 else:
                     blank_meaning = "now"
@@ -3085,8 +3224,9 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
         else:
             for snapshot_table_info in models:
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot_table_info.change_category]
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({category_str})"
                 )
 
     def _print_modified_models(
@@ -3098,7 +3238,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         no_diff: bool = True,
     ) -> None:
         directly_modified = []
-        indirectly_modified = []
+        indirectly_modified: t.List[Snapshot] = []
         metadata_modified = []
         for snapshot in modified_snapshots:
             if context_diff.directly_modified(snapshot.name):
@@ -3110,11 +3250,40 @@ class MarkdownConsole(CaptureTerminalConsole):
         if directly_modified:
             self._print("\n**Directly Modified:**")
             for snapshot in sorted(directly_modified):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                    f"* `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({category_str})"
                 )
+
+                indirectly_modified_children = sorted(
+                    [s for s in indirectly_modified if snapshot.snapshot_id in s.parents]
+                )
+
                 if not no_diff:
-                    self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
+                    diff_text = context_diff.text_diff(snapshot.name)
+                    # sometimes there is no text_diff, like on a seed model where the data has been updated
+                    if diff_text:
+                        diff_text = f"\n```diff\n{diff_text}\n```"
+                        # these are part of a Markdown list, so indent them by 2 spaces to relate them to the current list item
+                        diff_text_indented = "\n".join(
+                            [f"  {line}" for line in diff_text.splitlines()]
+                        )
+                        self._print(diff_text_indented)
+                    else:
+                        if indirectly_modified_children:
+                            self._print("\n")
+
+                if indirectly_modified_children:
+                    self._print("  Indirectly Modified Children:")
+                    for child_snapshot in indirectly_modified_children:
+                        child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                            child_snapshot.change_category
+                        ]
+                        self._print(
+                            f"    - `{child_snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({child_category_str})"
+                        )
+                    self._print("\n")
+
         if indirectly_modified:
             self._print("\n**Indirectly Modified:**")
             self._print_models_with_threshold(
@@ -3810,19 +3979,34 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
     return "  " + "\n".join(error_messages)
 
 
+def _format_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval with an optional prefix."""
+    inclusive_interval = make_inclusive(interval[0], interval[1])
+    if snapshot.model.interval_unit.is_date_granularity:
+        return f"{to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
+
+    if inclusive_interval[0].date() == inclusive_interval[1].date():
+        # omit end date if interval start/end on same day
+        return f"{to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+
+    return f"{inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+def _format_signal_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for signal output (without 'insert' prefix)."""
+    return _format_interval(snapshot, interval)
+
+
 def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for evaluation output (with 'insert' prefix)."""
     if snapshot.is_model and (
         snapshot.model.kind.is_incremental
         or snapshot.model.kind.is_managed
         or snapshot.model.kind.is_custom
     ):
-        inclusive_interval = make_inclusive(interval[0], interval[1])
-        if snapshot.model.interval_unit.is_date_granularity:
-            return f"insert {to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
-        # omit end date if interval start/end on same day
-        if inclusive_interval[0].date() == inclusive_interval[1].date():
-            return f"insert {to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
-        return f"insert {inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+        formatted_interval = _format_interval(snapshot, interval)
+        return f"insert {formatted_interval}"
+
     return ""
 
 

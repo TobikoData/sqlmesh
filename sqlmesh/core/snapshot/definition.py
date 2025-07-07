@@ -15,6 +15,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
+from sqlmesh.core.environment import EnvironmentSuffixTarget
 from sqlmesh.core.macros import call_macro
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
 from sqlmesh.core.model.definition import _Model
@@ -40,8 +41,6 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
 from sqlmesh.utils.metaprogramming import (
-    prepare_env,
-    print_exception,
     format_evaluated_code_exception,
     Executable,
 )
@@ -783,7 +782,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             # only warn if the requested removal interval was a subset of the actual model intervals and was automatically expanded
             # if the requested interval was the same or wider than the actual model intervals, no need to warn
-            if requested_start > expanded_start or requested_end < expanded_end:
+            if (
+                requested_start > expanded_start or requested_end < expanded_end
+            ) and self.is_incremental:
                 from sqlmesh.core.console import get_console
 
                 get_console().log_warning(
@@ -793,6 +794,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 )
 
             removal_interval = expanded_removal_interval
+
+        # SCD Type 2 validation that end date is the latest interval if it was provided
+        if not is_preview and self.is_scd_type_2 and self.intervals:
+            requested_start, requested_end = removal_interval
+            latest_end = self.intervals[-1][1]
+            if requested_end < latest_end:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"SCD Type 2 model '{self.model.name}' does not support end date in restatements.\n"
+                    f"Requested end date [{to_ts(requested_end)}] is less than the latest interval end date.\n"
+                    f"The requested end date will be ignored. Using the latest interval end instead: [{to_ts(latest_end)}]"
+                )
+
+                removal_interval = self.inclusive_exclusive(requested_start, latest_end, strict)
 
         return removal_interval
 
@@ -947,37 +963,35 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             model_end_ts,
         )
 
-    def check_ready_intervals(self, intervals: Intervals, context: ExecutionContext) -> Intervals:
+    def check_ready_intervals(
+        self,
+        intervals: Intervals,
+        context: ExecutionContext,
+    ) -> Intervals:
         """Returns a list of intervals that are considered ready by the provided signal.
 
         Note that this will handle gaps in the provided intervals. The returned intervals
         may introduce new gaps.
         """
         signals = self.is_model and self.model.render_signal_calls()
-
         if not signals:
             return intervals
 
-        python_env = self.model.python_env
-        env = prepare_env(python_env)
-
-        for signal_name, kwargs in signals.items():
+        for signal_name, kwargs in signals.signals_to_kwargs.items():
             try:
-                intervals = _check_ready_intervals(
-                    env[signal_name],
+                intervals = check_ready_intervals(
+                    signals.prepared_python_env[signal_name],
                     intervals,
                     context,
-                    python_env=python_env,
+                    python_env=signals.python_env,
                     dialect=self.model.dialect,
                     path=self.model._path,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:
-                print_exception(e, python_env)
-                raise SQLMeshError(
+                raise SignalEvalError(
                     f"{e} '{signal_name}' for '{self.model.name}' at {self.model._path}"
                 )
-
         return intervals
 
     def categorize_as(self, category: SnapshotChangeCategory) -> None:
@@ -1455,7 +1469,8 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     def create(
         cls,
         snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot],
-        start: t.Optional[TimeLike] = None,
+        start: t.Optional[TimeLike] = None,  # plan start
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ) -> DeployabilityIndex:
         if not isinstance(snapshots, dict):
             snapshots = {s.snapshot_id: s for s in snapshots}
@@ -1463,6 +1478,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         deployability_mapping: t.Dict[SnapshotId, bool] = {}
         children_deployability_mapping: t.Dict[SnapshotId, bool] = {}
         representative_shared_version_ids: t.Set[SnapshotId] = set()
+        start_override_per_model = start_override_per_model or {}
 
         start_date_cache: t.Optional[t.Dict[str, datetime]] = {}
 
@@ -1485,12 +1501,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     snapshot.is_model and snapshot.model.auto_restatement_cron is not None
                 )
 
+                snapshot_start = start_override_per_model.get(
+                    node.name, start_date(snapshot, snapshots.values(), cache=start_date_cache)
+                )
+
                 is_valid_start = (
-                    snapshot.is_valid_start(
-                        start, start_date(snapshot, snapshots.values(), start_date_cache)
-                    )
-                    if start is not None
-                    else True
+                    snapshot.is_valid_start(start, snapshot_start) if start is not None else True
                 )
 
                 if (
@@ -1589,12 +1605,18 @@ def display_name(
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
     view_name = exp.to_table(snapshot_info_like.name)
+
+    catalog = (
+        None
+        if (
+            environment_naming_info.suffix_target != EnvironmentSuffixTarget.CATALOG
+            and view_name.catalog == default_catalog
+        )
+        else view_name.catalog
+    )
+
     qvn = QualifiedViewName(
-        catalog=(
-            view_name.catalog
-            if view_name.catalog and view_name.catalog != default_catalog
-            else None
-        ),
+        catalog=catalog,
         schema_name=view_name.db or None,
         table=view_name.name,
     )
@@ -1780,7 +1802,8 @@ def missing_intervals(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
@@ -1797,13 +1820,15 @@ def missing_intervals(
         else earliest_start_date(snapshots, cache=cache, relative_to=end_date)
     )
     restatements = restatements or {}
-    interval_end_per_model = interval_end_per_model or {}
+    start_override_per_model = start_override_per_model or {}
+    end_override_per_model = end_override_per_model or {}
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
     for snapshot in snapshots.values():
         if not snapshot.evaluatable:
             continue
-        snapshot_start_date = start_dt
+
+        snapshot_start_date = start_override_per_model.get(snapshot.name, start_dt)
         snapshot_end_date: TimeLike = end_date
 
         restated_interval = restatements.get(snapshot.snapshot_id)
@@ -1813,9 +1838,9 @@ def missing_intervals(
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(restated_interval)
 
-        existing_interval_end = interval_end_per_model.get(snapshot.name)
+        existing_interval_end = end_override_per_model.get(snapshot.name)
         if existing_interval_end:
-            if to_timestamp(snapshot_start_date) >= existing_interval_end:
+            if snapshot_start_date >= existing_interval_end:
                 # The start exceeds the provided interval end, so we can skip this snapshot
                 # since it doesn't have missing intervals by definition
                 continue
@@ -1843,7 +1868,7 @@ def missing_intervals(
     return missing
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.List[int]:
     croniter = interval_unit.croniter(start_ts)
     timestamps = [start_ts]
@@ -1860,7 +1885,7 @@ def expand_range(start_ts: int, end_ts: int, interval_unit: IntervalUnit) -> t.L
     return timestamps
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def compute_missing_intervals(
     interval_unit: IntervalUnit,
     intervals: t.Tuple[Interval, ...],
@@ -1922,7 +1947,7 @@ def compute_missing_intervals(
     return sorted(missing)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def inclusive_exclusive(
     start: TimeLike,
     end: TimeLike,
@@ -2167,7 +2192,7 @@ def _contiguous_intervals(intervals: Intervals) -> t.List[Intervals]:
     return contiguous_intervals
 
 
-def _check_ready_intervals(
+def check_ready_intervals(
     check: t.Callable,
     intervals: Intervals,
     context: ExecutionContext,

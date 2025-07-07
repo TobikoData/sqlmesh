@@ -61,7 +61,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import parent_snapshots_by_name
-from sqlmesh.utils import random_id
+from sqlmesh.utils import random_id, CorrelationId
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
     concurrent_apply_to_values,
@@ -127,6 +127,7 @@ class SnapshotEvaluator:
             if not selected_gateway
             else self.adapters[selected_gateway]
         )
+        self.selected_gateway = selected_gateway
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(
@@ -1186,6 +1187,16 @@ class SnapshotEvaluator:
         )
         adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
 
+    def set_correlation_id(self, correlation_id: CorrelationId) -> SnapshotEvaluator:
+        return SnapshotEvaluator(
+            {
+                gateway: adapter.with_settings(correlation_id=correlation_id)
+                for gateway, adapter in self.adapters.items()
+            },
+            self.ddl_concurrent_tasks,
+            self.selected_gateway,
+        )
+
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
     klass: t.Type
@@ -1614,6 +1625,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                     end=kwargs.get("end"),
                     execution_time=kwargs.get("execution_time"),
                 ),
+                physical_properties=kwargs.get("physical_properties", model.physical_properties),
             )
 
     def append(
@@ -1634,6 +1646,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
                 end=kwargs.get("end"),
                 execution_time=kwargs.get("execution_time"),
             ),
+            physical_properties=kwargs.get("physical_properties", model.physical_properties),
         )
 
 
@@ -1788,6 +1801,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
+                start=kwargs["start"],
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1805,6 +1819,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
+                start=kwargs["start"],
             )
         else:
             raise SQLMeshError(
@@ -1872,20 +1887,12 @@ class ViewStrategy(PromotableStrategy):
         )
         snapshot = kwargs["snapshot"]
         snapshots = kwargs["snapshots"]
+
         if (
-            (
-                isinstance(query_or_df, exp.Expression)
-                and snapshot.is_materialized_view
-                and deployability_index.is_deployable(snapshot)
-                and model.render_query(
-                    snapshots=snapshots,
-                    deployability_index=deployability_index,
-                    engine_adapter=self.adapter,
-                )
-                == query_or_df
-            )
-            or self.adapter.HAS_VIEW_BINDING
-        ) and self.adapter.table_exists(table_name):
+            not snapshot.is_materialized_view
+            and self.adapter.HAS_VIEW_BINDING
+            and self.adapter.table_exists(table_name)
+        ):
             logger.info("Skipping creation of the view '%s'", table_name)
             return
 

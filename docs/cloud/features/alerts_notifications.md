@@ -32,8 +32,6 @@ Tobiko Cloud sends an alert based on a *trigger*. There are two types of trigger
 
 Events are tied to steps in the SQLMesh `plan` and `run` processes. For example, you could alert whenever a `plan` succeeded or a `run` failed.
 
-Measures are [automatically calculated](../../guides/observer.md#measures) at run time.
-
 Choose whether the alert will be triggered by a Measure or Event in the alert's Trigger Type field.
 
 ![Image showing the add Alert page trigger type field](./alerts_notifications/add_alert_trigger_type.png)
@@ -63,7 +61,7 @@ Finally, choose a Notification Target where the alert should be sent (described 
 
 ### Measure triggers
 
-Tobiko Cloud Alerts can be triggered when a [measure](../../guides/observer.md#measures) exceeds a threshold or meets a condition.
+Tobiko Cloud Alerts can be triggered when a measure exceeds a threshold or meets a condition.
 
 To configure a measure alert, first build the condition that triggers the measure. Choose the measure of interest, the comparison operator, and a threshold value.
 

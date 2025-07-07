@@ -98,7 +98,52 @@ All software runs within a system environment that stores information as "enviro
 
 SQLMesh can access environment variables during configuration, which enables approaches like storing passwords/secrets outside the configuration file and changing configuration parameters dynamically based on which user is running SQLMesh.
 
-You can use environment variables in two ways: specifying them in the configuration file or creating properly named variables to override configuration file values.
+You can specify environment variables in the configuration file or by storing them in a `.env` file.
+
+### .env files
+
+SQLMesh automatically loads environment variables from a `.env` file in your project directory. This provides a convenient way to manage environment variables without having to set them in your shell.
+
+Create a `.env` file in your project root with key-value pairs:
+
+```bash
+# .env file
+SNOWFLAKE_PW=my_secret_password
+S3_BUCKET=s3://my-data-bucket/warehouse
+DATABASE_URL=postgresql://user:pass@localhost/db
+
+# Override specific SQLMesh configuration values
+SQLMESH__DEFAULT_GATEWAY=production
+SQLMESH__MODEL_DEFAULTS__DIALECT=snowflake
+```
+
+See the [overrides](#overrides) section for a detailed explanation of how these are defined.
+
+The rest of the `.env` file variables can be used in your configuration files with `{{ env_var('VARIABLE_NAME') }}` syntax in YAML or accessed via `os.environ['VARIABLE_NAME']` in Python.
+
+#### Custom dot env file location and name
+
+By default, SQLMesh loads `.env` files from each project directory. However, you can specify a custom path using the `--dotenv` CLI flag directly when running a command:
+
+```bash
+sqlmesh --dotenv /path/to/custom/.env plan
+```
+
+!!! note
+    The `--dotenv` flag is a global option and must be placed **before** the subcommand (e.g. `plan`, `run`), not after.
+
+Alternatively, you can export the `SQLMESH_DOTENV_PATH` environment variable once, to persist a custom path across all subsequent commands in your shell session:
+
+```bash
+export SQLMESH_DOTENV_PATH=/path/to/custom/.custom_env
+sqlmesh plan
+sqlmesh run
+```
+
+**Important considerations:**
+- Add `.env` to your `.gitignore` file to avoid committing sensitive information
+- SQLMesh will only load the `.env` file if it exists in the project directory (unless a custom path is specified)
+- When using a custom path, that specific file takes precedence over any `.env` file in the project directory.
 
 ### Configuration file
 
@@ -242,6 +287,34 @@ Conceptually, we can group the root level parameters into the following types. E
 ## Configuration details
 
 The rest of this page provides additional detail for some of the configuration options and provides brief examples. Comprehensive lists of configuration options are at the [configuration reference page](../reference/configuration.md).
+
+### Cache directory
+
+By default, the SQLMesh cache is stored in a `.cache` directory within your project folder. You can customize the cache location using the `cache_dir` configuration option:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    # Relative path to project directory
+    cache_dir: my_custom_cache
+
+    # Absolute path
+    cache_dir: /tmp/sqlmesh_cache
+
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        cache_dir="/tmp/sqlmesh_cache",
+    )
+    ```
+
+The cache directory is automatically created if it doesn't exist. You can clear the cache using the `sqlmesh clean` command.
 
 ### Table/view storage locations
 

@@ -1,48 +1,45 @@
-import { test } from '@playwright/test'
+import { test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { startVSCode, SUSHI_SOURCE_PATH } from './utils'
+import { runCommand, SUSHI_SOURCE_PATH } from './utils'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Workspace diagnostics show up in the diagnostics panel', async () => {
+test('Workspace diagnostics show up in the diagnostics panel', async ({
+  page,
+  sharedCodeServer,
+}) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   const configPath = path.join(tempDir, 'config.py')
   const configContent = await fs.readFile(configPath, 'utf8')
   const updatedContent = configContent.replace('enabled=False', 'enabled=True')
   await fs.writeFile(configPath, updatedContent)
 
-  try {
-    const { window, close } = await startVSCode(tempDir)
+  await page.goto(
+    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+  )
 
-    // Wait for the models folder to be visible
-    await window.waitForSelector('text=models')
+  // Wait for the models folder to be visible
+  await page.waitForSelector('text=models')
 
-    // Click on the models folder, excluding external_models
-    await window
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
+  // Click on the models folder, excluding external_models
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
 
-    // Open the customer_revenue_lifetime model
-    await window
-      .getByRole('treeitem', { name: 'customers.sql', exact: true })
-      .locator('a')
-      .click()
+  // Open the customer_revenue_lifetime model
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
 
-    await // Open problems panel
-    await window.keyboard.press(
-      process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P',
-    )
-    await window.keyboard.type('View: Focus Problems')
-    await window.keyboard.press('Enter')
+  // Open problems panel
+  await runCommand(page, 'View: Focus Problems')
 
-    await window.waitForSelector('text=problems')
-    await window.waitForSelector('text=All models should have an owner')
-
-    await close()
-  } finally {
-    await fs.remove(tempDir)
-  }
+  await page.waitForSelector('text=problems')
+  await page.waitForSelector('text=All models should have an owner')
 })

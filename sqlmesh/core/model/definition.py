@@ -27,6 +27,7 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
+    parse_strings_with_macro_refs,
     single_value_or_tuple,
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
@@ -72,13 +73,14 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+UNRENDERABLE_MODEL_FIELDS = {"cron", "description"}
+
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
-    "description",
-    "cron",
     "merge_filter",
 } | PROPERTIES
 
@@ -627,14 +629,22 @@ class _Model(ModelMeta, frozen=True):
             {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
         ]
 
-    def render_signal_calls(self) -> t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]:
-        return {
+    def render_signal_calls(self) -> EvaluatableSignals:
+        python_env = self.python_env
+        env = prepare_env(python_env)
+        signals_to_kwargs = {
             name: {
                 k: seq_get(self._create_renderer(v).render() or [], 0) for k, v in kwargs.items()
             }
             for name, kwargs in self.signals
             if name
         }
+
+        return EvaluatableSignals(
+            signals_to_kwargs=signals_to_kwargs,
+            python_env=python_env,
+            prepared_python_env=env,
+        )
 
     def render_merge_filter(
         self,
@@ -653,7 +663,7 @@ class _Model(ModelMeta, frozen=True):
         )
         if len(rendered_exprs) != 1:
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
-        return rendered_exprs[0].transform(d.replace_merge_table_aliases)
+        return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
         self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
@@ -1857,6 +1867,15 @@ class AuditResult(PydanticModel):
     blocking: bool = True
 
 
+class EvaluatableSignals(PydanticModel):
+    signals_to_kwargs: t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]
+    """A mapping of signal names to the kwargs passed to the signal."""
+    python_env: t.Dict[str, Executable]
+    """The Python environment that should be used to evaluated the rendered signal calls."""
+    prepared_python_env: t.Dict[str, t.Any]
+    """The prepared Python environment that should be used to evaluated the rendered signal calls."""
+
+
 def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
     if not blueprints:
         return [None]
@@ -2431,7 +2450,7 @@ def _create_model(
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
 
-    statements = []
+    statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
@@ -2452,8 +2471,11 @@ def _create_model(
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+        statements.append(kwargs["kind"].merge_filter)
+
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(gen(e) for e in statements)
+        *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
     if jinja_macros:
@@ -2734,21 +2756,24 @@ def render_meta_fields(
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
+        field_value = fields.get(field)
 
-        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+        # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
+        if field == "cron" or field_value is None:
             continue
 
-        field_value = fields.get(field)
-        if field_value is None:
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = value
+                    rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
+
             if rendered_dict:
                 fields[field] = rendered_dict
             else:
@@ -2886,6 +2911,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
             for name, args in values
         )
     ),
+    "formatting": str,
 }
 
 

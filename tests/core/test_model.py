@@ -5366,13 +5366,13 @@ def test_when_matched():
     """
     )
 
-    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary))"
+    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`))"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
 
     expressions = d.parse(
         """
@@ -5400,9 +5400,9 @@ def test_when_matched():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
-      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET
-        __MERGE_TARGET__.purchase_order_id = 1
+      WHEN MATCHED AND "__merge_source__"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "__merge_source__"."_operation" <> 1 THEN UPDATE SET
+        "__merge_target__"."purchase_order_id" = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5453,7 +5453,7 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET
+      WHEN MATCHED AND "__merge_source__"."salary" <> "__merge_target__"."salary" THEN UPDATE SET
         ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
@@ -5487,21 +5487,21 @@ def test_when_matched_multiple():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
+        "WHEN MATCHED AND `__merge_source__`.`x` = 1 THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
+        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
     ]
 
     model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert whens.expressions[0].sql(dialect="hive") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="hive") == expected_when_matched[1]
 
     model = SqlModel.parse_raw(model.json())
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert whens.expressions[0].sql(dialect="hive") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="hive") == expected_when_matched[1]
 
 
 def test_when_matched_merge_filter_multi_part_columns():
@@ -5529,28 +5529,86 @@ def test_when_matched_merge_filter_multi_part_columns():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND __MERGE_SOURCE__.record.nested_record.field = 1 THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
+        "WHEN MATCHED AND `__merge_source__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
     ]
 
     expected_merge_filter = (
-        "__MERGE_SOURCE__.record.nested_record.field < __MERGE_TARGET__.record.nested_record.field AND "
-        "__MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field > __MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field"
+        "`__merge_source__`.`record`.`nested_record`.`field` < `__merge_target__`.`record`.`nested_record`.`field` AND "
+        "`__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
     )
 
     model = load_sql_based_model(expressions, dialect="bigquery", variables={"schema": "db"})
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
-    assert model.merge_filter.sql() == expected_merge_filter
+    assert whens.expressions[0].sql(dialect="bigquery") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="bigquery") == expected_when_matched[1]
+    assert model.merge_filter.sql(dialect="bigquery") == expected_merge_filter
 
     model = SqlModel.parse_raw(model.json())
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
-    assert model.merge_filter.sql() == expected_merge_filter
+    assert whens.expressions[0].sql(dialect="bigquery") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="bigquery") == expected_when_matched[1]
+    assert model.merge_filter.sql(dialect="bigquery") == expected_merge_filter
+
+
+def test_when_matched_normalization() -> None:
+    # unquoted should be normalized and quoted
+    expressions = d.parse(
+        """
+        MODEL (
+          name test.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched (
+                WHEN MATCHED THEN UPDATE SET
+                    target.key_a = source.key_a,
+                    target.key_b = source.key_b,            
+            )
+          )
+        );
+        SELECT 'name' AS name, 1 AS key_a, 2 AS key_b;
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="snowflake")
+
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert isinstance(model.kind.when_matched, exp.Whens)
+    first_expression = model.kind.when_matched.expressions[0]
+    assert isinstance(first_expression, exp.Expression)
+    assert (
+        first_expression.sql(dialect="snowflake")
+        == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."KEY_A" = "__MERGE_SOURCE__"."KEY_A", "__MERGE_TARGET__"."KEY_B" = "__MERGE_SOURCE__"."KEY_B"'
+    )
+
+    # quoted should be preserved
+    expressions = d.parse(
+        """
+        MODEL (
+          name test.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched (
+                WHEN MATCHED THEN UPDATE SET
+                    target."kEy_A" = source."kEy_A",
+                    target."kEY_b" = source.key_b,
+            )
+          )
+        );
+        SELECT 'name' AS name, 1 AS "kEy_A", 2 AS "kEY_b";
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="snowflake")
+
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert isinstance(model.kind.when_matched, exp.Whens)
+    first_expression = model.kind.when_matched.expressions[0]
+    assert isinstance(first_expression, exp.Expression)
+    assert (
+        first_expression.sql(dialect="snowflake")
+        == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."kEy_A" = "__MERGE_SOURCE__"."kEy_A", "__MERGE_TARGET__"."kEY_b" = "__MERGE_SOURCE__"."KEY_B"'
+    )
 
 
 def test_default_catalog_sql(assert_exp_eq):
@@ -6378,7 +6436,7 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         stamp="@{stamp}",
         tags=["@{tag1}", "@{tag2}"],
-        description="Model desc @{test_}",
+        description="'Model desc @{test_}'",
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(
@@ -6422,6 +6480,87 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
 
 
+def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+            MODEL (
+              name db.employees,
+              kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key @{key},
+                merge_filter source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var
+              ),
+              cron '@daily',
+              allow_partials @IF(@gateway = 'dev', True, False),
+              physical_properties (
+                location1 = @'s3://bucket/prefix/@{schema_name}/@{table_name}',
+                location2 = @IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}'),
+                foo = @physical_var
+              ),
+              virtual_properties (
+                creatable_type = @{create_type},
+                bar = @virtual_var,
+              ),
+              session_properties (
+                'spark.executor.cores' = @IF(@gateway = 'dev', 1, 2),
+                'spark.executor.memory' = '1G',
+                baz = @session_var
+              ),
+            );
+
+            SELECT * FROM src;
+        """
+        ),
+        variables={
+            "gateway": "dev",
+            "key": "a",  # Not included in python_env because kind is rendered at load time
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        }
+    )
+
+    assert "location1" in model.physical_properties
+    assert "location2" in model.physical_properties
+
+    # The properties will stay unrendered at load time
+    assert model.session_properties == {
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
+        "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
+    }
+    assert model.virtual_properties["creatable_type"] == exp.maybe_parse("@{create_type}")
+
+    assert (
+        model.physical_properties["location1"].sql()
+        == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
+    )
+    assert (
+        model.physical_properties["location2"].sql()
+        == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
+    )
+
+    # merge_filter will stay unrendered as well
+    assert model.unique_key[0] == exp.column("a", quoted=True)
+    assert (
+        t.cast(exp.Expression, model.merge_filter).sql()
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+    )
+
+
 def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_unrendered_macros_python_model_@{bar}",
@@ -6429,7 +6568,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         kind=dict(
             name=ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
             unique_key="@{key}",
-            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds",
+            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var",
         ),
         cron="@daily",
         columns={"a": "string"},
@@ -6437,11 +6576,13 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         physical_properties=dict(
             location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
             location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
+            foo="@physical_var",
         ),
-        virtual_properties={"creatable_type": "@{create_type}"},
+        virtual_properties={"creatable_type": "@{create_type}", "bar": "@virtual_var"},
         session_properties={
             "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
             "spark.executor.memory": "1G",
+            "baz": "@session_var",
         },
     )
     def model_with_macros(evaluator, **kwargs):
@@ -6459,12 +6600,24 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "gateway": "dev",
             "key": "a",
             "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
         },
     )
 
     assert python_sql_model.name == "test_unrendered_macros_python_model_suffix"
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value"}
+        {
+            "test_var_a": "test_value",
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        }
     )
     assert python_sql_model.enabled
 
@@ -6478,25 +6631,28 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
 
     # The properties will stay unrendered at load time
     assert python_sql_model.session_properties == {
-        "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
         "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
     }
-    assert python_sql_model.virtual_properties["creatable_type"] == exp.convert("@{create_type}")
+    assert python_sql_model.virtual_properties["creatable_type"] == exp.maybe_parse(
+        "@{create_type}"
+    )
 
     assert (
-        python_sql_model.physical_properties["location1"].text("this")
+        python_sql_model.physical_properties["location1"].sql()
         == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
     )
     assert (
-        python_sql_model.physical_properties["location2"].text("this")
+        python_sql_model.physical_properties["location2"].sql()
         == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
     )
 
-    # Merge_filter will stay unrendered as well
+    # merge_filter will stay unrendered as well
     assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         python_sql_model.merge_filter.sql()
-        == "source.id > 0 AND target.updated_at < @end_ds AND source.updated_at > @start_ds"
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -7583,7 +7739,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7611,7 +7767,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b) WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED AND "__merge_source__"."x" = 1 THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b") WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7872,13 +8028,14 @@ def test_merge_filter():
     """
     )
 
-    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.salary > 0"
+    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS.lower()}`.`salary` > 0"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
+    assert model.dialect == "hive"
 
     expressions = d.parse(
         """
@@ -7894,7 +8051,7 @@ def test_merge_filter():
                 source.ds > (SELECT MAX(ds) FROM db.test) AND
                 source.ds > @start_ds AND
                 source._operation <> 1 AND
-                target.start_date > dateadd(day, -7, current_date)
+                target.start_date > date_add(current_date, interval 7 day)
             )
           )
         );
@@ -7906,26 +8063,27 @@ def test_merge_filter():
         """
     )
 
-    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
-    assert d.format_model_expressions(model.render_definition()) == (
+    model = SqlModel.parse_raw(load_sql_based_model(expressions, dialect="duckdb").json())
+    assert d.format_model_expressions(model.render_definition(), dialect=model.dialect) == (
         f"""MODEL (
   name db.test,
+  dialect duckdb,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET
-        {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1 THEN UPDATE SET
+        "{MERGE_TARGET_ALIAS.lower()}"."purchase_order_id" = 1
     ),
     merge_filter (
-      {MERGE_SOURCE_ALIAS}.ds > (
+      "{MERGE_SOURCE_ALIAS.lower()}"."ds" > (
         SELECT
-          MAX(ds)
-        FROM db.test
+          MAX("ds")
+        FROM "db"."test"
       )
-      AND {MERGE_SOURCE_ALIAS}.ds > @start_ds
-      AND {MERGE_SOURCE_ALIAS}._operation <> 1
-      AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
+      AND "{MERGE_SOURCE_ALIAS.lower()}"."ds" > @start_ds
+      AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1
+      AND "{MERGE_TARGET_ALIAS.lower()}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -7942,9 +8100,45 @@ FROM db.upstream"""
 
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
     assert (
-        rendered_merge_filters.sql()
-        == "(__MERGE_SOURCE__.ds > (SELECT MAX(ds) FROM db.test) AND __MERGE_SOURCE__.ds > '2023-01-01' AND __MERGE_SOURCE__._operation <> 1 AND __MERGE_TARGET__.start_date > DATEADD(day, -7, CURRENT_DATE))"
+        rendered_merge_filters.sql(dialect="hive")
+        == "(`__merge_source__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__merge_source__`.`ds` > '2023-01-01' AND `__merge_source__`.`_operation` <> 1 AND `__merge_target__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
     )
+
+
+def test_merge_filter_normalization():
+    # unquoted gets normalized and quoted
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source.salary > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.merge_filter.sql(dialect="snowflake") == '"__MERGE_SOURCE__"."SALARY" > 0'
+
+    # quoted gets preserved
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source."SaLArY" > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS "SaLArY";
+    """
+    )
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.merge_filter.sql(dialect="snowflake") == '"__MERGE_SOURCE__"."SaLArY" > 0'
 
 
 def test_merge_filter_macro():
@@ -7969,19 +8163,20 @@ def test_merge_filter_macro():
     """
     )
 
-    unrendered_merge_filter = (
-        f"@predicate(update_datetime) AND {MERGE_TARGET_ALIAS}.update_datetime > @start_dt"
+    unrendered_merge_filter = f"""@predicate("UPDATE_DATETIME") AND "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME" > @start_dt"""
+    expected_merge_filter = (
+        f"""\"{MERGE_SOURCE_ALIAS}"."UPDATE_DATETIME" > DATEADD(DAY, -7, "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME") """
+        f"""AND "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME" > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"""
     )
-    expected_merge_filter = f"{MERGE_SOURCE_ALIAS}.UPDATE_DATETIME > DATE_ADD({MERGE_TARGET_ALIAS}.UPDATE_DATETIME, -7, 'DAY') AND {MERGE_TARGET_ALIAS}.UPDATE_DATETIME > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"
 
     model = load_sql_based_model(expressions, dialect="snowflake")
-    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+    assert model.kind.merge_filter.sql(dialect=model.dialect) == unrendered_merge_filter
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+    assert model.kind.merge_filter.sql(dialect=model.dialect) == unrendered_merge_filter
 
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01 15:00:00")
-    assert rendered_merge_filters.sql() == expected_merge_filter
+    assert rendered_merge_filters.sql(dialect=model.dialect) == expected_merge_filter
 
 
 @pytest.mark.parametrize(
@@ -9906,9 +10101,9 @@ def test_signal_always_true(batch, arg1, arg2):
 
 
 def test_scd_type_2_full_history_restatement():
-    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
-    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
-    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is False
     assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
 
 
@@ -9973,9 +10168,9 @@ def test_formatting_flag_serde():
     )
 
     model = load_sql_based_model(expressions)
+    assert model.render_definition()[0].sql() == "MODEL (\nname test_model,\nformatting False\n)"
 
     model_json = model.json()
-
     assert "formatting" not in json.loads(model_json)
 
     deserialized_model = SqlModel.parse_raw(model_json)
@@ -10518,3 +10713,28 @@ def test_boolean_property_validation() -> None:
     )
     model = load_sql_based_model(expressions, dialect="tsql")
     assert model.enabled
+
+
+def test_datetime_without_timezone_variable_redshift() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column test_time_col,
+                batch_size 1,
+                batch_concurrency 1
+            ),
+            start '2025-06-01',
+            dialect redshift
+        );
+
+        SELECT @start_dtntz AS test_time_col
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="redshift")
+
+    assert (
+        model.render_query_or_raise().sql("redshift")
+        == '''SELECT CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS "test_time_col"'''
+    )

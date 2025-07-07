@@ -38,6 +38,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
@@ -49,7 +50,9 @@ logger = logging.getLogger(__name__)
 class PlanEvaluator(abc.ABC):
     @abc.abstractmethod
     def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self,
+        plan: EvaluatablePlan,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         """Evaluates a plan by pushing snapshots and backfilling data.
 
@@ -60,6 +63,7 @@ class PlanEvaluator(abc.ABC):
 
         Args:
             plan: The plan to evaluate.
+            circuit_breaker: The circuit breaker to use.
         """
 
 
@@ -68,7 +72,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
@@ -85,6 +89,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self._circuit_breaker = circuit_breaker
+        self.snapshot_evaluator = self.snapshot_evaluator.set_correlation_id(
+            CorrelationId.from_plan_id(plan.plan_id)
+        )
+
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
             plan=plan,
@@ -102,6 +110,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         else:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
         finally:
+            self.snapshot_evaluator.recycle()
             self.console.stop_plan_evaluation()
 
     def _evaluate_stages(
@@ -224,7 +233,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(stage.all_snapshots.values())
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -245,14 +254,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots)
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
             plan.end,
             execution_time=plan.execution_time,
             end_bounded=plan.end_bounded,
-            interval_end_per_model=plan.interval_end_per_model,
+            start_override_per_model=plan.start_override_per_model,
+            end_override_per_model=plan.end_override_per_model,
         )
 
         if completion_status.is_failure:

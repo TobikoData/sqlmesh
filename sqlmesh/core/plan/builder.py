@@ -5,6 +5,7 @@ import re
 import typing as t
 from collections import defaultdict
 from functools import cached_property
+from datetime import datetime
 
 
 from sqlmesh.core.console import PlanBuilderConsole, get_console
@@ -85,7 +86,8 @@ class PlanBuilder:
         ensure_finalized_snapshots: Whether to compare against snapshots from the latest finalized
             environment state, or to use whatever snapshots are in the current environment state even if
             the environment is not finalized.
-        interval_end_per_model: The mapping from model FQNs to target end dates.
+        start_override_per_model: A mapping of model FQNs to target start dates.
+        end_override_per_model: A mapping of model FQNs to target end dates.
         explain: Whether to explain the plan instead of applying it.
     """
 
@@ -117,7 +119,8 @@ class PlanBuilder:
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
         explain: bool = False,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
         user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
     ):
@@ -133,7 +136,8 @@ class PlanBuilder:
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
-        self._interval_end_per_model = interval_end_per_model
+        self._start_override_per_model = start_override_per_model
+        self._end_override_per_model = end_override_per_model
         self._environment_ttl = environment_ttl
         self._categorizer_config = categorizer_config or CategorizerConfig()
         self._auto_categorization_enabled = auto_categorization_enabled
@@ -280,7 +284,11 @@ class PlanBuilder:
         self._adjust_new_snapshot_intervals()
 
         deployability_index = (
-            DeployabilityIndex.create(self._context_diff.snapshots.values(), start=self._start)
+            DeployabilityIndex.create(
+                self._context_diff.snapshots.values(),
+                start=self._start,
+                start_override_per_model=self._start_override_per_model,
+            )
             if self._is_dev
             else DeployabilityIndex.all_deployable()
         )
@@ -291,11 +299,11 @@ class PlanBuilder:
         )
         models_to_backfill = self._build_models_to_backfill(dag, restatements)
 
-        interval_end_per_model = self._interval_end_per_model
-        if interval_end_per_model and self.override_end:
+        end_override_per_model = self._end_override_per_model
+        if end_override_per_model and self.override_end:
             # If the end date was provided explicitly by a user, then interval end for each individual
             # model should be ignored.
-            interval_end_per_model = None
+            end_override_per_model = None
 
         # this deliberately uses the passed in self._execution_time and not self.execution_time cached property
         # the reason is because that there can be a delay between the Plan being built and the Plan being actually run,
@@ -322,7 +330,8 @@ class PlanBuilder:
             indirectly_modified=indirectly_modified,
             deployability_index=deployability_index,
             restatements=restatements,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=self._start_override_per_model,
+            end_override_per_model=end_override_per_model,
             selected_models_to_backfill=self._backfill_models,
             models_to_backfill=models_to_backfill,
             effective_from=self._effective_from,
@@ -405,7 +414,7 @@ class PlanBuilder:
                 elif (not self._is_dev or not snapshot.is_paused) and snapshot.disable_restatement:
                     self._console.log_warning(
                         f"Cannot restate model '{snapshot.name}'. "
-                        "Restatement is disabled for this model to prevent possible data loss."
+                        "Restatement is disabled for this model to prevent possible data loss. "
                         "If you want to restate this model, change the model's `disable_restatement` setting to `false`."
                     )
                     continue

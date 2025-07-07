@@ -37,7 +37,9 @@ class PlanExplainer(PlanEvaluator):
         self.console = console or get_console()
 
     def evaluate(
-        self, plan: EvaluatablePlan, circuit_breaker: t.Optional[t.Callable[[], bool]] = None
+        self,
+        plan: EvaluatablePlan,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         plan_stages = stages.build_plan_stages(plan, self.state_reader, self.default_catalog)
         explainer_console = _get_explainer_console(
@@ -161,7 +163,8 @@ class RichExplainerConsole(ExplainerConsole):
         for snapshot, intervals in stage.snapshot_to_intervals.items():
             display_name = self._display_name(snapshot)
             if snapshot.is_model:
-                table_name = snapshot.table_name(stage.deployability_index.is_deployable(snapshot))
+                is_deployable = stage.deployability_index.is_deployable(snapshot)
+                table_name = snapshot.table_name(is_deployable)
                 model_tree = Tree(f"{display_name} -> {table_name}")
 
                 for signal_name, _ in snapshot.model.signals:
@@ -170,26 +173,30 @@ class RichExplainerConsole(ExplainerConsole):
                 if snapshot.model.pre_statements:
                     model_tree.add("Run pre-statements")
 
+                backfill_tree = Tree("Fully refresh table")
                 if snapshot.is_incremental:
                     current_intervals = (
                         snapshot.intervals
                         if stage.deployability_index.is_deployable(snapshot)
                         else snapshot.dev_intervals
                     )
+                    # If there are no intervals, the table will be fully refreshed
                     if current_intervals:
                         formatted_range = SnapshotIntervals(
                             snapshot_id=snapshot.snapshot_id, intervals=intervals
                         ).format_intervals(snapshot.node.interval_unit)
-                        model_tree.add(
+                        backfill_tree = Tree(
                             f"Incrementally insert records within the range [{formatted_range}]"
                         )
-                    else:
-                        # If there are no intervals, the table will be fully refreshed
-                        model_tree.add("Fully refresh table")
                 elif snapshot.is_view:
-                    model_tree.add("Recreate view")
-                else:
-                    model_tree.add("Fully refresh table")
+                    backfill_tree = Tree("Recreate view")
+
+                if not is_deployable:
+                    backfill_tree.add(
+                        "[orange1]preview[/orange1]: data will NOT be reused in production"
+                    )
+
+                model_tree.add(backfill_tree)
 
                 if snapshot.model.post_statements:
                     model_tree.add("Run post-statements")
