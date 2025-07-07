@@ -70,16 +70,11 @@ def test_engine_adapter_columns(
     ctx: TestContext, risingwave_columns_with_datatypes: t.Dict[str, exp.DataType]
 ):
     table = ctx.table("TEST_COLUMNS")
-    query_cols: t.List[str] = [
-        f"NULL::{data_type.sql(dialect='risingwave')} AS {col_name}"
-        for col_name, data_type in risingwave_columns_with_datatypes.items()
-    ]
-    query: exp.Query = exp.maybe_parse(
-        f"""
-        SELECT
-          {",".join(query_cols)}
-        """,
-        dialect="risingwave",
+    query = exp.select(
+        *[
+            exp.cast(exp.null(), dtype).as_(name)
+            for name, dtype in risingwave_columns_with_datatypes.items()
+        ]
     )
     ctx.engine_adapter.ctas(table, query)
 

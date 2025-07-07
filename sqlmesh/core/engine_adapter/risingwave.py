@@ -53,10 +53,8 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
             )
         )
 
-        if table.args.get("db"):
-            sql = sql.where(
-                exp.column("name", table="rw_schemas", quoted=False).eq(table.args["db"].name)
-            )
+        if table.db:
+            sql = sql.where(exp.column("name", table="rw_schemas").eq(table.db))
 
         self.execute(sql)
         resp = self.cursor.fetchall()
