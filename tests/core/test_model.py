@@ -6436,7 +6436,7 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         stamp="@{stamp}",
         tags=["@{tag1}", "@{tag2}"],
-        description="Model desc @{test_}",
+        description="'Model desc @{test_}'",
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(

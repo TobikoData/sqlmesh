@@ -27,6 +27,7 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
+    parse_strings_with_macro_refs,
     single_value_or_tuple,
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
@@ -71,6 +72,9 @@ if t.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+UNRENDERABLE_MODEL_FIELDS = {"cron", "description"}
 
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
@@ -2750,34 +2754,23 @@ def render_meta_fields(
 
         return value
 
-    def parse_strings_with_macro_refs(value: t.Any) -> t.Any:
-        if isinstance(value, str) and "@" in value:
-            return exp.maybe_parse(value, dialect=dialect)
-
-        if isinstance(value, dict):
-            for k, v in dict(value).items():
-                value[k] = parse_strings_with_macro_refs(v)
-        elif isinstance(value, list):
-            value = [parse_strings_with_macro_refs(v) for v in value]
-
-        return value
-
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
         field_value = fields.get(field)
 
-        if field in ("cron", "description") or field_value is None:
+        # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
+        if field == "cron" or field_value is None:
             continue
 
         if field in RUNTIME_RENDERED_MODEL_FIELDS:
-            fields[field] = parse_strings_with_macro_refs(field_value)
+            fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = parse_strings_with_macro_refs(value)
+                    rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
 
