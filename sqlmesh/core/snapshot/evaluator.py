@@ -61,7 +61,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import parent_snapshots_by_name
-from sqlmesh.utils import random_id
+from sqlmesh.utils import random_id, CorrelationId
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
     concurrent_apply_to_values,
@@ -127,6 +127,7 @@ class SnapshotEvaluator:
             if not selected_gateway
             else self.adapters[selected_gateway]
         )
+        self.selected_gateway = selected_gateway
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(
@@ -1185,6 +1186,16 @@ class SnapshotEvaluator:
             physical_properties=rendered_physical_properties,
         )
         adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
+
+    def set_correlation_id(self, correlation_id: CorrelationId) -> SnapshotEvaluator:
+        return SnapshotEvaluator(
+            {
+                gateway: adapter.with_settings(correlation_id=correlation_id)
+                for gateway, adapter in self.adapters.items()
+            },
+            self.ddl_concurrent_tasks,
+            self.selected_gateway,
+        )
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
