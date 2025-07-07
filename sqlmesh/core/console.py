@@ -3107,7 +3107,9 @@ class MarkdownConsole(CaptureTerminalConsole):
     AUDIT_PADDING = 7
 
     def __init__(self, **kwargs: t.Any) -> None:
-        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
+        super().__init__(
+            **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
+        )
 
     def show_environment_difference_summary(
         self,
