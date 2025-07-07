@@ -321,12 +321,13 @@ class SQLMeshLanguageServer:
                     diagnostics = getattr(params.capabilities.text_document, "diagnostic", None)
                     if diagnostics:
                         self.client_supports_pull_diagnostics = True
-                        ls.log_trace("Client supports pull diagnostics")
+                        ls.show_message("Client supports pull diagnostics", types.MessageType.Info)
                     else:
                         self.client_supports_pull_diagnostics = False
-                        ls.log_trace("Client does not support pull diagnostics")
+                        ls.show_message("Client does not support pull diagnostics", types.MessageType.Info)
                 else:
                     self.client_supports_pull_diagnostics = False
+                    ls.show_message("Client capabilities not available", types.MessageType.Info)
 
                 if params.workspace_folders:
                     # Store all workspace folders for later use
@@ -354,15 +355,22 @@ class SQLMeshLanguageServer:
         @self.server.feature(types.TEXT_DOCUMENT_DID_OPEN)
         def did_open(ls: LanguageServer, params: types.DidOpenTextDocumentParams) -> None:
             uri = URI(params.text_document.uri)
-            context = self._context_get_or_load(ls, uri)
-
-            # Only publish diagnostics if client doesn't support pull diagnostics
-            if not self.client_supports_pull_diagnostics:
-                diagnostics = context.lint_model(uri)
-                ls.publish_diagnostics(
-                    params.text_document.uri,
-                    LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
-                )
+            try:
+                context = self._context_get_or_load(ls, uri)
+                
+                # Only publish diagnostics if client doesn't support pull diagnostics
+                if not self.client_supports_pull_diagnostics:
+                    diagnostics = context.lint_model(uri)
+                    ls.publish_diagnostics(
+                        params.text_document.uri,
+                        LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
+                    )
+            except Exception as e:
+                # Context loading failed, but don't crash the LSP
+                ls.log_trace(f"Failed to load context in did_open: {e}")
+                # Optionally publish empty diagnostics to clear any existing ones
+                if not self.client_supports_pull_diagnostics:
+                    ls.publish_diagnostics(params.text_document.uri, [])
 
         @self.server.feature(types.TEXT_DOCUMENT_DID_SAVE)
         def did_save(ls: LanguageServer, params: types.DidSaveTextDocumentParams) -> None:
@@ -769,7 +777,25 @@ class SQLMeshLanguageServer:
             context = self._context_get_or_load(ls, uri)
             diagnostics = context.lint_model(uri)
             return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
-        except Exception:
+        except Exception as e:
+            # Check if there's a failed context state with configuration errors for this URI
+            if isinstance(self.context_state, ContextFailed):
+                error_message = self.context_state.error_message
+                if isinstance(error_message, ConfigError) and error_message.location is not None:
+                    error_uri = URI.from_path(error_message.location)
+                    if error_uri.value == uri.value:
+                        # Return the configuration error as a diagnostic
+                        return [
+                            types.Diagnostic(
+                                range=types.Range(
+                                    start=types.Position(line=0, character=0),
+                                    end=types.Position(line=0, character=0),
+                                ),
+                                message=str(error_message),
+                                severity=types.DiagnosticSeverity.Error,
+                                source="SQLMesh",
+                            )
+                        ], 0
             return [], 0
 
     def _context_get_or_load(
@@ -869,16 +895,17 @@ class SQLMeshLanguageServer:
         except Exception as e:
             # Only show the error message once
             if not self.has_raised_loading_error:
+                location_info = f" at {e.location}" if isinstance(e, ConfigError) and e.location else ""
                 self.server.show_message(
-                    f"Error creating context error type {type(e)}: {e.location} {e}",
+                    f"Error creating context error type {type(e)}: {e}{location_info}",
                     types.MessageType.Error,
                 )
                 self.has_raised_loading_error = True
             error_message = e if isinstance(e, ConfigError) else str(e)
-            if isinstance(e, ConfigError) and error_message.location is not None:
-                self.server.show_message("hello", types.MessageType.Error)
-                uri = URI.from_path(error_message.location)
-                self.server.publish_diagnostics(
+            if isinstance(e, ConfigError) and e.location is not None:
+                uri = URI.from_path(e.location)
+                ls.show_message(f"Publishing diagnostic to URI: {uri.value}", types.MessageType.Info)
+                ls.publish_diagnostics(
                     uri.value,
                     [
                         types.Diagnostic(
@@ -890,7 +917,6 @@ class SQLMeshLanguageServer:
                             severity=types.DiagnosticSeverity.Error,
                         )
                     ],
-                str(1),
                 )
 
             # Store the error in context state such that later requests can
