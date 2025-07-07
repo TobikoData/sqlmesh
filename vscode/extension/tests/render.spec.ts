@@ -3,7 +3,11 @@ import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
 import { openLineageView, runCommand, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 test('Render works correctly', async ({ page }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
@@ -11,8 +15,8 @@ test('Render works correctly', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
@@ -55,8 +59,8 @@ test('Render works correctly with model without a description', async ({
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
@@ -99,8 +103,8 @@ test('Render works correctly with every rendered model opening a new tab', async
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
@@ -153,8 +157,8 @@ test('Render shows model picker when no active editor is open', async ({
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
   try {
     // Navigate to code-server instance

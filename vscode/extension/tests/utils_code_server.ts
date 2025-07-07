@@ -29,16 +29,38 @@ function getExtensionsDir(): string {
 }
 
 /**
+ * Creates a .vscode/settings.json specifier for the Python interpreter
+ */
+export const createPythonInterpreterSettingsSpecifier = async (
+  directory: string,
+): Promise<string> => {
+  const defaultPythonInterpreter = path.join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    '.venv',
+    'bin',
+    'python',
+  )
+  const vscodeDir = path.join(directory, '.vscode')
+  await fs.ensureDir(vscodeDir)
+  const settingsFilePath = path.join(vscodeDir, 'settings.json')
+  await fs.writeJson(settingsFilePath, {
+    'python.defaultInterpreterPath': defaultPythonInterpreter,
+  })
+  return settingsFilePath
+}
+
+/**
  * @param tempDir - The temporary directory to use for the code-server instance
  * @param placeFileWithPythonInterpreter - Whether to place a vscode/settings.json file in the temp directory that points to the python interpreter of the environmen the test is running in.
  * @returns The code-server context
  */
 export async function startCodeServer({
   tempDir,
-  placeFileWithPythonInterpreter = false,
 }: {
   tempDir: string
-  placeFileWithPythonInterpreter?: boolean
 }): Promise<CodeServerContext> {
   // Get the extensions directory set up by global setup
   const extensionsDir = getExtensionsDir()
@@ -58,20 +80,6 @@ export async function startCodeServer({
   const userDataDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-sushi-user-data-dir-'),
   )
-
-  // Create .vscode/settings.json with Python interpreter if requested
-  if (placeFileWithPythonInterpreter) {
-    const vscodeDir = path.join(tempDir, '.vscode')
-    await fs.ensureDir(vscodeDir)
-
-    const settings = {
-      'python.defaultInterpreterPath': defaultPythonInterpreter,
-    }
-
-    await fs.writeJson(path.join(vscodeDir, 'settings.json'), settings, {
-      spaces: 2,
-    })
-  }
 
   // Start code-server instance using the shared extensions directory
   const codeServerProcess = spawn(

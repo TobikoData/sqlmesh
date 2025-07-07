@@ -7,6 +7,7 @@ import {
   startCodeServer,
   stopCodeServer,
   CodeServerContext,
+  createPythonInterpreterSettingsSpecifier,
 } from './utils_code_server'
 
 // Helper function to set up a test environment for model references
@@ -15,8 +16,8 @@ async function setupModelTestEnvironment(): Promise<CodeServerContext> {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   return context
 }
 

@@ -3,7 +3,11 @@ import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
 import { openLineageView, saveFile, SUSHI_SOURCE_PATH } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 test('bad project, double model', async ({ page }) => {
   const tempDir = await fs.mkdtemp(
@@ -25,8 +29,8 @@ test('bad project, double model', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
@@ -60,8 +64,8 @@ test('working project, then broken through adding double model, then refixed', a
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
     await page.waitForLoadState('networkidle')
@@ -173,8 +177,8 @@ test('bad project, double model, then fixed', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
@@ -246,8 +250,8 @@ test('bad project, double model, check lineage', async ({ page }) => {
 
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   try {
     await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
     await page.waitForLoadState('networkidle')
