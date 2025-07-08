@@ -6,6 +6,7 @@ from unittest import mock
 from unittest.mock import PropertyMock, call
 
 import pytest
+import time_machine
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
@@ -608,6 +609,7 @@ def test_uncategorized(
     assert "Run `sqlmesh plan hello_world_2` locally to apply these changes" in summary
 
 
+@time_machine.travel("2025-07-07 00:00:00 UTC", tick=False)
 def test_get_plan_summary_doesnt_truncate_backfill_list(
     github_client, make_controller: t.Callable[..., GithubController]
 ):
