@@ -13,7 +13,13 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, MacroStrTemplate
 from sqlmesh.utils import str_to_bool
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
+from sqlmesh.utils.errors import (
+    ConfigError,
+    SQLMeshError,
+    raise_config_error,
+    ModelBlockFieldValidationMissingFieldsError,
+    ModeBlockExtraFields,
+)
 from sqlmesh.utils.metaprogramming import (
     Executable,
     SqlValue,
@@ -269,34 +275,28 @@ def validate_extra_and_required_fields(
 ) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
-        field_names = "'" + "', '".join(missing_required_fields) + "'"
-        raise_config_error(
-            f"Please add required field{'s' if len(missing_required_fields) > 1 else ''} {field_names} to the {entity_name}."
-        )
+        if path is None:
+            raise_config_error(
+        raise ModelBlockFieldValidationMissingFieldsError(path, missing_required_fields)
 
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
         extra_field_names = "'" + "', '".join(extra_fields) + "'"
 
         all_fields = klass.all_fields()
-        close_matches = {}
+        extra_with_close_match: t.Dict[str, t.Optional[str]] = {}
         for field in extra_fields:
             matches = get_close_matches(field, all_fields, n=1)
             if matches:
-                close_matches[field] = matches[0]
+                extra_with_close_match[field] = matches[0]
+            else:
+                extra_with_close_match[field] = None
 
-        if len(close_matches) == 1:
-            similar_msg = ". Did you mean " + "'" + "', '".join(close_matches.values()) + "'?"
-        else:
-            similar = [
-                f"- {field}: Did you mean '{match}'?" for field, match in close_matches.items()
-            ]
-            similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
-
-        raise_config_error(
-            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}",
-            path,
-        )
+        if extra_with_close_match:
+            raise ModeBlockExtraFields(
+                path,
+                extra_fields=extra_with_close_match,
+            )
 
 
 def single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:

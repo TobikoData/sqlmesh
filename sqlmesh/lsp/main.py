@@ -46,6 +46,7 @@ from sqlmesh.lsp.custom import (
     FormatProjectResponse,
     CustomMethod,
 )
+from sqlmesh.lsp.errors import ContextFailedError, contextErrorToDiagnostic
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
     LSPCteReference,
@@ -56,7 +57,7 @@ from sqlmesh.lsp.reference import (
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, ModelBlockFieldValidationMissingFieldsError, ModeBlockExtraFields
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
@@ -75,9 +76,6 @@ class ContextLoaded:
     """State when context has been successfully loaded."""
 
     lsp_context: LSPContext
-
-
-type ContextFailedError = str | ConfigError
 
 
 @dataclass
@@ -324,7 +322,9 @@ class SQLMeshLanguageServer:
                         ls.show_message("Client supports pull diagnostics", types.MessageType.Info)
                     else:
                         self.client_supports_pull_diagnostics = False
-                        ls.show_message("Client does not support pull diagnostics", types.MessageType.Info)
+                        ls.show_message(
+                            "Client does not support pull diagnostics", types.MessageType.Info
+                        )
                 else:
                     self.client_supports_pull_diagnostics = False
                     ls.show_message("Client capabilities not available", types.MessageType.Info)
@@ -357,7 +357,7 @@ class SQLMeshLanguageServer:
             uri = URI(params.text_document.uri)
             try:
                 context = self._context_get_or_load(ls, uri)
-                
+
                 # Only publish diagnostics if client doesn't support pull diagnostics
                 if not self.client_supports_pull_diagnostics:
                     diagnostics = context.lint_model(uri)
@@ -894,30 +894,9 @@ class SQLMeshLanguageServer:
             return self.context_state.lsp_context
         except Exception as e:
             # Only show the error message once
-            if not self.has_raised_loading_error:
-                location_info = f" at {e.location}" if isinstance(e, ConfigError) and e.location else ""
-                self.server.show_message(
-                    f"Error creating context error type {type(e)}: {e}{location_info}",
-                    types.MessageType.Error,
-                )
-                self.has_raised_loading_error = True
-            error_message = e if isinstance(e, ConfigError) else str(e)
-            if isinstance(e, ConfigError) and e.location is not None:
-                uri = URI.from_path(e.location)
-                ls.show_message(f"Publishing diagnostic to URI: {uri.value}", types.MessageType.Info)
-                ls.publish_diagnostics(
-                    uri.value,
-                    [
-                        types.Diagnostic(
-                            range=types.Range(
-                                start=types.Position(line=0, character=0),
-                                end=types.Position(line=0, character=0),
-                            ),
-                            message=str(error_message),
-                            severity=types.DiagnosticSeverity.Error,
-                        )
-                    ],
-                )
+            (uri, diagnostic), error = contextErrorToDiagnostic(e)
+            if diagnostic:
+                ls.publish_diagnostics(uri, [diagnostic])
 
             # Store the error in context state such that later requests can
             # show the actual error. Try to preserve any partially loaded context
@@ -927,7 +906,7 @@ class SQLMeshLanguageServer:
                 context = self.context_state.lsp_context.context
             elif isinstance(self.context_state, ContextFailed) and self.context_state.context:
                 context = self.context_state.context
-            self.context_state = ContextFailed(error_message=error_message, context=context)
+            self.context_state = ContextFailed(error_message=error, context=context)
             return None
 
     @staticmethod

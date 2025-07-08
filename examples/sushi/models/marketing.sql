@@ -2,6 +2,7 @@ MODEL (
   name sushi.marketing,
   kind SCD_TYPE_2(unique_key customer_id),
   owner jen,
+  owners test,
   cron '@daily',
   grain customer_id,
   description 'Sushi marketing data'

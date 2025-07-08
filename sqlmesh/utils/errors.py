@@ -32,6 +32,49 @@ class ConfigError(SQLMeshError):
             self.location = Path(location) if isinstance(location, str) else location
 
 
+class ModelBlockFieldValidationMissingFieldsError(ConfigError):
+    """Raised when required fields are missing from a model block."""
+
+    missing_fields: t.Set[str]
+
+    def __init__(self, path: Path, missing_fields: t.Set[str]) -> None:
+        super().__init__(
+            self.message(missing_fields),
+            path,
+        )
+        self.missing_fields = missing_fields
+
+    @staticmethod
+    def message(missing_fields: t.Set[str]) -> str:
+        field_names = "'" + "', '".join(missing_fields) + "'"
+        return f"Please add required field{'s' if len(missing_fields) > 1 else ''} {field_names} to the model block."
+
+
+class ModeBlockExtraFields(ConfigError):
+    """Raised when there are extra fields in a model block that are not defined in the model schema. If there are close
+     matches, this tries to recommend them"""
+
+    def __init__(self, path: Path, extra_fields: t.Dict[str, t.Optional[None]]) -> None:
+        super().__init__(
+            self.message(extra_fields),
+            path,
+        )
+        self.extra_fields = extra_fields
+
+    @staticmethod
+    def message(extra_fields: t.Dict[str, t.Optional[None]]) -> str:
+        if len(extra_with_close_match) == 1:
+            similar_msg = (
+                ". Did you mean " + "'" + "', '".join(extra_with_close_match.values()) + "'?"
+            )
+        else:
+            similar = [
+                f"- {field}: Did you mean '{match}'?" for field, match in close_matches.items()
+            ]
+            similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
+        return f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}"
+
+
 class MissingDependencyError(SQLMeshError):
     """Local environment is missing a required dependency for the given operation"""
 

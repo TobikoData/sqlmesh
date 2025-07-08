@@ -364,7 +364,7 @@ class Loader(abc.ABC):
                             self._failed_to_load_model_error(
                                 path, f"Duplicate external model name: '{model.name}'."
                             ),
-                            path
+                            path,
                         )
                     models[model.fqn] = model
 
@@ -404,13 +404,15 @@ class Loader(abc.ABC):
                     args = [k.strip() for k in line.split("==")]
                     if len(args) != 2:
                         raise ConfigError(
-                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported", requirements_path
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported",
+                            requirements_path,
                         )
                     dep, ver = args
                     other_ver = requirements.get(dep, ver)
                     if ver != other_ver:
                         raise ConfigError(
-                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file.", requirements_path
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file.",
+                            requirements_path,
                         )
                     requirements[dep] = ver
 
@@ -622,7 +624,7 @@ class SqlMeshLoader(Loader):
                                     self._failed_to_load_model_error(
                                         path, f"Duplicate SQL model name: '{model.name}'."
                                     ),
-                                    path
+                                    path,
                                 )
                             elif model.enabled:
                                 model._path = path
@@ -785,7 +787,9 @@ class SqlMeshLoader(Loader):
                         metric = load_metric_ddl(expression, path=path, dialect=dialect)
                         metrics[metric.name] = metric
                 except SqlglotError as ex:
-                    raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.", path)
+                    raise ConfigError(
+                        f"Failed to parse metric definitions at '{path}': {ex}.", path
+                    )
 
         return metrics
 

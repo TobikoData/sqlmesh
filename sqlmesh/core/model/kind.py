@@ -1015,8 +1015,8 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                     "The 'materialization' property is required for models of the CUSTOM kind"
                 )
 
-            # The below call will print a warning if a materialization with the given name doesn't exist
-            # we dont want to throw an error here because we still want Models with a CustomKind to be able
+            # The below call prints a warning if no materialization with the given name doesn't exist.
+            # We don't throw an error here because we still want Models with a CustomKind to be able
             # to be serialized / deserialized in contexts where the custom materialization class may not be available,
             # such as in HTTP request handlers
             custom_materialization = get_custom_materialization_type(
