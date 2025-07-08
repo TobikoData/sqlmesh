@@ -22,6 +22,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
     ExecutableKind,
+    _deterministic_repr,
     build_env,
     func_globals,
     normalize_source,
@@ -48,7 +49,7 @@ def test_print_exception(mocker: MockerFixture):
     except Exception as ex:
         print_exception(ex, test_env, out_mock)
 
-    expected_message = r"""  File ".*?.tests.utils.test_metaprogramming\.py", line 47, in test_print_exception
+    expected_message = r"""  File ".*?.tests.utils.test_metaprogramming\.py", line 48, in test_print_exception
     eval\("test_fun\(\)", env\).*
 
   File '/test/path.py' \(or imported file\), line 2, in test_fun
@@ -457,3 +458,162 @@ def test_serialize_env_with_enum_import_appearing_in_two_functions() -> None:
     }
 
     assert serialized_env == expected_env
+
+
+def test_deterministic_repr_basic_types():
+    """Test _deterministic_repr with basic Python types."""
+    # Test basic types that should use standard repr
+    assert _deterministic_repr(42) == "42"
+    assert _deterministic_repr("hello") == "'hello'"
+    assert _deterministic_repr(True) == "True"
+    assert _deterministic_repr(None) == "None"
+    assert _deterministic_repr(3.14) == "3.14"
+
+
+def test_deterministic_repr_dict_ordering():
+    """Test that _deterministic_repr produces consistent output for dicts with different key ordering."""
+    # Same dict with different key ordering
+    dict1 = {"c": 3, "a": 1, "b": 2}
+    dict2 = {"a": 1, "b": 2, "c": 3}
+    dict3 = {"b": 2, "c": 3, "a": 1}
+
+    repr1 = _deterministic_repr(dict1)
+    repr2 = _deterministic_repr(dict2)
+    repr3 = _deterministic_repr(dict3)
+
+    # All should produce the same representation
+    assert repr1 == repr2 == repr3
+    assert repr1 == "{'a': 1, 'b': 2, 'c': 3}"
+
+
+def test_deterministic_repr_mixed_key_types():
+    """Test _deterministic_repr with mixed key types (strings and numbers)."""
+    dict1 = {42: "number", "string": "text", 1: "one"}
+    dict2 = {"string": "text", 1: "one", 42: "number"}
+
+    repr1 = _deterministic_repr(dict1)
+    repr2 = _deterministic_repr(dict2)
+
+    # Should produce consistent ordering despite mixed key types
+    assert repr1 == repr2
+    # Numbers come before strings when sorting by string representation
+    assert repr1 == "{1: 'one', 42: 'number', 'string': 'text'}"
+
+
+def test_deterministic_repr_nested_structures():
+    """Test _deterministic_repr with deeply nested dictionaries."""
+    nested1 = {"outer": {"z": 26, "a": 1}, "list": [3, {"y": 2, "x": 1}], "simple": "value"}
+
+    nested2 = {"simple": "value", "list": [3, {"x": 1, "y": 2}], "outer": {"a": 1, "z": 26}}
+
+    repr1 = _deterministic_repr(nested1)
+    repr2 = _deterministic_repr(nested2)
+
+    assert repr1 == repr2
+    # Verify structure is maintained with sorted keys
+    expected = "{'list': [3, {'x': 1, 'y': 2}], 'outer': {'a': 1, 'z': 26}, 'simple': 'value'}"
+    assert repr1 == expected
+
+
+def test_deterministic_repr_lists_and_tuples():
+    """Test _deterministic_repr preserves order for lists/tuples but sorts nested dicts."""
+    # Lists should maintain their order
+    list_with_dicts = [{"b": 2, "a": 1}, {"d": 4, "c": 3}]
+    list_repr = _deterministic_repr(list_with_dicts)
+    expected_list = "[{'a': 1, 'b': 2}, {'c': 3, 'd': 4}]"
+    assert list_repr == expected_list
+
+    # Tuples should maintain their order
+    tuple_with_dicts = ({"z": 26, "a": 1}, {"y": 25, "b": 2})
+    tuple_repr = _deterministic_repr(tuple_with_dicts)
+    expected_tuple = "({'a': 1, 'z': 26}, {'b': 2, 'y': 25})"
+    assert tuple_repr == expected_tuple
+
+
+def test_deterministic_repr_empty_containers():
+    """Test _deterministic_repr with empty containers."""
+    assert _deterministic_repr({}) == "{}"
+    assert _deterministic_repr([]) == "[]"
+    assert _deterministic_repr(()) == "()"
+
+
+def test_deterministic_repr_special_characters():
+    """Test _deterministic_repr handles special characters correctly."""
+    special_dict = {
+        "quotes": "text with 'single' and \"double\" quotes",
+        "unicode": "unicode: ñáéíóú",
+        "newlines": "text\nwith\nnewlines",
+        "backslashes": "path\\to\\file",
+    }
+
+    result = _deterministic_repr(special_dict)
+
+    # Should be valid Python that can be evaluated
+    reconstructed = eval(result)
+    assert reconstructed == special_dict
+
+    # Should be deterministic - same input produces same output
+    result2 = _deterministic_repr(special_dict)
+    assert result == result2
+
+
+def test_deterministic_repr_executable_integration():
+    """Test that _deterministic_repr works correctly with Executable.value()."""
+    # Test the integration with Executable.value which is the main use case
+    variables1 = {"env": "dev", "debug": True, "timeout": 30}
+    variables2 = {"timeout": 30, "debug": True, "env": "dev"}
+
+    exec1 = Executable.value(variables1)
+    exec2 = Executable.value(variables2)
+
+    # Should produce identical payloads despite different input ordering
+    assert exec1.payload == exec2.payload
+    assert exec1.payload == "{'debug': True, 'env': 'dev', 'timeout': 30}"
+
+    # Should be valid Python
+    reconstructed = eval(exec1.payload)
+    assert reconstructed == variables1
+
+
+def test_deterministic_repr_complex_example():
+    """Test _deterministic_repr with a complex real-world-like structure."""
+    complex_vars = {
+        "database_config": {
+            "host": "localhost",
+            "port": 5432,
+            "credentials": {"username": "admin", "password": "secret"},
+        },
+        "feature_flags": ["flag_b", "flag_a"],
+        "metadata": {
+            "version": "1.0.0",
+            "environment": "production",
+            "tags": {"team": "data", "project": "analytics"},
+        },
+        42: "numeric_key",
+        "arrays": [{"config": {"nested": True, "level": 2}}, {"simple": "value"}],
+    }
+
+    expected_structure = {
+        42: "numeric_key",
+        "arrays": [{"config": {"level": 2, "nested": True}}, {"simple": "value"}],
+        "database_config": {
+            "credentials": {"password": "secret", "username": "admin"},
+            "host": "localhost",
+            "port": 5432,
+        },
+        "feature_flags": ["flag_b", "flag_a"],
+        "metadata": {
+            "environment": "production",
+            "tags": {"project": "analytics", "team": "data"},
+            "version": "1.0.0",
+        },
+    }
+
+    actual_repr = _deterministic_repr(complex_vars)
+    expected_repr = repr(expected_structure)
+    assert actual_repr == expected_repr
+
+    # Should be valid Python
+    reconstructed = eval(actual_repr)
+    assert isinstance(reconstructed, dict)
+    assert reconstructed == complex_vars
