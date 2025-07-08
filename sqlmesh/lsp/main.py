@@ -57,7 +57,7 @@ from sqlmesh.lsp.reference import (
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
-from sqlmesh.utils.errors import ConfigError, ModelBlockFieldValidationMissingFieldsError, ModeBlockExtraFields
+from sqlmesh.utils.errors import ConfigError
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
@@ -894,9 +894,10 @@ class SQLMeshLanguageServer:
             return self.context_state.lsp_context
         except Exception as e:
             # Only show the error message once
-            (uri, diagnostic), error = contextErrorToDiagnostic(e)
+            diagnostic, error = contextErrorToDiagnostic(e)
             if diagnostic:
-                ls.publish_diagnostics(uri, [diagnostic])
+                uri, lsp_diagnostic = diagnostic
+                ls.publish_diagnostics(uri, [lsp_diagnostic])
 
             # Store the error in context state such that later requests can
             # show the actual error. Try to preserve any partially loaded context

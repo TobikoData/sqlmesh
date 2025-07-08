@@ -118,7 +118,7 @@ def read_range_from_file(file: Path, text_range: Range) -> str:
 
 def get_range_of_model_block(
     sql: str,
-    dialect: str,
+    dialect: t.Optional[str] = None,
 ) -> t.Optional[Range]:
     """
     Get the range of the model block in an SQL file.

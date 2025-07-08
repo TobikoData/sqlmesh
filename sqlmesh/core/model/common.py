@@ -275,9 +275,12 @@ def validate_extra_and_required_fields(
 ) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
-        if path is None:
-            raise_config_error(
-        raise ModelBlockFieldValidationMissingFieldsError(path, missing_required_fields)
+        if path is not None:
+            raise ModelBlockFieldValidationMissingFieldsError(path, missing_required_fields)
+        field_names = "'" + "', '".join(missing_required_fields) + "'"
+        raise_config_error(
+            f"Please add required field{'s' if len(missing_required_fields) > 1 else ''} {field_names} to the {entity_name}."
+        )
 
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:

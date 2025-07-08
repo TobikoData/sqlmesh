@@ -2,12 +2,14 @@ MODEL (
   name sushi.customers,
   kind FULL,
   owner jen,
+  owners test,
   cron '@daily',
   tags (pii, fact),
   grain customer_id,
+  grains why,
   description 'Sushi customer data',
   column_descriptions (
-    customer_id = 'customer_id uniquely identifies customers'
+    customer_id = 'customer_id uniquely i:wdentifies customers'
   )
 );
 

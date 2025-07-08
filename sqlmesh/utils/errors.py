@@ -52,9 +52,9 @@ class ModelBlockFieldValidationMissingFieldsError(ConfigError):
 
 class ModeBlockExtraFields(ConfigError):
     """Raised when there are extra fields in a model block that are not defined in the model schema. If there are close
-     matches, this tries to recommend them"""
+    matches, this tries to recommend them"""
 
-    def __init__(self, path: Path, extra_fields: t.Dict[str, t.Optional[None]]) -> None:
+    def __init__(self, path: t.Optional[Path], extra_fields: t.Dict[str, t.Optional[str]]) -> None:
         super().__init__(
             self.message(extra_fields),
             path,
@@ -62,17 +62,22 @@ class ModeBlockExtraFields(ConfigError):
         self.extra_fields = extra_fields
 
     @staticmethod
-    def message(extra_fields: t.Dict[str, t.Optional[None]]) -> str:
-        if len(extra_with_close_match) == 1:
-            similar_msg = (
-                ". Did you mean " + "'" + "', '".join(extra_with_close_match.values()) + "'?"
-            )
-        else:
+    def message(extra_fields: t.Dict[str, t.Optional[str]]) -> str:
+        extra_field_names = "'" + "', '".join(extra_fields.keys()) + "'"
+
+        close_matches = {field: match for field, match in extra_fields.items() if match is not None}
+
+        if len(close_matches) == 1:
+            similar_msg = ". Did you mean '" + list(close_matches.values())[0] + "'?"
+        elif close_matches:
             similar = [
                 f"- {field}: Did you mean '{match}'?" for field, match in close_matches.items()
             ]
-            similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
-        return f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}"
+            similar_msg = "\n\n  " + "\n  ".join(similar)
+        else:
+            similar_msg = ""
+
+        return f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the model block: {extra_field_names}{similar_msg}"
 
 
 class MissingDependencyError(SQLMeshError):
