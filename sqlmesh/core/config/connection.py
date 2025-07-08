@@ -1524,41 +1524,6 @@ class MSSQLConnectionConfig(ConnectionConfig):
         return validator_func(cls, data)
 
     @property
-    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
-        """Initialize the cursor with output converters for MSSQL-specific data types."""
-        # Only apply pyodbc-specific cursor initialization when using pyodbc driver
-        if self.driver != "pyodbc":
-            return None
-
-        def init(cursor: t.Any) -> None:
-            # Get the connection from the cursor and set the output converter
-            conn = cursor.connection
-            if hasattr(conn, "add_output_converter"):
-                # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
-                # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
-                def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
-                    from datetime import datetime, timedelta, timezone
-                    import struct
-
-                    # Unpack the DATETIMEOFFSET binary format:
-                    # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
-                    tup = struct.unpack("<6hI2h", dto_value)
-                    return datetime(
-                        tup[0],
-                        tup[1],
-                        tup[2],
-                        tup[3],
-                        tup[4],
-                        tup[5],
-                        tup[6] // 1000,
-                        timezone(timedelta(hours=tup[7], minutes=tup[8])),
-                    )
-
-                conn.add_output_converter(-155, handle_datetimeoffset)
-
-        return init
-
-    @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         base_keys = {
             "host",
@@ -1662,7 +1627,33 @@ class MSSQLConnectionConfig(ConnectionConfig):
             # Create the connection string
             conn_str = ";".join(conn_str_parts)
 
-            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+            conn = pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+            # Set up output converters for MSSQL-specific data types
+            if hasattr(conn, "add_output_converter"):
+                # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
+                # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+                def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
+                    from datetime import datetime, timedelta, timezone
+                    import struct
+
+                    # Unpack the DATETIMEOFFSET binary format:
+                    # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
+                    tup = struct.unpack("<6hI2h", dto_value)
+                    return datetime(
+                        tup[0],
+                        tup[1],
+                        tup[2],
+                        tup[3],
+                        tup[4],
+                        tup[5],
+                        tup[6] // 1000,
+                        timezone(timedelta(hours=tup[7], minutes=tup[8])),
+                    )
+
+                conn.add_output_converter(-155, handle_datetimeoffset)
+
+            return conn
 
         return connect
 
