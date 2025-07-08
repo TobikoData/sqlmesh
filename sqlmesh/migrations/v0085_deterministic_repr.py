@@ -3,13 +3,21 @@ When serializing some objects, like `__sqlmesh__vars__`, the order of keys in th
 and therefore this migration applies deterministic sorting to the keys of the dictionary.
 """
 
-import ast
 import json
 import typing as t
+from dataclasses import dataclass
 
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type, blob_text_type
+
+
+# Make sure `SqlValue` is defined so it can be used by `eval` call in the migration
+@dataclass
+class SqlValue:
+    """A SQL string representing a generated SQLGlot AST."""
+
+    sql: str
 
 
 def _deterministic_repr(obj: t.Any) -> str:
@@ -27,7 +35,10 @@ def _deterministic_repr(obj: t.Any) -> str:
             return type(o)(normalized)
         return o
 
-    return repr(_normalize_for_repr(obj))
+    try:
+        return repr(_normalize_for_repr(obj))
+    except Exception:
+        return repr(obj)
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -75,33 +86,16 @@ def migrate(state_sync, **kwargs):  # type: ignore
                     old_payload = executable["payload"]
                     try:
                         # Try to parse the old payload and re-serialize it deterministically
-                        parsed_value = ast.literal_eval(old_payload)
+                        parsed_value = eval(old_payload)
                         new_payload = _deterministic_repr(parsed_value)
 
                         # Only update if the representation changed
                         if old_payload != new_payload:
                             executable["payload"] = new_payload
                             migration_needed = True
-                    except (ValueError, SyntaxError):
-                        # Special handling for dictionaries containing SqlValue objects
-                        # These can't be parsed by ast.literal_eval but we can still make them deterministic
-                        if old_payload.startswith("{") and "SqlValue(" in old_payload:
-                            try:
-                                # Use eval in a safe context to parse SqlValue objects
-                                # This is safe because we're only running this on our own serialized data
-                                from sqlmesh.utils.metaprogramming import SqlValue
-
-                                safe_globals = {"SqlValue": SqlValue}
-                                parsed_value = eval(old_payload, safe_globals, {})
-                                new_payload = _deterministic_repr(parsed_value)
-
-                                # Only update if the representation changed
-                                if old_payload != new_payload:
-                                    executable["payload"] = new_payload
-                                    migration_needed = True
-                            except (ValueError, SyntaxError, NameError):
-                                # If we still can't parse it, leave it as-is
-                                pass
+                    except Exception:
+                        # If we still can't eval it, leave it as-is
+                        pass
 
         new_snapshots.append(
             {
