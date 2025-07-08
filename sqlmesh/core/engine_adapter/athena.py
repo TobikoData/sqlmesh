@@ -41,6 +41,10 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SCHEMA_DIFFER = TrinoEngineAdapter.SCHEMA_DIFFER
     MAX_TIMESTAMP_PRECISION = 3  # copied from Trino
+    # Athena does not deal with comments well, e.g:
+    # >>> self._execute('/* test */ DESCRIBE foo')
+    #     pyathena.error.OperationalError: FAILED: ParseException line 1:0 cannot recognize input near '/' '*' 'test'
+    ATTACH_CORRELATION_ID = False
 
     def __init__(
         self, *args: t.Any, s3_warehouse_location: t.Optional[str] = None, **kwargs: t.Any

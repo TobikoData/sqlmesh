@@ -109,6 +109,7 @@ class EngineAdapter:
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
+    ATTACH_CORRELATION_ID = True
 
     def __init__(
         self,
@@ -2219,8 +2220,7 @@ class EngineAdapter:
                 else:
                     sql = t.cast(str, e)
 
-                if self.correlation_id:
-                    sql = f"/* {self.correlation_id} */ {sql}"
+                sql = self._attach_correlation_id(sql)
 
                 self._log_sql(
                     sql,
@@ -2228,6 +2228,11 @@ class EngineAdapter:
                     quote_identifiers=quote_identifiers,
                 )
                 self._execute(sql, **kwargs)
+
+    def _attach_correlation_id(self, sql: str) -> str:
+        if self.ATTACH_CORRELATION_ID and self.correlation_id:
+            return f"/* {self.correlation_id} */ {sql}"
+        return sql
 
     def _log_sql(
         self,
