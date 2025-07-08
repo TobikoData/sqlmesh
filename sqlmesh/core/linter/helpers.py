@@ -2,6 +2,7 @@ from pathlib import Path
 
 from sqlmesh.core.linter.rule import Position, Range
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlglot import tokenize, TokenType
 import typing as t
 
 
@@ -113,3 +114,41 @@ def read_range_from_file(file: Path, text_range: Range) -> str:
         result.append(line[start_char:end_char])
 
     return "".join(result)
+
+
+def get_range_of_model_block(
+    sql: str,
+    dialect: str,
+) -> t.Optional[Range]:
+    """
+    Get the range of the model block in an SQL file.
+    """
+    tokens = tokenize(sql, dialect=dialect)
+
+    # Find start of the model block
+    start = next(
+        (t for t in tokens if t.token_type is TokenType.VAR and t.text.upper() == "MODEL"),
+        None,
+    )
+    end = next((t for t in tokens if t.token_type is TokenType.SEMICOLON), None)
+
+    if start is None or end is None:
+        return None
+
+    start_position = TokenPositionDetails(
+        line=start.line,
+        col=start.col,
+        start=start.start,
+        end=start.end,
+    )
+    end_position = TokenPositionDetails(
+        line=end.line,
+        col=end.col,
+        start=end.start,
+        end=end.end,
+    )
+
+    splitlines = sql.splitlines()
+    return Range(
+        start=start_position.to_range(splitlines).start, end=end_position.to_range(splitlines).end
+    )
