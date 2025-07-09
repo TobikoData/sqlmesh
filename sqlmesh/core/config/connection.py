@@ -1630,28 +1630,27 @@ class MSSQLConnectionConfig(ConnectionConfig):
             conn = pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
 
             # Set up output converters for MSSQL-specific data types
-            if hasattr(conn, "add_output_converter"):
-                # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
-                # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
-                def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
-                    from datetime import datetime, timedelta, timezone
-                    import struct
+            # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
+            # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+            def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
+                from datetime import datetime, timedelta, timezone
+                import struct
 
-                    # Unpack the DATETIMEOFFSET binary format:
-                    # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
-                    tup = struct.unpack("<6hI2h", dto_value)
-                    return datetime(
-                        tup[0],
-                        tup[1],
-                        tup[2],
-                        tup[3],
-                        tup[4],
-                        tup[5],
-                        tup[6] // 1000,
-                        timezone(timedelta(hours=tup[7], minutes=tup[8])),
-                    )
+                # Unpack the DATETIMEOFFSET binary format:
+                # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
+                tup = struct.unpack("<6hI2h", dto_value)
+                return datetime(
+                    tup[0],
+                    tup[1],
+                    tup[2],
+                    tup[3],
+                    tup[4],
+                    tup[5],
+                    tup[6] // 1000,
+                    timezone(timedelta(hours=tup[7], minutes=tup[8])),
+                )
 
-                conn.add_output_converter(-155, handle_datetimeoffset)
+            conn.add_output_converter(-155, handle_datetimeoffset)
 
             return conn
 

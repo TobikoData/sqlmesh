@@ -1685,32 +1685,6 @@ def test_mssql_pyodbc_connection_negative_timezone_offset():
         assert result.tzinfo == timezone(timedelta(hours=-8))
 
 
-def test_mssql_pyodbc_connection_no_add_output_converter():
-    """Test that connection gracefully handles pyodbc without add_output_converter."""
-    from unittest.mock import Mock, patch
-
-    with patch("pyodbc.connect") as mock_pyodbc_connect:
-        # Create a mock connection without add_output_converter
-        mock_connection = Mock()
-        # Remove the add_output_converter attribute
-        if hasattr(mock_connection, "add_output_converter"):
-            delattr(mock_connection, "add_output_converter")
-        mock_pyodbc_connect.return_value = mock_connection
-
-        config = MSSQLConnectionConfig(
-            host="localhost",
-            driver="pyodbc",  # DATETIMEOFFSET handling is pyodbc-specific
-            check_import=False,
-        )
-
-        # This should not raise an exception
-        factory_with_kwargs = config._connection_factory_with_kwargs
-        connection = factory_with_kwargs()
-
-        # Verify we get the connection back
-        assert connection is mock_connection
-
-
 def test_mssql_no_cursor_init_for_pymssql():
     """Test that _cursor_init is not needed for pymssql driver."""
     config = MSSQLConnectionConfig(
