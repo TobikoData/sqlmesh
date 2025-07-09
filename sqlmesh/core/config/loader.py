@@ -184,8 +184,14 @@ def load_config_from_python_module(
     module_path: Path,
     config_name: str = "config",
 ) -> C:
-    with sys_path(module_path.parent):
-        config_module = import_python_file(module_path, module_path.parent)
+    try:
+        with sys_path(module_path.parent):
+            config_module = import_python_file(module_path, module_path.parent)
+    except Exception as e:
+        raise ConfigError(
+            f"Failed to load config file: {str(e)}",
+            location=module_path,
+        )
 
     try:
         config_obj = getattr(config_module, config_name)
