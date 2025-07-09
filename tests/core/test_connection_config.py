@@ -1557,3 +1557,129 @@ def test_mssql_pymssql_connection_factory():
         # Clean up the mock module
         if "pymssql" in sys.modules:
             del sys.modules["pymssql"]
+
+
+def test_mssql_pyodbc_connection_datetimeoffset_handling():
+    """Test that the MSSQL pyodbc connection properly handles DATETIMEOFFSET conversion."""
+    from datetime import datetime, timezone, timedelta
+    import struct
+    from unittest.mock import Mock, patch
+
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        # Track calls to add_output_converter
+        converter_calls = []
+
+        def mock_add_output_converter(sql_type, converter_func):
+            converter_calls.append((sql_type, converter_func))
+
+        # Create a mock connection that will be returned by pyodbc.connect
+        mock_connection = Mock()
+        mock_connection.add_output_converter = mock_add_output_converter
+        mock_pyodbc_connect.return_value = mock_connection
+
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",  # DATETIMEOFFSET handling is pyodbc-specific
+            check_import=False,
+        )
+
+        # Get the connection factory and call it
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Verify that add_output_converter was called for SQL type -155 (DATETIMEOFFSET)
+        assert len(converter_calls) == 1
+        sql_type, converter_func = converter_calls[0]
+        assert sql_type == -155
+
+        # Test the converter function with actual DATETIMEOFFSET binary data
+        # Create a test DATETIMEOFFSET value: 2023-12-25 15:30:45.123456789 +05:30
+        year, month, day = 2023, 12, 25
+        hour, minute, second = 15, 30, 45
+        nanoseconds = 123456789
+        tz_hour_offset, tz_minute_offset = 5, 30
+
+        # Pack the binary data according to the DATETIMEOFFSET format
+        binary_data = struct.pack(
+            "<6hI2h",
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanoseconds,
+            tz_hour_offset,
+            tz_minute_offset,
+        )
+
+        # Convert using the registered converter
+        result = converter_func(binary_data)
+
+        # Verify the result
+        expected_dt = datetime(
+            2023,
+            12,
+            25,
+            15,
+            30,
+            45,
+            123456,  # microseconds = nanoseconds // 1000
+            timezone(timedelta(hours=5, minutes=30)),
+        )
+        assert result == expected_dt
+        assert result.tzinfo == timezone(timedelta(hours=5, minutes=30))
+
+
+def test_mssql_pyodbc_connection_negative_timezone_offset():
+    """Test DATETIMEOFFSET handling with negative timezone offset at connection level."""
+    from datetime import datetime, timezone, timedelta
+    import struct
+    from unittest.mock import Mock, patch
+
+    with patch("pyodbc.connect") as mock_pyodbc_connect:
+        converter_calls = []
+
+        def mock_add_output_converter(sql_type, converter_func):
+            converter_calls.append((sql_type, converter_func))
+
+        mock_connection = Mock()
+        mock_connection.add_output_converter = mock_add_output_converter
+        mock_pyodbc_connect.return_value = mock_connection
+
+        config = MSSQLConnectionConfig(
+            host="localhost",
+            driver="pyodbc",  # DATETIMEOFFSET handling is pyodbc-specific
+            check_import=False,
+        )
+
+        factory_with_kwargs = config._connection_factory_with_kwargs
+        connection = factory_with_kwargs()
+
+        # Get the converter function
+        _, converter_func = converter_calls[0]
+
+        # Test with negative timezone offset: 2023-01-01 12:00:00.0 -08:00
+        year, month, day = 2023, 1, 1
+        hour, minute, second = 12, 0, 0
+        nanoseconds = 0
+        tz_hour_offset, tz_minute_offset = -8, 0
+
+        binary_data = struct.pack(
+            "<6hI2h",
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanoseconds,
+            tz_hour_offset,
+            tz_minute_offset,
+        )
+
+        result = converter_func(binary_data)
+
+        expected_dt = datetime(2023, 1, 1, 12, 0, 0, 0, timezone(timedelta(hours=-8, minutes=0)))
+        assert result == expected_dt
+        assert result.tzinfo == timezone(timedelta(hours=-8))
