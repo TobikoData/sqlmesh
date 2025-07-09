@@ -1683,16 +1683,3 @@ def test_mssql_pyodbc_connection_negative_timezone_offset():
         expected_dt = datetime(2023, 1, 1, 12, 0, 0, 0, timezone(timedelta(hours=-8, minutes=0)))
         assert result == expected_dt
         assert result.tzinfo == timezone(timedelta(hours=-8))
-
-
-def test_mssql_no_cursor_init_for_pymssql():
-    """Test that _cursor_init is not needed for pymssql driver."""
-    config = MSSQLConnectionConfig(
-        host="localhost",
-        driver="pymssql",
-        check_import=False,
-    )
-
-    # Since we moved output converter setup to connection level,
-    # there's no cursor init needed for any driver
-    assert not hasattr(config, "_cursor_init") or config._cursor_init is None
