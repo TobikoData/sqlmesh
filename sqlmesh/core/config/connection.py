@@ -238,7 +238,10 @@ class DuckDBAttachOptions(BaseConfig):
             options.append("READ_ONLY")
 
         # DuckLake specific options
+        path = self.path
         if self.type == "ducklake":
+            if not path.startswith("ducklake:"):
+                path = f"ducklake:{path}"
             if self.data_path is not None:
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
@@ -254,7 +257,7 @@ class DuckDBAttachOptions(BaseConfig):
         alias_sql = (
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
-        return f"ATTACH IF NOT EXISTS '{self.path}'{alias_sql}{options_sql}"
+        return f"ATTACH IF NOT EXISTS '{path}'{alias_sql}{options_sql}"
 
 
 class BaseDuckDBConnectionConfig(ConnectionConfig):

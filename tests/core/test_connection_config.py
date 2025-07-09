@@ -742,9 +742,29 @@ def test_duckdb_attach_ducklake_catalog(make_config):
     assert ducklake_catalog.encrypted is True
     assert ducklake_catalog.data_inlining_row_limit == 10
     # Check that the generated SQL includes DATA_PATH
-    assert "DATA_PATH '/tmp/ducklake_data'" in ducklake_catalog.to_sql("ducklake")
-    assert "ENCRYPTED" in ducklake_catalog.to_sql("ducklake")
-    assert "DATA_INLINING_ROW_LIMIT 10" in ducklake_catalog.to_sql("ducklake")
+    generated_sql = ducklake_catalog.to_sql("ducklake")
+    assert "DATA_PATH '/tmp/ducklake_data'" in generated_sql
+    assert "ENCRYPTED" in generated_sql
+    assert "DATA_INLINING_ROW_LIMIT 10" in generated_sql
+    # Check that the ducklake: prefix is automatically added
+    assert "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake'" in generated_sql
+
+    # Test that a path with existing ducklake: prefix is preserved
+    config_with_prefix = make_config(
+        type="duckdb",
+        catalogs={
+            "ducklake": DuckDBAttachOptions(
+                type="ducklake",
+                path="ducklake:catalog.ducklake",
+                data_path="/tmp/ducklake_data",
+            ),
+        },
+    )
+    ducklake_catalog_with_prefix = config_with_prefix.catalogs.get("ducklake")
+    generated_sql_with_prefix = ducklake_catalog_with_prefix.to_sql("ducklake")
+    assert "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake'" in generated_sql_with_prefix
+    # Ensure we don't have double prefixes
+    assert "'ducklake:catalog.ducklake" in generated_sql_with_prefix
 
 
 def test_duckdb_attach_options():
@@ -760,6 +780,22 @@ def test_duckdb_attach_options():
     options = DuckDBAttachOptions(type="duckdb", path="test.db", read_only=False)
 
     assert options.to_sql(alias="db") == "ATTACH IF NOT EXISTS 'test.db' AS db"
+
+
+def test_ducklake_attach_add_ducklake_prefix():
+    # Test that ducklake: prefix is automatically added when missing
+    options = DuckDBAttachOptions(type="ducklake", path="catalog.ducklake")
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake"
+    )
+
+    # Test that ducklake: prefix is preserved when already present
+    options = DuckDBAttachOptions(type="ducklake", path="ducklake:catalog.ducklake")
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake"
+    )
 
 
 def test_duckdb_config_json_strings(make_config):
