@@ -169,7 +169,14 @@ def load_config_from_paths(
 
 
 def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
-    return yaml_load(path)
+    content = yaml_load(path)
+    if not isinstance(content, dict):
+        raise ConfigError(
+            f"Invalid YAML configuration: expected a dictionary but got {type(content).__name__}. "
+            f"Please check the YAML syntax in your config file.",
+            location=path,
+        )
+    return content
 
 
 def load_config_from_python_module(
