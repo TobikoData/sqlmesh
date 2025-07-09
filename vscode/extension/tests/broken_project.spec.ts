@@ -2,8 +2,15 @@ import { test, expect } from './fixtures'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
-import { openLineageView, saveFile, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  runCommand,
+  saveFile,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
+import { execAsync } from '../src/utilities/exec'
+import yaml from 'yaml'
 
 test('bad project, double model', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(
@@ -252,4 +259,81 @@ test('bad project, double model, check lineage', async ({
   await page.waitForSelector('text=Error:')
 
   await page.waitForTimeout(500)
+})
+
+const setup = async (tempDir: string) => {
+  // Run the sqlmesh CLI from the root of the repo using the local path
+  const sqlmeshCliPath = path.resolve(__dirname, '../../../.venv/bin/sqlmesh')
+  const result = await execAsync(sqlmeshCliPath, ['init', 'duckdb'], {
+    cwd: tempDir,
+  })
+  expect(result.exitCode).toBe(0)
+}
+
+test.describe('Bad config.py/config.yaml file issues', () => {
+  test('sqlmesh init, then corrupted config.yaml, invalid yaml', async ({
+    page,
+    sharedCodeServer,
+  }) => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+    )
+    await setup(tempDir)
+
+    const configYamlPath = path.join(tempDir, 'config.yaml')
+    // Write an invalid YAML to config.yaml
+    await fs.writeFile(configYamlPath, 'invalid_yaml:;asdfasudfy [1, 2, 3')
+    await createPythonInterpreterSettingsSpecifier(tempDir)
+    await page.goto(
+      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+    )
+    await page.waitForLoadState('networkidle')
+  })
+  // Load the page
+
+  test('sqlmesh init, then corrupted config.yaml, bad parameters', async ({
+    page,
+    sharedCodeServer,
+  }) => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+    )
+    await setup(tempDir)
+    await createPythonInterpreterSettingsSpecifier(tempDir)
+
+    const configYamlPath = path.join(tempDir, 'config.yaml')
+    // Write an invalid YAML to config.yaml
+    const config = {
+      gateway: 'test',
+    }
+    // Write config to the yaml file
+    await fs.writeFile(configYamlPath, yaml.stringify(config))
+
+    await page.goto(
+      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+    )
+    await page.waitForLoadState('networkidle')
+
+    // Open full_model.sql model
+    await page
+      .getByRole('treeitem', { name: 'models', exact: true })
+      .locator('a')
+      .click()
+    await page
+      .getByRole('treeitem', { name: 'full_model.sql', exact: true })
+      .locator('a')
+      .click()
+
+    // Wait for the error to appear
+    await page.waitForSelector('text=Error creating context')
+
+    // Open the problems view
+    await runCommand(page, 'View: Focus Problems')
+
+    // Asser that the error is present in the problems view
+    await page
+      .getByText('Invalid project config:', { exact: true })
+      .isVisible({ timeout: 1_000 })
+    await page.getByText('Invalid project config:', { exact: true }).click()
+  })
 })

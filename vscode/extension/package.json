@@ -138,6 +138,7 @@
     "fs-extra": "^11.3.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
+    "yaml": "^2.8.0",
     "zod": "^3.25.71"
   },
   "devDependencies": {

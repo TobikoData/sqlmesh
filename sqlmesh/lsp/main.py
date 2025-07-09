@@ -779,7 +779,7 @@ class SQLMeshLanguageServer:
             return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
         except ConfigError as config_error:
             diagnostic, error = context_error_to_diagnostic(config_error, uri_filter=uri)
-            if diagnostic:
+            if diagnostic and diagnostic[0] == uri.value:
                 return [diagnostic[1]], 0
             return [], 0
 
