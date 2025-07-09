@@ -260,6 +260,18 @@ class Config(BaseConfig):
 
         return self
 
+    @model_validator(mode="after")
+    def _inherit_project_config_in_cicd_bot(self) -> Self:
+        if self.cicd_bot:
+            # inherit the project-level settings into the CICD bot if they have not been explicitly overridden
+            if self.cicd_bot.auto_categorize_changes_ is None:
+                self.cicd_bot.auto_categorize_changes_ = self.plan.auto_categorize_changes
+
+            if self.cicd_bot.pr_include_unmodified_ is None:
+                self.cicd_bot.pr_include_unmodified_ = self.plan.include_unmodified
+
+        return self
+
     def get_default_test_connection(
         self,
         default_catalog: t.Optional[str] = None,
