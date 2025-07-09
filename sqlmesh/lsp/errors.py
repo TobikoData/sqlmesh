@@ -6,7 +6,7 @@ from sqlmesh.utils.errors import (
 )
 import typing as t
 
-type ContextFailedError = t.Union[str, ConfigError, Exception]
+ContextFailedError = t.Union[str, ConfigError, Exception]
 
 
 def context_error_to_diagnostic(
