@@ -425,7 +425,9 @@ class Executable(PydanticModel):
 
     @classmethod
     def value(cls, v: t.Any, is_metadata: t.Optional[bool] = None) -> Executable:
-        return Executable(payload=repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata)
+        return Executable(
+            payload=_deterministic_repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata
+        )
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
@@ -631,6 +633,38 @@ def print_exception(
     """
     tb = format_evaluated_code_exception(exception, python_env)
     out.write(tb)
+
+
+def _deterministic_repr(obj: t.Any) -> str:
+    """Create a deterministic representation by ensuring consistent ordering before repr().
+
+    For dictionaries, ensures consistent key ordering to prevent non-deterministic
+    serialization that affects fingerprinting. Uses Python's native repr() logic
+    for all formatting to handle edge cases properly.
+
+    Note that this function assumes list/tuple order is significant and therefore does not sort them.
+
+    Args:
+        obj: The object to represent as a string.
+
+    Returns:
+        A deterministic string representation of the object.
+    """
+
+    def _normalize_for_repr(o: t.Any) -> t.Any:
+        if isinstance(o, dict):
+            sorted_items = sorted(o.items(), key=lambda x: str(x[0]))
+            return {k: _normalize_for_repr(v) for k, v in sorted_items}
+        if isinstance(o, (list, tuple)):
+            # Recursively normalize nested structures
+            normalized = [_normalize_for_repr(item) for item in o]
+            return type(o)(normalized)
+        return o
+
+    try:
+        return repr(_normalize_for_repr(obj))
+    except Exception:
+        return repr(obj)
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:

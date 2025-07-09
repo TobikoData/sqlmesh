@@ -109,6 +109,7 @@ class EngineAdapter:
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
+    ATTACH_CORRELATION_ID = True
 
     def __init__(
         self,
@@ -147,19 +148,23 @@ class EngineAdapter:
         self._multithreaded = multithreaded
         self.correlation_id = correlation_id
 
-    def with_settings(self, log_level: int, **kwargs: t.Any) -> EngineAdapter:
+    def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
+        extra_kwargs = {
+            "null_connection": True,
+            "execute_log_level": kwargs.pop("execute_log_level", self._execute_log_level),
+            **self._extra_config,
+            **kwargs,
+        }
+
         adapter = self.__class__(
             self._connection_pool,
             dialect=self.dialect,
             sql_gen_kwargs=self._sql_gen_kwargs,
             default_catalog=self._default_catalog,
-            execute_log_level=log_level,
             register_comments=self._register_comments,
-            null_connection=True,
             multithreaded=self._multithreaded,
             pretty_sql=self._pretty_sql,
-            **self._extra_config,
-            **kwargs,
+            **extra_kwargs,
         )
 
         return adapter
@@ -2215,8 +2220,7 @@ class EngineAdapter:
                 else:
                     sql = t.cast(str, e)
 
-                if self.correlation_id:
-                    sql = f"/* {self.correlation_id} */ {sql}"
+                sql = self._attach_correlation_id(sql)
 
                 self._log_sql(
                     sql,
@@ -2224,6 +2228,11 @@ class EngineAdapter:
                     quote_identifiers=quote_identifiers,
                 )
                 self._execute(sql, **kwargs)
+
+    def _attach_correlation_id(self, sql: str) -> str:
+        if self.ATTACH_CORRELATION_ID and self.correlation_id:
+            return f"/* {self.correlation_id} */ {sql}"
+        return sql
 
     def _log_sql(
         self,

@@ -27,6 +27,7 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
+    parse_strings_with_macro_refs,
     single_value_or_tuple,
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
@@ -72,13 +73,14 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+UNRENDERABLE_MODEL_FIELDS = {"cron", "description"}
+
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
-    "description",
-    "cron",
     "merge_filter",
 } | PROPERTIES
 
@@ -1646,6 +1648,8 @@ class SeedModel(_Model):
     def seed_path(self) -> Path:
         seed_path = Path(self.kind.path)
         if not seed_path.is_absolute():
+            if self._path is None:
+                raise SQLMeshError(f"Seed model '{self.name}' has no path")
             return self._path.parent / seed_path
         return seed_path
 
@@ -2020,7 +2024,7 @@ def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
@@ -2171,6 +2175,8 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
     name = meta_fields.pop("name", "")
     if not name and infer_names:
+        if path is None:
+            raise ValueError(f"Model {name} must have a name")
         name = get_model_name(path)
 
     if not name:
@@ -2249,7 +2255,7 @@ def create_seed_model(
     name: TableName,
     seed_kind: SeedKind,
     *,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     module_path: Path = Path(),
     **kwargs: t.Any,
 ) -> Model:
@@ -2268,7 +2274,12 @@ def create_seed_model(
         seed_path = module_path.joinpath(*subdirs)
         seed_kind.path = str(seed_path)
     elif not seed_path.is_absolute():
-        seed_path = path / seed_path if path.is_dir() else path.parent / seed_path
+        if path is None:
+            seed_path = seed_path
+        elif path.is_dir():
+            seed_path = path / seed_path
+        else:
+            seed_path = path.parent / seed_path
 
     seed = create_seed(seed_path)
 
@@ -2403,7 +2414,7 @@ def _create_model(
     name: TableName,
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
@@ -2468,6 +2479,9 @@ def _create_model(
         property_values = kwargs.get(property_name)
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
+
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+        statements.append(kwargs["kind"].merge_filter)
 
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
@@ -2588,7 +2602,7 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 def _split_sql_model_statements(
     expressions: t.List[exp.Expression],
-    path: Path,
+    path: t.Optional[Path],
     dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
@@ -2709,7 +2723,7 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
 def render_meta_fields(
     fields: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2751,21 +2765,24 @@ def render_meta_fields(
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
+        field_value = fields.get(field)
 
-        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+        # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
+        if field == "cron" or field_value is None:
             continue
 
-        field_value = fields.get(field)
-        if field_value is None:
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = value
+                    rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
+
             if rendered_dict:
                 fields[field] = rendered_dict
             else:
@@ -2793,7 +2810,7 @@ def render_meta_fields(
 def render_model_defaults(
     defaults: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2843,7 +2860,7 @@ def parse_defaults_properties(
 def render_expression(
     expression: exp.Expression,
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     macros: t.Optional[MacroRegistry] = None,
     dialect: DialectType = None,

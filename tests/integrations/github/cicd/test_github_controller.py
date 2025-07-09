@@ -1,10 +1,12 @@
 # type: ignore
+import typing as t
 import os
 import pathlib
 from unittest import mock
 from unittest.mock import PropertyMock, call
 
 import pytest
+import time_machine
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
@@ -12,11 +14,13 @@ from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.user import User, UserRole
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
     MergeStateStatus,
 )
+from sqlmesh.integrations.github.cicd.controller import GithubController
 from sqlmesh.integrations.github.cicd.command import _update_pr_environment
 from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
@@ -251,6 +255,18 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
     assert controller._pr_plan_builder._categorizer_config == custom_categorizer_config
     assert controller.pr_plan.start == default_start_absolute
+    assert not controller.pr_plan.start_override_per_model
+
+
+def test_pr_plan_min_intervals(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(default_pr_start="1 day ago", pr_min_intervals=1),
+    )
+    assert controller.pr_plan.environment.name == "hello_world_2"
+    assert isinstance(controller.pr_plan, Plan)
+    assert controller.pr_plan.start_override_per_model
 
 
 def test_prod_plan(github_client, make_controller):
@@ -591,3 +607,40 @@ def test_uncategorized(
     assert "The following models could not be categorized automatically" in summary
     assert '- "b"' in summary
     assert "Run `sqlmesh plan hello_world_2` locally to apply these changes" in summary
+
+
+@time_machine.travel("2025-07-07 00:00:00 UTC", tick=False)
+def test_get_plan_summary_doesnt_truncate_backfill_list(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    summary = controller.get_plan_summary(controller.prod_plan)
+
+    assert "more ...." not in summary
+
+    assert (
+        """**Models needing backfill:**
+* `memory.raw.demographics`: [full refresh]
+* `memory.sushi.active_customers`: [full refresh]
+* `memory.sushi.count_customers_active`: [full refresh]
+* `memory.sushi.count_customers_inactive`: [full refresh]
+* `memory.sushi.customer_revenue_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customer_revenue_lifetime`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customers`: [full refresh]
+* `memory.sushi.items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.latest_order`: [full refresh]
+* `memory.sushi.marketing`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.order_items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.orders`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.raw_marketing`: [full refresh]
+* `memory.sushi.top_waiters`: [recreate view]
+* `memory.sushi.waiter_as_customer_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.waiter_names`: [full refresh]
+* `memory.sushi.waiter_revenue_by_day`: [2025-06-30 - 2025-07-06]"""
+        in summary
+    )

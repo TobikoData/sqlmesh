@@ -440,6 +440,19 @@ def sorted_python_env_payloads(python_env: t.Dict[str, Executable]) -> t.List[st
     return [_executable_to_str(k, v) for k, v in sort_python_env(python_env)]
 
 
+def parse_strings_with_macro_refs(value: t.Any, dialect: DialectType) -> t.Any:
+    if isinstance(value, str) and "@" in value:
+        return exp.maybe_parse(value, dialect=dialect)
+
+    if isinstance(value, dict):
+        for k, v in dict(value).items():
+            value[k] = parse_strings_with_macro_refs(v, dialect)
+    elif isinstance(value, list):
+        value = [parse_strings_with_macro_refs(v, dialect) for v in value]
+
+    return value
+
+
 expression_validator: t.Callable = field_validator(
     "query",
     "expressions_",
