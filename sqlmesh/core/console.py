@@ -912,6 +912,7 @@ class TerminalConsole(Console):
         self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
         self.table_diff_progress_live: t.Optional[Live] = None
 
+        self.signal_progress_logged = False
         self.signal_status_tree: t.Optional[Tree] = None
 
         self.verbosity = verbosity
@@ -956,7 +957,8 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot evaluation/auditing progress has begun."""
         # Add a newline to separate signal checking from evaluation
-        self._print("")
+        if self.signal_progress_logged:
+            self._print("")
 
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
@@ -1188,6 +1190,7 @@ class TerminalConsole(Console):
         if self.signal_status_tree is not None:
             self._print(self.signal_status_tree)
             self.signal_status_tree = None
+            self.signal_progress_logged = True
 
     def start_creation_progress(
         self,

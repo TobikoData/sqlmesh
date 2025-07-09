@@ -2175,3 +2175,18 @@ WHERE ds::DATE BETWEEN @start_ds AND @end_ds
 
     # Only one model was executed
     assert "100.0% • 1/1 • 0:00:00" in result.output
+
+    rmtree(tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    create_example_project(tmp_path)
+
+    # Example project models have start dates, so there are no date prompts
+    # for the `prod` environment.
+    # Input: `y` to apply and backfill
+    result = runner.invoke(
+        cli, ["--log-file-dir", str(tmp_path), "--paths", str(tmp_path), "plan"], input="y\n"
+    )
+    assert_plan_success(result)
+
+    assert "Checking signals" not in result.output
