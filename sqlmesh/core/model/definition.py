@@ -2434,7 +2434,10 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
     validate_extra_and_required_fields(
-        klass, {"name", *kwargs} - {"grain", "table_properties"}, "MODEL block"
+        klass,
+        {"name", *kwargs} - {"grain", "table_properties"},
+        "MODEL block",
+        path,
     )
 
     for prop in PROPERTIES:
