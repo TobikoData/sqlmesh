@@ -6,6 +6,7 @@ import logging
 import typing as t
 from pathlib import Path
 import urllib.parse
+import uuid
 
 from lsprotocol import types
 from lsprotocol.types import (
@@ -46,6 +47,7 @@ from sqlmesh.lsp.custom import (
     FormatProjectResponse,
     CustomMethod,
 )
+from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
     LSPCteReference,
@@ -56,17 +58,18 @@ from sqlmesh.lsp.reference import (
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
+from sqlmesh.utils.errors import ConfigError
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class NoContext:
     """State when no context has been attempted to load."""
 
-    pass
+    version_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
 @dataclass
@@ -74,14 +77,16 @@ class ContextLoaded:
     """State when context has been successfully loaded."""
 
     lsp_context: LSPContext
+    version_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
 @dataclass
 class ContextFailed:
     """State when context failed to load with an error message."""
 
-    error_message: str
+    error: ContextFailedError
     context: t.Optional[Context] = None
+    version_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
 ContextState = Union[NoContext, ContextLoaded, ContextFailed]
@@ -110,7 +115,7 @@ class SQLMeshLanguageServer:
         self._supported_custom_methods: t.Dict[
             str,
             t.Callable[
-                # mypy unable to recognise the base class
+                # mypy unable to recognize the base class
                 [LanguageServer, t.Any],
                 t.Any,
             ],
@@ -223,9 +228,8 @@ class SQLMeshLanguageServer:
     ) -> None:
         """Helper method to reload context and publish diagnostics."""
         if isinstance(self.context_state, NoContext):
-            return
-
-        if isinstance(self.context_state, ContextFailed):
+            pass
+        elif isinstance(self.context_state, ContextFailed):
             if self.context_state.context:
                 try:
                     self.context_state.context.load()
@@ -235,14 +239,17 @@ class SQLMeshLanguageServer:
                     )
                 except Exception as e:
                     ls.log_trace(f"Error loading context: {e}")
-                    if not isinstance(self.context_state, ContextFailed):
-                        raise Exception("Context state should be failed")
-                    self.context_state = ContextFailed(
-                        error_message=str(e), context=self.context_state.context
+                    context = (
+                        self.context_state.context
+                        if hasattr(self.context_state, "context")
+                        else None
                     )
-                    return
+                    self.context_state = ContextFailed(error=e, context=context)
             else:
-                # If there's no context, try to create one from scratch
+                # If there's no context, reset to NoContext and try to create one from scratch
+                ls.log_trace("No partial context available, attempting fresh creation")
+                self.context_state = NoContext()
+                self.has_raised_loading_error = False  # Reset error flag to show new errors
                 try:
                     self._ensure_context_for_document(uri)
                     # If successful, context_state will be ContextLoaded
@@ -253,43 +260,42 @@ class SQLMeshLanguageServer:
                         )
                 except Exception as e:
                     ls.log_trace(f"Still cannot load context: {e}")
-                return
-
-        # Reload the context if it was successfully loaded
-        try:
-            context = self.context_state.lsp_context.context
-            context.load()
-            # Create new LSPContext which will have fresh, empty caches
-            self.context_state = ContextLoaded(lsp_context=LSPContext(context))
-        except Exception as e:
-            ls.log_trace(f"Error loading context: {e}")
-            self.context_state = ContextFailed(
-                error_message=str(e), context=self.context_state.lsp_context.context
-            )
-            return
+                    # The error will be stored in context_state by _ensure_context_for_document
+        else:
+            # Reload the context if it was successfully loaded
+            try:
+                context = self.context_state.lsp_context.context
+                context.load()
+                # Create new LSPContext which will have fresh, empty caches
+                self.context_state = ContextLoaded(lsp_context=LSPContext(context))
+            except Exception as e:
+                ls.log_trace(f"Error loading context: {e}")
+                self.context_state = ContextFailed(
+                    error=e, context=self.context_state.lsp_context.context
+                )
 
         # Send a workspace diagnostic refresh request to the client. This is used to notify the client that the diagnostics have changed.
         ls.lsp.send_request(
             types.WORKSPACE_DIAGNOSTIC_REFRESH,
             WorkspaceDiagnosticRefreshRequest(
-                id=self.context_state.lsp_context.version_id,
+                id=self.context_state.version_id,
             ),
         )
-
         ls.lsp.send_request(
             types.WORKSPACE_INLAY_HINT_REFRESH,
             WorkspaceInlayHintRefreshRequest(
-                id=self.context_state.lsp_context.version_id,
+                id=self.context_state.version_id,
             ),
         )
 
         # Only publish diagnostics if client doesn't support pull diagnostics
         if not self.client_supports_pull_diagnostics:
-            diagnostics = self.context_state.lsp_context.lint_model(uri)
-            ls.publish_diagnostics(
-                document_uri,
-                LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
-            )
+            if hasattr(self.context_state, "lsp_context"):
+                diagnostics = self.context_state.lsp_context.lint_model(uri)
+                ls.publish_diagnostics(
+                    document_uri,
+                    LSPContext.diagnostics_to_lsp_diagnostics(diagnostics),
+                )
 
     def _register_features(self) -> None:
         """Register LSP features on the internal LanguageServer instance."""
@@ -650,9 +656,21 @@ class SQLMeshLanguageServer:
                 return types.WorkspaceDiagnosticReport(items=items)
 
             except Exception as e:
-                ls.log_trace(
-                    f"Error getting workspace diagnostics: {e}",
-                )
+                ls.log_trace(f"Error getting workspace diagnostics: {e}")
+                error_diagnostic, error = context_error_to_diagnostic(e)
+                if error_diagnostic:
+                    uri_value, unpacked_diagnostic = error_diagnostic
+                    return types.WorkspaceDiagnosticReport(
+                        items=[
+                            types.WorkspaceFullDocumentDiagnosticReport(
+                                kind=types.DocumentDiagnosticReportKind.Full,
+                                result_id=self.context_state.version_id,  # No versioning, always fresh
+                                uri=uri_value,
+                                items=[unpacked_diagnostic],
+                            )
+                        ]
+                    )
+
                 return types.WorkspaceDiagnosticReport(items=[])
 
         @self.server.feature(types.TEXT_DOCUMENT_CODE_ACTION)
@@ -759,17 +777,23 @@ class SQLMeshLanguageServer:
             context = self._context_get_or_load(uri)
             diagnostics = context.lint_model(uri)
             return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
-        except Exception:
+        except ConfigError as config_error:
+            diagnostic, error = context_error_to_diagnostic(config_error, uri_filter=uri)
+            if diagnostic:
+                return [diagnostic[1]], 0
             return [], 0
 
     def _context_get_or_load(self, document_uri: t.Optional[URI] = None) -> LSPContext:
-        if isinstance(self.context_state, ContextFailed):
-            raise RuntimeError(self.context_state.error_message)
-        if isinstance(self.context_state, NoContext):
+        state = self.context_state
+        if isinstance(state, ContextFailed):
+            if isinstance(state.error, str):
+                raise Exception(state.error)
+            raise state.error
+        if isinstance(state, NoContext):
             self._ensure_context_for_document(document_uri)
-        if not isinstance(self.context_state, ContextLoaded):
-            raise RuntimeError("Context is not loaded")
-        return self.context_state.lsp_context
+        if isinstance(state, ContextLoaded):
+            return state.lsp_context
+        raise RuntimeError("Context failed to load")
 
     def _ensure_context_for_document(
         self,
@@ -866,7 +890,7 @@ class SQLMeshLanguageServer:
                 context = self.context_state.lsp_context.context
             elif isinstance(self.context_state, ContextFailed) and self.context_state.context:
                 context = self.context_state.context
-            self.context_state = ContextFailed(error_message=str(e), context=context)
+            self.context_state = ContextFailed(error=e, context=context)
             return None
 
     @staticmethod

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from pathlib import Path
-import uuid
 from sqlmesh.core.context import Context
 import typing as t
 
@@ -35,14 +34,12 @@ class LSPContext:
     map: t.Dict[Path, t.Union[ModelTarget, AuditTarget]]
     _render_cache: t.Dict[Path, t.List[RenderModelEntry]]
     _lint_cache: t.Dict[Path, t.List[AnnotatedRuleViolation]]
-    _version_id: str
     """
     This is a version ID for the context. It is used to track changes to the context. It can be used to 
     return a version number to the LSP client.
     """
 
     def __init__(self, context: Context) -> None:
-        self._version_id = str(uuid.uuid4())
         self.context = context
         self._render_cache = {}
         self._lint_cache = {}
@@ -69,11 +66,6 @@ class LSPContext:
             **model_map,
             **audit_map,
         }
-
-    @property
-    def version_id(self) -> str:
-        """Get the version ID for the context."""
-        return self._version_id
 
     def render_model(self, uri: URI) -> t.List[RenderModelEntry]:
         """Get rendered models for a file, using cache when available.
