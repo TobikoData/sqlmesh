@@ -767,7 +767,7 @@ class SQLMeshLanguageServer:
                 get_sql_completions(None, URI(params.text_document.uri))
                 return None
 
-    def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], int]:
+    def _get_diagnostics_for_uri(self, uri: URI) -> t.Tuple[t.List[types.Diagnostic], str]:
         """Get diagnostics for a specific URI, returning (diagnostics, result_id).
 
         Since we no longer track version numbers, we always return 0 as the result_id.
@@ -776,12 +776,16 @@ class SQLMeshLanguageServer:
         try:
             context = self._context_get_or_load(uri)
             diagnostics = context.lint_model(uri)
-            return LSPContext.diagnostics_to_lsp_diagnostics(diagnostics), 0
+            return LSPContext.diagnostics_to_lsp_diagnostics(
+                diagnostics
+            ), self.context_state.version_id
         except ConfigError as config_error:
             diagnostic, error = context_error_to_diagnostic(config_error, uri_filter=uri)
             if diagnostic:
-                return [diagnostic[1]], 0
-            return [], 0
+                location, diag = diagnostic
+                if location == uri.value:
+                    return [diag], self.context_state.version_id
+            return [], self.context_state.version_id
 
     def _context_get_or_load(self, document_uri: t.Optional[URI] = None) -> LSPContext:
         state = self.context_state
