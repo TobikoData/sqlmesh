@@ -34,10 +34,6 @@ class LSPContext:
     map: t.Dict[Path, t.Union[ModelTarget, AuditTarget]]
     _render_cache: t.Dict[Path, t.List[RenderModelEntry]]
     _lint_cache: t.Dict[Path, t.List[AnnotatedRuleViolation]]
-    """
-    This is a version ID for the context. It is used to track changes to the context. It can be used to 
-    return a version number to the LSP client.
-    """
 
     def __init__(self, context: Context) -> None:
         self.context = context
