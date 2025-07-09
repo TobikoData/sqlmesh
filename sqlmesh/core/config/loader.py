@@ -194,7 +194,8 @@ def load_config_from_python_module(
 
     if config_obj is None or not isinstance(config_obj, Config):
         raise ConfigError(
-            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'."
+            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'.",
+            module_path,
         )
 
     return (
