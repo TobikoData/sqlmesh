@@ -271,6 +271,48 @@ const setup = async (tempDir: string) => {
 }
 
 test.describe('Bad config.py/config.yaml file issues', () => {
+  test('sqlmesh init, then corrupted config.yaml, bad yaml', async ({
+    page,
+    sharedCodeServer,
+  }) => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+    )
+    await setup(tempDir)
+    await createPythonInterpreterSettingsSpecifier(tempDir)
+
+    const configYamlPath = path.join(tempDir, 'config.yaml')
+    // Write an invalid YAML to config.yaml
+    await fs.writeFile(configYamlPath, 'invalid_yaml; asdfasudfy')
+
+    await page.goto(
+      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+    )
+    await page.waitForLoadState('networkidle')
+
+    // Open full_model.sql model
+    await page
+      .getByRole('treeitem', { name: 'models', exact: true })
+      .locator('a')
+      .click()
+    await page
+      .getByRole('treeitem', { name: 'full_model.sql', exact: true })
+      .locator('a')
+      .click()
+
+    // Wait for the error to appear
+    await page.waitForSelector('text=Error creating context')
+
+    // Open the problems view
+    await runCommand(page, 'View: Focus Problems')
+
+    // Asser that the error is present in the problems view
+    await page
+      .getByText('Invalid YAML configuration:')
+      .first()
+      .isVisible({ timeout: 5_000 })
+  })
+
   test('sqlmesh init, then corrupted config.yaml, bad parameters', async ({
     page,
     sharedCodeServer,
