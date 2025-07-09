@@ -754,7 +754,7 @@ class Scheduler:
         """
         signals = snapshot.is_model and snapshot.model.render_signal_calls()
 
-        if not signals:
+        if not (signals and signals.signals_to_kwargs):
             return intervals
 
         self.console.start_signal_progress(
