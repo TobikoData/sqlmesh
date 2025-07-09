@@ -151,6 +151,9 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
+        import pandas as pd
+        import numpy as np
+
         self.engine_adapter.create_schema(self._qualified_fixture_schema)
 
         for name, values in self.body.get("inputs", {}).items():
@@ -200,6 +203,10 @@ class ModelTest(unittest.TestCase):
                     }
             else:
                 query_or_df = self._create_df(values, columns=columns_to_known_types)
+
+            # Convert NaN/NaT values to None if DataFrame
+            if isinstance(query_or_df, pd.DataFrame):
+                query_or_df = query_or_df.replace({np.nan: None})
 
             self.engine_adapter.create_view(
                 self._test_fixture_table(name), query_or_df, columns_to_known_types

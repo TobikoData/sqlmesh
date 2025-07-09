@@ -2753,3 +2753,64 @@ def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path:
 
     output = captured_output.stdout
     assert "test" not in output.lower()
+
+
+def test_test_generation_with_timestamp_nat(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo); SELECT ts_col FROM sqlmesh_example.bar;"
+    )
+    bar_sql_file = tmp_path / "models" / "bar.sql"
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT ts_col FROM external_table;")
+
+    context = Context(paths=tmp_path, config=config)
+
+    # This simulates the scenario where upstream models have NULL timestamp values
+    input_queries = {
+        "sqlmesh_example.bar": """
+        SELECT ts_col FROM (
+            VALUES
+                (TIMESTAMP '2024-09-20 11:30:00.123456789'),
+                (CAST(NULL AS TIMESTAMP)),
+                (TIMESTAMP '2024-09-21 15:45:00.987654321')
+        ) AS t(ts_col)
+        """
+    }
+
+    # This should not raise an exception even with NULL timestamp values
+    context.create_test("sqlmesh_example.foo", input_queries=input_queries, overwrite=True)
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+    assert len(test) == 1
+    assert "test_foo" in test
+
+    # Verify that the test was created with correct input and output data
+    inputs = test["test_foo"]["inputs"]
+    outputs = test["test_foo"]["outputs"]
+
+    # Check that we have the expected input table
+    assert '"memory"."sqlmesh_example"."bar"' in inputs
+    bar_data = inputs['"memory"."sqlmesh_example"."bar"']
+
+    # Verify we have 3 rows (2 with timestamps, 1 with NULL)
+    assert len(bar_data) == 3
+
+    # Verify that non-NULL timestamps are preserved
+    assert bar_data[0]["ts_col"] == datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)
+    assert bar_data[2]["ts_col"] == datetime.datetime(2024, 9, 21, 15, 45, 0, 987654)
+
+    # Verify that NULL timestamp is represented as None (not NaT)
+    assert bar_data[1]["ts_col"] is None
+
+    # Verify that the output matches the input (since the model just selects from bar)
+    query_output = outputs["query"]
+    assert len(query_output) == 3
+    assert query_output[0]["ts_col"] == datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)
+    assert query_output[1]["ts_col"] is None
+    assert query_output[2]["ts_col"] == datetime.datetime(2024, 9, 21, 15, 45, 0, 987654)
