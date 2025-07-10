@@ -19,11 +19,13 @@ from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMe
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
     MergeStateStatus,
+    GithubCheckConclusion,
 )
 from sqlmesh.integrations.github.cicd.controller import GithubController
 from sqlmesh.integrations.github.cicd.command import _update_pr_environment
 from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
+from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.github
 
@@ -644,3 +646,54 @@ def test_get_plan_summary_doesnt_truncate_backfill_list(
 * `memory.sushi.waiter_revenue_by_day`: [2025-06-30 - 2025-07-06]"""
         in summary
     )
+
+
+def test_get_plan_summary_includes_warnings_and_errors(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    controller._console.log_warning("Warning 1\nWith multiline")
+    controller._console.log_warning("Warning 2")
+    controller._console.log_error("Error 1")
+
+    summary = controller.get_plan_summary(controller.prod_plan)
+
+    assert ("> [!WARNING]\n>\n> - Warning 1\n> With multiline\n>\n> - Warning 2\n\n") in summary
+
+    assert ("> [!CAUTION]\n>\n> Error 1\n\n") in summary
+
+
+def test_get_pr_environment_summary_includes_warnings_and_errors(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    controller._console.log_warning("Warning 1")
+    controller._console.log_error("Error 1")
+
+    # completed with no exception triggers a SUCCESS conclusion and only shows warnings
+    success_summary = controller.get_pr_environment_summary(
+        conclusion=GithubCheckConclusion.SUCCESS
+    )
+    assert "> [!WARNING]\n>\n> Warning 1\n" in success_summary
+    assert "> [!CAUTION]\n>\n> Error 1" not in success_summary
+
+    # since they got consumed in the previous call
+    controller._console.log_warning("Warning 1")
+    controller._console.log_error("Error 1")
+
+    # completed with an exception triggers a FAILED conclusion and shows errors
+    error_summary = controller.get_pr_environment_summary(
+        conclusion=GithubCheckConclusion.FAILURE, exception=SQLMeshError("Something broke")
+    )
+    assert "> [!WARNING]\n>\n> Warning 1\n" in error_summary
+    assert "> [!CAUTION]\n>\n> Error 1" in error_summary

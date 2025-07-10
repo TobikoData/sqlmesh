@@ -119,10 +119,7 @@ def _update_pr_environment(controller: GithubController) -> bool:
     except Exception as e:
         logger.exception("Error occurred when updating PR environment")
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED,
-            exception=e,
-            plan=controller.pr_plan_or_none,
-            plan_flags=controller.pr_plan_flags,
+            status=GithubCheckStatus.COMPLETED, exception=e
         )
         return (
             conclusion is not None
