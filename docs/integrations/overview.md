@@ -17,6 +17,7 @@ SQLMesh supports the following execution engines for running SQLMesh projects (e
 * [ClickHouse](./engines/clickhouse.md) (clickhouse)
 * [Databricks](./engines/databricks.md) (databricks)
 * [DuckDB](./engines/duckdb.md) (duckdb)
+* [Fabric](./engines/fabric.md) (fabric)
 * [MotherDuck](./engines/motherduck.md) (motherduck)
 * [MSSQL](./engines/mssql.md) (mssql)
 * [MySQL](./engines/mysql.md) (mysql)
