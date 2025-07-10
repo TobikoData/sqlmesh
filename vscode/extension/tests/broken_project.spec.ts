@@ -358,4 +358,46 @@ test.describe('Bad config.py/config.yaml file issues', () => {
       .first()
       .isVisible({ timeout: 5_000 })
   })
+
+  test('sushi example, correct python, bad config', async ({
+    page,
+    sharedCodeServer,
+  }) => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+    )
+    await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+    await createPythonInterpreterSettingsSpecifier(tempDir)
+
+    const configPyPath = path.join(tempDir, 'config.py')
+    // Write an invalid Python to config.py
+    await fs.writeFile(configPyPath, 'config = {}')
+
+    await page.goto(
+      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+    )
+    await page.waitForLoadState('networkidle')
+
+    // Open customers.sql model
+    await page
+      .getByRole('treeitem', { name: 'models', exact: true })
+      .locator('a')
+      .click()
+    await page
+      .getByRole('treeitem', { name: 'customers.sql', exact: true })
+      .locator('a')
+      .click()
+
+    // Expect the error to appear
+    await page.waitForSelector('text=Error creating context')
+
+    // Open the problems view
+    await runCommand(page, 'View: Focus Problems')
+
+    // Assert that the error is present in the problems view
+    await page
+      .getByText('Config needs to be a valid object of type')
+      .first()
+      .isVisible({ timeout: 5_000 })
+  })
 })
