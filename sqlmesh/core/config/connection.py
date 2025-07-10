@@ -1703,7 +1703,7 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {
             "database": self.database,
-            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+            "catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY,
         }
 
 
