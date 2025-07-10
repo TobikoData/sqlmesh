@@ -1756,6 +1756,7 @@ def test_dialects(ctx: TestContext):
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
                 "clickhouse": pd.Timestamp("2020-01-01 00:00:00"),
+                "fabric": pd.Timestamp("2020-01-01 00:00:00"),
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
                 "databricks": pd.Timestamp("2020-01-01 00:00:00"),
