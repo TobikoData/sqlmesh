@@ -846,7 +846,7 @@ def test_merge_pr_has_no_changes(
     assert GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_skipped
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
-        ":next_track_button: Skipped creating or updating PR Environment `hello_world_2`. No changes were detected compared to the prod environment."
+        ":next_track_button: Skipped creating or updating PR Environment `hello_world_2` :next_track_button:\n\nNo changes were detected compared to the prod environment."
         in pr_checks_runs[2]["output"]["summary"]
     )
 

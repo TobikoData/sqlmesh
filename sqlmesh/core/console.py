@@ -3049,6 +3049,7 @@ class CaptureTerminalConsole(TerminalConsole):
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
         self._captured_outputs: t.List[str] = []
+        self._warnings: t.List[str] = []
         self._errors: t.List[str] = []
 
     @property
@@ -3056,27 +3057,39 @@ class CaptureTerminalConsole(TerminalConsole):
         return "".join(self._captured_outputs)
 
     @property
+    def captured_warnings(self) -> str:
+        return "".join(self._warnings)
+
+    @property
     def captured_errors(self) -> str:
         return "".join(self._errors)
 
     def consume_captured_output(self) -> str:
-        output = self.captured_output
-        self.clear_captured_outputs()
-        return output
+        try:
+            return self.captured_output
+        finally:
+            self._captured_outputs = []
+
+    def consume_captured_warnings(self) -> str:
+        try:
+            return self.captured_warnings
+        finally:
+            self._warnings = []
 
     def consume_captured_errors(self) -> str:
-        errors = self.captured_errors
-        self.clear_captured_errors()
-        return errors
+        try:
+            return self.captured_errors
+        finally:
+            self._errors = []
 
-    def clear_captured_outputs(self) -> None:
-        self._captured_outputs = []
-
-    def clear_captured_errors(self) -> None:
-        self._errors = []
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        if short_message not in self._warnings:
+            self._warnings.append(short_message)
+        super().log_warning(short_message, long_message)
 
     def log_error(self, message: str) -> None:
-        self._errors.append(message)
+        if message not in self._errors:
+            self._errors.append(message)
         super().log_error(message)
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
@@ -3087,9 +3100,8 @@ class CaptureTerminalConsole(TerminalConsole):
             super().log_skipped_models(snapshot_names)
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
-        if errors:
-            self._errors.append("\n".join(str(ex) for ex in errors))
-            super().log_failed_models(errors)
+        self._errors.extend([str(ex) for ex in errors if str(ex) not in self._errors])
+        super().log_failed_models(errors)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
@@ -3110,6 +3122,11 @@ class MarkdownConsole(CaptureTerminalConsole):
     AUDIT_PADDING = 7
 
     def __init__(self, **kwargs: t.Any) -> None:
+        self.alert_block_max_content_length = int(kwargs.pop("alert_block_max_content_length", 500))
+        self.alert_block_collapsible_threshold = int(
+            kwargs.pop("alert_block_collapsible_threshold", 200)
+        )
+
         super().__init__(
             **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
         )
@@ -3434,18 +3451,40 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(msg)
         self._errors.append(msg)
 
-    def log_error(self, message: str) -> None:
-        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+    @property
+    def captured_warnings(self) -> str:
+        return self._render_alert_block("WARNING", self._warnings)
 
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
-        logger.warning(long_message or short_message)
+    @property
+    def captured_errors(self) -> str:
+        return self._render_alert_block("CAUTION", self._errors)
 
-        if not short_message.endswith("\n"):
-            short_message += (
-                "\n"  # so that the closing ``` ends up on a newline which is important for GitHub
-            )
+    def _render_alert_block(self, block_type: str, items: t.List[str]) -> str:
+        # GitHub Markdown alert syntax, https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts
+        if items:
+            item_contents = ""
+            list_indicator = "- " if len(items) > 1 else ""
 
-        self._print(f"```\n\\[WARNING] {short_message}```\n\n")
+            for item in items:
+                item = item.replace("\n", "\n> ")
+                item_contents += f">\n> {list_indicator}{item}\n"
+
+                if len(item_contents) > self.alert_block_max_content_length:
+                    truncation_msg = (
+                        "...\n>\n> Truncated. Please check the console for full information.\n"
+                    )
+                    item_contents = item_contents[
+                        0 : self.alert_block_max_content_length - len(truncation_msg)
+                    ]
+                    item_contents += truncation_msg
+                    break
+
+            if len(item_contents) > self.alert_block_collapsible_threshold:
+                item_contents = f"> <details>\n{item_contents}> </details>"
+
+            return f"> [!{block_type}]\n{item_contents}\n"
+
+        return ""
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -3472,7 +3511,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super()._print(value, **kwargs)
         for captured_output in self._captured_outputs:
             print(captured_output)
-        self.clear_captured_outputs()
+        self.consume_captured_output()
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)
