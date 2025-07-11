@@ -23,7 +23,9 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=27.0.0",
+
+    # TODO: Change this to the real release before merge!
+    "sqlglot[rs] @ git+https://github.com/mattiasthalen/sqlglot@fix/fabric-ensure-varchar-max", #~=27.0.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -103,7 +105,7 @@ dev = [
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
 duckdb = []
-fabric = ["pyodbc"]
+fabric = ["pyodbc>=5.0.0"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
