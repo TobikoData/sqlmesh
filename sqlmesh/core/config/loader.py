@@ -189,7 +189,7 @@ def load_config_from_python_module(
             config_module = import_python_file(module_path, module_path.parent)
     except Exception as e:
         raise ConfigError(
-            f"Failed to load config file: {str(e)}",
+            f"Failed to load config file: {e}",
             location=module_path,
         )
 
