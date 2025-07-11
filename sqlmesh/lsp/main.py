@@ -85,7 +85,7 @@ class ContextFailed:
     """State when context failed to load with an error message."""
 
     error: ContextFailedError
-    context: t.Optional[Context] = None
+    context: Context
     version_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
@@ -227,24 +227,26 @@ class SQLMeshLanguageServer:
         self, ls: LanguageServer, uri: URI, document_uri: str
     ) -> None:
         """Helper method to reload context and publish diagnostics."""
+        context: t.Optional[Context] = None
         if isinstance(self.context_state, NoContext):
             pass
         elif isinstance(self.context_state, ContextFailed):
             if self.context_state.context:
+                context = self.context_state.context
                 try:
-                    self.context_state.context.load()
+                    context.load()
                     # Creating a new LSPContext will naturally create fresh caches
-                    self.context_state = ContextLoaded(
-                        lsp_context=LSPContext(self.context_state.context)
-                    )
+                    self.context_state = ContextLoaded(lsp_context=LSPContext(context))
                 except Exception as e:
                     ls.log_trace(f"Error loading context: {e}")
-                    context = (
+                    error_context = (
                         self.context_state.context
                         if hasattr(self.context_state, "context")
                         else None
                     )
-                    self.context_state = ContextFailed(error=e, context=context)
+                    if error_context is None:
+                        raise RuntimeError(f"Context should always be set.")
+                    self.context_state = ContextFailed(error=e, context=error_context)
             else:
                 # If there's no context, reset to NoContext and try to create one from scratch
                 ls.log_trace("No partial context available, attempting fresh creation")
@@ -860,9 +862,11 @@ class SQLMeshLanguageServer:
         Returns:
             A new LSPContext instance wrapping the created context, or None if creation fails
         """
+        context = None
         try:
             if isinstance(self.context_state, NoContext):
-                context = self.context_class(paths=paths)
+                context = self.context_class(paths=paths, load=False)
+                context.load()
                 loaded_sqlmesh_message(self.server, paths[0])
             elif isinstance(self.context_state, ContextFailed):
                 if self.context_state.context:
@@ -870,7 +874,8 @@ class SQLMeshLanguageServer:
                     context.load()
                 else:
                     # If there's no context (initial creation failed), try creating again
-                    context = self.context_class(paths=paths)
+                    context = self.context_class(paths=paths, load=False)
+                    context.load()
                     loaded_sqlmesh_message(self.server, paths[0])
             else:
                 context = self.context_state.lsp_context.context
@@ -889,11 +894,12 @@ class SQLMeshLanguageServer:
             self.server.log_trace(f"Error creating context: {e}")
             # Store the error in context state so subsequent requests show the actual error
             # Try to preserve any partially loaded context if it exists
-            context = None
             if isinstance(self.context_state, ContextLoaded):
                 context = self.context_state.lsp_context.context
             elif isinstance(self.context_state, ContextFailed) and self.context_state.context:
                 context = self.context_state.context
+            if context is None:
+                raise RuntimeError("Context should always be set.")
             self.context_state = ContextFailed(error=e, context=context)
             return None
 
