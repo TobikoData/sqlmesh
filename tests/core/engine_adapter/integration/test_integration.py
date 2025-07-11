@@ -2158,14 +2158,12 @@ def test_value_normalization(
     input_data: t.Tuple[t.Any, ...],
     expected_results: t.Tuple[str, ...],
 ) -> None:
-    if (
-        ctx.dialect == "trino"
-        and ctx.engine_adapter.current_catalog_type == "hive"
-        and column_type == exp.DataType.Type.TIMESTAMPTZ
-    ):
-        pytest.skip(
-            "Trino on Hive doesnt support creating tables with TIMESTAMP WITH TIME ZONE fields"
-        )
+    # Skip TIMESTAMPTZ tests for engines that don't support it
+    if column_type == exp.DataType.Type.TIMESTAMPTZ:
+        if ctx.dialect == "trino" and ctx.engine_adapter.current_catalog_type == "hive":
+            pytest.skip("Trino on Hive doesn't support TIMESTAMP WITH TIME ZONE fields")
+        if ctx.dialect == "fabric":
+            pytest.skip("Fabric doesn't support TIMESTAMP WITH TIME ZONE fields")
 
     if not isinstance(ctx.engine_adapter, RowDiffMixin):
         pytest.skip(
