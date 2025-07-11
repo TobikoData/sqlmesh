@@ -43,7 +43,13 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql", "azuresql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {
+    "postgres",
+    "gcp_postgres",
+    "mysql",
+    "mssql",
+    "azuresql",
+}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -1504,7 +1510,14 @@ class MSSQLConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        driver = data.get("driver", "pymssql")
+        # Get the default driver for this specific class
+        default_driver = "pymssql"
+        if hasattr(cls, "model_fields") and "driver" in cls.model_fields:
+            field_info = cls.model_fields["driver"]
+            if hasattr(field_info, "default") and field_info.default is not None:
+                default_driver = field_info.default
+
+        driver = data.get("driver", default_driver)
 
         # Define the mapping of driver to import module and extra name
         driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
@@ -1669,6 +1682,34 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
+
+
+class FabricConnectionConfig(MSSQLConnectionConfig):
+    """
+    Fabric Connection Configuration.
+    Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
+    It is recommended to use the 'pyodbc' driver for Fabric.
+    """
+
+    type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric"  # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
+    driver: t.Literal["pyodbc"] = "pyodbc"
+    autocommit: t.Optional[bool] = True
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+
+        return FabricAdapter
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            "catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY,
+        }
 
 
 class SparkConnectionConfig(ConnectionConfig):
