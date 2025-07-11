@@ -1775,11 +1775,15 @@ class PythonModel(_Model):
         execution_time = to_datetime(execution_time or c.EPOCH)
 
         variables = env.get(c.SQLMESH_VARS, {})
+        variables.update(env.get(c.SQLMESH_VARS_METADATA, {}))
         variables.update(kwargs.pop("variables", {}))
 
         blueprint_variables = {
             k: d.parse_one(v.sql, dialect=self.dialect) if isinstance(v, SqlValue) else v
-            for k, v in env.get(c.SQLMESH_BLUEPRINT_VARS, {}).items()
+            for k, v in {
+                **env.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+                **env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
+            }.items()
         }
         try:
             kwargs = {
