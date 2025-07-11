@@ -38,6 +38,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.dag import DAG
@@ -71,7 +72,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
-        create_scheduler: t.Callable[[t.Iterable[Snapshot]], Scheduler],
+        create_scheduler: t.Callable[[t.Iterable[Snapshot], SnapshotEvaluator], Scheduler],
         default_catalog: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
@@ -88,6 +89,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> None:
         self._circuit_breaker = circuit_breaker
+        self.snapshot_evaluator = self.snapshot_evaluator.set_correlation_id(
+            CorrelationId.from_plan_id(plan.plan_id)
+        )
 
         self.console.start_plan_evaluation(plan)
         analytics.collector.on_plan_apply_start(
@@ -106,6 +110,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         else:
             analytics.collector.on_plan_apply_end(plan_id=plan.plan_id)
         finally:
+            self.snapshot_evaluator.recycle()
             self.console.stop_plan_evaluation()
 
     def _evaluate_stages(
@@ -228,7 +233,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success("SKIP: No model batches to execute")
             return
 
-        scheduler = self.create_scheduler(stage.all_snapshots.values())
+        scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -249,7 +254,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         # If there are any snapshots to be audited, we'll reuse the scheduler's internals to audit them
-        scheduler = self.create_scheduler(audit_snapshots)
+        scheduler = self.create_scheduler(audit_snapshots, self.snapshot_evaluator)
         completion_status = scheduler.audit(
             plan.environment,
             plan.start,
@@ -335,9 +340,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             )
             if stage.demoted_environment_naming_info:
                 self._demote_snapshots(
-                    stage.demoted_snapshots,
+                    [stage.all_snapshots[s.snapshot_id] for s in stage.demoted_snapshots],
                     stage.demoted_environment_naming_info,
+                    deployability_index=stage.deployability_index,
                     on_complete=lambda s: self.console.update_promotion_progress(s, False),
+                    snapshots=stage.all_snapshots,
                 )
 
             completed = True
@@ -377,12 +384,23 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
     def _demote_snapshots(
         self,
-        target_snapshots: t.Iterable[SnapshotTableInfo],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         self.snapshot_evaluator.demote(
-            target_snapshots, environment_naming_info, on_complete=on_complete
+            target_snapshots,
+            environment_naming_info,
+            table_mapping=to_view_mapping(
+                snapshots.values(),
+                environment_naming_info,
+                default_catalog=self.default_catalog,
+                dialect=self.snapshot_evaluator.adapter.dialect,
+            ),
+            deployability_index=deployability_index,
+            on_complete=on_complete,
         )
 
     def _restatement_intervals_across_all_environments(

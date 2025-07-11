@@ -41,7 +41,7 @@ def make_python_env(
     macros: MacroRegistry,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     used_variables: t.Optional[t.Set[str]] = None,
-    path: t.Optional[str | Path] = None,
+    path: t.Optional[Path] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     strict_resolution: bool = True,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
@@ -265,12 +265,14 @@ def validate_extra_and_required_fields(
     klass: t.Type[PydanticModel],
     provided_fields: t.Set[str],
     entity_name: str,
+    path: t.Optional[Path] = None,
 ) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
         field_names = "'" + "', '".join(missing_required_fields) + "'"
         raise_config_error(
-            f"Please add required field{'s' if len(missing_required_fields) > 1 else ''} {field_names} to the {entity_name}."
+            f"Please add required field{'s' if len(missing_required_fields) > 1 else ''} {field_names} to the {entity_name}.",
+            path,
         )
 
     extra_fields = klass.extra_fields(provided_fields)
@@ -293,7 +295,8 @@ def validate_extra_and_required_fields(
             similar_msg = "\n\n  " + "\n  ".join(similar) if similar else ""
 
         raise_config_error(
-            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}"
+            f"Invalid field name{'s' if len(extra_fields) > 1 else ''} present in the {entity_name}: {extra_field_names}{similar_msg}",
+            path,
         )
 
 
@@ -438,6 +441,19 @@ def sorted_python_env_payloads(python_env: t.Dict[str, Executable]) -> t.List[st
         return result
 
     return [_executable_to_str(k, v) for k, v in sort_python_env(python_env)]
+
+
+def parse_strings_with_macro_refs(value: t.Any, dialect: DialectType) -> t.Any:
+    if isinstance(value, str) and "@" in value:
+        return exp.maybe_parse(value, dialect=dialect)
+
+    if isinstance(value, dict):
+        for k, v in dict(value).items():
+            value[k] = parse_strings_with_macro_refs(v, dialect)
+    elif isinstance(value, list):
+        value = [parse_strings_with_macro_refs(v, dialect) for v in value]
+
+    return value
 
 
 expression_validator: t.Callable = field_validator(

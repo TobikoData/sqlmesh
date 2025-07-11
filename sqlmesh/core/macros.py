@@ -67,6 +67,7 @@ class RuntimeStage(Enum):
     CREATING = "creating"
     EVALUATING = "evaluating"
     PROMOTING = "promoting"
+    DEMOTING = "demoting"
     AUDITING = "auditing"
     TESTING = "testing"
     BEFORE_ALL = "before_all"
@@ -171,7 +172,7 @@ class MacroEvaluator:
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         default_catalog: t.Optional[str] = None,
-        path: Path = Path(),
+        path: t.Optional[Path] = None,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         model_fqn: t.Optional[str] = None,
     ):
@@ -1384,7 +1385,7 @@ for m in macro.get_registry().values():
 def call_macro(
     func: t.Callable,
     dialect: DialectType,
-    path: Path,
+    path: t.Optional[Path],
     provided_args: t.Tuple[t.Any, ...],
     provided_kwargs: t.Dict[str, t.Any],
     **optional_kwargs: t.Any,
@@ -1431,7 +1432,7 @@ def _coerce(
     expr: t.Any,
     typ: t.Any,
     dialect: DialectType,
-    path: Path,
+    path: t.Optional[Path] = None,
     strict: bool = False,
 ) -> t.Any:
     """Coerces the given expression to the specified type on a best-effort basis."""

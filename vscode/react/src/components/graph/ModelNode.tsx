@@ -8,7 +8,9 @@ import { Position, type NodeProps } from 'reactflow'
 import { ModelNodeHeaderHandles } from './ModelNodeHeaderHandles'
 import { ModelColumns } from './ModelColumns'
 import { fromAPIColumn, type Column } from '@/domain/column'
-import type { ModelEncodedFQN } from '@/domain/models'
+import { decode, type ModelEncodedFQN } from '@/domain/models'
+import { toKeys } from './types'
+import { MAX_VISIBLE_COLUMNS } from './constants'
 
 export const EnumLineageNodeModelType = {
   ...ModelType,
@@ -25,11 +27,12 @@ export type LineageNodeModelType = keyof typeof EnumLineageNodeModelType
 export type ColumnType = keyof typeof EnumColumnType
 
 export default function ModelNode({
-  id,
+  id: idProp,
   data,
   sourcePosition,
   targetPosition,
 }: NodeProps<GraphNodeData>): JSX.Element {
+  const id = idProp as ModelEncodedFQN
   const nodeData: GraphNodeData = data ?? {
     label: '',
     type: EnumLineageNodeModelType.unknown,
@@ -52,37 +55,28 @@ export default function ModelNode({
 
   const columns: Column[] = useMemo(() => {
     const modelsArray = Object.values(models)
-    const decodedId = decodeURIComponent(id)
+    const decodedId = decode(id)
     const model = modelsArray.find((m: Model) => m.fqn === decodedId)
     const modelColumns = model?.columns?.map(fromAPIColumn) ?? []
 
-    Object.keys(lineage[decodedId]?.columns ?? {}).forEach((column: string) => {
-      const found = modelColumns.find(({ name }: any) => {
-        try {
-          return name === decodeURI(column)
-        } catch {
-          return name === column
-        }
-      })
-
+    toKeys(lineage[decodedId]?.columns ?? {}).forEach(column => {
+      const found = modelColumns.find(({ name }) => name === column)
       if (isNil(found)) {
         modelColumns.push(
           fromAPIColumn({ name: column, type: EnumColumnType.UNKNOWN }),
         )
       }
     })
-
-    modelColumns.forEach((column: any) => {
+    return modelColumns.map(column => {
       let columnType = column.type ?? EnumColumnType.UNKNOWN
-
       if (columnType.startsWith(EnumColumnType.STRUCT)) {
         columnType = EnumColumnType.STRUCT
       }
-
-      column.type = columnType
+      return {
+        ...column,
+        type: columnType,
+      }
     })
-
-    return modelColumns
   }, [id, models, lineage])
 
   const highlightedNodeModels = useMemo(
@@ -135,7 +129,7 @@ export default function ModelNode({
   // Ensure nodeData.type is a valid LineageNodeModelType
   const nodeType: LineageNodeModelType = Object.values(
     EnumLineageNodeModelType,
-  ).includes(nodeData.type as any)
+  ).includes(nodeData.type)
     ? (nodeData.type as LineageNodeModelType)
     : EnumLineageNodeModelType.unknown
 
@@ -221,12 +215,13 @@ export default function ModelNode({
             ? undefined
             : handleSelect
         }
-        count={hasHighlightedNodes ? undefined : columns.length}
+        numberOfColumns={columns.length}
       />
       {showColumns && (
         <ModelColumns
           className="nowheel rounded-b-lg bg-theme-lighter text-xs"
           nodeId={id}
+          limit={MAX_VISIBLE_COLUMNS}
           columns={columns}
           disabled={shouldDisableColumns}
           withHandles={true}

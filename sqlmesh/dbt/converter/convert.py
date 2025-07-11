@@ -207,6 +207,8 @@ def _convert_models(
 
         if model.kind.is_seed:
             # this will produce the original seed file, eg "items.csv"
+            if model._path is None:
+                raise ValueError(f"Unhandled model path for model {model_name}")
             seed_filename = model._path.relative_to(input_paths.seeds)
 
             # seed definition - rename "items.csv" -> "items.sql"
@@ -219,6 +221,8 @@ def _convert_models(
             assert isinstance(model.kind, SeedKind)
             model.kind.path = str(Path("../seeds", seed_filename))
         else:
+            if model._path is None:
+                raise ValueError(f"Unhandled model path for model {model_name}")
             if input_paths.models in model._path.parents:
                 model_filename = model._path.relative_to(input_paths.models)
             elif input_paths.snapshots in model._path.parents:
@@ -290,6 +294,8 @@ def _convert_standalone_audits(
 
         audit_definition_string = ";\n".join(stringified)
 
+        if audit._path is None:
+            continue
         audit_filename = audit._path.relative_to(input_paths.tests)
         audit_output_path = output_paths.audits / audit_filename
         audit_output_path.write_text(audit_definition_string)

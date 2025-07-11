@@ -91,6 +91,7 @@ def load_config_from_paths(
             "SQLMesh project config could not be found. Point the cli to the project path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
         )
 
+    yaml_config_path: t.Optional[Path] = None
     for path in [*project_paths, *personal_paths]:
         if not path.exists():
             continue
@@ -107,8 +108,9 @@ def load_config_from_paths(
         if extension in ("yml", "yaml"):
             if config_name != "config" and not python_config:
                 raise ConfigError(
-                    "YAML configs do not support multiple configs. Use Python instead."
+                    "YAML configs do not support multiple configs. Use Python instead.",
                 )
+            yaml_config_path = path.resolve()
             non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
             try:
@@ -149,7 +151,8 @@ def load_config_from_paths(
     except ValidationError as e:
         raise ConfigError(
             validation_error_message(e, "Invalid project config:")
-            + "\n\nVerify your config.yaml and environment variables."
+            + "\n\nVerify your config.yaml and environment variables.",
+            location=yaml_config_path,
         )
 
     no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
@@ -166,7 +169,14 @@ def load_config_from_paths(
 
 
 def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
-    return yaml_load(path)
+    content = yaml_load(path)
+    if not isinstance(content, dict):
+        raise ConfigError(
+            f"Invalid YAML configuration: expected a dictionary but got {type(content).__name__}. "
+            f"Please check the YAML syntax in your config file.",
+            location=path,
+        )
+    return content
 
 
 def load_config_from_python_module(
@@ -184,7 +194,8 @@ def load_config_from_python_module(
 
     if config_obj is None or not isinstance(config_obj, Config):
         raise ConfigError(
-            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'."
+            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'.",
+            module_path,
         )
 
     return (

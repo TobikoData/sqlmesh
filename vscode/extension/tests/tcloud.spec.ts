@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
@@ -9,7 +9,11 @@ import {
   SUSHI_SOURCE_PATH,
 } from './utils'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
+import {
+  createPythonInterpreterSettingsSpecifier,
+  startCodeServer,
+  stopCodeServer,
+} from './utils_code_server'
 
 /**
  * Helper function to create and set up a Python virtual environment
@@ -34,8 +38,7 @@ async function setupPythonEnvironment(envDir: string): Promise<string> {
   return pythonDetails.pythonPath
 }
 
-test('not signed in, shows sign in window', async ({ page }, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+test('not signed in, shows sign in window', async ({ page }) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -185,8 +188,7 @@ test('signed in and not installed shows installation window', async ({
 
 test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when ready', async ({
   page,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -347,8 +349,7 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
 // but the test is still useful when running it manually.
 test.skip('tcloud not signed in and not installed, shows sign in window and then fact that loaded', async ({
   page,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -384,8 +385,8 @@ test.skip('tcloud not signed in and not installed, shows sign in window and then
   // Start VS Code
   const context = await startCodeServer({
     tempDir,
-    placeFileWithPythonInterpreter: true,
   })
+  await createPythonInterpreterSettingsSpecifier(tempDir)
   await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
 
   try {

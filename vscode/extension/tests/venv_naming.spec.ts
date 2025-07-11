@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { test } from './fixtures'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
@@ -9,10 +9,8 @@ import {
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
 } from './utils'
-import { startCodeServer, stopCodeServer } from './utils_code_server'
 
-test('venv being named .env', async ({ page }, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+test('venv being named .env', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -36,13 +34,10 @@ test('venv being named .env', async ({ page }, testInfo) => {
     spaces: 2,
   })
 
-  const context = await startCodeServer({ tempDir })
-
-  try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
-    await openLineageView(page)
-    await page.waitForSelector('text=Loaded SQLMesh Context')
-  } finally {
-    await stopCodeServer(context)
-  }
+  await page.goto(
+    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+  )
+  await page.waitForSelector('text=models')
+  await openLineageView(page)
+  await page.waitForSelector('text=Loaded SQLMesh Context')
 })

@@ -3290,7 +3290,7 @@ def test_no_depends_on_runtime_jinja_query():
     model = load_sql_based_model(expressions)
     with pytest.raises(
         ConfigError,
-        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
+        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime",
     ):
         model.validate_definition()
 
@@ -6436,7 +6436,7 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         stamp="@{stamp}",
         tags=["@{tag1}", "@{tag2}"],
-        description="Model desc @{test_}",
+        description="'Model desc @{test_}'",
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(
@@ -6480,6 +6480,87 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
 
 
+def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+            MODEL (
+              name db.employees,
+              kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key @{key},
+                merge_filter source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var
+              ),
+              cron '@daily',
+              allow_partials @IF(@gateway = 'dev', True, False),
+              physical_properties (
+                location1 = @'s3://bucket/prefix/@{schema_name}/@{table_name}',
+                location2 = @IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}'),
+                foo = @physical_var
+              ),
+              virtual_properties (
+                creatable_type = @{create_type},
+                bar = @virtual_var,
+              ),
+              session_properties (
+                'spark.executor.cores' = @IF(@gateway = 'dev', 1, 2),
+                'spark.executor.memory' = '1G',
+                baz = @session_var
+              ),
+            );
+
+            SELECT * FROM src;
+        """
+        ),
+        variables={
+            "gateway": "dev",
+            "key": "a",  # Not included in python_env because kind is rendered at load time
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        }
+    )
+
+    assert "location1" in model.physical_properties
+    assert "location2" in model.physical_properties
+
+    # The properties will stay unrendered at load time
+    assert model.session_properties == {
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
+        "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
+    }
+    assert model.virtual_properties["creatable_type"] == exp.maybe_parse("@{create_type}")
+
+    assert (
+        model.physical_properties["location1"].sql()
+        == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
+    )
+    assert (
+        model.physical_properties["location2"].sql()
+        == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
+    )
+
+    # merge_filter will stay unrendered as well
+    assert model.unique_key[0] == exp.column("a", quoted=True)
+    assert (
+        t.cast(exp.Expression, model.merge_filter).sql()
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+    )
+
+
 def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_unrendered_macros_python_model_@{bar}",
@@ -6487,7 +6568,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         kind=dict(
             name=ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
             unique_key="@{key}",
-            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds",
+            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var",
         ),
         cron="@daily",
         columns={"a": "string"},
@@ -6495,11 +6576,13 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         physical_properties=dict(
             location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
             location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
+            foo="@physical_var",
         ),
-        virtual_properties={"creatable_type": "@{create_type}"},
+        virtual_properties={"creatable_type": "@{create_type}", "bar": "@virtual_var"},
         session_properties={
             "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
             "spark.executor.memory": "1G",
+            "baz": "@session_var",
         },
     )
     def model_with_macros(evaluator, **kwargs):
@@ -6517,12 +6600,24 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "gateway": "dev",
             "key": "a",
             "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
         },
     )
 
     assert python_sql_model.name == "test_unrendered_macros_python_model_suffix"
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value"}
+        {
+            "test_var_a": "test_value",
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        }
     )
     assert python_sql_model.enabled
 
@@ -6536,17 +6631,20 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
 
     # The properties will stay unrendered at load time
     assert python_sql_model.session_properties == {
-        "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
         "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
     }
-    assert python_sql_model.virtual_properties["creatable_type"] == exp.convert("@{create_type}")
+    assert python_sql_model.virtual_properties["creatable_type"] == exp.maybe_parse(
+        "@{create_type}"
+    )
 
     assert (
-        python_sql_model.physical_properties["location1"].text("this")
+        python_sql_model.physical_properties["location1"].sql()
         == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
     )
     assert (
-        python_sql_model.physical_properties["location2"].text("this")
+        python_sql_model.physical_properties["location2"].sql()
         == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
     )
 
@@ -6554,7 +6652,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         python_sql_model.merge_filter.sql()
-        == '"source"."id" > 0 AND "target"."updated_at" < @end_ds AND "source"."updated_at" > @start_ds'
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -8226,7 +8324,7 @@ def test_physical_version():
 
     with pytest.raises(
         ConfigError,
-        match=r"Pinning a physical version is only supported for forward only models at.*",
+        match=r"Pinning a physical version is only supported for forward only models( at.*)?",
     ):
         load_sql_based_model(
             d.parse(

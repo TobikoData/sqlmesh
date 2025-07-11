@@ -298,7 +298,7 @@ def test_merge_pr_has_non_breaking_change(
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
 
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -318,10 +318,10 @@ def test_merge_pr_has_non_breaking_change(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)
+- `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
 
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
@@ -509,7 +509,7 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
 
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -529,10 +529,10 @@ def test_merge_pr_has_non_breaking_change_diff_start(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)
+- `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
 
     prod_plan_preview_summary = prod_plan_preview_checks_runs[2]["output"]["summary"]
@@ -846,7 +846,7 @@ def test_merge_pr_has_no_changes(
     assert GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_skipped
     assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
     assert (
-        ":next_track_button: Skipped creating or updating PR Environment `hello_world_2`. No changes were detected compared to the prod environment."
+        ":next_track_button: Skipped creating or updating PR Environment `hello_world_2` :next_track_button:\n\nNo changes were detected compared to the prod environment."
         in pr_checks_runs[2]["output"]["summary"]
     )
 
@@ -1032,7 +1032,7 @@ def test_no_merge_since_no_deploy_signal(
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
 
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -1052,10 +1052,10 @@ def test_no_merge_since_no_deploy_signal(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)"""
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)"""
 
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)
+- `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
 
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
@@ -1232,7 +1232,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -1252,10 +1252,10 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)
+- `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     prod_plan_preview_summary = prod_plan_preview_checks_runs[2]["output"]["summary"]
@@ -1414,7 +1414,7 @@ def test_deploy_comment_pre_categorized(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -1434,10 +1434,10 @@ def test_deploy_comment_pre_categorized(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)
+- `memory.sushi.top_waiters` (Indirect Non-breaking)
 """
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     prod_plan_preview_summary = prod_plan_preview_checks_runs[2]["output"]["summary"]
@@ -1781,7 +1781,7 @@ def test_overlapping_changes_models(
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
 
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.customers` (Non-breaking)
+* `memory.sushi.customers` (Non-breaking)
   
   ```diff
   --- 
@@ -1801,23 +1801,23 @@ def test_overlapping_changes_models(
      WITH current_marketing AS (
   ```
   Indirectly Modified Children:
-    - `sushi.active_customers` (Indirect Non-breaking)
-    - `sushi.count_customers_active` (Indirect Non-breaking)
-    - `sushi.count_customers_inactive` (Indirect Non-breaking)
-    - `sushi.waiter_as_customer_by_day` (Indirect Breaking)
+    - `memory.sushi.active_customers` (Indirect Non-breaking)
+    - `memory.sushi.count_customers_active` (Indirect Non-breaking)
+    - `memory.sushi.count_customers_inactive` (Indirect Non-breaking)
+    - `memory.sushi.waiter_as_customer_by_day` (Indirect Breaking)
 
 
-* `sushi.waiter_names` (Breaking)
+* `memory.sushi.waiter_names` (Breaking)
 
 
   Indirectly Modified Children:
-    - `sushi.waiter_as_customer_by_day` (Indirect Breaking)"""
+    - `memory.sushi.waiter_as_customer_by_day` (Indirect Breaking)"""
 
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.active_customers` (Indirect Non-breaking)
-- `sushi.count_customers_active` (Indirect Non-breaking)
-- `sushi.count_customers_inactive` (Indirect Non-breaking)
-- `sushi.waiter_as_customer_by_day` (Indirect Breaking)"""
+- `memory.sushi.active_customers` (Indirect Non-breaking)
+- `memory.sushi.count_customers_active` (Indirect Non-breaking)
+- `memory.sushi.count_customers_inactive` (Indirect Non-breaking)
+- `memory.sushi.waiter_as_customer_by_day` (Indirect Breaking)"""
 
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     prod_plan_preview_summary = prod_plan_preview_checks_runs[2]["output"]["summary"]
@@ -1993,7 +1993,7 @@ def test_pr_add_model(
     )
 
     expected_prod_plan_summary = """**Added Models:**
-- `sushi.cicd_test_model` (Breaking)"""
+- `memory.sushi.cicd_test_model` (Breaking)"""
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -2144,7 +2144,7 @@ def test_pr_delete_model(
     )
 
     expected_prod_plan_summary = """**Removed Models:**
-- `sushi.top_waiters` (Breaking)"""
+- `memory.sushi.top_waiters` (Breaking)"""
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -2330,7 +2330,7 @@ def test_has_required_approval_but_not_base_branch(
     assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
     assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
     expected_prod_plan_directly_modified_summary = """**Directly Modified:**
-* `sushi.waiter_revenue_by_day` (Non-breaking)
+* `memory.sushi.waiter_revenue_by_day` (Non-breaking)
   
   ```diff
   --- 
@@ -2350,10 +2350,10 @@ def test_has_required_approval_but_not_base_branch(
      ON o.id = oi.order_id AND o.event_date = oi.event_date
   ```
   Indirectly Modified Children:
-    - `sushi.top_waiters` (Indirect Non-breaking)"""
+    - `memory.sushi.top_waiters` (Indirect Non-breaking)"""
 
     expected_prod_plan_indirectly_modified_summary = """**Indirectly Modified:**
-- `sushi.top_waiters` (Indirect Non-breaking)"""
+- `memory.sushi.top_waiters` (Indirect Non-breaking)"""
 
     assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
     prod_plan_preview_summary = prod_plan_preview_checks_runs[2]["output"]["summary"]

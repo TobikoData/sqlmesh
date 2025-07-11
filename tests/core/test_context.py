@@ -1840,7 +1840,7 @@ def access_adapter(evaluator):
 
     assert (
         model.pre_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = now())"
+        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = NOW())"
     )
     assert (
         model.post_statements[0].sql()

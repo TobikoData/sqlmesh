@@ -7,7 +7,7 @@ import typing as t
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
-from sqlmesh.core.linter.helpers import TokenPositionDetails
+from sqlmesh.core.linter.helpers import TokenPositionDetails, get_range_of_model_block
 from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel
@@ -93,7 +93,21 @@ class NoMissingAudits(Rule):
     """Model `audits` must be configured to test data quality."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        return self.violation() if not model.audits and not model.kind.is_symbolic else None
+        if model.audits or model.kind.is_symbolic:
+            return None
+        if model._path is None or not str(model._path).endswith(".sql"):
+            return self.violation()
+
+        try:
+            with open(model._path, "r", encoding="utf-8") as file:
+                content = file.read()
+
+            range = get_range_of_model_block(content, model.dialect)
+            if range:
+                return self.violation(violation_range=range)
+            return self.violation()
+        except Exception:
+            return self.violation()
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))

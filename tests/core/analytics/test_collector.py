@@ -145,7 +145,7 @@ def test_on_cicd_command(collector: AnalyticsCollector, mocker: MockerFixture):
                 {
                     "seq_num": 1,
                     "event_type": "CICD_COMMAND",
-                    "event": '{"command_name": "test_cicd", "command_args": ["arg_1", "arg_2"], "parent_command_names": ["parent_a", "parent_b"], "cicd_bot_config": {"invalidate_environment_after_deploy": true, "enable_deploy_command": false, "auto_categorize_changes": {"external": "off", "python": "off", "sql": "off", "seed": "off"}, "skip_pr_backfill": true, "run_on_deploy_to_prod": false}}',
+                    "event": '{"command_name": "test_cicd", "command_args": ["arg_1", "arg_2"], "parent_command_names": ["parent_a", "parent_b"], "cicd_bot_config": {"invalidate_environment_after_deploy": true, "enable_deploy_command": false, "run_on_deploy_to_prod": false}}',
                     **common_fields,
                 }
             ),

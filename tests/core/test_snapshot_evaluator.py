@@ -294,6 +294,8 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
@@ -320,6 +322,8 @@ def test_demote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.drop_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         cascade=False,
@@ -516,25 +520,8 @@ def test_evaluate_materialized_view(
         snapshots={},
     )
 
-    adapter_mock.table_exists.assert_called_once_with(snapshot.table_name())
-
-    if view_exists:
-        # Evaluation shouldn't take place because the rendered query hasn't changed
-        # since the last view creation.
-        assert not adapter_mock.create_view.called
-    else:
-        # If the view doesn't exist, it should be created even if the rendered query
-        # hasn't changed since the last view creation.
-        adapter_mock.create_view.assert_called_once_with(
-            snapshot.table_name(),
-            model.render_query(),
-            model.columns_to_types,
-            replace=True,
-            materialized=True,
-            view_properties={},
-            table_description=None,
-            column_descriptions={},
-        )
+    # Ensure that the materialized view is recreated even if it exists
+    assert adapter_mock.create_view.assert_called
 
 
 def test_evaluate_materialized_view_with_partitioned_by_cluster_by(

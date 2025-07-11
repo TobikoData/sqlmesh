@@ -1,4 +1,4 @@
-import { Page, test } from '@playwright/test'
+import { test, Page } from './fixtures'
 import fs from 'fs-extra'
 import {
   createVirtualEnvironment,
@@ -11,11 +11,7 @@ import {
 import os from 'os'
 import path from 'path'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
-import {
-  CodeServerContext,
-  startCodeServer,
-  stopCodeServer,
-} from './utils_code_server'
+import { CodeServerContext } from './utils_code_server'
 
 function writeEnvironmentConfig(sushiPath: string) {
   const configPath = path.join(sushiPath, 'config.py')
@@ -33,8 +29,15 @@ if test_var is None or test_var == "":
   fs.writeFileSync(configPath, newConfig)
 }
 
-async function runTest(page: Page, context: CodeServerContext): Promise<void> {
-  await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+async function runTest(
+  page: Page,
+  context: CodeServerContext,
+  tempDir: string,
+): Promise<void> {
+  await page.goto(
+    `http://127.0.0.1:${context.codeServerPort}` + `/?folder=${tempDir}`,
+  )
+  await page.waitForSelector('text=models')
   await openLineageView(page)
 }
 
@@ -68,40 +71,22 @@ async function setupEnvironment(): Promise<{
 }
 
 test.describe('python environment variable injection on sqlmesh_lsp', () => {
-  test('normal setup - error ', async ({ page }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
     const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
-
-    const context = await startCodeServer({
-      tempDir,
-    })
-
-    try {
-      await runTest(page, context)
-      await page.waitForSelector('text=Error creating context')
-    } finally {
-      await stopCodeServer(context)
-    }
+    await runTest(page, sharedCodeServer, tempDir)
+    await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page }, testInfo) => {
+  test('normal setup - set', async ({ page, sharedCodeServer }, testInfo) => {
     testInfo.setTimeout(120_000)
 
     const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
-    const context = await startCodeServer({
-      tempDir,
-    })
-    try {
-      await runTest(page, context)
-      await page.waitForSelector('text=Loaded SQLMesh context')
-    } finally {
-      await stopCodeServer(context)
-    }
+    await runTest(page, sharedCodeServer, tempDir)
+    await page.waitForSelector('text=Loaded SQLMesh context')
   })
 })
 
@@ -130,39 +115,21 @@ async function setupTcloudProject(
 }
 
 test.describe('tcloud version', () => {
-  test('normal setup - error ', async ({ page }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
     const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
-    const context = await startCodeServer({
-      tempDir,
-    })
-    try {
-      await runTest(page, context)
-      await page.waitForSelector('text=Error creating context')
-    } finally {
-      await stopCodeServer(context)
-    }
+    await runTest(page, sharedCodeServer, tempDir)
+    await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - set', async ({ page, sharedCodeServer }) => {
     const { tempDir, pythonDetails } = await setupEnvironment()
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
-    const context = await startCodeServer({
-      tempDir,
-    })
-    try {
-      await runTest(page, context)
-      await page.waitForSelector('text=Loaded SQLMesh context')
-    } finally {
-      await stopCodeServer(context)
-    }
+    await runTest(page, sharedCodeServer, tempDir)
+    await page.waitForSelector('text=Loaded SQLMesh context')
   })
 })

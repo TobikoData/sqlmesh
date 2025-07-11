@@ -75,12 +75,6 @@ importers:
       ts-loader:
         specifier: ^9.5.2
         version: 9.5.2(typescript@5.8.3)(webpack@5.99.8(esbuild@0.25.5))
-<<<<<<< HEAD
-=======
-      tsx:
-        specifier: ^4.20.3
-        version: 4.20.3
->>>>>>> a6ed6cf88 (chore(vscode): update dependencies)
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -90,6 +84,9 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.11.25)(@vitest/ui@3.2.4)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0)
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.0
 
   vscode/react:
     dependencies:

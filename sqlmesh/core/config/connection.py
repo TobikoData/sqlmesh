@@ -230,13 +230,16 @@ class DuckDBAttachOptions(BaseConfig):
         options = []
         # 'duckdb' is actually not a supported type, but we'd like to allow it for
         # fully qualified attach options or integration testing, similar to duckdb-dbt
-        if self.type not in ("duckdb", "motherduck"):
+        if self.type not in ("duckdb", "ducklake", "motherduck"):
             options.append(f"TYPE {self.type.upper()}")
         if self.read_only:
             options.append("READ_ONLY")
 
         # DuckLake specific options
+        path = self.path
         if self.type == "ducklake":
+            if not path.startswith("ducklake:"):
+                path = f"ducklake:{path}"
             if self.data_path is not None:
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
@@ -249,8 +252,10 @@ class DuckDBAttachOptions(BaseConfig):
         # TODO: Add support for Postgres schema. Currently adding it blocks access to the information_schema
 
         # MotherDuck does not support aliasing
-        alias_sql = f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
-        return f"ATTACH IF NOT EXISTS '{self.path}'{alias_sql}{options_sql}"
+        alias_sql = (
+            f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
+        )
+        return f"ATTACH IF NOT EXISTS '{path}'{alias_sql}{options_sql}"
 
 
 class BaseDuckDBConnectionConfig(ConnectionConfig):
@@ -273,7 +278,7 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
     catalogs: t.Optional[t.Dict[str, t.Union[str, DuckDBAttachOptions]]] = None
     extensions: t.List[t.Union[str, t.Dict[str, t.Any]]] = []
     connector_config: t.Dict[str, t.Any] = {}
-    secrets: t.List[t.Dict[str, t.Any]] = []
+    secrets: t.Union[t.List[t.Dict[str, t.Any]], t.Dict[str, t.Dict[str, t.Any]]] = []
     filesystems: t.List[t.Dict[str, t.Any]] = []
 
     concurrent_tasks: int = 1
@@ -358,14 +363,22 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         "More info: https://duckdb.org/docs/stable/extensions/httpfs/s3api_legacy_authentication.html"
                     )
                 else:
-                    for secrets in self.secrets:
+                    if isinstance(self.secrets, list):
+                        secrets_items = [(secret_dict, "") for secret_dict in self.secrets]
+                    else:
+                        secrets_items = [
+                            (secret_dict, secret_name)
+                            for secret_name, secret_dict in self.secrets.items()
+                        ]
+
+                    for secret_dict, secret_name in secrets_items:
                         secret_settings: t.List[str] = []
-                        for field, setting in secrets.items():
+                        for field, setting in secret_dict.items():
                             secret_settings.append(f"{field} '{setting}'")
                         if secret_settings:
                             secret_clause = ", ".join(secret_settings)
                             try:
-                                cursor.execute(f"CREATE SECRET ({secret_clause});")
+                                cursor.execute(f"CREATE SECRET {secret_name} ({secret_clause});")
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
@@ -1565,7 +1578,32 @@ class MSSQLConnectionConfig(ConnectionConfig):
             # Create the connection string
             conn_str = ";".join(conn_str_parts)
 
-            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+            conn = pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+            # Set up output converters for MSSQL-specific data types
+            # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
+            # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+            def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
+                from datetime import datetime, timedelta, timezone
+                import struct
+
+                # Unpack the DATETIMEOFFSET binary format:
+                # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
+                tup = struct.unpack("<6hI2h", dto_value)
+                return datetime(
+                    tup[0],
+                    tup[1],
+                    tup[2],
+                    tup[3],
+                    tup[4],
+                    tup[5],
+                    tup[6] // 1000,
+                    timezone(timedelta(hours=tup[7], minutes=tup[8])),
+                )
+
+            conn.add_output_converter(-155, handle_datetimeoffset)
+
+            return conn
 
         return connect
 
