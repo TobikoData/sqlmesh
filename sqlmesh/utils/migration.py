@@ -16,7 +16,11 @@ def index_text_type(dialect: DialectType) -> str:
     This helper abstracts away the type of such fields.
     """
 
-    return f"VARCHAR({MAX_TEXT_INDEX_LENGTH[str(dialect)]})" if dialect in MAX_TEXT_INDEX_LENGTH else "TEXT"
+    return (
+        f"VARCHAR({MAX_TEXT_INDEX_LENGTH[str(dialect)]})"
+        if dialect in MAX_TEXT_INDEX_LENGTH
+        else "TEXT"
+    )
 
 
 def blob_text_type(dialect: DialectType) -> str:

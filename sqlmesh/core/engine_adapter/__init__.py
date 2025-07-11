@@ -44,7 +44,9 @@ DIALECT_ALIASES = {
 }
 
 
-def create_engine_adapter(connection_factory: t.Callable[[], t.Any], dialect: str, **kwargs: t.Any) -> EngineAdapter:
+def create_engine_adapter(
+    connection_factory: t.Callable[[], t.Any], dialect: str, **kwargs: t.Any
+) -> EngineAdapter:
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
     engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)

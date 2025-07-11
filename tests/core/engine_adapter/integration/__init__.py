@@ -493,9 +493,7 @@ class TestContext:
                     AND {kind}_name = '{table_name}'
             """
         elif self.dialect == "clickhouse":
-            query = (
-                f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
-            )
+            query = f"SELECT name, comment FROM system.tables WHERE database = '{schema_name}' AND name = '{table_name}'"
         elif self.dialect == "doris":
             # Doris uses MySQL-compatible information_schema
             query = f"""

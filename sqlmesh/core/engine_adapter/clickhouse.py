@@ -75,10 +75,14 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
             return self.cursor.fetchall()[0]
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False) -> pd.DataFrame:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         return self.cursor.client.query_df(
-            self._to_sql(query, quote=quote_identifiers) if isinstance(query, exp.Expression) else query,
+            self._to_sql(query, quote=quote_identifiers)
+            if isinstance(query, exp.Expression)
+            else query,
             use_extended_dtypes=True,
         )
 
@@ -97,7 +101,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             # be created so we skip creating again. This means we are assuming the first call is the same result
             # as later calls.
             if not self.table_exists(temp_table):
-                self.create_table(temp_table, columns_to_types, storage_format=exp.var("MergeTree"), **kwargs)
+                self.create_table(
+                    temp_table, columns_to_types, storage_format=exp.var("MergeTree"), **kwargs
+                )
 
                 self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
 
@@ -265,12 +271,14 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     partitions_temp_table_name = self._get_temp_table(
                         exp.to_table(f"{target_table.db}._affected_partitions")
                     )
-                    all_affected_partitions, existing_records_insert_exp = self._get_affected_partitions_and_insert_exp(
-                        target_table,
-                        temp_table,
-                        where,
-                        existing_records_insert_exp,
-                        partitions_temp_table_name,
+                    all_affected_partitions, existing_records_insert_exp = (
+                        self._get_affected_partitions_and_insert_exp(
+                            target_table,
+                            temp_table,
+                            where,
+                            existing_records_insert_exp,
+                            partitions_temp_table_name,
+                        )
                     )
 
                 try:
@@ -283,7 +291,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             #   1. The table is partitioned AND
             #   (2a. There are existing records to keep (`where`) OR
             #    2b. We're overwriting existing partition rows (incremental by partition model))
-            if table_partition_exp and (where or kwargs.get("keep_existing_partition_rows") is False):
+            if table_partition_exp and (
+                where or kwargs.get("keep_existing_partition_rows") is False
+            ):
                 # only replace partitions that have records in temp_table
                 partitions_to_replace = self._get_partition_ids(temp_table)
 
@@ -322,7 +332,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             .from_(
                 exp.union(
                     # target table partitions with records in `where`
-                    exp.select(exp.column("_partition_id").as_("partition_id")).from_(target_table).where(where),
+                    exp.select(exp.column("_partition_id").as_("partition_id"))
+                    .from_(target_table)
+                    .where(where),
                     # temp table partitions with new records to insert
                     exp.select(
                         exp.column("_partition_id").as_("partition_id"),
@@ -332,14 +344,18 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
         # read all affected partition IDs into memory
-        all_affected_partitions = self._get_partition_ids(partitions_temp_table_name, "partition_id")
+        all_affected_partitions = self._get_partition_ids(
+            partitions_temp_table_name, "partition_id"
+        )
 
         # limit existing records insert expression WHERE to affected target table partitions
         #   by adding `AND _partition_id IN (SELECT partition_id FROM partitions_temp_table)`
         existing_records_insert_exp.set(
             "expression",
             existing_records_insert_exp.expression.where(
-                exp.column("_partition_id").isin(exp.select("partition_id").from_(partitions_temp_table_name))
+                exp.column("_partition_id").isin(
+                    exp.select("partition_id").from_(partitions_temp_table_name)
+                )
             ),
         )
 
@@ -358,7 +374,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             alter_expr.append(
                 "actions",
                 exp.ReplacePartition(
-                    expression=exp.Partition(expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))]),
+                    expression=exp.Partition(
+                        expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))]
+                    ),
                     source=temp_table,
                 ),
             )
@@ -367,7 +385,11 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             alter_expr.append(
                 "actions",
                 exp.DropPartition(
-                    expressions=[exp.Partition(expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))])],
+                    expressions=[
+                        exp.Partition(
+                            expressions=[exp.PartitionId(this=exp.Literal.string(str(partition)))]
+                        )
+                    ],
                     source=temp_table,
                 ),
             )
@@ -412,9 +434,13 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             table_name, source_queries, columns_to_types, keep_existing_partition_rows=False
         )
 
-    def _create_table_like(self, target_table_name: TableName, source_table_name: TableName) -> None:
+    def _create_table_like(
+        self, target_table_name: TableName, source_table_name: TableName
+    ) -> None:
         """Create table with identical structure as source table"""
-        self.execute(f"CREATE TABLE {target_table_name}{self._on_cluster_sql()} AS {source_table_name}")
+        self.execute(
+            f"CREATE TABLE {target_table_name}{self._on_cluster_sql()} AS {source_table_name}"
+        )
 
     def _get_partition_ids(
         self,
@@ -457,7 +483,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         #       incremental by time models
         if kwargs.get("partitioned_by"):
             partition_cols = [
-                col.name for part_expr in kwargs["partitioned_by"] for col in part_expr.find_all(exp.Column)
+                col.name
+                for part_expr in kwargs["partitioned_by"]
+                for col in part_expr.find_all(exp.Column)
             ]
             if isinstance(table_name_or_schema, exp.Schema):
                 for coldef in table_name_or_schema.expressions:
@@ -487,10 +515,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             self.engine_run_mode.is_cloud
             and table_kind != "VIEW"
             and expression
-            and not (expression.args.get("limit") is not None and expression.args["limit"].expression.this == "0")
+            and not (
+                expression.args.get("limit") is not None
+                and expression.args["limit"].expression.this == "0"
+            )
         ):
             table_name = (
-                table_name_or_schema.this if isinstance(table_name_or_schema, exp.Schema) else table_name_or_schema
+                table_name_or_schema.this
+                if isinstance(table_name_or_schema, exp.Schema)
+                else table_name_or_schema
             )
             self._insert_append_query(
                 table_name,
@@ -509,7 +542,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
 
         try:
-            self.execute(f"EXCHANGE TABLES {old_table_sql} AND {new_table_sql}{self._on_cluster_sql()}")
+            self.execute(
+                f"EXCHANGE TABLES {old_table_sql} AND {new_table_sql}{self._on_cluster_sql()}"
+            )
         except DatabaseError as e:
             if "NOT_IMPLEMENTED" in str(e):
                 # If someone is using an old Clickhouse version, an OS that doesn't support atomic exchanges,
@@ -549,7 +584,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         with self.transaction():
             for alter_expression in alter_expressions:
                 if self.engine_run_mode.is_cluster:
-                    alter_expression.set("cluster", exp.OnCluster(this=exp.to_identifier(self.cluster)))
+                    alter_expression.set(
+                        "cluster", exp.OnCluster(this=exp.to_identifier(self.cluster))
+                    )
                 self.execute(alter_expression)
 
     def _drop_object(
@@ -625,7 +662,12 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         # if user has not already set it explicitly
         if not (
             user_settings
-            and any([isinstance(setting, exp.EQ) and setting.name == setting_name for setting in user_settings])
+            and any(
+                [
+                    isinstance(setting, exp.EQ) and setting.name == setting_name
+                    for setting in user_settings
+                ]
+            )
         ):
             server_value = self.fetchone(
                 exp.select("value")
@@ -637,11 +679,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             setting_value = server_value if inject_setting else setting_value
 
             if inject_setting:
-                query.append("settings", exp.var(setting_name).eq(exp.Literal.number(setting_value)))
+                query.append(
+                    "settings", exp.var(setting_name).eq(exp.Literal.number(setting_value))
+                )
 
         return query
 
-    def _build_settings_property(self, key: str, value: exp.Expression | str | int | float) -> exp.SettingsProperty:
+    def _build_settings_property(
+        self, key: str, value: exp.Expression | str | int | float
+    ) -> exp.SettingsProperty:
         return exp.SettingsProperty(
             expressions=[
                 exp.EQ(
@@ -678,7 +724,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         properties.append(exp.EngineProperty(this=table_engine))
 
         # copy of table_properties so we can pop items off below then consume the rest later
-        table_properties_copy = {k.upper(): v for k, v in (table_properties.copy() if table_properties else {}).items()}
+        table_properties_copy = {
+            k.upper(): v for k, v in (table_properties.copy() if table_properties else {}).items()
+        }
 
         mergetree_engine = bool(re.search(self.ORDER_BY_TABLE_ENGINE_REGEX, table_engine))
         ordered_by_raw = table_properties_copy.pop("ORDER_BY", None)
@@ -693,7 +741,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     ordered_by_vals = [ordered_by_raw.this]
 
                 if not ordered_by_vals:
-                    ordered_by_vals = ordered_by_raw if isinstance(ordered_by_raw, list) else [ordered_by_raw]
+                    ordered_by_vals = (
+                        ordered_by_raw if isinstance(ordered_by_raw, list) else [ordered_by_raw]
+                    )
 
                 for col in ordered_by_vals:
                     ordered_by_exprs.append(
@@ -721,15 +771,25 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
             properties.append(
                 exp.PrimaryKey(
-                    expressions=[exp.to_column(k.name if isinstance(k, exp.Literal) else k) for k in primary_key_vals]
+                    expressions=[
+                        exp.to_column(k.name if isinstance(k, exp.Literal) else k)
+                        for k in primary_key_vals
+                    ]
                 )
             )
 
         ttl = table_properties_copy.pop("TTL", None)
         if ttl:
-            properties.append(exp.MergeTreeTTL(expressions=[ttl if isinstance(ttl, exp.Expression) else exp.var(ttl)]))
+            properties.append(
+                exp.MergeTreeTTL(
+                    expressions=[ttl if isinstance(ttl, exp.Expression) else exp.var(ttl)]
+                )
+            )
 
-        if partitioned_by and (partitioned_by_prop := self._build_partitioned_by_exp(partitioned_by)) is not None:
+        if (
+            partitioned_by
+            and (partitioned_by_prop := self._build_partitioned_by_exp(partitioned_by)) is not None
+        ):
             properties.append(partitioned_by_prop)
 
         if self.engine_run_mode.is_cluster:
@@ -739,11 +799,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.EmptyProperty())
 
         if table_properties_copy:
-            properties.extend([self._build_settings_property(k, v) for k, v in table_properties_copy.items()])
+            properties.extend(
+                [self._build_settings_property(k, v) for k, v in table_properties_copy.items()]
+            )
 
         if table_description:
             properties.append(
-                exp.SchemaCommentProperty(this=exp.Literal.string(self._truncate_table_comment(table_description)))
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
             )
 
         if properties:
@@ -766,11 +830,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             properties.append(exp.OnCluster(this=exp.to_identifier(self.cluster)))
 
         if view_properties_copy:
-            properties.extend([self._build_settings_property(k, v) for k, v in view_properties_copy.items()])
+            properties.extend(
+                [self._build_settings_property(k, v) for k, v in view_properties_copy.items()]
+            )
 
         if table_description:
             properties.append(
-                exp.SchemaCommentProperty(this=exp.Literal.string(self._truncate_table_comment(table_description)))
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
             )
 
         if properties:

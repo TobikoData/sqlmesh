@@ -103,7 +103,12 @@ def test_truncate_column_comment(adapter: DorisEngineAdapter):
 def test_build_table_properties_exp(adapter: DorisEngineAdapter):
     """测试构建表属性表达式"""
     props = adapter._build_table_properties_exp(
-        table_properties={"TABLE_MODEL": "UNIQUE", "DISTRIBUTED_BY": "HASH(id)", "BUCKETS": 5, "replication_num": 1},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "DISTRIBUTED_BY": "HASH(id)",
+            "BUCKETS": 5,
+            "replication_num": 1,
+        },
         columns_to_types={"id": exp.DataType.build("INT"), "name": exp.DataType.build("STRING")},
         table_description="Test table description",
     )
@@ -274,7 +279,10 @@ def test_create_table_aggregate_model(adapter: DorisEngineAdapter):
     exp_obj = adapter._build_create_table_exp(
         "aggregate_table",
         None,
-        columns_to_types={"dim": exp.DataType.build("STRING"), "metric": exp.DataType.build("BIGINT")},
+        columns_to_types={
+            "dim": exp.DataType.build("STRING"),
+            "metric": exp.DataType.build("BIGINT"),
+        },
         table_properties={"TABLE_MODEL": "AGGREGATE", "BUCKETS": 8},
     )
     sql = adapter._to_sql(exp_obj)

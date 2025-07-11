@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 import pytest
-import pandas as pd
 from sqlglot import exp, parse_one
 from pytest import FixtureRequest
 
@@ -20,7 +19,9 @@ pytestmark = [pytest.mark.doris, pytest.mark.engine]
 @pytest.fixture(params=list(generate_pytest_params([ENGINES_BY_NAME["doris"]])))
 def ctx(
     request: FixtureRequest,
-    create_test_context: t.Callable[[IntegrationTestEngine, str, str, str], t.Iterable[TestContext]],
+    create_test_context: t.Callable[
+        [IntegrationTestEngine, str, str, str], t.Iterable[TestContext]
+    ],
 ) -> t.Iterable[TestContext]:
     yield from create_test_context(*request.param)
 
@@ -155,7 +156,11 @@ def test_doris_indexes(ctx: TestContext, engine_adapter: DorisEngineAdapter):
     engine_adapter.create_table(
         table,
         columns_to_types=columns_to_types,
-        table_properties={"TABLE_MODEL": "UNIQUE", "UNIQUE_KEY": ["id"], "DISTRIBUTED_BY": "HASH(id)"},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": ["id"],
+            "DISTRIBUTED_BY": "HASH(id)",
+        },
     )
 
     # Test INVERTED index
@@ -169,7 +174,11 @@ def test_doris_indexes(ctx: TestContext, engine_adapter: DorisEngineAdapter):
 
     # Test BLOOMFILTER index
     engine_adapter.create_index(
-        table, "idx_name_bloom", ("name",), index_type="BLOOMFILTER", comment="Bloom filter for name column"
+        table,
+        "idx_name_bloom",
+        ("name",),
+        index_type="BLOOMFILTER",
+        comment="Bloom filter for name column",
     )
 
     # Test NGRAM_BF index
@@ -185,6 +194,7 @@ def test_doris_indexes(ctx: TestContext, engine_adapter: DorisEngineAdapter):
 
 def test_doris_views_and_materialized_views(ctx: TestContext, engine_adapter: DorisEngineAdapter):
     """Test Doris view and materialized view creation"""
+    import pandas as pd
 
     # Create base table
     base_table = ctx.table("base_for_views")
@@ -197,7 +207,11 @@ def test_doris_views_and_materialized_views(ctx: TestContext, engine_adapter: Do
     engine_adapter.create_table(
         base_table,
         columns_to_types=columns_to_types,
-        table_properties={"TABLE_MODEL": "UNIQUE", "UNIQUE_KEY": ["id"], "DISTRIBUTED_BY": "HASH(id)"},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": ["id"],
+            "DISTRIBUTED_BY": "HASH(id)",
+        },
     )
 
     # Insert test data
@@ -266,7 +280,11 @@ def test_doris_table_comments(ctx: TestContext, engine_adapter: DorisEngineAdapt
         columns_to_types=columns_to_types,
         table_description="Test table with comments",
         column_descriptions=column_descriptions,
-        table_properties={"TABLE_MODEL": "UNIQUE", "UNIQUE_KEY": ["id"], "DISTRIBUTED_BY": "HASH(id)"},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": ["id"],
+            "DISTRIBUTED_BY": "HASH(id)",
+        },
     )
 
     # Verify table comment
@@ -294,7 +312,12 @@ def test_doris_create_table_like(ctx: TestContext, engine_adapter: DorisEngineAd
     engine_adapter.create_table(
         source_table,
         columns_to_types=columns_to_types,
-        table_properties={"TABLE_MODEL": "UNIQUE", "UNIQUE_KEY": ["id"], "DISTRIBUTED_BY": "HASH(id)", "BUCKETS": "10"},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": ["id"],
+            "DISTRIBUTED_BY": "HASH(id)",
+            "BUCKETS": "10",
+        },
     )
 
     # Create table like source
@@ -310,6 +333,7 @@ def test_doris_create_table_like(ctx: TestContext, engine_adapter: DorisEngineAd
 
 def test_doris_data_operations(ctx: TestContext, engine_adapter: DorisEngineAdapter):
     """Test basic data operations with Doris"""
+    import pandas as pd
 
     table = ctx.table("data_ops_test")
     columns_to_types = {
@@ -323,7 +347,11 @@ def test_doris_data_operations(ctx: TestContext, engine_adapter: DorisEngineAdap
     engine_adapter.create_table(
         table,
         columns_to_types=columns_to_types,
-        table_properties={"TABLE_MODEL": "UNIQUE", "UNIQUE_KEY": ["id"], "DISTRIBUTED_BY": "HASH(id)"},
+        table_properties={
+            "TABLE_MODEL": "UNIQUE",
+            "UNIQUE_KEY": ["id"],
+            "DISTRIBUTED_BY": "HASH(id)",
+        },
     )
 
     # Insert initial data
