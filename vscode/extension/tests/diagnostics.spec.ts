@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { runCommand, SUSHI_SOURCE_PATH } from './utils'
+import { openProblemsView, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 import { execAsync } from '../src/utilities/exec'
 import yaml from 'yaml'
@@ -39,8 +39,7 @@ test('Workspace diagnostics show up in the diagnostics panel', async ({
     .locator('a')
     .click()
 
-  // Open problems panel
-  await runCommand(page, 'View: Focus Problems')
+  await openProblemsView(page)
 
   await page.waitForSelector('text=problems')
   await page.waitForSelector('text=All models should have an owner')
@@ -88,8 +87,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -134,8 +132,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -176,8 +173,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Expect the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page
@@ -215,8 +211,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Expect the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page.getByText('Failed to load config file:').first()
@@ -260,8 +255,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -302,8 +296,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert error is present in the problems view
     const errorElement = page
@@ -352,8 +345,7 @@ test.describe('Diagnostics for bad audits', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page
