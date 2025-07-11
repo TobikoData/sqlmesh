@@ -1708,12 +1708,9 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
     DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
     driver: t.Literal["pyodbc"] = "pyodbc"
+    workspace: str
+    tenant: str
     autocommit: t.Optional[bool] = True
-    workspace_id: t.Optional[str] = None
-    # Service Principal authentication for Fabric REST API
-    tenant_id: t.Optional[str] = None
-    client_id: t.Optional[str] = None
-    client_secret: t.Optional[str] = None
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -1725,7 +1722,7 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {
             "database": self.database,
-            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+            "catalog_support": CatalogSupport.FULL_SUPPORT,
         }
 
 

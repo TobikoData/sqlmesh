@@ -192,10 +192,12 @@ gateways:
       driver: pyodbc
       host: {{ env_var("FABRIC_HOST") }}
       user: {{ env_var("FABRIC_CLIENT_ID") }}
-      password: {{ env_var("FABRIC_CLIENT_SECRET") }}    
+      password: {{ env_var("FABRIC_CLIENT_SECRET") }}
       database: {{ env_var("FABRIC_DATABASE") }}
+      tenant: {{ env_var("FABRIC_TENANT") }}
+      workspace: {{ env_var("FABRIC_WORKSPACE") }}
       odbc_properties:
-        Authentication: ActiveDirectoryServicePrincipal        
+        Authentication: ActiveDirectoryServicePrincipal
     state_connection:
       type: duckdb
 

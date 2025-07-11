@@ -57,9 +57,9 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def _get_access_token(self) -> str:
         """Get access token using Service Principal authentication."""
-        tenant_id = self._extra_config.get("tenant_id")
-        client_id = self._extra_config.get("client_id")
-        client_secret = self._extra_config.get("client_secret")
+        tenant_id = self._extra_config.get("tenant")
+        client_id = self._extra_config.get("user")
+        client_secret = self._extra_config.get("password")
 
         if not all([tenant_id, client_id, client_secret]):
             raise SQLMeshError(
@@ -102,14 +102,14 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         if not requests:
             raise SQLMeshError("requests library is required for Fabric catalog operations")
 
-        workspace_id = self._extra_config.get("workspace_id")
-        if not workspace_id:
+        workspace = self._extra_config.get("workspace")
+        if not workspace:
             raise SQLMeshError(
-                "workspace_id parameter is required in connection config for Fabric catalog operations"
+                "workspace parameter is required in connection config for Fabric catalog operations"
             )
 
         base_url = "https://api.fabric.microsoft.com/v1"
-        url = f"{base_url}/workspaces/{workspace_id}/{endpoint}"
+        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
 
         headers = self._get_fabric_auth_headers()
 
