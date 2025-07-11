@@ -405,6 +405,7 @@ class GithubController:
                 min_intervals=self.bot_config.pr_min_intervals,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
+                forward_only=self.forward_only_plan,
             )
         assert self._pr_plan_builder
         return self._pr_plan_builder.build()
@@ -434,6 +435,7 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_builder
         return self._prod_plan_builder.build()
@@ -450,6 +452,7 @@ class GithubController:
                 skip_tests=True,
                 skip_linter=True,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_with_gaps_builder
         return self._prod_plan_with_gaps_builder.build()
@@ -473,6 +476,13 @@ class GithubController:
     def pr_targets_prod_branch(self) -> bool:
         return self._pull_request.base.ref in self.bot_config.prod_branch_names
 
+    @property
+    def forward_only_plan(self) -> bool:
+        head_ref = self._pull_request.head.ref
+        if isinstance(head_ref, str):
+            return head_ref.endswith(self.bot_config.forward_only_branch_suffix)
+        return False
+
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
         """
@@ -484,6 +494,26 @@ class GithubController:
         if output_file := os.environ.get("GITHUB_OUTPUT"):
             with open(output_file, "a", encoding="utf-8") as fh:
                 print(f"{key}={value}", file=fh)
+
+    def get_forward_only_plan_post_deployment_tip(self, plan: Plan) -> str:
+        if not plan.forward_only:
+            return ""
+
+        example_model_name = "<model name>"
+        for snapshot_id in sorted(plan.snapshots):
+            snapshot = plan.snapshots[snapshot_id]
+            if snapshot.is_incremental:
+                example_model_name = snapshot.node.name
+                break
+
+        return (
+            "> [!TIP]\n"
+            "> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:\n"
+            "> \n"
+            f"> `$ sqlmesh plan --restate-model {example_model_name} --start YYYY-MM-dd --end YYYY-MM-DD`\n"
+            ">\n"
+            "> Learn more: https://sqlmesh.readthedocs.io/en/stable/concepts/plans/?h=restate#restatement-plans"
+        )
 
     def get_plan_summary(self, plan: Plan) -> str:
         # use Verbosity.VERY_VERBOSE to prevent the list of models from being truncated
@@ -754,6 +784,11 @@ class GithubController:
 </details>
 
 """
+        if self.forward_only_plan:
+            plan_summary = (
+                f"{self.get_forward_only_plan_post_deployment_tip(self.prod_plan)}\n{plan_summary}"
+            )
+
         self.update_sqlmesh_comment_info(
             value=plan_summary,
             dedup_regex=None,
@@ -1096,6 +1131,7 @@ class GithubController:
                     summary = "Got an action required conclusion but no plan error was provided. This is unexpected."
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
+
             return conclusion, title, summary
 
         self._update_check_handler(

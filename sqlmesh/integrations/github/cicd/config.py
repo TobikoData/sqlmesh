@@ -33,6 +33,9 @@ class GithubCICDBotConfig(BaseConfig):
     pr_environment_name: t.Optional[str] = None
     pr_min_intervals: t.Optional[int] = None
     prod_branch_names_: t.Optional[str] = Field(default=None, alias="prod_branch_name")
+    forward_only_branch_suffix_: t.Optional[str] = Field(
+        default=None, alias="foward_only_branch_suffix"
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -73,6 +76,10 @@ class GithubCICDBotConfig(BaseConfig):
             return True
         return self.skip_pr_backfill_
 
+    @property
+    def forward_only_branch_suffix(self) -> str:
+        return self.forward_only_branch_suffix_ or "-forward-only"
+
     FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
         "invalidate_environment_after_deploy",
         "enable_deploy_command",
@@ -83,4 +90,6 @@ class GithubCICDBotConfig(BaseConfig):
         "skip_pr_backfill",
         "pr_include_unmodified",
         "run_on_deploy_to_prod",
+        "pr_min_intervals",
+        "forward_only_branch_suffix",
     }
