@@ -39,7 +39,7 @@ export async function fetchAPI<T = any, B extends object = any>(
   _options?: Partial<FetchOptionsWithSignal>,
 ): Promise<T & ResponseWithDetail> {
   const request = {
-    url: config.url,
+    endpoint: config.url,
     method: config.method,
     params: config.params,
     body: config.data,
