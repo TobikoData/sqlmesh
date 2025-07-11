@@ -312,3 +312,53 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     await expect(errorElement).toBeVisible({ timeout: 5000 })
   })
 })
+
+test.describe('Diagnostics for bad audits', () => {
+  test('bad audit block in audit', async ({ page, sharedCodeServer }) => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+    )
+
+    // Copy over the sushi project
+    await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+    await createPythonInterpreterSettingsSpecifier(tempDir)
+
+    // Make an existing audit file a bad audit
+    const auditFilePath = path.join(
+      tempDir,
+      'audits',
+      'assert_item_price_above_zero.sql',
+    )
+    const readFile = await fs.readFile(auditFilePath, 'utf8')
+    const updatedContent = readFile.replace('AUDIT (', 'AUDIT ( rubbish value,')
+    await fs.writeFile(auditFilePath, updatedContent)
+
+    // Navigate to the code-server instance
+    await page.goto(
+      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+    )
+    await page.waitForLoadState('networkidle')
+
+    // Open a the customers.sql model
+    await page
+      .getByRole('treeitem', { name: 'models', exact: true })
+      .locator('a')
+      .click()
+    await page
+      .getByRole('treeitem', { name: 'customers.sql', exact: true })
+      .locator('a')
+      .click()
+
+    // Wait for the error to appear
+    await page.waitForSelector('text=Error creating context')
+
+    // Open the problems view
+    await runCommand(page, 'View: Focus Problems')
+
+    // Assert that the error is present in the problems view
+    const errorElement = page
+      .getByText("Invalid extra fields {'rubbish'} in the audit definition")
+      .first()
+    await expect(errorElement).toBeVisible({ timeout: 5000 })
+  })
+})
