@@ -1,5 +1,5 @@
 from sqlmesh.core.context import Context
-from sqlmesh.lsp.description import generate_markdown_description
+from sqlmesh.core.linter.rules.helpers.lineage import generate_markdown_description
 
 
 def test_model_description() -> None:

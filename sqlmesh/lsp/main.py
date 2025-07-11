@@ -16,6 +16,7 @@ from lsprotocol.types import (
 from pygls.server import LanguageServer
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
+from sqlmesh.core.linter.rules.helpers.lineage import LSPExternalModelReference
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
@@ -48,11 +49,11 @@ from sqlmesh.lsp.custom import (
     CustomMethod,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
+from sqlmesh.lsp.helpers import to_lsp_range
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
     LSPCteReference,
     LSPModelReference,
-    LSPExternalModelReference,
     get_references,
     get_all_references,
 )
@@ -432,7 +433,7 @@ class SQLMeshLanguageServer:
                         kind=types.MarkupKind.Markdown,
                         value=reference.markdown_description,
                     ),
-                    range=reference.range,
+                    range=to_lsp_range(reference.range),
                 )
 
             except Exception as e:
@@ -492,19 +493,19 @@ class SQLMeshLanguageServer:
                             end=types.Position(line=0, character=0),
                         )
                         if reference.target_range is not None:
-                            target_range = reference.target_range
-                            target_selection_range = reference.target_range
+                            target_range = to_lsp_range(reference.target_range)
+                            target_selection_range = to_lsp_range(reference.target_range)
                     else:
                         # CTEs and Macros always have target_range
-                        target_range = reference.target_range
-                        target_selection_range = reference.target_range
+                        target_range = to_lsp_range(reference.target_range)
+                        target_selection_range = to_lsp_range(reference.target_range)
 
                     location_links.append(
                         types.LocationLink(
-                            target_uri=reference.uri,
+                            target_uri=URI.from_path(reference.path).value,
                             target_selection_range=target_selection_range,
                             target_range=target_range,
-                            origin_selection_range=reference.range,
+                            origin_selection_range=to_lsp_range(reference.range),
                         )
                     )
                 return location_links
@@ -524,7 +525,10 @@ class SQLMeshLanguageServer:
                 all_references = get_all_references(context, uri, params.position)
 
                 # Convert references to Location objects
-                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in all_references]
+                locations = [
+                    types.Location(uri=URI.from_path(ref.path).value, range=to_lsp_range(ref.range))
+                    for ref in all_references
+                ]
 
                 return locations if locations else None
             except Exception as e:

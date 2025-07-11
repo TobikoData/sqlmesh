@@ -59,7 +59,7 @@ def test_reference_with_alias() -> None:
     with open(waiter_revenue_by_day_path, "r") as file:
         read_file = file.readlines()
 
-    assert references[0].uri.endswith("orders.py")
+    assert str(references[0].path).endswith("orders.py")
     assert get_string_from_range(read_file, references[0].range) == "sushi.orders"
     assert (
         references[0].markdown_description
