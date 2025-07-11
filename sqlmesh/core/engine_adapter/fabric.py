@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 from sqlglot import exp
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.utils import optional_import
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
 
 
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
+
+logger = logging.getLogger(__name__)
+requests = optional_import("requests")
 
 
 class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
@@ -21,6 +27,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     DIALECT = "fabric"
     SUPPORTS_INDEXES = False
     SUPPORTS_TRANSACTIONS = False
+    SUPPORTS_CREATE_DROP_CATALOG = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
 
     def _insert_overwrite_by_condition(
@@ -47,3 +54,130 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
             **kwargs,
         )
+
+    def _get_access_token(self) -> str:
+        """Get access token using Service Principal authentication."""
+        tenant_id = self._extra_config.get("tenant_id")
+        client_id = self._extra_config.get("client_id")
+        client_secret = self._extra_config.get("client_secret")
+
+        if not all([tenant_id, client_id, client_secret]):
+            raise SQLMeshError(
+                "Service Principal authentication requires tenant_id, client_id, and client_secret "
+                "in the Fabric connection configuration"
+            )
+
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric authentication")
+
+        # Use Azure AD OAuth2 token endpoint
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "https://api.fabric.microsoft.com/.default",
+        }
+
+        try:
+            response = requests.post(token_url, data=data)
+            response.raise_for_status()
+            token_data = response.json()
+            return token_data["access_token"]
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Failed to authenticate with Azure AD: {e}")
+        except KeyError:
+            raise SQLMeshError("Invalid response from Azure AD token endpoint")
+
+    def _get_fabric_auth_headers(self) -> t.Dict[str, str]:
+        """Get authentication headers for Fabric REST API calls."""
+        access_token = self._get_access_token()
+        return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    def _make_fabric_api_request(
+        self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
+        """Make a request to the Fabric REST API."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        workspace_id = self._extra_config.get("workspace_id")
+        if not workspace_id:
+            raise SQLMeshError(
+                "workspace_id parameter is required in connection config for Fabric catalog operations"
+            )
+
+        base_url = "https://api.fabric.microsoft.com/v1"
+        url = f"{base_url}/workspaces/{workspace_id}/{endpoint}"
+
+        headers = self._get_fabric_auth_headers()
+
+        try:
+            if method.upper() == "GET":
+                response = requests.get(url, headers=headers)
+            elif method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=data)
+            elif method.upper() == "DELETE":
+                response = requests.delete(url, headers=headers)
+            else:
+                raise SQLMeshError(f"Unsupported HTTP method: {method}")
+
+            response.raise_for_status()
+
+            if response.status_code == 204:  # No content
+                return {}
+
+            return response.json() if response.content else {}
+
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Fabric API request failed: {e}")
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
+        warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+
+        logger.info(f"Creating Fabric warehouse: {warehouse_name}")
+
+        request_data = {
+            "displayName": warehouse_name,
+            "description": f"Warehouse created by SQLMesh: {warehouse_name}",
+        }
+
+        try:
+            self._make_fabric_api_request("POST", "warehouses", request_data)
+            logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+        except SQLMeshError as e:
+            if "already exists" in str(e).lower():
+                logger.info(f"Fabric warehouse already exists: {warehouse_name}")
+                return
+            raise
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
+        warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+
+        logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
+
+        # First, we need to get the warehouse ID by listing warehouses
+        try:
+            warehouses = self._make_fabric_api_request("GET", "warehouses")
+            warehouse_id = None
+
+            for warehouse in warehouses.get("value", []):
+                if warehouse.get("displayName") == warehouse_name:
+                    warehouse_id = warehouse.get("id")
+                    break
+
+            if not warehouse_id:
+                raise SQLMeshError(f"Warehouse not found: {warehouse_name}")
+
+            # Delete the warehouse by ID
+            self._make_fabric_api_request("DELETE", f"warehouses/{warehouse_id}")
+            logger.info(f"Successfully deleted Fabric warehouse: {warehouse_name}")
+
+        except SQLMeshError as e:
+            if "not found" in str(e).lower():
+                logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
+                return
+            raise
