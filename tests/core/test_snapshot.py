@@ -36,6 +36,8 @@ from sqlmesh.core.model import (
     load_sql_based_model,
     CustomKind,
 )
+from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.state_sync import CachingStateSync
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.signal import signal
@@ -47,6 +49,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotIntervals,
+    SnapshotEvaluator,
     SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,
@@ -3053,3 +3056,91 @@ def test_partitioned_by_roundtrip(make_snapshot: t.Callable):
 
     assert isinstance(deserialized.node, SqlModel)
     assert deserialized.node.partitioned_by == snapshot.node.partitioned_by
+
+
+def test_auto_restatement_selectors(make_snapshot, mocker):
+    # Model A with auto restatement
+    model_a = SqlModel(
+        name="model_a",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=24,
+        ),
+        cron="@hourly",
+        query=parse_one("SELECT 1, ds"),
+    )
+    snapshot_a = make_snapshot(model_a, version="1")
+    snapshot_a.add_interval("2020-01-01", "2020-01-06 09:00:00")
+    snapshot_a.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    # Model B depends on A
+    model_b = SqlModel(
+        name="model_b",
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+        cron="@daily",
+        query=parse_one("SELECT ds FROM model_a"),
+    )
+    snapshot_b = make_snapshot(model_b, nodes={model_a.fqn: model_a}, version="2")
+
+    # Model C also depends on A
+    model_c = SqlModel(
+        name="model_c",
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+        cron="@daily",
+        query=parse_one("SELECT ds FROM model_a"),
+    )
+    snapshot_c = make_snapshot(model_c, nodes={model_a.fqn: model_a}, version="3")
+
+    state_sync = mocker.Mock(spec=CachingStateSync)
+    evaluator = mocker.Mock(spec=SnapshotEvaluator)
+
+    scheduler = Scheduler(
+        snapshots=[snapshot_a, snapshot_b, snapshot_c],
+        snapshot_evaluator=evaluator,
+        state_sync=state_sync,
+        default_catalog="default",
+    )
+
+    run_merged_intervals_calls = []
+
+    def track_run_merged_intervals(merged_intervals, **kwargs):
+        run_merged_intervals_calls.append(
+            {
+                "snapshots": [s.name for s in merged_intervals.keys()],
+                "intervals": {s.name: intervals for s, intervals in merged_intervals.items()},
+            }
+        )
+        return ([], [])
+
+    scheduler.run_merged_intervals = mocker.Mock(side_effect=track_run_merged_intervals)
+
+    # Run with selector for model A
+    scheduler.run(
+        environment="prod",
+        start="2020-01-06",
+        end="2020-01-07",
+        execution_time="2020-01-06 10:01:00",
+        auto_restatement_enabled=True,
+        selected_snapshots={'"model_a"'},
+    )
+
+    # Check that all models intervals were added
+    restated_intervals = state_sync.add_snapshots_intervals.call_args[0][0]
+    pending_by_name = {si.name: si.pending_restatement_intervals for si in restated_intervals}
+    assert pending_by_name['"model_a"'] == [
+        (to_timestamp("2020-01-05 10:00:00"), to_timestamp("2020-01-06 10:00:00"))
+    ]
+    assert pending_by_name['"model_b"'] == [
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-07"))
+    ]
+    assert pending_by_name['"model_c"'] == [
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-07"))
+    ]
+
+    # Check run_merged_intervals was only called for model_a though
+    assert len(run_merged_intervals_calls) == 1
+    merged_intervals_call = run_merged_intervals_calls[0]
+    assert set(merged_intervals_call["snapshots"]) == {'"model_a"'}
+    model_a_intervals = merged_intervals_call["intervals"]['"model_a"']
+    assert len(model_a_intervals) == 1
