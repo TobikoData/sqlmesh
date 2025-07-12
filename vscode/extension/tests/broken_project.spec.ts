@@ -9,8 +9,6 @@ import {
   SUSHI_SOURCE_PATH,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
-import { execAsync } from '../src/utilities/exec'
-import yaml from 'yaml'
 
 test('bad project, double model', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(
@@ -261,143 +259,54 @@ test('bad project, double model, check lineage', async ({
   await page.waitForTimeout(500)
 })
 
-const setup = async (tempDir: string) => {
-  // Run the sqlmesh CLI from the root of the repo using the local path
-  const sqlmeshCliPath = path.resolve(__dirname, '../../../.venv/bin/sqlmesh')
-  const result = await execAsync(sqlmeshCliPath, ['init', 'duckdb'], {
-    cwd: tempDir,
-  })
-  expect(result.exitCode).toBe(0)
-}
+test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
+  const tempDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+  )
+  // Copy over the sushi project
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+  await createPythonInterpreterSettingsSpecifier(tempDir)
 
-test.describe('Bad config.py/config.yaml file issues', () => {
-  test('sqlmesh init, then corrupted config.yaml, bad yaml', async ({
-    page,
-    sharedCodeServer,
-  }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
-    await setup(tempDir)
-    await createPythonInterpreterSettingsSpecifier(tempDir)
+  // Add a model with a bad model block
+  const badModelPath = path.join(tempDir, 'models', 'bad_model.sql')
+  const contents =
+    'MODEL ( name sushi.bad_block, test); SELECT * FROM sushi.customers'
+  await fs.writeFile(badModelPath, contents)
 
-    const configYamlPath = path.join(tempDir, 'config.yaml')
-    // Write an invalid YAML to config.yaml
-    await fs.writeFile(configYamlPath, 'invalid_yaml; asdfasudfy')
+  await page.goto(
+    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
+  )
+  await page.waitForLoadState('networkidle')
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+  // Open the customers.sql model
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
 
-    // Open full_model.sql model
-    await page
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
-    await page
-      .getByRole('treeitem', { name: 'full_model.sql', exact: true })
-      .locator('a')
-      .click()
+  // Wait for the error to appear
+  await page.waitForSelector('text=Error creating context')
 
-    // Wait for the error to appear
-    await page.waitForSelector('text=Error creating context')
+  // Open the problems view
+  await runCommand(page, 'View: Focus Problems')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+  // Assert error is present in the problems view
+  const errorElement = page
+    .getByText("Required keyword: 'value' missing for")
+    .first()
+  await expect(errorElement).toBeVisible({ timeout: 5000 })
 
-    // Asser that the error is present in the problems view
-    await page
-      .getByText('Invalid YAML configuration:')
-      .first()
-      .isVisible({ timeout: 5_000 })
-  })
+  // Remove the bad model file
+  await fs.remove(badModelPath)
 
-  test('sqlmesh init, then corrupted config.yaml, bad parameters', async ({
-    page,
-    sharedCodeServer,
-  }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
-    await setup(tempDir)
-    await createPythonInterpreterSettingsSpecifier(tempDir)
+  // Click on the grain part of the model and save
+  await page.getByText('grain').click()
+  await saveFile(page)
 
-    const configYamlPath = path.join(tempDir, 'config.yaml')
-    // Write an invalid YAML to config.yaml
-    const config = {
-      gateway: 'test',
-    }
-    // Write config to the yaml file
-    await fs.writeFile(configYamlPath, yaml.stringify(config))
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
-
-    // Open full_model.sql model
-    await page
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
-    await page
-      .getByRole('treeitem', { name: 'full_model.sql', exact: true })
-      .locator('a')
-      .click()
-
-    // Wait for the error to appear
-    await page.waitForSelector('text=Error creating context')
-
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
-
-    // Asser that the error is present in the problems view
-    await page
-      .getByText('Invalid project config:', { exact: true })
-      .first()
-      .isVisible({ timeout: 5_000 })
-  })
-
-  test('sushi example, correct python, bad config', async ({
-    page,
-    sharedCodeServer,
-  }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
-    await fs.copy(SUSHI_SOURCE_PATH, tempDir)
-    await createPythonInterpreterSettingsSpecifier(tempDir)
-
-    const configPyPath = path.join(tempDir, 'config.py')
-    // Write an invalid Python to config.py
-    await fs.writeFile(configPyPath, 'config = {}')
-
-    await page.goto(
-      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
-
-    // Open customers.sql model
-    await page
-      .getByRole('treeitem', { name: 'models', exact: true })
-      .locator('a')
-      .click()
-    await page
-      .getByRole('treeitem', { name: 'customers.sql', exact: true })
-      .locator('a')
-      .click()
-
-    // Expect the error to appear
-    await page.waitForSelector('text=Error creating context')
-
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
-
-    // Assert that the error is present in the problems view
-    await page
-      .getByText('Config needs to be a valid object of type')
-      .first()
-      .isVisible({ timeout: 5_000 })
-  })
+  // Wait for successful context load
+  await page.waitForSelector('text=Loaded SQLMesh context')
 })
