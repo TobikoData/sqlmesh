@@ -488,7 +488,6 @@ With the example configuration above, SQLMesh would evaluate environment names a
 
 *Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 
-* [Doris](../integrations/engines/doris.md) (Doris supports external catalogs but uses 'internal' as the default environment)
 * [MySQL](../integrations/engines/mysql.md)
 * [Postgres](../integrations/engines/postgres.md)
 * [GCP Postgres](../integrations/engines/gcp-postgres.md)

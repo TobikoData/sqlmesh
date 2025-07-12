@@ -75,7 +75,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             )
             return self.cursor.fetchall()[0]
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False) -> pd.DataFrame:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         return self.cursor.client.query_df(
             self._to_sql(query, quote=quote_identifiers) if isinstance(query, exp.Expression) else query,
