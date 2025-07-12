@@ -50,7 +50,7 @@ The DUPLICATE model allows duplicate data and is optimized for high-throughput s
 MODEL (
   name user_events,
   kind FULL,
-  table_properties (
+  physical_properties (
     TABLE_MODEL 'DUPLICATE',
     DISTRIBUTED_BY 'HASH(user_id)',
     BUCKETS 10
@@ -72,7 +72,7 @@ The UNIQUE model is ideal for dimension tables and scenarios requiring data upda
 MODEL (
   name dim_users,
   kind FULL,
-  table_properties (
+  physical_properties (
     TABLE_MODEL 'UNIQUE',
     KEY_COLS ['user_id'],
     DISTRIBUTED_BY 'HASH(user_id)',

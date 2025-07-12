@@ -32,7 +32,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "redshift": RedshiftEngineAdapter,
     "postgres": PostgresEngineAdapter,
     "mysql": MySQLEngineAdapter,
-    "doris": DorisEngineAdapter,  # Doris uses dedicated adapter
+    "doris": DorisEngineAdapter,
     "mssql": MSSQLEngineAdapter,
     "trino": TrinoEngineAdapter,
     "athena": AthenaEngineAdapter,
