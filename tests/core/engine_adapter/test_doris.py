@@ -29,23 +29,27 @@ def make_mocked_engine_adapter(mocker: MockFixture) -> t.Callable[..., DorisEngi
     [
         (
             {"schema_name": "test_schema"},
-            'DROP DATABASE IF EXISTS `test_schema`',
+            "DROP DATABASE IF EXISTS `test_schema`",
         ),
         (
             {"schema_name": "test_schema", "ignore_if_not_exists": False},
-            'DROP DATABASE `test_schema`',
+            "DROP DATABASE `test_schema`",
         ),
         (
             {"schema_name": "test_schema", "cascade": True},
-            'DROP DATABASE IF EXISTS `test_schema`',
+            "DROP DATABASE IF EXISTS `test_schema`",
         ),
         (
             {"schema_name": "test_schema", "cascade": True, "ignore_if_not_exists": False},
-            'DROP DATABASE `test_schema`',
+            "DROP DATABASE `test_schema`",
         ),
     ],
 )
-def test_drop_schema(kwargs: t.Dict[str, t.Any], expected: str, make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
+def test_drop_schema(
+    kwargs: t.Dict[str, t.Any],
+    expected: str,
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+) -> None:
     adapter = make_mocked_engine_adapter()
 
     adapter.drop_schema(**kwargs)
@@ -64,7 +68,7 @@ def test_drop_schema(kwargs: t.Dict[str, t.Any], expected: str, make_mocked_engi
                 "columns": ("a",),
                 "index_type": "INVERTED",
             },
-            'CREATE INDEX IF NOT EXISTS test_index ON test_table (`a`) USING INVERTED',
+            "CREATE INDEX IF NOT EXISTS test_index ON test_table (`a`) USING INVERTED",
         ),
         (
             {
@@ -88,7 +92,11 @@ def test_drop_schema(kwargs: t.Dict[str, t.Any], expected: str, make_mocked_engi
         ),
     ],
 )
-def test_create_index(kwargs: t.Dict[str, t.Any], expected: str, make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
+def test_create_index(
+    kwargs: t.Dict[str, t.Any],
+    expected: str,
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+) -> None:
     adapter = make_mocked_engine_adapter()
 
     adapter.create_index(**kwargs)
@@ -97,7 +105,9 @@ def test_create_index(kwargs: t.Dict[str, t.Any], expected: str, make_mocked_eng
     assert sql_calls[0].startswith(expected)
 
 
-def test_create_table_with_comments(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
+def test_create_table_with_comments(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+) -> None:
     adapter = make_mocked_engine_adapter()
 
     adapter.create_table(
@@ -129,8 +139,9 @@ def test_merge(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) 
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        'INSERT OVERWRITE `target` (`id`, `ts`, `val`) SELECT `id`, `ts`, `val` FROM `source`'
+        "INSERT OVERWRITE `target` (`id`, `ts`, `val`) SELECT `id`, `ts`, `val` FROM `source`"
     ]
+
 
 def test_create_table_like(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
     adapter = make_mocked_engine_adapter()
@@ -140,7 +151,10 @@ def test_create_table_like(make_mocked_engine_adapter: t.Callable[..., DorisEngi
         "CREATE TABLE IF NOT EXISTS `target_table` LIKE `source_table`"
     )
 
-def test_comment_truncation(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
+
+def test_comment_truncation(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+) -> None:
     adapter = make_mocked_engine_adapter()
     allowed_table_comment_length = DorisEngineAdapter.MAX_TABLE_COMMENT_LENGTH
     truncated_table_comment = "a" * allowed_table_comment_length

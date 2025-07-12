@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 
 @set_catalog()
 class DorisEngineAdapter(
-    LogicalMergeMixin, NonTransactionalTruncateMixin, PandasNativeFetchDFSupportMixin, EngineAdapterWithIndexSupport
+    LogicalMergeMixin,
+    NonTransactionalTruncateMixin,
+    PandasNativeFetchDFSupportMixin,
+    EngineAdapterWithIndexSupport,
 ):
     DIALECT = "doris"
     DEFAULT_BATCH_SIZE = 200
@@ -124,7 +127,9 @@ class DorisEngineAdapter(
         """
         index_type = index_type.upper()
         if index_type not in ("INVERTED", "BLOOMFILTER", "NGRAM_BF"):
-            raise ValueError(f"Doris only supports INVERTED, BLOOMFILTER, and NGRAM_BF index types, got: {index_type}")
+            raise ValueError(
+                f"Doris only supports INVERTED, BLOOMFILTER, and NGRAM_BF index types, got: {index_type}"
+            )
 
         col_sql = ", ".join(f"`{col}`" for col in columns)
         prop_sql = ""
@@ -140,10 +145,10 @@ class DorisEngineAdapter(
         comment_sql = f" COMMENT '{comment}'" if comment else ""
         if use_create_index:
             exists_sql = " IF NOT EXISTS" if exists else ""
-            using_sql = f" USING {index_type}" if index_type != "BLOOMFILTER" else " USING BLOOMFILTER"
-            sql = (
-                f"CREATE INDEX{exists_sql} {index_name} ON {table_name} ({col_sql}){using_sql}{prop_sql}{comment_sql};"
+            using_sql = (
+                f" USING {index_type}" if index_type != "BLOOMFILTER" else " USING BLOOMFILTER"
             )
+            sql = f"CREATE INDEX{exists_sql} {index_name} ON {table_name} ({col_sql}){using_sql}{prop_sql}{comment_sql};"
         else:
             sql = f"ALTER TABLE {table_name} ADD INDEX {index_name} ({col_sql}) USING {index_type}{prop_sql}{comment_sql};"
         self.execute(sql)
@@ -494,7 +499,11 @@ class DorisEngineAdapter(
         key_cols: str = ""
         if "KEY_COLS" in table_properties_copy:
             key_cols_value = table_properties_copy.pop("KEY_COLS", None)
-            key_cols_str = self._extract_value_from_property(key_cols_value) if key_cols_value is not None else None
+            key_cols_str = (
+                self._extract_value_from_property(key_cols_value)
+                if key_cols_value is not None
+                else None
+            )
             if key_cols_str is not None:
                 key_cols = key_cols_str
             if key_cols:
@@ -569,7 +578,9 @@ class DorisEngineAdapter(
 
         partition_type = partition_type.upper()
         if partition_type not in ("RANGE", "LIST"):
-            raise ValueError(f"Doris only supports RANGE and LIST partitioning, got: {partition_type}")
+            raise ValueError(
+                f"Doris only supports RANGE and LIST partitioning, got: {partition_type}"
+            )
 
         return exp.Property(
             this=exp.Identifier(this="PARTITION BY"),
@@ -599,7 +610,9 @@ class DorisEngineAdapter(
             if columns_to_types:
                 column_defs = []
                 for col_name, col_type in columns_to_types.items():
-                    column_defs.append(exp.ColumnDef(this=exp.to_identifier(col_name), kind=col_type))
+                    column_defs.append(
+                        exp.ColumnDef(this=exp.to_identifier(col_name), kind=col_type)
+                    )
                 schema = exp.Schema(this=table_name, expressions=column_defs)
             else:
                 schema = exp.Schema(this=table_name)
@@ -712,7 +725,11 @@ class DorisEngineAdapter(
                 key_clause = f"DUPLICATE KEY({', '.join(key_cols)})"
         elif table_model:
             # Fallback: use first N columns as default key
-            if not is_ctas and hasattr(create_exp.this, "expressions") and create_exp.this.expressions:
+            if (
+                not is_ctas
+                and hasattr(create_exp.this, "expressions")
+                and create_exp.this.expressions
+            ):
                 col_names = []
                 for expr in create_exp.this.expressions:
                     if isinstance(expr, exp.ColumnDef):
@@ -739,12 +756,16 @@ class DorisEngineAdapter(
                 if partition_function:
                     part_exprs = partition_function
                 else:
-                    part_exprs = ", ".join(e.sql(dialect=self.dialect, identify=quote) for e in part_func.expressions)
+                    part_exprs = ", ".join(
+                        e.sql(dialect=self.dialect, identify=quote) for e in part_func.expressions
+                    )
 
                 # Add AUTO prefix if auto_partition is enabled
                 partition_prefix = "AUTO " if auto_partition.lower() == "true" else ""
 
-                parts.append(f"{partition_prefix}PARTITION BY {part_type}({part_exprs}) ({partitioned_by_def})")
+                parts.append(
+                    f"{partition_prefix}PARTITION BY {part_type}({part_exprs}) ({partitioned_by_def})"
+                )
 
         if distributed_by:
             parts.append(f"DISTRIBUTED BY {distributed_by} BUCKETS {buckets}")
@@ -822,6 +843,8 @@ class DorisEngineAdapter(
         """
         if where == exp.true():
             # Use TRUNCATE TABLE for full table deletion as Doris doesn't support WHERE TRUE
-            return self.execute(exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)]))
+            return self.execute(
+                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
+            )
 
         return super().delete_from(table_name, where)
