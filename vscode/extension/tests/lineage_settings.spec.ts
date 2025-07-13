@@ -2,7 +2,7 @@ import { test, expect } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openLineageView, SUSHI_SOURCE_PATH } from './utils'
+import { openLineageView, openServerPage, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Settings button is visible in the lineage view', async ({
@@ -13,9 +13,7 @@ test('Settings button is visible in the lineage view', async ({
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   await page.waitForSelector('text=models')
 
