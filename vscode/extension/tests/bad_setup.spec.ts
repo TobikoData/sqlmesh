@@ -6,6 +6,7 @@ import {
   createVirtualEnvironment,
   openFile,
   openLineageView,
+  openServerPage,
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
@@ -41,21 +42,13 @@ test('missing LSP dependencies shows install prompt', async ({
     spaces: 2,
   })
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
-  // Open a SQL file to trigger SQLMesh activation
-  // Wait for the models folder to be visible
-  await page.waitForSelector('text=models')
-
-  // Click on the models folder
+  // Open a top_waiters model to trigger SQLMesh activation
   await page
     .getByRole('treeitem', { name: 'models', exact: true })
     .locator('a')
     .click()
-
-  // Open the top_waiters model
   await page
     .getByRole('treeitem', { name: 'customers.sql', exact: true })
     .locator('a')
@@ -66,12 +59,7 @@ test('missing LSP dependencies shows install prompt', async ({
   expect(await page.locator('text=Install').count()).toBeGreaterThanOrEqual(1)
 })
 
-test('lineage, no sqlmesh found', async ({
-  page,
-  sharedCodeServer,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
-
+test('lineage, no sqlmesh found', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -92,12 +80,8 @@ test('lineage, no sqlmesh found', async ({
   })
 
   // navigate to code-server instance
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
 
-  // Open lineage view
   await openLineageView(page)
 
   // Assert shows that sqlmesh is not installed
@@ -143,10 +127,7 @@ test.skip('check that the LSP runs correctly by opening lineage when looking at 
   await fs.ensureDir(path.dirname(sqlFile))
   await fs.writeFile(sqlFile, 'SELECT 1')
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Open the SQL file from the other directory
   await openFile(page, sqlFile)
