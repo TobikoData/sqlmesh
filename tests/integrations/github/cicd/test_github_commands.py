@@ -1447,6 +1447,6 @@ def test_deploy_prod_forward_only(
         """> [!TIP]
 > In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:
 > 
-> `$ sqlmesh plan --restate-model sushi.customer_revenue_by_day --start YYYY-MM-dd --end YYYY-MM-DD`"""
+> `$ sqlmesh plan --restate-model sushi.customer_revenue_by_day --start YYYY-MM-DD --end YYYY-MM-DD`"""
         in created_comments[0].body
     )

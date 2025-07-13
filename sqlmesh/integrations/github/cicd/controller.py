@@ -510,7 +510,7 @@ class GithubController:
             "> [!TIP]\n"
             "> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:\n"
             "> \n"
-            f"> `$ sqlmesh plan --restate-model {example_model_name} --start YYYY-MM-dd --end YYYY-MM-DD`\n"
+            f"> `$ sqlmesh plan --restate-model {example_model_name} --start YYYY-MM-DD --end YYYY-MM-DD`\n"
             ">\n"
             "> Learn more: https://sqlmesh.readthedocs.io/en/stable/concepts/plans/?h=restate#restatement-plans"
         )
