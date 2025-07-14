@@ -1283,14 +1283,20 @@ class TerminalConsole(Console):
             self.log_error("Cleanup failed!")
 
     def start_destroy(self) -> bool:
-        self.log_warning(
+        self.log_error(
             (
-                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+                "!!!  EXTREME CAUTION: DESTRUCTIVE OPERATION !!!\n\n"
+                "The 'destroy' command will PERMANENTLY DELETE:\n"
+                "  • ALL state tables and metadata\n"
+                "  • ALL SQLMesh cache and build artifacts\n"
+                "  • ALL tables and views in the project's schemas/datasets\n"
+                "  • ALL schemas/datasets managed by SQLMesh in this project\n\n"
+                "!!! WARNING: This includes external tables created or managed by other tools !!!\n\n"
                 "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-                "Use this command only when you intend to fully reset the project."
+                "Only use this command when you intend to COMPLETELY DESTROY the project.\n"
             )
         )
-        if not self._confirm("Proceed?"):
+        if not self._confirm("Do you understand the risks and want to see what will be deleted?"):
             self.log_error("Destroy aborted!")
             return False
         return True

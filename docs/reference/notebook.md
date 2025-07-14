@@ -250,7 +250,7 @@ options:
 ```
 %destroy
 
-Removes all project resources, including warehouse objects, state tables, the SQLMesh cache and any build artifacts.
+Removes all state tables, the SQLMesh cache, and other project resources, including warehouse objects. This includes all tables, views, and schemas managed by SQLMesh, as well as any external resources that may have been created by other tools within those schemas.
 ```
 
 #### dlt_refresh
