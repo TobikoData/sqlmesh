@@ -34,7 +34,7 @@ class GithubCICDBotConfig(BaseConfig):
     pr_min_intervals: t.Optional[int] = None
     prod_branch_names_: t.Optional[str] = Field(default=None, alias="prod_branch_name")
     forward_only_branch_suffix_: t.Optional[str] = Field(
-        default=None, alias="foward_only_branch_suffix"
+        default=None, alias="forward_only_branch_suffix"
     )
 
     @model_validator(mode="before")

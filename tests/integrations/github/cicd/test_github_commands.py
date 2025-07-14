@@ -1417,7 +1417,7 @@ def test_deploy_prod_forward_only(
         bot_config=GithubCICDBotConfig(
             merge_method=MergeMethod.SQUASH,
             enable_deploy_command=True,
-            foward_only_branch_suffix="-forward-only",
+            forward_only_branch_suffix="-forward-only",
         ),
         mock_out_context=False,
     )
