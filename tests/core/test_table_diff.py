@@ -504,6 +504,69 @@ Column: dict
     assert stripped_output == stripped_expected
 
 
+def test_data_diff_array_struct_query():
+    engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
+
+    columns_to_types = {"key": exp.DataType.build("int"), "value": exp.DataType.build("int")}
+
+    engine_adapter.create_table("table_diff_source", columns_to_types)
+    engine_adapter.create_table("table_diff_target", columns_to_types)
+
+    engine_adapter.execute(
+        "insert into table_diff_source (key, value) values (1, 1), (1, 2), (1, 3)"
+    )
+    engine_adapter.execute(
+        "insert into table_diff_target (key, value) values (1, 1), (1, 3), (1, 2)"
+    )
+
+    engine_adapter.execute(
+        "create view src_view as select key, array_agg(value) as val_arr, map(['k','v'], [10,11]) as val_map from table_diff_source group by 1"
+    )
+    engine_adapter.execute(
+        "create view target_view as select key, array_agg(value) as val_arr, map(['k','v'],[11,10]) as val_map from table_diff_target group by 1"
+    )
+
+    table_diff = TableDiff(
+        adapter=engine_adapter,
+        source="src_view",
+        target="target_view",
+        source_alias="dev",
+        target_alias="prod",
+        on=["key"],
+    )
+
+    diff = table_diff.row_diff()
+
+    output = capture_console_output("show_row_diff", row_diff=diff)
+
+    assert (
+        strip_ansi_codes(output)
+        == """Row Counts:
+└──  PARTIAL MATCH: 1 rows (100.0%)
+
+COMMON ROWS column comparison stats:
+         pct_match
+val_arr        0.0
+val_map        0.0
+
+
+COMMON ROWS sample data differences:
+Column: val_arr
+┏━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ key ┃ DEV     ┃ PROD    ┃
+┡━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ 1   │ [1 2 3] │ [1 3 2] │
+└─────┴─────────┴─────────┘
+Column: val_map
+┏━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ key ┃ DEV                ┃ PROD               ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ 1   │ {'k': 10, 'v': 11} │ {'k': 11, 'v': 10} │
+└─────┴────────────────────┴────────────────────┘
+""".strip()
+    )
+
+
 def test_data_diff_nullable_booleans():
     engine_adapter = DuckDBConnectionConfig().create_engine_adapter()
 
