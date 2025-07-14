@@ -622,6 +622,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 BUILTIN_RULES.union(project.user_rules), config.linter
             )
 
+        # Load environment statements from state for projects not in current load
+        if any(self._projects):
+            prod = self.state_reader.get_environment(c.PROD)
+            if prod:
+                existing_statements = self.state_reader.get_environment_statements(c.PROD)
+                for stmt in existing_statements:
+                    if stmt.project and stmt.project not in self._projects:
+                        self._environment_statements.append(stmt)
+
         uncached = set()
 
         if any(self._projects):

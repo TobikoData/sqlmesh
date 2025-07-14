@@ -4944,15 +4944,88 @@ def test_multi(mocker):
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
-    # Ensure only repo_1's environment statements have executed in this context
+    # Ensure that before_all and after_all statements of both repos are there despite planning with repo_1
     environment_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert len(environment_statements) == 1
-    assert environment_statements[0].before_all == [
+    assert len(environment_statements) == 2
+
+    # Ensure that environment statements have the project field set correctly
+    sorted_env_statements = sorted(environment_statements, key=lambda es: es.project)
+    assert sorted_env_statements[0].project == "repo_1"
+    assert sorted_env_statements[1].project == "repo_2"
+
+    # Assert before_all and after_all for each project
+    assert sorted_env_statements[0].before_all == [
         "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
     ]
-    assert environment_statements[0].after_all == [
+    assert sorted_env_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
+    assert sorted_env_statements[1].before_all == [
+        "CREATE TABLE IF NOT EXISTS before_2 AS select @two()"
+    ]
+    assert sorted_env_statements[1].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_2 AS select @dup()"
+    ]
+
+
+@use_terminal_console
+def test_multi_repo_single_project_environment_statements_update(copy_to_temp_path):
+    paths = copy_to_temp_path("examples/multi")
+    repo_1_path = f"{paths[0]}/repo_1"
+    repo_2_path = f"{paths[0]}/repo_2"
+
+    context = Context(paths=[repo_1_path, repo_2_path], gateway="memory")
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
+
+    initial_plan = context.plan_builder().build()
+    context.apply(initial_plan)
+
+    # Get initial statements
+    initial_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(initial_statements) == 2
+
+    # Modify repo_1's config to add a new before_all statement
+    repo_1_config_path = f"{repo_1_path}/config.yaml"
+    with open(repo_1_config_path, "r") as f:
+        config_content = f.read()
+
+    # Add a new before_all statement to repo_1 only
+    modified_config = config_content.replace(
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()",
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()\n  - CREATE TABLE IF NOT EXISTS before_1_modified AS select 999",
+    )
+
+    with open(repo_1_config_path, "w") as f:
+        f.write(modified_config)
+
+    # Create new context with modified config but only for repo_1
+    context_repo_1_only = Context(
+        paths=[repo_1_path], state_sync=context.state_sync, gateway="memory"
+    )
+
+    # Plan with only repo_1, this should preserve repo_2's statements from state
+    repo_1_plan = context_repo_1_only.plan_builder(environment="dev").build()
+    context_repo_1_only.apply(repo_1_plan)
+    updated_statements = context_repo_1_only.state_reader.get_environment_statements("dev")
+
+    # Should still have statements from both projects
+    assert len(updated_statements) == 2
+
+    # Sort by project
+    sorted_updated = sorted(updated_statements, key=lambda es: es.project or "")
+
+    # Verify repo_1 has the new statement
+    repo_1_updated = sorted_updated[0]
+    assert repo_1_updated.project == "repo_1"
+    assert len(repo_1_updated.before_all) == 2
+    assert "CREATE TABLE IF NOT EXISTS before_1_modified" in repo_1_updated.before_all[1]
+
+    # Verify repo_2 statements are preserved from state
+    repo_2_preserved = sorted_updated[1]
+    assert repo_2_preserved.project == "repo_2"
+    assert len(repo_2_preserved.before_all) == 1
+    assert "CREATE TABLE IF NOT EXISTS before_2" in repo_2_preserved.before_all[0]
+    assert "CREATE TABLE IF NOT EXISTS after_2 AS select @dup()" in repo_2_preserved.after_all[0]
 
 
 @use_terminal_console
