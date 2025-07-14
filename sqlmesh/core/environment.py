@@ -266,6 +266,7 @@ class EnvironmentStatements(PydanticModel):
     after_all: t.List[str]
     python_env: t.Dict[str, Executable]
     jinja_macros: t.Optional[JinjaMacroRegistry] = None
+    project: t.Optional[str] = None
 
     def render_before_all(
         self,
