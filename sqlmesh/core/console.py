@@ -2711,8 +2711,16 @@ def _cells_match(x: t.Any, y: t.Any) -> bool:
     def _normalize(val: t.Any) -> t.Any:
         # Convert Pandas null to Python null for the purposes of comparison to prevent errors like the following on boolean fields:
         # - TypeError: boolean value of NA is ambiguous
-        if pd.isnull(val):
+        # note pd.isnull() returns either a bool or a ndarray[bool] depending on if the input
+        # is scalar or an array
+        isnull = pd.isnull(val)
+
+        if isinstance(isnull, bool):  # scalar
+            if isnull:
+                val = None
+        elif all(isnull):  # array
             val = None
+
         return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
 
     return _normalize(x) == _normalize(y)
