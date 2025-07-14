@@ -900,31 +900,29 @@ def test_destroy(
     expected_messages = [
         (
             "!!!  EXTREME CAUTION: DESTRUCTIVE OPERATION !!!\n\n"
-            "The 'destroy' command will PERMANENTLY DELETE:\n"
+            "The 'destroy' command will DELETE:\n"
             "  • ALL state tables and metadata\n"
             "  • ALL SQLMesh cache and build artifacts\n"
             "  • ALL tables and views in the project's schemas/datasets\n"
             "  • ALL schemas/datasets managed by SQLMesh in this project\n\n"
             "!!! WARNING: This includes external tables created or managed by other tools !!!\n\n"
-            "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
             "Only use this command when you intend to COMPLETELY DESTROY the project."
         ),
-        "Do you understand the risks and want to see what will be deleted? [y/n]:",
         "Schemas to be deleted:",
         "• memory.sushi",
         "Snapshot tables to be deleted:",
         "All SQLMesh state tables will be deleted",
+        "==================================================",
         (
-            "!!! CRITICAL WARNING: This action will PERMANENTLY DELETE ALL the above resources!\n"
-            "This includes ALL tables, views and schemas managed by SQLMesh AND potentially\n"
-            "external resources created by other tools in these schemas. This action is IRREVERSIBLE!"
+            "!!! WARNING: This action will DELETE ALL the above resources managed by SQLMesh\n"
+            "AND potentially external resources created by other tools in these schemas !!!"
         ),
-        "Are you ABSOLUTELY SURE you want to proceed with deletion? [y/n]:",
+        "Do you understand the risks and are you ABSOLUTELY SURE you want to proceed with deletion? [y/n]:",
         "Environment 'prod' invalidated.",
         "Deleted object memory.sushi",
         'Deleted object "memory"."raw"."model1"',
         'Deleted object "memory"."raw"."model2"',
-        'Deleted object "memory"."raw"."demographics"',
         "State tables removed.",
         "Destroy completed successfully.",
     ]

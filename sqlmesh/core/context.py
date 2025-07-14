@@ -858,7 +858,50 @@ class GenericContext(BaseContext, t.Generic[C]):
     def destroy(self) -> bool:
         success = False
 
-        if self.console.start_destroy():
+        # Collect resources to be deleted
+        environments = self.state_reader.get_environments()
+        schemas_to_delete = set()
+        tables_to_delete = set()
+        views_to_delete = set()
+        all_snapshot_infos = set()
+
+        # For each environment find schemas and tables
+        for environment in environments:
+            all_snapshot_infos.update(environment.snapshots)
+            snapshots = self.state_reader.get_snapshots(environment.snapshots).values()
+            for snapshot in snapshots:
+                if snapshot.is_model and not snapshot.is_symbolic:
+                    # Get the appropriate adapter
+                    if environment.gateway_managed and snapshot.model_gateway:
+                        adapter = self.engine_adapters.get(
+                            snapshot.model_gateway, self.engine_adapter
+                        )
+                    else:
+                        adapter = self.engine_adapter
+
+                    if environment.suffix_target.is_schema or environment.suffix_target.is_catalog:
+                        schema = snapshot.qualified_view_name.schema_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        catalog = snapshot.qualified_view_name.catalog_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        if catalog:
+                            schemas_to_delete.add(f"{catalog}.{schema}")
+                        else:
+                            schemas_to_delete.add(schema)
+
+                    if environment.suffix_target.is_table:
+                        view_name = snapshot.qualified_view_name.for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        views_to_delete.add(view_name)
+
+                    # Add snapshot tables
+                    table_name = snapshot.table_name()
+                    tables_to_delete.add(table_name)
+
+        if self.console.start_destroy(schemas_to_delete, views_to_delete, tables_to_delete):
             try:
                 success = self._destroy()
             finally:
@@ -2723,80 +2766,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def _destroy(self) -> bool:
-        environments = self.state_reader.get_environments()
-
-        schemas_to_delete = set()
-        tables_to_delete = set()
-        views_to_delete = set()
-        all_snapshot_infos = set()
-
-        # For each environment find schemas and tables
-        for environment in environments:
-            all_snapshot_infos.update(environment.snapshots)
-            snapshots = self.state_reader.get_snapshots(environment.snapshots).values()
-            for snapshot in snapshots:
-                if snapshot.is_model and not snapshot.is_symbolic:
-                    # Get the appropriate adapter
-                    if environment.gateway_managed and snapshot.model_gateway:
-                        adapter = self.engine_adapters.get(
-                            snapshot.model_gateway, self.engine_adapter
-                        )
-                    else:
-                        adapter = self.engine_adapter
-
-                    if environment.suffix_target.is_schema or environment.suffix_target.is_catalog:
-                        schema = snapshot.qualified_view_name.schema_for_environment(
-                            environment.naming_info, dialect=adapter.dialect
-                        )
-                        catalog = snapshot.qualified_view_name.catalog_for_environment(
-                            environment.naming_info, dialect=adapter.dialect
-                        )
-                        if catalog:
-                            schemas_to_delete.add(f"{catalog}.{schema}")
-                        else:
-                            schemas_to_delete.add(schema)
-
-                    if environment.suffix_target.is_table:
-                        view_name = snapshot.qualified_view_name.for_environment(
-                            environment.naming_info, dialect=adapter.dialect
-                        )
-                        views_to_delete.add(view_name)
-
-                    # Add snapshot tables
-                    table_name = snapshot.table_name()
-                    tables_to_delete.add(table_name)
-
-        # Display what will be deleted
-        self.console.log_error("\n" + "=" * 50 + "\n")
-        if schemas_to_delete:
-            self.console.log_error("Schemas to be deleted:")
-            for schema in sorted(schemas_to_delete):
-                self.console.log_error(f"  • {schema}")
-
-        if views_to_delete:
-            self.console.log_error("\nEnvironment views to be deleted:")
-            for view in sorted(views_to_delete):
-                self.console.log_error(f"  • {view}")
-
-        if tables_to_delete:
-            self.console.log_error("\nSnapshot tables to be deleted:")
-            for table in sorted(tables_to_delete):
-                self.console.log_error(f"  • {table}")
-
-        self.console.log_error("\nAll SQLMesh state tables will be deleted")
-        self.console.log_error("\n" + "=" * 50 + "\n")
-
-        # Final confirmation with stronger warning
-        self.console.log_error(
-            "!!! CRITICAL WARNING: This action will PERMANENTLY DELETE ALL the above resources!\n"
-            "This includes ALL tables, views and schemas managed by SQLMesh AND potentially\n"
-            "external resources created by other tools in these schemas. This action is IRREVERSIBLE!\n"
-        )
-
-        if not self.console._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):  # type: ignore
-            self.console.log_error("Destroy operation cancelled.")
-            return False
-
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
             self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
