@@ -603,11 +603,11 @@ class GithubController:
 
     def _get_pr_environment_summary_failure(self, exception: t.Optional[Exception] = None) -> str:
         console_output = self._console.consume_captured_output()
+        failure_msg = ""
 
         if isinstance(exception, PlanError):
-            failure_msg = f"Plan application failed.\n"
             if exception.args and (msg := exception.args[0]) and isinstance(msg, str):
-                failure_msg += f"\n{msg}\n"
+                failure_msg += f"*{msg}*\n"
             if console_output:
                 failure_msg += f"\n{console_output}"
         elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
@@ -713,6 +713,7 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
+        self._console.consume_captured_output()  # clear output buffer
         self._context.apply(self.pr_plan)  # will raise if PR environment creation fails
 
         # update PR info comment
