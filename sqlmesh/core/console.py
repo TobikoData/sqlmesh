@@ -289,11 +289,17 @@ class TableDiffConsole(abc.ABC):
 
 class BaseConsole(abc.ABC):
     @abc.abstractmethod
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         """Display warning info to the user.
 
         Args:
@@ -3090,15 +3096,23 @@ class CaptureTerminalConsole(TerminalConsole):
         finally:
             self._errors = []
 
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         if short_message not in self._warnings:
             self._warnings.append(short_message)
-        super().log_warning(short_message, long_message)
+        if kwargs.pop("print", True):
+            super().log_warning(short_message, long_message)
 
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         if message not in self._errors:
             self._errors.append(message)
-        super().log_error(message)
+        if kwargs.pop("print", True):
+            super().log_error(message)
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
@@ -3134,6 +3148,11 @@ class MarkdownConsole(CaptureTerminalConsole):
         self.alert_block_collapsible_threshold = int(
             kwargs.pop("alert_block_collapsible_threshold", 200)
         )
+
+        # capture_only = True: capture but dont print to console
+        # capture_only = False: capture and also print to console
+        self.warning_capture_only = kwargs.pop("warning_capture_only", False)
+        self.error_capture_only = kwargs.pop("error_capture_only", False)
 
         super().__init__(
             **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
@@ -3409,6 +3428,12 @@ class MarkdownConsole(CaptureTerminalConsole):
         super().stop_promotion_progress(success)
         self._print("\n")
 
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        super().log_warning(short_message, long_message, print=not self.warning_capture_only)
+
+    def log_error(self, message: str) -> None:
+        super().log_error(message, print=not self.error_capture_only)
+
     def log_success(self, message: str) -> None:
         self._print(message)
 
@@ -3435,19 +3460,24 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
-            msg = "  " + "\n  ".join(snapshot_names)
-            self._print(f"**Skipped models**\n\n{msg}")
+            self._print(f"**Skipped models**")
+            for snapshot_name in snapshot_names:
+                self._print(f"* `{snapshot_name}`")
+            self._print("")
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
         if errors:
-            self._print("\n```\nFailed models\n")
+            self._print("**Failed models**")
 
             error_messages = _format_node_errors(errors)
 
             for node_name, msg in error_messages.items():
-                self._print(f"  **{node_name}**\n\n{msg}")
+                self._print(f"* `{node_name}`\n")
+                self._print("  ```")
+                self._print(msg)
+                self._print("  ```")
 
-            self._print("```\n")
+            self._print("")
 
     def show_linter_violations(
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
