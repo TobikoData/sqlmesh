@@ -908,6 +908,7 @@ def test_destroy(
         "Deleted object memory.sushi",
         'Deleted object "memory"."raw"."model1"',
         'Deleted object "memory"."raw"."model2"',
+        'Deleted object "memory"."raw"."demographics"',
         "State tables removed.",
         "Destroy completed successfully.",
     ]
