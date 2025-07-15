@@ -1072,3 +1072,75 @@ def test_get_alter_expressions_includes_catalog(
     assert schema.db == "bar"
     assert schema.sql(dialect="bigquery") == "catalog2.bar"
     assert tables == {"bing"}
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_still_running(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-123"
+    mock_job.done.return_value = False  # Job is still running
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked and cancellation was called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_called_once()
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_already_done(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-456"
+    mock_job.done.return_value = True  # Job is already done
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked but cancellation was NOT called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_not_called()
