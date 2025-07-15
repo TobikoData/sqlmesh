@@ -2089,7 +2089,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     with pytest.raises(
         SQLMeshError,
-        match=rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
+        match=rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
     ):
         state_sync.get_versions()
 
@@ -2099,7 +2099,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION + 1)
     error = (
         rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}' \(remote\). "
-        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={SQLMESH_VERSION}"' command\)."""
+        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={re.escape(SQLMESH_VERSION)}"' command\)."""
     )
 
     with pytest.raises(SQLMeshError, match=error):
@@ -2136,7 +2136,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # sqlmesh version is behind
     sqlmesh_version_minor_bump = f"{major}.{int(minor) + 1}.{patch}"
     error = (
-        rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
+        rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
     )
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
@@ -2146,7 +2146,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
 
     # sqlmesh version is ahead
     sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
-    error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
+    error = rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '{sqlmesh_version_minor_decrease}'"
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
