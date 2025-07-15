@@ -1,0 +1,92 @@
+name: Private Repo Testing
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: 'private-test-${{ github.event.pull_request.number }}'
+  cancel-in-progress: true
+
+jobs:
+  trigger-private-test:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Set up Node.js for UI build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - name: Install UI dependencies
+        run: pnpm install
+      - name: Build UI
+        run: pnpm --prefix web/client run build
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install build twine setuptools_scm
+      - name: Generate development version
+        id: version
+        run: |
+          source .venv/bin/activate
+          # Generate a development version using existing script
+          DEV_VERSION=$(python .github/scripts/get_scm_version.py)
+          echo "version=$DEV_VERSION" >> $GITHUB_OUTPUT
+          echo "Generated development version: $DEV_VERSION"
+      - name: Build package
+        run: |
+          source .venv/bin/activate
+          python -m build
+      - name: Configure PyPI for private repository
+        run: |
+          cat > ~/.pypirc << EOF
+          [distutils]
+          index-servers = tobiko-private
+          [tobiko-private]
+          repository = ${{ secrets.TOBIKO_PRIVATE_PYPI_URL }}
+          username = _json_key_base64
+          password = ${{ secrets.TOBIKO_PRIVATE_PYPI_KEY }}
+          EOF
+      - name: Publish to private PyPI
+        run: |
+          source .venv/bin/activate
+          python -m twine upload -r tobiko-private dist/*
+      - name: Get commit information
+        id: commit
+        run: |
+          echo "author=$(git log -1 --format='%an')" >> $GITHUB_OUTPUT
+          echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "message=$(git log -1 --format='%s')" >> $GITHUB_OUTPUT
+      - name: Trigger private repository workflow
+        uses: convictional/trigger-workflow-and-wait@v1.6.5
+        with:
+          owner: ${{ secrets.PRIVATE_REPO_OWNER }}
+          repo: ${{ secrets.PRIVATE_REPO_NAME }}
+          github_token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          workflow_file_name: ${{ secrets.PRIVATE_WORKFLOW_FILE }}
+          client_payload: |
+            {
+              "package_version": "${{ steps.version.outputs.version }}",
+              "python_version": "3.12",
+              "author": "${{ steps.commit.outputs.author }}",
+              "hash": "${{ steps.commit.outputs.hash }}",
+              "message": "${{ steps.commit.outputs.message }}",
+              "pr_number": "${{ github.event.pull_request.number }}"
+            }

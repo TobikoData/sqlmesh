@@ -1762,21 +1762,19 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
-                    if truncate
-                    else existing_rows_query.where(
+                    existing_rows_query.where(
                         exp.and_(
                             valid_to_col.is_(exp.Null().not_()),
                             valid_to_col < cleanup_ts,
                         ),
-                    ),
+                    )
+                    if truncate
+                    else existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()))
-                    if truncate
-                    else exp.select(
+                    exp.select(
                         *(
                             to_time_column(
                                 exp.null(), time_data_type, self.dialect, nullable=True
@@ -1796,7 +1794,9 @@ class EngineAdapter:
                                 valid_to_col >= cleanup_ts,
                             ),
                         )
-                    ),
+                    )
+                    if truncate
+                    else existing_rows_query.where(valid_to_col.is_(exp.Null())),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(
