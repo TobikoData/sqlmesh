@@ -31,6 +31,7 @@ from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.core.test.context import TestExecutionContext
 from sqlmesh.utils import Verbosity
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
@@ -2996,3 +2997,89 @@ test_foo_cumulative:
 
     _check_successful_or_raise(test1.run())
     _check_successful_or_raise(test2.run())
+
+
+def test_parameterized_name_self_referential_python_model():
+    variables = {"table_catalog": "gold"}
+
+    @model(
+        name="@{table_catalog}.sushi.foo",
+        columns={
+            "id": "int",
+        },
+        depends_on=["@{table_catalog}.sushi.bar"],
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        current_table = context.resolve_table(f"{context.var('table_catalog')}.sushi.foo")
+        current_df = context.fetchdf(f"select id from {current_table}")
+        upstream_table = context.resolve_table(f"{context.var('table_catalog')}.sushi.bar")
+        upstream_df = context.fetchdf(f"select id from {upstream_table}")
+
+        return pd.DataFrame([{"ID": upstream_df["ID"].sum() + current_df["ID"].sum()}])
+
+    @model(
+        name="@{table_catalog}.sushi.bar",
+        columns={
+            "id": "int",
+        },
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        return pd.DataFrame([{"ID": 1}])
+
+    model_foo = model.get_registry()["@{table_catalog}.sushi.foo"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+    model_bar = model.get_registry()["@{table_catalog}.sushi.bar"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+
+    assert model_foo.fqn == '"GOLD"."SUSHI"."FOO"'
+    assert model_bar.fqn == '"GOLD"."SUSHI"."BAR"'
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables)
+    )
+    ctx.upsert_model(model_foo)
+    ctx.upsert_model(model_bar)
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog') }}.sushi.foo
+  inputs:
+    {{ var('table_catalog') }}.sushi.foo:
+      rows:
+        - id: 3
+    {{ var('table_catalog') }}.sushi.bar:
+      rows:
+        - id: 5
+  outputs:
+    query:
+      - id: 8        
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=model_foo,
+        context=ctx,
+    )
+
+    assert isinstance(test, PythonModelTest)
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    assert '"GOLD"."SUSHI"."BAR"' in test.body["inputs"]
+
+    assert isinstance(test.context, TestExecutionContext)
+    assert '"GOLD"."SUSHI"."FOO"' in test.context._model_tables
+    assert '"GOLD"."SUSHI"."BAR"' in test.context._model_tables
+
+    _check_successful_or_raise(test.run())
