@@ -69,11 +69,14 @@ def _create_model(
     meta: str = SUSHI_FOO_META,
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
+    **kwargs: t.Any,
 ) -> SqlModel:
     parsed_definition = parse(f"{meta};{query}", default_dialect=dialect)
     return t.cast(
         SqlModel,
-        load_sql_based_model(parsed_definition, dialect=dialect, default_catalog=default_catalog),
+        load_sql_based_model(
+            parsed_definition, dialect=dialect, default_catalog=default_catalog, **kwargs
+        ),
     )
 
 
@@ -2814,3 +2817,182 @@ def test_test_generation_with_timestamp_nat(tmp_path: Path) -> None:
     assert query_output[0]["ts_col"] == datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)
     assert query_output[1]["ts_col"] is None
     assert query_output[2]["ts_col"] == datetime.datetime(2024, 9, 21, 15, 45, 0, 987654)
+
+
+def test_parameterized_name_sql_model() -> None:
+    variables = {"table_catalog": "gold"}
+    model = _create_model(
+        "select 1 as id, 'foo' as name",
+        meta="""
+        MODEL (
+          name @{table_catalog}.sushi.foo,
+          kind FULL
+        )
+        """,
+        dialect="snowflake",
+        variables=variables,
+    )
+    assert model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  outputs:
+    query:
+      - id: 1
+        name: foo  
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+
+    _check_successful_or_raise(test.run())
+
+
+def test_parameterized_name_python_model() -> None:
+    variables = {"table_catalog": "gold"}
+
+    @model(
+        name="@{table_catalog}.sushi.foo",
+        columns={
+            "id": "int",
+            "name": "varchar",
+        },
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        return pd.DataFrame([{"ID": 1, "NAME": "foo"}])
+
+    python_model = model.get_registry()["@{table_catalog}.sushi.foo"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+
+    assert python_model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  outputs:
+    query:
+      - id: 1
+        name: foo  
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=python_model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+
+    _check_successful_or_raise(test.run())
+
+
+def test_parameterized_name_self_referential_model():
+    variables = {"table_catalog": "gold"}
+    model = _create_model(
+        """
+        with last_value as (
+          select coalesce(max(v), 0) as v from @{table_catalog}.sushi.foo
+        )
+        select v + 1 as v from last_value
+        """,
+        meta="""
+        MODEL (
+          name @{table_catalog}.sushi.foo,
+          kind FULL
+        )
+        """,
+        dialect="snowflake",
+        variables=variables,
+    )
+    assert model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test1 = _create_test(
+        body=load_yaml(
+            """
+test_foo_intial_state:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  inputs:
+    {{ var('table_catalog' ) }}.sushi.foo:
+      rows: []
+      columns:
+        v: int
+  outputs:
+    query:
+      - v: 1 
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo_intial_state",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+    assert isinstance(test1, SqlModelTest)
+    assert test1.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    test1_model_query = test1._render_model_query().sql(dialect="snowflake")
+    assert '"GOLD"."SUSHI"."FOO"' not in test1_model_query
+    assert (
+        test1._test_fixture_table('"GOLD"."SUSHI"."FOO"').sql(dialect="snowflake", identify=True)
+        in test1_model_query
+    )
+
+    test2 = _create_test(
+        body=load_yaml(
+            """
+test_foo_cumulative:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  inputs:
+    {{ var('table_catalog' ) }}.sushi.foo:
+      rows:
+        - v: 5
+  outputs:
+    query:
+      - v: 6
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo_cumulative",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+    assert isinstance(test2, SqlModelTest)
+    assert test2.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    test2_model_query = test2._render_model_query().sql(dialect="snowflake")
+    assert '"GOLD"."SUSHI"."FOO"' not in test2_model_query
+    assert (
+        test2._test_fixture_table('"GOLD"."SUSHI"."FOO"').sql(dialect="snowflake", identify=True)
+        in test2_model_query
+    )
+
+    _check_successful_or_raise(test1.run())
+    _check_successful_or_raise(test2.run())
