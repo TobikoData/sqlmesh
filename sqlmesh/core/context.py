@@ -214,6 +214,15 @@ class BaseContext(abc.ABC):
         """
         model_name = normalize_model_name(model_name, self.default_catalog, self.default_dialect)
 
+        if model_name not in self._model_tables:
+            model_name_list = "\n".join(list(self._model_tables))
+            logger.debug(
+                f"'{model_name}' not found in model to table mapping. Available model names: \n{model_name_list}"
+            )
+            raise SQLMeshError(
+                f"Unable to find a table mapping for model '{model_name}'. Has it been spelled correctly?"
+            )
+
         # We generate SQL for the default dialect because the table name may be used in a
         # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
         return parse_one(self._model_tables[model_name]).sql(

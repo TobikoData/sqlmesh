@@ -3082,4 +3082,7 @@ test_foo:
     assert '"GOLD"."SUSHI"."FOO"' in test.context._model_tables
     assert '"GOLD"."SUSHI"."BAR"' in test.context._model_tables
 
+    with pytest.raises(SQLMeshError, match=r"Unable to find a table mapping"):
+        test.context.resolve_table("silver.sushi.bar")
+
     _check_successful_or_raise(test.run())
