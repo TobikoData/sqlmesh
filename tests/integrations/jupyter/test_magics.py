@@ -898,27 +898,12 @@ def test_destroy(
     assert not output.stderr
     text_output = convert_all_html_output_to_text(output)
     expected_messages = [
-        (
-            "!!!  EXTREME CAUTION: DESTRUCTIVE OPERATION !!!\n\n"
-            "The 'destroy' command will DELETE:\n"
-            "  • ALL state tables and metadata\n"
-            "  • ALL SQLMesh cache and build artifacts\n"
-            "  • ALL tables and views in the project's schemas/datasets\n"
-            "  • ALL schemas/datasets managed by SQLMesh in this project\n\n"
-            "!!! WARNING: This includes external tables created or managed by other tools !!!\n\n"
-            "The operation may disrupt any currently running or scheduled plans.\n"
-            "Only use this command when you intend to COMPLETELY DESTROY the project."
-        ),
+        "[WARNING] This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\nThe operation may disrupt any currently running or scheduled plans.",
         "Schemas to be deleted:",
         "• memory.sushi",
         "Snapshot tables to be deleted:",
-        "All SQLMesh state tables will be deleted",
-        "==================================================",
-        (
-            "!!! WARNING: This action will DELETE ALL the above resources managed by SQLMesh\n"
-            "AND potentially external resources created by other tools in these schemas !!!"
-        ),
-        "Do you understand the risks and are you ABSOLUTELY SURE you want to proceed with deletion? [y/n]:",
+        "This action will DELETE ALL the above resources managed by SQLMesh AND\npotentially external resources created by other tools in these schemas.",
+        "Are you ABSOLUTELY SURE you want to proceed with deletion? [y/n]:",
         "Environment 'prod' invalidated.",
         "Deleted object memory.sushi",
         'Deleted object "memory"."raw"."model1"',
@@ -927,4 +912,4 @@ def test_destroy(
         "Destroy completed successfully.",
     ]
     for message in expected_messages:
-        assert message in text_output
+        assert any(message in line for line in text_output)

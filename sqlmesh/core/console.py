@@ -1303,23 +1303,12 @@ class TerminalConsole(Console):
         views_to_delete: t.Optional[t.Set[str]] = None,
         tables_to_delete: t.Optional[t.Set[str]] = None,
     ) -> bool:
-        self.log_error(
-            (
-                "!!!  EXTREME CAUTION: DESTRUCTIVE OPERATION !!!\n\n"
-                "The 'destroy' command will DELETE:\n"
-                "  • ALL state tables and metadata\n"
-                "  • ALL SQLMesh cache and build artifacts\n"
-                "  • ALL tables and views in the project's schemas/datasets\n"
-                "  • ALL schemas/datasets managed by SQLMesh in this project\n\n"
-                "!!! WARNING: This includes external tables created or managed by other tools !!!\n\n"
-                "The operation may disrupt any currently running or scheduled plans.\n"
-                "Only use this command when you intend to COMPLETELY DESTROY the project.\n"
-            )
+        self.log_warning(
+            "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
         )
 
-        # Display what will be deleted
         if schemas_to_delete or views_to_delete or tables_to_delete:
-            self.log_error("\n" + "=" * 50 + "\n")
             if schemas_to_delete:
                 self.log_error("Schemas to be deleted:")
                 for schema in sorted(schemas_to_delete):
@@ -1335,18 +1324,12 @@ class TerminalConsole(Console):
                 for table in sorted(tables_to_delete):
                     self.log_error(f"  • {table}")
 
-            self.log_error("\nAll SQLMesh state tables will be deleted")
-            self.log_error("\n" + "=" * 50 + "\n")
-
-            # Final confirmation with stronger warning
             self.log_error(
-                "!!! WARNING: This action will DELETE ALL the above resources managed by SQLMesh\n"
-                "AND potentially external resources created by other tools in these schemas !!!\n"
+                "\nThis action will DELETE ALL the above resources managed by SQLMesh AND\n"
+                "potentially external resources created by other tools in these schemas.\n"
             )
 
-        if not self._confirm(
-            "Do you understand the risks and are you ABSOLUTELY SURE you want to proceed with deletion?"
-        ):
+        if not self._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):
             self.log_error("Destroy operation cancelled.")
             return False
         return True
