@@ -186,8 +186,18 @@ class DestroyConsole(abc.ABC):
     """Console for describing a destroy operation"""
 
     @abc.abstractmethod
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         """Start a destroy operation.
+
+        Args:
+            schemas_to_delete: Set of schemas that will be deleted
+            views_to_delete: Set of views that will be deleted
+            tables_to_delete: Set of tables that will be deleted
 
         Returns:
             Whether or not the destroy operation should proceed
@@ -830,7 +840,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
@@ -1282,16 +1297,40 @@ class TerminalConsole(Console):
         else:
             self.log_error("Cleanup failed!")
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         self.log_warning(
-            (
-                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
-                "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-                "Use this command only when you intend to fully reset the project."
-            )
+            "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
         )
-        if not self._confirm("Proceed?"):
-            self.log_error("Destroy aborted!")
+
+        if schemas_to_delete or views_to_delete or tables_to_delete:
+            if schemas_to_delete:
+                self.log_error("Schemas to be deleted:")
+                for schema in sorted(schemas_to_delete):
+                    self.log_error(f"  • {schema}")
+
+            if views_to_delete:
+                self.log_error("\nEnvironment views to be deleted:")
+                for view in sorted(views_to_delete):
+                    self.log_error(f"  • {view}")
+
+            if tables_to_delete:
+                self.log_error("\nSnapshot tables to be deleted:")
+                for table in sorted(tables_to_delete):
+                    self.log_error(f"  • {table}")
+
+            self.log_error(
+                "\nThis action will DELETE ALL the above resources managed by SQLMesh AND\n"
+                "potentially external resources created by other tools in these schemas.\n"
+            )
+
+        if not self._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):
+            self.log_error("Destroy operation cancelled.")
             return False
         return True
 

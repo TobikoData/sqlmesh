@@ -6354,7 +6354,9 @@ def test_destroy(copy_to_temp_path):
     context.fetchdf(f"SELECT * FROM db_1.first_schema.model_two")
 
     # Use the destroy command to remove all data objects and state
-    context._destroy()
+    # Mock the console confirmation to automatically return True
+    with patch.object(context.console, "_confirm", return_value=True):
+        context._destroy()
 
     # Ensure all tables have been removed
     for table_name in state_tables:

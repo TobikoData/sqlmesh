@@ -858,10 +858,52 @@ class GenericContext(BaseContext, t.Generic[C]):
     def destroy(self) -> bool:
         success = False
 
-        if self.console.start_destroy():
+        # Collect resources to be deleted
+        environments = self.state_reader.get_environments()
+        schemas_to_delete = set()
+        tables_to_delete = set()
+        views_to_delete = set()
+        all_snapshot_infos = set()
+
+        # For each environment find schemas and tables
+        for environment in environments:
+            all_snapshot_infos.update(environment.snapshots)
+            snapshots = self.state_reader.get_snapshots(environment.snapshots).values()
+            for snapshot in snapshots:
+                if snapshot.is_model and not snapshot.is_symbolic:
+                    # Get the appropriate adapter
+                    if environment.gateway_managed and snapshot.model_gateway:
+                        adapter = self.engine_adapters.get(
+                            snapshot.model_gateway, self.engine_adapter
+                        )
+                    else:
+                        adapter = self.engine_adapter
+
+                    if environment.suffix_target.is_schema or environment.suffix_target.is_catalog:
+                        schema = snapshot.qualified_view_name.schema_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        catalog = snapshot.qualified_view_name.catalog_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        if catalog:
+                            schemas_to_delete.add(f"{catalog}.{schema}")
+                        else:
+                            schemas_to_delete.add(schema)
+
+                    if environment.suffix_target.is_table:
+                        view_name = snapshot.qualified_view_name.for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        views_to_delete.add(view_name)
+
+                    # Add snapshot tables
+                    table_name = snapshot.table_name()
+                    tables_to_delete.add(table_name)
+
+        if self.console.start_destroy(schemas_to_delete, views_to_delete, tables_to_delete):
             try:
-                self._destroy()
-                success = True
+                success = self._destroy()
             finally:
                 self.console.stop_destroy(success=success)
 
@@ -2723,7 +2765,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             always_recreate_environment=always_recreate_environment,
         )
 
-    def _destroy(self) -> None:
+    def _destroy(self) -> bool:
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
             self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
@@ -2738,6 +2780,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # Finally clear caches
         self.clear_caches()
+
+        return True
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         current_ts = now_timestamp()
