@@ -1029,10 +1029,22 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             self._query_job.job_id,
         )
 
-        results = self._db_call(
-            self._query_job.result,
-            timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
-        )
+        try:
+            results = self._db_call(
+                self._query_job.result,
+                timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
+            )
+        except KeyboardInterrupt:
+            # Wrapping this in another try-except to ensure the subsequent db calls don't change
+            # the original exception type.
+            try:
+                if not self._db_call(self._query_job.done):
+                    self._db_call(self._query_job.cancel)
+            except:
+                pass
+
+            raise
+
         self._query_data = iter(results) if results.total_rows else iter([])
         query_results = self._query_job._query_results
         self.cursor._set_rowcount(query_results)
