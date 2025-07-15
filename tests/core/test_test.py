@@ -1026,6 +1026,97 @@ test_foo:
     )
 
 
+def test_index_preservation_with_later_rows() -> None:
+    # Test comparison with differences in later rows
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 300
+      - id: 4
+        value: 400
+  outputs:
+    query:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 999
+      - id: 4
+        value: 888
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT id, value FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+            "   value       \n"
+            "     exp    act\n"
+            "2  999.0  300.0\n"
+            "3  888.0  400.0\n"
+        ),
+    )
+
+    # Test with null values in later rows
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: null
+      - id: 4
+        value: 400
+      - id: 5
+        value: null
+  outputs:
+    query:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 300
+      - id: 4
+        value: null
+      - id: 5
+        value: 500
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT id, value FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+            "   value       \n"
+            "     exp    act\n"
+            "2  300.0    NaN\n"
+            "3    NaN  400.0\n"
+            "4  500.0    NaN\n"
+        ),
+    )
+
+
 def test_unknown_column_error() -> None:
     _check_successful_or_raise(
         _create_test(
@@ -2277,7 +2368,7 @@ test_example_full_model:
 ┃     ┃ item_id:        ┃                 ┃ num_orders:     ┃ num_orders:      ┃
 ┃ Row ┃ Expected        ┃ item_id: Actual ┃ Expected        ┃ Actual           ┃
 ┡━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
-│  0  │       4.0       │       2.0       │       3.0       │       1.0        │
+│  1  │       4.0       │       2.0       │       3.0       │       1.0        │
 └─────┴─────────────────┴─────────────────┴─────────────────┴──────────────────┘
 
 ----------------------------------------------------------------------"""
@@ -2300,14 +2391,14 @@ test_example_full_model:
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
 ┃     Row     ┃        Expected        ┃      Actual       ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
-│      0      │          4.0           │        2.0        │
+│      1      │          4.0           │        2.0        │
 └─────────────┴────────────────────────┴───────────────────┘
 
                 Column 'num_orders' mismatch                
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
 ┃     Row     ┃        Expected        ┃      Actual       ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
-│      0      │          3.0           │        1.0        │
+│      1      │          3.0           │        1.0        │
 └─────────────┴────────────────────────┴───────────────────┘
 
 ----------------------------------------------------------------------"""
@@ -2384,6 +2475,56 @@ test_example_full_model:
 │  0  │     2     │     5     │     1     │     6     │     0     │     7      │
 └─────┴───────────┴───────────┴───────────┴───────────┴───────────┴────────────┘"""
         in captured_output.stdout
+    )
+
+    # Case 5: Test null value difference in the 3rd row (index 2)
+    rmtree(tmp_path / "tests")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    null_test_file = tmp_path / "tests" / "test_null_in_third_row.yaml"
+    null_test_file.write_text(
+        """
+test_null_third_row:
+  model: sqlmesh_example.full_model
+  description: Test null value in third row
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+      - id: 4
+        item_id: 3
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+      - item_id: 3
+        num_orders: null
+        """
+    )
+
+    with capture_output() as captured_output:
+        context.test()
+
+    output = captured_output.stdout
+
+    # Check for null value difference in the 3rd row (index 2)
+    assert (
+        """
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row  ┃   num_orders: Expected    ┃  num_orders: Actual   ┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│  2   │            nan            │          1.0          │
+└──────┴───────────────────────────┴───────────────────────┘"""
+        in output
     )
 
 
