@@ -226,6 +226,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         scheduler = self.create_scheduler(stage.all_snapshots.values())
+        # Convert model name restatements to snapshot ID restatements
+        restatements_by_snapshot_id = {
+            stage.all_snapshots[name].snapshot_id: interval
+            for name, interval in plan.restatements.items()
+        }
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -234,6 +239,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             circuit_breaker=self._circuit_breaker,
             start=plan.start,
             end=plan.end,
+            restatements=restatements_by_snapshot_id,
         )
         if errors:
             raise PlanError("Plan application failed.")
