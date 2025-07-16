@@ -415,6 +415,7 @@ class Scheduler:
         selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Dict[SnapshotId, SnapshotId] = {},
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -531,6 +532,7 @@ class Scheduler:
                         evaluation_duration_ms,
                         num_audits - num_audits_failed,
                         num_audits_failed,
+                        auto_restatement_trigger=auto_restatement_triggers.get(snapshot.snapshot_id),
                     )
             elif isinstance(node, CreateNode):
                 self.snapshot_evaluator.create_snapshot(
@@ -736,8 +738,11 @@ class Scheduler:
         for s_id, interval in (remove_intervals or {}).items():
             self.snapshots[s_id].remove_interval(interval)
 
+        auto_restatement_triggers: t.Dict[SnapshotId, SnapshotId] = {}
         if auto_restatement_enabled:
-            auto_restated_intervals = apply_auto_restatements(self.snapshots, execution_time)
+            auto_restated_intervals, auto_restatement_triggers = apply_auto_restatements(
+                self.snapshots, execution_time
+            )
             self.state_sync.add_snapshots_intervals(auto_restated_intervals)
             self.state_sync.update_auto_restatements(
                 {s.name_version: s.next_auto_restatement_ts for s in self.snapshots.values()}
@@ -768,6 +773,7 @@ class Scheduler:
             end=end,
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
+            auto_restatement_triggers=auto_restatement_triggers,
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS

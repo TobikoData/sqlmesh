@@ -2180,7 +2180,7 @@ def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
 
 def apply_auto_restatements(
     snapshots: t.Dict[SnapshotId, Snapshot], execution_time: TimeLike
-) -> t.List[SnapshotIntervals]:
+) -> t.Tuple[t.List[SnapshotIntervals], t.Dict[SnapshotId, SnapshotId]]:
     """Applies auto restatements to the snapshots.
 
     This operation results in the removal of intervals for snapshots that are ready to be restated based
@@ -2195,6 +2195,8 @@ def apply_auto_restatements(
         A list of SnapshotIntervals with **new** intervals that need to be restated.
     """
     dag = snapshots_to_dag(snapshots.values())
+    snapshots_with_auto_restatements: t.List[SnapshotId] = []
+    auto_restatement_triggers: t.Dict[SnapshotId, SnapshotId] = {}
     auto_restated_intervals_per_snapshot: t.Dict[SnapshotId, Interval] = {}
     for s_id in dag:
         if s_id not in snapshots:
@@ -2217,6 +2219,23 @@ def apply_auto_restatements(
                 snapshot.snapshot_id,
             )
             auto_restated_intervals.append(next_auto_restated_interval)
+
+            # auto-restated snapshot is its own trigger
+            snapshots_with_auto_restatements.append(s_id)
+            auto_restatement_triggers[s_id] = s_id
+        else:
+            for parent_s_id in snapshot.parents:
+                # first auto-restated parent is the trigger
+                if parent_s_id in snapshots_with_auto_restatements:
+                    auto_restatement_triggers[s_id] = parent_s_id
+                    break
+                # if no trigger yet and parent has trigger, inherit their trigger
+                # - will be overwritten if a different parent is auto-restated
+                if (
+                    parent_s_id in auto_restatement_triggers
+                    and s_id not in auto_restatement_triggers
+                ):
+                    auto_restatement_triggers[s_id] = auto_restatement_triggers[parent_s_id]
 
         if auto_restated_intervals:
             auto_restated_interval_start = sys.maxsize
@@ -2247,20 +2266,22 @@ def apply_auto_restatements(
 
         snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)
-
-    return [
-        SnapshotIntervals(
-            name=snapshots[s_id].name,
-            identifier=None,
-            version=snapshots[s_id].version,
-            dev_version=None,
-            intervals=[],
-            dev_intervals=[],
-            pending_restatement_intervals=[interval],
-        )
-        for s_id, interval in auto_restated_intervals_per_snapshot.items()
-        if s_id in snapshots
-    ]
+    return (
+        [
+            SnapshotIntervals(
+                name=snapshots[s_id].name,
+                identifier=None,
+                version=snapshots[s_id].version,
+                dev_version=None,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=[interval],
+            )
+            for s_id, interval in auto_restated_intervals_per_snapshot.items()
+            if s_id in snapshots
+        ],
+        auto_restatement_triggers,
+    )
 
 
 def parent_snapshots_by_name(

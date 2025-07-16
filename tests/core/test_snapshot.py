@@ -3102,7 +3102,7 @@ def test_apply_auto_restatements(make_snapshot):
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
     ]
 
-    restated_intervals = apply_auto_restatements(
+    restated_intervals, _ = apply_auto_restatements(
         {
             snapshot_a.snapshot_id: snapshot_a,
             snapshot_b.snapshot_id: snapshot_b,
@@ -3239,7 +3239,7 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     snapshot_b.add_interval("2020-01-01", "2020-01-05")
     assert snapshot_a.snapshot_id in snapshot_b.parents
 
-    restated_intervals = apply_auto_restatements(
+    restated_intervals, _ = apply_auto_restatements(
         {
             snapshot_a.snapshot_id: snapshot_a,
             snapshot_b.snapshot_id: snapshot_b,
