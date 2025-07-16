@@ -452,9 +452,7 @@ class Scheduler:
                 else:
                     # Determine if this snapshot and interval is a restatement (for SCD type 2)
                     is_restatement = (
-                        restatements is not None
-                        and snapshot.snapshot_id in restatements
-                        and start >= restatements[snapshot.snapshot_id][0]
+                        restatements is not None and snapshot.snapshot_id in restatements
                     )
                     audit_results = self.evaluate(
                         snapshot=snapshot,

@@ -238,7 +238,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         restatements_by_snapshot_id = {
             stage.all_snapshots[name].snapshot_id: interval
             for name, interval in plan.restatements.items()
-            if name in stage.all_snapshots
         }
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
