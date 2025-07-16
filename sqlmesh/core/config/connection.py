@@ -380,7 +380,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         if secret_settings:
                             secret_clause = ", ".join(secret_settings)
                             try:
-                                cursor.execute(f"CREATE SECRET {secret_name} ({secret_clause});")
+                                cursor.execute(
+                                    f"CREATE OR REPLACE SECRET {secret_name} ({secret_clause});"
+                                )
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
