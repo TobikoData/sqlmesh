@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import pytest
 import string
 import time_machine
@@ -2190,3 +2191,74 @@ WHERE ds::DATE BETWEEN @start_ds AND @end_ds
     assert_plan_success(result)
 
     assert "Checking signals" not in result.output
+
+
+@pytest.mark.isolated
+@time_machine.travel(FREEZE_TIME)
+def test_format_leading_comma_default(runner: CliRunner, tmp_path: Path):
+    """Test that format command respects leading_comma environment variable."""
+    create_example_project(tmp_path, template=ProjectTemplate.EMPTY)
+
+    # Create a SQL file with trailing comma format
+    test_sql = tmp_path / "models" / "test_format.sql"
+    test_sql.write_text("""MODEL (
+  name sqlmesh_example.test_format,
+  kind FULL
+);
+
+SELECT
+  col1,
+  col2,
+  col3
+FROM table1""")
+
+    # Test 1: Default behavior (no env var set) - should not change the file
+    result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+    assert result.exit_code == 0
+
+    # Test 2: Set env var to true - should require reformatting to leading comma
+    os.environ["SQLMESH__FORMAT__LEADING_COMMA"] = "true"
+    try:
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+        # Should exit with 1 because formatting is needed
+        assert result.exit_code == 1
+
+        # Actually format the file
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format"])
+        assert result.exit_code == 0
+
+        # Check that the file now has leading commas
+        formatted_content = test_sql.read_text()
+        assert ", col2" in formatted_content
+        assert ", col3" in formatted_content
+
+        # Now check should pass
+        result = runner.invoke(cli, ["--paths", str(tmp_path), "format", "--check"])
+        assert result.exit_code == 0
+    finally:
+        # Clean up env var
+        del os.environ["SQLMESH__FORMAT__LEADING_COMMA"]
+
+    # Test 3: Explicit command line flag overrides env var
+    os.environ["SQLMESH__FORMAT__LEADING_COMMA"] = "false"
+    try:
+        # Write file with leading commas
+        test_sql.write_text("""MODEL (
+  name sqlmesh_example.test_format,
+  kind FULL
+);
+
+SELECT
+  col1
+  , col2
+  , col3
+FROM table1""")
+
+        # Check with --leading-comma flag (should pass)
+        result = runner.invoke(
+            cli,
+            ["--paths", str(tmp_path), "format", "--check", "--leading-comma"],
+        )
+        assert result.exit_code == 0
+    finally:
+        del os.environ["SQLMESH__FORMAT__LEADING_COMMA"]
