@@ -489,7 +489,9 @@ def test_duckdb_multiple_secrets(mock_connect, make_config):
     cursor = config.create_engine_adapter().cursor
 
     execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
-    create_secret_calls = [call for call in execute_calls if call.startswith("CREATE SECRET")]
+    create_secret_calls = [
+        call for call in execute_calls if call.startswith("CREATE OR REPLACE SECRET")
+    ]
 
     # Should have exactly 2 CREATE SECRET calls
     assert len(create_secret_calls) == 2
@@ -497,13 +499,13 @@ def test_duckdb_multiple_secrets(mock_connect, make_config):
     # Verify the SQL for the first secret (S3)
     assert (
         create_secret_calls[0]
-        == "CREATE SECRET  (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+        == "CREATE OR REPLACE SECRET  (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
     )
 
     # Verify the SQL for the second secret (Azure)
     assert (
         create_secret_calls[1]
-        == "CREATE SECRET  (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+        == "CREATE OR REPLACE SECRET  (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
     )
 
 
@@ -541,7 +543,9 @@ def test_duckdb_named_secrets(mock_connect, make_config):
     cursor = config.create_engine_adapter().cursor
 
     execute_calls = [call[0][0] for call in mock_cursor.execute.call_args_list]
-    create_secret_calls = [call for call in execute_calls if call.startswith("CREATE SECRET")]
+    create_secret_calls = [
+        call for call in execute_calls if call.startswith("CREATE OR REPLACE SECRET")
+    ]
 
     # Should have exactly 2 CREATE SECRET calls
     assert len(create_secret_calls) == 2
@@ -549,13 +553,13 @@ def test_duckdb_named_secrets(mock_connect, make_config):
     # Verify the SQL for the first secret (S3) includes the secret name
     assert (
         create_secret_calls[0]
-        == "CREATE SECRET my_s3_secret (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
+        == "CREATE OR REPLACE SECRET my_s3_secret (type 's3', region 'us-east-1', key_id 'my_aws_key', secret 'my_aws_secret');"
     )
 
     # Verify the SQL for the second secret (Azure) includes the secret name
     assert (
         create_secret_calls[1]
-        == "CREATE SECRET my_azure_secret (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
+        == "CREATE OR REPLACE SECRET my_azure_secret (type 'azure', account_name 'myaccount', account_key 'myaccountkey');"
     )
 
 
