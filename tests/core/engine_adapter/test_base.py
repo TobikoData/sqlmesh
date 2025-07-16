@@ -1223,6 +1223,7 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
 
     assert (
@@ -1422,6 +1423,7 @@ def test_scd_type_2_by_time_no_invalidate_hard_deletes(make_mocked_engine_adapte
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
 
     assert (
@@ -1610,6 +1612,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
 
     assert (
@@ -1799,6 +1802,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
         extra_col_ignore="testing",
+        is_restatement=True,
     )
 
     assert (
@@ -1990,6 +1994,7 @@ def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callab
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
     assert (
         parse_one(adapter.cursor.execute.call_args[0][0]).sql()
@@ -2352,6 +2357,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
 
     assert (
@@ -2527,6 +2533,7 @@ def test_scd_type_2_by_column_no_invalidate_hard_deletes(make_mocked_engine_adap
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
+        is_restatement=True,
     )
 
     assert (
