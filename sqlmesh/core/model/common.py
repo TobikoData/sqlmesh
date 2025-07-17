@@ -241,7 +241,7 @@ def _add_variables_to_python_env(
             )
         if metadata_blueprint_variables:
             python_env[c.SQLMESH_BLUEPRINT_VARS_METADATA] = Executable.value(
-                blueprint_variables, sort_root_dict=True, is_metadata=True
+                metadata_blueprint_variables, sort_root_dict=True, is_metadata=True
             )
 
     return python_env

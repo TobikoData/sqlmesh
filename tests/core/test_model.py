@@ -10053,11 +10053,14 @@ def test_vars_are_taken_into_account_when_propagating_metadata_status(tmp_path: 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
     test_model.write_text(
-        "MODEL (name test_model, kind FULL);"
+        "MODEL (name test_model, kind FULL, blueprints ((v4 := 4, v5 := 5)));"
         "@m1_with_var();"  # metadata macro, references v1 internally => v1 metadata
         "@m2_without_var(@v2, @v3);"  # metadata macro => v2 metadata, v3 metadata
-        "@m3_without_var(@v3);"  # non-metadata macro => v3 is not metadata, ^ changes
-        "SELECT 1 AS c"
+        "@m3_without_var(@v3);"  # non-metadata macro, references v4 => v3, v4 are not metadata
+        "SELECT 1 AS c;"
+        "ON_VIRTUAL_UPDATE_BEGIN;"
+        "@m3_without_var(@v5);"  # non-metadata macro, metadata context => v5 metadata
+        "ON_VIRTUAL_UPDATE_END;"
     )
 
     macro_code = """
@@ -10074,6 +10077,7 @@ def m2_without_var(evaluator, *args):
 
 @macro()
 def m3_without_var(evaluator, *args):
+    evaluator.var("v4")
     return None"""
 
     test_macros = tmp_path / "macros/test_macros.py"
@@ -10088,11 +10092,10 @@ def m3_without_var(evaluator, *args):
         paths=tmp_path,
     )
     model = ctx.get_model("test_model")
-    empty_executable = Executable(payload="")
 
     python_env = model.python_env
 
-    assert len(python_env) == 5
+    assert len(python_env) == 7
     assert "m1_with_var" in python_env
     assert "m2_without_var" in python_env
     assert "m3_without_var" in python_env
@@ -10102,6 +10105,40 @@ def m3_without_var(evaluator, *args):
 
     assert variables == Executable.value({"v1": 1, "v3": 3})
     assert metadata_variables == Executable.value({"v2": 2}, is_metadata=True)
+
+    blueprint_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS)
+    blueprint_metadata_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
+
+    assert blueprint_variables == Executable.value({"v4": SqlValue(sql="4")})
+    assert blueprint_metadata_variables == Executable.value(
+        {"v5": SqlValue(sql="5")}, is_metadata=True
+    )
+
+    macro_evaluator = MacroEvaluator(python_env=python_env)
+
+    assert macro_evaluator.locals == {
+        "runtime_stage": "loading",
+        "default_catalog": None,
+        c.SQLMESH_VARS: {"v1": 1, "v3": 3},
+        c.SQLMESH_VARS_METADATA: {"v2": 2},
+        c.SQLMESH_BLUEPRINT_VARS: {"v4": exp.Literal.number("4")},
+        c.SQLMESH_BLUEPRINT_VARS_METADATA: {"v5": exp.Literal.number("5")},
+    }
+    assert macro_evaluator.var("v1") == 1
+    assert macro_evaluator.var("v2") == 2
+    assert macro_evaluator.var("v3") == 3
+    assert macro_evaluator.blueprint_var("v4") == exp.Literal.number("4")
+    assert macro_evaluator.blueprint_var("v5") == exp.Literal.number("5")
+
+    query_with_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @VAR('v{var}')" for var in [1, 2, 3]))
+    )
+    assert t.cast(exp.Expression, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3"
+
+    query_with_blueprint_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @BLUEPRINT_VAR('v{var}')" for var in [4, 5]))
+    )
+    assert t.cast(exp.Expression, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:

@@ -562,17 +562,17 @@ class MacroEvaluator:
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified variable, or the default value if it doesn't exist."""
-        return (
-            self.locals.get(c.SQLMESH_VARS) or self.locals.get(c.SQLMESH_VARS_METADATA) or {}
-        ).get(var_name.lower(), default)
+        return {
+            **(self.locals.get(c.SQLMESH_VARS) or {}),
+            **(self.locals.get(c.SQLMESH_VARS_METADATA) or {}),
+        }.get(var_name.lower(), default)
 
     def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified blueprint variable, or the default value if it doesn't exist."""
-        return (
-            self.locals.get(c.SQLMESH_BLUEPRINT_VARS)
-            or self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
-            or {}
-        ).get(var_name.lower(), default)
+        return {
+            **(self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}),
+            **(self.locals.get(c.SQLMESH_BLUEPRINT_VARS_METADATA) or {}),
+        }.get(var_name.lower(), default)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:
