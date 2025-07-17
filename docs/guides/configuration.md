@@ -320,10 +320,14 @@ The cache directory is automatically created if it doesn't exist. You can clear 
 
 SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
 
-The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override *where* SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options.
+
+You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option. 
+
+These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 #### Physical table schemas
-By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.
+By default, SQLMesh creates physical schemas for a model with a naming convention of `sqlmesh__[model schema]`.
 
 This can be overridden on a per-schema basis using the `physical_schema_mapping` option, which removes the `sqlmesh__` prefix and uses the [regex pattern](https://docs.python.org/3/library/re.html#regular-expression-syntax) you provide to map the schemas defined in your model to their corresponding physical schemas.
 
@@ -435,6 +439,89 @@ Given the example of a model called `my_schema.users` with a default catalog of 
 !!! warning "Caveats"
     - Using `environment_suffix_target: catalog` only works on engines that support querying across different catalogs. If your engine does not support cross-catalog queries then you will need to use `environment_suffix_target: schema` or `environment_suffix_target: table` instead.
     - Automatic catalog creation is not supported on all engines even if they support cross-catalog queries. For engines where it is not supported, the catalogs must be managed externally from SQLMesh and exist prior to invoking SQLMesh.
+
+#### Physical table naming convention
+
+Out of the box, SQLMesh has the following defaults set:
+
+ - `environment_suffix_target: schema`
+ - `physical_table_naming_convention: schema_and_table`
+
+Given a catalog of `warehouse` and a model named `finance_mart.transaction_events_over_threshold`, this causes SQLMesh to create physical tables using the following convention:
+
+```
+# <catalog>.sqlmesh__<schema>.<schema>__<table>__<fingerprint>
+
+warehouse.sqlmesh__finance_mart.finance_mart__transaction_events_over_threshold__<fingerprint>
+```
+
+This deliberately contains some redundancy with the *model* schema as it's repeated at the physical layer in both the physical schema name as well as the physical table name.
+
+##### Table only
+
+Some engines have object name length limitations which cause them to [silently truncate](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS) table and view names that exceed this limit. This behaviour breaks SQLMesh, so we raise a runtime error if we detect the engine would silently truncate the name of the table we are trying to create.
+
+Having redundancy in the physical table names does reduce the number of characters that can be utilised in model names. To increase the number of characters available to model names, you can use `physical_table_naming_convention` like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    physical_table_naming_convention: table_only
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, TableNamingConvention
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    ```
+
+This will cause SQLMesh to omit the model schema from the table name and generate physical names that look like (using the above example):
+```
+# <catalog>.sqlmesh__<schema>.<table>__<fingerprint>
+
+warehouse.sqlmesh__finance_mart.transaction_events_over_threshold__<fingerprint>
+```
+
+Notice that the model schema name is no longer part of the physical table name. This allows for slightly longer model names on engines with low identifier length limits, which may be useful for your project.
+
+##### MD5 hash
+
+If you *still* need more characters, you can set `physical_table_naming_convention: hash_md5` like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    physical_table_naming_convention: hash_md5
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, TableNamingConvention
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        physical_table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    ```
+
+This will cause SQLMesh generate physical names that are always 45-50 characters in length and look something like:
+
+```
+# sqlmesh_md5__<hash of what we would have generated using 'schema_and_table'>
+
+sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00
+
+# or, for a dev preview
+sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00__dev
+```
+
+This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names now have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
 
 #### Environment view catalogs
 
