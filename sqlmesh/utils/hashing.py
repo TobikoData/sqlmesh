@@ -9,7 +9,9 @@ def crc32(data: t.Iterable[t.Optional[str]]) -> str:
     return str(zlib.crc32(_safe_concat(data)))
 
 
-def md5(data: t.Iterable[t.Optional[str]]) -> str:
+def md5(data: t.Union[str, t.Iterable[t.Optional[str]]]) -> str:
+    if isinstance(data, str):
+        data = [data]
     return hashlib.md5(_safe_concat(data)).hexdigest()
 
 
