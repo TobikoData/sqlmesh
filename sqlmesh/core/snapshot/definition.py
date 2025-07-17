@@ -13,6 +13,7 @@ from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
+from sqlmesh.core.config import TableNamingConvention
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -44,7 +45,7 @@ from sqlmesh.utils.metaprogramming import (
     format_evaluated_code_exception,
     Executable,
 )
-from sqlmesh.utils.hashing import hash_data
+from sqlmesh.utils.hashing import hash_data, md5
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 if t.TYPE_CHECKING:
@@ -333,6 +334,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
+    table_naming_convention: t.Optional[TableNamingConvention] = None
 
     @cached_property
     def identifier(self) -> str:
@@ -451,6 +453,7 @@ class SnapshotInfoMixin(ModelKindMixin):
             version,
             catalog=self.fully_qualified_table.catalog,
             suffix=self.dev_table_suffix if is_dev_table else None,
+            naming_convention=self.table_naming_convention,
         )
 
     @property
@@ -580,6 +583,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         migrated: Whether or not this snapshot has been created as a result of migration.
         unrestorable: Whether or not this snapshot can be used to revert its model to a previous version.
         next_auto_restatement_ts: The timestamp which indicates when is the next time this snapshot should be restated.
+        table_naming_convention: Convention to follow when generating the physical table name
     """
 
     name: str
@@ -605,6 +609,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     base_table_name_override: t.Optional[str] = None
     next_auto_restatement_ts: t.Optional[int] = None
     dev_table_suffix: str = "dev"
+    table_naming_convention_: t.Optional[TableNamingConvention] = Field(
+        default=None, alias="table_naming_convention"
+    )
 
     @field_validator("ttl")
     @classmethod
@@ -656,6 +663,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+        table_naming_convention: t.Optional[TableNamingConvention] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -666,6 +674,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             cache: Cache of node name to fingerprints.
+            table_naming_convention: Convention to follow when generating the physical table name
 
         Returns:
             The newly created snapshot.
@@ -697,6 +706,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             updated_ts=created_ts,
             ttl=ttl,
             version=version,
+            table_naming_convention=table_naming_convention,
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -1206,6 +1216,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             custom_materialization=custom_materialization,
             dev_table_suffix=self.dev_table_suffix,
             model_gateway=self.model_gateway,
+            table_naming_convention=self.table_naming_convention,  # type: ignore
         )
 
     @property
@@ -1568,14 +1579,41 @@ def table_name(
     version: str,
     catalog: t.Optional[str] = None,
     suffix: t.Optional[str] = None,
+    naming_convention: t.Optional[TableNamingConvention] = None,
 ) -> str:
     table = exp.to_table(name)
 
-    # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
-    name = "__".join(sanitize_name(part.name) for part in table.parts)
+    naming_convention = naming_convention or TableNamingConvention.default
+
+    if naming_convention == TableNamingConvention.HASH_MD5:
+        # just take a MD5 hash of what we would have generated anyway using SCHEMA_AND_TABLE
+        value_to_hash = table_name(
+            physical_schema=physical_schema,
+            name=name,
+            version=version,
+            catalog=catalog,
+            suffix=suffix,
+            naming_convention=TableNamingConvention.SCHEMA_AND_TABLE,
+        )
+        full_name = f"{c.SQLMESH}_md5__{md5(value_to_hash)}"
+    else:
+        # note: Snapshot._table_name() already strips the catalog from the model name before calling this function
+        # Therefore, a model with 3-part naming like "foo.bar.baz" gets passed as (name="bar.baz", catalog="foo") to this function
+        # This is why there is no TableNamingConvention.CATALOG_AND_SCHEMA_AND_TABLE
+        table_parts = table.parts
+        parts_to_consider = 2 if naming_convention == TableNamingConvention.SCHEMA_AND_TABLE else 1
+
+        # in case the parsed table name has less parts than what the naming convention says we should be considering
+        parts_to_consider = min(len(table_parts), parts_to_consider)
+
+        # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
+        name = "__".join(sanitize_name(part.name) for part in table_parts[-parts_to_consider:])
+
+        full_name = f"{name}__{version}"
+
     suffix = f"__{suffix}" if suffix else ""
 
-    table.set("this", exp.to_identifier(f"{name}__{version}{suffix}"))
+    table.set("this", exp.to_identifier(f"{full_name}{suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
     if not table.catalog and catalog:
         table.set("catalog", exp.to_identifier(catalog))

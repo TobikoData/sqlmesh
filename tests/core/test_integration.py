@@ -35,6 +35,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.console import Console, get_console
@@ -7115,3 +7116,74 @@ def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
     gathered_gateways = context.engine_adapters.keys()
     expected_gateways = {"local", "memory", "extra"}
     assert gathered_gateways == expected_gateways
+
+    
+def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.TABLE_ONLY
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.TABLE_ONLY
+        for s in prod_env_snapshots.values()
+    )
+
+
+def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.HASH_MD5,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.HASH_MD5
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+    assert all([t["table"].startswith("sqlmesh_md5") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.HASH_MD5
+        for s in prod_env_snapshots.values()
+    )

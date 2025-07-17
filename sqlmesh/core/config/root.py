@@ -14,7 +14,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
-from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.config import EnvironmentSuffixTarget, TableNamingConvention
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
@@ -106,6 +106,7 @@ class Config(BaseConfig):
         model_defaults: Default values for model definitions.
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
+        physical_table_naming_convention: Indicates how tables should be named at the physical layer
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
         infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
@@ -147,6 +148,7 @@ class Config(BaseConfig):
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
+    physical_table_naming_convention: t.Optional[TableNamingConvention] = None
     gateway_managed_virtual_layer: bool = False
     infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
