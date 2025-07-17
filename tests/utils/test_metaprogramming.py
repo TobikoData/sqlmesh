@@ -563,8 +563,8 @@ def test_deterministic_repr_executable_integration():
     variables1 = {"env": "dev", "debug": True, "timeout": 30}
     variables2 = {"timeout": 30, "debug": True, "env": "dev"}
 
-    exec1 = Executable.value(variables1)
-    exec2 = Executable.value(variables2)
+    exec1 = Executable.value(variables1, use_deterministic_repr=True)
+    exec2 = Executable.value(variables2, use_deterministic_repr=True)
 
     # Should produce identical payloads despite different input ordering
     assert exec1.payload == exec2.payload
@@ -573,6 +573,10 @@ def test_deterministic_repr_executable_integration():
     # Should be valid Python
     reconstructed = eval(exec1.payload)
     assert reconstructed == variables1
+
+    # non-deterministic repr should not change the payload
+    exec3 = Executable.value(variables1)
+    assert exec3.payload == "{'env': 'dev', 'debug': True, 'timeout': 30}"
 
 
 def test_deterministic_repr_complex_example():

@@ -424,10 +424,11 @@ class Executable(PydanticModel):
         return self.kind == ExecutableKind.VALUE
 
     @classmethod
-    def value(cls, v: t.Any, is_metadata: t.Optional[bool] = None) -> Executable:
-        return Executable(
-            payload=_deterministic_repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata
-        )
+    def value(
+        cls, v: t.Any, is_metadata: t.Optional[bool] = None, use_deterministic_repr: bool = False
+    ) -> Executable:
+        payload = _deterministic_repr(v) if use_deterministic_repr else repr(v)
+        return Executable(payload=payload, kind=ExecutableKind.VALUE, is_metadata=is_metadata)
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:

@@ -12,6 +12,9 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
+KEYS_TO_MAKE_DETERMINISTIC = ["__sqlmesh__vars__", "__sqlmesh__blueprint__vars__"]
+
+
 # Make sure `SqlValue` is defined so it can be used by `eval` call in the migration
 @dataclass
 class SqlValue:
@@ -82,6 +85,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
         if python_env:
             for key, executable in python_env.items():
+                if key not in KEYS_TO_MAKE_DETERMINISTIC:
+                    continue
                 if isinstance(executable, dict) and executable.get("kind") == "value":
                     old_payload = executable["payload"]
                     try:

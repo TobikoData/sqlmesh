@@ -153,14 +153,16 @@ def _add_variables_to_python_env(
 
     variables = {k: v for k, v in (variables or {}).items() if k in used_variables}
     if variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(variables)
+        python_env[c.SQLMESH_VARS] = Executable.value(variables, use_deterministic_repr=True)
 
     if blueprint_variables:
         blueprint_variables = {
             k: SqlValue(sql=v.sql(dialect=dialect)) if isinstance(v, exp.Expression) else v
             for k, v in blueprint_variables.items()
         }
-        python_env[c.SQLMESH_BLUEPRINT_VARS] = Executable.value(blueprint_variables)
+        python_env[c.SQLMESH_BLUEPRINT_VARS] = Executable.value(
+            blueprint_variables, use_deterministic_repr=True
+        )
 
     return python_env
 
