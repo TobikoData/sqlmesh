@@ -6116,7 +6116,8 @@ def test_named_variable_macros() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6142,7 +6143,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6166,7 +6168,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6305,7 +6308,8 @@ def test_variables_migrated_dbt_package_macro():
         dialect="bigquery",
     )
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"}
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query().sql(dialect="bigquery")
@@ -6530,7 +6534,8 @@ def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
             "physical_var": "bla",
             "virtual_var": "blb",
             "session_var": "blc",
-        }
+        },
+        sort_root_dict=True,
     )
 
     assert "location1" in model.physical_properties
@@ -6617,7 +6622,8 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "physical_var": "bla",
             "virtual_var": "blb",
             "session_var": "blc",
-        }
+        },
+        sort_root_dict=True,
     )
     assert python_sql_model.enabled
 
@@ -10576,9 +10582,12 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
     )
 
     assert m.python_env.get(c.SQLMESH_VARS) == Executable.value(
-        {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
+        {"selector": "bla", "bla_variable": 1, "baz_variable": 2},
+        sort_root_dict=True,
     )
-    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"selector": "baz"}, sort_root_dict=True
+    )
 
 
 def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
