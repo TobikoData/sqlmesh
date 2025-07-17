@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 from contextlib import contextmanager
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 
@@ -83,12 +84,12 @@ class BaseExpressionRenderer:
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
     ) -> t.List[t.Optional[exp.Expression]]:
-        """Renders a expression, expanding macros with provided kwargs
+        """Renders an expression, expanding macros with provided kwargs
 
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            execution_time: The date/time time reference to use for execution time.
+            execution_time: The datetime/time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
@@ -173,7 +174,7 @@ class BaseExpressionRenderer:
         )
 
         start_time, end_time = (
-            make_inclusive(start or c.EPOCH, end or c.EPOCH, self._dialect)
+            make_inclusive(start or c.EPOCH, end or c.EPOCH + timedelta(days=1), self._dialect)
             if not self._only_execution_time
             else (None, None)
         )
