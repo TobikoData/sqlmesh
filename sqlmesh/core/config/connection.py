@@ -348,11 +348,28 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
 
-            for field, setting in self.connector_config.items():
-                try:
-                    cursor.execute(f"SET {field} = '{setting}'")
-                except Exception as e:
-                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+            if self.connector_config:
+                option_names = list(self.connector_config)
+                in_part = ",".join("?" for _ in range(len(option_names)))
+
+                cursor.execute(
+                    f"SELECT name, value FROM duckdb_settings() WHERE name IN ({in_part})",
+                    option_names,
+                )
+
+                existing_values = {field: setting for field, setting in cursor.fetchall()}
+
+                # only set connector_config items if the values differ from what is already set
+                # trying to set options like 'temp_directory' even to the same value can throw errors like:
+                # Not implemented Error: Cannot switch temporary directory after the current one has been used
+                for field, setting in self.connector_config.items():
+                    if existing_values.get(field) != setting:
+                        try:
+                            cursor.execute(f"SET {field} = '{setting}'")
+                        except Exception as e:
+                            raise ConfigError(
+                                f"Failed to set connector config {field} to {setting}: {e}"
+                            )
 
             if self.secrets:
                 duckdb_version = duckdb.__version__
