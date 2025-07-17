@@ -49,6 +49,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     SignalEvalError,
 )
+from sqlmesh.utils.pydantic import serialize_expressions
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
@@ -58,6 +59,37 @@ SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 # we store snapshot name instead of snapshots/snapshotids because pydantic
 # is extremely slow to hash. snapshot names should be unique within a dag run
 SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class SignalListener:
+    def on_signal_register(
+        self,
+        snapshot_id: SnapshotId,
+        signals: t.Dict[str, t.Dict[str, str]],
+    ) -> None:
+        pass
+
+    def on_signal_start(
+        self,
+        snapshot_id: SnapshotId,
+        signal_name: str,
+        signal_index: int,
+        intervals: Intervals,
+        signal_kwargs: t.Dict[str, str],
+    ) -> None:
+        pass
+
+    def on_signal_end(
+        self,
+        snapshot_id: SnapshotId,
+        signal_name: str,
+        signal_index: int,
+        signal_kwargs: t.Dict[str, str],
+        intervals: Intervals,
+        ready_intervals: Intervals,
+        error: t.Optional[Exception] = None,
+    ) -> None:
+        pass
 
 
 class Scheduler:
@@ -86,6 +118,7 @@ class Scheduler:
         max_workers: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
+        signal_listener: t.Optional[SignalListener] = None,
     ):
         self.state_sync = state_sync
         self.snapshots = {s.snapshot_id: s for s in snapshots}
@@ -98,6 +131,7 @@ class Scheduler:
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
+        self.signal_listener = signal_listener or SignalListener()
 
     def merged_missing_intervals(
         self,
@@ -766,6 +800,16 @@ class Scheduler:
         if not (signals and signals.signals_to_kwargs):
             return intervals
 
+        signals_to_serialized_kwargs = {
+            signal_name: serialize_expressions(kwargs)
+            for signal_name, kwargs in signals.signals_to_kwargs.items()
+        }
+
+        self.signal_listener.on_signal_register(
+            snapshot_id=snapshot.snapshot_id,
+            signals=signals_to_serialized_kwargs,
+        )
+
         self.console.start_signal_progress(
             snapshot,
             self.default_catalog,
@@ -778,6 +822,15 @@ class Scheduler:
 
             signal_start_ts = time.perf_counter()
 
+            self.signal_listener.on_signal_start(
+                snapshot_id=snapshot.snapshot_id,
+                signal_name=signal_name,
+                signal_index=signal_idx,
+                intervals=intervals_to_check,
+                signal_kwargs=signals_to_serialized_kwargs[signal_name],
+            )
+
+            error = None
             try:
                 intervals = check_ready_intervals(
                     signals.prepared_python_env[signal_name],
@@ -789,8 +842,20 @@ class Scheduler:
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:
-                raise SignalEvalError(
+                error = SignalEvalError(
                     f"{e} '{signal_name}' for '{snapshot.model.name}' at {snapshot.model._path}"
+                )
+                raise error
+            finally:
+                ready_intervals = merge_intervals(intervals)
+                self.signal_listener.on_signal_end(
+                    snapshot_id=snapshot.snapshot_id,
+                    signal_name=signal_name,
+                    signal_index=signal_idx,
+                    signal_kwargs=signals_to_serialized_kwargs[signal_name],
+                    intervals=intervals_to_check,
+                    ready_intervals=ready_intervals,
+                    error=error,
                 )
 
             duration = time.perf_counter() - signal_start_ts
@@ -800,7 +865,7 @@ class Scheduler:
                 signal_name=signal_name,
                 signal_idx=signal_idx,
                 total_signals=len(signals.signals_to_kwargs),
-                ready_intervals=merge_intervals(intervals),
+                ready_intervals=ready_intervals,
                 check_intervals=intervals_to_check,
                 duration=duration,
             )
