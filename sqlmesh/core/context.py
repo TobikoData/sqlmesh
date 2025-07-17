@@ -2649,13 +2649,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
-        """Returns all the engine adapters for the gateways defined in the configuration."""
+        """Returns all the engine adapters for the gateways defined in the configurations."""
         adapters: t.Dict[str, EngineAdapter] = {self.selected_gateway: self.engine_adapter}
-        for gateway_name in self.config.gateways:
-            if gateway_name != self.selected_gateway:
-                connection = self.config.get_connection(gateway_name)
-                adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
-                adapters[gateway_name] = adapter
+        for config in self.configs.values():
+            for gateway_name in config.gateways:
+                if gateway_name not in adapters:
+                    connection = config.get_connection(gateway_name)
+                    adapter = connection.create_engine_adapter(
+                        concurrent_tasks=self.concurrent_tasks,
+                    )
+                    adapters[gateway_name] = adapter
         return adapters
 
     @cached_property

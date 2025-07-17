@@ -7,6 +7,7 @@ from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
 import logging
+from textwrap import dedent
 import os
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
@@ -7079,3 +7080,38 @@ def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
         assert restated_data.iloc[1]["region"] == "ANZ"
         assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-09 07:26:00"
         assert pd.isna(restated_data.iloc[1]["valid_to"])
+
+
+def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
+    paths = copy_to_temp_path("examples/multi")
+    repo_1_path = paths[0] / "repo_1"
+    repo_2_path = paths[0] / "repo_2"
+
+    # Add an extra gateway to repo_2's config
+    repo_2_config_path = repo_2_path / "config.yaml"
+    config_content = repo_2_config_path.read_text()
+
+    modified_config = config_content.replace(
+        "default_gateway: local",
+        dedent("""
+              extra:
+                connection:
+                  type: duckdb
+                  database: extra.duckdb
+
+            default_gateway: local
+        """),
+    )
+
+    repo_2_config_path.write_text(modified_config)
+
+    # Create context with both repos but using the repo_1 path first
+    context = Context(
+        paths=(repo_1_path, repo_2_path),
+        gateway="memory",
+    )
+
+    # Verify all gateways from both repos are present
+    gathered_gateways = context.engine_adapters.keys()
+    expected_gateways = {"local", "memory", "extra"}
+    assert gathered_gateways == expected_gateways
