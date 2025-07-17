@@ -350,14 +350,14 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
 
             if self.connector_config:
                 option_names = list(self.connector_config)
-                in_part = ",".join(["?" for _ in range(len(option_names))])
+                in_part = ",".join("?" for _ in range(len(option_names)))
 
                 cursor.execute(
                     f"SELECT name, value FROM duckdb_settings() WHERE name IN ({in_part})",
                     option_names,
                 )
 
-                existing_values = {r[0]: r[1] for r in cursor.fetchall()}
+                existing_values = {field: setting for field, setting in cursor.fetchall()}
 
                 # only set connector_config items if the values differ from what is already set
                 # trying to set options like 'temp_directory' even to the same value can throw errors like:
