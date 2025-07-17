@@ -2,7 +2,7 @@ import { test, Page } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openLineageView, SUSHI_SOURCE_PATH } from './utils'
+import { openLineageView, openServerPage, SUSHI_SOURCE_PATH } from './utils'
 import { writeFileSync } from 'fs'
 import {
   createPythonInterpreterSettingsSpecifier,
@@ -28,9 +28,7 @@ test('Lineage panel renders correctly - no project path config (default)', async
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
   await testLineageWithProjectPath(page)
 })
 
@@ -59,7 +57,7 @@ test.skip('Lineage panel renders correctly - relative project path', async ({
   )
 
   try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, workspaceDir, sharedCodeServer)
     await testLineageWithProjectPath(page)
   } finally {
     await fs.remove(workspaceDir)
@@ -91,7 +89,7 @@ test.skip('Lineage panel renders correctly - absolute project path', async ({
   )
 
   try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
     await testLineageWithProjectPath(page)
   } finally {
     await stopCodeServer(context)
@@ -125,7 +123,7 @@ test.skip('Lineage panel renders correctly - relative project outside of workspa
   )
 
   try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
     await testLineageWithProjectPath(page)
   } finally {
     await stopCodeServer(context)
@@ -156,9 +154,7 @@ test.skip('Lineage panel renders correctly - absolute path project outside of wo
     { spaces: 2 },
   )
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}?folder=${workspaceDir}`,
-  )
+  await openServerPage(page, workspaceDir, sharedCodeServer)
   await testLineageWithProjectPath(page)
 })
 
@@ -206,9 +202,7 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
     { spaces: 2 },
   )
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}?folder=${workspaceDir}`,
-  )
+  await openServerPage(page, workspaceDir, sharedCodeServer)
   await page.waitForSelector('text=Open workspace')
   await page.click('text=Open workspace')
   await testLineageWithProjectPath(page)
@@ -216,6 +210,7 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
 
 test.skip('Lineage panel renders correctly - multiworkspace setup reversed', async ({
   page,
+  sharedCodeServer,
 }) => {
   const workspaceDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),
@@ -267,7 +262,7 @@ test.skip('Lineage panel renders correctly - multiworkspace setup reversed', asy
   )
 
   try {
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, workspaceDir, sharedCodeServer)
     await page.waitForSelector('text=Open workspace')
     await page.click('text=Open workspace')
     await testLineageWithProjectPath(page)

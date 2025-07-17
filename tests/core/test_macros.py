@@ -575,6 +575,26 @@ def test_ast_correctness(macro_evaluator):
             "SELECT 3",
             {},
         ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v)) ) AS v",
+            "SELECT * FROM (VALUES (1), (2), (3)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v))) ) AS v",
+            "SELECT * FROM (VALUES ((1), (2), (3))) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v, @EVAL(@v + 1))) ) AS v",
+            "SELECT * FROM (VALUES (1, 2), (2, 3), (3, 4)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v, @EVAL(@v + 1)))) ) AS v",
+            "SELECT * FROM (VALUES ((1, 2), (2, 3), (3, 4))) AS v",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):

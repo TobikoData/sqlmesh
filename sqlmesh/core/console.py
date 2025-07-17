@@ -186,8 +186,18 @@ class DestroyConsole(abc.ABC):
     """Console for describing a destroy operation"""
 
     @abc.abstractmethod
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         """Start a destroy operation.
+
+        Args:
+            schemas_to_delete: Set of schemas that will be deleted
+            views_to_delete: Set of views that will be deleted
+            tables_to_delete: Set of tables that will be deleted
 
         Returns:
             Whether or not the destroy operation should proceed
@@ -289,11 +299,17 @@ class TableDiffConsole(abc.ABC):
 
 class BaseConsole(abc.ABC):
     @abc.abstractmethod
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         """Display warning info to the user.
 
         Args:
@@ -824,7 +840,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
@@ -1276,16 +1297,40 @@ class TerminalConsole(Console):
         else:
             self.log_error("Cleanup failed!")
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         self.log_warning(
-            (
-                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
-                "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-                "Use this command only when you intend to fully reset the project."
-            )
+            "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
         )
-        if not self._confirm("Proceed?"):
-            self.log_error("Destroy aborted!")
+
+        if schemas_to_delete or views_to_delete or tables_to_delete:
+            if schemas_to_delete:
+                self.log_error("Schemas to be deleted:")
+                for schema in sorted(schemas_to_delete):
+                    self.log_error(f"  • {schema}")
+
+            if views_to_delete:
+                self.log_error("\nEnvironment views to be deleted:")
+                for view in sorted(views_to_delete):
+                    self.log_error(f"  • {view}")
+
+            if tables_to_delete:
+                self.log_error("\nSnapshot tables to be deleted:")
+                for table in sorted(tables_to_delete):
+                    self.log_error(f"  • {table}")
+
+            self.log_error(
+                "\nThis action will DELETE ALL the above resources managed by SQLMesh AND\n"
+                "potentially external resources created by other tools in these schemas.\n"
+            )
+
+        if not self._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):
+            self.log_error("Destroy operation cancelled.")
             return False
         return True
 
@@ -2711,8 +2756,16 @@ def _cells_match(x: t.Any, y: t.Any) -> bool:
     def _normalize(val: t.Any) -> t.Any:
         # Convert Pandas null to Python null for the purposes of comparison to prevent errors like the following on boolean fields:
         # - TypeError: boolean value of NA is ambiguous
-        if pd.isnull(val):
+        # note pd.isnull() returns either a bool or a ndarray[bool] depending on if the input
+        # is scalar or an array
+        isnull = pd.isnull(val)
+
+        if isinstance(isnull, bool):  # scalar
+            if isnull:
+                val = None
+        elif all(isnull):  # array
             val = None
+
         return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
 
     return _normalize(x) == _normalize(y)
@@ -3082,15 +3135,23 @@ class CaptureTerminalConsole(TerminalConsole):
         finally:
             self._errors = []
 
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         if short_message not in self._warnings:
             self._warnings.append(short_message)
-        super().log_warning(short_message, long_message)
+        if kwargs.pop("print", True):
+            super().log_warning(short_message, long_message)
 
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         if message not in self._errors:
             self._errors.append(message)
-        super().log_error(message)
+        if kwargs.pop("print", True):
+            super().log_error(message)
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
@@ -3126,6 +3187,11 @@ class MarkdownConsole(CaptureTerminalConsole):
         self.alert_block_collapsible_threshold = int(
             kwargs.pop("alert_block_collapsible_threshold", 200)
         )
+
+        # capture_only = True: capture but dont print to console
+        # capture_only = False: capture and also print to console
+        self.warning_capture_only = kwargs.pop("warning_capture_only", False)
+        self.error_capture_only = kwargs.pop("error_capture_only", False)
 
         super().__init__(
             **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
@@ -3401,6 +3467,12 @@ class MarkdownConsole(CaptureTerminalConsole):
         super().stop_promotion_progress(success)
         self._print("\n")
 
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        super().log_warning(short_message, long_message, print=not self.warning_capture_only)
+
+    def log_error(self, message: str) -> None:
+        super().log_error(message, print=not self.error_capture_only)
+
     def log_success(self, message: str) -> None:
         self._print(message)
 
@@ -3427,19 +3499,24 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
-            msg = "  " + "\n  ".join(snapshot_names)
-            self._print(f"**Skipped models**\n\n{msg}")
+            self._print(f"**Skipped models**")
+            for snapshot_name in snapshot_names:
+                self._print(f"* `{snapshot_name}`")
+            self._print("")
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
         if errors:
-            self._print("\n```\nFailed models\n")
+            self._print("**Failed models**")
 
             error_messages = _format_node_errors(errors)
 
             for node_name, msg in error_messages.items():
-                self._print(f"  **{node_name}**\n\n{msg}")
+                self._print(f"* `{node_name}`\n")
+                self._print("  ```")
+                self._print(msg)
+                self._print("  ```")
 
-            self._print("```\n")
+            self._print("")
 
     def show_linter_violations(
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False

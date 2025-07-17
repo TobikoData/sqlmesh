@@ -2,7 +2,12 @@ import { test, expect, Page } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { findAllReferences, goToReferences, SUSHI_SOURCE_PATH } from './utils'
+import {
+  findAllReferences,
+  goToReferences,
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 // Helper function to set up a test environment for model references
@@ -59,10 +64,7 @@ test.describe('Model References', () => {
     sharedCodeServer,
   }) => {
     const tempDir = await setupModelTestEnvironment()
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open customers.sql which contains references to other models
     await openCustomersFile(page)
@@ -130,9 +132,7 @@ test.describe('Model References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open customers.sql which contains multiple model references
     await openCustomersFile(page)
@@ -180,10 +180,7 @@ test.describe('Model References', () => {
     sharedCodeServer,
   }) => {
     const tempDir = await setupModelTestEnvironment()
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open assert_item_price_above_zero.sql audit file which references sushi.items model
     await navigateToAudits(page)
@@ -268,9 +265,7 @@ test.describe('Model References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open the audit file that validates item prices
     await navigateToAudits(page)
@@ -331,10 +326,7 @@ test.describe('CTE References', () => {
     sharedCodeServer,
   }) => {
     const tempDir = await setupModelTestEnvironment()
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
 
@@ -373,9 +365,7 @@ test.describe('CTE References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
 
@@ -414,10 +404,7 @@ test.describe('CTE References', () => {
     sharedCodeServer,
   }) => {
     const tempDir = await setupModelTestEnvironment()
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
 
@@ -455,10 +442,7 @@ test.describe('CTE References', () => {
   test('Find all references for CTE', async ({ page, sharedCodeServer }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-
+    await openServerPage(page, tempDir, sharedCodeServer)
     await openCustomersFile(page)
 
     // Click on the CTE definition "current_marketing_outer"
@@ -482,9 +466,7 @@ test.describe('CTE References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
 
@@ -509,10 +491,7 @@ test.describe('CTE References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-
+    await openServerPage(page, tempDir, sharedCodeServer)
     await openCustomersFile(page)
 
     // Click on the nested CTE "current_marketing" at line 33
@@ -541,10 +520,7 @@ test.describe('Macro References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-
+    await openServerPage(page, tempDir, sharedCodeServer)
     await openTopWaitersFile(page)
 
     // Click on the @ADD_ONE macro usage
@@ -578,10 +554,7 @@ test.describe('Macro References', () => {
     sharedCodeServer,
   }) => {
     const tempDir = await setupModelTestEnvironment()
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     await openTopWaitersFile(page)
 
@@ -635,10 +608,7 @@ test.describe('Macro References', () => {
   }) => {
     const tempDir = await setupModelTestEnvironment()
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-
+    await openServerPage(page, tempDir, sharedCodeServer)
     await openTopWaitersFile(page)
 
     // Click on the @SQL_LITERAL macro usage

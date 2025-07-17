@@ -1,5 +1,5 @@
 import path from 'path'
-import { runCommand, SUSHI_SOURCE_PATH } from './utils'
+import { openServerPage, runCommand, SUSHI_SOURCE_PATH } from './utils'
 import os from 'os'
 import { test } from './fixtures'
 import fs from 'fs-extra'
@@ -12,12 +12,7 @@ test('Stop server works', async ({ page, sharedCodeServer }) => {
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
   // Navigate to code-server instance
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-
-  // Wait for code-server to load
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForSelector('[role="application"]', { timeout: 10000 })
 
   // Wait for the models folder to be visible in the file explorer
