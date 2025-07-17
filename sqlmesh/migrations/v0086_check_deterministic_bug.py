@@ -1,41 +1,13 @@
 import json
-import typing as t
+import logging
+
 from sqlglot import exp
 
 from sqlmesh.core.console import get_console
 
 
+logger = logging.getLogger(__name__)
 KEYS_TO_MAKE_DETERMINISTIC = ["__sqlmesh__vars__", "__sqlmesh__blueprint__vars__"]
-
-
-def would_sorting_be_applied(obj: t.Any) -> bool:
-    """
-    Detects if sorting would be applied to an object based on the
-    deterministic_repr logic.
-
-    Returns True if the object is a dictionary or contains a dictionary
-    at any nesting level (in lists or tuples).
-
-    Args:
-        obj: The object to check
-
-    Returns:
-        bool: True if sorting would be applied, False otherwise
-    """
-
-    def _check_for_dict(o: t.Any) -> bool:
-        if isinstance(o, dict):
-            return True
-        if isinstance(o, (list, tuple)):
-            return any(_check_for_dict(item) for item in o)
-
-        return False
-
-    try:
-        return _check_for_dict(obj)
-    except Exception:
-        # If any error occurs during checking, assume no sorting
-        return False
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -103,8 +75,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
                 ):
                     try:
                         parsed_value = eval(executable["payload"])
-                        if would_sorting_be_applied(parsed_value):
+                        if isinstance(parsed_value, dict):
                             get_console().log_warning(warning)
                             return
                     except Exception:
-                        pass
+                        logger.warning("Exception trying to eval payload", exc_info=True)

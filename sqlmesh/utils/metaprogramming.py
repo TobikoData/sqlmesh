@@ -5,6 +5,7 @@ import dis
 import importlib
 import inspect
 import linecache
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,9 @@ from sqlmesh.core import constants as c
 from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
+
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
@@ -425,9 +429,9 @@ class Executable(PydanticModel):
 
     @classmethod
     def value(
-        cls, v: t.Any, is_metadata: t.Optional[bool] = None, use_deterministic_repr: bool = False
+        cls, v: t.Any, is_metadata: t.Optional[bool] = None, sort_root_dict: bool = False
     ) -> Executable:
-        payload = _deterministic_repr(v) if use_deterministic_repr else repr(v)
+        payload = _dict_sort(v) if sort_root_dict else repr(v)
         return Executable(payload=payload, kind=ExecutableKind.VALUE, is_metadata=is_metadata)
 
 
@@ -636,36 +640,13 @@ def print_exception(
     out.write(tb)
 
 
-def _deterministic_repr(obj: t.Any) -> str:
-    """Create a deterministic representation by ensuring consistent ordering before repr().
-
-    For dictionaries, ensures consistent key ordering to prevent non-deterministic
-    serialization that affects fingerprinting. Uses Python's native repr() logic
-    for all formatting to handle edge cases properly.
-
-    Note that this function assumes list/tuple order is significant and therefore does not sort them.
-
-    Args:
-        obj: The object to represent as a string.
-
-    Returns:
-        A deterministic string representation of the object.
-    """
-
-    def _normalize_for_repr(o: t.Any) -> t.Any:
-        if isinstance(o, dict):
-            sorted_items = sorted(o.items(), key=lambda x: str(x[0]))
-            return {k: _normalize_for_repr(v) for k, v in sorted_items}
-        if isinstance(o, (list, tuple)):
-            # Recursively normalize nested structures
-            normalized = [_normalize_for_repr(item) for item in o]
-            return type(o)(normalized)
-        return o
-
+def _dict_sort(obj: t.Any) -> str:
     try:
-        return repr(_normalize_for_repr(obj))
+        if isinstance(obj, dict):
+            obj = dict(sorted(obj.items(), key=lambda x: str(x[0])))
     except Exception:
-        return repr(obj)
+        logger.warning("Failed to sort non-recursive dict", exc_info=True)
+    return repr(obj)
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:

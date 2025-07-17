@@ -4,12 +4,16 @@ and therefore this migration applies deterministic sorting to the keys of the di
 """
 
 import json
+import logging
 import typing as t
 from dataclasses import dataclass
 
 from sqlglot import exp
 
 from sqlmesh.utils.migration import index_text_type, blob_text_type
+
+
+logger = logging.getLogger(__name__)
 
 
 KEYS_TO_MAKE_DETERMINISTIC = ["__sqlmesh__vars__", "__sqlmesh__blueprint__vars__"]
@@ -23,25 +27,13 @@ class SqlValue:
     sql: str
 
 
-def _deterministic_repr(obj: t.Any) -> str:
-    """
-    This is a copy of the function from utils.metaprogramming
-    """
-
-    def _normalize_for_repr(o: t.Any) -> t.Any:
-        if isinstance(o, dict):
-            sorted_items = sorted(o.items(), key=lambda x: str(x[0]))
-            return {k: _normalize_for_repr(v) for k, v in sorted_items}
-        if isinstance(o, (list, tuple)):
-            # Recursively normalize nested structures
-            normalized = [_normalize_for_repr(item) for item in o]
-            return type(o)(normalized)
-        return o
-
+def _dict_sort(obj: t.Any) -> str:
     try:
-        return repr(_normalize_for_repr(obj))
+        if isinstance(obj, dict):
+            obj = dict(sorted(obj.items(), key=lambda x: str(x[0])))
     except Exception:
-        return repr(obj)
+        logger.warning("Failed to sort non-recursive dict", exc_info=True)
+    return repr(obj)
 
 
 def migrate(state_sync, **kwargs):  # type: ignore
@@ -92,7 +84,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                     try:
                         # Try to parse the old payload and re-serialize it deterministically
                         parsed_value = eval(old_payload)
-                        new_payload = _deterministic_repr(parsed_value)
+                        new_payload = _dict_sort(parsed_value)
 
                         # Only update if the representation changed
                         if old_payload != new_payload:
@@ -100,7 +92,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
                             migration_needed = True
                     except Exception:
                         # If we still can't eval it, leave it as-is
-                        pass
+                        logger.warning("Exception trying to eval payload", exc_info=True)
 
         new_snapshots.append(
             {
