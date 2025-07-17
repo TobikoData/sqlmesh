@@ -160,16 +160,22 @@ def make_python_env(
 def _extract_macro_func_variable_references(macro_func: exp.Expression) -> t.Set[str]:
     references = set()
 
-    for n in macro_func.walk():
-        if n is macro_func:
-            continue
+    # Don't descend into nested MacroFunc nodes besides @VAR() and @BLUEPRINT_VAR(), because
+    # they will be handled in a separate call of _extract_macro_func_variable_references.
+    def _prune_nested_macro_func(expression: exp.Expression) -> bool:
+        return (
+            type(n) is d.MacroFunc
+            and n is not macro_func
+            and n.this.name.lower() not in (c.VAR, c.BLUEPRINT_VAR)
+        )
 
-        # Don't descend into nested MacroFunc nodes besides @VAR() and @BLUEPRINT_VAR(), because
-        # they will be handled in a separate call of _extract_macro_func_variable_references.
-        if isinstance(n, d.MacroFunc):
+    for n in macro_func.walk(prune=_prune_nested_macro_func):
+        if type(n) is d.MacroFunc:
             this = n.this
-            if this.name.lower() in (c.VAR, c.BLUEPRINT_VAR) and this.expressions:
-                references.add(this.expressions[0].this.lower())
+            args = this.expressions
+
+            if this.name.lower() in (c.VAR, c.BLUEPRINT_VAR) and args and args[0].is_string:
+                references.add(args[0].this.lower())
         elif isinstance(n, d.MacroVar):
             references.add(n.name.lower())
         elif isinstance(n, (exp.Identifier, d.MacroStrReplace, d.MacroSQL)) and "@" in n.name:

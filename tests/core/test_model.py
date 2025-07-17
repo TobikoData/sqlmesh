@@ -11246,3 +11246,22 @@ def test_each_macro_with_paren_expression_arg(assert_exp_eq):
           'value' AS "property1"
         """,
     )
+
+
+@pytest.mark.parametrize(
+    "macro_func, variables",
+    [
+        ("@M(@v1)", {"v1"}),
+        ("@M(@{v1})", {"v1"}),
+        ("@M(@SQL('@v1'))", {"v1"}),
+        ("@M(@'@{v1}_foo')", {"v1"}),
+        ("@M1(@VAR('v1'))", {"v1"}),
+        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v3"}),
+        ("@M1(@BLUEPRINT_VAR(@VAR('v1')))", {"v1"}),
+    ],
+)
+def test_extract_macro_func_variable_references(macro_func: str, variables: t.Set[str]) -> None:
+    from sqlmesh.core.model.common import _extract_macro_func_variable_references
+
+    macro_func_ast = parse_one(macro_func)
+    assert _extract_macro_func_variable_references(macro_func_ast) == variables
