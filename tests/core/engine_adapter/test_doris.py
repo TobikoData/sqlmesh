@@ -81,9 +81,7 @@ def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
         column_descriptions={"a": "test_column_description", "b": "test_column_description"},
     )
-    adapter.create_view(
-        "test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True
-    )
+    adapter.create_view("test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True)
 
     assert to_sql_calls(adapter) == [
         "CREATE MATERIALIZED VIEW `test_view` (`a` COMMENT 'test_column_description', `b` COMMENT 'test_column_description') AS SELECT `a`, `b` FROM `tbl`",
@@ -226,9 +224,7 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(DorisEngineAdapter)
 
     adapter.create_index("test_table", "test_index", ("cola",))
-    adapter.cursor.execute.assert_called_once_with(
-        "CREATE INDEX IF NOT EXISTS `test_index` ON `test_table`(`cola`)"
-    )
+    adapter.cursor.execute.assert_called_once_with("CREATE INDEX IF NOT EXISTS `test_index` ON `test_table`(`cola`)")
 
 
 def test_create_table_with_distributed_by(make_mocked_engine_adapter: t.Callable):
@@ -298,6 +294,37 @@ def test_create_table_with_properties(make_mocked_engine_adapter: t.Callable):
     ]
 
 
+def test_create_table_with_partitioned_by(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
+        partitioned_by=[exp.to_column("b")],
+        table_properties={"partitioned_by_expr": "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` DATE) PARTITION BY RANGE (`b`) (FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR)",
+    ]
+    
+    adapter.cursor.execute.reset_mock()
+    
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
+        partitioned_by=[exp.to_column("b")],
+        table_properties={
+            "partitioned_by_expr": [
+                "PARTITION `p201701` VALUES [('2017-01-01'), ('2017-02-01'))",
+                "PARTITION `other` VALUES LESS THAN (MAXVALUE)",
+            ]
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` DATE) PARTITION BY RANGE (`b`) (PARTITION `p201701` VALUES [('2017-01-01'), ('2017-02-01')), PARTITION `other` VALUES LESS THAN (MAXVALUE))",
+    ]
+
 def test_create_full_materialized_view(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(DorisEngineAdapter)
     materialized_properties = {
@@ -309,9 +336,9 @@ def test_create_full_materialized_view(make_mocked_engine_adapter: t.Callable):
             "expressions": ["orderkey"],
             "buckets": 2,
         },
-        "properties": {"replication_num": "1"},
         "unique_key": ["orderkey"],
-        "partitioned_by": "orderdate",
+        "partitioned_by_expr": "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR",
+        "replication_num": "1",
     }
     columns_to_types = {
         "orderdate": exp.DataType.build("DATE"),
@@ -319,9 +346,9 @@ def test_create_full_materialized_view(make_mocked_engine_adapter: t.Callable):
         "partkey": exp.DataType.build("INT"),
     }
     column_descriptions = {
-        "orderdate": "订单日期",
-        "orderkey": "订单键",
-        "partkey": "部件键",
+        "orderdate": "order date",
+        "orderkey": "order key",
+        "partkey": "part key",
     }
     query = parse_one(
         """
@@ -345,11 +372,13 @@ def test_create_full_materialized_view(make_mocked_engine_adapter: t.Callable):
         column_descriptions=column_descriptions,
         table_description="test_description",
         materialized_properties=materialized_properties,
+        partitioned_by=["orderdate"],
     )
     expected_sqls = [
-        "CREATE MATERIALIZED VIEW `complete_mv` (`orderdate` COMMENT '订单日期', `orderkey` COMMENT '订单键', `partkey` COMMENT '部件键') "
-        "BUILD IMMEDIATE REFRESH AUTO ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00' KEY (`orderkey`) COMMENT 'test_description' PARTITION BY (`orderdate`) "
-        "DISTRIBUTED BY HASH (orderkey) BUCKETS 2 PROPERTIES ('replication_num' = '1') "
+        "CREATE MATERIALIZED VIEW `complete_mv` (`orderdate` COMMENT 'order date', `orderkey` COMMENT 'order key', `partkey` COMMENT 'part key') "
+        "BUILD IMMEDIATE REFRESH AUTO ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00' KEY (`orderkey`) COMMENT 'test_description' "
+        "PARTITION BY RANGE (`orderdate`) (FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR) "
+        "DISTRIBUTED BY HASH (orderkey) BUCKETS 2 PROPERTIES ('replication_num'='1') "
         "AS SELECT `o_orderdate`, `l_orderkey`, `l_partkey` FROM `orders` LEFT JOIN `lineitem` ON `l_orderkey` = `o_orderkey` LEFT JOIN `partsupp` ON `ps_partkey` = `l_partkey` AND `l_suppkey` = `ps_suppkey`",
     ]
     sql_calls = to_sql_calls(adapter)

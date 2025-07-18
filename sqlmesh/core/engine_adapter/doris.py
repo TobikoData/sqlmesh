@@ -199,70 +199,122 @@ class DorisEngineAdapter(
                 **create_kwargs,
             )
 
-        # Materialized view: implement Doris-specific SQL
-        # Build column list with comments if provided
-        schema = exp.to_table(view_name)
-        col_defs = []
-        if columns_to_types:
-            for col, dtype in columns_to_types.items():
-                col_expr = exp.to_column(col)
-                col_sql = col_expr.sql(dialect=self.dialect, identify=True)
-                if column_descriptions and col in column_descriptions:
-                    comment = column_descriptions[col]
-                    col_defs.append(f"{col_sql} COMMENT '{comment}'")
-                else:
-                    col_defs.append(f"{col_sql}")
-            columns_sql = f"({', '.join(col_defs)})"
-        else:
-            columns_sql = ""
+        # Materialized view: delegate to separate method
+        self._create_materialized_view(
+            view_name,
+            query_or_df,
+            columns_to_types=columns_to_types,
+            materialized_properties=materialized_properties,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            view_properties=view_properties,
+            **create_kwargs,
+        )
 
-        # Doris-specific materialized view clauses
-        build = None
-        refresh = None
-        on_schedule = None
-        distributed_by = None
-        buckets = None
-        properties = {}
-        key_clause = None
-        partition_by_clause = None
-        comment_sql = ""
+    def _create_materialized_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """
+        Creates a Doris materialized view with the specified properties.
+        Uses SQLGlot for supported parts and manual SQL generation for unsupported Doris-specific features.
+        """
+        # Convert query_or_df to proper format using base infrastructure
+        query_or_df = self._native_df_to_pandas_df(query_or_df)
+
+        # Handle DataFrame case
+        import pandas as pd
+
+        if isinstance(query_or_df, pd.DataFrame):
+            values: t.List[t.Tuple[t.Any, ...]] = list(query_or_df.itertuples(index=False, name=None))
+            columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
+            if not columns_to_types:
+                raise SQLMeshError("columns_to_types must be provided for dataframes")
+            query_or_df = self._values_to_sql(
+                values,
+                columns_to_types,
+                batch_start=0,
+                batch_end=len(values),
+            )
+
+        # Get source queries using base infrastructure
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, batch_size=0, target_table=view_name
+        )
+        if len(source_queries) != 1:
+            raise SQLMeshError("Only one source query is supported for creating materialized views")
+
+        # Build schema using base infrastructure
+        schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
+        if columns_to_types:
+            schema = self._build_schema_exp(
+                exp.to_table(view_name), columns_to_types, column_descriptions, is_view=True
+            )
+
+        # Extract Doris-specific properties that aren't supported by SQLGlot
+        doris_specific_clauses = []
+
+        # Check for partitioned_by in create_kwargs first, then materialized_properties
+        partitioned_by = create_kwargs.get("partitioned_by") or (materialized_properties or {}).get("partitioned_by")
+        partitioned_by_expr = create_kwargs.get("partitioned_by_expr") or (materialized_properties or {}).get(
+            "partitioned_by_expr"
+        )
+
+        # Extract other Doris-specific properties from materialized_properties
         if materialized_properties:
+            # BUILD clause (order: 3)
             build = materialized_properties.get("build")
+            if build:
+                doris_specific_clauses.append(f"BUILD {build}")
+
+            # REFRESH clause (order: 4)
             refresh = materialized_properties.get("refresh")
+            if refresh:
+                doris_specific_clauses.append(f"REFRESH {refresh}")
+
+            # ON SCHEDULE clause (part of refresh)
             on_schedule = materialized_properties.get("on_schedule")
-            distributed_by = materialized_properties.get("distributed_by")
+            if on_schedule:
+                doris_specific_clauses.append(f"ON SCHEDULE {on_schedule}")
+
+            # KEY clauses (order: 5)
             unique_key = materialized_properties.get("unique_key")
             duplicate_key = materialized_properties.get("duplicate_key")
             if unique_key:
-                key_cols = ", ".join(
-                    [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in unique_key]
-                )
-                key_clause = f"KEY ({key_cols})"
+                key_cols = ", ".join([exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in unique_key])
+                doris_specific_clauses.append(f"KEY ({key_cols})")
             elif duplicate_key:
-                key_cols = ", ".join(
-                    [
-                        exp.to_column(k).sql(dialect=self.dialect, identify=True)
-                        for k in duplicate_key
-                    ]
-                )
-                key_clause = f"DUPLICATE KEY ({key_cols})"
-            partitioned_by = materialized_properties.get("partitioned_by")
-            if partitioned_by:
-                if isinstance(partitioned_by, (list, tuple)):
-                    part_cols = ", ".join(
-                        [
-                            exp.to_column(k).sql(dialect=self.dialect, identify=True)
-                            for k in partitioned_by
-                        ]
-                    )
-                    partition_by_clause = f"PARTITION BY ({part_cols})"
-                else:
-                    # If it's a string or single column
-                    part_col = exp.to_column(partitioned_by).sql(
-                        dialect=self.dialect, identify=True
-                    )
-                    partition_by_clause = f"PARTITION BY ({part_col})"
-            # Collect all extra keys for PROPERTIES
+                key_cols = ", ".join([exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in duplicate_key])
+                doris_specific_clauses.append(f"DUPLICATE KEY ({key_cols})")
+
+            # COMMENT clause (order: 6)
+            if table_description:
+                doris_specific_clauses.append(f"COMMENT '{self._truncate_table_comment(table_description)}'")
+
+            # PARTITION BY clause (order: 7) - handled by _build_partitioned_by_exp method
+            # We'll handle this separately to use the proper method
+
+            # DISTRIBUTED BY clause (order: 8)
+            distributed_by = materialized_properties.get("distributed_by")
+            if distributed_by and isinstance(distributed_by, dict):
+                kind = distributed_by.get("kind")
+                exprs = distributed_by.get("expressions")
+                buckets = distributed_by.get("buckets")
+                if kind and exprs:
+                    distributed_sql = f"DISTRIBUTED BY {kind} ({', '.join(exprs)})"
+                    if buckets is not None:
+                        distributed_sql += f" BUCKETS {buckets}"
+                    doris_specific_clauses.append(distributed_sql)
+
+            # PROPERTIES clause (order: 9)
+            properties = {}
             for k, v in materialized_properties.items():
                 if k not in {
                     "build",
@@ -270,6 +322,7 @@ class DorisEngineAdapter(
                     "on_schedule",
                     "distributed_by",
                     "partitioned_by",
+                    "partitioned_by_expr",
                     "clustered_by",
                     "buckets",
                     "key",
@@ -278,59 +331,146 @@ class DorisEngineAdapter(
                     "properties",
                 }:
                     properties[k] = v
-            # Merge with explicit 'properties' dict if present
-            if "properties" in materialized_properties and isinstance(
-                materialized_properties["properties"], dict
-            ):
-                properties.update(materialized_properties["properties"])
-        # Compose distributed by clause
-        distributed_sql = ""
-        if distributed_by and isinstance(distributed_by, dict):
-            kind = distributed_by.get("kind")
-            exprs = distributed_by.get("expressions")
-            buckets = distributed_by.get("buckets")
-            if kind and exprs:
-                distributed_sql = f"DISTRIBUTED BY {kind} ({', '.join(exprs)})"
-                if buckets is not None:
-                    distributed_sql += f" BUCKETS {buckets}"
-        # Compose properties clause
-        properties_sql = ""
-        if properties:
-            props = [f"'{k}' = '{v}'" for k, v in properties.items()]
-            properties_sql = f"PROPERTIES ({', '.join(props)})"
-        # Compose BUILD, REFRESH, ON SCHEDULE
-        build_sql = f"BUILD {build}" if build else ""
-        refresh_sql = f"REFRESH {refresh}" if refresh else ""
-        on_schedule_sql = f"ON SCHEDULE {on_schedule}" if on_schedule else ""
-        # Compose COMMENT clause for table comment
-        if table_description:
-            comment_sql = f"COMMENT '{self._truncate_table_comment(table_description)}'"
-        # Compose the full CREATE MATERIALIZED VIEW statement (order per Doris docs)
-        view_name_sql = exp.to_table(view_name).sql(dialect=self.dialect, identify=True)
-        clauses = [
-            f"CREATE MATERIALIZED VIEW {view_name_sql}",
-            columns_sql if columns_sql else None,
-            build_sql if build_sql else None,
-            refresh_sql if refresh_sql else None,
-            on_schedule_sql if on_schedule_sql else None,
-            key_clause if key_clause else None,
-            comment_sql if comment_sql else None,
-            partition_by_clause if partition_by_clause else None,
-            distributed_sql if distributed_sql else None,
-            properties_sql if properties_sql else None,
-        ]
-        # Remove empty
-        clauses = [c for c in clauses if c]
-        # The AS clause
-        # Render the query as SQL, quoted, to match test expectation
-        if hasattr(query_or_df, "sql"):
-            query_sql = query_or_df.sql(dialect=self.dialect, identify=True)
-        else:
-            query_sql = str(query_or_df)
-        full_sql = " ".join(clauses) + f" AS {query_sql}"
-        self.execute(full_sql)
 
-        # No need to register comments separately for materialized views in Doris
+            # Merge with explicit 'properties' dict if present
+            if "properties" in materialized_properties and isinstance(materialized_properties["properties"], dict):
+                properties.update(materialized_properties["properties"])
+
+            if properties:
+                props = [f"'{k}'='{v}'" for k, v in properties.items()]
+                doris_specific_clauses.append(f"PROPERTIES ({', '.join(props)})")
+
+        # Handle partitioned_by from create_kwargs if not already handled
+        if not partitioned_by and create_kwargs.get("partitioned_by"):
+            partitioned_by = create_kwargs.get("partitioned_by")
+
+        # Convert partitioned_by to list of expressions if it's not already
+        typed_partitioned_by: t.Optional[t.List[exp.Expression]] = None
+        if partitioned_by:
+            if not isinstance(partitioned_by, list):
+                if isinstance(partitioned_by, str):
+                    typed_partitioned_by = [exp.to_column(partitioned_by)]
+                else:
+                    # Ensure it's an Expression
+                    if isinstance(partitioned_by, exp.Expression):
+                        typed_partitioned_by = [partitioned_by]
+                    else:
+                        typed_partitioned_by = [exp.to_column(str(partitioned_by))]
+            else:
+                typed_partitioned_by = [
+                    exp.to_column(expr) if isinstance(expr, str) else expr for expr in partitioned_by
+                ]
+
+        # Build properties using the existing _build_table_properties_exp method for SQLGlot-supported parts only
+        # We exclude Doris-specific properties that we handle manually
+        table_properties = {}
+        if materialized_properties:
+            for key, value in materialized_properties.items():
+                # Only include properties that SQLGlot can handle and we don't handle manually
+                if key not in {
+                    "build",
+                    "refresh",
+                    "on_schedule",
+                    "partitioned_by",
+                    "partitioned_by_expr",
+                    "unique_key",
+                    "duplicate_key",
+                    "distributed_by",
+                    "properties",
+                }:
+                    # Convert to exp.Property similar to _build_table_properties_exp
+                    if not isinstance(value, exp.Expression):
+                        value = exp.Literal.string(str(value))
+                    table_properties[key] = value
+
+        # Note: partitioned_by_expr should not be added to table_properties
+        # as it's handled separately in the partition clause generation
+
+        # Only pass partitioned_by_expr if it's not already in table_properties
+        kwargs_for_properties = {
+            "table_properties": table_properties,
+            "table_description": table_description,
+            "partitioned_by": typed_partitioned_by,
+        }
+        if partitioned_by_expr and "partitioned_by_expr" not in table_properties:
+            kwargs_for_properties["partitioned_by_expr"] = partitioned_by_expr
+
+        properties = self._build_table_properties_exp(**kwargs_for_properties)
+
+        # Add materialized property
+        if not properties:
+            properties = exp.Properties(expressions=[])
+        properties.append("expressions", exp.MaterializedProperty())
+
+        # Generate the query SQL
+        with source_queries[0] as query:
+            query_sql = query.sql(dialect=self.dialect, identify=True)
+
+            # Build the complete SQL following Doris grammar order
+            view_name_sql = exp.to_table(view_name).sql(dialect=self.dialect, identify=True)
+
+            # Start with CREATE MATERIALIZED VIEW
+            clauses = [f"CREATE MATERIALIZED VIEW {view_name_sql}"]
+
+            # Add column definitions if provided
+            if columns_to_types:
+                col_defs = []
+                for col, dtype in columns_to_types.items():
+                    col_expr = exp.to_column(col)
+                    col_sql = col_expr.sql(dialect=self.dialect, identify=True)
+                    if column_descriptions and col in column_descriptions:
+                        comment = column_descriptions[col]
+                        col_defs.append(f"{col_sql} COMMENT '{comment}'")
+                    else:
+                        col_defs.append(col_sql)
+                clauses.append(f"({', '.join(col_defs)})")
+
+            # Extract partition clause from properties if it exists
+            partition_clause = None
+            if properties and properties.expressions:
+                for prop in properties.expressions:
+                    if isinstance(prop, (exp.PartitionedByProperty, exp.PartitionByRangeProperty)):
+                        # Generate the partition clause manually since SQLGlot might not handle it correctly
+                        if typed_partitioned_by:
+                            if isinstance(prop, exp.PartitionByRangeProperty):
+                                part_cols = ", ".join(
+                                    [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
+                                )
+                                partition_clause = f"PARTITION BY RANGE ({part_cols})"
+                                if partitioned_by_expr:
+                                    partition_clause += f" ({partitioned_by_expr})"
+                            else:
+                                part_cols = ", ".join(
+                                    [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
+                                )
+                                partition_clause = f"PARTITION BY ({part_cols})"
+                        break
+
+            # Add Doris-specific clauses in the correct order, inserting partition clause at the right position
+            # According to Doris grammar: BUILD, REFRESH, KEY, COMMENT, PARTITION BY, DISTRIBUTED BY, PROPERTIES
+            doris_clauses_with_partition = []
+            partition_inserted = False
+
+            for clause in doris_specific_clauses:
+                doris_clauses_with_partition.append(clause)
+                # Insert partition clause after COMMENT and before DISTRIBUTED BY
+                if not partition_inserted and partition_clause and "DISTRIBUTED BY" in clause:
+                    doris_clauses_with_partition.insert(-1, partition_clause)
+                    partition_inserted = True
+
+            # If partition clause wasn't inserted and we have one, add it at the end of Doris clauses
+            if not partition_inserted and partition_clause:
+                doris_clauses_with_partition.append(partition_clause)
+
+            clauses.extend(doris_clauses_with_partition)
+
+            # Add the AS clause and query
+            clauses.append(f"AS {query_sql}")
+
+            # Join all clauses
+            full_sql = " ".join(clauses)
+
+            self.execute(full_sql)
 
     def drop_view(
         self,
@@ -379,14 +519,10 @@ class DorisEngineAdapter(
 
         self.execute(f"ALTER TABLE {old_table_sql} RENAME {new_table_sql}")
 
-    def _create_table_comment(
-        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
-    ) -> None:
+    def _create_table_comment(self, table_name: TableName, table_comment: str, table_kind: str = "TABLE") -> None:
         table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
 
-        self.execute(
-            f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"'
-        )
+        self.execute(f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"')
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -418,9 +554,7 @@ class DorisEngineAdapter(
         """
         if where == exp.true():
             # Use TRUNCATE TABLE for full table deletion as Doris doesn't support DELETE FROM table WHERE TRUE
-            return self.execute(
-                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
-            )
+            return self.execute(exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)]))
 
         return super().delete_from(table_name, where)
 
@@ -493,11 +627,27 @@ class DorisEngineAdapter(
         **kwargs: t.Any,
     ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.PartitionByRangeProperty, exp.Property]]:
         """Doris supports range and list partition, but sqlglot only supports range partition, so we use PartitionByRangeProperty."""
+        # Handle partitioned_by_expr from kwargs
+        partitioned_by_expr = kwargs.get("partitioned_by_expr")
+        create_expressions = None
+
+        if partitioned_by_expr:
+            if isinstance(partitioned_by_expr, list):
+                create_expressions = []
+                for expr in partitioned_by_expr:
+                    if isinstance(expr, str):
+                        create_expressions.append(exp.Var(this=expr))
+                    else:
+                        create_expressions.append(expr)
+            else:
+                if isinstance(partitioned_by_expr, str):
+                    create_expressions = [exp.Var(this=str(partitioned_by_expr))]
+                else:
+                    create_expressions = [partitioned_by_expr]
+
         return exp.PartitionByRangeProperty(
             partition_expressions=partitioned_by,
-            create_expressions=exp.Literal(
-                this=kwargs.get("partition_expression", ""), is_string=False
-            ),
+            create_expressions=create_expressions,
         )
 
     def _build_table_properties_exp(
@@ -519,56 +669,23 @@ class DorisEngineAdapter(
 
         if table_description:
             properties.append(
-                exp.SchemaCommentProperty(
-                    this=exp.Literal.string(self._truncate_table_comment(table_description))
-                )
+                exp.SchemaCommentProperty(this=exp.Literal.string(self._truncate_table_comment(table_description)))
             )
 
         table_properties_copy = dict(table_properties) if table_properties else {}
 
-        # Doris-specific materialized view clauses
-        build = table_properties_copy.pop("build", None)
-        if build:
-            properties.append(exp.Property(this=exp.Var(this="BUILD"), value=exp.Var(this=build)))
-
-        refresh = table_properties_copy.pop("refresh", None)
-        if refresh:
-            properties.append(
-                exp.Property(this=exp.Var(this="REFRESH"), value=exp.Var(this=refresh))
-            )
-
-        on_schedule = table_properties_copy.pop("on_schedule", None)
-        if on_schedule:
-            properties.append(
-                exp.Property(
-                    this=exp.Var(this="ON SCHEDULE"), value=exp.Literal.string(on_schedule)
-                )
-            )
-
-        key = table_properties_copy.pop("key", None)
-        if key:
-            properties.append(
-                exp.Property(
-                    this=exp.Var(this="KEY"),
-                    value=exp.Tuple(expressions=[exp.to_column(k) for k in key]),
-                )
-            )
-
         # Existing logic for unique_key, duplicate_key, distributed_by
         unique_key = table_properties_copy.pop("unique_key", None)
         if unique_key is not None:
-            properties.append(
-                exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in unique_key])
-            )
+            properties.append(exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in unique_key]))
 
         duplicate_key = table_properties_copy.pop("duplicate_key", None)
         if duplicate_key is not None:
-            properties.append(
-                exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in duplicate_key])
-            )
+            properties.append(exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in duplicate_key]))
 
         # Handle partitioning
         add_partition = True
+        partitioned_by_expr = table_properties_copy.pop("partitioned_by_expr", None)
         if partitioned_by:
             # check if partitioned_by columns are in unique_key, if not, skip PARTITION BY.
             if unique_key is not None:
@@ -588,7 +705,7 @@ class DorisEngineAdapter(
                     )
                     add_partition = False
             if add_partition:
-                partition_expr = self._build_partitioned_by_exp(partitioned_by)
+                partition_expr = self._build_partitioned_by_exp(partitioned_by, partitioned_by_expr=partitioned_by_expr)
                 if partition_expr:
                     properties.append(partition_expr)
 
