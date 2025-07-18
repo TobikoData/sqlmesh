@@ -186,6 +186,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             )
         ]
 
+    def close(self) -> t.Any:
+        # Cancel all pending query jobs to avoid them becoming orphan, e.g., due to interrupts
+        for query_job in self._query_jobs:
+            if not self._db_call(query_job.done):
+                self._db_call(query_job.cancel)
+
+        return super().close()
+
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
@@ -1021,6 +1029,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             job_config=job_config,
             timeout=self._extra_config.get("job_creation_timeout_seconds"),
         )
+        self._query_jobs.add(self._query_job)
 
         logger.debug(
             "BigQuery job created: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
@@ -1029,21 +1038,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             self._query_job.job_id,
         )
 
-        try:
-            results = self._db_call(
-                self._query_job.result,
-                timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
-            )
-        except KeyboardInterrupt:
-            # Wrapping this in another try-except to ensure the subsequent db calls don't change
-            # the original exception type.
-            try:
-                if not self._db_call(self._query_job.done):
-                    self._db_call(self._query_job.cancel)
-            except:
-                pass
+        results = self._db_call(
+            self._query_job.result,
+            timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
+        )
 
-            raise
+        self._query_jobs.remove(self._query_job)
 
         self._query_data = iter(results) if results.total_rows else iter([])
         query_results = self._query_job._query_results
@@ -1211,6 +1211,15 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     @_query_data.setter
     def _query_data(self, value: t.Any) -> None:
         return self._connection_pool.set_attribute("query_data", value)
+
+    @property
+    def _query_jobs(self) -> t.Any:
+        query_jobs = self._connection_pool.get_attribute("query_jobs")
+        if not isinstance(query_jobs, set):
+            query_jobs = set()
+            self._connection_pool.set_attribute("query_jobs", query_jobs)
+
+        return query_jobs
 
     @property
     def _query_job(self) -> t.Any:
