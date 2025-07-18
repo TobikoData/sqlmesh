@@ -6,10 +6,11 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
+from sqlglot.helper import ensure_list
 from sqlmesh.core.engine_adapter.mixins import (
-    LogicalMergeMixin,
     NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
+    GetCurrentCatalogFromFunctionMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
@@ -18,40 +19,39 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     set_catalog,
 )
+from sqlmesh.utils import columns_to_types_all_known
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
+from sqlmesh.utils.errors import (
+    SQLMeshError,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.node import IntervalUnit
 
 logger = logging.getLogger(__name__)
 
 
 @set_catalog()
 class DorisEngineAdapter(
-    LogicalMergeMixin,
-    NonTransactionalTruncateMixin,
+    GetCurrentCatalogFromFunctionMixin,
     PandasNativeFetchDFSupportMixin,
-    EngineAdapterWithIndexSupport,
+    NonTransactionalTruncateMixin,
 ):
     DIALECT = "doris"
     DEFAULT_BATCH_SIZE = 200
     SUPPORTS_TRANSACTIONS = False  # Doris doesn't support transactions
     SUPPORTS_INDEXES = True  # Doris supports various indexes (inverted, bloom filter, etc.)
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_CTAS
-    COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
+    COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
     MAX_TABLE_COMMENT_LENGTH = 2048
     MAX_COLUMN_COMMENT_LENGTH = 255
     SUPPORTS_REPLACE_TABLE = False  # Doris doesn't support REPLACE TABLE
     MAX_IDENTIFIER_LENGTH = 64
-    SUPPORTS_MATERIALIZED_VIEWS = False
-    SUPPORTS_VIEW_SCHEMA = False
+    SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CREATE_DROP_CATALOG = False
-
-    # Doris table model constants
-    DEFAULT_TABLE_MODEL = "DUPLICATE"  # Default to DUPLICATE model
 
     @property
     def supports_indexes(self) -> bool:
@@ -69,34 +69,6 @@ class DorisEngineAdapter(
             exp.DataType.build("DATETIME", dialect=DIALECT).this: [(0,)],
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(0,)],
         },
-        # Doris type compatibility mapping
-        compatible_types={
-            exp.DataType.build("TINYINT", dialect=DIALECT): {
-                exp.DataType.build("BOOLEAN", dialect=DIALECT),
-            },
-            exp.DataType.build("SMALLINT", dialect=DIALECT): {
-                exp.DataType.build("TINYINT", dialect=DIALECT),
-            },
-            exp.DataType.build("INT", dialect=DIALECT): {
-                exp.DataType.build("SMALLINT", dialect=DIALECT),
-                exp.DataType.build("TINYINT", dialect=DIALECT),
-            },
-            exp.DataType.build("BIGINT", dialect=DIALECT): {
-                exp.DataType.build("INT", dialect=DIALECT),
-                exp.DataType.build("SMALLINT", dialect=DIALECT),
-                exp.DataType.build("TINYINT", dialect=DIALECT),
-            },
-            exp.DataType.build("FLOAT", dialect=DIALECT): {
-                exp.DataType.build("DOUBLE", dialect=DIALECT),
-            },
-            exp.DataType.build("DOUBLE", dialect=DIALECT): {
-                exp.DataType.build("FLOAT", dialect=DIALECT),
-            },
-            exp.DataType.build("STRING", dialect=DIALECT): {  # Doris TEXT/STRING type
-                exp.DataType.build("VARCHAR", dialect=DIALECT),
-                exp.DataType.build("CHAR", dialect=DIALECT),
-            },
-        },
         types_with_unlimited_length={
             exp.DataType.build("STRING", dialect=DIALECT).this: {
                 exp.DataType.build("STRING", dialect=DIALECT).this,
@@ -104,54 +76,22 @@ class DorisEngineAdapter(
         },
     )
 
-    def get_current_catalog(self) -> t.Optional[str]:
-        """Returns the catalog name of the current connection."""
-        return "internal"
-
-    def create_index(
+    def create_schema(
         self,
-        table_name: TableName,
-        index_name: str,
-        columns: t.Tuple[str, ...],
-        exists: bool = True,
-        index_type: str = "INVERTED",
-        properties: t.Optional[t.Dict[str, t.Any]] = None,
-        comment: t.Optional[str] = None,
-        use_create_index: bool = True,
+        schema_name: SchemaName,
+        ignore_if_exists: bool = True,
+        warn_on_error: bool = True,
+        properties: t.Optional[t.List[exp.Expression]] = None,
     ) -> None:
-        """
-        Create index in Doris using CREATE INDEX (preferred) or ALTER TABLE ... ADD INDEX.
-        Supports INVERTED and NGRAM_BF index types.
-        Example:
-            CREATE INDEX IF NOT EXISTS idx_name ON table_name (col) USING INVERTED PROPERTIES(...) COMMENT '...';
-        """
-        index_type = index_type.upper()
-        if index_type not in ("INVERTED", "BLOOMFILTER", "NGRAM_BF"):
-            raise ValueError(
-                f"Doris only supports INVERTED, BLOOMFILTER, and NGRAM_BF index types, got: {index_type}"
-            )
-
-        col_sql = ", ".join(f"`{col}`" for col in columns)
-        prop_sql = ""
-        if properties:
-            prop_list = []
-            for k, v in properties.items():
-                if isinstance(v, bool):
-                    v = str(v).lower()
-                elif isinstance(v, (int, float)):
-                    v = str(v)
-                prop_list.append(f'"{k}" = "{v}"')
-            prop_sql = f" PROPERTIES ({', '.join(prop_list)})"
-        comment_sql = f" COMMENT '{comment}'" if comment else ""
-        if use_create_index:
-            exists_sql = " IF NOT EXISTS" if exists else ""
-            using_sql = (
-                f" USING {index_type}" if index_type != "BLOOMFILTER" else " USING BLOOMFILTER"
-            )
-            sql = f"CREATE INDEX{exists_sql} {index_name} ON {table_name} ({col_sql}){using_sql}{prop_sql}{comment_sql};"
-        else:
-            sql = f"ALTER TABLE {table_name} ADD INDEX {index_name} ({col_sql}) USING {index_type}{prop_sql}{comment_sql};"
-        self.execute(sql)
+        """Create a schema."""
+        properties = properties or []
+        return super()._create_schema(
+            schema_name=schema_name,
+            ignore_if_exists=ignore_if_exists,
+            warn_on_error=warn_on_error,
+            properties=properties,
+            kind="DATABASE",
+        )
 
     def drop_schema(
         self,
@@ -161,7 +101,14 @@ class DorisEngineAdapter(
         **drop_args: t.Dict[str, exp.Expression],
     ) -> None:
         """Drop schema in Doris. Note: Doris doesn't support CASCADE clause."""
-        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
+        # In Doris, a schema is a database
+        return self._drop_object(
+            name=schema_name,
+            exists=ignore_if_not_exists,
+            kind="DATABASE",
+            cascade=False,
+            **drop_args,
+        )
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
@@ -172,8 +119,8 @@ class DorisEngineAdapter(
         """
         query = (
             exp.select(
-                exp.column("table_name").as_("name"),
                 exp.column("table_schema").as_("schema_name"),
+                exp.column("table_name").as_("name"),
                 exp.case()
                 .when(
                     exp.column("table_type").eq("BASE TABLE"),
@@ -219,77 +166,186 @@ class DorisEngineAdapter(
 
         return result
 
-    def create_table(
+    def create_view(
         self,
-        table_name: TableName,
-        columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
-        exists: bool = True,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """Create a table using a DDL statement with Doris-specific optimizations.
-
-        Args:
-            table_name: The name of the table to create. Can be fully qualified or just table name.
-            columns_to_types: A mapping between the column name and its data type.
-            primary_key: Determines the table primary key.
-            exists: Indicates whether to include the IF NOT EXISTS check.
-            table_description: Optional table description from MODEL DDL.
-            column_descriptions: Optional column descriptions from model query.
-            kwargs: Optional create table properties.
-                Available table properties:
-                - TABLE_MODEL: "DUPLICATE" (default) or "UNIQUE"
-                - KEY_COLS: list of key columns
-                - DISTRIBUTED_BY: distribution method (default: HASH on first column)
-                - BUCKETS: number of buckets (default: 10)
-        """
-        super().create_table(
-            table_name,
-            columns_to_types,
-            primary_key=primary_key,
-            exists=exists,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            **kwargs,
-        )
-
-    def ctas(
-        self,
-        table_name: TableName,
-        query_or_df: "QueryOrDF",
+        view_name: TableName,
+        query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        exists: bool = True,
+        replace: bool = True,
+        materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """
+        Implements Doris CREATE VIEW and CREATE MATERIALIZED VIEW syntax.
+        For materialized views, constructs the SQL to match Doris syntax and test expectations.
+        """
+        if replace:
+            self.drop_view(view_name, ignore_if_not_exists=True, materialized=materialized)
+        if not materialized:
+            return super().create_view(
+                view_name,
+                query_or_df,
+                columns_to_types=columns_to_types,
+                replace=False,  # Already dropped if needed
+                materialized=False,
+                materialized_properties=materialized_properties,
+                table_description=table_description,
+                column_descriptions=column_descriptions,
+                view_properties=view_properties,
+                **create_kwargs,
+            )
+
+        # Materialized view: implement Doris-specific SQL
+        # Build column list with comments if provided
+        schema = exp.to_table(view_name)
+        col_defs = []
+        if columns_to_types:
+            for col, dtype in columns_to_types.items():
+                col_expr = exp.to_column(col)
+                col_sql = col_expr.sql(dialect=self.dialect, identify=True)
+                if column_descriptions and col in column_descriptions:
+                    comment = column_descriptions[col]
+                    col_defs.append(f"{col_sql} COMMENT '{comment}'")
+                else:
+                    col_defs.append(f"{col_sql}")
+            columns_sql = f"({', '.join(col_defs)})"
+        else:
+            columns_sql = ""
+
+        # Doris-specific materialized view clauses
+        build = None
+        refresh = None
+        on_schedule = None
+        distributed_by = None
+        buckets = None
+        properties = {}
+        key_clause = None
+        partition_by_clause = None
+        comment_sql = ""
+        if materialized_properties:
+            build = materialized_properties.get("build")
+            refresh = materialized_properties.get("refresh")
+            on_schedule = materialized_properties.get("on_schedule")
+            distributed_by = materialized_properties.get("distributed_by")
+            unique_key = materialized_properties.get("unique_key")
+            duplicate_key = materialized_properties.get("duplicate_key")
+            if unique_key:
+                key_cols = ", ".join(
+                    [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in unique_key]
+                )
+                key_clause = f"KEY ({key_cols})"
+            elif duplicate_key:
+                key_cols = ", ".join(
+                    [
+                        exp.to_column(k).sql(dialect=self.dialect, identify=True)
+                        for k in duplicate_key
+                    ]
+                )
+                key_clause = f"DUPLICATE KEY ({key_cols})"
+            partitioned_by = materialized_properties.get("partitioned_by")
+            if partitioned_by:
+                if isinstance(partitioned_by, (list, tuple)):
+                    part_cols = ", ".join(
+                        [
+                            exp.to_column(k).sql(dialect=self.dialect, identify=True)
+                            for k in partitioned_by
+                        ]
+                    )
+                    partition_by_clause = f"PARTITION BY ({part_cols})"
+                else:
+                    # If it's a string or single column
+                    part_col = exp.to_column(partitioned_by).sql(
+                        dialect=self.dialect, identify=True
+                    )
+                    partition_by_clause = f"PARTITION BY ({part_col})"
+            # Collect all extra keys for PROPERTIES
+            for k, v in materialized_properties.items():
+                if k not in {
+                    "build",
+                    "refresh",
+                    "on_schedule",
+                    "distributed_by",
+                    "partitioned_by",
+                    "clustered_by",
+                    "buckets",
+                    "key",
+                    "unique_key",
+                    "duplicate_key",
+                    "properties",
+                }:
+                    properties[k] = v
+            # Merge with explicit 'properties' dict if present
+            if "properties" in materialized_properties and isinstance(
+                materialized_properties["properties"], dict
+            ):
+                properties.update(materialized_properties["properties"])
+        # Compose distributed by clause
+        distributed_sql = ""
+        if distributed_by and isinstance(distributed_by, dict):
+            kind = distributed_by.get("kind")
+            exprs = distributed_by.get("expressions")
+            buckets = distributed_by.get("buckets")
+            if kind and exprs:
+                distributed_sql = f"DISTRIBUTED BY {kind} ({', '.join(exprs)})"
+                if buckets is not None:
+                    distributed_sql += f" BUCKETS {buckets}"
+        # Compose properties clause
+        properties_sql = ""
+        if properties:
+            props = [f"'{k}' = '{v}'" for k, v in properties.items()]
+            properties_sql = f"PROPERTIES ({', '.join(props)})"
+        # Compose BUILD, REFRESH, ON SCHEDULE
+        build_sql = f"BUILD {build}" if build else ""
+        refresh_sql = f"REFRESH {refresh}" if refresh else ""
+        on_schedule_sql = f"ON SCHEDULE {on_schedule}" if on_schedule else ""
+        # Compose COMMENT clause for table comment
+        if table_description:
+            comment_sql = f"COMMENT '{self._truncate_table_comment(table_description)}'"
+        # Compose the full CREATE MATERIALIZED VIEW statement (order per Doris docs)
+        view_name_sql = exp.to_table(view_name).sql(dialect=self.dialect, identify=True)
+        clauses = [
+            f"CREATE MATERIALIZED VIEW {view_name_sql}",
+            columns_sql if columns_sql else None,
+            build_sql if build_sql else None,
+            refresh_sql if refresh_sql else None,
+            on_schedule_sql if on_schedule_sql else None,
+            key_clause if key_clause else None,
+            comment_sql if comment_sql else None,
+            partition_by_clause if partition_by_clause else None,
+            distributed_sql if distributed_sql else None,
+            properties_sql if properties_sql else None,
+        ]
+        # Remove empty
+        clauses = [c for c in clauses if c]
+        # The AS clause
+        # Render the query as SQL, quoted, to match test expectation
+        if hasattr(query_or_df, "sql"):
+            query_sql = query_or_df.sql(dialect=self.dialect, identify=True)
+        else:
+            query_sql = str(query_or_df)
+        full_sql = " ".join(clauses) + f" AS {query_sql}"
+        self.execute(full_sql)
+
+        # No need to register comments separately for materialized views in Doris
+
+    def drop_view(
+        self,
+        view_name: TableName,
+        ignore_if_not_exists: bool = True,
+        materialized: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        """Create a table using a CTAS statement with Doris-specific optimizations.
-
-        Args:
-            table_name: The name of the table to create. Can be fully qualified or just table name.
-            query_or_df: The SQL query to run or a dataframe for the CTAS.
-            columns_to_types: A mapping between the column name and its data type. Required if using a DataFrame.
-            exists: Indicates whether to include the IF NOT EXISTS check.
-            table_description: Optional table description from MODEL DDL.
-            column_descriptions: Optional column descriptions from model query.
-            kwargs: Optional create table properties.
-                Available table properties:
-                - TABLE_MODEL: "DUPLICATE" (default) or "UNIQUE"
-                - KEY_COLS: list of key columns
-                - DISTRIBUTED_BY: distribution method (default: HASH on first column)
-                - BUCKETS: number of buckets (default: 10)
         """
-        super().ctas(
-            table_name,
-            query_or_df,
-            columns_to_types=columns_to_types,
-            exists=exists,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            **kwargs,
-        )
+        Drop view in Doris.
+        Doris doesn't support CASCADE clause for DROP VIEW.
+        """
+        # Remove cascade from kwargs as Doris doesn't support it
+        kwargs.pop("cascade", None)
+        super().drop_view(view_name, ignore_if_not_exists, materialized, **kwargs)
 
     def create_table_like(
         self,
@@ -298,12 +354,6 @@ class DorisEngineAdapter(
         exists: bool = True,
         **kwargs: t.Any,
     ) -> None:
-        """
-        Create table like another table in Doris.
-        Note: Doris CREATE TABLE LIKE has some limitations compared to MySQL.
-        """
-        # Doris supports CREATE TABLE LIKE but with some limitations
-        # It may not copy all Doris-specific properties like distribution and partition
         self.execute(
             exp.Create(
                 this=exp.to_table(target_table_name),
@@ -319,58 +369,136 @@ class DorisEngineAdapter(
             )
         )
 
-    def ping(self) -> None:
-        """Ping the Doris connection to check if it's alive."""
-        # Use a simple query to check connection
-        try:
-            self.fetchone("SELECT 1")
-        except Exception as e:
-            logger.warning(f"Doris connection ping failed: {e}")
-            raise
+    def _rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        old_table_sql = exp.to_table(old_table_name).sql(dialect=self.dialect, identify=True)
+        new_table_sql = exp.to_table(new_table_name).sql(dialect=self.dialect, identify=True)
 
-    def _truncate_table_comment(self, comment: str) -> str:
-        """Truncate table comment to fit Doris limits."""
-        if self.MAX_TABLE_COMMENT_LENGTH and len(comment) > self.MAX_TABLE_COMMENT_LENGTH:
-            return comment[: self.MAX_TABLE_COMMENT_LENGTH - 3] + "..."
-        return comment
+        self.execute(f"ALTER TABLE {old_table_sql} RENAME {new_table_sql}")
 
-    def _truncate_column_comment(self, comment: str) -> str:
-        """Truncate column comment to fit Doris limits."""
-        if self.MAX_COLUMN_COMMENT_LENGTH and len(comment) > self.MAX_COLUMN_COMMENT_LENGTH:
-            return comment[: self.MAX_COLUMN_COMMENT_LENGTH - 3] + "..."
-        return comment
+    def _create_table_comment(
+        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
+    ) -> None:
+        table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
 
-    def _extract_value_from_property(self, value: t.Any) -> t.Optional[str]:
-        """Extract string value from SQLGlot expression or raw value."""
-        if value is None:
-            return None
-        # Handle SQLGlot Array expression, e.g., ARRAY('recordid')
-        if hasattr(value, "args") and "expressions" in value.args:
-            elements = []
-            for expr in value.args["expressions"]:
-                elem_val = self._extract_value_from_property(expr)
-                if elem_val is not None:
-                    elements.append(elem_val)
-            if not elements:
-                return None
-            return ", ".join(elements)
-        if hasattr(value, "this"):
-            # SQLGlot Literal expression
-            return str(value.this)
-        if hasattr(value, "name"):
-            # SQLGlot Identifier expression
-            return str(value.name)
-        if hasattr(value, "expressions"):
-            elements = []
-            for expr in value.expressions:
-                elem_val = self._extract_value_from_property(expr)
-                if elem_val is not None:
-                    elements.append(elem_val)
-            if not elements:
-                return None
-            return f"[{', '.join(elements)}]"
-        # Raw string or other value
-        return str(value).strip("'\"")
+        self.execute(
+            f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"'
+        )
+
+    def _build_create_comment_column_exp(
+        self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
+    ) -> exp.Comment | str:
+        table_sql = table.sql(dialect=self.dialect, identify=True)
+        return f'ALTER TABLE {table_sql} MODIFY COLUMN {column_name} COMMENT "{self._truncate_column_comment(column_comment)}"'
+
+    def _create_column_comments(
+        self,
+        table_name: TableName,
+        column_comments: t.Dict[str, str],
+        table_kind: str = "TABLE",
+        materialized_view: bool = False,
+    ) -> None:
+        table = exp.to_table(table_name)
+
+        for col, comment in column_comments.items():
+            try:
+                self.execute(self._build_create_comment_column_exp(table, col, comment, table_kind))
+            except Exception:
+                logger.warning(
+                    f"Column comments for column '{col}' in table '{table.alias_or_name}' not registered - this may be due to limited permissions",
+                    exc_info=True,
+                )
+
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        """
+        Delete from table in Doris.
+        """
+        if where == exp.true():
+            # Use TRUNCATE TABLE for full table deletion as Doris doesn't support DELETE FROM table WHERE TRUE
+            return self.execute(
+                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
+            )
+
+        return super().delete_from(table_name, where)
+
+    def _create_table_from_columns(
+        self,
+        table_name: TableName,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Create a table using a DDL statement.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            columns_to_types: Mapping between the column name and its data type.
+            primary_key: Determines the table primary key.
+            exists: Indicates whether to include the IF NOT EXISTS check.
+            table_description: Optional table description from MODEL DDL.
+            column_descriptions: Optional column descriptions from model query.
+            kwargs: Optional create table properties.
+        """
+        table = exp.to_table(table_name)
+
+        if not columns_to_types_all_known(columns_to_types):
+            # It is ok if the columns types are not known if the table already exists and IF NOT EXISTS is set
+            if exists and self.table_exists(table_name):
+                return
+            raise SQLMeshError(
+                "Cannot create a table without knowing the column types. "
+                "Try casting the columns to an expected type or defining the columns in the model metadata. "
+                f"Columns to types: {columns_to_types}"
+            )
+
+        # Doris doesn't support primary key. We use Unique Key Model if primary key is provided.
+        primary_key_expression: t.List[exp.PrimaryKey] = []
+        table_properties = kwargs.get("table_properties")
+        if table_properties is None:
+            table_properties = {}
+            kwargs["table_properties"] = table_properties
+        if primary_key and "unique_key" not in table_properties:
+            table_properties["unique_key"] = primary_key
+
+        schema = self._build_schema_exp(
+            table,
+            columns_to_types,
+            column_descriptions,
+            primary_key_expression,
+        )
+
+        self._create_table(
+            schema,
+            None,
+            exists=exists,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            **kwargs,
+        )
+
+    def _build_partitioned_by_exp(
+        self,
+        partitioned_by: t.List[exp.Expression],
+        *,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        catalog_name: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.PartitionByRangeProperty, exp.Property]]:
+        """Doris supports range and list partition, but sqlglot only supports range partition, so we use PartitionByRangeProperty."""
+        return exp.PartitionByRangeProperty(
+            partition_expressions=partitioned_by,
+            create_expressions=exp.Literal(
+                this=kwargs.get("partition_expression", ""), is_string=False
+            ),
+        )
 
     def _build_table_properties_exp(
         self,
@@ -380,151 +508,71 @@ class DorisEngineAdapter(
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        table_properties: t.Optional[t.Dict[str, t.Any]] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Properties]:
-        """Build Doris-specific table properties including table model and distribution.
-        Args:
-            key_cols: List of key column names for Doris table (UNIQUE, DUPLICATE).
-            table_model: Doris table model type (UNIQUE, DUPLICATE).
-        """
+        """Creates a SQLGlot table properties expression for ddl, including Doris-specific materialized view clauses."""
         properties: t.List[exp.Expression] = []
 
-        # Copy table_properties to avoid modifying the original
-        table_properties_copy = {k.upper(): v for k, v in (table_properties or {}).copy().items()}
-
-        # Determine table model - default to DUPLICATE
-        table_model = "DUPLICATE"
-        if "TABLE_MODEL" in table_properties_copy:
-            table_model_value = table_properties_copy.pop("TABLE_MODEL")
-            table_model_str = self._extract_value_from_property(table_model_value)
-            if table_model_str is not None:
-                table_model = table_model_str.upper()
-
-        # Validate table model
-        if table_model not in ("DUPLICATE", "UNIQUE"):
-            raise ValueError(f"Invalid table model '{table_model}'. Must be DUPLICATE or UNIQUE.")
-
-        properties.append(
-            exp.Property(
-                this=exp.Identifier(this="_doris_table_model"),
-                expression=exp.Literal.string(table_model),
+        if table_description:
+            properties.append(
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
             )
-        )
 
-        # Handle DISTRIBUTED BY - extract and store for later use
-        distributed_by: str = ""
-        if "DISTRIBUTED_BY" in table_properties_copy:
-            distributed_by_value = table_properties_copy.pop("DISTRIBUTED_BY")
-            distributed_by_str = self._extract_value_from_property(distributed_by_value)
-            if distributed_by_str is not None:
-                distributed_by = distributed_by_str
-        elif columns_to_types:
-            first_column = next(iter(columns_to_types.keys()))
-            distributed_by = f"HASH({first_column})"
+        table_properties_copy = dict(table_properties) if table_properties else {}
 
-        # Handle BUCKETS
-        buckets: str = "10"
-        if "BUCKETS" in table_properties_copy:
-            buckets_value = table_properties_copy.pop("BUCKETS")
-            buckets_str = self._extract_value_from_property(buckets_value)
-            if buckets_str is not None:
-                buckets = buckets_str
+        # Doris-specific materialized view clauses
+        build = table_properties_copy.pop("build", None)
+        if build:
+            properties.append(exp.Property(this=exp.Var(this="BUILD"), value=exp.Var(this=build)))
 
-        # Store extracted values for later SQL generation
-        if distributed_by:
+        refresh = table_properties_copy.pop("refresh", None)
+        if refresh:
+            properties.append(
+                exp.Property(this=exp.Var(this="REFRESH"), value=exp.Var(this=refresh))
+            )
+
+        on_schedule = table_properties_copy.pop("on_schedule", None)
+        if on_schedule:
             properties.append(
                 exp.Property(
-                    this=exp.Identifier(this="_doris_distributed_by"),
-                    expression=exp.Literal.string(distributed_by),
+                    this=exp.Var(this="ON SCHEDULE"), value=exp.Literal.string(on_schedule)
                 )
             )
 
-        if buckets:
+        key = table_properties_copy.pop("key", None)
+        if key:
             properties.append(
                 exp.Property(
-                    this=exp.Identifier(this="_doris_buckets"),
-                    expression=exp.Literal.string(buckets),
+                    this=exp.Var(this="KEY"),
+                    value=exp.Tuple(expressions=[exp.to_column(k) for k in key]),
                 )
             )
 
-        # Handle auto_partition flag
-        auto_partition = "false"
-        if "AUTO_PARTITION" in table_properties_copy:
-            auto_partition_value = table_properties_copy.pop("AUTO_PARTITION")
-            auto_partition_str = self._extract_value_from_property(auto_partition_value)
-            if auto_partition_str is not None:
-                auto_partition = auto_partition_str.lower()
-
-        properties.append(
-            exp.Property(
-                this=exp.Identifier(this="_doris_auto_partition"),
-                expression=exp.Literal.string(auto_partition),
-            )
-        )
-
-        # Handle partition_function
-        partition_function = ""
-        if "PARTITION_FUNCTION" in table_properties_copy:
-            partition_function_value = table_properties_copy.pop("PARTITION_FUNCTION")
-            partition_function_str = self._extract_value_from_property(partition_function_value)
-            if partition_function_str is not None:
-                partition_function = partition_function_str
-
-        if partition_function:
+        # Existing logic for unique_key, duplicate_key, distributed_by
+        unique_key = table_properties_copy.pop("unique_key", None)
+        if unique_key is not None:
             properties.append(
-                exp.Property(
-                    this=exp.Identifier(this="_doris_partition_function"),
-                    expression=exp.Literal.string(partition_function),
-                )
+                exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in unique_key])
             )
 
-        partitioned_by_def: str = ""
-        if "PARTITIONED_BY_DEF" in table_properties_copy:
-            partitioned_by_def_value = table_properties_copy.pop("PARTITIONED_BY_DEF")
-            partitioned_by_def_str = self._extract_value_from_property(partitioned_by_def_value)
-            if partitioned_by_def_str is not None:
-                partitioned_by_def = partitioned_by_def_str
+        duplicate_key = table_properties_copy.pop("duplicate_key", None)
+        if duplicate_key is not None:
             properties.append(
-                exp.Property(
-                    this=exp.Identifier(this="_doris_partition_def"),
-                    expression=exp.Literal.string(partitioned_by_def),
-                )
+                exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in duplicate_key])
             )
-
-        # Add key_cols as a property for later SQL generation
-        key_cols: str = ""
-        if "KEY_COLS" in table_properties_copy:
-            key_cols_value = table_properties_copy.pop("KEY_COLS", None)
-            key_cols_str = (
-                self._extract_value_from_property(key_cols_value)
-                if key_cols_value is not None
-                else None
-            )
-            if key_cols_str is not None:
-                key_cols = key_cols_str
-            if key_cols:
-                properties.append(
-                    exp.Property(
-                        this=exp.Identifier(this="_doris_key_cols"),
-                        expression=exp.Literal.string(key_cols),
-                    )
-                )
 
         # Handle partitioning
         add_partition = True
         if partitioned_by:
-            # 检查 UNIQUE KEY 模型下 partitioned_by 列是否都在 key_cols
-            if table_model == "UNIQUE":
-                key_cols_set = set()
-                if key_cols:
-                    if isinstance(key_cols, str):
-                        key_cols_set = set([c.strip() for c in key_cols.split(",") if c.strip()])
-                    elif isinstance(key_cols, (list, tuple)):
-                        key_cols_set = set([str(c).strip() for c in key_cols])
+            # check if partitioned_by columns are in unique_key, if not, skip PARTITION BY.
+            if unique_key is not None:
+                key_cols_set = set([str(c).strip() for c in unique_key])
                 partition_cols = set()
                 for expr in partitioned_by:
                     if hasattr(expr, "name"):
@@ -544,307 +592,37 @@ class DorisEngineAdapter(
                 if partition_expr:
                     properties.append(partition_expr)
 
-        # Add remaining properties as key-value pairs
-        for key, value in table_properties_copy.items():
-            if not key.startswith("_"):
-                value_str = self._extract_value_from_property(value)
-                properties.append(
-                    exp.Property(
-                        this=exp.Identifier(this=key.lower()),
-                        expression=exp.Literal.string(value_str),
-                    )
-                )
-
-        # Add table description as comment
-        if table_description:
-            properties.append(
-                exp.Property(
-                    this=exp.Identifier(this="_doris_table_comment"),
-                    expression=exp.Literal.string(self._truncate_table_comment(table_description)),
-                )
+        # Handle distributed_by property from table_properties only
+        distributed_by = table_properties_copy.pop("distributed_by", None)
+        if distributed_by and isinstance(distributed_by, dict):
+            expressions = distributed_by.get("expressions")
+            kind = distributed_by.get("kind")
+            buckets = distributed_by.get("buckets")
+            prop = exp.DistributedByProperty(
+                kind=exp.Var(this=kind),
+                expressions=[exp.to_column(e) for e in expressions] if expressions else None,
+                buckets=exp.Literal.number(buckets)
+                if isinstance(buckets, int)
+                else exp.Var(this="AUTO")
+                if buckets == "AUTO"
+                else None,
+                order=None,
             )
+            properties.append(prop)
 
-        return exp.Properties(expressions=properties) if properties else None
+        # Add any remaining properties as generic exp.Property
+        table_type = self._pop_creatable_type_from_properties(table_properties_copy)
+        properties.extend([p for p in ensure_list(table_type) if p is not None])
 
-    def _build_partitioned_by_exp(
-        self,
-        partitioned_by: t.List[exp.Expression],
-        partition_type: str = "RANGE",
-        **kwargs: t.Any,
-    ) -> t.Optional[exp.Property]:
-        """Build Doris PARTITION BY expression."""
-        if not partitioned_by:
-            return None
+        # Only add generic properties if there are any left
+        generic_properties = []
+        for k, v in table_properties_copy.items():
+            if not isinstance(v, exp.Expression):
+                v = exp.Literal.string(str(v))
+            generic_properties.append(exp.Property(this=exp.Literal.string(str(k)), value=v))
+        if generic_properties:
+            properties.extend(generic_properties)
 
-        partition_type = partition_type.upper()
-        if partition_type not in ("RANGE", "LIST"):
-            raise ValueError(
-                f"Doris only supports RANGE and LIST partitioning, got: {partition_type}"
-            )
-
-        return exp.Property(
-            this=exp.Identifier(this="PARTITION BY"),
-            value=exp.Func(this=partition_type, expressions=partitioned_by),
-        )
-
-    def _build_create_table_exp(
-        self,
-        table_name_or_schema: t.Union[exp.Schema, TableName],
-        expression: t.Optional[exp.Expression],
-        exists: bool = True,
-        replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        table_description: t.Optional[str] = None,
-        table_kind: t.Optional[str] = None,
-        **kwargs: t.Any,
-    ) -> exp.Create:
-        """Override to add Doris-specific CREATE TABLE syntax."""
-
-        # Build table schema
-        if isinstance(table_name_or_schema, exp.Schema):
-            schema = table_name_or_schema
-            table_name = schema.this
-        else:
-            table_name = table_name_or_schema
-            # Build schema from columns_to_types
-            if columns_to_types:
-                column_defs = []
-                for col_name, col_type in columns_to_types.items():
-                    column_defs.append(
-                        exp.ColumnDef(this=exp.to_identifier(col_name), kind=col_type)
-                    )
-                schema = exp.Schema(this=table_name, expressions=column_defs)
-            else:
-                schema = exp.Schema(this=table_name)
-
-        # Get base CREATE TABLE expression with our modified schema
-        create_exp = super()._build_create_table_exp(
-            table_name_or_schema=schema,
-            expression=expression,
-            exists=exists,
-            replace=replace,
-            columns_to_types=columns_to_types,
-            table_description=table_description,
-            table_kind=table_kind,
-            **kwargs,
-        )
-
-        return create_exp
-
-    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
-        """Override SQL generation to handle Doris-specific syntax."""
-
-        if isinstance(expression, exp.Create) and expression.kind == "TABLE":
-            # Custom Doris CREATE TABLE generation
-            return self._generate_doris_create_table_sql(expression, quote=quote)
-
-        return super()._to_sql(expression, quote=quote, **kwargs)
-
-    def _generate_doris_create_table_sql(self, create_exp: exp.Create, quote: bool = True) -> str:
-        """Generate Doris-specific CREATE TABLE SQL supporting both DDL and CTAS.
-        Uses key_cols and table_model for KEY clause generation.
-        """
-        parts = []
-
-        create_clause = "CREATE TABLE"
-        if getattr(create_exp, "exists", None):
-            create_clause += " IF NOT EXISTS"
-
-        table_name = create_exp.this.this if hasattr(create_exp.this, "this") else create_exp.this
-        if hasattr(table_name, "sql"):
-            table_name_sql = table_name.sql(dialect=self.dialect, identify=quote)
-        else:
-            table_name_sql = str(table_name)
-
-        parts.append(f"{create_clause} {table_name_sql}")
-
-        is_ctas = hasattr(create_exp, "expression") and create_exp.expression is not None
-
-        if not is_ctas and hasattr(create_exp.this, "expressions") and create_exp.this.expressions:
-            column_parts = []
-            for expr in create_exp.this.expressions:
-                if isinstance(expr, exp.ColumnDef):
-                    col_sql = expr.sql(dialect=self.dialect, identify=quote)
-                    column_parts.append(f"    {col_sql}")
-            if column_parts:
-                parts.append("(\n" + ",\n".join(column_parts) + "\n)")
-
-        # Extract properties from the create expression
-        table_model = None
-        distributed_by = None
-        buckets = "10"
-        key_cols = None
-        table_comment = None
-        properties_list = []
-        partition_by_clause = None
-        partitioned_by_def: str = ""
-        auto_partition = "false"
-        partition_function = ""
-
-        if hasattr(create_exp, "args") and create_exp.args.get("properties"):
-            properties = create_exp.args["properties"]
-            if hasattr(properties, "expressions"):
-                for prop in properties.expressions:
-                    if isinstance(prop, exp.Property):
-                        key = prop.this.name if hasattr(prop.this, "name") else str(prop.this)
-                        value = None
-                        if hasattr(prop, "expression") and prop.expression:
-                            if isinstance(prop.expression, exp.Literal):
-                                value = prop.expression.this
-                            else:
-                                value = str(prop.expression)
-                        if key == "_doris_table_comment":
-                            table_comment = str(value) if value is not None else None
-                        elif key == "_doris_table_model":
-                            table_model = str(value) if value is not None else None
-                        elif key == "_doris_distributed_by":
-                            distributed_by = str(value) if value is not None else None
-                        elif key == "_doris_buckets":
-                            buckets = str(value) if value is not None else "10"
-                        elif key == "_doris_key_cols":
-                            if value and str(value) not in ("None", "null"):
-                                key_cols = [v.strip() for v in str(value).split(",") if v.strip()]
-                        elif key == "PARTITION BY":
-                            partition_by_clause = prop
-                        elif key == "_doris_partition_def":
-                            partitioned_by_def = str(value) if value is not None else ""
-                        elif key == "_doris_auto_partition":
-                            auto_partition = str(value) if value is not None else "false"
-                        elif key == "_doris_partition_function":
-                            partition_function = str(value) if value is not None else ""
-                        elif key and value is not None:
-                            properties_list.append(f'"{key}" = "{value}"')
-
-        # Generate KEY clause based on table_model and key_cols
-        key_clause = None
-        if table_model and key_cols:
-            key_type = table_model.upper()
-            if key_type == "UNIQUE":
-                key_clause = f"UNIQUE KEY({', '.join(key_cols)})"
-            elif key_type == "DUPLICATE":
-                key_clause = f"DUPLICATE KEY({', '.join(key_cols)})"
-        elif table_model:
-            # Fallback: use first N columns as default key
-            if (
-                not is_ctas
-                and hasattr(create_exp.this, "expressions")
-                and create_exp.this.expressions
-            ):
-                col_names = []
-                for expr in create_exp.this.expressions:
-                    if isinstance(expr, exp.ColumnDef):
-                        col_name = expr.this.name if hasattr(expr.this, "name") else str(expr.this)
-                        col_names.append(col_name)
-                if table_model.upper() == "UNIQUE" and col_names:
-                    key_clause = f"UNIQUE KEY({col_names[0]})"
-                elif table_model.upper() == "DUPLICATE" and col_names:
-                    key_clause = f"DUPLICATE KEY({', '.join(col_names[0])})"
-
-        if key_clause:
-            parts.append(key_clause)
-
-        if table_comment:
-            parts.append(f"COMMENT '{table_comment}'")
-
-        if partition_by_clause:
-            # Doris PARTITION BY property uses 'value' in args
-            part_func = partition_by_clause.args.get("value")
-            if part_func and hasattr(part_func, "this") and hasattr(part_func, "expressions"):
-                part_type = part_func.this
-
-                # Use partition_function if available, otherwise use column names
-                if partition_function:
-                    part_exprs = partition_function
-                else:
-                    part_exprs = ", ".join(
-                        e.sql(dialect=self.dialect, identify=quote) for e in part_func.expressions
-                    )
-
-                # Add AUTO prefix if auto_partition is enabled
-                partition_prefix = "AUTO " if auto_partition.lower() == "true" else ""
-
-                parts.append(
-                    f"{partition_prefix}PARTITION BY {part_type}({part_exprs}) ({partitioned_by_def})"
-                )
-
-        if distributed_by:
-            parts.append(f"DISTRIBUTED BY {distributed_by} BUCKETS {buckets}")
-
-        if properties_list:
-            properties_sql = "PROPERTIES (\n    " + ",\n    ".join(properties_list) + "\n)"
-            parts.append(properties_sql)
-
-        if is_ctas:
-            select_sql = create_exp.expression.sql(dialect=self.dialect, identify=quote)
-            parts.append(f"AS {select_sql}")
-
-        sql_result = "\n".join(parts)
-        return sql_result
-
-    def create_view(
-        self,
-        view_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        replace: bool = True,
-        materialized: bool = False,
-        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        **create_kwargs: t.Any,
-    ) -> None:
-        """
-        Doris CREATE VIEW syntax:
-        - CREATE VIEW [IF NOT EXISTS] [<db_name>.]<view_name> [(<column_definition>)] AS <query_stmt>
-
-        Doris does not support CREATE OR REPLACE VIEW syntax, so we need to drop the view first
-        if replace=True.
-
-        Doris supports both regular views and materialized views. But we only support regular views
-        because the Doris materialized views does not support the following features:
-        - Table alias
-        - Schema name in view name
-        """
-        if replace:
-            self.drop_view(view_name, ignore_if_not_exists=True, materialized=materialized)
-
-        super().create_view(
-            view_name,
-            query_or_df,
-            columns_to_types=columns_to_types,
-            replace=False,  # Always set to False since we handle replacement manually
-            materialized=materialized,
-            materialized_properties=materialized_properties,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            view_properties=view_properties,
-            **create_kwargs,
-        )
-
-    def drop_view(
-        self,
-        view_name: TableName,
-        ignore_if_not_exists: bool = True,
-        materialized: bool = False,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Drop view in Doris.
-        Doris doesn't support CASCADE clause for DROP VIEW.
-        """
-        # Remove cascade from kwargs as Doris doesn't support it
-        kwargs.pop("cascade", None)
-        super().drop_view(view_name, ignore_if_not_exists, materialized, **kwargs)
-
-    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
-        """
-        Delete from table in Doris.
-        """
-        if where == exp.true():
-            # Use TRUNCATE TABLE for full table deletion as Doris doesn't support WHERE TRUE
-            return self.execute(
-                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
-            )
-
-        return super().delete_from(table_name, where)
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None

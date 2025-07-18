@@ -1,177 +1,364 @@
 import typing as t
 
 import pytest
-from pytest_mock import MockFixture
-from sqlglot import exp
+from sqlglot import expressions as exp
+from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter.doris import DorisEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
+from sqlmesh.core.engine_adapter.doris import DorisEngineAdapter
+from sqlmesh.utils.errors import UnsupportedCatalogOperationError
+
+from pytest_mock.plugin import MockerFixture
 
 pytestmark = pytest.mark.doris
 
 
-@pytest.fixture
-def make_mocked_engine_adapter(mocker: MockFixture) -> t.Callable[..., DorisEngineAdapter]:
-    def _make(server_version: t.Optional[str] = None) -> DorisEngineAdapter:
-        connection_mock = mocker.MagicMock()
-        cursor_mock = mocker.MagicMock()
-        connection_mock.cursor.return_value = cursor_mock
+def test_create_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), replace=False)
+    # check view properties
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        replace=False,
+        view_properties={"a": exp.convert(1)},
+    )
 
-        adapter = DorisEngineAdapter(lambda: connection_mock, "doris")
-        return adapter
-
-    return _make
-
-
-@pytest.mark.parametrize(
-    "kwargs, expected",
-    [
-        (
-            {"schema_name": "test_schema"},
-            "DROP DATABASE IF EXISTS `test_schema`",
-        ),
-        (
-            {"schema_name": "test_schema", "ignore_if_not_exists": False},
-            "DROP DATABASE `test_schema`",
-        ),
-        (
-            {"schema_name": "test_schema", "cascade": True},
-            "DROP DATABASE IF EXISTS `test_schema`",
-        ),
-        (
-            {"schema_name": "test_schema", "cascade": True, "ignore_if_not_exists": False},
-            "DROP DATABASE `test_schema`",
-        ),
-    ],
-)
-def test_drop_schema(
-    kwargs: t.Dict[str, t.Any],
-    expected: str,
-    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
-) -> None:
-    adapter = make_mocked_engine_adapter()
-
-    adapter.drop_schema(**kwargs)
-
-    sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [expected]
+    assert to_sql_calls(adapter) == [
+        "DROP VIEW IF EXISTS `test_view`",
+        "CREATE VIEW `test_view` AS SELECT `a` FROM `tbl`",
+        "CREATE VIEW `test_view` AS SELECT `a` FROM `tbl`",
+        "CREATE VIEW `test_view` AS SELECT `a` FROM `tbl`",
+    ]
 
 
-@pytest.mark.parametrize(
-    "kwargs, expected",
-    [
-        (
-            {
-                "table_name": "test_table",
-                "index_name": "test_index",
-                "columns": ("a",),
-                "index_type": "INVERTED",
-            },
-            "CREATE INDEX IF NOT EXISTS test_index ON test_table (`a`) USING INVERTED",
-        ),
-        (
-            {
-                "table_name": "test_table",
-                "index_name": "test_index",
-                "columns": ("a", "b"),
-                "index_type": "BLOOMFILTER",
-                "comment": "test comment",
-            },
-            "CREATE INDEX IF NOT EXISTS test_index ON test_table (`a`, `b`) USING BLOOMFILTER COMMENT 'test comment'",
-        ),
-        (
-            {
-                "table_name": "test_table",
-                "index_name": "test_index",
-                "columns": ("a",),
-                "index_type": "NGRAM_BF",
-                "properties": {"gram_size": "4", "bf_size": "2048"},
-            },
-            'CREATE INDEX IF NOT EXISTS test_index ON test_table (`a`) USING NGRAM_BF PROPERTIES ("gram_size" = "4", "bf_size" = "2048")',
-        ),
-    ],
-)
-def test_create_index(
-    kwargs: t.Dict[str, t.Any],
-    expected: str,
-    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
-) -> None:
-    adapter = make_mocked_engine_adapter()
+def test_create_view_with_comment(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        replace=False,
+        columns_to_types={"a": exp.DataType.build("INT")},
+        table_description="test_description",
+        column_descriptions={"a": "test_column_description"},
+    )
 
-    adapter.create_index(**kwargs)
-
-    sql_calls = to_sql_calls(adapter)
-    assert sql_calls[0].startswith(expected)
+    assert to_sql_calls(adapter) == [
+        "CREATE VIEW `test_view` (`a` COMMENT 'test_column_description') COMMENT 'test_description' AS SELECT `a` FROM `tbl`",
+    ]
 
 
-def test_create_table_with_comments(
-    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
-) -> None:
-    adapter = make_mocked_engine_adapter()
+def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT")},
+    )
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        replace=False,
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT")},
+    )
 
+    assert to_sql_calls(adapter) == [
+        "DROP MATERIALIZED VIEW IF EXISTS `test_view`",
+        "CREATE MATERIALIZED VIEW `test_view` (`a`) AS SELECT `a` FROM `tbl`",
+        "CREATE MATERIALIZED VIEW `test_view` (`a`) AS SELECT `a` FROM `tbl`",
+    ]
+
+    adapter.cursor.reset_mock()
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM tbl"),
+        replace=False,
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        column_descriptions={"a": "test_column_description", "b": "test_column_description"},
+    )
+    adapter.create_view(
+        "test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE MATERIALIZED VIEW `test_view` (`a` COMMENT 'test_column_description', `b` COMMENT 'test_column_description') AS SELECT `a`, `b` FROM `tbl`",
+        "CREATE MATERIALIZED VIEW `test_view` AS SELECT `a`, `b` FROM `tbl`",
+    ]
+
+
+def test_create_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
     adapter.create_table(
         "test_table",
-        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("VARCHAR")},
-        table_description="test table comment",
-        column_descriptions={"a": "test column comment"},
+        columns_to_types={"a": exp.DataType.build("INT")},
+        column_descriptions={"a": "test_column_description"},
+        table_properties={"unique_key": ["a"]},
     )
-
-    sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (\n  `a` INT COMMENT 'test column comment',\n  `b` VARCHAR\n) COMMENT 'test table comment'"
+    # primary_key and unique_key are the same
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT")},
+        primary_key=["a"],
+        column_descriptions={"a": "test_column_description"},
+    )
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT")},
+        column_descriptions={"a": "test_column_description"},
+        table_properties={"duplicate_key": ["a"]},
+    )
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT")},
+        table_description="test_description",
+        column_descriptions={"a": "test_column_description"},
+    )
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') UNIQUE KEY (`a`)",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') UNIQUE KEY (`a`)",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') DUPLICATE KEY (`a`)",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') COMMENT 'test_description'",
     ]
 
-
-def test_merge(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
-    adapter = make_mocked_engine_adapter()
-
-    adapter.merge(
-        target_table="target",
-        source_table=exp.to_table("source"),
-        columns_to_types={
-            "id": exp.DataType.build("int"),
-            "ts": exp.DataType.build("timestamp"),
-            "val": exp.DataType.build("int"),
-        },
-        unique_key=[exp.to_identifier("id")],
-    )
-
-    sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [
-        "INSERT OVERWRITE `target` (`id`, `ts`, `val`) SELECT `id`, `ts`, `val` FROM `source`"
-    ]
+    adapter.cursor.reset_mock()
 
 
-def test_create_table_like(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]) -> None:
-    adapter = make_mocked_engine_adapter()
+def test_create_table_like(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
 
     adapter.create_table_like("target_table", "source_table")
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `target_table` LIKE `source_table`",
+    ]
+
+
+def test_create_schema(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_schema("test_schema")
+    adapter.create_schema("test_schema", ignore_if_exists=False)
+
+    assert to_sql_calls(adapter) == [
+        "CREATE DATABASE IF NOT EXISTS `test_schema`",
+        "CREATE DATABASE `test_schema`",
+    ]
+
+    with pytest.raises(UnsupportedCatalogOperationError):
+        adapter.create_schema("test_catalog.test_schema")
+
+
+def test_drop_schema(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.drop_schema("test_schema")
+    adapter.drop_schema("test_schema", ignore_if_not_exists=False)
+
+    assert to_sql_calls(adapter) == [
+        "DROP DATABASE IF EXISTS `test_schema`",
+        "DROP DATABASE `test_schema`",
+    ]
+
+
+def test_rename_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    adapter.rename_table("old_table", "new_table")
+    adapter.cursor.execute.assert_called_once_with("ALTER TABLE `old_table` RENAME `new_table`")
+
+
+def test_replace_by_key(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    temp_table = parse_one("temp_table")
+    mocker.patch.object(adapter, "_get_temp_table", return_value=temp_table)
+    ctas_mock = mocker.patch.object(adapter, "ctas")
+    delete_from_mock = mocker.patch.object(adapter, "delete_from")
+    drop_table_mock = mocker.patch.object(adapter, "drop_table")
+
+    columns_to_types = {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    source_query = parse_one("SELECT a, b FROM src")
+    target_table = "target_table"
+
+    # Single key, is_unique_key True and False
+    for key, is_unique_key, expected_insert_sql in [
+        (
+            [exp.column("a")],
+            True,
+            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a` ORDER BY `a`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
+        ),
+        (
+            [exp.column("a")],
+            False,
+            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
+        ),
+        (
+            [exp.column("a"), exp.column("b")],
+            True,
+            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a`, `b` ORDER BY `a`, `b`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
+        ),
+        (
+            [exp.column("a"), exp.column("b")],
+            False,
+            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
+        ),
+    ]:
+        ctas_mock.reset_mock()
+        delete_from_mock.reset_mock()
+        drop_table_mock.reset_mock()
+        adapter.cursor.execute.reset_mock()
+
+        adapter._replace_by_key(target_table, source_query, columns_to_types, key, is_unique_key)
+
+        ctas_mock.assert_called_once()
+        drop_table_mock.assert_called_once_with(temp_table)
+        # delete_from is only called if not is_replace_where (default)
+        delete_from_mock.assert_called_once()
+        sql_calls = to_sql_calls(adapter)
+        assert any(expected_insert_sql in sql for sql in sql_calls), (
+            f"Expected SQL not found: {expected_insert_sql}, get {sql_calls}"
+        )
+
+
+def test_create_index(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    adapter.create_index("test_table", "test_index", ("cola",))
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `target_table` LIKE `source_table`"
+        "CREATE INDEX IF NOT EXISTS `test_index` ON `test_table`(`cola`)"
     )
 
 
-def test_comment_truncation(
-    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
-) -> None:
-    adapter = make_mocked_engine_adapter()
-    allowed_table_comment_length = DorisEngineAdapter.MAX_TABLE_COMMENT_LENGTH
-    truncated_table_comment = "a" * allowed_table_comment_length
-    long_table_comment = truncated_table_comment + "b"
-
-    allowed_column_comment_length = DorisEngineAdapter.MAX_COLUMN_COMMENT_LENGTH
-    truncated_column_comment = "c" * allowed_column_comment_length
-    long_column_comment = truncated_column_comment + "d"
-
+def test_create_table_with_distributed_by(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    distributed_by = {
+        "expressions": ["a", "b"],
+        "kind": "HASH",
+        "buckets": 8,
+    }
     adapter.create_table(
         "test_table",
-        {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
-        table_description=long_table_comment,
-        column_descriptions={"a": long_column_comment},
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={"distributed_by": distributed_by},
     )
 
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT) DISTRIBUTED BY HASH (`a`, `b`) BUCKETS 8",
+    ]
+
+    adapter.cursor.execute.reset_mock()
+
+    distributed_by = {
+        "expressions": None,
+        "kind": "RANDOM",
+        "buckets": None,
+    }
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={"distributed_by": distributed_by},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT) DISTRIBUTED BY RANDOM",
+    ]
+
+    adapter.cursor.execute.reset_mock()
+
+    distributed_by = {
+        "expressions": ["a"],
+        "kind": "HASH",
+        "buckets": "AUTO",
+    }
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        table_properties={"distributed_by": distributed_by},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT) DISTRIBUTED BY HASH (`a`) BUCKETS AUTO",
+    ]
+
+
+def test_create_table_with_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_table(
+        "test_table",
+        columns_to_types={"a": exp.DataType.build("INT")},
+        table_properties={
+            "refresh_interval": "86400",
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT) PROPERTIES ('refresh_interval'='86400')",
+    ]
+
+
+def test_create_full_materialized_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    materialized_properties = {
+        "build": "IMMEDIATE",
+        "refresh": "AUTO",
+        "on_schedule": "EVERY 1 DAY STARTS '2024-12-01 20:30:00'",
+        "distributed_by": {
+            "kind": "HASH",
+            "expressions": ["orderkey"],
+            "buckets": 2,
+        },
+        "properties": {"replication_num": "1"},
+        "unique_key": ["orderkey"],
+        "partitioned_by": "orderdate",
+    }
+    columns_to_types = {
+        "orderdate": exp.DataType.build("DATE"),
+        "orderkey": exp.DataType.build("INT"),
+        "partkey": exp.DataType.build("INT"),
+    }
+    column_descriptions = {
+        "orderdate": "订单日期",
+        "orderkey": "订单键",
+        "partkey": "部件键",
+    }
+    query = parse_one(
+        """
+        SELECT 
+        o_orderdate, 
+        l_orderkey, 
+        l_partkey 
+        FROM 
+        orders 
+        LEFT JOIN lineitem ON l_orderkey = o_orderkey 
+        LEFT JOIN partsupp ON ps_partkey = l_partkey 
+        and l_suppkey = ps_suppkey
+        """
+    )
+    adapter.create_view(
+        "complete_mv",
+        query,
+        replace=False,
+        materialized=True,
+        columns_to_types=columns_to_types,
+        column_descriptions=column_descriptions,
+        table_description="test_description",
+        materialized_properties=materialized_properties,
+    )
+    expected_sqls = [
+        "CREATE MATERIALIZED VIEW `complete_mv` (`orderdate` COMMENT '订单日期', `orderkey` COMMENT '订单键', `partkey` COMMENT '部件键') "
+        "BUILD IMMEDIATE REFRESH AUTO ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00' KEY (`orderkey`) COMMENT 'test_description' PARTITION BY (`orderdate`) "
+        "DISTRIBUTED BY HASH (orderkey) BUCKETS 2 PROPERTIES ('replication_num' = '1') "
+        "AS SELECT `o_orderdate`, `l_orderkey`, `l_partkey` FROM `orders` LEFT JOIN `lineitem` ON `l_orderkey` = `o_orderkey` LEFT JOIN `partsupp` ON `ps_partkey` = `l_partkey` AND `l_suppkey` = `ps_suppkey`",
+    ]
     sql_calls = to_sql_calls(adapter)
-    # Table and column comments should be truncated to Doris limits
-    assert any(truncated_table_comment in sql for sql in sql_calls)
-    assert any(truncated_column_comment in sql for sql in sql_calls)
+
+    # Remove extra spaces for comparison
+    def norm(s):
+        return " ".join(s.split())
+
+    for expected_sql in expected_sqls:
+        assert any(norm(expected_sql) == norm(sql) for sql in sql_calls), (
+            f"Expected SQL not found.\nExpected: {expected_sql}\nGot: {sql_calls}"
+        )
