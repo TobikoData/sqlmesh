@@ -10,6 +10,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig as ConnectionConfig,
     DatabricksConnectionConfig as DatabricksConnectionConfig,
     DuckDBConnectionConfig as DuckDBConnectionConfig,
+    FabricConnectionConfig as FabricConnectionConfig,
     GCPPostgresConnectionConfig as GCPPostgresConnectionConfig,
     MotherDuckConnectionConfig as MotherDuckConnectionConfig,
     MSSQLConnectionConfig as MSSQLConnectionConfig,
