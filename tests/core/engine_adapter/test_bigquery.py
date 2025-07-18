@@ -1102,6 +1102,9 @@ def test_job_cancellation_on_keyboard_interrupt_job_still_running(mocker: Mocker
     with pytest.raises(KeyboardInterrupt):
         adapter.execute("SELECT 1")
 
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
+
     # Verify the job was created
     connection_mock._client.query.assert_called_once()
 
@@ -1137,6 +1140,9 @@ def test_job_cancellation_on_keyboard_interrupt_job_already_done(mocker: MockerF
     # Execute a query and expect KeyboardInterrupt
     with pytest.raises(KeyboardInterrupt):
         adapter.execute("SELECT 1")
+
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
 
     # Verify the job was created
     connection_mock._client.query.assert_called_once()
