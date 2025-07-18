@@ -63,10 +63,7 @@ def _expression_encoder(e: exp.Expression) -> str:
 def serialize_expressions(kwargs: t.Dict[str, t.Optional[exp.Expression]]) -> t.Dict[str, str]:
     serialized_kwargs: t.Dict[str, str] = {}
     for key, value in kwargs.items():
-        if isinstance(value, exp.Expression):
-            serialized_kwargs[key] = _expression_encoder(value)
-        else:
-            serialized_kwargs[key] = str(value)
+        serialized_kwargs[key] = _expression_encoder(value) if value else str(value)
     return serialized_kwargs
 
 
