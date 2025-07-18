@@ -6715,7 +6715,7 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     )
 
     assert python_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value", "start": "2024-01-01"}
+        {"test_var_a": "test_value", "start": "2024-01-01"}, sort_root_dict=True
     )
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
