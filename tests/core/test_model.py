@@ -9231,14 +9231,8 @@ def entrypoint(evaluator):
             assert "blueprints" not in model.all_fields()
 
             python_env = model.python_env
-            serialized_blueprint = (
-                SqlValue(sql=blueprint_value) if model_name == "test_model_sql" else blueprint_value
-            )
-            assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
-            assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-                {"blueprint": serialized_blueprint}
-            )
 
+            assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
     multi_variable_blueprint_example = tmp_path / "models" / "multi_variable_blueprint_example.sql"
@@ -9899,6 +9893,100 @@ def metadata_macro(evaluator):
 
     new_snapshot, _ = ctx_diff.modified_snapshots['"test_model"']
     assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_vars_are_taken_into_account_when_propagating_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL, blueprints ((v4 := 4, v5 := 5)));"
+        "@m1_with_var();"  # metadata macro, references v1 internally => v1 metadata
+        "@m2_without_var(@v2, @v3);"  # metadata macro => v2 metadata, v3 metadata
+        "@m3_without_var(@v3);"  # non-metadata macro, references v4 => v3, v4 are not metadata
+        "SELECT 1 AS c;"
+        "ON_VIRTUAL_UPDATE_BEGIN;"
+        "@m3_without_var(@v5);"  # non-metadata macro, metadata context => v5 metadata
+        "ON_VIRTUAL_UPDATE_END;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_with_var(evaluator):
+    evaluator.var("v1")
+    return None
+
+@macro(metadata_only=True)
+def m2_without_var(evaluator, *args):
+    return None
+
+@macro()
+def m3_without_var(evaluator, *args):
+    evaluator.var("v4")
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"v1": 1, "v2": 2, "v3": 3},
+        ),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 7
+    assert "m1_with_var" in python_env
+    assert "m2_without_var" in python_env
+    assert "m3_without_var" in python_env
+
+    variables = python_env.get(c.SQLMESH_VARS)
+    metadata_variables = python_env.get(c.SQLMESH_VARS_METADATA)
+
+    assert variables == Executable.value({"v1": 1, "v3": 3})
+    assert metadata_variables == Executable.value({"v2": 2}, is_metadata=True)
+
+    blueprint_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS)
+    blueprint_metadata_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
+
+    assert blueprint_variables == Executable.value({"v4": SqlValue(sql="4")})
+    assert blueprint_metadata_variables == Executable.value(
+        {"v5": SqlValue(sql="5")}, is_metadata=True
+    )
+
+    macro_evaluator = MacroEvaluator(python_env=python_env)
+
+    assert macro_evaluator.locals == {
+        "runtime_stage": "loading",
+        "default_catalog": None,
+        c.SQLMESH_VARS: {"v1": 1, "v3": 3},
+        c.SQLMESH_VARS_METADATA: {"v2": 2},
+        c.SQLMESH_BLUEPRINT_VARS: {"v4": exp.Literal.number("4")},
+        c.SQLMESH_BLUEPRINT_VARS_METADATA: {"v5": exp.Literal.number("5")},
+    }
+    assert macro_evaluator.var("v1") == 1
+    assert macro_evaluator.var("v2") == 2
+    assert macro_evaluator.var("v3") == 3
+    assert macro_evaluator.blueprint_var("v4") == exp.Literal.number("4")
+    assert macro_evaluator.blueprint_var("v5") == exp.Literal.number("5")
+
+    query_with_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @VAR('v{var}')" for var in [1, 2, 3]))
+    )
+    assert t.cast(exp.Expression, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3"
+
+    query_with_blueprint_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @BLUEPRINT_VAR('v{var}')" for var in [4, 5]))
+    )
+    assert t.cast(exp.Expression, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
@@ -10747,3 +10835,22 @@ def test_datetime_without_timezone_variable_redshift() -> None:
         model.render_query_or_raise().sql("redshift")
         == '''SELECT CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS "test_time_col"'''
     )
+
+
+@pytest.mark.parametrize(
+    "macro_func, variables",
+    [
+        ("@M(@v1)", {"v1"}),
+        ("@M(@{v1})", {"v1"}),
+        ("@M(@SQL('@v1'))", {"v1"}),
+        ("@M(@'@{v1}_foo')", {"v1"}),
+        ("@M1(@VAR('v1'))", {"v1"}),
+        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v3"}),
+        ("@M1(@BLUEPRINT_VAR(@VAR('v1')))", {"v1"}),
+    ],
+)
+def test_extract_macro_func_variable_references(macro_func: str, variables: t.Set[str]) -> None:
+    from sqlmesh.core.model.common import _extract_macro_func_variable_references
+
+    macro_func_ast = parse_one(macro_func)
+    assert _extract_macro_func_variable_references(macro_func_ast) == variables
