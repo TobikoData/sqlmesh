@@ -254,14 +254,20 @@ class MacroEvaluator:
                 changed = True
                 variables = self.variables
 
-                if node.name not in self.locals and node.name.lower() not in variables:
+                if (
+                    node.name not in self.locals
+                    and node.name.lower() not in variables
+                    and node.name not in variables
+                ):
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
                 # Precedence order is locals (e.g. @DEF) > blueprint variables > config variables
-                value = self.locals.get(node.name, variables.get(node.name.lower()))
+                value = self.locals.get(
+                    node.name, variables.get(node.name, variables.get(node.name.lower()))
+                )
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(
@@ -532,7 +538,9 @@ class MacroEvaluator:
 
     def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns the value of the specified blueprint variable, or the default value if it doesn't exist."""
-        return (self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}).get(var_name.lower(), default)
+        return (self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}).get(var_name) or (
+            self.locals.get(c.SQLMESH_BLUEPRINT_VARS) or {}
+        ).get(var_name.lower(), default)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:

@@ -199,7 +199,9 @@ def parse_dependencies(
 
         @staticmethod
         def blueprint_var(var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
-            return (blueprint_variables or {}).get(var_name.lower(), default)
+            return (blueprint_variables or {}).get(var_name) or (blueprint_variables or {}).get(
+                var_name.lower(), default
+            )
 
     env = prepare_env(python_env)
     local_env = dict.fromkeys(("context", "evaluator"), VariableResolutionContext)

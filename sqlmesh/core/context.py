@@ -314,7 +314,9 @@ class ExecutionContext(BaseContext):
 
     def blueprint_var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns a blueprint variable value."""
-        return self._blueprint_variables.get(var_name.lower(), default)
+        return self._blueprint_variables.get(var_name) or self._blueprint_variables.get(
+            var_name.lower(), default
+        )
 
     def with_variables(
         self,

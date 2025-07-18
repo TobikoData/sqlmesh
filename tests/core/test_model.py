@@ -9463,6 +9463,58 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
     assert t.cast(exp.Query, m2.render_query()).sql() == '''SELECT 'c d' AS "c1", "c d" AS "c2"'''
 
 
+def test_blueprinting_with_uppercase_blueprint_names(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    template_with_uppercase_vars = tmp_path / "models/template_with_uppercase_vars.sql"
+    template_with_uppercase_vars.parent.mkdir(parents=True, exist_ok=True)
+    template_with_uppercase_vars.write_text(
+        """
+        MODEL (
+          name @{Customer_Name}.my_table,
+          blueprints (
+            (Customer_Name := customer1, Field_A := 'value1', Field_B := 100),
+            (Customer_Name := customer2, Field_A := 'value2', Field_B := 200),
+          ),
+        );
+
+        SELECT
+          @Customer_Name AS customer_name,
+          @Field_A AS field_a_macro,
+          @{Field_B} AS field_b_identifier,
+          @BLUEPRINT_VAR('Field_A') AS field_a_func,
+          @BLUEPRINT_VAR('Field_B') AS field_b_func_lower
+        """
+    )
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb")), paths=tmp_path
+    )
+    assert len(ctx.models) == 2
+
+    m1 = ctx.get_model('"memory"."customer1"."my_table"', raise_if_missing=True)
+    m2 = ctx.get_model('"memory"."customer2"."my_table"', raise_if_missing=True)
+
+    # Verify that uppercase references in the query work correctly
+    query1 = t.cast(exp.Query, m1.render_query()).sql()
+    query2 = t.cast(exp.Query, m2.render_query()).sql()
+
+    assert '"customer1"' in query1
+    assert "'value1'" in query1
+    assert "100" in query1
+
+    assert '"customer2"' in query2
+    assert "'value2'" in query2
+    assert "200" in query2
+
+    # Verify exact query structure
+    expected_query1 = '''SELECT "customer1" AS "customer_name", 'value1' AS "field_a_macro", "100" AS "field_b_identifier", 'value1' AS "field_a_func", 100 AS "field_b_func_lower"'''
+    expected_query2 = '''SELECT "customer2" AS "customer_name", 'value2' AS "field_a_macro", "200" AS "field_b_identifier", 'value2' AS "field_a_func", 200 AS "field_b_func_lower"'''
+
+    assert query1 == expected_query1
+    assert query2 == expected_query2
+
+
 def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
     init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
