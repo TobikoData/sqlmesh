@@ -2361,7 +2361,7 @@ def create_python_model(
 
     used_variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
     if used_variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(used_variables)
+        python_env[c.SQLMESH_VARS] = Executable.value(used_variables, sort_root_dict=True)
 
     return _create_model(
         PythonModel,
