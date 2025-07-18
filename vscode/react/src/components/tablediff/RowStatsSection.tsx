@@ -1,18 +1,12 @@
-import { SectionToggle } from './SectionToggle'
 import { type TableDiffData } from './types'
 import { twColors, twMerge } from './tailwind-utils'
+import { Card, CardContent } from './Card'
 
 interface RowStatsSectionProps {
   rowDiff: TableDiffData['row_diff']
-  expanded: boolean
-  onToggle: () => void
 }
 
-export function RowStatsSection({
-  rowDiff,
-  expanded,
-  onToggle,
-}: RowStatsSectionProps) {
+export function RowStatsSection({ rowDiff }: RowStatsSectionProps) {
   const formatPercentage = (v: number) => `${(v * 100).toFixed(1)}%`
   const formatCount = (v: number) => v.toLocaleString()
 
@@ -25,66 +19,84 @@ export function RowStatsSection({
   const fullMatchPct = totalRows > 0 ? (2 * fullMatchCount) / totalRows : 0
 
   return (
-    <SectionToggle
-      id="rows"
-      title="Row Statistics"
-      expanded={expanded}
-      onToggle={onToggle}
-    >
-      <div className="px-8 py-3 space-y-3">
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span className={twColors.textSuccess}>✓ Full Matches</span>
-              <span className="font-medium">{formatCount(fullMatchCount)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={twColors.textClass}>~ Partial Matches</span>
-              <span className="font-medium">
-                {formatCount(partialMatchCount)}
-              </span>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span className={twColors.textSource}>+ Source Only</span>
-              <span className="font-medium">{formatCount(sOnlyCount)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={twColors.textTarget}>- Target Only</span>
-              <span className="font-medium">{formatCount(tOnlyCount)}</span>
-            </div>
-          </div>
-        </div>
-        {/* Match rate progress bar */}
-        <div className="mt-3 space-y-1">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Full Match Card */}
+      <Card className="overflow-hidden">
+        <div className={twMerge('h-1', twColors.bgSuccess)} />
+        <CardContent className="text-center py-3 px-3">
           <div
             className={twMerge(
-              'flex items-center gap-2 text-xs',
-              twColors.textMuted,
+              'text-2xl font-light mb-1',
+              twColors.textSuccess500,
             )}
           >
-            <span>Match Rate</span>
-            <span className="font-medium">
-              {formatPercentage(fullMatchPct)}
-            </span>
+            {formatCount(fullMatchCount)}
           </div>
+          <div className={twMerge('text-xs font-medium', twColors.textMuted)}>
+            Full Matches
+          </div>
+          <div className={twMerge('text-xs mt-0.5', twColors.textMuted)}>
+            {formatPercentage(fullMatchPct)}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Partial Match Card */}
+      <Card className="overflow-hidden">
+        <div className={twMerge('h-1', twColors.bgPrimary)} />
+        <CardContent className="text-center py-3 px-3">
           <div
             className={twMerge(
-              'h-2 rounded-full overflow-hidden',
-              twColors.bgInput,
+              'text-2xl font-light mb-1',
+              twColors.textPrimary,
             )}
           >
-            <div
-              className={twMerge(
-                'h-full transition-all duration-300',
-                twColors.textSuccess.replace('text-', 'bg-'),
-              )}
-              style={{ width: `${fullMatchPct * 100}%` }}
-            />
+            {formatCount(partialMatchCount)}
           </div>
-        </div>
-      </div>
-    </SectionToggle>
+          <div className={twMerge('text-xs font-medium', twColors.textMuted)}>
+            Partial Matches
+          </div>
+          <div className={twMerge('text-xs mt-0.5', twColors.textMuted)}>
+            {formatPercentage(partialMatchCount / totalRows)}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Source Only Card */}
+      <Card className="overflow-hidden">
+        <div className={twMerge('h-1', twColors.bgSource)} />
+        <CardContent className="text-center py-3 px-3">
+          <div
+            className={twMerge('text-2xl font-light mb-1', twColors.textSource)}
+          >
+            {formatCount(sOnlyCount)}
+          </div>
+          <div className={twMerge('text-xs font-medium', twColors.textMuted)}>
+            Source Only
+          </div>
+          <div className={twMerge('text-xs mt-0.5', twColors.textMuted)}>
+            {formatPercentage(sOnlyCount / totalRows)}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Target Only Card */}
+      <Card className="overflow-hidden">
+        <div className={twMerge('h-1', twColors.bgTarget)} />
+        <CardContent className="text-center py-3 px-3">
+          <div
+            className={twMerge('text-2xl font-light mb-1', twColors.textTarget)}
+          >
+            {formatCount(tOnlyCount)}
+          </div>
+          <div className={twMerge('text-xs font-medium', twColors.textMuted)}>
+            Target Only
+          </div>
+          <div className={twMerge('text-xs mt-0.5', twColors.textMuted)}>
+            {formatPercentage(tOnlyCount / totalRows)}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

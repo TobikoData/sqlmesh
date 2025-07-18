@@ -37,6 +37,18 @@ export interface TableDiffData {
     }
   }
   on: string[][]
+  limit?: number
+  where?: string
+}
+
+export interface TableDiffParams {
+  source: string
+  target: string
+  model_or_snapshot: string
+  on?: string
+  where?: string
+  temp_schema?: string
+  limit?: number
 }
 
 export interface ExpandedSections {

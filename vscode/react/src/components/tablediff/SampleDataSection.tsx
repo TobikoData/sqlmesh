@@ -118,7 +118,12 @@ const SimpleTableCell = ({
   colorClass,
   decimals = 3,
 }: SimpleTableCellProps) => (
-  <td className={twMerge('py-2 px-2 font-mono whitespace-nowrap', colorClass)}>
+  <td
+    className={twMerge(
+      'py-3 px-4 font-mono whitespace-nowrap text-sm',
+      colorClass,
+    )}
+  >
     {formatCellValue(value, decimals)}
   </td>
 )
@@ -171,52 +176,71 @@ const ColumnDifferenceGroup = ({
   const targetName = rows[0].__target_name__
 
   return (
-    <div
-      className={twMerge(
-        'border rounded-lg p-4',
-        twColors.bgInactiveSelection,
-        twColors.borderPanel,
-      )}
-    >
-      <h5
-        className={twMerge('font-medium mb-2 underline', twColors.textAccent)}
+    <div className="mb-4">
+      <div
+        className={twMerge(
+          'flex items-center gap-2 text-sm font-medium mb-3',
+          twColors.textForeground,
+        )}
       >
-        Column: {columnName}
-      </h5>
-      <div className="overflow-auto max-h-80">
-        <table className="w-full text-xs">
-          <thead className={twMerge('sticky top-0 z-10', twColors.bgEditor)}>
-            <tr className={twMerge('border-b', twColors.borderPanel)}>
-              {Object.keys(rows[0] || {})
-                .filter(key => !key.startsWith('__'))
-                .map(key => (
-                  <TableHeaderCell
-                    key={key}
-                    columnKey={key}
-                    sourceName={sourceName}
-                    targetName={targetName}
-                  />
-                ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 10).map((row, rowIdx) => (
-              <DiffTableRow
-                key={rowIdx}
-                row={row}
-                sourceName={sourceName}
-                targetName={targetName}
-                decimals={decimals}
-              />
-            ))}
-          </tbody>
-        </table>
+        <span className="font-semibold">Column: {columnName}</span>
+        <span
+          className={twMerge(
+            'text-xs px-2 py-0.5 rounded-full',
+            twColors.bgNeutral10,
+          )}
+        >
+          {rows.length} difference{rows.length > 1 ? 's' : ''}
+        </span>
       </div>
-      {rows.length > 10 && (
-        <p className={twMerge('text-xs mt-2', twColors.textMuted)}>
-          Showing first 10 of {rows.length} differing rows
-        </p>
-      )}
+      <div
+        className={twMerge(
+          'border rounded-lg overflow-hidden',
+          twColors.borderNeutral100,
+        )}
+      >
+        <div className="overflow-auto max-h-60">
+          <table className="w-full">
+            <thead
+              className={twMerge(
+                'sticky top-0 z-10',
+                twColors.bgNeutral10,
+                'border-b',
+                twColors.borderNeutral100,
+              )}
+            >
+              <tr>
+                {Object.keys(rows[0] || {})
+                  .filter(key => !key.startsWith('__'))
+                  .map(key => (
+                    <TableHeaderCell
+                      key={key}
+                      columnKey={key}
+                      sourceName={sourceName}
+                      targetName={targetName}
+                    />
+                  ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 10).map((row, rowIdx) => (
+                <DiffTableRow
+                  key={rowIdx}
+                  row={row}
+                  sourceName={sourceName}
+                  targetName={targetName}
+                  decimals={decimals}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {rows.length > 10 && (
+          <p className={twMerge('text-xs mt-2', twColors.textMuted)}>
+            Showing first 10 of {rows.length} differing rows
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -255,8 +279,13 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
     <div className="px-8 py-3 space-y-6">
       {/* COMMON ROWS diff */}
       <div>
-        <h4 className={twMerge('text-sm font-medium mb-3', twColors.textInfo)}>
-          Common Rows Data Differences:
+        <h4
+          className={twMerge(
+            'text-base font-semibold mb-4',
+            twColors.textPrimary,
+          )}
+        >
+          Common Rows
         </h4>
         {Object.keys(groupedDifferences).length > 0 ? (
           <div className="space-y-4">
@@ -281,31 +310,32 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
         <div>
           <h4
             className={twMerge(
-              'text-sm font-medium mb-3',
-              twColors.textWarning,
+              'text-base font-semibold mb-4',
+              twColors.textSource,
             )}
           >
-            Source Only Rows:
+            Source Only Rows
           </h4>
           <div
             className={twMerge(
-              'border rounded-lg p-4',
-              twColors.bgModified,
-              twColors.borderModified,
+              'border-2 rounded-lg overflow-hidden',
+              twColors.borderSource,
             )}
           >
             <div className="overflow-auto max-h-80">
-              <table className="w-full text-xs">
+              <table className="w-full">
                 <thead
-                  className={twMerge('sticky top-0 z-10', twColors.bgModified)}
+                  className={twMerge('sticky top-0 z-10', twColors.bgNeutral10)}
                 >
-                  <tr className={twMerge('border-b', twColors.borderModified)}>
+                  <tr
+                    className={twMerge('border-b', twColors.borderNeutral100)}
+                  >
                     {Object.keys(source_only[0] || {}).map(col => (
                       <th
                         key={col}
                         className={twMerge(
-                          'text-left py-2 px-2 font-medium whitespace-nowrap',
-                          twColors.textModified,
+                          'text-left py-3 px-4 font-medium whitespace-nowrap text-sm',
+                          twColors.textForeground,
                         )}
                       >
                         {col}
@@ -318,8 +348,8 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
                     <SimpleTableRow
                       key={rowIdx}
                       row={row}
-                      colorClass={twColors.textModified}
-                      borderColorClass={twColors.borderModified}
+                      colorClass={twColors.textSource}
+                      borderColorClass={twColors.borderNeutral100}
                       decimals={decimals}
                     />
                   ))}
@@ -327,9 +357,15 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
               </table>
             </div>
             {source_only.length > 10 && (
-              <p className={twMerge('text-xs mt-2', twColors.textModified)}>
+              <div
+                className={twMerge(
+                  'px-4 py-2 text-xs',
+                  twColors.bgNeutral5,
+                  twColors.textMuted,
+                )}
+              >
                 Showing first 10 of {source_only.length} rows
-              </p>
+              </div>
             )}
           </div>
         </div>
@@ -339,31 +375,32 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
         <div>
           <h4
             className={twMerge(
-              'text-sm font-medium mb-3',
-              twColors.textSuccess,
+              'text-base font-semibold mb-4',
+              twColors.textTarget,
             )}
           >
-            Target Only Rows:
+            Target Only Rows
           </h4>
           <div
             className={twMerge(
-              'border rounded-lg p-4',
-              twColors.bgAdded,
-              twColors.borderAdded,
+              'border-2 rounded-lg overflow-hidden',
+              twColors.borderTarget,
             )}
           >
             <div className="overflow-auto max-h-80">
-              <table className="w-full text-xs">
+              <table className="w-full">
                 <thead
-                  className={twMerge('sticky top-0 z-10', twColors.bgAdded)}
+                  className={twMerge('sticky top-0 z-10', twColors.bgNeutral10)}
                 >
-                  <tr className={twMerge('border-b', twColors.borderAdded)}>
+                  <tr
+                    className={twMerge('border-b', twColors.borderNeutral100)}
+                  >
                     {Object.keys(target_only[0] || {}).map(col => (
                       <th
                         key={col}
                         className={twMerge(
-                          'text-left py-2 px-2 font-medium whitespace-nowrap',
-                          twColors.textAdded,
+                          'text-left py-3 px-4 font-medium whitespace-nowrap text-sm',
+                          twColors.textForeground,
                         )}
                       >
                         {col}
@@ -376,8 +413,8 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
                     <SimpleTableRow
                       key={rowIdx}
                       row={row}
-                      colorClass={twColors.textAdded}
-                      borderColorClass={twColors.borderAdded}
+                      colorClass={twColors.textTarget}
+                      borderColorClass={twColors.borderNeutral100}
                       decimals={decimals}
                     />
                   ))}
@@ -385,9 +422,15 @@ export function SampleDataSection({ rowDiff }: SampleDataSectionProps) {
               </table>
             </div>
             {target_only.length > 10 && (
-              <p className={twMerge('text-xs mt-2', twColors.textAdded)}>
+              <div
+                className={twMerge(
+                  'px-4 py-2 text-xs',
+                  twColors.bgNeutral5,
+                  twColors.textMuted,
+                )}
+              >
                 Showing first 10 of {target_only.length} rows
-              </p>
+              </div>
             )}
           </div>
         </div>

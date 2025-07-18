@@ -19,6 +19,10 @@ export function TableDiff() {
   const [diffError] = useState<string | null>(null)
   const [hasInitialData, setHasInitialData] = useState(false)
 
+  const handleDataUpdate = (newData: TableDiffData) => {
+    setTableDiffData(newData)
+  }
+
   // Load initial data on mount
   useEffect(() => {
     const loadInitialData = async () => {
@@ -85,7 +89,10 @@ export function TableDiff() {
     if (tableDiffData) {
       return (
         <div className="h-[100vh] w-[100vw]">
-          <TableDiffResults data={tableDiffData} />
+          <TableDiffResults
+            data={tableDiffData}
+            onDataUpdate={handleDataUpdate}
+          />
         </div>
       )
     }

@@ -1,11 +1,14 @@
-import { SectionToggle } from './SectionToggle'
+import { useState } from 'react'
 import { type TableDiffData, type SampleValue } from './types'
 import { twColors, twMerge } from './tailwind-utils'
+import { Card } from './Card'
+import {
+  ArrowsUpDownIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline'
 
 interface ColumnStatsSectionProps {
   columnStats: TableDiffData['row_diff']['column_stats']
-  expanded: boolean
-  onToggle: () => void
 }
 
 interface StatHeaderProps {
@@ -16,12 +19,12 @@ const StatHeader = ({ stat }: StatHeaderProps) => (
   <th
     key={stat}
     className={twMerge(
-      'text-left py-2 px-1 font-medium w-16',
-      twColors.textMuted,
+      'text-left py-3 px-4 font-medium text-sm',
+      twColors.textForeground,
     )}
     title={stat}
   >
-    {stat.length > 6 ? stat.slice(0, 6) + '..' : stat}
+    {stat}
   </th>
 )
 
@@ -31,17 +34,10 @@ interface StatCellProps {
 
 const StatCell = ({ value }: StatCellProps) => (
   <td
-    className={twMerge(
-      'py-2 px-1 font-mono text-xs truncate',
-      twColors.textMuted,
-    )}
+    className={twMerge('py-3 px-4 font-mono text-sm', twColors.textMuted)}
     title={String(value)}
   >
-    {typeof value === 'number'
-      ? value.toFixed(1)
-      : String(value).length > 8
-        ? String(value).slice(0, 8) + '..'
-        : String(value)}
+    {typeof value === 'number' ? value.toFixed(1) : String(value)}
   </td>
 )
 
@@ -54,12 +50,15 @@ const ColumnStatRow = ({ columnName, statsValue }: ColumnStatRowProps) => (
   <tr
     className={twMerge(
       'transition-colors border-b',
-      twColors.borderPanel,
+      twColors.borderNeutral100,
       twColors.bgHover,
     )}
   >
     <td
-      className="py-2 pr-2 font-mono truncate"
+      className={twMerge(
+        'py-3 px-4 font-medium text-sm',
+        twColors.textForeground,
+      )}
       title={columnName}
     >
       {columnName}
@@ -82,11 +81,9 @@ const ColumnStatRow = ({ columnName, statsValue }: ColumnStatRowProps) => (
   </tr>
 )
 
-export function ColumnStatsSection({
-  columnStats,
-  expanded,
-  onToggle,
-}: ColumnStatsSectionProps) {
+export function ColumnStatsSection({ columnStats }: ColumnStatsSectionProps) {
+  const [isVertical, setIsVertical] = useState(false)
+
   if (Object.keys(columnStats || {}).length === 0) {
     return null
   }
@@ -99,45 +96,286 @@ export function ColumnStatsSection({
       : []
 
   return (
-    <SectionToggle
-      id="columnStats"
-      title="Column Statistics"
-      expanded={expanded}
-      onToggle={onToggle}
-    >
-      <div className="px-8 py-3">
-        <div className="overflow-auto max-h-80">
-          <table className="w-full text-xs table-fixed">
-            <thead className={twMerge('sticky top-0 z-10', twColors.bgEditor)}>
-              <tr className={twMerge('border-b', twColors.borderPanel)}>
-                <th
-                  className={twMerge(
-                    'text-left py-2 pr-2 font-medium w-28',
-                    twColors.textMuted,
-                  )}
-                >
-                  Column
-                </th>
+    <div className="grid grid-cols-1 gap-4">
+      {/* Statistics Table Card */}
+      <Card className="overflow-hidden">
+        {/* Toggle Button */}
+        <div
+          className={twMerge(
+            'flex justify-end p-2 border-b',
+            twColors.borderNeutral100,
+          )}
+        >
+          <button
+            onClick={() => setIsVertical(!isVertical)}
+            className={twMerge(
+              'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+              twColors.bgHover,
+              twColors.textMuted,
+            )}
+            title={`Switch to ${isVertical ? 'horizontal' : 'vertical'} layout`}
+          >
+            {isVertical ? (
+              <>
+                <ArrowsRightLeftIcon className="w-3 h-3" />
+                Horizontal
+              </>
+            ) : (
+              <>
+                <ArrowsUpDownIcon className="w-3 h-3" />
+                Vertical
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="overflow-auto max-h-96">
+          {isVertical ? (
+            // Vertical layout: Each stat as a separate row
+            <table className="w-full">
+              <thead
+                className={twMerge('sticky top-0 z-10', twColors.bgNeutral10)}
+              >
+                <tr className={twMerge('border-b', twColors.borderNeutral100)}>
+                  <th
+                    className={twMerge(
+                      'text-left py-3 px-4 font-medium text-sm',
+                      twColors.textForeground,
+                    )}
+                  >
+                    Column
+                  </th>
+                  {Object.keys(columnStats).map(col => (
+                    <th
+                      key={col}
+                      className={twMerge(
+                        'text-left py-3 px-4 font-medium text-sm',
+                        twColors.textForeground,
+                      )}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
                 {statKeys.map(stat => (
-                  <StatHeader
+                  <tr
                     key={stat}
-                    stat={stat}
+                    className={twMerge(
+                      'transition-colors border-b',
+                      twColors.borderNeutral100,
+                      twColors.bgHover,
+                    )}
+                  >
+                    <td
+                      className={twMerge(
+                        'py-3 px-4 font-medium text-sm',
+                        twColors.textForeground,
+                      )}
+                    >
+                      {stat}
+                    </td>
+                    {Object.entries(columnStats).map(([col, statsValue]) => (
+                      <StatCell
+                        key={col}
+                        value={
+                          statsValue && typeof statsValue === 'object'
+                            ? (statsValue as Record<string, SampleValue>)[stat]
+                            : statsValue
+                        }
+                      />
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            // Horizontal layout: Original layout
+            <table className="w-full">
+              <thead
+                className={twMerge('sticky top-0 z-10', twColors.bgNeutral10)}
+              >
+                <tr className={twMerge('border-b', twColors.borderNeutral100)}>
+                  <th
+                    className={twMerge(
+                      'text-left py-3 px-4 font-medium text-sm',
+                      twColors.textForeground,
+                    )}
+                  >
+                    Column
+                  </th>
+                  {statKeys.map(stat => (
+                    <StatHeader
+                      key={stat}
+                      stat={stat}
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(columnStats).map(([col, statsValue]) => (
+                  <ColumnStatRow
+                    key={col}
+                    columnName={col}
+                    statsValue={statsValue}
                   />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(columnStats).map(([col, statsValue]) => (
-                <ColumnStatRow
-                  key={col}
-                  columnName={col}
-                  statsValue={statsValue}
-                />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          )}
         </div>
+      </Card>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {(() => {
+          let percentages: { column: string; percentage: number }[] = []
+
+          if (columnStats && typeof columnStats === 'object') {
+            if (
+              'pct_match' in columnStats &&
+              typeof columnStats.pct_match === 'object' &&
+              columnStats.pct_match !== null
+            ) {
+              const pctMatchData = columnStats.pct_match as Record<
+                string,
+                number
+              >
+              percentages = Object.entries(pctMatchData)
+                .map(([col, value]) => ({
+                  column: col,
+                  percentage: Number(value) || 0,
+                }))
+                .filter(item => !isNaN(item.percentage))
+            } else {
+              percentages = Object.entries(columnStats)
+                .map(([col, stats]) => {
+                  if (!stats || typeof stats !== 'object') return null
+
+                  const statsObj = stats as Record<string, number>
+                  const pctMatch =
+                    statsObj.pct_match ||
+                    statsObj.match_pct ||
+                    statsObj.percentage ||
+                    0
+
+                  return { column: col, percentage: Number(pctMatch) }
+                })
+                .filter(
+                  (item): item is { column: string; percentage: number } =>
+                    item !== null &&
+                    !isNaN(item.percentage) &&
+                    item.column !== 'pct_match',
+                )
+            }
+          }
+
+          const validPercentages = percentages.map(p => p.percentage)
+          const highest =
+            percentages.length > 0
+              ? percentages.find(
+                  p => p.percentage === Math.max(...validPercentages),
+                )
+              : null
+          const lowest =
+            percentages.length > 0
+              ? percentages.find(
+                  p => p.percentage === Math.min(...validPercentages),
+                )
+              : null
+          const average =
+            validPercentages.length > 0
+              ? validPercentages.reduce((a, b) => a + b, 0) /
+                validPercentages.length
+              : 0
+
+          return (
+            <>
+              <Card className="overflow-hidden">
+                <div className={twMerge('h-1', twColors.bgSuccess)} />
+                <div className="text-center py-2 px-2">
+                  <div
+                    className={twMerge(
+                      'text-lg font-light mb-0.5',
+                      twColors.textSuccess500,
+                    )}
+                  >
+                    {highest ? `${highest.percentage.toFixed(1)}%` : 'N/A'}
+                  </div>
+                  <div
+                    className={twMerge(
+                      'text-xs font-medium',
+                      twColors.textMuted,
+                    )}
+                  >
+                    Highest Match
+                  </div>
+                  <div
+                    className={twMerge('text-xs mt-0.5', twColors.textMuted)}
+                  >
+                    {highest ? highest.column : 'No data'}
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden">
+                <div className={twMerge('h-1', twColors.bgPrimary)} />
+                <div className="text-center py-2 px-2">
+                  <div
+                    className={twMerge(
+                      'text-lg font-light mb-0.5',
+                      twColors.textPrimary,
+                    )}
+                  >
+                    {average > 0 ? `${average.toFixed(1)}%` : 'N/A'}
+                  </div>
+                  <div
+                    className={twMerge(
+                      'text-xs font-medium',
+                      twColors.textMuted,
+                    )}
+                  >
+                    Average Match
+                  </div>
+                  <div
+                    className={twMerge('text-xs mt-0.5', twColors.textMuted)}
+                  >
+                    Across {validPercentages.length} columns
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden">
+                <div className={twMerge('h-1', twColors.bgDanger)} />
+                <div className="text-center py-2 px-2">
+                  <div
+                    className={twMerge(
+                      'text-lg font-light mb-0.5',
+                      twColors.textDanger500,
+                    )}
+                  >
+                    {lowest ? `${lowest.percentage.toFixed(1)}%` : 'N/A'}
+                  </div>
+                  <div
+                    className={twMerge(
+                      'text-xs font-medium',
+                      twColors.textMuted,
+                    )}
+                  >
+                    Lowest Match
+                  </div>
+                  <div
+                    className={twMerge('text-xs mt-0.5', twColors.textMuted)}
+                  >
+                    {lowest ? lowest.column : 'No data'}
+                  </div>
+                </div>
+              </Card>
+            </>
+          )
+        })()}
       </div>
-    </SectionToggle>
+    </div>
   )
 }

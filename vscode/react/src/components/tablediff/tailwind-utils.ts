@@ -31,6 +31,10 @@ export const twColors = {
   bgAdded: 'bg-[var(--vscode-diffEditor-insertedTextBackground)]',
   bgRemoved: 'bg-[var(--vscode-diffEditor-removedTextBackground)]',
   bgModified: 'bg-[var(--vscode-diffEditor-modifiedTextBackground)]',
+  bgTestSuccess: 'bg-[var(--vscode-testing-iconPassed)]',
+  bgError: 'bg-[var(--vscode-testing-iconFailed)]',
+  bgWarning: 'bg-[var(--vscode-testing-iconQueued)]',
+  bgInfo: 'bg-[var(--vscode-testing-iconUnset)]',
 
   // Border colors
   borderPanel: 'border-[var(--vscode-panel-border)]',
@@ -41,6 +45,39 @@ export const twColors = {
   borderAdded: 'border-[var(--vscode-diffEditor-insertedTextForeground)]',
   borderRemoved: 'border-[var(--vscode-diffEditor-removedTextForeground)]',
   borderModified: 'border-[var(--vscode-diffEditor-modifiedTextForeground)]',
+
+  //These colors are similar to web UI
+  // Primary (blue)
+  textPrimary: 'text-[#3b82f6]',
+  bgPrimary10: 'bg-[#3b82f6]/10',
+  bgPrimary: 'bg-[#3b82f6]',
+  borderPrimary: 'border-[#3b82f6]',
+
+  // Success (green)
+  textSuccess500: 'text-[#10b981]',
+  bgSuccess10: 'bg-[#10b981]/10',
+  bgSuccess: 'bg-[#10b981]',
+  borderSuccess500: 'border-[#10b981]',
+
+  // Danger (red)
+  textDanger500: 'text-[#ef4444]',
+  bgDanger5: 'bg-[#ef4444]/5',
+  bgDanger10: 'bg-[#ef4444]/10',
+  bgDanger: 'bg-[#ef4444]',
+  borderDanger500: 'border-[#ef4444]',
+
+  // Brand (purple)
+  textBrand: 'text-[#8b5cf6]',
+  bgBrand10: 'bg-[#8b5cf6]/10',
+  bgBrand: 'bg-[#8b5cf6]',
+  borderBrand500: 'border-[#8b5cf6]',
+
+  // Neutral
+  bgNeutral5: 'bg-[var(--vscode-editor-inactiveSelectionBackground)]',
+  bgNeutral10: 'bg-[var(--vscode-list-hoverBackground)]',
+  textNeutral500: 'text-[var(--vscode-descriptionForeground)]',
+  textNeutral600: 'text-[var(--vscode-editor-foreground)]',
+  borderNeutral100: 'border-[var(--vscode-panel-border)]',
 }
 
 // Helper function to combine conditional classes

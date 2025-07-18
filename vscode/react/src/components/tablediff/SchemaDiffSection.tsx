@@ -1,12 +1,9 @@
 import { useMemo } from 'react'
-import { SectionToggle } from './SectionToggle'
 import { type TableDiffData } from './types'
 import { twColors, twMerge } from './tailwind-utils'
 
 interface SchemaDiffSectionProps {
   schemaDiff: TableDiffData['schema_diff']
-  expanded: boolean
-  onToggle: () => void
 }
 
 interface SchemaChangeItemProps {
@@ -22,21 +19,21 @@ const SchemaChangeItem = ({
 }: SchemaChangeItemProps) => {
   const styleMap = {
     added: {
-      bgClass: twColors.bgAdded,
-      borderClass: 'border-l-2 ' + twColors.borderAdded,
-      textClass: twColors.textAdded,
+      bgClass: twColors.bgSuccess10,
+      borderClass: 'border-l-4 ' + twColors.borderSuccess500,
+      textClass: twColors.textSuccess500,
       symbol: '+',
     },
     removed: {
-      bgClass: twColors.bgRemoved,
-      borderClass: 'border-l-2 ' + twColors.borderRemoved,
-      textClass: twColors.textRemoved,
+      bgClass: twColors.bgDanger10,
+      borderClass: 'border-l-4 ' + twColors.borderDanger500,
+      textClass: twColors.textDanger500,
       symbol: '-',
     },
     modified: {
-      bgClass: twColors.bgModified,
-      borderClass: 'border-l-2 ' + twColors.borderModified,
-      textClass: twColors.textModified,
+      bgClass: twColors.bgPrimary10,
+      borderClass: 'border-l-4 ' + twColors.borderPrimary,
+      textClass: twColors.textPrimary,
       symbol: '~',
     },
   }
@@ -46,7 +43,7 @@ const SchemaChangeItem = ({
   return (
     <div
       className={twMerge(
-        'flex items-center gap-2 text-xs pl-3 py-1 rounded-r',
+        'flex items-center gap-3 text-sm px-4 py-3 rounded-lg mb-2',
         bgClass,
         borderClass,
       )}
@@ -71,11 +68,7 @@ const SchemaChangeItem = ({
   )
 }
 
-export function SchemaDiffSection({
-  schemaDiff,
-  expanded,
-  onToggle,
-}: SchemaDiffSectionProps) {
+export function SchemaDiffSection({ schemaDiff }: SchemaDiffSectionProps) {
   const schemaHasChanges = useMemo(() => {
     return (
       Object.keys(schemaDiff.added || {}).length > 0 ||
@@ -85,46 +78,45 @@ export function SchemaDiffSection({
   }, [schemaDiff])
 
   return (
-    <SectionToggle
-      id="schema"
-      title="Schema Changes"
-      expanded={expanded}
-      onToggle={onToggle}
-    >
-      <div className="px-8 py-3 space-y-2">
-        {!schemaHasChanges ? (
-          <div className={twMerge('text-xs', twColors.textSuccess)}>
-            ✓ Schemas are identical
-          </div>
-        ) : (
-          <>
-            {Object.entries(schemaDiff.added).map(([col, type]) => (
-              <SchemaChangeItem
-                key={col}
-                column={col}
-                type={type}
-                changeType="added"
-              />
-            ))}
-            {Object.entries(schemaDiff.removed).map(([col, type]) => (
-              <SchemaChangeItem
-                key={col}
-                column={col}
-                type={type}
-                changeType="removed"
-              />
-            ))}
-            {Object.entries(schemaDiff.modified).map(([col, type]) => (
-              <SchemaChangeItem
-                key={col}
-                column={col}
-                type={type}
-                changeType="modified"
-              />
-            ))}
-          </>
-        )}
-      </div>
-    </SectionToggle>
+    <div>
+      {!schemaHasChanges ? (
+        <div
+          className={twMerge(
+            'text-sm px-4 py-3 rounded-lg',
+            twColors.bgSuccess10,
+            twColors.textSuccess500,
+          )}
+        >
+          ✓ Schemas are identical
+        </div>
+      ) : (
+        <>
+          {Object.entries(schemaDiff.added).map(([col, type]) => (
+            <SchemaChangeItem
+              key={col}
+              column={col}
+              type={type}
+              changeType="added"
+            />
+          ))}
+          {Object.entries(schemaDiff.removed).map(([col, type]) => (
+            <SchemaChangeItem
+              key={col}
+              column={col}
+              type={type}
+              changeType="removed"
+            />
+          ))}
+          {Object.entries(schemaDiff.modified).map(([col, type]) => (
+            <SchemaChangeItem
+              key={col}
+              column={col}
+              type={type}
+              changeType="modified"
+            />
+          ))}
+        </>
+      )}
+    </div>
   )
 }
