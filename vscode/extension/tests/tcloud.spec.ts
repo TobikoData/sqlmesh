@@ -4,6 +4,7 @@ import fs from 'fs-extra'
 import os from 'os'
 import {
   createVirtualEnvironment,
+  openServerPage,
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
@@ -38,7 +39,10 @@ async function setupPythonEnvironment(envDir: string): Promise<string> {
   return pythonDetails.pythonPath
 }
 
-test('not signed in, shows sign in window', async ({ page }) => {
+test('not signed in, shows sign in window', async ({
+  page,
+  sharedCodeServer,
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -79,8 +83,7 @@ test('not signed in, shows sign in window', async ({ page }) => {
       { spaces: 2 },
     )
 
-    // Start VS Code
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
@@ -111,8 +114,8 @@ test('not signed in, shows sign in window', async ({ page }) => {
 
 test('signed in and not installed shows installation window', async ({
   page,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+  sharedCodeServer,
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -156,8 +159,7 @@ test('signed in and not installed shows installation window', async ({
       { spaces: 2 },
     )
 
-    // Start VS Code
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
@@ -188,6 +190,7 @@ test('signed in and not installed shows installation window', async ({
 
 test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when ready', async ({
   page,
+  sharedCodeServer,
 }) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
@@ -236,10 +239,7 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when read
     )
 
     // Start VS Code
-    const context = await startCodeServer({
-      tempDir,
-    })
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible
@@ -267,8 +267,8 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when read
 
 test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when ready', async ({
   page,
-}, testInfo) => {
-  testInfo.setTimeout(120_000) // 2 minutes for venv creation and package installation
+  sharedCodeServer,
+}) => {
   const tempDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-tcloud-'),
   )
@@ -315,11 +315,7 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
       { spaces: 2 },
     )
 
-    // Start VS Code
-    const context = await startCodeServer({
-      tempDir,
-    })
-    await page.goto(`http://127.0.0.1:${context.codeServerPort}`)
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a SQL file to trigger SQLMesh activation
     // Wait for the models folder to be visible

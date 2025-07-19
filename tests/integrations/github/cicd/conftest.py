@@ -117,7 +117,7 @@ def make_controller(
 
         orig_console = get_console()
         try:
-            set_console(MarkdownConsole())
+            set_console(MarkdownConsole(warning_capture_only=True, error_capture_only=True))
 
             return GithubController(
                 paths=paths,

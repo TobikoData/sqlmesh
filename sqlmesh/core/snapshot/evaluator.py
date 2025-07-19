@@ -140,6 +140,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         batch_index: int = 0,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> t.Optional[str]:
         """Renders the snapshot's model, executes it and stores the result in the snapshot's physical table.
@@ -165,6 +166,7 @@ class SnapshotEvaluator:
             snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
+            is_restatement=is_restatement,
             **kwargs,
         )
         if result is None or isinstance(result, str):
@@ -622,6 +624,7 @@ class SnapshotEvaluator:
         limit: t.Optional[int] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         batch_index: int = 0,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> DF | str | None:
         """Renders the snapshot's model and executes it. The return value depends on whether the limit was specified.
@@ -694,6 +697,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
+                    is_restatement=is_restatement,
                 )
             else:
                 logger.info(
@@ -715,6 +719,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
+                    is_restatement=is_restatement,
                 )
 
         with (
@@ -1833,6 +1838,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
+                is_restatement=kwargs.get("is_restatement", False),
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1851,6 +1857,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
+                is_restatement=kwargs.get("is_restatement", False),
             )
         else:
             raise SQLMeshError(

@@ -2,7 +2,7 @@ import { test, expect } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { SUSHI_SOURCE_PATH } from './utils'
+import { openServerPage, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Autocomplete for model names', async ({ page, sharedCodeServer }) => {
@@ -10,9 +10,7 @@ test('Autocomplete for model names', async ({ page, sharedCodeServer }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Wait for the models folder to be visible
   await page.waitForSelector('text=models')
@@ -67,9 +65,7 @@ test.describe('Macro Completions', () => {
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
     await createPythonInterpreterSettingsSpecifier(tempDir)
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Wait for the models folder to be visible
     await page.waitForSelector('text=models')
@@ -119,10 +115,7 @@ test.describe('Macro Completions', () => {
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
     await createPythonInterpreterSettingsSpecifier(tempDir)
-
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Wait for the models folder to be visible
     await page.waitForSelector('text=models')

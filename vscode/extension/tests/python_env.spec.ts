@@ -3,6 +3,7 @@ import fs from 'fs-extra'
 import {
   createVirtualEnvironment,
   openLineageView,
+  openServerPage,
   pipInstall,
   PythonEnvironment,
   REPO_ROOT,
@@ -34,9 +35,7 @@ async function runTest(
   context: CodeServerContext,
   tempDir: string,
 ): Promise<void> {
-  await page.goto(
-    `http://127.0.0.1:${context.codeServerPort}` + `/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, context)
   await page.waitForSelector('text=models')
   await openLineageView(page)
 }
@@ -78,9 +77,7 @@ test.describe('python environment variable injection on sqlmesh_lsp', () => {
     await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page, sharedCodeServer }, testInfo) => {
-    testInfo.setTimeout(120_000)
-
+  test('normal setup - set', async ({ page, sharedCodeServer }) => {
     const { tempDir } = await setupEnvironment()
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')

@@ -5,6 +5,7 @@ import path from 'path'
 import {
   createVirtualEnvironment,
   openLineageView,
+  openServerPage,
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
@@ -34,9 +35,7 @@ test('venv being named .env', async ({ page, sharedCodeServer }) => {
     spaces: 2,
   })
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForSelector('text=models')
   await openLineageView(page)
   await page.waitForSelector('text=Loaded SQLMesh Context')

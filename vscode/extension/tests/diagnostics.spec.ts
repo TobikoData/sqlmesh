@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { runCommand, SUSHI_SOURCE_PATH } from './utils'
+import { openServerPage, runCommand, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 import { execAsync } from '../src/utilities/exec'
 import yaml from 'yaml'
@@ -20,10 +20,7 @@ test('Workspace diagnostics show up in the diagnostics panel', async ({
   const updatedContent = configContent.replace('enabled=False', 'enabled=True')
   await fs.writeFile(configPath, updatedContent)
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-
+  await openServerPage(page, tempDir, sharedCodeServer)
   // Wait for the models folder to be visible
   await page.waitForSelector('text=models')
 
@@ -70,10 +67,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Write an invalid YAML to config.yaml
     await fs.writeFile(configYamlPath, 'invalid_yaml; asdfasudfy')
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open full_model.sql model
     await page
@@ -116,10 +110,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Write config to the yaml file
     await fs.writeFile(configYamlPath, yaml.stringify(config))
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open full_model.sql model
     await page
@@ -158,10 +149,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Write an invalid Python to config.py
     await fs.writeFile(configPyPath, 'config = {}')
 
-    await page.goto(
-      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open customers.sql model
     await page
@@ -197,10 +185,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Write an invalid Python to config.py
     await fs.writeFile(configPyPath, 'invalid_python_code = [1, 2, 3')
 
-    await page.goto(
-      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open customers.sql model
     await page
@@ -242,10 +227,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     )
     await fs.copy(customersSqlPath, duplicatedCustomersSqlPath)
 
-    await page.goto(
-      `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open full_model.sql model
     await page
@@ -334,10 +316,7 @@ test.describe('Diagnostics for bad audits', () => {
     await fs.writeFile(auditFilePath, updatedContent)
 
     // Navigate to the code-server instance
-    await page.goto(
-      `http://127.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-    )
-    await page.waitForLoadState('networkidle')
+    await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open a the customers.sql model
     await page

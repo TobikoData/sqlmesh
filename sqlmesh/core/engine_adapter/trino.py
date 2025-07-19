@@ -267,6 +267,7 @@ class TrinoEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
@@ -289,6 +290,7 @@ class TrinoEngineAdapter(
             table_description,
             column_descriptions,
             truncate,
+            is_restatement,
             **kwargs,
         )
 

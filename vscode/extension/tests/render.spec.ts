@@ -2,7 +2,12 @@ import { test, expect } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openLineageView, runCommand, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  openServerPage,
+  runCommand,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Render works correctly', async ({ page, sharedCodeServer }) => {
@@ -10,9 +15,7 @@ test('Render works correctly', async ({ page, sharedCodeServer }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   //   Wait for the models folder to be visible
   await page.waitForSelector('text=models')
@@ -48,9 +51,7 @@ test('Render works correctly with model without a description', async ({
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   //   Wait for the models folder to be visible
   await page.waitForSelector('text=models')
@@ -86,9 +87,7 @@ test('Render works correctly with every rendered model opening a new tab', async
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Wait for the models folder to be visible
   await page.waitForSelector('text=models')
@@ -133,10 +132,7 @@ test('Render shows model picker when no active editor is open', async ({
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
   // Navigate to code-server instance
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Load the lineage view to initialize SQLMesh context (like lineage.spec.ts does)
   await openLineageView(page)

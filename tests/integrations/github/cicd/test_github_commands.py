@@ -1,4 +1,5 @@
 # type: ignore
+import typing as t
 import os
 import pathlib
 from unittest import TestCase, mock
@@ -14,6 +15,7 @@ from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
+    GithubController,
     GithubCheckConclusion,
     GithubCheckStatus,
 )
@@ -1152,6 +1154,7 @@ def test_comment_command_deploy_prod(
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
+    assert not controller.forward_only_plan
 
     github_output_file = tmp_path / "github_output.txt"
 
@@ -1366,3 +1369,84 @@ def test_comment_command_deploy_prod_no_deploy_detected_yet(
 
     # required approvers are irrelevant because /deploy command is enabled
     assert "SQLMesh - Has Required Approval" not in controller._check_run_mapping
+
+
+def test_deploy_prod_forward_only(
+    github_client,
+    make_controller: t.Callable[..., GithubController],
+    make_mock_check_run,
+    make_mock_issue_comment,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    Scenario:
+    - PR is created with a branch name indicating that plans should be forward-only
+    - PR is not merged
+    - Tests passed
+    - PR Merge Method defined
+    - Deploy command has been triggered
+
+    Outcome:
+    - "Prod Environment Synced" step should show a tip explaining how to retroactively apply forward-only changes to old data
+    - Bot Comment should show the same tip
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+    mock_pull_request.head.ref = "unit-test-forward-only"
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.SQUASH,
+            enable_deploy_command=True,
+            forward_only_branch_suffix="-forward-only",
+        ),
+        mock_out_context=False,
+    )
+
+    # create existing prod to apply against
+    controller._context.plan(auto_apply=True)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    # then, run a deploy with forward_only set
+    assert controller.forward_only_plan
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._deploy_production(controller)
+
+    # Prod Environment Synced step should be successful
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 2
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_completed
+    assert prod_checks_runs[1]["output"]["title"] == "Deployed to Prod"
+    assert GithubCheckConclusion(prod_checks_runs[1]["conclusion"]).is_success
+
+    # PR comment should be updated with forward-only tip
+    assert len(created_comments) == 1
+    assert (
+        """> [!TIP]
+> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:
+> 
+> `$ sqlmesh plan --restate-model sushi.customer_revenue_by_day --start YYYY-MM-DD --end YYYY-MM-DD`"""
+        in created_comments[0].body
+    )

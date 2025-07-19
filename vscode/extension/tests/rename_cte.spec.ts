@@ -2,7 +2,12 @@ import { test, expect, Page } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { findAllReferences, renameSymbol, SUSHI_SOURCE_PATH } from './utils'
+import {
+  findAllReferences,
+  openServerPage,
+  renameSymbol,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 async function setupTestEnvironment({
@@ -16,10 +21,7 @@ async function setupTestEnvironment({
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
-  // Navigate to code-server instance
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Navigate to customers.sql which contains CTEs
   await page.waitForSelector('text=models')

@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import {
   openLineageView,
+  openServerPage,
   runCommand,
   saveFile,
   SUSHI_SOURCE_PATH,
@@ -29,9 +30,7 @@ test('bad project, double model', async ({ page, sharedCodeServer }) => {
   )
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   await page.waitForSelector('text=models')
 
@@ -60,9 +59,7 @@ test('working project, then broken through adding double model, then refixed', a
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForLoadState('networkidle')
 
   // Open the lineage view to confirm it loads properly
@@ -170,13 +167,7 @@ test('bad project, double model, then fixed', async ({
     customersSql,
   )
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   await page.waitForSelector('text=models')
 
@@ -245,10 +236,7 @@ test('bad project, double model, check lineage', async ({
   )
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Open the lineage view
   await openLineageView(page)
@@ -273,9 +261,7 @@ test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
     'MODEL ( name sushi.bad_block, test); SELECT * FROM sushi.customers'
   await fs.writeFile(badModelPath, contents)
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForLoadState('networkidle')
 
   // Open the customers.sql model

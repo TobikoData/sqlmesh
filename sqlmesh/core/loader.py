@@ -815,7 +815,11 @@ class SqlMeshLoader(Loader):
                 path=self.config_path,
             )
 
-            return [EnvironmentStatements(**statements, python_env=python_env)]
+            return [
+                EnvironmentStatements(
+                    **statements, python_env=python_env, project=self.config.project or None
+                )
+            ]
         return []
 
     def _load_linting_rules(self) -> RuleSet:

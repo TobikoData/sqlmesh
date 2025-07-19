@@ -95,7 +95,7 @@ def df_to_table(
 
         rich_table.add_column(Align.center(column_name))
 
-    for index, value_list in enumerate(df.values.tolist()):
+    for index, value_list in zip(df.index, df.values.tolist()):
         row = [str(index)] if show_index else []
         row += [str(x) for x in value_list]
         center = [Align.center(x) for x in row]

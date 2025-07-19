@@ -63,6 +63,7 @@ def format_options(func: t.Callable) -> t.Callable:
         "--normalize",
         is_flag=True,
         help="Whether or not to normalize identifiers to lowercase.",
+        default=None,
     )(func)
     func = click.option(
         "--pad",
@@ -82,6 +83,7 @@ def format_options(func: t.Callable) -> t.Callable:
     func = click.option(
         "--leading-comma",
         is_flag=True,
+        default=None,
         help="Determines whether or not the comma is leading or trailing in select expressions. Default is trailing.",
     )(func)
     func = click.option(

@@ -311,7 +311,9 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_environment_statements_changes(self) -> bool:
-        return self.environment_statements != self.previous_environment_statements
+        return sorted(self.environment_statements, key=lambda s: s.project or "") != sorted(
+            self.previous_environment_statements, key=lambda s: s.project or ""
+        )
 
     @property
     def has_snapshot_changes(self) -> bool:
