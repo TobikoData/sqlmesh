@@ -200,6 +200,9 @@ export class LineagePanel implements WebviewViewProvider, Disposable {
     />
     <link rel="apple-touch-icon" href="${logoUri}" />
     <title>Create TanStack App - react</title>
+    <script>
+      window.__SQLMESH_PANEL_TYPE__ = 'lineage';
+    </script>
     <script type="module" crossorigin src="${jsUri}"></script>
     <link rel="stylesheet" crossorigin href="${cssUri}">
    </head>
