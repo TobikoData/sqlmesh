@@ -23,9 +23,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-
-    # TODO: Change this to the real release before merge!
-    "sqlglot[rs] @ git+https://github.com/mattiasthalen/sqlglot@fix/fabric-ensure-varchar-max", #~=27.0.0",
+    "sqlglot[rs]~=27.0.0",
     "tenacity",
     "time-machine",
     "json-stream"
