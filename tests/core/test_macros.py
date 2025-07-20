@@ -876,12 +876,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
 
     # Generate the expected SQL based on the dialect and date_part
     if dialect == "duckdb":
-        if date_part == "week":
-            interval = "(7 * INTERVAL '1' DAY)"
-        elif date_part == "quarter":
-            interval = "(90 * INTERVAL '1' DAY)"
-        else:
-            interval = f"INTERVAL '1' {date_part.upper()}"
+        interval = f"INTERVAL '1' {date_part.upper()}"
         expected_sql = f"""
         SELECT
             date_{date_part}
