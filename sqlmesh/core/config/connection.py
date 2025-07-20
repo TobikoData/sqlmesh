@@ -1529,14 +1529,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        # Get the default driver for this specific class
-        default_driver = "pymssql"
-        if hasattr(cls, "model_fields") and "driver" in cls.model_fields:
-            field_info = cls.model_fields["driver"]
-            if hasattr(field_info, "default") and field_info.default is not None:
-                default_driver = field_info.default
-
-        driver = data.get("driver", default_driver)
+        driver = data.get("driver", "pymssql")
 
         # Define the mapping of driver to import module and extra name
         driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
