@@ -186,18 +186,18 @@ gateways:
     state_connection:
       type: duckdb
 
-  inttest_fabric:
-    connection:
-      type: fabric
-      driver: pyodbc
-      host: {{ env_var("FABRIC_HOST") }}
-      user: {{ env_var("FABRIC_CLIENT_ID") }}
-      password: {{ env_var("FABRIC_CLIENT_SECRET") }}    
-      database: {{ env_var("FABRIC_DATABASE") }}
-      odbc_properties:
-        Authentication: ActiveDirectoryServicePrincipal        
-    state_connection:
-      type: duckdb
+  #inttest_fabric:
+  #  connection:
+  #    type: fabric
+  #    driver: pyodbc
+  #    host: {{ env_var("FABRIC_HOST") }}
+  #    user: {{ env_var("FABRIC_CLIENT_ID") }}
+  #    password: {{ env_var("FABRIC_CLIENT_SECRET") }}    
+  #    database: {{ env_var("FABRIC_DATABASE") }}
+  #    odbc_properties:
+  #      Authentication: ActiveDirectoryServicePrincipal        
+  #  state_connection:
+  #    type: duckdb
 
 model_defaults:
     dialect: duckdb
