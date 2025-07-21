@@ -84,6 +84,16 @@ RUNTIME_RENDERED_MODEL_FIELDS = {
     "merge_filter",
 } | PROPERTIES
 
+CRON_ALIASES = {
+    "@midnight",
+    "@hourly",
+    "@daily",
+    "@weekly",
+    "@monthly",
+    "@yearly",
+    "@annually",
+}
+
 
 class _Model(ModelMeta, frozen=True):
     """Model is the core abstraction for user defined datasets.
@@ -2771,8 +2781,14 @@ def render_meta_fields(
         field_value = fields.get(field)
 
         # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
-        if field == "cron" or field_value is None:
+        if (
+            field == "cron" and isinstance(field_value, str) and field_value.lower() in CRON_ALIASES
+        ) or field_value is None:
             continue
+
+        # If it contains a macro reference we need to render it similar to sql models
+        if field == "cron" and isinstance(field_value, str):
+            field_value = exp.to_identifier(field_value)
 
         if field in RUNTIME_RENDERED_MODEL_FIELDS:
             fields[field] = parse_strings_with_macro_refs(field_value, dialect)
