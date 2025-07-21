@@ -290,6 +290,7 @@ class GithubController:
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
         client: t.Optional[Github] = None,
+        context: t.Optional[Context] = None,
     ) -> None:
         from github import Github
 
@@ -331,7 +332,7 @@ class GithubController:
             if review.state.lower() == "approved"
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
-        self._context: Context = Context(paths=self._paths, config=self.config)
+        self._context: Context = context or Context(paths=self._paths, config=self.config)
 
         # Bot config needs the context to be initialized
         logger.debug(f"Bot config: {self.bot_config.json(indent=2)}")
