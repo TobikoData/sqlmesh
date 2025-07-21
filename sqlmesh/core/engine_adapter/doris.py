@@ -4,6 +4,7 @@ import logging
 import typing as t
 
 from sqlglot import exp
+from sqlglot import expressions as exp
 
 from sqlmesh.core.dialect import to_schema
 from sqlglot.helper import ensure_list
@@ -179,28 +180,11 @@ class DorisEngineAdapter(
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         **create_kwargs: t.Any,
     ) -> None:
-        # Add debug logging
-        logger.info(
-            f"Creating view {view_name} with table description: {table_description}, column descriptions: {column_descriptions}"
-        )
-        logger.info(f"columns_to_types: {columns_to_types}")
-        logger.info(f"materialized: {materialized}")
-        logger.info(f"replace: {replace}")
-        logger.info(f"columns_to_types: {columns_to_types}")
-        """
-        Implements Doris CREATE VIEW and CREATE MATERIALIZED VIEW syntax.
-        For materialized views, constructs the SQL to match Doris syntax and test expectations.
-        """
         if replace:
             self.drop_view(view_name, ignore_if_not_exists=True, materialized=materialized)
-        logger.info(
-            f"Creating view {view_name} with table description: {table_description}, column descriptions: {column_descriptions}"
-        )
+        if not columns_to_types:
+            columns_to_types = self._view_query_columns_to_types(query_or_df)
         if not materialized:
-            logger.info(f"Calling super().create_view for non-materialized view {view_name}")
-            logger.info(f"Passing table_description: {table_description}")
-            logger.info(f"Passing column_descriptions: {column_descriptions}")
-            logger.info(f"Passing columns_to_types: {columns_to_types}")
             return super().create_view(
                 view_name,
                 query_or_df,
@@ -213,8 +197,6 @@ class DorisEngineAdapter(
                 view_properties=view_properties,
                 **create_kwargs,
             )
-
-        # Materialized view: delegate to separate method
         self._create_materialized_view(
             view_name,
             query_or_df,
@@ -237,26 +219,12 @@ class DorisEngineAdapter(
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         **create_kwargs: t.Any,
     ) -> None:
-        """
-        Creates a Doris materialized view with the specified properties.
-        Uses SQLGlot for supported parts and manual SQL generation for unsupported Doris-specific features.
-        """
-        logger.info(f"[Doris] _create_materialized_view called for view: {view_name}")
-        logger.info(f"[Doris] materialized_properties: {materialized_properties}")
-        logger.info(f"[Doris] create_kwargs: {create_kwargs}")
-        logger.info(f"[Doris] view_properties: {view_properties}")
-        logger.info(f"[Doris] table_description: {table_description}")
-        logger.info(f"[Doris] query_or_df: {query_or_df}")
         # Convert query_or_df to proper format using base infrastructure
         query_or_df = self._native_df_to_pandas_df(query_or_df)
-
-        # Handle DataFrame case
         import pandas as pd
 
         if isinstance(query_or_df, pd.DataFrame):
-            values: t.List[t.Tuple[t.Any, ...]] = list(
-                query_or_df.itertuples(index=False, name=None)
-            )
+            values: t.List[t.Tuple[t.Any, ...]] = list(query_or_df.itertuples(index=False, name=None))
             columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
             if not columns_to_types:
                 raise SQLMeshError("columns_to_types must be provided for dataframes")
@@ -267,15 +235,11 @@ class DorisEngineAdapter(
                 batch_end=len(values),
             )
 
-        # Get source queries using base infrastructure
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, batch_size=0, target_table=view_name
         )
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating materialized views")
-
-        logger.info(f"[Doris] column_descriptions: {column_descriptions}")
-        logger.info(f"[Doris] columns_to_types: {columns_to_types}")
 
         # Build schema using base infrastructure
         schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
@@ -297,9 +261,9 @@ class DorisEngineAdapter(
         # Check for partitioned_by_expr if partitioned_by is not provided
         partitioned_by_expr = None
         if not partitioned_by:
-            partitioned_by_expr = create_kwargs.get("partitioned_by_expr") or (
-                view_properties or {}
-            ).get("partitioned_by_expr")
+            partitioned_by_expr = create_kwargs.get("partitioned_by_expr") or (view_properties or {}).get(
+                "partitioned_by_expr"
+            )
 
         # Extract other Doris-specific properties from view_properties
         if view_properties is not None:
@@ -340,10 +304,7 @@ class DorisEngineAdapter(
                 # Handle both single column and list of columns
                 if isinstance(unique_key, (list, tuple)):
                     key_cols = ", ".join(
-                        [
-                            exp.to_column(k).sql(dialect=self.dialect, identify=True)
-                            for k in unique_key
-                        ]
+                        [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in unique_key]
                     )
                 else:
                     # Single column case
@@ -361,10 +322,7 @@ class DorisEngineAdapter(
                 # Handle both single column and list of columns
                 if isinstance(duplicate_key, (list, tuple)):
                     key_cols = ", ".join(
-                        [
-                            exp.to_column(k).sql(dialect=self.dialect, identify=True)
-                            for k in duplicate_key
-                        ]
+                        [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in duplicate_key]
                     )
                 else:
                     # Single column case
@@ -381,9 +339,7 @@ class DorisEngineAdapter(
 
             # COMMENT clause (order: 6)
             if table_description:
-                doris_specific_clauses.append(
-                    f"COMMENT '{self._truncate_table_comment(table_description)}'"
-                )
+                doris_specific_clauses.append(f"COMMENT '{self._truncate_table_comment(table_description)}'")
 
             # PROPERTIES clause (order: 9)
             properties = {}
@@ -420,9 +376,7 @@ class DorisEngineAdapter(
         else:
             # COMMENT clause (order: 6) - can be added even without view_properties
             if table_description:
-                doris_specific_clauses.append(
-                    f"COMMENT '{self._truncate_table_comment(table_description)}'"
-                )
+                doris_specific_clauses.append(f"COMMENT '{self._truncate_table_comment(table_description)}'")
 
         # Handle partitioned_by from create_kwargs if not already handled
         if not partitioned_by and create_kwargs.get("partitioned_by"):
@@ -442,8 +396,7 @@ class DorisEngineAdapter(
                         typed_partitioned_by = [exp.to_column(str(partitioned_by))]
             else:
                 typed_partitioned_by = [
-                    exp.to_column(expr) if isinstance(expr, str) else expr
-                    for expr in partitioned_by
+                    exp.to_column(expr) if isinstance(expr, str) else expr for expr in partitioned_by
                 ]
 
         # Build properties using the existing _build_table_properties_exp method for SQLGlot-supported parts only
@@ -516,9 +469,7 @@ class DorisEngineAdapter(
                     if column_descriptions and col in column_descriptions:
                         comment = column_descriptions[col]
                         col_defs.append(f"{col_sql} COMMENT '{comment}'")
-                        logger.info(
-                            f"[Doris] Added column with comment: {col_sql} COMMENT '{comment}'"
-                        )
+                        logger.info(f"[Doris] Added column with comment: {col_sql} COMMENT '{comment}'")
                     else:
                         col_defs.append(col_sql)
                         logger.info(f"[Doris] Added column without comment: {col_sql}")
@@ -537,16 +488,11 @@ class DorisEngineAdapter(
             if properties and properties.expressions:
                 for prop in properties.expressions:
                     if isinstance(prop, exp.PartitionedByProperty):
-                        logger.info(
-                            f"[Doris] Found partition property in properties: {type(prop).__name__}"
-                        )
+                        logger.info(f"[Doris] Found partition property in properties: {type(prop).__name__}")
                         # Generate the partition clause manually since SQLGlot might not handle it correctly
                         if typed_partitioned_by:
                             part_cols = ", ".join(
-                                [
-                                    col.sql(dialect=self.dialect, identify=True)
-                                    for col in typed_partitioned_by
-                                ]
+                                [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
                             )
                             partition_clause = f"PARTITION BY ({part_cols})"
                         break
@@ -556,10 +502,7 @@ class DorisEngineAdapter(
                 if typed_partitioned_by:
                     logger.info(f"[Doris] Generating partition clause from partitioned_by")
                     part_cols = ", ".join(
-                        [
-                            col.sql(dialect=self.dialect, identify=True)
-                            for col in typed_partitioned_by
-                        ]
+                        [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
                     )
                     partition_clause = f"PARTITION BY ({part_cols})"
                     logger.info(f"[Doris] Generated partition clause: {partition_clause}")
@@ -652,9 +595,7 @@ class DorisEngineAdapter(
                                         if isinstance(buckets, (int, str))
                                         else buckets.sql(dialect=self.dialect)
                                     )
-                                    distributed_clause = (
-                                        f"DISTRIBUTED BY HASH ({col_name}) BUCKETS {buckets_str}"
-                                    )
+                                    distributed_clause = f"DISTRIBUTED BY HASH ({col_name}) BUCKETS {buckets_str}"
                                     logger.info(
                                         f"[Doris] Fixed distributed clause with backticks: {distributed_clause}"
                                     )
@@ -675,10 +616,10 @@ class DorisEngineAdapter(
                                     if isinstance(buckets, (int, str))
                                     else buckets.sql(dialect=self.dialect)
                                 )
-                                distributed_clause = f"DISTRIBUTED BY HASH ({', '.join(col_names)}) BUCKETS {buckets_str}"
-                                logger.info(
-                                    f"[Doris] Fixed distributed clause with backticks: {distributed_clause}"
+                                distributed_clause = (
+                                    f"DISTRIBUTED BY HASH ({', '.join(col_names)}) BUCKETS {buckets_str}"
                                 )
+                                logger.info(f"[Doris] Fixed distributed clause with backticks: {distributed_clause}")
 
             # Add Doris-specific clauses in the correct order
             # According to Doris grammar: BUILD, REFRESH, KEY, COMMENT, PARTITION BY, DISTRIBUTED BY, PROPERTIES
@@ -771,14 +712,10 @@ class DorisEngineAdapter(
 
         self.execute(f"ALTER TABLE {old_table_sql} RENAME {new_table_sql}")
 
-    def _create_table_comment(
-        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
-    ) -> None:
+    def _create_table_comment(self, table_name: TableName, table_comment: str, table_kind: str = "TABLE") -> None:
         table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
 
-        self.execute(
-            f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"'
-        )
+        self.execute(f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"')
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -810,9 +747,7 @@ class DorisEngineAdapter(
         """
         if where == exp.true():
             # Use TRUNCATE TABLE for full table deletion as Doris doesn't support DELETE FROM table WHERE TRUE
-            return self.execute(
-                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
-            )
+            return self.execute(exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)]))
 
         return super().delete_from(table_name, where)
 
@@ -907,9 +842,7 @@ class DorisEngineAdapter(
         if partitioned_by_expr:
             if isinstance(partitioned_by_expr, exp.Tuple):
                 create_expressions = [
-                    exp.Var(this=e.this, quoted=False)
-                    if isinstance(e, exp.Literal)
-                    else to_raw_sql(e)
+                    exp.Var(this=e.this, quoted=False) if isinstance(e, exp.Literal) else to_raw_sql(e)
                     for e in partitioned_by_expr.expressions
                 ]
             elif isinstance(partitioned_by_expr, exp.Literal):
@@ -951,19 +884,13 @@ class DorisEngineAdapter(
                 # Extract column names from Tuple expressions
                 column_names = []
                 for expr in unique_key.expressions:
-                    if (
-                        isinstance(expr, exp.Column)
-                        and hasattr(expr, "this")
-                        and hasattr(expr.this, "this")
-                    ):
+                    if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
                         column_names.append(str(expr.this.this))
                     elif hasattr(expr, "this"):
                         column_names.append(str(expr.this))
                     else:
                         column_names.append(str(expr))
-                properties.append(
-                    exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in column_names])
-                )
+                properties.append(exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in column_names]))
             elif isinstance(unique_key, exp.Column):
                 # Handle as single column
                 if hasattr(unique_key, "this") and hasattr(unique_key.this, "this"):
@@ -979,34 +906,24 @@ class DorisEngineAdapter(
                 # Extract column names from Tuple expressions
                 column_names = []
                 for expr in duplicate_key.expressions:
-                    if (
-                        isinstance(expr, exp.Column)
-                        and hasattr(expr, "this")
-                        and hasattr(expr.this, "this")
-                    ):
+                    if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
                         column_names.append(str(expr.this.this))
                     elif hasattr(expr, "this"):
                         column_names.append(str(expr.this))
                     else:
                         column_names.append(str(expr))
-                properties.append(
-                    exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in column_names])
-                )
+                properties.append(exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in column_names]))
             elif isinstance(duplicate_key, exp.Column):
                 # Handle as single column
                 if hasattr(duplicate_key, "this") and hasattr(duplicate_key.this, "this"):
                     column_name = str(duplicate_key.this.this)
                 else:
                     column_name = str(duplicate_key.this)
-                properties.append(
-                    exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)])
-                )
+                properties.append(exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)]))
 
         if table_description:
             properties.append(
-                exp.SchemaCommentProperty(
-                    this=exp.Literal.string(self._truncate_table_comment(table_description))
-                )
+                exp.SchemaCommentProperty(this=exp.Literal.string(self._truncate_table_comment(table_description)))
             )
 
         # Handle partitioning
@@ -1018,11 +935,7 @@ class DorisEngineAdapter(
                 key_cols_set = set()
                 if isinstance(unique_key, exp.Tuple):
                     for expr in unique_key.expressions:
-                        if (
-                            isinstance(expr, exp.Column)
-                            and hasattr(expr, "this")
-                            and hasattr(expr.this, "this")
-                        ):
+                        if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
                             key_cols_set.add(str(expr.this.this))
                         elif hasattr(expr, "this"):
                             key_cols_set.add(str(expr.this))
@@ -1078,16 +991,12 @@ class DorisEngineAdapter(
                         elif isinstance(expr.expression, exp.Array):
                             # Handle expressions array
                             distributed_info[key] = [
-                                str(e.this)
-                                for e in expr.expression.expressions
-                                if hasattr(e, "this")
+                                str(e.this) for e in expr.expression.expressions if hasattr(e, "this")
                             ]
                         elif isinstance(expr.expression, exp.Tuple):
                             # Handle expressions tuple (array of strings)
                             distributed_info[key] = [
-                                str(e.this)
-                                for e in expr.expression.expressions
-                                if hasattr(e, "this")
+                                str(e.this) for e in expr.expression.expressions if hasattr(e, "this")
                             ]
                         else:
                             distributed_info[key] = str(expr.expression)
@@ -1164,19 +1073,38 @@ class DorisEngineAdapter(
         logger.info(f"[Doris] No properties generated")
         return None
 
-    def _get_temp_table(
-        self, table: TableName, table_only: bool = False, quoted: bool = True
-    ) -> exp.Table:
+    def _get_temp_table(self, table: TableName, table_only: bool = False, quoted: bool = True) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name. Doris does not support table name begin with underscore.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set(
-            "this", exp.to_identifier(f"temp_{table.name}_{random_id(short=True)}", quoted=quoted)
-        )
+        table.set("this", exp.to_identifier(f"temp_{table.name}_{random_id(short=True)}", quoted=quoted))
 
         if table_only:
             table.set("db", None)
             table.set("catalog", None)
 
         return table
+
+    def _view_query_columns_to_types(self, query_or_df) -> t.Optional[t.Dict[str, exp.DataType]]:
+        """Extract output column names from a SQLGlot Query and return a dict mapping them to unknown type."""
+        if isinstance(query_or_df, exp.Query):
+            # If any select is a Star (i.e., SELECT * or SELECT a.*), return None
+            selects = getattr(query_or_df, "selects", [])
+            if any(isinstance(s, exp.Star) for s in selects):
+                return None
+            output_columns = []
+            if hasattr(query_or_df, "named_selects"):
+                for expr in query_or_df.named_selects:
+                    name = getattr(expr, "alias_or_name", None)
+                    if not name:
+                        name = getattr(expr, "name", None)
+                    if not name:
+                        name = str(expr)
+                    output_columns.append(name)
+            else:
+                output_columns = [
+                    getattr(s, "alias_or_name", getattr(s, "name", str(s))) for s in getattr(query_or_df, "selects", [])
+                ]
+            return {col: exp.DataType.build("unknown") for col in output_columns}
+        return None
