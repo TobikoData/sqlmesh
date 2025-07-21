@@ -109,6 +109,7 @@ class EngineAdapter:
     DEFAULT_CATALOG_TYPE = DIALECT
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
+    ATTACH_CORRELATION_ID = True
 
     def __init__(
         self,
@@ -1461,6 +1462,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1477,6 +1479,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            is_restatement=is_restatement,
             **kwargs,
         )
 
@@ -1495,6 +1498,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1511,6 +1515,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            is_restatement=is_restatement,
             **kwargs,
         )
 
@@ -1532,6 +1537,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
@@ -1717,13 +1723,15 @@ class EngineAdapter:
             target_table
         )
 
-        cleanup_ts = None
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
-        else:
-            # If truncate is false it is not the first insert
-            # Determine the cleanup timestamp for restatement or a regular incremental run
-            cleanup_ts = to_time_column(start, time_data_type, self.dialect, nullable=True)
+
+        # Only set cleanup_ts if is_restatement is True and truncate is False (this to enable full restatement)
+        cleanup_ts = (
+            to_time_column(start, time_data_type, self.dialect, nullable=True)
+            if is_restatement and not truncate
+            else None
+        )
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
@@ -1762,7 +1770,7 @@ class EngineAdapter:
                 .with_(
                     "static",
                     existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
-                    if truncate
+                    if cleanup_ts is None
                     else existing_rows_query.where(
                         exp.and_(
                             valid_to_col.is_(exp.Null().not_()),
@@ -1774,7 +1782,7 @@ class EngineAdapter:
                 .with_(
                     "latest",
                     existing_rows_query.where(valid_to_col.is_(exp.Null()))
-                    if truncate
+                    if cleanup_ts is None
                     else exp.select(
                         *(
                             to_time_column(
@@ -2219,8 +2227,7 @@ class EngineAdapter:
                 else:
                     sql = t.cast(str, e)
 
-                if self.correlation_id:
-                    sql = f"/* {self.correlation_id} */ {sql}"
+                sql = self._attach_correlation_id(sql)
 
                 self._log_sql(
                     sql,
@@ -2228,6 +2235,11 @@ class EngineAdapter:
                     quote_identifiers=quote_identifiers,
                 )
                 self._execute(sql, **kwargs)
+
+    def _attach_correlation_id(self, sql: str) -> str:
+        if self.ATTACH_CORRELATION_ID and self.correlation_id:
+            return f"/* {self.correlation_id} */ {sql}"
+        return sql
 
     def _log_sql(
         self,

@@ -186,8 +186,18 @@ class DestroyConsole(abc.ABC):
     """Console for describing a destroy operation"""
 
     @abc.abstractmethod
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         """Start a destroy operation.
+
+        Args:
+            schemas_to_delete: Set of schemas that will be deleted
+            views_to_delete: Set of views that will be deleted
+            tables_to_delete: Set of tables that will be deleted
 
         Returns:
             Whether or not the destroy operation should proceed
@@ -289,11 +299,17 @@ class TableDiffConsole(abc.ABC):
 
 class BaseConsole(abc.ABC):
     @abc.abstractmethod
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         """Display warning info to the user.
 
         Args:
@@ -824,7 +840,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
@@ -912,6 +933,7 @@ class TerminalConsole(Console):
         self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
         self.table_diff_progress_live: t.Optional[Live] = None
 
+        self.signal_progress_logged = False
         self.signal_status_tree: t.Optional[Tree] = None
 
         self.verbosity = verbosity
@@ -956,7 +978,8 @@ class TerminalConsole(Console):
     ) -> None:
         """Indicates that a new snapshot evaluation/auditing progress has begun."""
         # Add a newline to separate signal checking from evaluation
-        self._print("")
+        if self.signal_progress_logged:
+            self._print("")
 
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
@@ -1188,6 +1211,7 @@ class TerminalConsole(Console):
         if self.signal_status_tree is not None:
             self._print(self.signal_status_tree)
             self.signal_status_tree = None
+            self.signal_progress_logged = True
 
     def start_creation_progress(
         self,
@@ -1273,16 +1297,40 @@ class TerminalConsole(Console):
         else:
             self.log_error("Cleanup failed!")
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         self.log_warning(
-            (
-                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
-                "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-                "Use this command only when you intend to fully reset the project."
-            )
+            "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
         )
-        if not self._confirm("Proceed?"):
-            self.log_error("Destroy aborted!")
+
+        if schemas_to_delete or views_to_delete or tables_to_delete:
+            if schemas_to_delete:
+                self.log_error("Schemas to be deleted:")
+                for schema in sorted(schemas_to_delete):
+                    self.log_error(f"  • {schema}")
+
+            if views_to_delete:
+                self.log_error("\nEnvironment views to be deleted:")
+                for view in sorted(views_to_delete):
+                    self.log_error(f"  • {view}")
+
+            if tables_to_delete:
+                self.log_error("\nSnapshot tables to be deleted:")
+                for table in sorted(tables_to_delete):
+                    self.log_error(f"  • {table}")
+
+            self.log_error(
+                "\nThis action will DELETE ALL the above resources managed by SQLMesh AND\n"
+                "potentially external resources created by other tools in these schemas.\n"
+            )
+
+        if not self._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):
+            self.log_error("Destroy operation cancelled.")
             return False
         return True
 
@@ -2708,8 +2756,16 @@ def _cells_match(x: t.Any, y: t.Any) -> bool:
     def _normalize(val: t.Any) -> t.Any:
         # Convert Pandas null to Python null for the purposes of comparison to prevent errors like the following on boolean fields:
         # - TypeError: boolean value of NA is ambiguous
-        if pd.isnull(val):
+        # note pd.isnull() returns either a bool or a ndarray[bool] depending on if the input
+        # is scalar or an array
+        isnull = pd.isnull(val)
+
+        if isinstance(isnull, bool):  # scalar
+            if isnull:
+                val = None
+        elif all(isnull):  # array
             val = None
+
         return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
 
     return _normalize(x) == _normalize(y)
@@ -3046,6 +3102,7 @@ class CaptureTerminalConsole(TerminalConsole):
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
         self._captured_outputs: t.List[str] = []
+        self._warnings: t.List[str] = []
         self._errors: t.List[str] = []
 
     @property
@@ -3053,28 +3110,48 @@ class CaptureTerminalConsole(TerminalConsole):
         return "".join(self._captured_outputs)
 
     @property
+    def captured_warnings(self) -> str:
+        return "".join(self._warnings)
+
+    @property
     def captured_errors(self) -> str:
         return "".join(self._errors)
 
     def consume_captured_output(self) -> str:
-        output = self.captured_output
-        self.clear_captured_outputs()
-        return output
+        try:
+            return self.captured_output
+        finally:
+            self._captured_outputs = []
+
+    def consume_captured_warnings(self) -> str:
+        try:
+            return self.captured_warnings
+        finally:
+            self._warnings = []
 
     def consume_captured_errors(self) -> str:
-        errors = self.captured_errors
-        self.clear_captured_errors()
-        return errors
+        try:
+            return self.captured_errors
+        finally:
+            self._errors = []
 
-    def clear_captured_outputs(self) -> None:
-        self._captured_outputs = []
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
+        if short_message not in self._warnings:
+            self._warnings.append(short_message)
+        if kwargs.pop("print", True):
+            super().log_warning(short_message, long_message)
 
-    def clear_captured_errors(self) -> None:
-        self._errors = []
-
-    def log_error(self, message: str) -> None:
-        self._errors.append(message)
-        super().log_error(message)
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
+        if message not in self._errors:
+            self._errors.append(message)
+        if kwargs.pop("print", True):
+            super().log_error(message)
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
@@ -3084,9 +3161,8 @@ class CaptureTerminalConsole(TerminalConsole):
             super().log_skipped_models(snapshot_names)
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
-        if errors:
-            self._errors.append("\n".join(str(ex) for ex in errors))
-            super().log_failed_models(errors)
+        self._errors.extend([str(ex) for ex in errors if str(ex) not in self._errors])
+        super().log_failed_models(errors)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
@@ -3107,7 +3183,19 @@ class MarkdownConsole(CaptureTerminalConsole):
     AUDIT_PADDING = 7
 
     def __init__(self, **kwargs: t.Any) -> None:
-        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
+        self.alert_block_max_content_length = int(kwargs.pop("alert_block_max_content_length", 500))
+        self.alert_block_collapsible_threshold = int(
+            kwargs.pop("alert_block_collapsible_threshold", 200)
+        )
+
+        # capture_only = True: capture but dont print to console
+        # capture_only = False: capture and also print to console
+        self.warning_capture_only = kwargs.pop("warning_capture_only", False)
+        self.error_capture_only = kwargs.pop("error_capture_only", False)
+
+        super().__init__(
+            **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
+        )
 
     def show_environment_difference_summary(
         self,
@@ -3379,6 +3467,12 @@ class MarkdownConsole(CaptureTerminalConsole):
         super().stop_promotion_progress(success)
         self._print("\n")
 
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        super().log_warning(short_message, long_message, print=not self.warning_capture_only)
+
+    def log_error(self, message: str) -> None:
+        super().log_error(message, print=not self.error_capture_only)
+
     def log_success(self, message: str) -> None:
         self._print(message)
 
@@ -3405,19 +3499,24 @@ class MarkdownConsole(CaptureTerminalConsole):
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
-            msg = "  " + "\n  ".join(snapshot_names)
-            self._print(f"**Skipped models**\n\n{msg}")
+            self._print(f"**Skipped models**")
+            for snapshot_name in snapshot_names:
+                self._print(f"* `{snapshot_name}`")
+            self._print("")
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
         if errors:
-            self._print("\n```\nFailed models\n")
+            self._print("**Failed models**")
 
             error_messages = _format_node_errors(errors)
 
             for node_name, msg in error_messages.items():
-                self._print(f"  **{node_name}**\n\n{msg}")
+                self._print(f"* `{node_name}`\n")
+                self._print("  ```")
+                self._print(msg)
+                self._print("  ```")
 
-            self._print("```\n")
+            self._print("")
 
     def show_linter_violations(
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
@@ -3429,18 +3528,40 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(msg)
         self._errors.append(msg)
 
-    def log_error(self, message: str) -> None:
-        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+    @property
+    def captured_warnings(self) -> str:
+        return self._render_alert_block("WARNING", self._warnings)
 
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
-        logger.warning(long_message or short_message)
+    @property
+    def captured_errors(self) -> str:
+        return self._render_alert_block("CAUTION", self._errors)
 
-        if not short_message.endswith("\n"):
-            short_message += (
-                "\n"  # so that the closing ``` ends up on a newline which is important for GitHub
-            )
+    def _render_alert_block(self, block_type: str, items: t.List[str]) -> str:
+        # GitHub Markdown alert syntax, https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts
+        if items:
+            item_contents = ""
+            list_indicator = "- " if len(items) > 1 else ""
 
-        self._print(f"```\n\\[WARNING] {short_message}```\n\n")
+            for item in items:
+                item = item.replace("\n", "\n> ")
+                item_contents += f">\n> {list_indicator}{item}\n"
+
+                if len(item_contents) > self.alert_block_max_content_length:
+                    truncation_msg = (
+                        "...\n>\n> Truncated. Please check the console for full information.\n"
+                    )
+                    item_contents = item_contents[
+                        0 : self.alert_block_max_content_length - len(truncation_msg)
+                    ]
+                    item_contents += truncation_msg
+                    break
+
+            if len(item_contents) > self.alert_block_collapsible_threshold:
+                item_contents = f"> <details>\n{item_contents}> </details>"
+
+            return f"> [!{block_type}]\n{item_contents}\n"
+
+        return ""
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -3467,7 +3588,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super()._print(value, **kwargs)
         for captured_output in self._captured_outputs:
             print(captured_output)
-        self.clear_captured_outputs()
+        self.consume_captured_output()
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)

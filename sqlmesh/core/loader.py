@@ -349,7 +349,7 @@ class Loader(abc.ABC):
                         for row in YAML().load(file.read())
                     ]
             except Exception as ex:
-                raise ConfigError(self._failed_to_load_model_error(path, ex))
+                raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         for path in paths_to_load:
             self._track_file(path)
@@ -363,7 +363,8 @@ class Loader(abc.ABC):
                         raise ConfigError(
                             self._failed_to_load_model_error(
                                 path, f"Duplicate external model name: '{model.name}'."
-                            )
+                            ),
+                            path,
                         )
                     models[model.fqn] = model
 
@@ -375,7 +376,8 @@ class Loader(abc.ABC):
                             raise ConfigError(
                                 self._failed_to_load_model_error(
                                     path, f"Duplicate external model name: '{model.name}'."
-                                )
+                                ),
+                                path,
                             )
                         models.update({model.fqn: model})
 
@@ -402,13 +404,15 @@ class Loader(abc.ABC):
                     args = [k.strip() for k in line.split("==")]
                     if len(args) != 2:
                         raise ConfigError(
-                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported"
+                            f"Invalid lock file entry '{line.strip()}'. Only 'dep==ver' is supported",
+                            requirements_path,
                         )
                     dep, ver = args
                     other_ver = requirements.get(dep, ver)
                     if ver != other_ver:
                         raise ConfigError(
-                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file."
+                            f"Conflicting requirement {dep}: {ver} != {other_ver}. Fix your {c.REQUIREMENTS} file.",
+                            requirements_path,
                         )
                     requirements[dep] = ver
 
@@ -619,13 +623,14 @@ class SqlMeshLoader(Loader):
                                 raise ConfigError(
                                     self._failed_to_load_model_error(
                                         path, f"Duplicate SQL model name: '{model.name}'."
-                                    )
+                                    ),
+                                    path,
                                 )
                             elif model.enabled:
                                 model._path = path
                                 models[model.fqn] = model
                     except Exception as ex:
-                        raise ConfigError(self._failed_to_load_model_error(path, ex))
+                        raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         return models
 
@@ -678,7 +683,7 @@ class SqlMeshLoader(Loader):
                             if model.enabled:
                                 models[model.fqn] = model
                 except Exception as ex:
-                    raise ConfigError(self._failed_to_load_model_error(path, ex))
+                    raise ConfigError(self._failed_to_load_model_error(path, ex), path)
 
         finally:
             model_registry._dialect = None
@@ -782,7 +787,9 @@ class SqlMeshLoader(Loader):
                         metric = load_metric_ddl(expression, path=path, dialect=dialect)
                         metrics[metric.name] = metric
                 except SqlglotError as ex:
-                    raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
+                    raise ConfigError(
+                        f"Failed to parse metric definitions at '{path}': {ex}.", path
+                    )
 
         return metrics
 
@@ -808,7 +815,11 @@ class SqlMeshLoader(Loader):
                 path=self.config_path,
             )
 
-            return [EnvironmentStatements(**statements, python_env=python_env)]
+            return [
+                EnvironmentStatements(
+                    **statements, python_env=python_env, project=self.config.project or None
+                )
+            ]
         return []
 
     def _load_linting_rules(self) -> RuleSet:
@@ -1005,7 +1016,7 @@ class MigratedDbtProjectLoader(SqlMeshLoader):
                         package=package,
                     )
                 except Exception as e:
-                    raise ConfigError(f"Failed to load macro file: {path}", e)
+                    raise ConfigError(f"Failed to load macro file:  {e}", path)
 
         self._macros_max_mtime = macros_max_mtime
 

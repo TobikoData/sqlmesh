@@ -7,6 +7,7 @@ from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
 import logging
+from textwrap import dedent
 import os
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
@@ -4944,15 +4945,88 @@ def test_multi(mocker):
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
-    # Ensure only repo_1's environment statements have executed in this context
+    # Ensure that before_all and after_all statements of both repos are there despite planning with repo_1
     environment_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert len(environment_statements) == 1
-    assert environment_statements[0].before_all == [
+    assert len(environment_statements) == 2
+
+    # Ensure that environment statements have the project field set correctly
+    sorted_env_statements = sorted(environment_statements, key=lambda es: es.project)
+    assert sorted_env_statements[0].project == "repo_1"
+    assert sorted_env_statements[1].project == "repo_2"
+
+    # Assert before_all and after_all for each project
+    assert sorted_env_statements[0].before_all == [
         "CREATE TABLE IF NOT EXISTS before_1 AS select @one()"
     ]
-    assert environment_statements[0].after_all == [
+    assert sorted_env_statements[0].after_all == [
         "CREATE TABLE IF NOT EXISTS after_1 AS select @dup()"
     ]
+    assert sorted_env_statements[1].before_all == [
+        "CREATE TABLE IF NOT EXISTS before_2 AS select @two()"
+    ]
+    assert sorted_env_statements[1].after_all == [
+        "CREATE TABLE IF NOT EXISTS after_2 AS select @dup()"
+    ]
+
+
+@use_terminal_console
+def test_multi_repo_single_project_environment_statements_update(copy_to_temp_path):
+    paths = copy_to_temp_path("examples/multi")
+    repo_1_path = f"{paths[0]}/repo_1"
+    repo_2_path = f"{paths[0]}/repo_2"
+
+    context = Context(paths=[repo_1_path, repo_2_path], gateway="memory")
+    context._new_state_sync().reset(default_catalog=context.default_catalog)
+
+    initial_plan = context.plan_builder().build()
+    context.apply(initial_plan)
+
+    # Get initial statements
+    initial_statements = context.state_reader.get_environment_statements(c.PROD)
+    assert len(initial_statements) == 2
+
+    # Modify repo_1's config to add a new before_all statement
+    repo_1_config_path = f"{repo_1_path}/config.yaml"
+    with open(repo_1_config_path, "r") as f:
+        config_content = f.read()
+
+    # Add a new before_all statement to repo_1 only
+    modified_config = config_content.replace(
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()",
+        "CREATE TABLE IF NOT EXISTS before_1 AS select @one()\n  - CREATE TABLE IF NOT EXISTS before_1_modified AS select 999",
+    )
+
+    with open(repo_1_config_path, "w") as f:
+        f.write(modified_config)
+
+    # Create new context with modified config but only for repo_1
+    context_repo_1_only = Context(
+        paths=[repo_1_path], state_sync=context.state_sync, gateway="memory"
+    )
+
+    # Plan with only repo_1, this should preserve repo_2's statements from state
+    repo_1_plan = context_repo_1_only.plan_builder(environment="dev").build()
+    context_repo_1_only.apply(repo_1_plan)
+    updated_statements = context_repo_1_only.state_reader.get_environment_statements("dev")
+
+    # Should still have statements from both projects
+    assert len(updated_statements) == 2
+
+    # Sort by project
+    sorted_updated = sorted(updated_statements, key=lambda es: es.project or "")
+
+    # Verify repo_1 has the new statement
+    repo_1_updated = sorted_updated[0]
+    assert repo_1_updated.project == "repo_1"
+    assert len(repo_1_updated.before_all) == 2
+    assert "CREATE TABLE IF NOT EXISTS before_1_modified" in repo_1_updated.before_all[1]
+
+    # Verify repo_2 statements are preserved from state
+    repo_2_preserved = sorted_updated[1]
+    assert repo_2_preserved.project == "repo_2"
+    assert len(repo_2_preserved.before_all) == 1
+    assert "CREATE TABLE IF NOT EXISTS before_2" in repo_2_preserved.before_all[0]
+    assert "CREATE TABLE IF NOT EXISTS after_2 AS select @dup()" in repo_2_preserved.after_all[0]
 
 
 @use_terminal_console
@@ -6281,7 +6355,9 @@ def test_destroy(copy_to_temp_path):
     context.fetchdf(f"SELECT * FROM db_1.first_schema.model_two")
 
     # Use the destroy command to remove all data objects and state
-    context._destroy()
+    # Mock the console confirmation to automatically return True
+    with patch.object(context.console, "_confirm", return_value=True):
+        context._destroy()
 
     # Ensure all tables have been removed
     for table_name in state_tables:
@@ -6841,3 +6917,201 @@ def test_plan_evaluator_correlation_id(tmp_path: Path):
         assert str(correlation_id) == f"SQLMESH_PLAN: {plan.plan_id}"
 
         assert _correlation_id_in_sqls(correlation_id, mock_logger)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    raw_employee_status = d.parse("""
+    MODEL (
+        name memory.hr_system.raw_employee_status,
+        kind FULL
+    );
+
+    SELECT
+        1001 AS employee_id,
+        'engineering' AS department,
+        'EMEA' AS region,
+        '2023-01-08 15:00:00 UTC' AS last_modified;
+    """)
+
+    employee_history = d.parse("""
+    MODEL (
+        name memory.hr_system.employee_history,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key employee_id,
+            updated_at_name last_modified,
+            disable_restatement false
+        ),
+        owner hr_analytics,
+        cron '0 7 * * *',
+        grain employee_id,
+        description 'Historical tracking of employee status changes'
+    );
+
+    SELECT
+        employee_id::INT AS employee_id,
+        department::TEXT AS department,
+        region::TEXT AS region,
+        last_modified AS last_modified
+    FROM
+        memory.hr_system.raw_employee_status;
+    """)
+
+    raw_employee_status_model = load_sql_based_model(raw_employee_status)
+    employee_history_model = load_sql_based_model(employee_history)
+    context.upsert_model(raw_employee_status_model)
+    context.upsert_model(employee_history_model)
+
+    # Initial plan and apply
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    query = "SELECT employee_id, department, region, valid_from, valid_to FROM memory.hr_system.employee_history ORDER BY employee_id, valid_from"
+    initial_data = context.engine_adapter.fetchdf(query)
+
+    assert len(initial_data) == 1
+    assert initial_data["valid_to"].isna().all()
+    assert initial_data["department"].tolist() == ["engineering"]
+    assert initial_data["region"].tolist() == ["EMEA"]
+
+    # Apply a future plan with source changes a few hours before the cron time of the SCD Type 2 model BUT on the same day
+    with time_machine.travel("2023-01-09 00:10:00 UTC"):
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'engineering' AS department,
+            'AMER' AS region,
+            '2023-01-09 00:10:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    # The 7th hour of the day the run is kicked off for the SCD Type 2 model
+    with time_machine.travel("2023-01-09 07:00:01 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 records for employee 1001
+        assert len(data_after_change) == 2
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-09 00:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-09 00:10:00"
+        assert pd.isna(data_after_change.iloc[1]["valid_to"])
+
+        # Update source model again a bit later on the same day
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'sales' AS department,
+            'ANZ' AS region,
+            '2023-01-09 07:26:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    # A day later the run is kicked off for the SCD Type 2 model again
+    with time_machine.travel("2023-01-10 07:00:00 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history for employee 1001 after second change with the historical records intact
+        assert len(data_after_change) == 3
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-09 00:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-09 00:10:00"
+        assert str(data_after_change.iloc[1]["valid_to"]) == "2023-01-09 07:26:00"
+        assert data_after_change.iloc[2]["employee_id"] == 1001
+        assert data_after_change.iloc[2]["department"] == "sales"
+        assert data_after_change.iloc[2]["region"] == "ANZ"
+        assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-09 07:26:00"
+        assert pd.isna(data_after_change.iloc[2]["valid_to"])
+
+    # Now test restatement still works as expected by restating from 2023-01-09 00:10:00 (first change)
+    with time_machine.travel("2023-01-10 07:38:00 UTC"):
+        plan = context.plan_builder(
+            "prod",
+            skip_tests=True,
+            restate_models=["memory.hr_system.employee_history"],
+            start="2023-01-09 00:10:00",
+        ).build()
+        context.apply(plan)
+        restated_data = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history after restatement
+        assert len(restated_data) == 2
+        assert restated_data.iloc[0]["employee_id"] == 1001
+        assert restated_data.iloc[0]["department"] == "engineering"
+        assert restated_data.iloc[0]["region"] == "EMEA"
+        assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-09 07:26:00"
+        assert restated_data.iloc[1]["employee_id"] == 1001
+        assert restated_data.iloc[1]["department"] == "sales"
+        assert restated_data.iloc[1]["region"] == "ANZ"
+        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-09 07:26:00"
+        assert pd.isna(restated_data.iloc[1]["valid_to"])
+
+
+def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
+    paths = copy_to_temp_path("examples/multi")
+    repo_1_path = paths[0] / "repo_1"
+    repo_2_path = paths[0] / "repo_2"
+
+    # Add an extra gateway to repo_2's config
+    repo_2_config_path = repo_2_path / "config.yaml"
+    config_content = repo_2_config_path.read_text()
+
+    modified_config = config_content.replace(
+        "default_gateway: local",
+        dedent("""
+              extra:
+                connection:
+                  type: duckdb
+                  database: extra.duckdb
+
+            default_gateway: local
+        """),
+    )
+
+    repo_2_config_path.write_text(modified_config)
+
+    # Create context with both repos but using the repo_1 path first
+    context = Context(
+        paths=(repo_1_path, repo_2_path),
+        gateway="memory",
+    )
+
+    # Verify all gateways from both repos are present
+    gathered_gateways = context.engine_adapters.keys()
+    expected_gateways = {"local", "memory", "extra"}
+    assert gathered_gateways == expected_gateways

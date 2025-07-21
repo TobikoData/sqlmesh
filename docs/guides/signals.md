@@ -63,9 +63,9 @@ This example specifies that the `random_signal()` should evaluate once with a th
 MODEL (
   name example.signal_model,
   kind FULL,
-  signals [
+  signals (
     random_signal(threshold := 0.5), # specify threshold value
-  ]
+  )
 );
 
 SELECT 1
@@ -108,9 +108,9 @@ MODEL (
     time_column ds,
   ),
   start '2 week ago',
-  signals [
+  signals (
     one_week_ago(),
-  ]
+  )
 );
 
 

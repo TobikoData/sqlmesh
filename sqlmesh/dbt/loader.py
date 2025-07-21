@@ -277,6 +277,7 @@ class DbtLoader(Loader):
                         ],
                         python_env={},
                         jinja_macros=jinja_registry,
+                        project=package_name,
                     )
                     project_names.add(package_name)
 

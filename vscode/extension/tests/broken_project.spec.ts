@@ -2,7 +2,13 @@ import { test, expect } from './fixtures'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
-import { openLineageView, saveFile, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  openServerPage,
+  runCommand,
+  saveFile,
+  SUSHI_SOURCE_PATH,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('bad project, double model', async ({ page, sharedCodeServer }) => {
@@ -24,9 +30,7 @@ test('bad project, double model', async ({ page, sharedCodeServer }) => {
   )
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   await page.waitForSelector('text=models')
 
@@ -55,9 +59,7 @@ test('working project, then broken through adding double model, then refixed', a
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForLoadState('networkidle')
 
   // Open the lineage view to confirm it loads properly
@@ -165,13 +167,7 @@ test('bad project, double model, then fixed', async ({
     customersSql,
   )
 
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   await page.waitForSelector('text=models')
 
@@ -240,10 +236,7 @@ test('bad project, double model, check lineage', async ({
   )
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
-  await page.waitForLoadState('networkidle')
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Open the lineage view
   await openLineageView(page)
@@ -252,4 +245,54 @@ test('bad project, double model, check lineage', async ({
   await page.waitForSelector('text=Error:')
 
   await page.waitForTimeout(500)
+})
+
+test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
+  const tempDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
+  )
+  // Copy over the sushi project
+  await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+  await createPythonInterpreterSettingsSpecifier(tempDir)
+
+  // Add a model with a bad model block
+  const badModelPath = path.join(tempDir, 'models', 'bad_model.sql')
+  const contents =
+    'MODEL ( name sushi.bad_block, test); SELECT * FROM sushi.customers'
+  await fs.writeFile(badModelPath, contents)
+
+  await openServerPage(page, tempDir, sharedCodeServer)
+  await page.waitForLoadState('networkidle')
+
+  // Open the customers.sql model
+  await page
+    .getByRole('treeitem', { name: 'models', exact: true })
+    .locator('a')
+    .click()
+  await page
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
+    .locator('a')
+    .click()
+
+  // Wait for the error to appear
+  await page.waitForSelector('text=Error creating context')
+
+  // Open the problems view
+  await runCommand(page, 'View: Focus Problems')
+
+  // Assert error is present in the problems view
+  const errorElement = page
+    .getByText("Required keyword: 'value' missing for")
+    .first()
+  await expect(errorElement).toBeVisible({ timeout: 5000 })
+
+  // Remove the bad model file
+  await fs.remove(badModelPath)
+
+  // Click on the grain part of the model and save
+  await page.getByText('grain').click()
+  await saveFile(page)
+
+  // Wait for successful context load
+  await page.waitForSelector('text=Loaded SQLMesh context')
 })

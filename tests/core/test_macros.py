@@ -575,6 +575,26 @@ def test_ast_correctness(macro_evaluator):
             "SELECT 3",
             {},
         ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v)) ) AS v",
+            "SELECT * FROM (VALUES (1), (2), (3)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v))) ) AS v",
+            "SELECT * FROM (VALUES ((1), (2), (3))) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v, @EVAL(@v + 1))) ) AS v",
+            "SELECT * FROM (VALUES (1, 2), (2, 3), (3, 4)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v, @EVAL(@v + 1)))) ) AS v",
+            "SELECT * FROM (VALUES ((1, 2), (2, 3), (3, 4))) AS v",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator: MacroEvaluator, assert_exp_eq, sql, expected, args):
@@ -856,12 +876,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
 
     # Generate the expected SQL based on the dialect and date_part
     if dialect == "duckdb":
-        if date_part == "week":
-            interval = "(7 * INTERVAL '1' DAY)"
-        elif date_part == "quarter":
-            interval = "(90 * INTERVAL '1' DAY)"
-        else:
-            interval = f"INTERVAL '1' {date_part.upper()}"
+        interval = f"INTERVAL '1' {date_part.upper()}"
         expected_sql = f"""
         SELECT
             date_{date_part}

@@ -1,5 +1,7 @@
 # Visual Studio Code Extension
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/4a2e974ec8294716a4b1dbb0146add82?sid=b6c8def6-b7e0-4bfc-af6c-e37d5d83b0b1" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 !!! danger "Preview"
 
     The SQLMesh Visual Studio Code extension is in preview and undergoing active development. You may encounter bugs or API incompatibilities with the SQLMesh version you are running.

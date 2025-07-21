@@ -216,18 +216,35 @@ MODEL (
   name @customer.some_table,
   kind FULL,
   blueprints (
-    (customer := customer1, field_a := x, field_b := y),
-    (customer := customer2, field_a := z, field_b := w)
+    (customer := customer1, field_a := x, field_b := y, field_c := 'foo'),
+    (customer := customer2, field_a := z, field_b := w, field_c := 'bar')
   )
 );
 
 SELECT
   @field_a,
-  @{field_b} AS field_b
+  @{field_b} AS field_b,
+  @field_c AS @{field_c}
 FROM @customer.some_source
+
+/*
+When rendered for customer1.some_table:
+SELECT
+  x,
+  y AS field_b,
+  'foo' AS foo
+FROM customer1.some_source
+
+When rendered for customer2.some_table:
+SELECT
+  z,
+  w AS field_b,
+  'bar' AS bar
+FROM customer2.some_source
+*/
 ```
 
-Note the use of both regular `@field_a` and curly brace syntax `@{field_b}` macro variable references in the model query. Learn more [above](#embedding-variables-in-strings)
+Note the use of both regular `@field_a` and curly brace syntax `@{field_b}` macro variable references in the model query. Both of these will be rendered as identifiers. In the case of `field_c`, which in the blueprints is a string, it would be rendered as a string literal when used with the regular macro syntax `@field_c` and if we want to use the string as an identifier then we use the curly braces `@{field_c}`. Learn more [above](#embedding-variables-in-strings)
 
 Blueprint variables can be accessed using the syntax shown above, or through the `@BLUEPRINT_VAR()` macro function, which also supports specifying default values in case the variable is undefined (similar to `@VAR()`).
 

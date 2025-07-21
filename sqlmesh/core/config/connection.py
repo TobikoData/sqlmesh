@@ -238,7 +238,10 @@ class DuckDBAttachOptions(BaseConfig):
             options.append("READ_ONLY")
 
         # DuckLake specific options
+        path = self.path
         if self.type == "ducklake":
+            if not path.startswith("ducklake:"):
+                path = f"ducklake:{path}"
             if self.data_path is not None:
                 options.append(f"DATA_PATH '{self.data_path}'")
             if self.encrypted:
@@ -254,7 +257,7 @@ class DuckDBAttachOptions(BaseConfig):
         alias_sql = (
             f" AS {alias}" if not (self.type == "motherduck" or self.path.startswith("md:")) else ""
         )
-        return f"ATTACH IF NOT EXISTS '{self.path}'{alias_sql}{options_sql}"
+        return f"ATTACH IF NOT EXISTS '{path}'{alias_sql}{options_sql}"
 
 
 class BaseDuckDBConnectionConfig(ConnectionConfig):
@@ -345,11 +348,28 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                 except Exception as e:
                     raise ConfigError(f"Failed to load extension {extension['name']}: {e}")
 
-            for field, setting in self.connector_config.items():
-                try:
-                    cursor.execute(f"SET {field} = '{setting}'")
-                except Exception as e:
-                    raise ConfigError(f"Failed to set connector config {field} to {setting}: {e}")
+            if self.connector_config:
+                option_names = list(self.connector_config)
+                in_part = ",".join("?" for _ in range(len(option_names)))
+
+                cursor.execute(
+                    f"SELECT name, value FROM duckdb_settings() WHERE name IN ({in_part})",
+                    option_names,
+                )
+
+                existing_values = {field: setting for field, setting in cursor.fetchall()}
+
+                # only set connector_config items if the values differ from what is already set
+                # trying to set options like 'temp_directory' even to the same value can throw errors like:
+                # Not implemented Error: Cannot switch temporary directory after the current one has been used
+                for field, setting in self.connector_config.items():
+                    if existing_values.get(field) != setting:
+                        try:
+                            cursor.execute(f"SET {field} = '{setting}'")
+                        except Exception as e:
+                            raise ConfigError(
+                                f"Failed to set connector config {field} to {setting}: {e}"
+                            )
 
             if self.secrets:
                 duckdb_version = duckdb.__version__
@@ -377,7 +397,9 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
                         if secret_settings:
                             secret_clause = ", ".join(secret_settings)
                             try:
-                                cursor.execute(f"CREATE SECRET {secret_name} ({secret_clause});")
+                                cursor.execute(
+                                    f"CREATE OR REPLACE SECRET {secret_name} ({secret_clause});"
+                                )
                             except Exception as e:
                                 raise ConfigError(f"Failed to create secret: {e}")
 
@@ -1624,7 +1646,32 @@ class MSSQLConnectionConfig(ConnectionConfig):
             # Create the connection string
             conn_str = ";".join(conn_str_parts)
 
-            return pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+            conn = pyodbc.connect(conn_str, autocommit=kwargs.get("autocommit", False))
+
+            # Set up output converters for MSSQL-specific data types
+            # Handle SQL type -155 (DATETIMEOFFSET) which is not yet supported by pyodbc
+            # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+            def handle_datetimeoffset(dto_value: t.Any) -> t.Any:
+                from datetime import datetime, timedelta, timezone
+                import struct
+
+                # Unpack the DATETIMEOFFSET binary format:
+                # Format: <6hI2h = (year, month, day, hour, minute, second, nanoseconds, tz_hour_offset, tz_minute_offset)
+                tup = struct.unpack("<6hI2h", dto_value)
+                return datetime(
+                    tup[0],
+                    tup[1],
+                    tup[2],
+                    tup[3],
+                    tup[4],
+                    tup[5],
+                    tup[6] // 1000,
+                    timezone(timedelta(hours=tup[7], minutes=tup[8])),
+                )
+
+            conn.add_output_converter(-155, handle_datetimeoffset)
+
+            return conn
 
         return connect
 

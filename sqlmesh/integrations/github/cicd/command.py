@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
-    set_console(MarkdownConsole())
+    # set a larger width because if none is specified, it auto-detects 80 characters when running in GitHub Actions
+    # which can result in surprise newlines when outputting dates to backfill
+    set_console(MarkdownConsole(width=1000, warning_capture_only=True, error_capture_only=True))
     ctx.obj["github"] = GithubController(
         paths=ctx.obj["paths"],
         token=token,
@@ -117,10 +119,7 @@ def _update_pr_environment(controller: GithubController) -> bool:
     except Exception as e:
         logger.exception("Error occurred when updating PR environment")
         conclusion = controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED,
-            exception=e,
-            plan=controller.pr_plan_or_none,
-            plan_flags=controller.pr_plan_flags,
+            status=GithubCheckStatus.COMPLETED, exception=e
         )
         return (
             conclusion is not None

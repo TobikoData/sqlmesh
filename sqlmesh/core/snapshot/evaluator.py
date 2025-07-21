@@ -140,6 +140,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex] = None,
         batch_index: int = 0,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> t.Optional[str]:
         """Renders the snapshot's model, executes it and stores the result in the snapshot's physical table.
@@ -165,6 +166,7 @@ class SnapshotEvaluator:
             snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
+            is_restatement=is_restatement,
             **kwargs,
         )
         if result is None or isinstance(result, str):
@@ -276,8 +278,10 @@ class SnapshotEvaluator:
 
     def demote(
         self,
-        target_snapshots: t.Iterable[SnapshotInfoLike],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
@@ -290,7 +294,13 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._demote_snapshot(s, environment_naming_info, on_complete),
+                lambda s: self._demote_snapshot(
+                    s,
+                    environment_naming_info,
+                    deployability_index=deployability_index,
+                    on_complete=on_complete,
+                    table_mapping=table_mapping,
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -614,6 +624,7 @@ class SnapshotEvaluator:
         limit: t.Optional[int] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         batch_index: int = 0,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> DF | str | None:
         """Renders the snapshot's model and executes it. The return value depends on whether the limit was specified.
@@ -686,6 +697,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
+                    is_restatement=is_restatement,
                 )
             else:
                 logger.info(
@@ -707,6 +719,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
+                    is_restatement=is_restatement,
                 )
 
         with (
@@ -970,25 +983,32 @@ class SnapshotEvaluator:
         snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
-        if snapshot.is_model:
-            adapter = (
-                self.get_adapter(snapshot.model_gateway)
-                if environment_naming_info.gateway_managed
-                else self.adapter
-            )
-            table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
-            view_name = snapshot.qualified_view_name.for_environment(
-                environment_naming_info, dialect=adapter.dialect
-            )
-            render_kwargs: t.Dict[str, t.Any] = dict(
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                engine_adapter=adapter,
-                deployability_index=deployability_index,
-                table_mapping=table_mapping,
-                runtime_stage=RuntimeStage.PROMOTING,
-            )
+        if not snapshot.is_model:
+            return
+
+        adapter = (
+            self.get_adapter(snapshot.model_gateway)
+            if environment_naming_info.gateway_managed
+            else self.adapter
+        )
+        table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
+        view_name = snapshot.qualified_view_name.for_environment(
+            environment_naming_info, dialect=adapter.dialect
+        )
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            engine_adapter=adapter,
+            deployability_index=deployability_index,
+            table_mapping=table_mapping,
+            runtime_stage=RuntimeStage.PROMOTING,
+        )
+
+        with (
+            adapter.transaction(),
+            adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
+        ):
             _evaluation_strategy(snapshot, adapter).promote(
                 table_name=table_name,
                 view_name=view_name,
@@ -1007,10 +1027,15 @@ class SnapshotEvaluator:
 
     def _demote_snapshot(
         self,
-        snapshot: SnapshotInfoLike,
+        snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
+        deployability_index: t.Optional[DeployabilityIndex],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
     ) -> None:
+        if not snapshot.is_model:
+            return
+
         adapter = (
             self.get_adapter(snapshot.model_gateway)
             if environment_naming_info.gateway_managed
@@ -1019,7 +1044,18 @@ class SnapshotEvaluator:
         view_name = snapshot.qualified_view_name.for_environment(
             environment_naming_info, dialect=adapter.dialect
         )
-        _evaluation_strategy(snapshot, adapter).demote(view_name)
+        with (
+            adapter.transaction(),
+            adapter.session(
+                snapshot.model.render_session_properties(
+                    engine_adapter=adapter,
+                    deployability_index=deployability_index,
+                    table_mapping=table_mapping,
+                    runtime_stage=RuntimeStage.DEMOTING,
+                )
+            ),
+        ):
+            _evaluation_strategy(snapshot, adapter).demote(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -1802,6 +1838,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
+                is_restatement=kwargs.get("is_restatement", False),
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1820,6 +1857,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
+                is_restatement=kwargs.get("is_restatement", False),
             )
         else:
             raise SQLMeshError(

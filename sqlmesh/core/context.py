@@ -214,6 +214,15 @@ class BaseContext(abc.ABC):
         """
         model_name = normalize_model_name(model_name, self.default_catalog, self.default_dialect)
 
+        if model_name not in self._model_tables:
+            model_name_list = "\n".join(list(self._model_tables))
+            logger.debug(
+                f"'{model_name}' not found in model to table mapping. Available model names: \n{model_name_list}"
+            )
+            raise SQLMeshError(
+                f"Unable to find a table mapping for model '{model_name}'. Has it been spelled correctly?"
+            )
+
         # We generate SQL for the default dialect because the table name may be used in a
         # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
         return parse_one(self._model_tables[model_name]).sql(
@@ -622,6 +631,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 BUILTIN_RULES.union(project.user_rules), config.linter
             )
 
+        # Load environment statements from state for projects not in current load
+        if any(self._projects):
+            prod = self.state_reader.get_environment(c.PROD)
+            if prod:
+                existing_statements = self.state_reader.get_environment_statements(c.PROD)
+                for stmt in existing_statements:
+                    if stmt.project and stmt.project not in self._projects:
+                        self._environment_statements.append(stmt)
+
         uncached = set()
 
         if any(self._projects):
@@ -840,10 +858,52 @@ class GenericContext(BaseContext, t.Generic[C]):
     def destroy(self) -> bool:
         success = False
 
-        if self.console.start_destroy():
+        # Collect resources to be deleted
+        environments = self.state_reader.get_environments()
+        schemas_to_delete = set()
+        tables_to_delete = set()
+        views_to_delete = set()
+        all_snapshot_infos = set()
+
+        # For each environment find schemas and tables
+        for environment in environments:
+            all_snapshot_infos.update(environment.snapshots)
+            snapshots = self.state_reader.get_snapshots(environment.snapshots).values()
+            for snapshot in snapshots:
+                if snapshot.is_model and not snapshot.is_symbolic:
+                    # Get the appropriate adapter
+                    if environment.gateway_managed and snapshot.model_gateway:
+                        adapter = self.engine_adapters.get(
+                            snapshot.model_gateway, self.engine_adapter
+                        )
+                    else:
+                        adapter = self.engine_adapter
+
+                    if environment.suffix_target.is_schema or environment.suffix_target.is_catalog:
+                        schema = snapshot.qualified_view_name.schema_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        catalog = snapshot.qualified_view_name.catalog_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        if catalog:
+                            schemas_to_delete.add(f"{catalog}.{schema}")
+                        else:
+                            schemas_to_delete.add(schema)
+
+                    if environment.suffix_target.is_table:
+                        view_name = snapshot.qualified_view_name.for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        views_to_delete.add(view_name)
+
+                    # Add snapshot tables
+                    table_name = snapshot.table_name()
+                    tables_to_delete.add(table_name)
+
+        if self.console.start_destroy(schemas_to_delete, views_to_delete, tables_to_delete):
             try:
-                self._destroy()
-                success = True
+                success = self._destroy()
             finally:
                 self.console.stop_destroy(success=success)
 
@@ -946,12 +1006,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                 pass
         return self.config, self.path
 
-    def config_for_node(self, node: str | Model | Audit) -> Config:
-        if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
-                0
-            ]  # type: ignore
-        return self.config_for_path(node._path)[0]  # type: ignore
+    def config_for_node(self, node: Model | Audit) -> Config:
+        path = node._path
+        if path is None:
+            return self.config
+        return self.config_for_path(path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:
@@ -2590,13 +2649,16 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
-        """Returns all the engine adapters for the gateways defined in the configuration."""
+        """Returns all the engine adapters for the gateways defined in the configurations."""
         adapters: t.Dict[str, EngineAdapter] = {self.selected_gateway: self.engine_adapter}
-        for gateway_name in self.config.gateways:
-            if gateway_name != self.selected_gateway:
-                connection = self.config.get_connection(gateway_name)
-                adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
-                adapters[gateway_name] = adapter
+        for config in self.configs.values():
+            for gateway_name in config.gateways:
+                if gateway_name not in adapters:
+                    connection = config.get_connection(gateway_name)
+                    adapter = connection.create_engine_adapter(
+                        concurrent_tasks=self.concurrent_tasks,
+                    )
+                    adapters[gateway_name] = adapter
         return adapters
 
     @cached_property
@@ -2706,7 +2768,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             always_recreate_environment=always_recreate_environment,
         )
 
-    def _destroy(self) -> None:
+    def _destroy(self) -> bool:
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
             self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
@@ -2721,6 +2783,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # Finally clear caches
         self.clear_caches()
+
+        return True
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         current_ts = now_timestamp()

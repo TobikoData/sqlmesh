@@ -402,8 +402,10 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 start=self.bot_config.default_pr_start,
+                min_intervals=self.bot_config.pr_min_intervals,
                 skip_backfill=self.bot_config.skip_pr_backfill,
                 include_unmodified=self.bot_config.pr_include_unmodified,
+                forward_only=self.forward_only_plan,
             )
         assert self._pr_plan_builder
         return self._pr_plan_builder.build()
@@ -433,6 +435,7 @@ class GithubController:
                 skip_linter=True,
                 categorizer_config=self.bot_config.auto_categorize_changes,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_builder
         return self._prod_plan_builder.build()
@@ -449,6 +452,7 @@ class GithubController:
                 skip_tests=True,
                 skip_linter=True,
                 run=self.bot_config.run_on_deploy_to_prod,
+                forward_only=self.forward_only_plan,
             )
         assert self._prod_plan_with_gaps_builder
         return self._prod_plan_with_gaps_builder.build()
@@ -472,6 +476,13 @@ class GithubController:
     def pr_targets_prod_branch(self) -> bool:
         return self._pull_request.base.ref in self.bot_config.prod_branch_names
 
+    @property
+    def forward_only_plan(self) -> bool:
+        head_ref = self._pull_request.head.ref
+        if isinstance(head_ref, str):
+            return head_ref.endswith(self.bot_config.forward_only_branch_suffix)
+        return False
+
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
         """
@@ -484,10 +495,36 @@ class GithubController:
             with open(output_file, "a", encoding="utf-8") as fh:
                 print(f"{key}={value}", file=fh)
 
+    def get_forward_only_plan_post_deployment_tip(self, plan: Plan) -> str:
+        if not plan.forward_only:
+            return ""
+
+        example_model_name = "<model name>"
+        for snapshot_id in sorted(plan.snapshots):
+            snapshot = plan.snapshots[snapshot_id]
+            if snapshot.is_incremental:
+                example_model_name = snapshot.node.name
+                break
+
+        return (
+            "> [!TIP]\n"
+            "> In order to see this forward-only plan retroactively apply to historical intervals on the production model, run the below for date ranges in scope:\n"
+            "> \n"
+            f"> `$ sqlmesh plan --restate-model {example_model_name} --start YYYY-MM-DD --end YYYY-MM-DD`\n"
+            ">\n"
+            "> Learn more: https://sqlmesh.readthedocs.io/en/stable/concepts/plans/?h=restate#restatement-plans"
+        )
+
     def get_plan_summary(self, plan: Plan) -> str:
+        # use Verbosity.VERY_VERBOSE to prevent the list of models from being truncated
+        # this is particularly important for the "Models needing backfill" list because
+        # there is no easy way to tell this otherwise
+        orig_verbosity = self._console.verbosity
+        self._console.verbosity = Verbosity.VERY_VERBOSE
+
         try:
             # Clear out any output that might exist from prior steps
-            self._console.clear_captured_outputs()
+            self._console.consume_captured_output()
             if plan.restatements:
                 self._console._print("\n**Restating models**\n")
             else:
@@ -515,9 +552,114 @@ class GithubController:
             if not difference_summary and not missing_dates:
                 return f"No changes to apply.{plan_flags_section}"
 
-            return f"{difference_summary}\n{missing_dates}{plan_flags_section}"
+            warnings_block = self._console.consume_captured_warnings()
+            errors_block = self._console.consume_captured_errors()
+
+            return f"{warnings_block}{errors_block}{difference_summary}\n{missing_dates}{plan_flags_section}"
         except PlanError as e:
+            logger.exception("Plan failed to generate")
             return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
+        finally:
+            self._console.verbosity = orig_verbosity
+
+    def get_pr_environment_summary(
+        self, conclusion: GithubCheckConclusion, exception: t.Optional[Exception] = None
+    ) -> str:
+        heading = ""
+        summary = ""
+
+        if conclusion.is_success:
+            summary = self._get_pr_environment_summary_success()
+        elif conclusion.is_action_required:
+            heading = f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:"
+            summary = self._get_pr_environment_summary_action_required(exception)
+        elif conclusion.is_failure:
+            heading = (
+                f":x: Failed to create or update PR Environment `{self.pr_environment_name}` :x:"
+            )
+            summary = self._get_pr_environment_summary_failure(exception)
+        elif conclusion.is_skipped:
+            heading = f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` :next_track_button:"
+            summary = self._get_pr_environment_summary_skipped(exception)
+        else:
+            heading = f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+
+        # note: we just add warnings here, errors will be covered by the "failure" conclusion
+        if warnings := self._console.consume_captured_warnings():
+            summary = f"{warnings}\n{summary}"
+
+        return f"{heading}\n\n{summary}".strip()
+
+    def _get_pr_environment_summary_success(self) -> str:
+        prod_plan = self.prod_plan_with_gaps
+
+        if not prod_plan.has_changes:
+            summary = "No models were modified in this PR.\n"
+        else:
+            intro = self._generate_pr_environment_summary_intro()
+            summary = intro + self._generate_pr_environment_summary_list(prod_plan)
+
+        if prod_plan.user_provided_flags:
+            summary += self._generate_plan_flags_section(prod_plan.user_provided_flags)
+
+        return summary
+
+    def _get_pr_environment_summary_skipped(self, exception: t.Optional[Exception] = None) -> str:
+        if isinstance(exception, NoChangesPlanError):
+            skip_reason = "No changes were detected compared to the prod environment."
+        elif isinstance(exception, TestFailure):
+            skip_reason = "Unit Test(s) Failed so skipping PR creation"
+        else:
+            skip_reason = "A prior stage failed resulting in skipping PR creation."
+
+        return skip_reason
+
+    def _get_pr_environment_summary_action_required(
+        self, exception: t.Optional[Exception] = None
+    ) -> str:
+        plan = self.pr_plan_or_none
+        if isinstance(exception, UncategorizedPlanError) and plan:
+            failure_msg = f"The following models could not be categorized automatically:\n"
+            for snapshot in plan.uncategorized:
+                failure_msg += f"- {snapshot.name}\n"
+            failure_msg += (
+                f"\nRun `sqlmesh plan {self.pr_environment_name}` locally to apply these changes.\n\n"
+                "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
+            )
+        else:
+            failure_msg = "Please check the Actions Workflow logs for more information."
+
+        return failure_msg
+
+    def _get_pr_environment_summary_failure(self, exception: t.Optional[Exception] = None) -> str:
+        console_output = self._console.consume_captured_output()
+        failure_msg = ""
+
+        if isinstance(exception, PlanError):
+            if exception.args and (msg := exception.args[0]) and isinstance(msg, str):
+                failure_msg += f"*{msg}*\n"
+            if console_output:
+                failure_msg += f"\n{console_output}"
+        elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
+            # this logic is taken from the global error handler attached to the CLI, which uses `click.echo()` to output the message
+            # so cant be re-used here because it bypasses the Console
+            failure_msg = f"**Error:** {str(exception)}"
+        elif exception:
+            logger.debug(
+                "Got unexpected error. Error Type: "
+                + str(type(exception))
+                + " Stack trace: "
+                + traceback.format_exc()
+            )
+            failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
+
+        if captured_errors := self._console.consume_captured_errors():
+            failure_msg = f"{captured_errors}\n{failure_msg}"
+
+        if plan_flags := self.pr_plan_flags:
+            failure_msg += f"\n\n{self._generate_plan_flags_section(plan_flags)}"
+
+        return failure_msg
 
     def run_tests(self) -> t.Tuple[ModelTextTestResult, str]:
         """
@@ -529,7 +671,7 @@ class GithubController:
         """
         Run linter for the PR
         """
-        self._console.clear_captured_outputs()
+        self._console.consume_captured_output()
         self._context.lint_models()
 
     def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
@@ -601,7 +743,23 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
-        self._context.apply(self.pr_plan)
+        self._console.consume_captured_output()  # clear output buffer
+        self._context.apply(self.pr_plan)  # will raise if PR environment creation fails
+
+        # update PR info comment
+        vde_title = "- :eyes: To **review** this PR's changes, use virtual data environment:"
+        comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
+        if self.bot_config.enable_deploy_command:
+            comment_value += (
+                "\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `/deploy`"
+            )
+        dedup_regex = vde_title.replace("*", r"\*") + r".*"
+        updated_comment, _ = self.update_sqlmesh_comment_info(
+            value=comment_value,
+            dedup_regex=dedup_regex,
+        )
+        if updated_comment:
+            self._append_output("created_pr_environment", "true")
 
     def deploy_to_prod(self) -> None:
         """
@@ -626,6 +784,11 @@ class GithubController:
 </details>
 
 """
+        if self.forward_only_plan:
+            plan_summary = (
+                f"{self.get_forward_only_plan_post_deployment_tip(self.prod_plan)}\n{plan_summary}"
+            )
+
         self.update_sqlmesh_comment_info(
             value=plan_summary,
             dedup_regex=None,
@@ -845,13 +1008,7 @@ class GithubController:
         )
 
     def update_pr_environment_check(
-        self,
-        status: GithubCheckStatus,
-        exception: t.Optional[Exception] = None,
-        plan: t.Optional[Plan] = None,
-        plan_flags: t.Optional[
-            t.Dict[str, UserProvidedFlags]
-        ] = None,  # note: the plan flags are passed separately in case the plan fails to build
+        self, status: GithubCheckStatus, exception: t.Optional[Exception] = None
     ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
@@ -872,87 +1029,7 @@ class GithubController:
         def conclusion_handler(
             conclusion: GithubCheckConclusion, exception: t.Optional[Exception]
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-            if conclusion.is_success:
-                prod_plan = self.prod_plan_with_gaps
-
-                if not prod_plan.has_changes:
-                    summary = "No models were modified in this PR.\n"
-                else:
-                    intro = self._generate_pr_environment_summary_intro()
-                    summary = intro + self._generate_pr_environment_summary_list(prod_plan)
-                    if prod_plan.user_provided_flags:
-                        summary += self._generate_plan_flags_section(prod_plan.user_provided_flags)
-
-                vde_title = (
-                    "- :eyes: To **review** this PR's changes, use virtual data environment:"
-                )
-                comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
-                if self.bot_config.enable_deploy_command:
-                    comment_value += "\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `/deploy`"
-                dedup_regex = vde_title.replace("*", r"\*") + r".*"
-                updated_comment, _ = self.update_sqlmesh_comment_info(
-                    value=comment_value,
-                    dedup_regex=dedup_regex,
-                )
-                if updated_comment:
-                    self._append_output("created_pr_environment", "true")
-            else:
-                if isinstance(exception, NoChangesPlanError):
-                    skip_reason = "No changes were detected compared to the prod environment."
-                elif isinstance(exception, TestFailure):
-                    skip_reason = "Unit Test(s) Failed so skipping PR creation"
-                else:
-                    skip_reason = "A prior stage failed resulting in skipping PR creation."
-
-                if not skip_reason and exception:
-                    logger.debug(
-                        f"Got {type(exception).__name__}. Stack trace: " + traceback.format_exc()
-                    )
-
-                captured_errors = self._console.consume_captured_errors()
-                if captured_errors:
-                    logger.debug(f"Captured errors: {captured_errors}")
-                    failure_msg = f"**Errors:**\n{captured_errors}\n"
-                elif isinstance(exception, UncategorizedPlanError) and plan:
-                    failure_msg = f"The following models could not be categorized automatically:\n"
-                    for snapshot in plan.uncategorized:
-                        failure_msg += f"- {snapshot.name}\n"
-                    failure_msg += (
-                        f"\nRun `sqlmesh plan {self.pr_environment_name}` locally to apply these changes.\n\n"
-                        "If you would like the bot to automatically categorize changes, check the [documentation](https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information."
-                    )
-                elif isinstance(exception, PlanError):
-                    failure_msg = f"Plan application failed.\n"
-                    if exception.args and (msg := exception.args[0]) and isinstance(msg, str):
-                        failure_msg += f"\n{msg}\n"
-                    if self._console.captured_output:
-                        failure_msg += f"\n{self._console.captured_output}"
-                elif isinstance(exception, (SQLMeshError, SqlglotError, ValueError)):
-                    # this logic is taken from the global error handler attached to the CLI, which uses `click.echo()` to output the message
-                    # so cant be re-used here because it bypasses the Console
-                    failure_msg = f"**Error:** {str(exception)}"
-                else:
-                    logger.debug(
-                        "Got unexpected error. Error Type: "
-                        + str(type(exception))
-                        + " Stack trace: "
-                        + traceback.format_exc()
-                    )
-                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
-
-                conclusion_to_summary = {
-                    GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}` :x:\n\n{failure_msg}",
-                    GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}` :warning:\n\n{failure_msg}",
-                }
-                summary = conclusion_to_summary.get(
-                    conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
-                )
-                if plan_flags:
-                    plan_flags_section = self._generate_plan_flags_section(plan_flags)
-                    summary += f"\n\n{plan_flags_section}"
-
+            summary = self.get_pr_environment_summary(conclusion, exception)
             self._append_output("pr_environment_name", self.pr_environment_name)
             return conclusion, check_title, summary
 
@@ -1054,6 +1131,7 @@ class GithubController:
                     summary = "Got an action required conclusion but no plan error was provided. This is unexpected."
             else:
                 summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
+
             return conclusion, title, summary
 
         self._update_check_handler(

@@ -2,17 +2,14 @@ import { test, expect } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { SUSHI_SOURCE_PATH } from './utils'
+import { openServerPage, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Model type hinting', async ({ page, sharedCodeServer }) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  // Navigate to code-server instance
-  await page.goto(
-    `http://127.0.0.1:${sharedCodeServer.codeServerPort}/?folder=${tempDir}`,
-  )
+  await openServerPage(page, tempDir, sharedCodeServer)
 
   // Wait for the models folder to be visible
   await page.waitForSelector('text=models')

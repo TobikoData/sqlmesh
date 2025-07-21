@@ -287,8 +287,9 @@ class SQLMeshMagics(Magics):
             if loaded.name == args.model:
                 model = loaded
         else:
-            with open(model._path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), default_dialect=config.dialect)
+            if model._path:
+                with open(model._path, "r", encoding="utf-8") as file:
+                    expressions = parse(file.read(), default_dialect=config.dialect)
 
         formatted = format_model_expressions(
             expressions,
@@ -307,8 +308,9 @@ class SQLMeshMagics(Magics):
             replace=True,
         )
 
-        with open(model._path, "w", encoding="utf-8") as file:
-            file.write(formatted)
+        if model._path:
+            with open(model._path, "w", encoding="utf-8") as file:
+                file.write(formatted)
 
         if sql:
             context.console.log_success(f"Model `{args.model}` updated")
@@ -638,6 +640,8 @@ class SQLMeshMagics(Magics):
         render_opts = vars(parse_argstring(self.render, line))
         model = render_opts.pop("model")
         dialect = render_opts.pop("dialect", None)
+
+        model = context.get_model(model, raise_if_missing=True)
 
         query = context.render(
             model,

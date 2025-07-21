@@ -1,6 +1,7 @@
 import path from 'path'
 import { Page } from '@playwright/test'
 import { execAsync } from '../src/utilities/exec'
+import { CodeServerContext } from './utils_code_server'
 
 // Where your extension lives on disk
 export const EXT_PATH = path.resolve(__dirname, '..')
@@ -163,8 +164,6 @@ export const goToReferences = async (page: Page): Promise<void> =>
 
 /**
  * Open the vscode code file picker and select the given file.
- * @param window The window to run the command in.
- * @param filePath The path to the file to select.
  */
 export const openFile = async (page: Page, file: string): Promise<void> => {
   const maxRetries = 3
@@ -195,4 +194,19 @@ export const openFile = async (page: Page, file: string): Promise<void> => {
       await page.waitForTimeout(retryDelay)
     }
   }
+}
+
+/**
+ * Go to VSCode page
+ */
+export const openServerPage = async (
+  page: Page,
+  tempDir: string,
+  context: CodeServerContext,
+) => {
+  await page.goto(
+    `http://127.0.0.1:${context.codeServerPort}/?folder=${tempDir}`,
+  )
+  await page.waitForLoadState('networkidle')
+  await page.waitForSelector('[role="application"]', { timeout: 10000 })
 }

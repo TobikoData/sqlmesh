@@ -23,7 +23,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=26.33.0",
+    "sqlglot[rs]~=27.1.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -40,7 +40,7 @@ classifiers = [
 [project.optional-dependencies]
 athena = ["PyAthena[Pandas]"]
 azuresql = ["pymssql"]
-azuresql-odbc = ["pyodbc"]
+azuresql-odbc = ["pyodbc>=5.0.0"]
 bigquery = [
     "google-cloud-bigquery[pandas]",
     "google-cloud-bigquery-storage"
@@ -78,7 +78,7 @@ dev = [
     "pydantic",
     "PyAthena[Pandas]",
     "PyGithub>=2.6.0",
-    "pyodbc",
+    "pyodbc>=5.0.0",
     "pyperf",
     "pyspark~=3.5.0",
     "pytest",
@@ -108,7 +108,7 @@ github = ["PyGithub~=2.5.0"]
 llm = ["langchain", "openai"]
 motherduck = ["duckdb>=1.2.0"]
 mssql = ["pymssql"]
-mssql-odbc = ["pyodbc"]
+mssql-odbc = ["pyodbc>=5.0.0"]
 mysql = ["pymysql"]
 mwaa = ["boto3"]
 postgres = ["psycopg2"]
