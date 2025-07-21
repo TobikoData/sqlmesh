@@ -680,6 +680,9 @@ class TestContext:
             except Exception:
                 pass
             self.engine_adapter.cursor.connection.autocommit(False)
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog creation functionality
+            self.engine_adapter.create_catalog(catalog_name)
         elif self.dialect == "snowflake":
             self.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
         elif self.dialect == "duckdb":

@@ -1723,6 +1723,10 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
         return {
             "database": self.database,
             "catalog_support": CatalogSupport.FULL_SUPPORT,
+            "workspace": self.workspace,
+            "tenant": self.tenant,
+            "user": self.user,
+            "password": self.password,
         }
 
 

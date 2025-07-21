@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 import logging
+import time
 from sqlglot import exp
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
@@ -130,6 +131,18 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
             return response.json() if response.content else {}
 
+        except requests.exceptions.HTTPError as e:
+            error_details = ""
+            try:
+                if response.content:
+                    error_response = response.json()
+                    error_details = error_response.get("error", {}).get(
+                        "message", str(error_response)
+                    )
+            except (ValueError, AttributeError):
+                error_details = response.text if hasattr(response, "text") else str(e)
+
+            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
         except requests.exceptions.RequestException as e:
             raise SQLMeshError(f"Fabric API request failed: {e}")
 
@@ -139,18 +152,70 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
+        # First check if warehouse already exists
+        try:
+            warehouses = self._make_fabric_api_request("GET", "warehouses")
+            for warehouse in warehouses.get("value", []):
+                if warehouse.get("displayName") == warehouse_name:
+                    logger.info(f"Fabric warehouse already exists: {warehouse_name}")
+                    return
+        except SQLMeshError as e:
+            logger.warning(f"Failed to check existing warehouses: {e}")
+
+        # Create the warehouse
         request_data = {
             "displayName": warehouse_name,
             "description": f"Warehouse created by SQLMesh: {warehouse_name}",
         }
 
         try:
-            self._make_fabric_api_request("POST", "warehouses", request_data)
+            response = self._make_fabric_api_request("POST", "warehouses", request_data)
             logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+
+            # Wait for warehouse to become ready
+            max_retries = 30  # Wait up to 5 minutes
+            retry_delay = 10  # 10 seconds between retries
+
+            for attempt in range(max_retries):
+                try:
+                    # Try to verify warehouse exists and is ready
+                    warehouses = self._make_fabric_api_request("GET", "warehouses")
+                    for warehouse in warehouses.get("value", []):
+                        if warehouse.get("displayName") == warehouse_name:
+                            state = warehouse.get("state", "Unknown")
+                            logger.info(f"Warehouse {warehouse_name} state: {state}")
+                            if state == "Active":
+                                logger.info(f"Warehouse {warehouse_name} is ready")
+                                return
+                            if state == "Failed":
+                                raise SQLMeshError(f"Warehouse {warehouse_name} creation failed")
+
+                    if attempt < max_retries - 1:
+                        logger.info(
+                            f"Waiting for warehouse {warehouse_name} to become ready (attempt {attempt + 1}/{max_retries})"
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        logger.warning(
+                            f"Warehouse {warehouse_name} may not be fully ready after {max_retries} attempts"
+                        )
+
+                except SQLMeshError as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Failed to check warehouse readiness (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(f"Failed to verify warehouse readiness: {e}")
+                        raise
+
         except SQLMeshError as e:
-            if "already exists" in str(e).lower():
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "conflict" in error_msg:
                 logger.info(f"Fabric warehouse already exists: {warehouse_name}")
                 return
+            logger.error(f"Failed to create Fabric warehouse {warehouse_name}: {e}")
             raise
 
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
@@ -159,8 +224,8 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
 
-        # First, we need to get the warehouse ID by listing warehouses
         try:
+            # First, get the warehouse ID by listing warehouses
             warehouses = self._make_fabric_api_request("GET", "warehouses")
             warehouse_id = None
 
@@ -170,14 +235,58 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
                     break
 
             if not warehouse_id:
-                raise SQLMeshError(f"Warehouse not found: {warehouse_name}")
+                logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
+                return
 
             # Delete the warehouse by ID
             self._make_fabric_api_request("DELETE", f"warehouses/{warehouse_id}")
             logger.info(f"Successfully deleted Fabric warehouse: {warehouse_name}")
 
+            # Wait for warehouse to be fully deleted
+            max_retries = 15  # Wait up to 2.5 minutes
+            retry_delay = 10  # 10 seconds between retries
+
+            for attempt in range(max_retries):
+                try:
+                    warehouses = self._make_fabric_api_request("GET", "warehouses")
+                    still_exists = False
+
+                    for warehouse in warehouses.get("value", []):
+                        if warehouse.get("displayName") == warehouse_name:
+                            state = warehouse.get("state", "Unknown")
+                            logger.info(f"Warehouse {warehouse_name} deletion state: {state}")
+                            still_exists = True
+                            break
+
+                    if not still_exists:
+                        logger.info(f"Warehouse {warehouse_name} successfully deleted")
+                        return
+
+                    if attempt < max_retries - 1:
+                        logger.info(
+                            f"Waiting for warehouse {warehouse_name} deletion to complete (attempt {attempt + 1}/{max_retries})"
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        logger.warning(
+                            f"Warehouse {warehouse_name} may still be in deletion process after {max_retries} attempts"
+                        )
+
+                except SQLMeshError as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Failed to check warehouse deletion status (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        logger.warning(f"Failed to verify warehouse deletion: {e}")
+                        # Don't raise here as deletion might have succeeded
+                        return
+
         except SQLMeshError as e:
-            if "not found" in str(e).lower():
+            error_msg = str(e).lower()
+            if "not found" in error_msg or "does not exist" in error_msg:
                 logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
                 return
+            logger.error(f"Failed to delete Fabric warehouse {warehouse_name}: {e}")
             raise
