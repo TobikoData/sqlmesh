@@ -192,6 +192,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             if not self._db_call(query_job.done):
                 self._db_call(query_job.cancel)
 
+        self._query_jobs.clear()
         return super().close()
 
     def _begin_session(self, properties: SessionProperties) -> None:
