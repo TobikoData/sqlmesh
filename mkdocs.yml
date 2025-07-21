@@ -161,6 +161,7 @@ theme:
     - navigation.expand ## expands navigation bar by default
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - toc.follow
