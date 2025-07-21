@@ -2786,10 +2786,6 @@ def render_meta_fields(
         ) or field_value is None:
             continue
 
-        # If it contains a macro reference we need to render it similar to sql models
-        if field == "cron" and isinstance(field_value, str):
-            field_value = exp.to_identifier(field_value)
-
         if field in RUNTIME_RENDERED_MODEL_FIELDS:
             fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue

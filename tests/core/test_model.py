@@ -10772,7 +10772,7 @@ from sqlmesh import ExecutionContext, model
 @model(
     "@{customer}.some_table",
     kind="FULL",
-    cron="*/@{min} * * * *",
+    cron="@'*/@{min} * * * *'",
     blueprints=[
         {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5},
         {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10},
