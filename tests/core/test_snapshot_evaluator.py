@@ -1061,7 +1061,9 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
             "clustered_by": [],
             "partition_interval_unit": None,
             "partitioned_by": [],
-            "key": exp.convert("value"),  # Physical properties should also be in materialized_properties
+            "key": exp.convert(
+                "value"
+            ),  # Physical properties should also be in materialized_properties
         },
         table_description=None,
         replace=False,
