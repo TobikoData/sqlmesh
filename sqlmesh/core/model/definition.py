@@ -74,8 +74,6 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-UNRENDERABLE_MODEL_FIELDS = {"cron", "description"}
-
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
 RUNTIME_RENDERED_MODEL_FIELDS = {
@@ -84,7 +82,7 @@ RUNTIME_RENDERED_MODEL_FIELDS = {
     "merge_filter",
 } | PROPERTIES
 
-CRON_ALIASES = {
+CRON_SHORTCUTS = {
     "@midnight",
     "@hourly",
     "@daily",
@@ -2782,7 +2780,9 @@ def render_meta_fields(
 
         # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
         if (
-            field == "cron" and isinstance(field_value, str) and field_value.lower() in CRON_ALIASES
+            field == "cron"
+            and isinstance(field_value, str)
+            and field_value.lower() in CRON_SHORTCUTS
         ) or field_value is None:
             continue
 
