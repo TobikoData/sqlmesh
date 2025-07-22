@@ -238,6 +238,9 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
           name: Generate database name
           command: |
             UUID=`cat /proc/sys/kernel/random/uuid`
