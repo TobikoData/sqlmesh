@@ -164,9 +164,9 @@ def _extract_macro_func_variable_references(macro_func: exp.Expression) -> t.Set
     # they will be handled in a separate call of _extract_macro_func_variable_references.
     def _prune_nested_macro_func(expression: exp.Expression) -> bool:
         return (
-            type(n) is d.MacroFunc
-            and n is not macro_func
-            and n.this.name.lower() not in (c.VAR, c.BLUEPRINT_VAR)
+            type(expression) is d.MacroFunc
+            and expression is not macro_func
+            and expression.this.name.lower() not in (c.VAR, c.BLUEPRINT_VAR)
         )
 
     for n in macro_func.walk(prune=_prune_nested_macro_func):
@@ -208,6 +208,9 @@ def _add_variables_to_python_env(
             used_variable_referenced_in_metadata_expression.get(var_name, True) and is_metadata
         )
 
+    # Variables are treated as metadata when:
+    # - They are only referenced in metadata-only contexts, such as `audits (...)`, virtual statements, etc
+    # - They are only referenced in metadata-only macros, either as their arguments of within their definitions
     metadata_used_variables = set()
     for used_var, macro_names in (macro_funcs_by_used_var or {}).items():
         if used_variable_referenced_in_metadata_expression.get(used_var) or all(
