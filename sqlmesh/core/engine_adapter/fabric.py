@@ -272,7 +272,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
 
         try:
-            # First, get the warehouse ID by listing warehouses
+            # Get the warehouse ID by listing warehouses
             warehouses = self._make_fabric_api_request("GET", "warehouses")
             warehouse_id = None
 
@@ -288,47 +288,6 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             # Delete the warehouse by ID
             self._make_fabric_api_request("DELETE", f"warehouses/{warehouse_id}")
             logger.info(f"Successfully deleted Fabric warehouse: {warehouse_name}")
-
-            # Wait for warehouse to be fully deleted
-            max_retries = 15  # Wait up to 2.5 minutes
-            retry_delay = 10  # 10 seconds between retries
-
-            for attempt in range(max_retries):
-                try:
-                    warehouses = self._make_fabric_api_request("GET", "warehouses")
-                    still_exists = False
-
-                    for warehouse in warehouses.get("value", []):
-                        if warehouse.get("displayName") == warehouse_name:
-                            state = warehouse.get("state", "Unknown")
-                            logger.info(f"Warehouse {warehouse_name} deletion state: {state}")
-                            still_exists = True
-                            break
-
-                    if not still_exists:
-                        logger.info(f"Warehouse {warehouse_name} successfully deleted")
-                        return
-
-                    if attempt < max_retries - 1:
-                        logger.info(
-                            f"Waiting for warehouse {warehouse_name} deletion to complete (attempt {attempt + 1}/{max_retries})"
-                        )
-                        time.sleep(retry_delay)
-                    else:
-                        logger.warning(
-                            f"Warehouse {warehouse_name} may still be in deletion process after {max_retries} attempts"
-                        )
-
-                except SQLMeshError as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(
-                            f"Failed to check warehouse deletion status (attempt {attempt + 1}/{max_retries}): {e}"
-                        )
-                        time.sleep(retry_delay)
-                    else:
-                        logger.warning(f"Failed to verify warehouse deletion: {e}")
-                        # Don't raise here as deletion might have succeeded
-                        return
 
         except SQLMeshError as e:
             error_msg = str(e).lower()
