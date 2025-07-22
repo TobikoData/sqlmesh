@@ -146,77 +146,124 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         except requests.exceptions.RequestException as e:
             raise SQLMeshError(f"Fabric API request failed: {e}")
 
+    def _make_fabric_api_request_with_location(
+        self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
+        """Make a request to the Fabric REST API and return response with status code and location."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        workspace = self._extra_config.get("workspace")
+        if not workspace:
+            raise SQLMeshError(
+                "workspace parameter is required in connection config for Fabric catalog operations"
+            )
+
+        base_url = "https://api.fabric.microsoft.com/v1"
+        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
+        headers = self._get_fabric_auth_headers()
+
+        try:
+            if method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=data)
+            else:
+                raise SQLMeshError(f"Unsupported HTTP method for location tracking: {method}")
+
+            # Check for errors first
+            response.raise_for_status()
+
+            result = {"status_code": response.status_code}
+
+            # Extract location header for polling
+            if "location" in response.headers:
+                result["location"] = response.headers["location"]
+
+            # Include response body if present
+            if response.content:
+                result.update(response.json())
+
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            error_details = ""
+            try:
+                if response.content:
+                    error_response = response.json()
+                    error_details = error_response.get("error", {}).get(
+                        "message", str(error_response)
+                    )
+            except (ValueError, AttributeError):
+                error_details = response.text if hasattr(response, "text") else str(e)
+
+            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Fabric API request failed: {e}")
+
+    def _poll_operation_status(self, location_url: str, operation_name: str) -> None:
+        """Poll the operation status until completion."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        headers = self._get_fabric_auth_headers()
+        max_attempts = 60  # Poll for up to 10 minutes
+        initial_delay = 1  # Start with 1 second
+
+        for attempt in range(max_attempts):
+            try:
+                response = requests.get(location_url, headers=headers)
+                response.raise_for_status()
+
+                result = response.json()
+                status = result.get("status", "Unknown")
+
+                logger.info(f"Operation {operation_name} status: {status}")
+
+                if status == "Succeeded":
+                    return
+                if status == "Failed":
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    raise SQLMeshError(f"Operation {operation_name} failed: {error_msg}")
+                elif status in ["InProgress", "Running"]:
+                    # Use exponential backoff with max of 30 seconds
+                    delay = min(initial_delay * (2 ** min(attempt // 3, 4)), 30)
+                    logger.info(f"Waiting {delay} seconds before next status check...")
+                    time.sleep(delay)
+                else:
+                    logger.warning(f"Unknown status '{status}' for operation {operation_name}")
+                    time.sleep(5)
+
+            except requests.exceptions.RequestException as e:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"Failed to poll status (attempt {attempt + 1}): {e}")
+                    time.sleep(5)
+                else:
+                    raise SQLMeshError(f"Failed to poll operation status: {e}")
+
+        raise SQLMeshError(f"Operation {operation_name} did not complete within timeout")
+
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
         warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
-
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
-        # First check if warehouse already exists
-        try:
-            warehouses = self._make_fabric_api_request("GET", "warehouses")
-            for warehouse in warehouses.get("value", []):
-                if warehouse.get("displayName") == warehouse_name:
-                    logger.info(f"Fabric warehouse already exists: {warehouse_name}")
-                    return
-        except SQLMeshError as e:
-            logger.warning(f"Failed to check existing warehouses: {e}")
-
-        # Create the warehouse
         request_data = {
             "displayName": warehouse_name,
             "description": f"Warehouse created by SQLMesh: {warehouse_name}",
         }
 
-        try:
-            response = self._make_fabric_api_request("POST", "warehouses", request_data)
+        response = self._make_fabric_api_request_with_location("POST", "warehouses", request_data)
+
+        # Handle direct success (201) or async creation (202)
+        if response.get("status_code") == 201:
             logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+            return
 
-            # Wait for warehouse to become ready
-            max_retries = 30  # Wait up to 5 minutes
-            retry_delay = 10  # 10 seconds between retries
-
-            for attempt in range(max_retries):
-                try:
-                    # Try to verify warehouse exists and is ready
-                    warehouses = self._make_fabric_api_request("GET", "warehouses")
-                    for warehouse in warehouses.get("value", []):
-                        if warehouse.get("displayName") == warehouse_name:
-                            state = warehouse.get("state", "Unknown")
-                            logger.info(f"Warehouse {warehouse_name} state: {state}")
-                            if state == "Active":
-                                logger.info(f"Warehouse {warehouse_name} is ready")
-                                return
-                            if state == "Failed":
-                                raise SQLMeshError(f"Warehouse {warehouse_name} creation failed")
-
-                    if attempt < max_retries - 1:
-                        logger.info(
-                            f"Waiting for warehouse {warehouse_name} to become ready (attempt {attempt + 1}/{max_retries})"
-                        )
-                        time.sleep(retry_delay)
-                    else:
-                        logger.warning(
-                            f"Warehouse {warehouse_name} may not be fully ready after {max_retries} attempts"
-                        )
-
-                except SQLMeshError as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(
-                            f"Failed to check warehouse readiness (attempt {attempt + 1}/{max_retries}): {e}"
-                        )
-                        time.sleep(retry_delay)
-                    else:
-                        logger.error(f"Failed to verify warehouse readiness: {e}")
-                        raise
-
-        except SQLMeshError as e:
-            error_msg = str(e).lower()
-            if "already exists" in error_msg or "conflict" in error_msg:
-                logger.info(f"Fabric warehouse already exists: {warehouse_name}")
-                return
-            logger.error(f"Failed to create Fabric warehouse {warehouse_name}: {e}")
-            raise
+        if response.get("status_code") == 202 and response.get("location"):
+            logger.info(f"Warehouse creation initiated for: {warehouse_name}")
+            self._poll_operation_status(response["location"], warehouse_name)
+            logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+        else:
+            raise SQLMeshError(f"Unexpected response from warehouse creation: {response}")
 
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
