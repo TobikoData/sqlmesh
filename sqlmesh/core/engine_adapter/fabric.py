@@ -180,7 +180,9 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
             # Include response body if present
             if response.content:
-                result.update(response.json())
+                json_data = response.json()
+                if json_data:
+                    result.update(json_data)
 
             return result
 
