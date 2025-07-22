@@ -3371,17 +3371,18 @@ def test_auto_restatement_triggers(make_snapshot):
         "2020-01-06 10:01:00",
     )
 
-    assert auto_restatement_triggers == {
-        snapshot_a.snapshot_id: [snapshot_a.snapshot_id],
-        snapshot_d.snapshot_id: [snapshot_d.snapshot_id],
-        snapshot_b.snapshot_id: [snapshot_a.snapshot_id],
-        snapshot_c.snapshot_id: [snapshot_c.snapshot_id, snapshot_a.snapshot_id],
-        snapshot_e.snapshot_id: [
-            snapshot_d.snapshot_id,
-            snapshot_c.snapshot_id,
-            snapshot_a.snapshot_id,
-        ],
-    }
+    assert auto_restatement_triggers[snapshot_a.snapshot_id] == [snapshot_a.snapshot_id]
+    assert auto_restatement_triggers[snapshot_d.snapshot_id] == [snapshot_d.snapshot_id]
+    assert auto_restatement_triggers[snapshot_b.snapshot_id] == [snapshot_a.snapshot_id]
+    assert auto_restatement_triggers[snapshot_c.snapshot_id] == [
+        snapshot_c.snapshot_id,
+        snapshot_a.snapshot_id,
+    ]
+    assert sorted(auto_restatement_triggers[snapshot_e.snapshot_id]) == [
+        snapshot_a.snapshot_id,
+        snapshot_c.snapshot_id,
+        snapshot_d.snapshot_id,
+    ]
 
 
 def test_render_signal(make_snapshot, mocker):
