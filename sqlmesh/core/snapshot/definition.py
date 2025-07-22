@@ -2180,7 +2180,7 @@ def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
 
 def apply_auto_restatements(
     snapshots: t.Dict[SnapshotId, Snapshot], execution_time: TimeLike
-) -> t.Tuple[t.List[SnapshotIntervals], t.Dict[SnapshotId, SnapshotId]]:
+) -> t.Tuple[t.List[SnapshotIntervals], t.Dict[SnapshotId, t.List[SnapshotId]]]:
     """Applies auto restatements to the snapshots.
 
     This operation results in the removal of intervals for snapshots that are ready to be restated based
@@ -2195,8 +2195,7 @@ def apply_auto_restatements(
         A list of SnapshotIntervals with **new** intervals that need to be restated.
     """
     dag = snapshots_to_dag(snapshots.values())
-    snapshots_with_auto_restatements: t.List[SnapshotId] = []
-    auto_restatement_triggers: t.Dict[SnapshotId, SnapshotId] = {}
+    auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
     auto_restated_intervals_per_snapshot: t.Dict[SnapshotId, Interval] = {}
     for s_id in dag:
         if s_id not in snapshots:
@@ -2211,6 +2210,7 @@ def apply_auto_restatements(
             for parent_s_id in snapshot.parents
             if parent_s_id in auto_restated_intervals_per_snapshot
         ]
+        upstream_triggers = []
         if next_auto_restated_interval:
             logger.info(
                 "Calculated the next auto restated interval (%s, %s) for snapshot %s",
@@ -2221,21 +2221,15 @@ def apply_auto_restatements(
             auto_restated_intervals.append(next_auto_restated_interval)
 
             # auto-restated snapshot is its own trigger
-            snapshots_with_auto_restatements.append(s_id)
-            auto_restatement_triggers[s_id] = s_id
-        else:
-            for parent_s_id in snapshot.parents:
-                # first auto-restated parent is the trigger
-                if parent_s_id in snapshots_with_auto_restatements:
-                    auto_restatement_triggers[s_id] = parent_s_id
-                    break
-                # if no trigger yet and parent has trigger, inherit their trigger
-                # - will be overwritten if a different parent is auto-restated
-                if (
-                    parent_s_id in auto_restatement_triggers
-                    and s_id not in auto_restatement_triggers
-                ):
-                    auto_restatement_triggers[s_id] = auto_restatement_triggers[parent_s_id]
+            upstream_triggers = [s_id]
+
+        for parent_s_id in snapshot.parents:
+            if parent_s_id in auto_restatement_triggers:
+                upstream_triggers.extend(auto_restatement_triggers[parent_s_id])
+
+        # remove duplicate triggers
+        if upstream_triggers:
+            auto_restatement_triggers[s_id] = list(dict.fromkeys(upstream_triggers))
 
         if auto_restated_intervals:
             auto_restated_interval_start = sys.maxsize
