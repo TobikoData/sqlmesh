@@ -446,8 +446,9 @@ Out of the box, SQLMesh has the following defaults set:
 
  - `environment_suffix_target: schema`
  - `physical_table_naming_convention: schema_and_table`
+ - no `physical_schema_mapping` overrides, so a `sqlmesh__<model schema>` physical schema will be created for each model schema
 
-Given a catalog of `warehouse` and a model named `finance_mart.transaction_events_over_threshold`, this causes SQLMesh to create physical tables using the following convention:
+This means that given a catalog of `warehouse` and a model named `finance_mart.transaction_events_over_threshold`, SQLMesh will create physical tables using the following convention:
 
 ```
 # <catalog>.sqlmesh__<schema>.<schema>__<table>__<fingerprint>
@@ -456,6 +457,8 @@ warehouse.sqlmesh__finance_mart.finance_mart__transaction_events_over_threshold_
 ```
 
 This deliberately contains some redundancy with the *model* schema as it's repeated at the physical layer in both the physical schema name as well as the physical table name.
+
+This default exists to make the physical table names portable between different configurations. If you were to define a `physical_schema_mapping` that maps all models to the same physical schema, since the model schema is included in the table name as well, there are no naming conflicts.
 
 ##### Table only
 
@@ -489,6 +492,18 @@ warehouse.sqlmesh__finance_mart.transaction_events_over_threshold__<fingerprint>
 
 Notice that the model schema name is no longer part of the physical table name. This allows for slightly longer model names on engines with low identifier length limits, which may be useful for your project.
 
+In this configuration, it is your responsibility to ensure that any schema overrides in `physical_schema_mapping` result in each model schema getting mapped to a unique physical schema.
+
+For example, the following configuration will cause **data corruption**:
+
+```yaml
+physical_table_naming_convention: table_only
+physical_schema_mapping:
+  '.*': sqlmesh
+```
+
+This is because every model schema is mapped to the same physical schema but the model schema name is omitted from the physical table name.
+
 ##### MD5 hash
 
 If you *still* need more characters, you can set `physical_table_naming_convention: hash_md5` like so:
@@ -521,7 +536,7 @@ sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00
 sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00__dev
 ```
 
-This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names now have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
+This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
 
 #### Environment view catalogs
 

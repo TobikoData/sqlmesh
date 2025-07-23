@@ -7117,7 +7117,7 @@ def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
     expected_gateways = {"local", "memory", "extra"}
     assert gathered_gateways == expected_gateways
 
-    
+
 def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
     sushi_context = Context(
         paths=copy_to_temp_path("examples/sushi"),
