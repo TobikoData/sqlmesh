@@ -2782,7 +2782,7 @@ SELECT 1 as id, 'test' as status;
 
     # Verify the statements contain the expected SQL
     assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
-    assert model.pre_statements[0].sql()
+    assert model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '10GB'"
     assert model.pre_statements[1].sql() == "SET threads = @var1"
     assert model.render_pre_statements()[1].sql() == 'SET "threads" = 4'
 
@@ -2815,6 +2815,7 @@ model_defaults:
     # Verify updated statements
     assert len(new_model.pre_statements) == 1
     assert new_model.pre_statements[0].sql() == "SET memory_limit = '5GB'"
+    assert new_model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '5GB'"
 
     # Verify the change was detected by the plan
     assert len(updated_plan.directly_modified) == 1
