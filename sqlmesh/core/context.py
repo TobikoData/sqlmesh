@@ -2343,24 +2343,33 @@ class GenericContext(BaseContext, t.Generic[C]):
         return results
 
     @python_api_analytics
-    def migrate(self) -> None:
+    def migrate(self, pre_check_only: bool = False) -> None:
         """Migrates SQLMesh to the current running version.
 
         Please contact your SQLMesh administrator before doing this.
+
+        Args:
+            pre_check_only: If True, only run pre-checks without performing the migration.
         """
-        self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
+        if not pre_check_only:
+            self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
+
         self._load_materializations()
         try:
             self._new_state_sync().migrate(
                 default_catalog=self.default_catalog,
                 promoted_snapshots_only=self.config.migration.promoted_snapshots_only,
+                pre_check_only=pre_check_only,
             )
         except Exception as e:
-            self.notification_target_manager.notify(
-                NotificationEvent.MIGRATION_FAILURE, traceback.format_exc()
-            )
+            if not pre_check_only:
+                self.notification_target_manager.notify(
+                    NotificationEvent.MIGRATION_FAILURE, traceback.format_exc()
+                )
             raise e
-        self.notification_target_manager.notify(NotificationEvent.MIGRATION_END)
+
+        if not pre_check_only:
+            self.notification_target_manager.notify(NotificationEvent.MIGRATION_END)
 
     @python_api_analytics
     def rollback(self) -> None:

@@ -8,7 +8,7 @@ import typing as t
 
 from sqlglot import __version__ as SQLGLOT_VERSION
 
-from sqlmesh import migrations
+from sqlmesh import migrations, pre_checks
 from sqlmesh.core.environment import (
     Environment,
     EnvironmentNamingInfo,
@@ -64,6 +64,10 @@ MIGRATIONS = [
     importlib.import_module(f"sqlmesh.migrations.{migration}")
     for migration in sorted(info.name for info in pkgutil.iter_modules(migrations.__path__))
 ]
+PRE_CHECKS = {
+    pre_check: importlib.import_module(f"sqlmesh.pre_checks.{pre_check}")
+    for pre_check in sorted(info.name for info in pkgutil.iter_modules(pre_checks.__path__))
+}
 SCHEMA_VERSION: int = len(MIGRATIONS)
 
 
@@ -456,6 +460,7 @@ class StateSync(StateReader, abc.ABC):
         default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
+        pre_check_only: bool = False,
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
 

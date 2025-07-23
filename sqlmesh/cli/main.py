@@ -932,12 +932,17 @@ def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
 
 
 @cli.command("migrate")
+@click.option(
+    "--pre-check",
+    is_flag=True,
+    help="Run pre-checks and display warnings without performing migration",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
-def migrate(ctx: click.Context) -> None:
+def migrate(ctx: click.Context, pre_check: bool) -> None:
     """Migrate SQLMesh to the current running version."""
-    ctx.obj.migrate()
+    ctx.obj.migrate(pre_check_only=pre_check)
 
 
 @cli.command("rollback")
