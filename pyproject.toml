@@ -280,9 +280,20 @@ select = [
 ]
 extend-select = ["TID"]
 
+
 [tool.ruff.lint.flake8-tidy-imports]
 banned-module-level-imports = [
     "duckdb",
     "numpy",
     "pandas",
 ]
+
+# Bans imports from sqlmesh.lsp in files outside of sqlmesh/lsp
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlmesh.lsp".msg = "Only files within sqlmesh/lsp can import from sqlmesh.lsp"
+
+[tool.ruff.lint.per-file-ignores]
+# TID251 is used to ignore the import of sqlmesh.lsp in files outside sqlmesh/lsp
+"sqlmesh/lsp/**/*.py" = ["TID251"]
+"tests/lsp/**/*.py" = ["TID251"]
+"benchmarks/lsp*.py" = ["TID251"]
