@@ -11,9 +11,14 @@ Clicking the **Upgrade Now** button and confirming will start the upgrade proces
     Only users with `Admin` permissions can perform upgrades.
 
 !!! warning "Upgrade Preparations"
+<<<<<<< HEAD
     The upgrade process can take anywhere from a few minutes to over 30 minutes.
     The total time depends on the size of your project and the complexity of the upgrade.
     During this time, your Tobiko Cloud project will be unavailable. Any in-progress plans and runs will be aborted:
+=======
+    The upgrade process may take a few minutes to complete. During this time, your Tobiko Cloud project will be unavailable.
+    Any in-progress plans and runs will be aborted:
+>>>>>>> 36a903d70 (chore(docs): add Tobiko Cloud upgrade documentation)
 
     - Aborted plans will be stopped and must be recreated.
     - Aborted runs will be automatically resumed shortly after the upgrade completes.
@@ -51,9 +56,12 @@ Once the upgrade is complete, you’ll be automatically redirected back to the u
 If the project is already on the latest version, you’ll see a message like the one below.
 
 ![Tobiko Cloud Upgrade Already Up-to-Date](./upgrade/upgrade-ui-up-to-date.png)
+<<<<<<< HEAD
 
 ## Upgrade Support
 
 If you encounter an issue during the upgrade process, please [report an incident](./incident_reporting.md).
 Our support team will follow up as soon as possible.
 For the quickest response, we recommend upgrading Monday through Friday between 9 AM and 5 PM PST.
+=======
+>>>>>>> 36a903d70 (chore(docs): add Tobiko Cloud upgrade documentation)
