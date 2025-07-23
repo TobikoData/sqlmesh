@@ -709,11 +709,17 @@ class SQLMeshMagics(Magics):
         self.display(dag)
 
     @magic_arguments()
+    @argument(
+        "--pre-check",
+        action="store_true",
+        help="Run pre-checks and display warnings without performing migration",
+    )
     @line_magic
     @pass_sqlmesh_context
     def migrate(self, context: Context, line: str) -> None:
         """Migrate SQLMesh to the current running version."""
-        context.migrate()
+        args = parse_argstring(self.migrate, line)
+        context.migrate(pre_check_only=args.pre_check)
         context.console.log_success("Migration complete")
 
     @magic_arguments()
