@@ -78,9 +78,3 @@ class ModelDefaultsConfig(BaseConfig):
             return [extract_func_call(parse_one(audit)) for audit in v]
 
         return v
-
-    @field_validator("pre_statements", "post_statements", "on_virtual_update", mode="before")
-    def _statements_validator(cls, v: t.Any) -> t.Any:
-        if isinstance(v, list):
-            return [parse_one(stmt) if isinstance(stmt, str) else stmt for stmt in v]
-        return v

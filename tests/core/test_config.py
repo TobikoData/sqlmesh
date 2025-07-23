@@ -702,18 +702,37 @@ model_defaults:
 
     assert config.model_defaults.pre_statements is not None
     assert len(config.model_defaults.pre_statements) == 2
-    assert isinstance(config.model_defaults.pre_statements[0], exp.Set)
-    assert isinstance(config.model_defaults.pre_statements[1], exp.Create)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[0]), exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[1]), exp.Create)
 
     assert config.model_defaults.post_statements is not None
     assert len(config.model_defaults.post_statements) == 3
-    assert isinstance(config.model_defaults.post_statements[0], exp.Drop)
-    assert isinstance(config.model_defaults.post_statements[1], exp.Analyze)
-    assert isinstance(config.model_defaults.post_statements[2], exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[0]), exp.Drop)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[1]), exp.Analyze)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[2]), exp.Set)
 
     assert config.model_defaults.on_virtual_update is not None
     assert len(config.model_defaults.on_virtual_update) == 1
-    assert isinstance(config.model_defaults.on_virtual_update[0], exp.Update)
+    assert isinstance(exp.maybe_parse(config.model_defaults.on_virtual_update[0]), exp.Update)
+
+
+def test_load_model_defaults_validation_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements_wrong.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - 313
+        """
+        )
+
+    with pytest.raises(TypeError, match=r"expected str instance, int found"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
 
 
 def test_scheduler_config(tmp_path_factory):
