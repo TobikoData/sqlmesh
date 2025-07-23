@@ -88,6 +88,12 @@ export const openLineageView = async (page: Page) =>
   await runCommand(page, 'Lineage: Focus On View')
 
 /**
+ * Open the problems/diagnostics view in the given window.
+ */
+export const openProblemsView = async (page: Page) =>
+  await runCommand(page, 'View: Focus Problems')
+
+/**
  * Restart the SQLMesh servers
  */
 export const restartSqlmeshServers = async (page: Page) =>
