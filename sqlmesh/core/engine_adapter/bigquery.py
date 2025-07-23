@@ -189,8 +189,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def close(self) -> t.Any:
         # Cancel all pending query jobs to avoid them becoming orphan, e.g., due to interrupts
         for query_job in self._query_jobs:
-            if not self._db_call(query_job.done):
-                self._db_call(query_job.cancel)
+            try:
+                if not self._db_call(query_job.done):
+                    self._db_call(query_job.cancel)
+            except Exception as ex:
+                logger.debug(
+                    "Failed to cancel BigQuery job: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s. %s",
+                    self._query_job.project,
+                    self._query_job.location,
+                    self._query_job.job_id,
+                    str(ex),
+                )
 
         self._query_jobs.clear()
         return super().close()
