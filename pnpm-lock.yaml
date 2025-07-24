@@ -20,6 +20,9 @@ importers:
 
   vscode/extension:
     dependencies:
+      '@duckdb/node-api':
+        specifier: 1.3.2-alpha.25
+        version: 1.3.2-alpha.25
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -691,6 +694,37 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
+
+  '@duckdb/node-api@1.3.2-alpha.25':
+    resolution: {integrity: sha512-AzDyyjTtnYUxoy/MHDFRwfOggDOkS8RBgGA82OI6nla8B9NDNZeAYJ97T3PvCL8cx7y00EtGVN3g03aoW4fRmw==}
+
+  '@duckdb/node-bindings-darwin-arm64@1.3.2-alpha.25':
+    resolution: {integrity: sha512-vRjzNgkz2TAYW5c2rzPwcHBctBWr0lxQ4blFASAv0DdeGPOeuCMXJUA3982X7iPNwAppH0VMII6cYzON0GA+RA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-darwin-x64@1.3.2-alpha.25':
+    resolution: {integrity: sha512-BSg/DZjT25QZe87+pmdMfE1XlHdi2WxtAO+F2PEXN6VnPeLyTdl5bYlnhOGrDKquKDmUEqok5OwF7mR4QfU+Aw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-linux-arm64@1.3.2-alpha.25':
+    resolution: {integrity: sha512-VhjUH/AvolZWDX/URqiIh58JbAB1vYbDgSmQ0wvqhS9jzJ9Sj88urGDw+XWXw49Rr4BhIgDtX70SoARhO2i/Gg==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@duckdb/node-bindings-linux-x64@1.3.2-alpha.25':
+    resolution: {integrity: sha512-raav2ypBiV4TlpnKU9hocsuFDO4ipwIcQQmkMIh20/Qd9vkv35QcQYNqStiZVJh2LAaVoQffNvcKMlclblYqUQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@duckdb/node-bindings-win32-x64@1.3.2-alpha.25':
+    resolution: {integrity: sha512-/fAKax+xYkdRhkUl3PkL3HfFd1ZsezG1yiOkL0StHBdD3xB80Njm1JGHxx1fO3WWE5XTbE1MTJ5I0xjEzPwsfQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@duckdb/node-bindings@1.3.2-alpha.25':
+    resolution: {integrity: sha512-FkoSaoeRAi6Em0hs0qzr3SN04ykN99R+Qap5kLwhi6GNPnHzWMU1VrNpK9cE4eBj0n+RWlNK0TiO712dn44QzQ==}
 
   '@esbuild/aix-ppc64@0.25.8':
     resolution: {integrity: sha512-urAvrUedIqEiFR3FYSLTWQgLu5tb+m0qZw0NBEasUeo6wuqatkMDaRT+1uABiGXEu5vqgPd7FGE1BhsAIy9QVA==}
@@ -6673,6 +6707,33 @@ snapshots:
       '@csstools/css-tokenizer': 3.0.4
 
   '@csstools/css-tokenizer@3.0.4': {}
+
+  '@duckdb/node-api@1.3.2-alpha.25':
+    dependencies:
+      '@duckdb/node-bindings': 1.3.2-alpha.25
+
+  '@duckdb/node-bindings-darwin-arm64@1.3.2-alpha.25':
+    optional: true
+
+  '@duckdb/node-bindings-darwin-x64@1.3.2-alpha.25':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64@1.3.2-alpha.25':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64@1.3.2-alpha.25':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@1.3.2-alpha.25':
+    optional: true
+
+  '@duckdb/node-bindings@1.3.2-alpha.25':
+    optionalDependencies:
+      '@duckdb/node-bindings-darwin-arm64': 1.3.2-alpha.25
+      '@duckdb/node-bindings-darwin-x64': 1.3.2-alpha.25
+      '@duckdb/node-bindings-linux-arm64': 1.3.2-alpha.25
+      '@duckdb/node-bindings-linux-x64': 1.3.2-alpha.25
+      '@duckdb/node-bindings-win32-x64': 1.3.2-alpha.25
 
   '@esbuild/aix-ppc64@0.25.8':
     optional: true

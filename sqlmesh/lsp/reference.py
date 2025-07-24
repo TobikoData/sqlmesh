@@ -893,6 +893,34 @@ def _process_column_references(
     return references
 
 
+def get_yaml_model_name_ranges(path: Path) -> t.Dict[str, Range]:
+    """
+    Get a mapping of model names to their ranges in an external models YAML file.
+
+    Args:
+        path: The path to the YAML file.
+    Returns:
+        A dictionary mapping model names to their ranges in the YAML file.
+    """
+    yaml = YAML()
+    model_ranges: t.Dict[str, Range] = {}
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.load(f)
+
+    if not isinstance(data, list):
+        return model_ranges
+
+    for item in data:
+        if isinstance(item, dict) and "name" in item:
+            # Get size of block by taking the earliest line/col in the items block and the last line/col of the block
+            position_data = item.lc.data["name"]  # type: ignore
+            start = Position(line=position_data[2], character=position_data[3])
+            end = Position(line=position_data[2], character=position_data[3] + len(item["name"]))
+            model_ranges[item["name"]] = Range(start=start, end=end)
+
+    return model_ranges
+
+
 def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:
     """
     Find the range of a specific model block in a YAML file.
@@ -911,11 +939,8 @@ def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:
     if not isinstance(data, list):
         return None
 
-    for item in data:
-        if isinstance(item, dict) and item.get("name") == model_name:
-            # Get size of block by taking the earliest line/col in the items block and the last line/col of the block
-            position_data = item.lc.data["name"]  # type: ignore
-            start = Position(line=position_data[2], character=position_data[3])
-            end = Position(line=position_data[2], character=position_data[3] + len(item["name"]))
-            return Range(start=start, end=end)
+    # Get all model ranges in the YAML file
+    model_ranges = get_yaml_model_name_ranges(path)
+    if model_name in model_ranges:
+        return model_ranges[model_name]
     return None
