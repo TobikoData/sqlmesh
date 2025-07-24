@@ -2161,7 +2161,7 @@ def test_render_query(assert_exp_eq, sushi_context):
           CAST("o"."event_date" AS DATE) AS "event_date"
         FROM "memory"."sushi"."orders" AS "o"
         WHERE
-          "o"."event_date" <= CAST('1970-01-01' AS DATE) AND "o"."event_date" >= CAST('1970-01-01' AS DATE)
+          "o"."event_date" <= CAST('1970-01-02' AS DATE) AND "o"."event_date" >= CAST('1970-01-01' AS DATE)
         """,
     )
 
@@ -2259,6 +2259,36 @@ def test_render_query(assert_exp_eq, sushi_context):
         LIMIT 10
         """,
     )
+
+
+def test_render_temporal_variables_give_different_hashes(sushi_context):
+    model_with_start = SqlModel(
+        name="test",
+        cron="1 0 * * *",
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="y")),
+        query=d.parse_one(
+            """
+        SELECT y
+        FROM x
+        WHERE
+          y = @start_ds
+        """
+        ),
+    )
+    model_with_end = SqlModel(
+        name="test",
+        cron="1 0 * * *",
+        kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="y")),
+        query=d.parse_one(
+            """
+        SELECT y
+        FROM x
+        WHERE
+          y = @end_ds
+        """
+        ),
+    )
+    assert model_with_start.data_hash != model_with_end.data_hash
 
 
 def test_time_column():
@@ -2478,7 +2508,7 @@ def test_parse(assert_exp_eq):
         "ds" AS "ds"
       FROM "x" AS "x"
       WHERE
-        "ds" BETWEEN '1970-01-01' AND '1970-01-01'
+        "ds" BETWEEN '1970-01-01' AND '1970-01-02'
     """,
     )
 
