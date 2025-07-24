@@ -37,7 +37,12 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotInfoLike,
 )
-from sqlmesh.core.snapshot.definition import Interval, Intervals, SnapshotTableInfo
+from sqlmesh.core.snapshot.definition import (
+    Interval,
+    Intervals,
+    SnapshotTableInfo,
+    SnapshotEvaluationTriggers,
+)
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils import Verbosity
@@ -428,7 +433,7 @@ class Console(
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
+        snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
         """Updates the snapshot evaluation progress."""
 
@@ -576,7 +581,7 @@ class NoopConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
+        snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
         pass
 
@@ -1058,7 +1063,7 @@ class TerminalConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
+        snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
         """Update the snapshot evaluation progress."""
         if (
@@ -3642,7 +3647,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
+        snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
 
@@ -3812,12 +3817,15 @@ class DebuggerTerminalConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
+        snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
         message = f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
 
-        if auto_restatement_triggers:
-            message += f" | auto_restatement_triggers={','.join(trigger.name for trigger in auto_restatement_triggers)}"
+        if snapshot_evaluation_triggers:
+            if snapshot_evaluation_triggers.auto_restatement_triggers:
+                message += f" | auto_restatement_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.auto_restatement_triggers)}"
+            if snapshot_evaluation_triggers.select_snapshot_triggers:
+                message += f" | select_snapshot_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.select_snapshot_triggers)}"
 
         if audit_only:
             message = f"Auditing {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"

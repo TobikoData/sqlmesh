@@ -327,6 +327,14 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return table
 
 
+class SnapshotEvaluationTriggers(PydanticModel):
+    ignore_cron: bool
+    auto_restatement_triggers: t.List[SnapshotId] = []
+    select_snapshot_triggers: t.List[SnapshotId] = []
+    directly_modified_triggers: t.List[SnapshotId] = []
+    manual_restatement_triggers: t.List[SnapshotId] = []
+
+
 class SnapshotInfoMixin(ModelKindMixin):
     name: str
     dev_version_: t.Optional[str]
