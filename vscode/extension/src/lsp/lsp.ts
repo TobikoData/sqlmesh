@@ -96,7 +96,17 @@ export class LSPClient implements Disposable {
       },
     }
     const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ scheme: 'file', pattern: `**/*.sql` }],
+      documentSelector: [
+        { scheme: 'file', pattern: `**/*.sql` },
+        {
+          scheme: 'file',
+          pattern: '**/external_models.yaml',
+        },
+        {
+          scheme: 'file',
+          pattern: '**/external_models.yml',
+        },
+      ],
       diagnosticCollectionName: 'sqlmesh',
       outputChannel: outputChannel,
     }
