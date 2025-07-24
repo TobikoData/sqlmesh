@@ -478,10 +478,9 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                 v = v[1:-1]
 
             v = t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=dialect))
-        else:
-            v = t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
-        return validate_expression(v, dialect=dialect)
+        v = validate_expression(v, dialect=dialect)
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
     @field_validator("merge_filter", mode="before")
     def _merge_filter_validator(
@@ -497,10 +496,9 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         if isinstance(v, str):
             v = v.strip()
             v = d.parse_one(v, dialect=dialect)
-        else:
-            v = v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
-        return validate_expression(v, dialect=dialect)
+        v = validate_expression(v, dialect=dialect)
+        return v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

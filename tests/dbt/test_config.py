@@ -135,7 +135,7 @@ def test_model_to_sqlmesh_fields():
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
     assert (
         kind.merge_filter.sql(dialect=model.dialect)
-        == """55 > "__merge_source__"."b" AND "__merge_target__"."session_start" > CURRENT_DATE + INTERVAL '7' DAY"""
+        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7' DAY"""
     )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)

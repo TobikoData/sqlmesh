@@ -2200,18 +2200,14 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
                     source=False,
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
+                            exp.column("name", MERGE_TARGET_ALIAS, quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS, quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column(
-                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
-                                    ),
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
                                     expressions=[
-                                        exp.column(
-                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
-                                        )
+                                        exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True)
                                     ],
                                 )
                             ),
@@ -2269,23 +2265,19 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             expressions=[
                 exp.When(
                     matched=True,
-                    condition=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True).eq(
+                    condition=exp.column("id", MERGE_SOURCE_ALIAS, quoted=True).eq(
                         exp.Literal.number(1)
                     ),
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
+                            exp.column("name", MERGE_TARGET_ALIAS, quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS, quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column(
-                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
-                                    ),
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
                                     expressions=[
-                                        exp.column(
-                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
-                                        )
+                                        exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True)
                                     ],
                                 )
                             ),
@@ -2297,18 +2289,14 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
                     source=False,
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
+                            exp.column("name", MERGE_TARGET_ALIAS, quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS, quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column(
-                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
-                                    ),
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
                                     expressions=[
-                                        exp.column(
-                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
-                                        )
+                                        exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True)
                                     ],
                                 )
                             ),
@@ -2395,16 +2383,16 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
     assert model.merge_filter == exp.And(
         this=exp.And(
             this=exp.GT(
-                this=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True),
+                this=exp.column("id", MERGE_SOURCE_ALIAS, quoted=True),
                 expression=exp.Literal(this="0", is_string=False),
             ),
             expression=exp.LT(
-                this=exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True),
+                this=exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True),
                 expression=d.MacroVar(this="end_ds"),
             ),
         ),
         expression=exp.GT(
-            this=exp.column("updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True),
+            this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
             expression=d.MacroVar(this="start_ds"),
         ),
     )
@@ -2436,15 +2424,11 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
                     matched=True,
                     then=exp.Update(
                         expressions=[
-                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column(
-                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
-                                    ),
+                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
                                     expressions=[
-                                        exp.column(
-                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
-                                        )
+                                        exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True)
                                     ],
                                 )
                             ),
@@ -2456,16 +2440,16 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
         merge_filter=exp.And(
             this=exp.And(
                 this=exp.GT(
-                    this=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True),
+                    this=exp.column("id", MERGE_SOURCE_ALIAS, quoted=True),
                     expression=exp.Literal(this="0", is_string=False),
                 ),
                 expression=exp.LT(
-                    this=exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True),
+                    this=exp.column("updated_at", MERGE_TARGET_ALIAS, quoted=True),
                     expression=exp.Literal(this="2020-01-02", is_string=True),
                 ),
             ),
             expression=exp.GT(
-                this=exp.column("updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True),
+                this=exp.column("updated_at", MERGE_SOURCE_ALIAS, quoted=True),
                 expression=exp.Literal(this="2020-01-01", is_string=True),
             ),
         ),
