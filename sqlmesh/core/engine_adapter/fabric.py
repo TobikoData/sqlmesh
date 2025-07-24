@@ -370,3 +370,35 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             logger.debug(f"Could not verify catalog switch: {e}")
 
         logger.debug(f"Updated target catalog to '{catalog_name}' and closed connections")
+
+    def drop_schema(
+        self,
+        schema_name: t.Union[str, exp.Table],
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
+        **drop_args: t.Any,
+    ) -> None:
+        """
+        Override drop_schema to handle catalog-qualified schema names.
+        Fabric doesn't support 'DROP SCHEMA [catalog].[schema]' syntax.
+        """
+        logger.debug(f"drop_schema called with: {schema_name} (type: {type(schema_name)})")
+
+        # If it's a string with a dot, assume it's catalog.schema format
+        if isinstance(schema_name, str) and "." in schema_name:
+            parts = schema_name.split(".", 1)  # Split only on first dot
+            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
+            schema_only = parts[1].strip('"[]')
+            logger.debug(
+                f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
+            )
+
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
+
+            # Use just the schema name
+            super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {schema_name}")
+            super().drop_schema(schema_name, ignore_if_not_exists, cascade, **drop_args)
