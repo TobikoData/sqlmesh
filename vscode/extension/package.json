@@ -18,7 +18,8 @@
   ],
   "activationEvents": [
     "onLanguage:sql",
-    "onLanguage:python"
+    "onLanguage:python",
+    "onLanguage:yaml"
   ],
   "extensionKind": [
     "workspace"
