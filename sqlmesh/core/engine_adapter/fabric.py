@@ -31,6 +31,30 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     SUPPORTS_CREATE_DROP_CATALOG = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
 
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Store the desired catalog for dynamic switching
+        self._target_catalog: t.Optional[str] = None
+        # Store the original connection factory for wrapping
+        self._original_connection_factory = self._connection_pool._connection_factory  # type: ignore
+        # Replace the connection factory with our custom one
+        self._connection_pool._connection_factory = self._create_fabric_connection  # type: ignore
+
+    def _create_fabric_connection(self) -> t.Any:
+        """Custom connection factory that uses the target catalog if set."""
+        # If we have a target catalog, we need to modify the connection parameters
+        if self._target_catalog:
+            # The original factory was created with partial(), so we need to extract and modify the kwargs
+            if hasattr(self._original_connection_factory, "keywords"):
+                # It's a partial function, get the original keywords
+                original_kwargs = self._original_connection_factory.keywords.copy()
+                original_kwargs["database"] = self._target_catalog
+                # Call the underlying function with modified kwargs
+                return self._original_connection_factory.func(**original_kwargs)
+
+        # Use the original factory if no target catalog is set
+        return self._original_connection_factory()
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -298,3 +322,51 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
                 return
             logger.error(f"Failed to delete Fabric warehouse {warehouse_name}: {e}")
             raise
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        """
+        Set the current catalog for Microsoft Fabric connections.
+
+        Override to handle Fabric's stateless session limitation where USE statements
+        don't persist across queries. Instead, we close existing connections and
+        recreate them with the new catalog in the connection configuration.
+
+        Args:
+            catalog_name: The name of the catalog (warehouse) to switch to
+
+        Note:
+            Fabric doesn't support catalog switching via USE statements because each
+            statement runs as an independent session. This method works around this
+            limitation by updating the connection pool with new catalog configuration.
+
+        See:
+            https://learn.microsoft.com/en-us/fabric/data-warehouse/sql-query-editor#limitations
+        """
+        current_catalog = self.get_current_catalog()
+
+        # If already using the requested catalog, do nothing
+        if current_catalog and current_catalog == catalog_name:
+            logger.debug(f"Already using catalog '{catalog_name}', no action needed")
+            return
+
+        logger.info(f"Switching from catalog '{current_catalog}' to '{catalog_name}'")
+
+        # Set the target catalog for our custom connection factory
+        self._target_catalog = catalog_name
+
+        # Close all existing connections since Fabric requires reconnection for catalog changes
+        self.close()
+
+        # Verify the catalog switch worked by getting a new connection
+        try:
+            actual_catalog = self.get_current_catalog()
+            if actual_catalog and actual_catalog == catalog_name:
+                logger.debug(f"Successfully switched to catalog '{catalog_name}'")
+            else:
+                logger.warning(
+                    f"Catalog switch may have failed. Expected '{catalog_name}', got '{actual_catalog}'"
+                )
+        except Exception as e:
+            logger.debug(f"Could not verify catalog switch: {e}")
+
+        logger.debug(f"Updated target catalog to '{catalog_name}' and closed connections")
