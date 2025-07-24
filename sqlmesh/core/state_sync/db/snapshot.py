@@ -388,10 +388,11 @@ class SnapshotState:
         if not next_auto_restatement_ts_filtered:
             return
 
-        self.engine_adapter.insert_append(
+        self.engine_adapter.merge(
             self.auto_restatements_table,
             _auto_restatements_to_df(next_auto_restatement_ts_filtered),
             columns_to_types=self._auto_restatement_columns_to_types,
+            unique_key=(exp.column("snapshot_name"), exp.column("snapshot_version")),
         )
 
     def count(self) -> int:
