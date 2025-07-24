@@ -1691,6 +1691,115 @@ def test_description(sushi_context):
     assert sushi_context.models['"memory"."sushi"."orders"'].description == "Table of sushi orders."
 
 
+def test_model_defaults_statements_merge():
+    model_defaults = ModelDefaultsConfig(
+        dialect="duckdb",
+        pre_statements=[
+            "SET enable_progress_bar = true",
+            "CREATE TEMP TABLE default_temp AS SELECT 1",
+        ],
+        post_statements=[
+            "DROP TABLE IF EXISTS default_temp",
+            "grant select on @this_model to group reporter",
+        ],
+        on_virtual_update=["ANALYZE"],
+    )
+
+    # Create a model with its own statements as well
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    CREATE TEMP TABLE model_temp AS SELECT 2;
+
+    SELECT * FROM test_table;
+
+    DROP TABLE IF EXISTS model_temp;
+
+    ON_VIRTUAL_UPDATE_BEGIN;
+    UPDATE stats_table SET last_update = CURRENT_TIMESTAMP;
+    ON_VIRTUAL_UPDATE_END;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=model_defaults.dict(),
+    )
+
+    # Check that pre_statements contains both default and model-specific statements
+    assert len(model.pre_statements) == 3
+    assert model.pre_statements[0].sql() == "SET enable_progress_bar = TRUE"
+    assert model.pre_statements[1].sql() == "CREATE TEMPORARY TABLE default_temp AS SELECT 1"
+    assert model.pre_statements[2].sql() == "CREATE TEMPORARY TABLE model_temp AS SELECT 2"
+
+    # Check that post_statements contains both default and model-specific statements
+    assert len(model.post_statements) == 3
+    assert model.post_statements[0].sql() == "DROP TABLE IF EXISTS default_temp"
+    assert model.post_statements[1].sql() == "GRANT SELECT ON @this_model TO GROUP reporter"
+    assert model.post_statements[2].sql() == "DROP TABLE IF EXISTS model_temp"
+
+    # Check that the query is rendered correctly with @this_model resolved to table name
+    assert (
+        model.render_post_statements()[1].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "reporter"'
+    )
+
+    # Check that on_virtual_update contains both default and model-specific statements
+    assert len(model.on_virtual_update) == 2
+    assert model.on_virtual_update[0].sql() == "ANALYZE"
+    assert (
+        model.on_virtual_update[1].sql()
+        == "UPDATE stats_table SET last_update = CURRENT_TIMESTAMP()"
+    )
+
+
+def test_model_defaults_statements_integration():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="postgres",
+            pre_statements=["SET memory_limit = '10GB'"],
+            post_statements=["VACUUM ANALYZE"],
+            on_virtual_update=["GRANT SELECT ON @this_model TO GROUP public"],
+        )
+    )
+
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    SELECT * FROM source_table;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=config.model_defaults.dict(),
+    )
+
+    # Verify defaults were applied
+    assert len(model.pre_statements) == 1
+    assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
+
+    assert len(model.post_statements) == 1
+    assert isinstance(model.post_statements[0], exp.Command)
+
+    assert len(model.on_virtual_update) == 1
+    assert model.on_virtual_update[0].sql() == "GRANT SELECT ON @this_model TO GROUP public"
+    assert (
+        model.render_on_virtual_update()[0].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "public"'
+    )
+
+
 def test_render_definition():
     expressions = d.parse(
         """
@@ -5568,7 +5677,7 @@ def test_when_matched_normalization() -> None:
             when_matched (
                 WHEN MATCHED THEN UPDATE SET
                     target.key_a = source.key_a,
-                    target.key_b = source.key_b,            
+                    target.key_b = source.key_b,
             )
           )
         );

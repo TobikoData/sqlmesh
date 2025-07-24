@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot import exp
 from sqlmesh.core.dialect import parse_one, extract_func_call
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import (
@@ -41,6 +42,9 @@ class ModelDefaultsConfig(BaseConfig):
         allow_partials: Whether the models can process partial (incomplete) data intervals.
         enabled: Whether the models are enabled.
         interval_unit: The temporal granularity of the models data intervals. By default computed from cron.
+        pre_statements: The list of SQL statements that get executed before a model runs.
+        post_statements: The list of SQL statements that get executed before a model runs.
+        on_virtual_update: The list of SQL statements to be executed after the virtual update.
 
     """
 
@@ -61,6 +65,9 @@ class ModelDefaultsConfig(BaseConfig):
     interval_unit: t.Optional[t.Union[str, IntervalUnit]] = None
     enabled: t.Optional[t.Union[str, bool]] = None
     formatting: t.Optional[t.Union[str, bool]] = None
+    pre_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
+    post_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
+    on_virtual_update: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
