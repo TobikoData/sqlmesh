@@ -394,6 +394,35 @@ It's also possible to use the `@EACH` macro, combined with a global list variabl
 ...
 ```
 
+## Using macros in model properties
+
+Python models support macro variables in model properties. However, special care must be taken when the macro variable appears within a string.
+
+For example when using macro variables inside cron expressions, you need to wrap the entire expression in quotes and prefix it with `@` to ensure proper parsing:
+
+```python linenums="1"
+# Correct: Wrap the cron expression containing a macro variable
+@model(
+    "my_model",
+    cron="@'*/@{mins} * * * *'",  # Note the @'...' syntax
+    ...
+)
+
+# This also works with blueprint variables
+@model(
+    "@{customer}.scheduled_model",
+    cron="@'0 @{hour} * * *'",
+    blueprints=[
+        {"customer": "customer_1", "hour": 2}, # Runs at 2 AM
+        {"customer": "customer_2", "hour": 8}, # Runs at 8 AM
+    ],
+    ...
+)
+
+```
+
+This is necessary because cron expressions often use `@` for aliases (like `@daily`, `@hourly`), which can conflict with SQLMesh's macro syntax.
+
 ## Examples
 ### Basic
 The following is an example of a Python model returning a static Pandas DataFrame.

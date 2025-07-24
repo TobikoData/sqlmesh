@@ -799,7 +799,7 @@ class PythonModelTest(ModelTest):
         with self._concurrent_render_context():
             variables = self.body.get("vars", {}).copy()
             time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
-            df = next(self.model.render(context=self.context, **time_kwargs, **variables))
+            df = next(self.model.render(context=self.context, variables=variables, **time_kwargs))
 
         assert not isinstance(df, exp.Expression)
         return df if isinstance(df, pd.DataFrame) else df.toPandas()

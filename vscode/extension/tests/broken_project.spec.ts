@@ -5,7 +5,7 @@ import path from 'path'
 import {
   openLineageView,
   openServerPage,
-  runCommand,
+  openProblemsView,
   saveFile,
   SUSHI_SOURCE_PATH,
 } from './utils'
@@ -277,8 +277,7 @@ test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
   // Wait for the error to appear
   await page.waitForSelector('text=Error creating context')
 
-  // Open the problems view
-  await runCommand(page, 'View: Focus Problems')
+  await openProblemsView(page)
 
   // Assert error is present in the problems view
   const errorElement = page
