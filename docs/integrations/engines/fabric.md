@@ -8,7 +8,7 @@ NOTE: Fabric Warehouse is not recommended to be used for the SQLMesh [state conn
 ### Installation
 #### Microsoft Entra ID / Azure Active Directory Authentication:
 ```
-pip install "sqlmesh[mssql-odbc]"
+pip install "sqlmesh[fabric]"
 ```
 
 ### Connection options
@@ -27,6 +27,8 @@ pip install "sqlmesh[mssql-odbc]"
 | `appname`         | The application name to use for the connection               |    string    |    N     |
 | `conn_properties` | The list of connection properties                            | list[string] |    N     |
 | `autocommit`      | Is autocommit mode enabled. Default: false                   |     bool     |    N     |
-| `driver`         | The driver to use for the connection. Default: pyodbc            |    string    |    N     |
+| `driver`          | The driver to use for the connection. Default: pyodbc            |    string    |    N     |
 | `driver_name`     | The driver name to use for the connection. E.g., *ODBC Driver 18 for SQL Server* |    string    |    N     |
+| `tenant`          | The Fabric tenant UUID                             |    string    |    Y     |
+| `workspace`       | The Fabric workspace UUID                             |    string    |    Y     |
 | `odbc_properties` | The dict of ODBC connection properties. E.g., authentication: ActiveDirectoryServicePrincipal. See more [here](https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute?view=sql-server-ver16). | dict |    N     |
