@@ -699,6 +699,9 @@ class TestContext:
             return  # bigquery cannot create/drop catalogs
         if self.dialect == "databricks":
             self.engine_adapter.execute(f"DROP CATALOG IF EXISTS {catalog_name} CASCADE")
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog dropping functionality
+            self.engine_adapter.drop_catalog(catalog_name)
         else:
             self.engine_adapter.execute(f'DROP DATABASE IF EXISTS "{catalog_name}"')
 
