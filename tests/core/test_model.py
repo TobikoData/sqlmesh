@@ -5480,7 +5480,7 @@ def test_when_matched():
     """
     )
 
-    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`))"
+    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`))"
 
     model = load_sql_based_model(expressions, dialect="hive")
     assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
@@ -5514,9 +5514,9 @@ def test_when_matched():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "__merge_source__"."_operation" = 1 THEN DELETE
-      WHEN MATCHED AND "__merge_source__"."_operation" <> 1 THEN UPDATE SET
-        "__merge_target__"."purchase_order_id" = 1
+      WHEN MATCHED AND "__MERGE_SOURCE__"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "__MERGE_SOURCE__"."_operation" <> 1 THEN UPDATE SET
+        "__MERGE_TARGET__"."purchase_order_id" = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5567,7 +5567,7 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "__merge_source__"."salary" <> "__merge_target__"."salary" THEN UPDATE SET
+      WHEN MATCHED AND "__MERGE_SOURCE__"."salary" <> "__MERGE_TARGET__"."salary" THEN UPDATE SET
         ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
@@ -5601,8 +5601,8 @@ def test_when_matched_multiple():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND `__merge_source__`.`x` = 1 THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
-        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
+        "WHEN MATCHED AND `__MERGE_SOURCE__`.`x` = 1 THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`)",
+        "WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`)",
     ]
 
     model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
@@ -5643,13 +5643,13 @@ def test_when_matched_merge_filter_multi_part_columns():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND `__merge_source__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
-        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED AND `__MERGE_SOURCE__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
     ]
 
     expected_merge_filter = (
-        "`__merge_source__`.`record`.`nested_record`.`field` < `__merge_target__`.`record`.`nested_record`.`field` AND "
-        "`__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
+        "`__MERGE_SOURCE__`.`record`.`nested_record`.`field` < `__MERGE_TARGET__`.`record`.`nested_record`.`field` AND "
+        "`__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
     )
 
     model = load_sql_based_model(expressions, dialect="bigquery", variables={"schema": "db"})
@@ -6679,7 +6679,7 @@ def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
     assert model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         t.cast(exp.Expression, model.merge_filter).sql()
-        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+        == '"__MERGE_SOURCE__"."id" > 0 AND "__MERGE_TARGET__"."updated_at" < @end_ds AND "__MERGE_SOURCE__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -6775,7 +6775,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         python_sql_model.merge_filter.sql()
-        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+        == '"__MERGE_SOURCE__"."id" > 0 AND "__MERGE_TARGET__"."updated_at" < @end_ds AND "__MERGE_SOURCE__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -7862,7 +7862,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
+when_matched (WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7890,7 +7890,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED AND "__merge_source__"."x" = 1 THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b") WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
+when_matched (WHEN MATCHED AND "__MERGE_SOURCE__"."x" = 1 THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b") WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -8151,7 +8151,7 @@ def test_merge_filter():
     """
     )
 
-    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS.lower()}`.`salary` > 0"
+    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS}`.`salary` > 0"
 
     model = load_sql_based_model(expressions, dialect="hive")
     assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
@@ -8194,19 +8194,19 @@ def test_merge_filter():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" = 1 THEN DELETE
-      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1 THEN UPDATE SET
-        "{MERGE_TARGET_ALIAS.lower()}"."purchase_order_id" = 1
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS}"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS}"."_operation" <> 1 THEN UPDATE SET
+        "{MERGE_TARGET_ALIAS}"."purchase_order_id" = 1
     ),
     merge_filter (
-      "{MERGE_SOURCE_ALIAS.lower()}"."ds" > (
+      "{MERGE_SOURCE_ALIAS}"."ds" > (
         SELECT
           MAX("ds")
         FROM "db"."test"
       )
-      AND "{MERGE_SOURCE_ALIAS.lower()}"."ds" > @start_ds
-      AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1
-      AND "{MERGE_TARGET_ALIAS.lower()}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
+      AND "{MERGE_SOURCE_ALIAS}"."ds" > @start_ds
+      AND "{MERGE_SOURCE_ALIAS}"."_operation" <> 1
+      AND "{MERGE_TARGET_ALIAS}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -8224,7 +8224,7 @@ FROM db.upstream"""
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
     assert (
         rendered_merge_filters.sql(dialect="hive")
-        == "(`__merge_source__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__merge_source__`.`ds` > '2023-01-01' AND `__merge_source__`.`_operation` <> 1 AND `__merge_target__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
+        == "(`__MERGE_SOURCE__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__MERGE_SOURCE__`.`ds` > '2023-01-01' AND `__MERGE_SOURCE__`.`_operation` <> 1 AND `__MERGE_TARGET__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
     )
 
 

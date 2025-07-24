@@ -1421,18 +1421,10 @@ def replace_merge_table_aliases(
     """
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
-    normalized_merge_source_alias = quote_identifiers(
-        normalize_identifiers(exp.to_identifier(MERGE_SOURCE_ALIAS), dialect), dialect=dialect
-    )
-
-    normalized_merge_target_alias = quote_identifiers(
-        normalize_identifiers(exp.to_identifier(MERGE_TARGET_ALIAS), dialect), dialect=dialect
-    )
-
     if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
         if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            first_part.replace(normalized_merge_target_alias)
+            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS, quoted=True))
         elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            first_part.replace(normalized_merge_source_alias)
+            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS, quoted=True))
 
     return expression
