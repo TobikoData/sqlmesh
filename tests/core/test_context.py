@@ -2778,7 +2778,7 @@ SELECT 1 as id, 'test' as status;
     # Verify statements are in the model and python environment has been popuplated
     assert len(model.pre_statements) == 2
     assert len(model.post_statements) == 1
-    assert model.python_env["__sqlmesh__vars__"].payload == "{'var1': 4}"
+    assert model.python_env[c.SQLMESH_VARS].payload == "{'var1': 4}"
 
     # Verify the statements contain the expected SQL
     assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
