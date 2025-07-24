@@ -51,12 +51,55 @@ export type RPCMethods = {
   }
   api_query: {
     params: {
-      url: string
+      endpoint: string
       method: string
       params: any
       body: any
     }
     result: any
+  }
+  get_selected_model: {
+    params: {}
+    result: {
+      selectedModel?: any
+    }
+  }
+  get_all_models: {
+    params: {}
+    result: {
+      ok: boolean
+      models?: any[]
+      error?: string
+    }
+  }
+  set_selected_model: {
+    params: {
+      model: any
+    }
+    result: {
+      ok: boolean
+      selectedModel?: any
+    }
+  }
+  get_environments: {
+    params: {}
+    result: {
+      ok: boolean
+      environments?: Record<string, any>
+      error?: string
+    }
+  }
+  run_table_diff: {
+    params: {
+      sourceModel: string
+      sourceEnvironment: string
+      targetEnvironment: string
+    }
+    result: {
+      ok: boolean
+      data?: any
+      error?: string
+    }
   }
 } & RPCMethodsShape
 
