@@ -24,7 +24,7 @@ test.describe('External model files trigger lsp', () => {
     // Wait for the models folder to be visible
     await page.waitForSelector('text=models')
 
-    // Click on the models folder, excluding external_models
+    // Click on the external_models file (e.g., external_models.yaml or external_models.yml)
     await page
       .getByRole('treeitem', { name: file, exact: true })
       .locator('a')
