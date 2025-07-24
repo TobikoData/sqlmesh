@@ -434,6 +434,122 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             logger.debug(f"No catalog detected, using original: {schema_name}")
             super().create_schema(schema_name, ignore_if_exists, **kwargs)
 
+    def _ensure_schema_exists(self, table_name: TableName) -> None:
+        """
+        Ensure that the schema for a table exists before creating the table.
+        This is necessary for Fabric because schemas must exist before tables can be created in them.
+        """
+        table = exp.to_table(table_name)
+        if table.db:
+            schema_name = table.db
+            catalog_name = table.catalog
+
+            # Build the full schema name
+            if catalog_name:
+                full_schema_name = f"{catalog_name}.{schema_name}"
+            else:
+                full_schema_name = schema_name
+
+            logger.debug(f"Ensuring schema exists: {full_schema_name}")
+
+            try:
+                # Create the schema if it doesn't exist
+                self.create_schema(full_schema_name, ignore_if_exists=True)
+            except Exception as e:
+                logger.debug(f"Error creating schema {full_schema_name}: {e}")
+                # Continue anyway - the schema might already exist or we might not have permissions
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override _create_table to ensure schema exists before creating tables.
+        """
+        # Extract table name for schema creation
+        if isinstance(table_name_or_schema, exp.Schema):
+            table_name = table_name_or_schema.this
+        else:
+            table_name = table_name_or_schema
+
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super()._create_table(
+            table_name_or_schema=table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            table_kind=table_kind,
+            **kwargs,
+        )
+
+    def create_table(
+        self,
+        table_name: TableName,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override create_table to ensure schema exists before creating tables.
+        """
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super().create_table(
+            table_name=table_name,
+            columns_to_types=columns_to_types,
+            primary_key=primary_key,
+            exists=exists,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
+        )
+
+    def ctas(
+        self,
+        table_name: TableName,
+        query_or_df: t.Any,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override ctas to ensure schema exists before creating tables.
+        """
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super().ctas(
+            table_name=table_name,
+            query_or_df=query_or_df,
+            columns_to_types=columns_to_types,
+            exists=exists,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
+        )
+
     def create_view(
         self,
         view_name: t.Union[str, exp.Table],
@@ -448,10 +564,18 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         **create_kwargs: t.Any,
     ) -> None:
         """
-        Override create_view to handle catalog-qualified view names.
+        Override create_view to handle catalog-qualified view names and ensure schema exists.
         Fabric doesn't support 'CREATE VIEW [catalog].[schema].[view]' syntax.
         """
         logger.debug(f"create_view called with: {view_name} (type: {type(view_name)})")
+
+        # Ensure schema exists for the view
+        if isinstance(view_name, exp.Table):
+            self._ensure_schema_exists(view_name)
+        elif isinstance(view_name, str):
+            # Parse string to table for schema extraction
+            parsed_table = exp.to_table(view_name)
+            self._ensure_schema_exists(parsed_table)
 
         # Handle exp.Table objects that might be catalog-qualified
         if isinstance(view_name, exp.Table):
