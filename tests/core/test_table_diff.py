@@ -290,10 +290,16 @@ def test_grain_check(sushi_context_fixed_date):
     )[0]
 
     row_diff = diff.row_diff()
+    assert row_diff.source_count == 7
+    assert row_diff.target_count == 10
     assert row_diff.full_match_count == 7
-    assert row_diff.full_match_pct == 82.35
+    assert row_diff.partial_match_count == 0
     assert row_diff.s_only_count == 0
     assert row_diff.t_only_count == 3
+    assert row_diff.full_match_pct == 82.35
+    assert row_diff.partial_match_pct == 0
+    assert row_diff.s_only_pct == 0
+    assert row_diff.t_only_pct == 17.65
     assert row_diff.stats["join_count"] == 7
     assert (
         row_diff.stats["null_grain_count"] == 4
