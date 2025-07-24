@@ -12,7 +12,7 @@ fi
 
 ENGINE="$1"
 
-COMMON_DEPENDENCIES="libpq-dev netcat-traditional"
+COMMON_DEPENDENCIES="libpq-dev netcat-traditional unixodbc-dev"
 ENGINE_DEPENDENCIES=""
 
 if [ "$ENGINE" == "spark" ]; then
