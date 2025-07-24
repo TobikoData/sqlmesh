@@ -53,7 +53,7 @@ test.describe('External model files trigger lsp', () => {
     await createPythonInterpreterSettingsSpecifier(tempDir)
     await openServerPage(page, tempDir, sharedCodeServer)
 
-    //   Wait for the models folder to be visible
+    // Wait for the models folder to be visible
     await page.waitForSelector('text=models')
 
     // Click on the models folder, excluding external_models
