@@ -14,7 +14,7 @@ from sqlmesh.core.model import Model, SqlModel, ExternalModel
 
 
 class NoSelectStar(Rule):
-    """Query should not contain SELECT * on its outermost projections, even if it can be expanded."""
+    """Query should not contain SELECT * on its outer most projections, even if it can be expanded."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         # Only applies to SQL models, as other model types do not have a query.
@@ -133,7 +133,7 @@ class NoMissingExternalModels(Rule):
             rule=self,
             violation_msg=f"Model '{model.name}' depends on unregistered external models: "
             f"{', '.join(m for m in not_registered_external_models)}. "
-            "Please register them in the external_models.yaml file.",
+            "Please register them in the external models file. This can be done by running 'sqlmesh create_external_models'.",
         )
 
 

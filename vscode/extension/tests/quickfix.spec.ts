@@ -17,7 +17,15 @@ test('noselectstar quickfix', async ({ page, sharedCodeServer }) => {
   const configPath = path.join(tempDir, 'config.py')
   const read = await fs.readFile(configPath, 'utf8')
   // Replace linter to be on
+  const target = 'enabled=True'
   const replaced = read.replace('enabled=False', 'enabled=True')
+  // Assert replaced correctly
+  expect(replaced).toContain(target)
+
+  // Replace the rules to only have noselectstar
+  const targetRules = `rules=[
+            "noselectstar",
+        ],`
   const replacedTheOtherRules = replaced.replace(
     `rules=[
             "ambiguousorinvalidcolumn",
@@ -25,12 +33,12 @@ test('noselectstar quickfix', async ({ page, sharedCodeServer }) => {
             "noselectstar",
             "nomissingaudits",
             "nomissingowner",
+            "nomissingexternalmodels",
         ],`,
-    `rules=[
-            "noselectstar",
-        ],
-`,
+    targetRules,
   )
+  expect(replacedTheOtherRules).toContain(targetRules)
+
   await fs.writeFile(configPath, replacedTheOtherRules)
   // Replace the file to cause the error
   const modelPath = path.join(tempDir, 'models', 'latest_order.sql')
