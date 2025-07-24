@@ -554,7 +554,7 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     if ctx.dialect == "bigquery":
         ds_type = "datetime"
     if ctx.dialect == "tsql":
-        ds_type = "varchar(8000)"
+        ds_type = "varchar(max)"
 
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     table = ctx.table("test_table")
@@ -2255,7 +2255,7 @@ def test_table_diff_grain_check_single_key(ctx: TestContext):
 
     columns_to_types = {
         "key1": exp.DataType.build("int"),
-        "value": exp.DataType.build("varchar(8000)"),
+        "value": exp.DataType.build("varchar(max)"),
     }
 
     ctx.engine_adapter.create_table(src_table, columns_to_types)
@@ -2319,8 +2319,8 @@ def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
 
     columns_to_types = {
         "key1": exp.DataType.build("int"),
-        "key2": exp.DataType.build("varchar(8000)"),
-        "value": exp.DataType.build("varchar(8000)"),
+        "key2": exp.DataType.build("varchar(max)"),
+        "value": exp.DataType.build("varchar(max)"),
     }
 
     ctx.engine_adapter.create_table(src_table, columns_to_types)
@@ -2377,13 +2377,13 @@ def test_table_diff_arbitrary_condition(ctx: TestContext):
 
     columns_to_types_src = {
         "id": exp.DataType.build("int"),
-        "value": exp.DataType.build("varchar(8000)"),
+        "value": exp.DataType.build("varchar(max)"),
         "ts": exp.DataType.build("timestamp"),
     }
 
     columns_to_types_target = {
         "item_id": exp.DataType.build("int"),
-        "value": exp.DataType.build("varchar(8000)"),
+        "value": exp.DataType.build("varchar(max)"),
         "ts": exp.DataType.build("timestamp"),
     }
 
@@ -2444,8 +2444,8 @@ def test_table_diff_identical_dataset(ctx: TestContext):
 
     columns_to_types = {
         "key1": exp.DataType.build("int"),
-        "key2": exp.DataType.build("varchar(8000)"),
-        "value": exp.DataType.build("varchar(8000)"),
+        "key2": exp.DataType.build("varchar(max)"),
+        "value": exp.DataType.build("varchar(max)"),
     }
 
     ctx.engine_adapter.create_table(src_table, columns_to_types)
