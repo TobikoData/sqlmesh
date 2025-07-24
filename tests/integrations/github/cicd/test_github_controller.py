@@ -697,3 +697,41 @@ def test_get_pr_environment_summary_includes_warnings_and_errors(
     )
     assert "> [!WARNING]\n>\n> Warning 1\n" in error_summary
     assert "> [!CAUTION]\n>\n> Error 1" in error_summary
+
+
+def test_pr_comment_deploy_indicator_includes_command_namespace(
+    mocker: MockerFixture,
+    github_client,
+    make_mock_issue_comment,
+    make_controller: t.Callable[..., GithubController],
+):
+    mock_repo = github_client.get_repo()
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+        bot_config=GithubCICDBotConfig(
+            enable_deploy_command=True,
+            merge_method=MergeMethod.SQUASH,
+            command_namespace="#SQLMesh",
+        ),
+    )
+
+    _update_pr_environment(controller)
+
+    assert len(created_comments) > 0
+
+    comment = created_comments[0].body
+
+    assert "To **apply** this PR's plan to prod, comment:\n  - `/deploy`" not in comment
+    assert "To **apply** this PR's plan to prod, comment:\n  - `#SQLMesh/deploy`" in comment
