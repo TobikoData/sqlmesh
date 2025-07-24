@@ -402,3 +402,34 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             # No catalog qualification, use as-is
             logger.debug(f"No catalog detected, using original: {schema_name}")
             super().drop_schema(schema_name, ignore_if_not_exists, cascade, **drop_args)
+
+    def create_schema(
+        self,
+        schema_name: t.Union[str, exp.Table],
+        ignore_if_exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override create_schema to handle catalog-qualified schema names.
+        Fabric doesn't support 'CREATE SCHEMA [catalog].[schema]' syntax.
+        """
+        logger.debug(f"create_schema called with: {schema_name} (type: {type(schema_name)})")
+
+        # If it's a string with a dot, assume it's catalog.schema format
+        if isinstance(schema_name, str) and "." in schema_name:
+            parts = schema_name.split(".", 1)  # Split only on first dot
+            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
+            schema_only = parts[1].strip('"[]')
+            logger.debug(
+                f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
+            )
+
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
+
+            # Use just the schema name
+            super().create_schema(schema_only, ignore_if_exists, **kwargs)
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {schema_name}")
+            super().create_schema(schema_name, ignore_if_exists, **kwargs)
