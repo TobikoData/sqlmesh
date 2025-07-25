@@ -46,6 +46,15 @@ from sqlmesh.lsp.custom import (
     FormatProjectRequest,
     FormatProjectResponse,
     CustomMethod,
+    LIST_WORKSPACE_TESTS_FEATURE,
+    ListWorkspaceTestsRequest,
+    ListWorkspaceTestsResponse,
+    LIST_DOCUMENT_TESTS_FEATURE,
+    ListDocumentTestsRequest,
+    ListDocumentTestsResponse,
+    RUN_TEST_FEATURE,
+    RunTestRequest,
+    RunTestResponse,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
@@ -127,10 +136,57 @@ class SQLMeshLanguageServer:
             API_FEATURE: self._custom_api,
             SUPPORTED_METHODS_FEATURE: self._custom_supported_methods,
             FORMAT_PROJECT_FEATURE: self._custom_format_project,
+            LIST_WORKSPACE_TESTS_FEATURE: self._list_workspace_tests,
+            LIST_DOCUMENT_TESTS_FEATURE: self._list_document_tests,
+            RUN_TEST_FEATURE: self._run_test,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
+
+    def _list_workspace_tests(
+        self,
+        ls: LanguageServer,
+        params: ListWorkspaceTestsRequest,
+    ) -> ListWorkspaceTestsResponse:
+        """List all tests in the current workspace."""
+        try:
+            context = self._context_get_or_load()
+            tests = context.list_workspace_tests()
+            return ListWorkspaceTestsResponse(tests=tests)
+        except Exception as e:
+            ls.log_trace(f"Error listing workspace tests: {e}")
+            return ListWorkspaceTestsResponse(tests=[])
+
+    def _list_document_tests(
+        self,
+        ls: LanguageServer,
+        params: ListDocumentTestsRequest,
+    ) -> ListDocumentTestsResponse:
+        """List tests for a specific document."""
+        try:
+            uri = URI(params.textDocument.uri)
+            context = self._context_get_or_load(uri)
+            tests = context.get_document_tests(uri)
+            return ListDocumentTestsResponse(tests=tests)
+        except Exception as e:
+            ls.log_trace(f"Error listing document tests: {e}")
+            return ListDocumentTestsResponse(tests=[])
+
+    def _run_test(
+        self,
+        ls: LanguageServer,
+        params: RunTestRequest,
+    ) -> RunTestResponse:
+        """Run a specific test."""
+        try:
+            uri = URI(params.textDocument.uri)
+            context = self._context_get_or_load(uri)
+            result = context.run_test(uri, params.testName)
+            return result
+        except Exception as e:
+            ls.log_trace(f"Error running test: {e}")
+            return RunTestResponse(success=False, response_error=str(e))
 
     # All the custom LSP methods are registered here and prefixed with _custom
     def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:

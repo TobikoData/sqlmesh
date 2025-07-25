@@ -3,10 +3,12 @@ from pathlib import Path
 from sqlmesh.core.context import Context
 import typing as t
 
+from sqlmesh.core.linter.rule import Range
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.custom import ModelForRendering
+from sqlmesh.lsp.custom import ModelForRendering, TestEntry, RunTestResponse
 from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
+from sqlmesh.lsp.tests_ranges import get_test_ranges
 from sqlmesh.lsp.uri import URI
 from lsprotocol import types
 
@@ -62,6 +64,71 @@ class LSPContext:
             **model_map,
             **audit_map,
         }
+
+    def list_workspace_tests(self) -> t.List[TestEntry]:
+        """List all tests in the workspace."""
+        tests = self.context.load_model_tests()
+
+        # Use a set to ensure unique URIs
+        unique_test_uris = {URI.from_path(test.path).value for test in tests}
+        test_uris: t.Dict[str, t.Dict[str, Range]] = {}
+        for uri in unique_test_uris:
+            test_ranges = get_test_ranges(URI(uri).to_path())
+            if uri not in test_uris:
+                test_uris[uri] = {}
+            test_uris[uri].update(test_ranges)
+        return [
+            TestEntry(
+                name=test.test_name,
+                uri=URI.from_path(test.path).value,
+                range=test_uris.get(URI.from_path(test.path).value, {}).get(test.test_name),
+            )
+            for test in tests
+        ]
+
+    def get_document_tests(self, uri: URI) -> t.List[TestEntry]:
+        """Get tests for a specific document.
+
+        Args:
+            uri: The URI of the file to get tests for.
+
+        Returns:
+            List of TestEntry objects for the specified document.
+        """
+        tests = self.context.load_model_tests(tests=[str(uri.to_path())])
+        test_ranges = get_test_ranges(uri.to_path())
+        return [
+            TestEntry(
+                name=test.test_name,
+                uri=URI.from_path(test.path).value,
+                range=test_ranges.get(test.test_name),
+            )
+            for test in tests
+        ]
+
+    def run_test(self, uri: URI, test_name: str) -> RunTestResponse:
+        """Run a specific test for a model.
+
+        Args:
+            uri: The URI of the file containing the test.
+            test_name: The name of the test to run.
+
+        Returns:
+            List of annotated rule violations from the test run.
+        """
+        path = uri.to_path()
+        results = self.context.test(
+            tests=[str(path)],
+            match_patterns=[test_name],
+        )
+        if results.testsRun != 1:
+            raise ValueError(f"Expected to run 1 test, but ran {results.testsRun} tests.")
+        if len(results.successes) == 1:
+            return RunTestResponse(success=True)
+        return RunTestResponse(
+            success=False,
+            error_message=str(results.failures[0][1]),
+        )
 
     def render_model(self, uri: URI) -> t.List[RenderModelEntry]:
         """Get rendered models for a file, using cache when available.
