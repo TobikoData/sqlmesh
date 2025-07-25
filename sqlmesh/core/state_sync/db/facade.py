@@ -447,6 +447,7 @@ class EngineAdapterStateSync(StateSync):
         default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
+        pre_check_only: bool = False,
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         self.migrator.migrate(
@@ -454,6 +455,7 @@ class EngineAdapterStateSync(StateSync):
             default_catalog,
             skip_backup=skip_backup,
             promoted_snapshots_only=promoted_snapshots_only,
+            pre_check_only=pre_check_only,
         )
 
     @transactional()
