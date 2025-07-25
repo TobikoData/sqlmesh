@@ -1,0 +1,1 @@
+EXTERNAL_MODEL_UPDATE_COLUMNS = "sqlmesh.external_model_update_columns"
