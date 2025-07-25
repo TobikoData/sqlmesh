@@ -2685,7 +2685,25 @@ class TerminalConsole(Console):
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
     ) -> None:
         severity = "errors" if is_error else "warnings"
-        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+
+        # Sort violations by line, then alphabetically the name of the violation
+        # Violations with no range go first
+        sorted_violations = sorted(
+            violations,
+            key=lambda v: (
+                v.violation_range.start.line if v.violation_range else -1,
+                v.rule.name.lower(),
+            ),
+        )
+        violations_text = [
+            (
+                f" - Line {v.violation_range.start.line + 1}: {v.rule.name} - {v.violation_msg}"
+                if v.violation_range
+                else f" - {v.rule.name}: {v.violation_msg}"
+            )
+            for v in sorted_violations
+        ]
+        violations_msg = "\n".join(violations_text)
         msg = f"Linter {severity} for {model._path}:\n{violations_msg}"
 
         if is_error:
