@@ -254,10 +254,7 @@ class SQLMeshLanguageServer:
                     self._ensure_context_for_document(uri)
                     # If successful, context_state will be ContextLoaded
                     if isinstance(self.context_state, ContextLoaded):
-                        ls.show_message(
-                            "Successfully loaded SQLMesh context",
-                            types.MessageType.Info,
-                        )
+                        loaded_sqlmesh_message(ls)
                 except Exception as e:
                     ls.log_trace(f"Still cannot load context: {e}")
                     # The error will be stored in context_state by _ensure_context_for_document
@@ -342,7 +339,7 @@ class SQLMeshLanguageServer:
                             config_path = folder_path / f"config.{ext}"
                             if config_path.exists():
                                 if self._create_lsp_context([folder_path]):
-                                    loaded_sqlmesh_message(ls, folder_path)
+                                    loaded_sqlmesh_message(ls)
                                     return  # Exit after successfully loading any config
             except Exception as e:
                 ls.log_trace(
@@ -863,7 +860,7 @@ class SQLMeshLanguageServer:
         try:
             if isinstance(self.context_state, NoContext):
                 context = self.context_class(paths=paths)
-                loaded_sqlmesh_message(self.server, paths[0])
+                loaded_sqlmesh_message(self.server)
             elif isinstance(self.context_state, ContextFailed):
                 if self.context_state.context:
                     context = self.context_state.context
@@ -871,7 +868,7 @@ class SQLMeshLanguageServer:
                 else:
                     # If there's no context (initial creation failed), try creating again
                     context = self.context_class(paths=paths)
-                    loaded_sqlmesh_message(self.server, paths[0])
+                    loaded_sqlmesh_message(self.server)
             else:
                 context = self.context_state.lsp_context.context
                 context.load()
@@ -908,9 +905,9 @@ class SQLMeshLanguageServer:
         self.server.start_io()
 
 
-def loaded_sqlmesh_message(ls: LanguageServer, folder: Path) -> None:
+def loaded_sqlmesh_message(ls: LanguageServer) -> None:
     ls.show_message(
-        f"Loaded SQLMesh context from {folder}",
+        f"Loaded SQLMesh Context",
         types.MessageType.Info,
     )
 
