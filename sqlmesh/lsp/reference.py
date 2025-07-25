@@ -38,10 +38,13 @@ class LSPExternalModelReference(PydanticModel):
     """A LSP reference to an external model."""
 
     type: t.Literal["external_model"] = "external_model"
-    uri: str
     range: Range
-    markdown_description: t.Optional[str] = None
     target_range: t.Optional[Range] = None
+    uri: t.Optional[str] = None
+    """The URI of the external model, typically a YAML file, it is optional because
+    external models can be unregistered and so they URI is not available."""
+
+    markdown_description: t.Optional[str] = None
 
 
 class LSPCteReference(PydanticModel):
@@ -224,7 +227,7 @@ def get_model_definitions_for_a_path(
                             references.extend(column_references)
                     continue
 
-                # For non-CTE tables, process as before (external model references)
+                # For non-CTE tables, process these as before (external model references)
                 # Normalize the table reference
                 unaliased = table.copy()
                 if unaliased.args.get("alias") is not None:
@@ -247,6 +250,19 @@ def get_model_definitions_for_a_path(
                     model_or_snapshot=normalized_reference_name, raise_if_missing=False
                 )
                 if referenced_model is None:
+                    table_meta = TokenPositionDetails.from_meta(table.this.meta)
+                    table_range_sqlmesh = table_meta.to_range(read_file)
+                    start_pos_sqlmesh = table_range_sqlmesh.start
+                    end_pos_sqlmesh = table_range_sqlmesh.end
+                    references.append(
+                        LSPExternalModelReference(
+                            range=Range(
+                                start=to_lsp_position(start_pos_sqlmesh),
+                                end=to_lsp_position(end_pos_sqlmesh),
+                            ),
+                            markdown_description="Unregistered external model",
+                        )
+                    )
                     continue
                 referenced_model_path = referenced_model._path
                 if referenced_model_path is None:
