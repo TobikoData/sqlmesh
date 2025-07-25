@@ -2,7 +2,12 @@ import { test, Page } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openLineageView, openServerPage, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { writeFileSync } from 'fs'
 import {
   createPythonInterpreterSettingsSpecifier,
@@ -17,7 +22,7 @@ async function testLineageWithProjectPath(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle')
   await page.waitForLoadState('domcontentloaded')
   await openLineageView(page)
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 }
 
 test('Lineage panel renders correctly - no project path config (default)', async ({

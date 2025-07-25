@@ -7,6 +7,7 @@ import {
   openServerPage,
   runCommand,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
@@ -33,7 +34,7 @@ test('Render works correctly', async ({ page, sharedCodeServer }) => {
     .click()
 
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Render the model
   await runCommand(page, 'Render Model')
@@ -69,7 +70,7 @@ test('Render works correctly with model without a description', async ({
     .click()
 
   await page.waitForSelector('text=custom_full_with_custom_kind')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Render the model
   await runCommand(page, 'Render Model')
@@ -100,7 +101,7 @@ test('Render works correctly with every rendered model opening a new tab', async
     .locator('a')
     .click()
   await page.waitForSelector('text=custom_full_with_custom_kind')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Render the model
   await runCommand(page, 'Render Model')
@@ -137,8 +138,7 @@ test('Render shows model picker when no active editor is open', async ({
   // Load the lineage view to initialize SQLMesh context (like lineage.spec.ts does)
   await openLineageView(page)
 
-  // Wait for "Loaded SQLmesh Context" text to appear
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Run the render command without any active editor
   await runCommand(page, 'Render Model')

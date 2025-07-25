@@ -7,6 +7,7 @@ import {
   openServerPage,
   renameSymbol,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
@@ -34,7 +35,7 @@ async function setupTestEnvironment({
     .locator('a')
     .click()
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 }
 
 test.describe('CTE Rename', () => {

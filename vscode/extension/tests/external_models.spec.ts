@@ -1,5 +1,9 @@
 import os from 'os'
-import { openServerPage, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 import { test, expect } from './fixtures'
 import fs from 'fs-extra'
@@ -31,7 +35,7 @@ test.describe('External model files trigger lsp', () => {
       .click()
 
     await page.waitForSelector('text=raw.demographics')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
   })
 
   test('external_models.yml', async ({ page, sharedCodeServer }) => {
@@ -63,6 +67,6 @@ test.describe('External model files trigger lsp', () => {
       .click()
 
     await page.waitForSelector('text=raw.demographics')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
   })
 })

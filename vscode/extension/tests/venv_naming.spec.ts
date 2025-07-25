@@ -9,6 +9,7 @@ import {
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 
 test('venv being named .env', async ({ page, sharedCodeServer }) => {
@@ -38,5 +39,5 @@ test('venv being named .env', async ({ page, sharedCodeServer }) => {
   await openServerPage(page, tempDir, sharedCodeServer)
   await page.waitForSelector('text=models')
   await openLineageView(page)
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 })

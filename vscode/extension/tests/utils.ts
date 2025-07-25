@@ -203,6 +203,12 @@ export const openFile = async (page: Page, file: string): Promise<void> => {
 }
 
 /**
+ * Wait for SQLMesh context to be loaded.
+ */
+export const waitForLoadedSQLMesh = (page: Page) =>
+  page.waitForSelector('text=Loaded SQLMesh Context')
+
+/**
  * Go to VSCode page
  */
 export const openServerPage = async (
