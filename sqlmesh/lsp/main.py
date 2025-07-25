@@ -496,14 +496,15 @@ class SQLMeshLanguageServer:
                         target_range = reference.target_range
                         target_selection_range = reference.target_range
 
-                    location_links.append(
-                        types.LocationLink(
-                            target_uri=reference.uri,
-                            target_selection_range=target_selection_range,
-                            target_range=target_range,
-                            origin_selection_range=reference.range,
+                    if reference.uri is not None:
+                        location_links.append(
+                            types.LocationLink(
+                                target_uri=reference.uri,
+                                target_selection_range=target_selection_range,
+                                target_range=target_range,
+                                origin_selection_range=reference.range,
+                            )
                         )
-                    )
                 return location_links
             except Exception as e:
                 ls.show_message(f"Error getting references: {e}", types.MessageType.Error)
@@ -521,7 +522,11 @@ class SQLMeshLanguageServer:
                 all_references = get_all_references(context, uri, params.position)
 
                 # Convert references to Location objects
-                locations = [types.Location(uri=ref.uri, range=ref.range) for ref in all_references]
+                locations = [
+                    types.Location(uri=ref.uri, range=ref.range)
+                    for ref in all_references
+                    if ref.uri is not None
+                ]
 
                 return locations if locations else None
             except Exception as e:
