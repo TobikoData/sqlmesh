@@ -46,6 +46,9 @@ from sqlmesh.lsp.custom import (
     FormatProjectRequest,
     FormatProjectResponse,
     CustomMethod,
+    LIST_WORKSPACE_TESTS_FEATURE,
+    ListWorkspaceTestsRequest,
+    ListWorkspaceTestsResponse,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.hints import get_hints
@@ -126,10 +129,25 @@ class SQLMeshLanguageServer:
             API_FEATURE: self._custom_api,
             SUPPORTED_METHODS_FEATURE: self._custom_supported_methods,
             FORMAT_PROJECT_FEATURE: self._custom_format_project,
+            LIST_WORKSPACE_TESTS_FEATURE: self._list_workspace_tests,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
+
+    def _list_workspace_tests(
+        self,
+        ls: LanguageServer,
+        params: ListWorkspaceTestsRequest,
+    ) -> ListWorkspaceTestsResponse:
+        """List all tests in the current workspace."""
+        try:
+            context = self._context_get_or_load()
+            tests = context.list_workspace_tests()
+            return ListWorkspaceTestsResponse(tests=tests)
+        except Exception as e:
+            ls.log_trace(f"Error listing workspace tests: {e}")
+            return ListWorkspaceTestsResponse(tests=[])
 
     # All the custom LSP methods are registered here and prefixed with _custom
     def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
