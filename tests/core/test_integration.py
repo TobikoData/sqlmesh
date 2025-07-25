@@ -48,6 +48,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnmanagedKind,
     Model,
     ModelKind,
     ModelKindName,
@@ -2483,6 +2484,54 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     ]
 
     context.apply(plan)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_plan_across_environments_snapshot_with_shared_version(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Change kind to incremental unmanaged
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    previous_kind = model.kind.copy(update={"forward_only": True})
+    assert isinstance(previous_kind, IncrementalByTimeRangeKind)
+
+    model = model.copy(
+        update={"kind": IncrementalUnmanagedKind(), "physical_version": "pinned_version_12345"}
+    )
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make some change and deploy it to both dev and prod environments
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    context.plan("dev_a", auto_apply=True, no_prompts=True)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Change the kind back to incremental by time range and deploy to prod
+    model = model.copy(update={"kind": previous_kind})
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Restate the model and verify that the interval hasn't been expanded because of the old snapshot
+    # with the same version
+    context.plan(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-06",
+        end="2023-01-08",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    assert (
+        context.fetchdf(
+            "SELECT COUNT(*) AS cnt FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL AND event_date < '2023-01-06'"
+        )["cnt"][0]
+        == 0
+    )
+    plan = context.plan_builder("prod").build()
+    assert not plan.missing_intervals
 
 
 def test_restatement_plan_hourly_with_downstream_daily_restates_correct_intervals(tmp_path: Path):
