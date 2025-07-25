@@ -1952,7 +1952,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
             ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
 
             assert (
-                """noselectstar: Query should not contain SELECT * on its outer most projections"""
+                """noselectstar - Query should not contain SELECT * on its outer most projections"""
                 in mock_logger.call_args[0][0]
             )
 
