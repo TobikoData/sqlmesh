@@ -35,6 +35,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
     SnapshotCreationFailedError,
+    SnapshotNameVersion,
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
@@ -398,6 +399,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not prod_restatements:
             return set()
 
+        prod_name_versions: t.Set[SnapshotNameVersion] = {
+            s.name_version for s in loaded_snapshots.values()
+        }
+
         snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
 
         for env_summary in self.state_sync.get_environments_summary():
@@ -425,6 +430,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     {
                         keyed_snapshots[a].snapshot_id: (keyed_snapshots[a], intervals)
                         for a in affected_snapshot_names
+                        # Don't restate a snapshot if it shares the version with a snapshot in prod
+                        if keyed_snapshots[a].name_version not in prod_name_versions
                     }
                 )
 
