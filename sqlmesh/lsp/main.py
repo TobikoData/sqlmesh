@@ -824,6 +824,7 @@ class SQLMeshLanguageServer:
                 config_path = workspace_folder / f"config.{ext}"
                 if config_path.exists():
                     if self._create_lsp_context([workspace_folder]):
+                        loaded_sqlmesh_message(self.server)
                         return
 
         #  Then , check the provided folder recursively
@@ -835,6 +836,7 @@ class SQLMeshLanguageServer:
                 config_path = path / f"config.{ext}"
                 if config_path.exists():
                     if self._create_lsp_context([path]):
+                        loaded_sqlmesh_message(self.server)
                         return
 
             path = path.parent
@@ -860,7 +862,6 @@ class SQLMeshLanguageServer:
         try:
             if isinstance(self.context_state, NoContext):
                 context = self.context_class(paths=paths)
-                loaded_sqlmesh_message(self.server)
             elif isinstance(self.context_state, ContextFailed):
                 if self.context_state.context:
                     context = self.context_state.context
@@ -868,7 +869,6 @@ class SQLMeshLanguageServer:
                 else:
                     # If there's no context (initial creation failed), try creating again
                     context = self.context_class(paths=paths)
-                    loaded_sqlmesh_message(self.server)
             else:
                 context = self.context_state.lsp_context.context
                 context.load()
