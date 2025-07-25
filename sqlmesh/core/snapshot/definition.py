@@ -228,6 +228,7 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     change_category: t.Optional[SnapshotChangeCategory] = None
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     dev_table_suffix: str
+    table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
@@ -334,7 +335,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
-    table_naming_convention: t.Optional[TableNamingConvention] = None
+    table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
 
     @cached_property
     def identifier(self) -> str:
@@ -609,8 +610,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     base_table_name_override: t.Optional[str] = None
     next_auto_restatement_ts: t.Optional[int] = None
     dev_table_suffix: str = "dev"
-    table_naming_convention_: t.Optional[TableNamingConvention] = Field(
-        default=None, alias="table_naming_convention"
+    table_naming_convention_: TableNamingConvention = Field(
+        default=TableNamingConvention.default, alias="table_naming_convention"
     )
 
     @field_validator("ttl")
@@ -663,7 +664,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
-        table_naming_convention: t.Optional[TableNamingConvention] = None,
+        table_naming_convention: TableNamingConvention = TableNamingConvention.default,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -1023,6 +1024,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             previous_version = self.previous_version
             self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
+            self.table_naming_convention = previous_version.table_naming_convention
             if self.is_materialized and (category.is_indirect_non_breaking or category.is_metadata):
                 # Reuse the dev table for indirect non-breaking changes.
                 self.dev_version_ = (
@@ -1229,6 +1231,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             change_category=self.change_category,
             physical_schema=self.physical_schema,
             dev_table_suffix=self.dev_table_suffix,
+            table_naming_convention=self.table_naming_convention,
         )
 
     @property

@@ -1419,7 +1419,7 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
 @pytest.mark.parametrize(
     "convention_str, expected",
     [
-        (None, None),
+        (None, TableNamingConvention.SCHEMA_AND_TABLE),
         ("schema_and_table", TableNamingConvention.SCHEMA_AND_TABLE),
         ("table_only", TableNamingConvention.TABLE_ONLY),
         ("hash_md5", TableNamingConvention.HASH_MD5),

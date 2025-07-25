@@ -166,6 +166,7 @@ def test_json(snapshot: Snapshot):
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
+        "table_naming_convention": "schema_and_table",
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
@@ -1140,6 +1141,9 @@ def test_snapshot_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
         data_hash="1", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
@@ -1196,6 +1200,8 @@ def test_table_name_naming_convention_table_only(make_snapshot: t.Callable[..., 
         table_naming_convention=TableNamingConvention.TABLE_ONLY,
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.TABLE_ONLY
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.TABLE_ONLY
 
     assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.baz__{snapshot.version}"
     assert (
@@ -1220,6 +1226,8 @@ def test_table_name_naming_convention_hash_md5(make_snapshot: t.Callable[..., Sn
         table_naming_convention=TableNamingConvention.HASH_MD5,
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
 
     hash = md5(f"foo.sqlmesh__bar.bar__baz__{snapshot.version}")
     assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.sqlmesh_md5__{hash}"
@@ -1271,6 +1279,36 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert new_snapshot.dev_version == new_snapshot.fingerprint.to_version()
     assert new_snapshot.version == snapshot.version
     assert new_snapshot.dev_version != snapshot.dev_version
+
+
+def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
+    # Ensure that snapshots that trigger "reuse previous version" inherit the naming convention of the previous snapshot
+    original_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds")),
+        table_naming_convention=TableNamingConvention.SCHEMA_AND_TABLE,
+    )
+    original_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert original_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert original_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+
+    changed_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, 'forward_only' as a, ds")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    changed_snapshot.previous_versions = original_snapshot.all_versions
+
+    assert changed_snapshot.previous_version == original_snapshot.data_version
+
+    changed_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    # inherited from previous version even though changed_snapshot was created with TableNamingConvention.HASH_MD5
+    assert changed_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert (
+        changed_snapshot.previous_version.table_naming_convention
+        == TableNamingConvention.SCHEMA_AND_TABLE
+    )
+    assert changed_snapshot.table_name() == "sqlmesh__default.a__4145234055"
 
 
 def test_categorize_change_sql(make_snapshot):

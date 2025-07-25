@@ -148,7 +148,9 @@ class Config(BaseConfig):
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
-    physical_table_naming_convention: t.Optional[TableNamingConvention] = None
+    physical_table_naming_convention: TableNamingConvention = Field(
+        default=TableNamingConvention.default
+    )
     gateway_managed_virtual_layer: bool = False
     infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
