@@ -1,5 +1,7 @@
 from functools import lru_cache
 from sqlglot import Dialect, Tokenizer
+
+from sqlmesh.core.linter.rules.helpers.lineage import generate_markdown_description
 from sqlmesh.lsp.custom import (
     AllModelsResponse,
     MacroCompletion,
@@ -8,7 +10,6 @@ from sqlmesh.lsp.custom import (
 from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
-from sqlmesh.lsp.description import generate_markdown_description
 from sqlmesh.lsp.uri import URI
 
 

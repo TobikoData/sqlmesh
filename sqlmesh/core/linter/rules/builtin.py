@@ -11,6 +11,8 @@ from sqlmesh.core.linter.helpers import TokenPositionDetails, get_range_of_model
 from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.core.linter.rules.helpers.lineage import find_external_model_ranges
 
 
 class NoSelectStar(Rule):
@@ -110,18 +112,22 @@ class NoMissingAudits(Rule):
             return self.violation()
 
 
-class NoMissingExternalModels(Rule):
+class NoUnregisteredExternalModels(Rule):
     """All external models must be registered in the external_models.yaml file"""
 
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        # Ignore external models themselves, because either they are registered,
-        # and if they are not, they will be caught as referenced in another model.
+    def check_model(
+        self, model: Model
+    ) -> t.Optional[t.Union[RuleViolation, t.List[RuleViolation]]]:
+        depends_on = model.depends_on
+
+        # Ignore external models themselves, because either they are registered
+        # if they are not, they will be caught as referenced in another model.
         if isinstance(model, ExternalModel):
             return None
 
-        # Handle other models that may refer to the external models.
+        # Handle other models that are referring to them
         not_registered_external_models: t.Set[str] = set()
-        for depends_on_model in model.depends_on:
+        for depends_on_model in depends_on:
             existing_model = self.context.get_model(depends_on_model)
             if existing_model is None:
                 not_registered_external_models.add(depends_on_model)
@@ -129,12 +135,59 @@ class NoMissingExternalModels(Rule):
         if not not_registered_external_models:
             return None
 
+        path = model._path
+        # For SQL models, try to do better than just raise it
+        if isinstance(model, SqlModel) and path is not None and str(path).endswith(".sql"):
+            external_model_ranges = self.find_external_model_ranges(
+                not_registered_external_models, model
+            )
+            if external_model_ranges is None:
+                return RuleViolation(
+                    rule=self,
+                    violation_msg=f"Model '{model.fqn}' depends on unregistered external models: "
+                    f"{', '.join(m for m in not_registered_external_models)}. "
+                    "Please register them in the external_models.yaml file.",
+                )
+
+            outs: t.List[RuleViolation] = []
+            for external_model in not_registered_external_models:
+                external_model_range = external_model_ranges.get(external_model)
+                if external_model_range:
+                    outs.extend(
+                        RuleViolation(
+                            rule=self,
+                            violation_msg=f"Model '{model.fqn}' depends on unregistered external model: "
+                            f"{external_model}. Please register it in the external_models.yaml file.",
+                            violation_range=target,
+                        )
+                        for target in external_model_range
+                    )
+                else:
+                    outs.append(
+                        RuleViolation(
+                            rule=self,
+                            violation_msg=f"Model '{model.fqn}' depends on unregistered external model: "
+                            f"{external_model}. Please register it in the external_models.yaml file.",
+                        )
+                    )
+
+            return outs
+
         return RuleViolation(
             rule=self,
             violation_msg=f"Model '{model.name}' depends on unregistered external models: "
             f"{', '.join(m for m in not_registered_external_models)}. "
-            "Please register them in the external models file. This can be done by running 'sqlmesh create_external_models'.",
+            "Please register them in the external_models.yaml file.",
         )
+
+    def find_external_model_ranges(
+        self, external_models_not_registered: t.Set[str], model: SqlModel
+    ) -> t.Optional[t.Dict[str, t.List[Range]]]:
+        """Returns a map of external model names to their ranges found in the query.
+
+        It returns a dictionary of fqn to a list of ranges where the external model
+        """
+        return find_external_model_ranges(self.context, external_models_not_registered, model)
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))

@@ -48,3 +48,5 @@ def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
         "Model 'sushi.customers' depends on unregistered external models: "
         in lints[0].violation_msg
     )
+
+    assert lints[0].violation_range is not None

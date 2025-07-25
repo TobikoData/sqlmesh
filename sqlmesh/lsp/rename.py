@@ -9,6 +9,7 @@ from lsprotocol.types import (
 )
 
 from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.helpers import to_lsp_range
 from sqlmesh.lsp.reference import (
     _position_within_range,
     get_cte_references,
@@ -38,15 +39,17 @@ def prepare_rename(
         target_range = None
         for ref in cte_references:
             # Check if cursor is on a CTE usage
-            if _position_within_range(position, ref.range):
+            if _position_within_range(position, to_lsp_range(ref.range)):
                 target_range = ref.target_range
                 break
             # Check if cursor is on the CTE definition
-            elif _position_within_range(position, ref.target_range):
+            elif _position_within_range(position, to_lsp_range(ref.target_range)):
                 target_range = ref.target_range
                 break
         if target_range:
-            return PrepareRenameResult_Type1(range=target_range, placeholder="cte_name")
+            return PrepareRenameResult_Type1(
+                range=to_lsp_range(target_range), placeholder="cte_name"
+            )
 
     # For now, only CTEs are supported
     return None
@@ -90,12 +93,13 @@ def _rename_cte(cte_references: t.List[LSPCteReference], new_name: str) -> Works
     changes: t.Dict[str, t.List[TextEdit]] = {}
 
     for ref in cte_references:
-        uri = ref.uri
+        uri = URI.from_path(ref.path).value
+
         if uri not in changes:
             changes[uri] = []
 
         # Create a text edit for this reference
-        text_edit = TextEdit(range=ref.range, new_text=new_name)
+        text_edit = TextEdit(range=to_lsp_range(ref.range), new_text=new_name)
         changes[uri].append(text_edit)
 
     return WorkspaceEdit(changes=changes)
@@ -130,7 +134,7 @@ def get_document_highlights(
                 else DocumentHighlightKind.Read
             )
 
-            highlights.append(DocumentHighlight(range=ref.range, kind=kind))
+            highlights.append(DocumentHighlight(range=to_lsp_range(ref.range), kind=kind))
         return highlights
 
     # For now, only CTEs are supported

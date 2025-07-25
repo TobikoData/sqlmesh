@@ -3,7 +3,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.linter.helpers import read_range_from_file
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.helpers import to_sqlmesh_range
-from sqlmesh.lsp.reference import get_references, LSPExternalModelReference
+from sqlmesh.lsp.reference import get_references
 from sqlmesh.lsp.uri import URI
 
 
