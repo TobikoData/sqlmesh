@@ -111,3 +111,21 @@ interface FormatProjectResponse extends BaseResponse {}
 interface BaseResponse {
   response_error?: string
 }
+
+export interface ListWorkspaceTests {
+  method: 'sqlmesh/list_workspace_tests'
+  request: ListWorkspaceTestsRequest
+  response: ListWorkspaceTestsResponse
+}
+
+type ListWorkspaceTestsRequest = object
+
+interface TestEntry {
+  name: string
+  uri: string
+  //  TODO Probably want to add position at some point
+}
+
+interface ListWorkspaceTestsResponse {
+  tests: TestEntry[]
+}

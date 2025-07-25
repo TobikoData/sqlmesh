@@ -143,3 +143,27 @@ class FormatProjectResponse(CustomMethodResponseBaseClass):
     """
 
     pass
+
+
+LIST_WORKSPACE_TESTS_FEATURE = "sqlmesh/list_workspace_tests"
+
+
+class ListWorkspaceTestsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to list all tests in the current project.
+    """
+
+    pass
+
+
+class TestEntry(PydanticModel):
+    """
+    An entry representing a test in the workspace.
+    """
+
+    name: str
+    uri: str
+
+
+class ListWorkspaceTestsResponse(CustomMethodResponseBaseClass):
+    tests: t.List[TestEntry]

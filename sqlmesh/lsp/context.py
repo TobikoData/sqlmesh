@@ -5,7 +5,7 @@ import typing as t
 
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
-from sqlmesh.lsp.custom import ModelForRendering
+from sqlmesh.lsp.custom import ModelForRendering, TestEntry
 from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
 from sqlmesh.lsp.uri import URI
 from lsprotocol import types
@@ -62,6 +62,18 @@ class LSPContext:
             **model_map,
             **audit_map,
         }
+
+    def list_workspace_tests(self) -> t.List[TestEntry]:
+        """List all tests in the workspace."""
+        tests = self.context.load_model_tests()
+        # TODO Probably want to get all the positions for the tests
+        return [
+            TestEntry(
+                name=test.test_name,
+                uri=URI.from_path(test.path).value,
+            )
+            for test in tests
+        ]
 
     def render_model(self, uri: URI) -> t.List[RenderModelEntry]:
         """Get rendered models for a file, using cache when available.
