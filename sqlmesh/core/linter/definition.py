@@ -108,9 +108,10 @@ class RuleSet(Mapping[str, type[Rule]]):
 
         for rule in self._underlying.values():
             violation = rule(context).check_model(model)
-
+            if isinstance(violation, RuleViolation):
+                violation = [violation]
             if violation:
-                violations.append(violation)
+                violations.extend(violation)
 
         return violations
 
