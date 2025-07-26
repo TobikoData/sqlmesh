@@ -1,6 +1,5 @@
 import typing as t
 
-import os
 import pandas as pd  # noqa: TID253
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -110,12 +109,13 @@ def test_drop_catalog(make_mocked_engine_adapter: t.Callable) -> None:
 
 
 def test_ducklake_partitioning(adapter: EngineAdapter, duck_conn, tmp_path):
-    os.chdir(tmp_path)
     catalog = "a_ducklake_db"
 
     duck_conn.install_extension("ducklake")
     duck_conn.load_extension("ducklake")
-    duck_conn.execute(f"ATTACH 'ducklake:{catalog}';")
+    duck_conn.execute(
+        f"ATTACH 'ducklake:{catalog}.ducklake' AS {catalog} (DATA_PATH '{tmp_path}');"
+    )
 
     # no partitions on catalog creation
     partition_info = duck_conn.execute(
