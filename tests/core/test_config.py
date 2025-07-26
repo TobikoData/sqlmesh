@@ -3,6 +3,7 @@ import pathlib
 import re
 from pathlib import Path
 from unittest import mock
+import typing as t
 
 import pytest
 from pytest_mock import MockerFixture
@@ -17,6 +18,7 @@ from sqlmesh.core.config import (
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
     EnvironmentSuffixTarget,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -1412,3 +1414,30 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
         default_gateway="test_gateway",
         model_defaults=ModelDefaultsConfig(dialect="postgres"),
     )
+
+
+@pytest.mark.parametrize(
+    "convention_str, expected",
+    [
+        (None, TableNamingConvention.SCHEMA_AND_TABLE),
+        ("schema_and_table", TableNamingConvention.SCHEMA_AND_TABLE),
+        ("table_only", TableNamingConvention.TABLE_ONLY),
+        ("hash_md5", TableNamingConvention.HASH_MD5),
+    ],
+)
+def test_physical_table_naming_convention(
+    convention_str: t.Optional[str], expected: t.Optional[TableNamingConvention], tmp_path: Path
+):
+    config_part = f"physical_table_naming_convention: {convention_str}" if convention_str else ""
+    (tmp_path / "config.yaml").write_text(f"""
+gateways:
+  test_gateway:
+    connection:
+      type: duckdb      
+model_defaults:
+  dialect: duckdb
+{config_part}
+    """)
+
+    config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+    assert config.physical_table_naming_convention == expected
