@@ -1,0 +1,657 @@
+from __future__ import annotations
+
+import typing as t
+import logging
+import time
+from sqlglot import exp
+from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.utils import optional_import
+from sqlmesh.utils.errors import SQLMeshError
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
+
+
+from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
+
+logger = logging.getLogger(__name__)
+requests = optional_import("requests")
+
+
+class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
+    """
+    Adapter for Microsoft Fabric.
+    """
+
+    DIALECT = "fabric"
+    SUPPORTS_INDEXES = False
+    SUPPORTS_TRANSACTIONS = False
+    SUPPORTS_CREATE_DROP_CATALOG = True
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
+
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Store the desired catalog for dynamic switching
+        self._target_catalog: t.Optional[str] = None
+        # Store the original connection factory for wrapping
+        self._original_connection_factory = self._connection_pool._connection_factory  # type: ignore
+        # Replace the connection factory with our custom one
+        self._connection_pool._connection_factory = self._create_fabric_connection  # type: ignore
+
+    def _create_fabric_connection(self) -> t.Any:
+        """Custom connection factory that uses the target catalog if set."""
+        # If we have a target catalog, we need to modify the connection parameters
+        if self._target_catalog:
+            # The original factory was created with partial(), so we need to extract and modify the kwargs
+            if hasattr(self._original_connection_factory, "keywords"):
+                # It's a partial function, get the original keywords
+                original_kwargs = self._original_connection_factory.keywords.copy()
+                original_kwargs["database"] = self._target_catalog
+                # Call the underlying function with modified kwargs
+                return self._original_connection_factory.func(**original_kwargs)
+
+        # Use the original factory if no target catalog is set
+        return self._original_connection_factory()
+
+    def _insert_overwrite_by_condition(
+        self,
+        table_name: TableName,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        where: t.Optional[exp.Condition] = None,
+        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Implements the insert overwrite strategy for Fabric using DELETE and INSERT.
+
+        This method is overridden to avoid the MERGE statement from the parent
+        MSSQLEngineAdapter, which is not fully supported in Fabric.
+        """
+        return EngineAdapter._insert_overwrite_by_condition(
+            self,
+            table_name=table_name,
+            source_queries=source_queries,
+            columns_to_types=columns_to_types,
+            where=where,
+            insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
+            **kwargs,
+        )
+
+    def _get_access_token(self) -> str:
+        """Get access token using Service Principal authentication."""
+        tenant_id = self._extra_config.get("tenant")
+        client_id = self._extra_config.get("user")
+        client_secret = self._extra_config.get("password")
+
+        if not all([tenant_id, client_id, client_secret]):
+            raise SQLMeshError(
+                "Service Principal authentication requires tenant_id, client_id, and client_secret "
+                "in the Fabric connection configuration"
+            )
+
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric authentication")
+
+        # Use Azure AD OAuth2 token endpoint
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "https://api.fabric.microsoft.com/.default",
+        }
+
+        try:
+            response = requests.post(token_url, data=data)
+            response.raise_for_status()
+            token_data = response.json()
+            return token_data["access_token"]
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Failed to authenticate with Azure AD: {e}")
+        except KeyError:
+            raise SQLMeshError("Invalid response from Azure AD token endpoint")
+
+    def _get_fabric_auth_headers(self) -> t.Dict[str, str]:
+        """Get authentication headers for Fabric REST API calls."""
+        access_token = self._get_access_token()
+        return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    def _make_fabric_api_request(
+        self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
+        """Make a request to the Fabric REST API."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        workspace = self._extra_config.get("workspace")
+        if not workspace:
+            raise SQLMeshError(
+                "workspace parameter is required in connection config for Fabric catalog operations"
+            )
+
+        base_url = "https://api.fabric.microsoft.com/v1"
+        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
+
+        headers = self._get_fabric_auth_headers()
+
+        try:
+            if method.upper() == "GET":
+                response = requests.get(url, headers=headers)
+            elif method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=data)
+            elif method.upper() == "DELETE":
+                response = requests.delete(url, headers=headers)
+            else:
+                raise SQLMeshError(f"Unsupported HTTP method: {method}")
+
+            response.raise_for_status()
+
+            if response.status_code == 204:  # No content
+                return {}
+
+            return response.json() if response.content else {}
+
+        except requests.exceptions.HTTPError as e:
+            error_details = ""
+            try:
+                if response.content:
+                    error_response = response.json()
+                    error_details = error_response.get("error", {}).get(
+                        "message", str(error_response)
+                    )
+            except (ValueError, AttributeError):
+                error_details = response.text if hasattr(response, "text") else str(e)
+
+            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Fabric API request failed: {e}")
+
+    def _make_fabric_api_request_with_location(
+        self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
+    ) -> t.Dict[str, t.Any]:
+        """Make a request to the Fabric REST API and return response with status code and location."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        workspace = self._extra_config.get("workspace")
+        if not workspace:
+            raise SQLMeshError(
+                "workspace parameter is required in connection config for Fabric catalog operations"
+            )
+
+        base_url = "https://api.fabric.microsoft.com/v1"
+        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
+        headers = self._get_fabric_auth_headers()
+
+        try:
+            if method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=data)
+            else:
+                raise SQLMeshError(f"Unsupported HTTP method for location tracking: {method}")
+
+            # Check for errors first
+            response.raise_for_status()
+
+            result = {"status_code": response.status_code}
+
+            # Extract location header for polling
+            if "location" in response.headers:
+                result["location"] = response.headers["location"]
+
+            # Include response body if present
+            if response.content:
+                json_data = response.json()
+                if json_data:
+                    result.update(json_data)
+
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            error_details = ""
+            try:
+                if response.content:
+                    error_response = response.json()
+                    error_details = error_response.get("error", {}).get(
+                        "message", str(error_response)
+                    )
+            except (ValueError, AttributeError):
+                error_details = response.text if hasattr(response, "text") else str(e)
+
+            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
+        except requests.exceptions.RequestException as e:
+            raise SQLMeshError(f"Fabric API request failed: {e}")
+
+    def _poll_operation_status(self, location_url: str, operation_name: str) -> None:
+        """Poll the operation status until completion."""
+        if not requests:
+            raise SQLMeshError("requests library is required for Fabric catalog operations")
+
+        headers = self._get_fabric_auth_headers()
+        max_attempts = 60  # Poll for up to 10 minutes
+        initial_delay = 1  # Start with 1 second
+
+        for attempt in range(max_attempts):
+            try:
+                response = requests.get(location_url, headers=headers)
+                response.raise_for_status()
+
+                result = response.json()
+                status = result.get("status", "Unknown")
+
+                logger.info(f"Operation {operation_name} status: {status}")
+
+                if status == "Succeeded":
+                    return
+                if status == "Failed":
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    raise SQLMeshError(f"Operation {operation_name} failed: {error_msg}")
+                elif status in ["InProgress", "Running"]:
+                    # Use exponential backoff with max of 30 seconds
+                    delay = min(initial_delay * (2 ** min(attempt // 3, 4)), 30)
+                    logger.info(f"Waiting {delay} seconds before next status check...")
+                    time.sleep(delay)
+                else:
+                    logger.warning(f"Unknown status '{status}' for operation {operation_name}")
+                    time.sleep(5)
+
+            except requests.exceptions.RequestException as e:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"Failed to poll status (attempt {attempt + 1}): {e}")
+                    time.sleep(5)
+                else:
+                    raise SQLMeshError(f"Failed to poll operation status: {e}")
+
+        raise SQLMeshError(f"Operation {operation_name} did not complete within timeout")
+
+    def _create_catalog(self, catalog_name: exp.Identifier) -> None:
+        """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
+        warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+        logger.info(f"Creating Fabric warehouse: {warehouse_name}")
+
+        request_data = {
+            "displayName": warehouse_name,
+            "description": f"Warehouse created by SQLMesh: {warehouse_name}",
+        }
+
+        response = self._make_fabric_api_request_with_location("POST", "warehouses", request_data)
+
+        # Handle direct success (201) or async creation (202)
+        if response.get("status_code") == 201:
+            logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+            return
+
+        if response.get("status_code") == 202 and response.get("location"):
+            logger.info(f"Warehouse creation initiated for: {warehouse_name}")
+            self._poll_operation_status(response["location"], warehouse_name)
+            logger.info(f"Successfully created Fabric warehouse: {warehouse_name}")
+        else:
+            raise SQLMeshError(f"Unexpected response from warehouse creation: {response}")
+
+    def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
+        """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
+        warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+
+        logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
+
+        try:
+            # Get the warehouse ID by listing warehouses
+            warehouses = self._make_fabric_api_request("GET", "warehouses")
+            warehouse_id = None
+
+            for warehouse in warehouses.get("value", []):
+                if warehouse.get("displayName") == warehouse_name:
+                    warehouse_id = warehouse.get("id")
+                    break
+
+            if not warehouse_id:
+                logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
+                return
+
+            # Delete the warehouse by ID
+            self._make_fabric_api_request("DELETE", f"warehouses/{warehouse_id}")
+            logger.info(f"Successfully deleted Fabric warehouse: {warehouse_name}")
+
+        except SQLMeshError as e:
+            error_msg = str(e).lower()
+            if "not found" in error_msg or "does not exist" in error_msg:
+                logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
+                return
+            logger.error(f"Failed to delete Fabric warehouse {warehouse_name}: {e}")
+            raise
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        """
+        Set the current catalog for Microsoft Fabric connections.
+
+        Override to handle Fabric's stateless session limitation where USE statements
+        don't persist across queries. Instead, we close existing connections and
+        recreate them with the new catalog in the connection configuration.
+
+        Args:
+            catalog_name: The name of the catalog (warehouse) to switch to
+
+        Note:
+            Fabric doesn't support catalog switching via USE statements because each
+            statement runs as an independent session. This method works around this
+            limitation by updating the connection pool with new catalog configuration.
+
+        See:
+            https://learn.microsoft.com/en-us/fabric/data-warehouse/sql-query-editor#limitations
+        """
+        current_catalog = self.get_current_catalog()
+
+        # If already using the requested catalog, do nothing
+        if current_catalog and current_catalog == catalog_name:
+            logger.debug(f"Already using catalog '{catalog_name}', no action needed")
+            return
+
+        logger.info(f"Switching from catalog '{current_catalog}' to '{catalog_name}'")
+
+        # Set the target catalog for our custom connection factory
+        self._target_catalog = catalog_name
+
+        # Close all existing connections since Fabric requires reconnection for catalog changes
+        self.close()
+
+        # Verify the catalog switch worked by getting a new connection
+        try:
+            actual_catalog = self.get_current_catalog()
+            if actual_catalog and actual_catalog == catalog_name:
+                logger.debug(f"Successfully switched to catalog '{catalog_name}'")
+            else:
+                logger.warning(
+                    f"Catalog switch may have failed. Expected '{catalog_name}', got '{actual_catalog}'"
+                )
+        except Exception as e:
+            logger.debug(f"Could not verify catalog switch: {e}")
+
+        logger.debug(f"Updated target catalog to '{catalog_name}' and closed connections")
+
+    def drop_schema(
+        self,
+        schema_name: t.Union[str, exp.Table],
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
+        **drop_args: t.Any,
+    ) -> None:
+        """
+        Override drop_schema to handle catalog-qualified schema names.
+        Fabric doesn't support 'DROP SCHEMA [catalog].[schema]' syntax.
+        """
+        logger.debug(f"drop_schema called with: {schema_name} (type: {type(schema_name)})")
+
+        # If it's a string with a dot, assume it's catalog.schema format
+        if isinstance(schema_name, str) and "." in schema_name:
+            parts = schema_name.split(".", 1)  # Split only on first dot
+            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
+            schema_only = parts[1].strip('"[]')
+            logger.debug(
+                f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
+            )
+
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
+
+            # Use just the schema name
+            super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {schema_name}")
+            super().drop_schema(schema_name, ignore_if_not_exists, cascade, **drop_args)
+
+    def create_schema(
+        self,
+        schema_name: t.Union[str, exp.Table],
+        ignore_if_exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override create_schema to handle catalog-qualified schema names.
+        Fabric doesn't support 'CREATE SCHEMA [catalog].[schema]' syntax.
+        """
+        logger.debug(f"create_schema called with: {schema_name} (type: {type(schema_name)})")
+
+        # If it's a string with a dot, assume it's catalog.schema format
+        if isinstance(schema_name, str) and "." in schema_name:
+            parts = schema_name.split(".", 1)  # Split only on first dot
+            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
+            schema_only = parts[1].strip('"[]')
+            logger.debug(
+                f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
+            )
+
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
+
+            # Use just the schema name
+            super().create_schema(schema_only, ignore_if_exists, **kwargs)
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {schema_name}")
+            super().create_schema(schema_name, ignore_if_exists, **kwargs)
+
+    def _ensure_schema_exists(self, table_name: TableName) -> None:
+        """
+        Ensure that the schema for a table exists before creating the table.
+        This is necessary for Fabric because schemas must exist before tables can be created in them.
+        """
+        table = exp.to_table(table_name)
+        if table.db:
+            schema_name = table.db
+            catalog_name = table.catalog
+
+            # Build the full schema name
+            if catalog_name:
+                full_schema_name = f"{catalog_name}.{schema_name}"
+            else:
+                full_schema_name = schema_name
+
+            logger.debug(f"Ensuring schema exists: {full_schema_name}")
+
+            try:
+                # Create the schema if it doesn't exist
+                self.create_schema(full_schema_name, ignore_if_exists=True)
+            except Exception as e:
+                logger.debug(f"Error creating schema {full_schema_name}: {e}")
+                # Continue anyway - the schema might already exist or we might not have permissions
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override _create_table to ensure schema exists before creating tables.
+        """
+        # Extract table name for schema creation
+        if isinstance(table_name_or_schema, exp.Schema):
+            table_name = table_name_or_schema.this
+        else:
+            table_name = table_name_or_schema
+
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super()._create_table(
+            table_name_or_schema=table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            table_kind=table_kind,
+            **kwargs,
+        )
+
+    def create_table(
+        self,
+        table_name: TableName,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override create_table to ensure schema exists before creating tables.
+        """
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super().create_table(
+            table_name=table_name,
+            columns_to_types=columns_to_types,
+            primary_key=primary_key,
+            exists=exists,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
+        )
+
+    def ctas(
+        self,
+        table_name: TableName,
+        query_or_df: t.Any,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        exists: bool = True,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Override ctas to ensure schema exists before creating tables.
+        """
+        # Ensure the schema exists before creating the table
+        self._ensure_schema_exists(table_name)
+
+        # Call the parent implementation
+        super().ctas(
+            table_name=table_name,
+            query_or_df=query_or_df,
+            columns_to_types=columns_to_types,
+            exists=exists,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            **kwargs,
+        )
+
+    def create_view(
+        self,
+        view_name: t.Union[str, exp.Table],
+        query_or_df: t.Any,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        materialized: bool = False,
+        materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """
+        Override create_view to handle catalog-qualified view names and ensure schema exists.
+        Fabric doesn't support 'CREATE VIEW [catalog].[schema].[view]' syntax.
+        """
+        logger.debug(f"create_view called with: {view_name} (type: {type(view_name)})")
+
+        # Ensure schema exists for the view
+        if isinstance(view_name, exp.Table):
+            self._ensure_schema_exists(view_name)
+        elif isinstance(view_name, str):
+            # Parse string to table for schema extraction
+            parsed_table = exp.to_table(view_name)
+            self._ensure_schema_exists(parsed_table)
+
+        # Handle exp.Table objects that might be catalog-qualified
+        if isinstance(view_name, exp.Table):
+            if view_name.catalog:
+                # Has catalog qualification - switch to catalog and use schema.table
+                catalog_name = view_name.catalog
+                schema_name = view_name.db or ""
+                table_name = view_name.name
+
+                logger.debug(
+                    f"Detected exp.Table with catalog: catalog='{catalog_name}', schema='{schema_name}', table='{table_name}'"
+                )
+
+                # Switch to the catalog first
+                self.set_current_catalog(catalog_name)
+
+                # Create new Table expression without catalog
+                unqualified_view = exp.Table(this=table_name, db=schema_name)
+
+                super().create_view(
+                    unqualified_view,
+                    query_or_df,
+                    columns_to_types,
+                    replace,
+                    materialized,
+                    materialized_properties,
+                    table_description,
+                    column_descriptions,
+                    view_properties,
+                    **create_kwargs,
+                )
+                return
+
+        # Handle string view names that might be catalog-qualified
+        elif isinstance(view_name, str):
+            # Check if it's in catalog.schema.view format
+            parts = view_name.split(".")
+            if len(parts) == 3:
+                # catalog.schema.view format
+                catalog_name = parts[0].strip('"[]')
+                schema_name = parts[1].strip('"[]')
+                view_only = parts[2].strip('"[]')
+                unqualified_view_str = f"{schema_name}.{view_only}"
+                logger.debug(
+                    f"Detected catalog.schema.view format: catalog='{catalog_name}', unqualified='{unqualified_view_str}'"
+                )
+
+                # Switch to the catalog first
+                self.set_current_catalog(catalog_name)
+
+                # Use just the schema.view name
+                super().create_view(
+                    unqualified_view_str,
+                    query_or_df,
+                    columns_to_types,
+                    replace,
+                    materialized,
+                    materialized_properties,
+                    table_description,
+                    column_descriptions,
+                    view_properties,
+                    **create_kwargs,
+                )
+                return
+
+        # No catalog qualification, use as-is
+        logger.debug(f"No catalog detected, using original: {view_name}")
+        super().create_view(
+            view_name,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            materialized_properties,
+            table_description,
+            column_descriptions,
+            view_properties,
+            **create_kwargs,
+        )
