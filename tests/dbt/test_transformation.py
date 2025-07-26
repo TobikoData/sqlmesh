@@ -259,7 +259,7 @@ def test_model_kind():
         incremental_strategy="merge",
         full_refresh=False,
     ).model_kind(context) == IncrementalByTimeRangeKind(
-        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=True
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=False
     )
 
     assert ModelConfig(
