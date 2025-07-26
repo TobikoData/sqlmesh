@@ -257,13 +257,6 @@ class ModelConfig(BaseModelConfig):
                 if field_val is not None:
                     incremental_by_kind_kwargs[field] = field_val
 
-            disable_restatement = self.disable_restatement
-            if disable_restatement is None:
-                disable_restatement = (
-                    not self.full_refresh if self.full_refresh is not None else False
-                )
-            incremental_kind_kwargs["disable_restatement"] = disable_restatement
-
             if self.time_column:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByTimeRangeKind
@@ -277,9 +270,18 @@ class ModelConfig(BaseModelConfig):
 
                 return IncrementalByTimeRangeKind(
                     time_column=self.time_column,
+                    disable_restatement=(
+                        self.disable_restatement if self.disable_restatement is not None else False
+                    ),
                     auto_restatement_intervals=self.auto_restatement_intervals,
                     **incremental_kind_kwargs,
                     **incremental_by_kind_kwargs,
+                )
+
+            disable_restatement = self.disable_restatement
+            if disable_restatement is None:
+                disable_restatement = (
+                    not self.full_refresh if self.full_refresh is not None else False
                 )
 
             if self.unique_key:
@@ -307,6 +309,7 @@ class ModelConfig(BaseModelConfig):
 
                 return IncrementalByUniqueKeyKind(
                     unique_key=self.unique_key,
+                    disable_restatement=disable_restatement,
                     **incremental_kind_kwargs,
                     **incremental_by_kind_kwargs,
                 )
@@ -316,6 +319,7 @@ class ModelConfig(BaseModelConfig):
             )
             return IncrementalUnmanagedKind(
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
+                disable_restatement=disable_restatement,
                 **incremental_kind_kwargs,
             )
         if materialization == Materialization.EPHEMERAL:
