@@ -592,7 +592,7 @@ class PlanBuilder:
                 # If the model kind changes mark as breaking
                 if snapshot.is_model and snapshot.name in self._context_diff.modified_snapshots:
                     _, old = self._context_diff.modified_snapshots[snapshot.name]
-                    if old.model.kind.name != snapshot.model.kind.name:
+                    if _is_breaking_kind_change(old, snapshot):
                         category = SnapshotChangeCategory.BREAKING
 
                 snapshot.categorize_as(category)
@@ -756,8 +756,8 @@ class PlanBuilder:
         snapshot = self._context_diff.snapshots[s_id]
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
-            # If the model kind has changed, then we should not consider this to be a forward-only change.
-            if snapshot.is_model and old.model.kind.name != snapshot.model.kind.name:
+            # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
+            if snapshot.is_model and _is_breaking_kind_change(old, snapshot):
                 return False
         return (
             snapshot.is_model
@@ -873,3 +873,16 @@ class PlanBuilder:
             if snapshot.name in self._context_diff.modified_snapshots
             or snapshot.snapshot_id in self._context_diff.added
         ]
+
+
+def _is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
+    if old.model.kind.name == new.model.kind.name:
+        # If the kind hasn't changed, then it's not a breaking change
+        return False
+    if not old.is_incremental or not new.is_incremental:
+        # If either is not incremental, then it's a breaking change
+        return True
+    if old.model.partitioned_by == new.model.partitioned_by:
+        # If the partitioning hasn't changed, then it's not a breaking change
+        return False
+    return True
