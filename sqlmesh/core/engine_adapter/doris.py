@@ -25,7 +25,6 @@ from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.errors import (
     SQLMeshError,
 )
-from sqlmesh.utils import random_id
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -545,12 +544,9 @@ class DorisEngineAdapter(
             table_description: Optional table description.
             column_descriptions: Optional mapping of column name to description.
         """
-        logger.info(f"[Doris] _create_table_from_columns called for table: {table_name}")
-        logger.info(f"[Doris] kwargs received: {kwargs}")
 
         # Extract table_properties from kwargs
         table_properties = kwargs.get("table_properties", {})
-        logger.info(f"[Doris] table_properties from kwargs: {table_properties}")
 
         # Check if distributed_by is missing and we have a primary_key
         if not table_properties.get("distributed_by") and primary_key:
@@ -568,6 +564,16 @@ class DorisEngineAdapter(
                 logger.info(
                     f"[Doris] Added fallback distributed_by using primary_key: {table_properties['distributed_by']}"
                 )
+
+        # Set default replication_allocation to 1 for testing environments if not specified
+        if (
+            "replication_num" not in table_properties
+            and "replication_allocation" not in table_properties
+        ):
+            table_properties["replication_allocation"] = "tag.location.default: 1"
+            logger.info(
+                f"[Doris] Added default replication_allocation for testing: {table_properties['replication_allocation']}"
+            )
 
         # Update kwargs with the modified table_properties
         kwargs["table_properties"] = table_properties
@@ -647,9 +653,6 @@ class DorisEngineAdapter(
         properties: t.List[exp.Expression] = []
 
         table_properties_copy = dict(table_properties) if table_properties else {}
-
-        logger.info(f"table_properties_copy: {table_properties_copy}")
-        logger.info(f"[Doris] _build_table_properties_exp called with kwargs: {kwargs}")
 
         # Handle unique_key - only handle Tuple expressions or single Column expressions
         unique_key = table_properties_copy.pop("unique_key", None)
@@ -769,8 +772,6 @@ class DorisEngineAdapter(
 
         # Handle distributed_by property - parse Tuple with EQ expressions or Paren with single EQ
         distributed_by = table_properties_copy.pop("distributed_by", None)
-        logger.info(f"[Doris] distributed_by from table_properties_copy: {type(distributed_by)}")
-        logger.info(f"[Doris] distributed_by value: {distributed_by}")
         if distributed_by is not None:
             distributed_info = {}
 
@@ -814,7 +815,6 @@ class DorisEngineAdapter(
 
             # Create DistributedByProperty from parsed info
             if distributed_info:
-                logger.info(f"distributed_info: {distributed_info}")
                 kind = distributed_info.get("kind")
                 expressions = distributed_info.get("expressions")
                 buckets = distributed_info.get("buckets")
@@ -866,27 +866,50 @@ class DorisEngineAdapter(
             properties.extend(generic_properties)
 
         if properties:
-            logger.info(f"[Doris] Final properties: {properties}")
             return exp.Properties(expressions=properties)
-        logger.info(f"[Doris] No properties generated")
         return None
 
     def _get_temp_table(
         self, table: TableName, table_only: bool = False, quoted: bool = True
     ) -> exp.Table:
+        """Get a temporary table name for Doris."""
+        temp_table = super()._get_temp_table(table, table_only, quoted)
+        return temp_table
+
+    def _ensure_quoted_identifier(self, identifier: str) -> str:
         """
-        Returns the name of the temp table that should be used for the given table name. Doris does not support table name begin with underscore.
+        Ensure that an identifier is properly quoted for Doris.
+        This is especially important for reserved keywords like 'value'.
         """
-        table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set(
-            "this", exp.to_identifier(f"temp_{table.name}_{random_id(short=True)}", quoted=quoted)
+        # Check if the identifier is already quoted
+        if identifier.startswith("`") and identifier.endswith("`"):
+            return identifier
+
+        # Quote the identifier with backticks for Doris
+        return f"`{identifier}`"
+
+    def _build_column_def(
+        self,
+        col_name: str,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        engine_supports_schema_comments: bool = False,
+        col_type: t.Optional[exp.DATA_TYPE] = None,
+        nested_names: t.List[str] = [],
+    ) -> exp.ColumnDef:
+        # Ensure column names are properly quoted for Doris, especially for reserved keywords
+        quoted_col_name = self._ensure_quoted_identifier(col_name)
+        # Parse the quoted identifier back to an exp.Identifier
+        col_identifier = exp.parse_identifier(quoted_col_name, dialect=self.dialect)
+
+        return exp.ColumnDef(
+            this=col_identifier,
+            kind=col_type,
+            constraints=(
+                self._build_col_comment_exp(col_name, column_descriptions)
+                if engine_supports_schema_comments and self.comments_enabled and column_descriptions
+                else None
+            ),
         )
-
-        if table_only:
-            table.set("db", None)
-            table.set("catalog", None)
-
-        return table
 
     def _build_view_query_columns_to_types(
         self, query_or_df: t.Union[exp.Query, t.Any]
