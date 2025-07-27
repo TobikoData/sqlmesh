@@ -9,9 +9,10 @@ from sqlglot import expressions as exp
 from sqlmesh.core.dialect import to_schema
 from sqlglot.helper import ensure_list
 from sqlmesh.core.engine_adapter.mixins import (
+    LogicalMergeMixin,
     NonTransactionalTruncateMixin,
     PandasNativeFetchDFSupportMixin,
-    GetCurrentCatalogFromFunctionMixin,
+    RowDiffMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
@@ -36,9 +37,7 @@ logger = logging.getLogger(__name__)
 
 @set_catalog()
 class DorisEngineAdapter(
-    GetCurrentCatalogFromFunctionMixin,
-    PandasNativeFetchDFSupportMixin,
-    NonTransactionalTruncateMixin,
+    LogicalMergeMixin, PandasNativeFetchDFSupportMixin, NonTransactionalTruncateMixin, RowDiffMixin
 ):
     DIALECT = "doris"
     DEFAULT_BATCH_SIZE = 200
@@ -182,8 +181,8 @@ class DorisEngineAdapter(
     ) -> None:
         if replace:
             self.drop_view(view_name, ignore_if_not_exists=True, materialized=materialized)
-        if not columns_to_types:
-            columns_to_types = self._view_query_columns_to_types(query_or_df)
+        if not columns_to_types and column_descriptions:
+            columns_to_types = self._build_view_query_columns_to_types(query_or_df)
         if not materialized:
             return super().create_view(
                 view_name,
@@ -224,7 +223,9 @@ class DorisEngineAdapter(
         import pandas as pd
 
         if isinstance(query_or_df, pd.DataFrame):
-            values: t.List[t.Tuple[t.Any, ...]] = list(query_or_df.itertuples(index=False, name=None))
+            values: t.List[t.Tuple[t.Any, ...]] = list(
+                query_or_df.itertuples(index=False, name=None)
+            )
             columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
             if not columns_to_types:
                 raise SQLMeshError("columns_to_types must be provided for dataframes")
@@ -241,197 +242,6 @@ class DorisEngineAdapter(
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating materialized views")
 
-        # Build schema using base infrastructure
-        schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
-        if columns_to_types:
-            schema = self._build_schema_exp(
-                exp.to_table(view_name), columns_to_types, column_descriptions, is_view=True
-            )
-
-        # Extract Doris-specific properties that aren't supported by SQLGlot
-        doris_specific_clauses = []
-
-        # Check for partitioned_by in create_kwargs first, then view_properties, then materialized_properties
-        partitioned_by = (
-            create_kwargs.get("partitioned_by")
-            or (view_properties or {}).get("partitioned_by")
-            or (materialized_properties or {}).get("partitioned_by")
-        )
-
-        # Check for partitioned_by_expr if partitioned_by is not provided
-        partitioned_by_expr = None
-        if not partitioned_by:
-            partitioned_by_expr = create_kwargs.get("partitioned_by_expr") or (view_properties or {}).get(
-                "partitioned_by_expr"
-            )
-
-        # Extract other Doris-specific properties from view_properties
-        if view_properties is not None:
-            # BUILD clause (order: 3)
-            build = view_properties.get("build")
-            if build:
-                # Extract the string value from Literal expression
-                if isinstance(build, exp.Literal):
-                    build_value = build.this
-                else:
-                    build_value = str(build)
-                doris_specific_clauses.append(f"BUILD {build_value}")
-
-            # REFRESH clause (order: 4)
-            refresh = view_properties.get("refresh")
-            if refresh:
-                # Extract the string value from Literal expression
-                if isinstance(refresh, exp.Literal):
-                    refresh_value = refresh.this
-                else:
-                    refresh_value = str(refresh)
-                doris_specific_clauses.append(f"REFRESH {refresh_value}")
-
-            # ON SCHEDULE clause (part of refresh)
-            on_schedule = view_properties.get("on_schedule")
-            if on_schedule:
-                # Extract the string value from Literal expression
-                if isinstance(on_schedule, exp.Literal):
-                    on_schedule_value = on_schedule.this
-                else:
-                    on_schedule_value = str(on_schedule)
-                doris_specific_clauses.append(f"ON SCHEDULE {on_schedule_value}")
-
-            # KEY clauses (order: 5)
-            unique_key = view_properties.get("unique_key")
-            duplicate_key = view_properties.get("duplicate_key")
-            if unique_key:
-                # Handle both single column and list of columns
-                if isinstance(unique_key, (list, tuple)):
-                    key_cols = ", ".join(
-                        [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in unique_key]
-                    )
-                else:
-                    # Single column case
-                    # Extract column name from the expression
-                    if isinstance(unique_key, exp.Column):
-                        if hasattr(unique_key, "this") and hasattr(unique_key.this, "this"):
-                            column_name = str(unique_key.this.this)
-                        else:
-                            column_name = str(unique_key.this)
-                    else:
-                        column_name = str(unique_key)
-                    key_cols = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
-                doris_specific_clauses.append(f"KEY ({key_cols})")
-            elif duplicate_key:
-                # Handle both single column and list of columns
-                if isinstance(duplicate_key, (list, tuple)):
-                    key_cols = ", ".join(
-                        [exp.to_column(k).sql(dialect=self.dialect, identify=True) for k in duplicate_key]
-                    )
-                else:
-                    # Single column case
-                    # Extract column name from the expression
-                    if isinstance(duplicate_key, exp.Column):
-                        if hasattr(duplicate_key, "this") and hasattr(duplicate_key.this, "this"):
-                            column_name = str(duplicate_key.this.this)
-                        else:
-                            column_name = str(duplicate_key.this)
-                    else:
-                        column_name = str(duplicate_key)
-                    key_cols = exp.to_column(column_name).sql(dialect=self.dialect, identify=True)
-                doris_specific_clauses.append(f"DUPLICATE KEY ({key_cols})")
-
-            # COMMENT clause (order: 6)
-            if table_description:
-                doris_specific_clauses.append(f"COMMENT '{self._truncate_table_comment(table_description)}'")
-
-            # PROPERTIES clause (order: 9)
-            properties = {}
-            for k, v in view_properties.items():
-                if k not in {
-                    "build",
-                    "refresh",
-                    "on_schedule",
-                    "distributed_by",
-                    "partitioned_by",
-                    "clustered_by",
-                    "buckets",
-                    "key",
-                    "unique_key",
-                    "duplicate_key",
-                    "properties",
-                }:
-                    properties[k] = v
-
-            # Merge with explicit 'properties' dict if present
-            if "properties" in view_properties and isinstance(view_properties["properties"], dict):
-                properties.update(view_properties["properties"])
-
-            if properties:
-                props = []
-                for k, v in properties.items():
-                    # Extract the string value from Literal expression
-                    if isinstance(v, exp.Literal):
-                        v_value = v.this
-                    else:
-                        v_value = str(v)
-                    props.append(f"'{k}'='{v_value}'")
-                doris_specific_clauses.append(f"PROPERTIES ({', '.join(props)})")
-        else:
-            # COMMENT clause (order: 6) - can be added even without view_properties
-            if table_description:
-                doris_specific_clauses.append(f"COMMENT '{self._truncate_table_comment(table_description)}'")
-
-        # Handle partitioned_by from create_kwargs if not already handled
-        if not partitioned_by and create_kwargs.get("partitioned_by"):
-            partitioned_by = create_kwargs.get("partitioned_by")
-
-        # Convert partitioned_by to list of expressions if it's not already
-        typed_partitioned_by: t.Optional[t.List[exp.Expression]] = None
-        if partitioned_by:
-            if not isinstance(partitioned_by, list):
-                if isinstance(partitioned_by, str):
-                    typed_partitioned_by = [exp.to_column(partitioned_by)]
-                else:
-                    # Ensure it's an Expression
-                    if isinstance(partitioned_by, exp.Expression):
-                        typed_partitioned_by = [partitioned_by]
-                    else:
-                        typed_partitioned_by = [exp.to_column(str(partitioned_by))]
-            else:
-                typed_partitioned_by = [
-                    exp.to_column(expr) if isinstance(expr, str) else expr for expr in partitioned_by
-                ]
-
-        # Build properties using the existing _build_table_properties_exp method for SQLGlot-supported parts only
-        # We exclude Doris-specific properties that we handle manually
-        table_properties = {}
-        if view_properties is not None:
-            for key, value in view_properties.items():
-                # Only include properties that SQLGlot can handle and we don't handle manually
-                if key not in {
-                    "build",
-                    "refresh",
-                    "on_schedule",
-                    "partitioned_by",
-                    "unique_key",
-                    "duplicate_key",
-                    "distributed_by",
-                    "properties",
-                }:
-                    # Convert to exp.Property similar to _build_table_properties_exp
-                    if not isinstance(value, exp.Expression):
-                        value = exp.Literal.string(str(value))
-                    table_properties[key] = value
-
-        # Build properties using the existing _build_table_properties_exp method
-        properties = self._build_table_properties_exp(
-            table_properties=table_properties,
-            table_description=table_description,
-            partitioned_by=typed_partitioned_by,
-        )
-
-        # Add materialized property
-        if not properties:
-            properties = exp.Properties(expressions=[])
-        properties.append("expressions", exp.MaterializedProperty())
-
         # Generate the query SQL
         with source_queries[0] as query:
             query_sql = query.sql(dialect=self.dialect, identify=True)
@@ -443,24 +253,6 @@ class DorisEngineAdapter(
             clauses = [f"CREATE MATERIALIZED VIEW {view_name_sql}"]
 
             # Add column definitions if provided
-            logger.info(
-                f"[Doris] columns_to_types check: {columns_to_types is not None}, length: {len(columns_to_types) if columns_to_types else 0}"
-            )
-            # If columns_to_types is None, try to infer columns from the query or DataFrame
-            if not columns_to_types:
-                output_columns = []
-                # Try to get output column names from the SQLGlot Select expression
-                select_expr = getattr(source_queries[0], "expression", None)
-                if select_expr and hasattr(select_expr, "named_selects"):
-                    output_columns = [name for name, _ in select_expr.named_selects]
-                else:
-                    # Fallback: parse the SQL string for AS <alias>
-                    import re
-
-                    sql_str = query.sql(dialect=self.dialect, identify=True)
-                    output_columns = re.findall(r'AS [`"]?(\w+)[`"]?', sql_str, re.IGNORECASE)
-                if output_columns:
-                    columns_to_types = {col: exp.DataType.build("STRING") for col in output_columns}
             if columns_to_types:
                 col_defs = []
                 for col in columns_to_types:
@@ -469,193 +261,167 @@ class DorisEngineAdapter(
                     if column_descriptions and col in column_descriptions:
                         comment = column_descriptions[col]
                         col_defs.append(f"{col_sql} COMMENT '{comment}'")
-                        logger.info(f"[Doris] Added column with comment: {col_sql} COMMENT '{comment}'")
                     else:
                         col_defs.append(col_sql)
-                        logger.info(f"[Doris] Added column without comment: {col_sql}")
                 clauses.append(f"({', '.join(col_defs)})")
-                logger.info(f"[Doris] Added column definitions clause: ({', '.join(col_defs)})")
-            else:
-                logger.info(f"[Doris] No column definitions added - columns_to_types is falsy")
 
-            # Extract partition clause from properties if it exists
-            partition_clause = None
-            logger.info(
-                f"[Doris] Checking for partition clause - typed_partitioned_by: {typed_partitioned_by is not None}, partitioned_by_expr: {partitioned_by_expr is not None}"
-            )
+            # Extract Doris-specific properties from view_properties
+            doris_clauses = []
 
-            # First try to extract from properties object
-            if properties and properties.expressions:
-                for prop in properties.expressions:
-                    if isinstance(prop, exp.PartitionedByProperty):
-                        logger.info(f"[Doris] Found partition property in properties: {type(prop).__name__}")
-                        # Generate the partition clause manually since SQLGlot might not handle it correctly
-                        if typed_partitioned_by:
-                            part_cols = ", ".join(
-                                [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
-                            )
-                            partition_clause = f"PARTITION BY ({part_cols})"
-                        break
+            if view_properties:
+                # BUILD clause
+                build = view_properties.get("build")
+                if build:
+                    build_value = build.this if isinstance(build, exp.Literal) else str(build)
+                    doris_clauses.append(f"BUILD {build_value}")
 
-            # If no partition clause found in properties, generate it directly from the parameters
-            if not partition_clause:
-                if typed_partitioned_by:
-                    logger.info(f"[Doris] Generating partition clause from partitioned_by")
-                    part_cols = ", ".join(
-                        [col.sql(dialect=self.dialect, identify=True) for col in typed_partitioned_by]
+                # REFRESH clause
+                refresh = view_properties.get("refresh")
+                if refresh:
+                    refresh_value = (
+                        refresh.this if isinstance(refresh, exp.Literal) else str(refresh)
                     )
-                    partition_clause = f"PARTITION BY ({part_cols})"
-                    logger.info(f"[Doris] Generated partition clause: {partition_clause}")
-                elif partitioned_by_expr:
-                    logger.info(f"[Doris] Generating partition clause from partitioned_by_expr")
-                    # Extract the string value from Literal expression
-                    if isinstance(partitioned_by_expr, exp.Literal):
-                        partition_expr_value = partitioned_by_expr.this
+                    doris_clauses.append(f"REFRESH {refresh_value}")
+
+                # ON SCHEDULE clause
+                on_schedule = view_properties.get("on_schedule")
+                if on_schedule:
+                    on_schedule_value = (
+                        on_schedule.this
+                        if isinstance(on_schedule, exp.Literal)
+                        else str(on_schedule)
+                    )
+                    doris_clauses.append(f"ON SCHEDULE {on_schedule_value}")
+
+                # KEY clauses
+                unique_key = view_properties.get("unique_key")
+                duplicate_key = view_properties.get("duplicate_key")
+                if unique_key:
+                    if isinstance(unique_key, exp.Column):
+                        key_cols = unique_key.sql(dialect=self.dialect, identify=True)
                     else:
-                        partition_expr_value = str(partitioned_by_expr)
-                    partition_clause = f"PARTITION BY ({partition_expr_value})"
-                    logger.info(f"[Doris] Generated partition clause: {partition_clause}")
+                        key_cols = str(unique_key)
+                    doris_clauses.append(f"KEY ({key_cols})")
+                elif duplicate_key:
+                    if isinstance(duplicate_key, exp.Column):
+                        key_cols = duplicate_key.sql(dialect=self.dialect, identify=True)
+                    else:
+                        key_cols = str(duplicate_key)
+                    doris_clauses.append(f"DUPLICATE KEY ({key_cols})")
 
-            # DISTRIBUTED BY clause (order: 8) - process outside view_properties block
-            distributed_by = (view_properties or {}).get("distributed_by")
-            distributed_clause = None
-            if distributed_by:
-                distributed_info = {}
+                # COMMENT clause
+                if table_description:
+                    doris_clauses.append(
+                        f"COMMENT '{self._truncate_table_comment(table_description)}'"
+                    )
 
-                if isinstance(distributed_by, exp.Tuple):
-                    # Parse the Tuple with EQ expressions to extract distributed_by info
+                # PARTITION BY clause - check view_properties first, then create_kwargs
+                partitioned_by_expr = view_properties.get("partitioned_by_expr")
+                if partitioned_by_expr:
+                    partition_value = (
+                        partitioned_by_expr.this
+                        if isinstance(partitioned_by_expr, exp.Literal)
+                        else str(partitioned_by_expr)
+                    )
+                    doris_clauses.append(f"PARTITION BY ({partition_value})")
+
+                # DISTRIBUTED BY clause
+                distributed_by = view_properties.get("distributed_by")
+                if distributed_by and isinstance(distributed_by, exp.Tuple):
+                    distributed_info = {}
                     for expr in distributed_by.expressions:
                         if isinstance(expr, exp.EQ) and hasattr(expr.this, "this"):
-                            # Remove quotes from the key if present
                             key = str(expr.this.this).strip('"')
                             if isinstance(expr.expression, exp.Literal):
                                 distributed_info[key] = expr.expression.this
                             elif isinstance(expr.expression, exp.Column):
-                                # Preserve the original column expression to maintain quoted identifiers
                                 distributed_info[key] = expr.expression
                             else:
                                 distributed_info[key] = str(expr.expression)
-                elif isinstance(distributed_by, dict):
-                    # Handle as dictionary (legacy format)
-                    distributed_info = distributed_by
 
-                if distributed_info:
-                    kind = distributed_info.get("kind")
-                    expressions = distributed_info.get("expressions")
-                    buckets = distributed_info.get("buckets")
+                    if distributed_info:
+                        kind = distributed_info.get("kind")
+                        expressions = distributed_info.get("expressions")
+                        buckets = distributed_info.get("buckets")
 
-                    if kind:
-                        # Handle buckets - convert string to int if it's a numeric string
-                        buckets_expr = None
-                        if isinstance(buckets, int):
-                            buckets_expr = exp.Literal.number(buckets)
-                        elif isinstance(buckets, str):
-                            if buckets == "AUTO":
-                                buckets_expr = exp.Var(this="AUTO")
-                            elif buckets.isdigit():
-                                buckets_expr = exp.Literal.number(int(buckets))
-
-                        # Handle expressions - convert single string to list if needed
-                        expressions_list = None
-                        if expressions:
+                        if kind and expressions:
+                            # Handle expressions
                             if isinstance(expressions, exp.Column):
-                                # Use the original column expression directly
-                                expressions_list = [expressions]
-                            elif isinstance(expressions, str):
-                                expressions_list = [exp.to_column(expressions)]
-                            elif isinstance(expressions, list):
-                                expressions_list = [exp.to_column(e) for e in expressions]
+                                expr_sql = expressions.sql(dialect=self.dialect, identify=True)
                             else:
-                                expressions_list = [exp.to_column(str(expressions))]
+                                expr_sql = str(expressions)
 
-                        prop = exp.DistributedByProperty(
-                            kind=exp.Var(this=kind),
-                            expressions=expressions_list,
-                            buckets=buckets_expr,
-                            order=None,
-                        )
-
-                        # Use SQLGlot to generate the distributed clause
-                        distributed_clause = prop.sql(dialect=self.dialect)
-                        logger.info(f"[Doris] Generated distributed clause: {distributed_clause}")
-
-                        # For Doris, we need to ensure column names are quoted with backticks, not double quotes
-                        # SQLGlot might not be generating the correct quotes for Doris dialect
-                        if expressions_list and len(expressions_list) == 1:
-                            # Single column case
-                            col_expr = expressions_list[0]
-                            if isinstance(col_expr, exp.Column):
-                                col_name = col_expr.sql(dialect=self.dialect, identify=True)
-                                # Replace double quotes with backticks for Doris
-                                if col_name.startswith('"') and col_name.endswith('"'):
-                                    col_name = f"`{col_name[1:-1]}`"
-                                    # Handle buckets expression
-                                    buckets_str = (
-                                        str(buckets)
-                                        if isinstance(buckets, (int, str))
-                                        else buckets.sql(dialect=self.dialect)
-                                    )
-                                    distributed_clause = f"DISTRIBUTED BY HASH ({col_name}) BUCKETS {buckets_str}"
-                                    logger.info(
-                                        f"[Doris] Fixed distributed clause with backticks: {distributed_clause}"
-                                    )
-                        elif expressions_list and len(expressions_list) > 1:
-                            # Multiple columns case
-                            col_names = []
-                            for col_expr in expressions_list:
-                                if isinstance(col_expr, exp.Column):
-                                    col_name = col_expr.sql(dialect=self.dialect, identify=True)
-                                    # Replace double quotes with backticks for Doris
-                                    if col_name.startswith('"') and col_name.endswith('"'):
-                                        col_name = f"`{col_name[1:-1]}`"
-                                    col_names.append(col_name)
-                            if col_names:
-                                # Handle buckets expression
-                                buckets_str = (
-                                    str(buckets)
-                                    if isinstance(buckets, (int, str))
-                                    else buckets.sql(dialect=self.dialect)
-                                )
+                            # Handle buckets
+                            if buckets is not None:
+                                if isinstance(buckets, exp.Literal):
+                                    buckets_str = str(buckets.this)
+                                else:
+                                    buckets_str = str(buckets)
                                 distributed_clause = (
-                                    f"DISTRIBUTED BY HASH ({', '.join(col_names)}) BUCKETS {buckets_str}"
+                                    f"DISTRIBUTED BY HASH ({expr_sql}) BUCKETS {buckets_str}"
                                 )
-                                logger.info(f"[Doris] Fixed distributed clause with backticks: {distributed_clause}")
+                            else:
+                                distributed_clause = f"DISTRIBUTED BY HASH ({expr_sql})"
 
-            # Add Doris-specific clauses in the correct order
-            # According to Doris grammar: BUILD, REFRESH, KEY, COMMENT, PARTITION BY, DISTRIBUTED BY, PROPERTIES
-            doris_clauses_with_partition = []
-            partition_inserted = False
-            distributed_inserted = False
+                            doris_clauses.append(distributed_clause)
 
-            for clause in doris_specific_clauses:
-                doris_clauses_with_partition.append(clause)
-                # Insert partition clause after COMMENT and before DISTRIBUTED BY
-                if not partition_inserted and partition_clause and "DISTRIBUTED BY" in clause:
-                    doris_clauses_with_partition.insert(-1, partition_clause)
-                    partition_inserted = True
-                # Insert distributed clause after partition clause and before PROPERTIES
-                elif not distributed_inserted and distributed_clause and "PROPERTIES" in clause:
-                    doris_clauses_with_partition.insert(-1, distributed_clause)
-                    distributed_inserted = True
+                # PROPERTIES clause
+                properties = {}
+                for k, v in view_properties.items():
+                    if k not in {
+                        "build",
+                        "refresh",
+                        "on_schedule",
+                        "distributed_by",
+                        "partitioned_by",
+                        "partitioned_by_expr",
+                        "unique_key",
+                        "duplicate_key",
+                        "properties",
+                    }:
+                        properties[k] = v
 
-            # If partition clause wasn't inserted and we have one, add it before distributed clause
-            if not partition_inserted and partition_clause:
-                if distributed_clause:
-                    # Find the position of distributed clause and insert partition before it
-                    for i, clause in enumerate(doris_clauses_with_partition):
+                if properties:
+                    props = []
+                    for k, v in properties.items():
+                        v_value = v.this if isinstance(v, exp.Literal) else str(v)
+                        props.append(f"'{k}'='{v_value}'")
+                    doris_clauses.append(f"PROPERTIES ({', '.join(props)})")
+
+            # Handle partitioned_by from create_kwargs if not already handled
+            if not any("PARTITION BY" in clause for clause in doris_clauses):
+                # Check materialized_properties first, then create_kwargs
+                partitioned_by = None
+                if materialized_properties and materialized_properties.get("partitioned_by"):
+                    partitioned_by = materialized_properties.get("partitioned_by")
+                elif create_kwargs.get("partitioned_by"):
+                    partitioned_by = create_kwargs.get("partitioned_by")
+
+                if partitioned_by:
+                    if isinstance(partitioned_by, list):
+                        part_cols = ", ".join(
+                            [
+                                exp.to_column(col).sql(dialect=self.dialect, identify=True)
+                                for col in partitioned_by
+                            ]
+                        )
+                    else:
+                        part_cols = exp.to_column(partitioned_by).sql(
+                            dialect=self.dialect, identify=True
+                        )
+                    # Insert PARTITION BY clause before DISTRIBUTED BY if it exists
+                    distributed_index = -1
+                    for i, clause in enumerate(doris_clauses):
                         if "DISTRIBUTED BY" in clause:
-                            doris_clauses_with_partition.insert(i, partition_clause)
-                            partition_inserted = True
+                            distributed_index = i
                             break
-                    # If distributed clause not found, add partition at the end
-                    if not partition_inserted:
-                        doris_clauses_with_partition.append(partition_clause)
+                    if distributed_index >= 0:
+                        doris_clauses.insert(distributed_index, f"PARTITION BY ({part_cols})")
+                    else:
+                        doris_clauses.append(f"PARTITION BY ({part_cols})")
 
-            # If distributed clause wasn't inserted and we have one, add it at the end
-            if not distributed_inserted and distributed_clause:
-                doris_clauses_with_partition.append(distributed_clause)
-
-            clauses.extend(doris_clauses_with_partition)
+            # Add Doris-specific clauses
+            clauses.extend(doris_clauses)
 
             # Add the AS clause and query
             clauses.append(f"AS {query_sql}")
@@ -712,10 +478,14 @@ class DorisEngineAdapter(
 
         self.execute(f"ALTER TABLE {old_table_sql} RENAME {new_table_sql}")
 
-    def _create_table_comment(self, table_name: TableName, table_comment: str, table_kind: str = "TABLE") -> None:
+    def _create_table_comment(
+        self, table_name: TableName, table_comment: str, table_kind: str = "TABLE"
+    ) -> None:
         table_sql = exp.to_table(table_name).sql(dialect=self.dialect, identify=True)
 
-        self.execute(f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"')
+        self.execute(
+            f'ALTER TABLE {table_sql} MODIFY COMMENT "{self._truncate_table_comment(table_comment)}"'
+        )
 
     def _build_create_comment_column_exp(
         self, table: exp.Table, column_name: str, column_comment: str, table_kind: str = "TABLE"
@@ -747,7 +517,9 @@ class DorisEngineAdapter(
         """
         if where == exp.true():
             # Use TRUNCATE TABLE for full table deletion as Doris doesn't support DELETE FROM table WHERE TRUE
-            return self.execute(exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)]))
+            return self.execute(
+                exp.TruncateTable(expressions=[exp.to_table(table_name, dialect=self.dialect)])
+            )
 
         return super().delete_from(table_name, where)
 
@@ -826,7 +598,7 @@ class DorisEngineAdapter(
         partitioned_by_expr = kwargs.get("partitioned_by_expr")
         create_expressions = None
 
-        def to_raw_sql(expr):
+        def to_raw_sql(expr: t.Union[exp.Literal, exp.Var, str, t.Any]) -> exp.Var:
             # If it's a Literal, extract the string and wrap as Var (no quotes)
             if isinstance(expr, exp.Literal):
                 return exp.Var(this=expr.this, quoted=False)
@@ -842,7 +614,9 @@ class DorisEngineAdapter(
         if partitioned_by_expr:
             if isinstance(partitioned_by_expr, exp.Tuple):
                 create_expressions = [
-                    exp.Var(this=e.this, quoted=False) if isinstance(e, exp.Literal) else to_raw_sql(e)
+                    exp.Var(this=e.this, quoted=False)
+                    if isinstance(e, exp.Literal)
+                    else to_raw_sql(e)
                     for e in partitioned_by_expr.expressions
                 ]
             elif isinstance(partitioned_by_expr, exp.Literal):
@@ -884,13 +658,19 @@ class DorisEngineAdapter(
                 # Extract column names from Tuple expressions
                 column_names = []
                 for expr in unique_key.expressions:
-                    if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
+                    if (
+                        isinstance(expr, exp.Column)
+                        and hasattr(expr, "this")
+                        and hasattr(expr.this, "this")
+                    ):
                         column_names.append(str(expr.this.this))
                     elif hasattr(expr, "this"):
                         column_names.append(str(expr.this))
                     else:
                         column_names.append(str(expr))
-                properties.append(exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in column_names]))
+                properties.append(
+                    exp.UniqueKeyProperty(expressions=[exp.to_column(k) for k in column_names])
+                )
             elif isinstance(unique_key, exp.Column):
                 # Handle as single column
                 if hasattr(unique_key, "this") and hasattr(unique_key.this, "this"):
@@ -906,24 +686,34 @@ class DorisEngineAdapter(
                 # Extract column names from Tuple expressions
                 column_names = []
                 for expr in duplicate_key.expressions:
-                    if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
+                    if (
+                        isinstance(expr, exp.Column)
+                        and hasattr(expr, "this")
+                        and hasattr(expr.this, "this")
+                    ):
                         column_names.append(str(expr.this.this))
                     elif hasattr(expr, "this"):
                         column_names.append(str(expr.this))
                     else:
                         column_names.append(str(expr))
-                properties.append(exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in column_names]))
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in column_names])
+                )
             elif isinstance(duplicate_key, exp.Column):
                 # Handle as single column
                 if hasattr(duplicate_key, "this") and hasattr(duplicate_key.this, "this"):
                     column_name = str(duplicate_key.this.this)
                 else:
                     column_name = str(duplicate_key.this)
-                properties.append(exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)]))
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)])
+                )
 
         if table_description:
             properties.append(
-                exp.SchemaCommentProperty(this=exp.Literal.string(self._truncate_table_comment(table_description)))
+                exp.SchemaCommentProperty(
+                    this=exp.Literal.string(self._truncate_table_comment(table_description))
+                )
             )
 
         # Handle partitioning
@@ -935,7 +725,11 @@ class DorisEngineAdapter(
                 key_cols_set = set()
                 if isinstance(unique_key, exp.Tuple):
                     for expr in unique_key.expressions:
-                        if isinstance(expr, exp.Column) and hasattr(expr, "this") and hasattr(expr.this, "this"):
+                        if (
+                            isinstance(expr, exp.Column)
+                            and hasattr(expr, "this")
+                            and hasattr(expr.this, "this")
+                        ):
                             key_cols_set.add(str(expr.this.this))
                         elif hasattr(expr, "this"):
                             key_cols_set.add(str(expr.this))
@@ -991,12 +785,16 @@ class DorisEngineAdapter(
                         elif isinstance(expr.expression, exp.Array):
                             # Handle expressions array
                             distributed_info[key] = [
-                                str(e.this) for e in expr.expression.expressions if hasattr(e, "this")
+                                str(e.this)
+                                for e in expr.expression.expressions
+                                if hasattr(e, "this")
                             ]
                         elif isinstance(expr.expression, exp.Tuple):
                             # Handle expressions tuple (array of strings)
                             distributed_info[key] = [
-                                str(e.this) for e in expr.expression.expressions if hasattr(e, "this")
+                                str(e.this)
+                                for e in expr.expression.expressions
+                                if hasattr(e, "this")
                             ]
                         else:
                             distributed_info[key] = str(expr.expression)
@@ -1023,7 +821,7 @@ class DorisEngineAdapter(
 
                 if kind:
                     # Handle buckets - convert string to int if it's a numeric string
-                    buckets_expr = None
+                    buckets_expr: t.Optional[exp.Expression] = None
                     if isinstance(buckets, int):
                         buckets_expr = exp.Literal.number(buckets)
                     elif isinstance(buckets, str):
@@ -1073,12 +871,16 @@ class DorisEngineAdapter(
         logger.info(f"[Doris] No properties generated")
         return None
 
-    def _get_temp_table(self, table: TableName, table_only: bool = False, quoted: bool = True) -> exp.Table:
+    def _get_temp_table(
+        self, table: TableName, table_only: bool = False, quoted: bool = True
+    ) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name. Doris does not support table name begin with underscore.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set("this", exp.to_identifier(f"temp_{table.name}_{random_id(short=True)}", quoted=quoted))
+        table.set(
+            "this", exp.to_identifier(f"temp_{table.name}_{random_id(short=True)}", quoted=quoted)
+        )
 
         if table_only:
             table.set("db", None)
@@ -1086,7 +888,9 @@ class DorisEngineAdapter(
 
         return table
 
-    def _view_query_columns_to_types(self, query_or_df) -> t.Optional[t.Dict[str, exp.DataType]]:
+    def _build_view_query_columns_to_types(
+        self, query_or_df: t.Union[exp.Query, t.Any]
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
         """Extract output column names from a SQLGlot Query and return a dict mapping them to unknown type."""
         if isinstance(query_or_df, exp.Query):
             # If any select is a Star (i.e., SELECT * or SELECT a.*), return None
@@ -1104,7 +908,8 @@ class DorisEngineAdapter(
                     output_columns.append(name)
             else:
                 output_columns = [
-                    getattr(s, "alias_or_name", getattr(s, "name", str(s))) for s in getattr(query_or_df, "selects", [])
+                    getattr(s, "alias_or_name", getattr(s, "name", str(s)))
+                    for s in getattr(query_or_df, "selects", [])
                 ]
             return {col: exp.DataType.build("unknown") for col in output_columns}
         return None

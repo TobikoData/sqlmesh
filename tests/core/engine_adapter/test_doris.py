@@ -305,7 +305,9 @@ def test_create_table_with_partitioned_by(
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
         partitioned_by=[exp.to_column("b")],
         table_properties={
-            "partitioned_by_expr": "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"
+            "partitioned_by_expr": exp.Literal.string(
+                "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"
+            )
         },
     )
 
@@ -320,10 +322,14 @@ def test_create_table_with_partitioned_by(
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
         partitioned_by=[exp.to_column("b")],
         table_properties={
-            "partitioned_by_expr": [
-                "PARTITION `p201701` VALUES [('2017-01-01'), ('2017-02-01'))",
-                "PARTITION `other` VALUES LESS THAN (MAXVALUE)",
-            ]
+            "partitioned_by_expr": exp.Tuple(
+                expressions=[
+                    exp.Literal.string(
+                        "PARTITION `p201701` VALUES [('2017-01-01'), ('2017-02-01'))"
+                    ),
+                    exp.Literal.string("PARTITION `other` VALUES LESS THAN (MAXVALUE)"),
+                ]
+            )
         },
     )
 
@@ -336,18 +342,33 @@ def test_create_full_materialized_view(
     make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
 ):
     adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    view_properties: t.Dict[str, exp.Expression] = {
+        "build": exp.Literal.string("IMMEDIATE"),
+        "refresh": exp.Literal.string("AUTO"),
+        "on_schedule": exp.Literal.string("EVERY 1 DAY STARTS '2024-12-01 20:30:00'"),
+        "distributed_by": exp.Tuple(
+            expressions=[
+                exp.EQ(
+                    this=exp.Column(this=exp.Identifier(this="kind", quoted=True)),
+                    expression=exp.Literal.string("HASH"),
+                ),
+                exp.EQ(
+                    this=exp.Column(this=exp.Identifier(this="expressions", quoted=True)),
+                    expression=exp.Column(this=exp.Identifier(this="orderkey", quoted=True)),
+                ),
+                exp.EQ(
+                    this=exp.Column(this=exp.Identifier(this="buckets", quoted=True)),
+                    expression=exp.Literal.number(2),
+                ),
+            ]
+        ),
+        "unique_key": exp.to_column("orderkey"),
+        "replication_num": exp.Literal.string("1"),
+    }
     materialized_properties = {
-        "build": "IMMEDIATE",
-        "refresh": "AUTO",
-        "on_schedule": "EVERY 1 DAY STARTS '2024-12-01 20:30:00'",
-        "distributed_by": {
-            "kind": "HASH",
-            "expressions": ["orderkey"],
-            "buckets": 2,
-        },
-        "unique_key": ["orderkey"],
-        "partitioned_by_expr": "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR",
-        "replication_num": "1",
+        "partitioned_by": [exp.to_column("orderdate")],
+        "clustered_by": [],
+        "partition_interval_unit": None,
     }
     columns_to_types = {
         "orderdate": exp.DataType.build("DATE"),
@@ -380,14 +401,14 @@ def test_create_full_materialized_view(
         columns_to_types=columns_to_types,
         column_descriptions=column_descriptions,
         table_description="test_description",
+        view_properties=view_properties,
         materialized_properties=materialized_properties,
-        partitioned_by=["orderdate"],
     )
     expected_sqls = [
         "CREATE MATERIALIZED VIEW `complete_mv` (`orderdate` COMMENT 'order date', `orderkey` COMMENT 'order key', `partkey` COMMENT 'part key') "
         "BUILD IMMEDIATE REFRESH AUTO ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00' KEY (`orderkey`) COMMENT 'test_description' "
-        "PARTITION BY RANGE (`orderdate`) (FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR) "
-        "DISTRIBUTED BY HASH (orderkey) BUCKETS 2 PROPERTIES ('replication_num'='1') "
+        "PARTITION BY (`orderdate`) "
+        "DISTRIBUTED BY HASH (`orderkey`) BUCKETS 2 PROPERTIES ('replication_num'='1') "
         "AS SELECT `o_orderdate`, `l_orderkey`, `l_partkey` FROM `orders` LEFT JOIN `lineitem` ON `l_orderkey` = `o_orderkey` LEFT JOIN `partsupp` ON `ps_partkey` = `l_partkey` AND `l_suppkey` = `ps_suppkey`",
     ]
     sql_calls = to_sql_calls(adapter)
