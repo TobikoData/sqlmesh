@@ -345,7 +345,9 @@ def test_create_full_materialized_view(
     view_properties: t.Dict[str, exp.Expression] = {
         "build": exp.Literal.string("IMMEDIATE"),
         "refresh": exp.Literal.string("AUTO"),
-        "on_schedule": exp.Literal.string("EVERY 1 DAY STARTS '2024-12-01 20:30:00'"),
+        "refresh_trigger": exp.Literal.string(
+            "ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00'"
+        ),
         "distributed_by": exp.Tuple(
             expressions=[
                 exp.EQ(

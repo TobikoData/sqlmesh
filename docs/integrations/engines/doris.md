@@ -231,7 +231,7 @@ MODEL (
   physical_properties (
     build = 'IMMEDIATE',
     refresh = 'AUTO',
-    on_schedule = 'EVERY 12 hour',
+    refresh_trigger = 'ON SCHEDULE EVERY 12 hour',
     unique_key = id,
     distributed_by = (kind='HASH', expressions=id, buckets=10),
     replication_allocation = 'tag.location.default: 3',
@@ -257,8 +257,8 @@ MODEL (
 | Property | Description | Values |
 |----------|-------------|--------|
 | `build` | Build strategy | `'IMMEDIATE'`, `'DEFERRED'` |
-| `refresh` | Refresh strategy | `'MANUAL'`, `'AUTOMATIC'` |
-| `on_schedule` | Schedule for automatic refresh | `'INTERVAL 1 HOUR'` |
+| `refresh` | Refresh strategy | `'COMPLETE'`, `'AUTO'` |
+| `refresh_trigger` | Schedule for automatic refresh | `'MANUAL'`, `'ON SCHEDULE INTERVAL 1 HOUR'`, `'ON COMMIT'` |
 | `unique_key` | Unique key columns | `'user_id'` or `['user_id', 'date']` |
 | `duplicate_key` | Duplicate key columns | `'user_id'` or `['user_id', 'date']` |
 | `partitioned_by_expr` | Custom partition expression. Applies only if `partitioned_by` is not specified. | `'date_trunc(event_date, "month")'` |

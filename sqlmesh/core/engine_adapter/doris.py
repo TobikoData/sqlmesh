@@ -283,15 +283,15 @@ class DorisEngineAdapter(
                     )
                     doris_clauses.append(f"REFRESH {refresh_value}")
 
-                # ON SCHEDULE clause
-                on_schedule = view_properties.get("on_schedule")
-                if on_schedule:
-                    on_schedule_value = (
-                        on_schedule.this
-                        if isinstance(on_schedule, exp.Literal)
-                        else str(on_schedule)
+                # refresh trigger clause
+                refresh_trigger = view_properties.get("refresh_trigger")
+                if refresh_trigger:
+                    refresh_trigger_value = (
+                        refresh_trigger.this
+                        if isinstance(refresh_trigger, exp.Literal)
+                        else str(refresh_trigger)
                     )
-                    doris_clauses.append(f"ON SCHEDULE {on_schedule_value}")
+                    doris_clauses.append(f"{refresh_trigger_value}")
 
                 # KEY clauses
                 unique_key = view_properties.get("unique_key")
@@ -371,7 +371,7 @@ class DorisEngineAdapter(
                     if k not in {
                         "build",
                         "refresh",
-                        "on_schedule",
+                        "refresh_trigger",
                         "distributed_by",
                         "partitioned_by",
                         "partitioned_by_expr",
