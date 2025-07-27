@@ -1,5 +1,10 @@
 import path from 'path'
-import { openServerPage, runCommand, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openServerPage,
+  runCommand,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import os from 'os'
 import { test } from './fixtures'
 import fs from 'fs-extra'
@@ -31,7 +36,7 @@ test('Stop server works', async ({ page, sharedCodeServer }) => {
     .click()
 
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Stop the server
   await runCommand(page, 'SQLMesh: Stop Server')

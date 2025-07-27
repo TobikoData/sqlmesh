@@ -8,6 +8,7 @@ import {
   PythonEnvironment,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import os from 'os'
 import path from 'path'
@@ -83,7 +84,7 @@ test.describe('python environment variable injection on sqlmesh_lsp', () => {
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
     await runTest(page, sharedCodeServer, tempDir)
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   })
 })
 
@@ -127,6 +128,6 @@ test.describe('tcloud version', () => {
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
     await runTest(page, sharedCodeServer, tempDir)
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   })
 })

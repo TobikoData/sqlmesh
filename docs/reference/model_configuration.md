@@ -136,6 +136,42 @@ You can also use the `@model_kind_name` variable to fine-tune control over `phys
     )
     ```
 
+You can aso define `pre_statements`, `post_statements` and `on_virtual_update` statements at the project level that will be applied to all models. These default statements are merged with any model-specific statements, with default statements executing first, followed by model-specific statements.
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    model_defaults:
+      dialect: duckdb
+      pre_statements:
+        - "SET timeout = 300000"
+      post_statements:
+        - "@IF(@runtime_stage = 'evaluating', ANALYZE @this_model)"
+      on_virtual_update:
+        - "GRANT SELECT ON @this_model TO ROLE analyst_role"
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+      model_defaults=ModelDefaultsConfig(
+        dialect="duckdb",
+        pre_statements=[
+          "SET query_timeout = 300000",
+        ],
+        post_statements=[
+          "@IF(@runtime_stage = 'evaluating', ANALYZE @this_model)",
+        ],
+        on_virtual_update=[
+          "GRANT SELECT ON @this_model TO ROLE analyst_role",
+        ],
+      ),
+    )
+    ```
+
 
 The SQLMesh project-level `model_defaults` key supports the following options, described in the [general model properties](#general-model-properties) table above:
 
@@ -155,6 +191,9 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - allow_partials
 - enabled
 - interval_unit
+- pre_statements (described [here](../concepts/models/sql_models.md#pre--and-post-statements))
+- post_statements (described [here](../concepts/models/sql_models.md#pre--and-post-statements))
+- on_virtual_update (described [here](../concepts/models/sql_models.md#on-virtual-update-statements))
 
 
 ### Model Naming

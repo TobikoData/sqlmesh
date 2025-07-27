@@ -10,7 +10,7 @@ from sqlglot.helper import subclasses
 from sqlmesh.core.linter.helpers import TokenPositionDetails, get_range_of_model_block
 from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
 from sqlmesh.core.linter.definition import RuleSet
-from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model import Model, SqlModel, ExternalModel
 
 
 class NoSelectStar(Rule):
@@ -108,6 +108,33 @@ class NoMissingAudits(Rule):
             return self.violation()
         except Exception:
             return self.violation()
+
+
+class NoMissingExternalModels(Rule):
+    """All external models must be registered in the external_models.yaml file"""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        # Ignore external models themselves, because either they are registered,
+        # and if they are not, they will be caught as referenced in another model.
+        if isinstance(model, ExternalModel):
+            return None
+
+        # Handle other models that may refer to the external models.
+        not_registered_external_models: t.Set[str] = set()
+        for depends_on_model in model.depends_on:
+            existing_model = self.context.get_model(depends_on_model)
+            if existing_model is None:
+                not_registered_external_models.add(depends_on_model)
+
+        if not not_registered_external_models:
+            return None
+
+        return RuleViolation(
+            rule=self,
+            violation_msg=f"Model '{model.name}' depends on unregistered external models: "
+            f"{', '.join(m for m in not_registered_external_models)}. "
+            "Please register them in the external models file. This can be done by running 'sqlmesh create_external_models'.",
+        )
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
