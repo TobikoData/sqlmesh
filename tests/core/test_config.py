@@ -676,6 +676,65 @@ model_defaults:
     assert config.model_defaults.audits[1][1]["threshold"].this == "1000"
 
 
+def test_load_model_defaults_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - CREATE TEMP TABLE temp_data AS SELECT 1 as id
+    post_statements:
+        - DROP TABLE IF EXISTS temp_data
+        - ANALYZE @this_model
+        - SET memory_limit = '5GB'
+    on_virtual_update:
+        - UPDATE stats_table SET last_update = CURRENT_TIMESTAMP
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.model_defaults.pre_statements is not None
+    assert len(config.model_defaults.pre_statements) == 2
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[0]), exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[1]), exp.Create)
+
+    assert config.model_defaults.post_statements is not None
+    assert len(config.model_defaults.post_statements) == 3
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[0]), exp.Drop)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[1]), exp.Analyze)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[2]), exp.Set)
+
+    assert config.model_defaults.on_virtual_update is not None
+    assert len(config.model_defaults.on_virtual_update) == 1
+    assert isinstance(exp.maybe_parse(config.model_defaults.on_virtual_update[0]), exp.Update)
+
+
+def test_load_model_defaults_validation_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements_wrong.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - 313
+        """
+        )
+
+    with pytest.raises(TypeError, match=r"expected str instance, int found"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+
 def test_scheduler_config(tmp_path_factory):
     config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
     with open(config_path, "w", encoding="utf-8") as fd:

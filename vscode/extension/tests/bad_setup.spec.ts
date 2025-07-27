@@ -10,6 +10,7 @@ import {
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 
 test('missing LSP dependencies shows install prompt', async ({
@@ -132,5 +133,5 @@ test.skip('check that the LSP runs correctly by opening lineage when looking at 
   // Open the SQL file from the other directory
   await openFile(page, sqlFile)
 
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 })

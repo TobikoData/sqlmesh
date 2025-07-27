@@ -25,7 +25,9 @@ def test_reference() -> None:
     references = get_model_definitions_for_a_path(lsp_context, active_customers_uri)
 
     assert len(references) == 1
-    assert URI(references[0].uri) == URI.from_path(sushi_customers_path)
+    uri = references[0].uri
+    assert uri is not None
+    assert URI(uri) == URI.from_path(sushi_customers_path)
 
     # Check that the reference in the correct range is sushi.customers
     path = active_customers_uri.to_path()

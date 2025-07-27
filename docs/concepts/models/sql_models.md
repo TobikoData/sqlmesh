@@ -67,6 +67,8 @@ For example, pre/post-statements might modify settings or create a table index. 
 
 Pre/post-statements are just standard SQL commands located before/after the model query. They must end with a semi-colon, and the model query must end with a semi-colon if a post-statement is present. The [example above](#example) contains both pre- and post-statements.
 
+**Project-level defaults:** You can also define pre/post-statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
+
 !!! warning
 
     Pre/post-statements are evaluated twice: when a model's table is created and when its query logic is evaluated. Executing statements more than once can have unintended side-effects, so you can [conditionally execute](../macros/sqlmesh_macros.md#prepost-statements) them based on SQLMesh's [runtime stage](../macros/macro_variables.md#runtime-variables).
@@ -96,6 +98,8 @@ Note that the SQL command `UNCACHE TABLE countries` inside the `@IF()` macro doe
 The optional on-virtual-update statements allow you to execute SQL commands after the completion of the [Virtual Update](#virtual-update).
 
 These can be used, for example, to grant privileges on views of the virtual layer.
+
+**Project-level defaults:** You can also define on-virtual-update statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
 
 These SQL statements must be enclosed within an `ON_VIRTUAL_UPDATE_BEGIN;` ...; `ON_VIRTUAL_UPDATE_END;` block like this:
 

@@ -48,6 +48,7 @@ config = Config(
             "noselectstar",
             "nomissingaudits",
             "nomissingowner",
+            "nomissingexternalmodels",
         ],
     ),
 )

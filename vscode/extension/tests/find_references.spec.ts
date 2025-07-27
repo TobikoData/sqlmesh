@@ -7,6 +7,7 @@ import {
   goToReferences,
   openServerPage,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
@@ -44,7 +45,7 @@ async function openCustomersFile(page: Page) {
     .locator('a')
     .click()
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 }
 
 // Helper function to open top_waiters.sql and wait for SQLMesh context
@@ -55,7 +56,7 @@ async function openTopWaitersFile(page: Page) {
     .locator('a')
     .click()
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 }
 
 test.describe('Model References', () => {
@@ -194,7 +195,7 @@ test.describe('Model References', () => {
 
     // Wait for audit file to load and SQLMesh context to initialize
     await page.waitForSelector('text=standalone')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
 
     // Step 4: Click on sushi.items model reference in the audit query
     await page.locator('text=sushi.items').first().click()
@@ -279,7 +280,7 @@ test.describe('Model References', () => {
 
     // Ensure audit file and SQLMesh context are fully loaded
     await page.waitForSelector('text=standalone')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
 
     // Step 4: Position cursor on sushi.items model reference
     await page.locator('text=sushi.items').first().click()

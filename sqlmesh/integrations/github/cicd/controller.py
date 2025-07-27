@@ -290,6 +290,7 @@ class GithubController:
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
         client: t.Optional[Github] = None,
+        context: t.Optional[Context] = None,
     ) -> None:
         from github import Github
 
@@ -331,7 +332,7 @@ class GithubController:
             if review.state.lower() == "approved"
         }
         logger.debug(f"Approvers: {', '.join(self._approvers)}")
-        self._context: Context = Context(paths=self._paths, config=self.config)
+        self._context: Context = context or Context(paths=self._paths, config=self.config)
 
         # Bot config needs the context to be initialized
         logger.debug(f"Bot config: {self.bot_config.json(indent=2)}")
@@ -750,9 +751,8 @@ class GithubController:
         vde_title = "- :eyes: To **review** this PR's changes, use virtual data environment:"
         comment_value = f"{vde_title}\n  - `{self.pr_environment_name}`"
         if self.bot_config.enable_deploy_command:
-            comment_value += (
-                "\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `/deploy`"
-            )
+            full_command = f"{self.bot_config.command_namespace or ''}/deploy"
+            comment_value += f"\n- :arrow_forward: To **apply** this PR's plan to prod, comment:\n  - `{full_command}`"
         dedup_regex = vde_title.replace("*", r"\*") + r".*"
         updated_comment, _ = self.update_sqlmesh_comment_info(
             value=comment_value,
