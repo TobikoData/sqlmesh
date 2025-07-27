@@ -30,20 +30,18 @@ doris:
     database: your_database
 ```
 
-## Doris Table Models
+## Table Models
 
-Doris supports three table models: DUPLICATE, UNIQUE, and AGGREGATE, each optimized for different use cases. SQLMesh supports **DUPLICATE** (default) and **UNIQUE** models. The AGGREGATE model is not supported yet.
-
-To specify a table model, use the `TABLE_MODEL` property in your model's `table_properties`.
+Doris supports three table models: DUPLICATE, UNIQUE, and AGGREGATE. SQLMesh supports **DUPLICATE** and **UNIQUE** models through the `physical_properties` configuration.
 
 ### DUPLICATE Model (Default)
 
 The DUPLICATE model allows duplicate data and is optimized for high-throughput scenarios like log data and streaming ingestion.
 
 **Features:**
-- **High Write Performance**: Optimized for append-only workloads.
-- **No Deduplication**: Allows duplicate records.
-- **Streaming Friendly**: Ideal for real-time data ingestion.
+- **High Write Performance**: Optimized for append-only workloads
+- **No Deduplication**: Allows duplicate records
+- **Streaming Friendly**: Ideal for real-time data ingestion
 
 **Example Configuration:**
 ```sql
@@ -51,9 +49,12 @@ MODEL (
   name user_events,
   kind FULL,
   physical_properties (
-    TABLE_MODEL 'DUPLICATE',
-    DISTRIBUTED_BY 'HASH(user_id)',
-    BUCKETS 10
+    duplicate_key ('user_id', 'event_time'),
+    distributed_by (
+      kind = 'HASH',
+      expressions = 'user_id',
+      buckets = 10
+    )
   )
 );
 ```
@@ -63,9 +64,9 @@ MODEL (
 The UNIQUE model is ideal for dimension tables and scenarios requiring data updates. It ensures key uniqueness and supports efficient UPSERT operations.
 
 **Features:**
-- **Primary Key Updates**: New data overwrites existing records with matching keys.
-- **Merge-on-Write**: Can be enabled for better query performance.
-- **Automatic Deduplication**: Ensures data uniqueness based on specified key columns.
+- **Primary Key Updates**: New data overwrites existing records with matching keys
+- **Merge-on-Write**: Can be enabled for better query performance
+- **Automatic Deduplication**: Ensures data uniqueness based on specified key columns
 
 **Example Configuration:**
 ```sql
@@ -73,80 +74,198 @@ MODEL (
   name dim_users,
   kind FULL,
   physical_properties (
-    TABLE_MODEL 'UNIQUE',
-    KEY_COLS ['user_id'],
-    DISTRIBUTED_BY 'HASH(user_id)',
-    BUCKETS 16,
-    -- Enable merge-on-write for better query performance
+    unique_key 'user_id',
+    distributed_by (
+      kind = 'HASH',
+      expressions = 'user_id',
+      buckets = 16
+    ),
     enable_unique_key_merge_on_write = 'true'
   )
 );
 ```
 
-## Advanced Table Properties
+## Table Properties
 
-The Doris adapter supports a range of advanced table properties for fine-grained control over table creation. These can be set in the `physical_properties` section of your model.
+The Doris adapter supports a comprehensive set of table properties that can be configured in the `physical_properties` section of your model. These properties are processed by the `_build_table_properties_exp` method.
 
-| Property              | Description                                                                                 | Default                |
-|-----------------------|---------------------------------------------------------------------------------------------|------------------------|
-| `TABLE_MODEL`         | Table model: `DUPLICATE` or `UNIQUE`                                                        | `DUPLICATE`            |
-| `KEY_COLS`            | List of key columns for UNIQUE or DUPLICATE models                                           | (all columns for DUPLICATE, required for UNIQUE) |
-| `DISTRIBUTED_BY`      | Distribution method, e.g., `HASH(user_id)`                                                  | `HASH(<first_column>)` |
-| `BUCKETS`             | Number of buckets for distribution                                                          | `10`                   |
-| `AUTO_PARTITION`      | Enable Doris auto partitioning (`true`/`false`) for Doris 2.1                                             | `false`                |
-| `PARTITION_FUNCTION`  | Custom partition function for advanced partitioning, e.g., `date_trunc(create_time, 'month')`                                         |                        |
-| `PARTITIONED_BY_DEF`  | Partition definition string, e.g., `FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 2 YEAR`                                         |                        |
-| Any other property    | Passed through as a Doris table property                                                     |                        |
+### Core Table Properties
 
-**Example with advanced properties:**
+| Property | Type | Description | Example |
+|----------|------|-------------|---------|
+| `unique_key` | `Tuple[str]` or `str` | Defines unique key columns for UNIQUE model | `('user_id')` or `'user_id'` |
+| `duplicate_key` | `Tuple[str]` or `str` | Defines key columns for DUPLICATE model | `（'user_id', 'event_time'）` |
+| `distributed_by` | `Dict` | Distribution configuration | See Distribution section |
+| `partitioned_by_expr` | `Tuple[str]` or `str` | Custom partition expression | `'FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 1 MONTH'` |
+
+### Distribution Configuration
+
+The `distributed_by` property supports multiple formats:
+
+**Dictionary Format:**
 ```sql
 MODEL (
-  name advanced_table,
+  name my_table,
   kind FULL,
-  partitioned_by create_time,
   physical_properties (
-    TABLE_MODEL = 'UNIQUE',
-    KEY_COLS = ['id'],
-    DISTRIBUTED_BY = 'HASH(id)',
-    BUCKETS = 8,
-    PARTITIONED_BY_DEF 'FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 2 YEAR',
-    replication_allocation = 'tag.location.default: 3',
-    in_memory = 'false',
-    storage_format = 'V2',
-    disable_auto_compaction = 'false'
+    distributed_by (
+      kind = 'HASH',
+      expressions = 'user_id',
+      buckets = 10
+    )
   )
 );
 ```
 
-**Notes:**
-- For the UNIQUE model, partition column must be included in `KEY_COLS`.
-- If `DISTRIBUTED_BY` is not specified, the first column is used by default.
-
-## Partitioning
-
-Doris supports range and list partitioning to improve query performance. SQLMesh will automatically translate time-based partitioning into Doris's `PARTITION BY RANGE` syntax. You can also use advanced partitioning options via table properties.
-
-**Example (automatic time-based partitioning):**
 ```sql
 MODEL (
-  name my_partitioned_model,
-  kind INCREMENTAL_BY_TIME_RANGE((event_date, '%Y-%m-%d')),
-  -- other model properties
+  name my_table,
+  kind FULL,
+  physical_properties (
+    distributed_by (
+      kind = 'RANDOM'
+    )
+  )
 );
 ```
 
-**Advanced partitioning:**
-- Use `AUTO_PARTITION` to enable Doris's auto partitioning (supported since Doris 2.1).
-- Use `PARTITION_FUNCTION` for custom partition expressions.
-- Use `PARTITIONED_BY_DEF` to specify raw partition definitions.
+**Supported Distribution Types:**
+- `HASH`: Hash-based distribution (most common)
+- `RANDOM`: Random distribution
 
-**Note:** For UNIQUE KEY tables, partition column must be included in `KEY_COLS`. If not, partitioning will be skipped and a warning will be logged.
+**Bucket Configuration:**
+- Integer value: Fixed number of buckets (e.g., `10`)
+- `'AUTO'`: Automatic bucket calculation
+
+### Partitioning
+
+Doris supports range partitioning to improve query performance. SQLMesh automatically translates partitioning into Doris's `PARTITION BY RANGE` syntax.
+
+**Custom Partition Expression:**
+```sql
+MODEL (
+  name my_partitioned_model,
+  kind INCREMENTAL_BY_TIME_RANGE(time_column (event_date, '%Y-%m-%d')),
+  partitioned_by event_date
+  physical_properties (
+    partitioned_by_expr = 'FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 2 YEAR',
+  ),
+);
+```
+
+```sql
+MODEL (
+  name my_custom_partitioned_model,
+  kind FULL,
+  partitioned_by event_date,
+  physical_properties (
+    partitioned_by_expr = (
+      'PARTITION `p2023` VALUES [("2023-01-01"), ("2024-01-01"))', 
+      'PARTITION `p2024` VALUES [("2024-01-01"), ("2025-01-01"))', 
+      'PARTITION `p2025` VALUES [("2025-01-01"), ("2026-01-01"))', 
+      'PARTITION `other` VALUES LESS THAN MAXVALUE'
+    ),
+  )
+);
+```
+
+**Important Notes:**
+- For UNIQUE KEY tables, partition columns must be included in the `unique_key` definition
+- If partition columns are not in the unique key, partitioning will be skipped with a warning
+- The adapter automatically handles partition expression generation for time-based partitioning
+
+### Generic Properties
+
+Any additional properties in `physical_properties` are passed through as Doris table properties:
+
+```sql
+MODEL (
+  name advanced_table,
+  kind FULL,
+  physical_properties (
+    unique_key = 'id',
+    distributed_by (
+      kind = 'HASH',
+      expressions = 'id',
+      buckets = 8
+    ),
+    replication_allocation = 'tag.location.default: 3',
+    in_memory = 'false',
+    storage_format = 'V2',
+    disable_auto_compaction = 'false',
+  )
+);
+```
+
+## Materialized Views
+
+SQLMesh supports creating materialized views in Doris with comprehensive configuration options.
+
+### Basic Materialized View
+
+```sql
+MODEL (
+  name user_summary_mv,
+  kind VIEW (
+    materialized true
+  )
+);
+
+SELECT 
+  user_id,
+  COUNT(*) as event_count,
+  MAX(event_time) as last_event
+FROM user_events
+GROUP BY user_id;
+```
+
+### Advanced Materialized View Configuration
+
+```sql
+MODEL (
+  name sqlmesh_test.view_materialized1,
+  kind VIEW (
+    materialized true
+  ),
+  partitioned_by ds,
+  physical_properties (
+    build = 'IMMEDIATE',
+    refresh = 'AUTO',
+    on_schedule = 'EVERY 12 hour',
+    unique_key = id,
+    distributed_by = (kind='HASH', expressions=id, buckets=10),
+    replication_allocation = 'tag.location.default: 3',
+    in_memory = 'false',
+    storage_format = 'V2',
+    disable_auto_compaction = 'false'
+  ),
+  description "customer zip",
+  columns (
+    id int,
+    ds datetime,
+    zip int,
+  ),
+  column_descriptions (
+    id = "order id",
+    zip = "zip code",
+  )
+);
+```
+
+### Materialized View Properties
+
+| Property | Description | Values |
+|----------|-------------|--------|
+| `build` | Build strategy | `'IMMEDIATE'`, `'DEFERRED'` |
+| `refresh` | Refresh strategy | `'MANUAL'`, `'AUTOMATIC'` |
+| `on_schedule` | Schedule for automatic refresh | `'INTERVAL 1 HOUR'` |
+| `unique_key` | Unique key columns | `'user_id'` or `['user_id', 'date']` |
+| `duplicate_key` | Duplicate key columns | `'user_id'` or `['user_id', 'date']` |
+| `partitioned_by_expr` | Custom partition expression. Applies only if `partitioned_by` is not specified. | `'date_trunc(event_date, "month")'` |
 
 ## Indexing
 
-SQLMesh supports creating indexes in Doris to accelerate queries. You can define indexes in your model's DDL or use the adapter's API.
-
-**Supported Index Types:** `INVERTED`, `BLOOMFILTER`, `NGRAM_BF`
+SQLMesh supports creating indexes in Doris to accelerate queries. You can define indexes in your model's DDL.
 
 **Example:**
 ```sql
@@ -156,14 +275,11 @@ MODEL (
 );
 
 SELECT 
-   ...
+   user_id,
+   username,
+   city
 FROM 
-   ...
-
-@IF(
-  @runtime_stage = 'creating',
-  CREATE INDEX idx_city ON my_indexed_table (city) USING BLOOMFILTER COMMENT 'Bloomfilter index on city'
-);
+   users;
 
 @IF(
   @runtime_stage = 'creating',
@@ -171,33 +287,96 @@ FROM
 );
 ```
 
-- Both `CREATE INDEX` and `ALTER TABLE ... ADD INDEX` are supported for compatibility with different Doris versions.
-- Index properties and comments are supported.
-
 ## Comments
 
-SQLMesh supports adding comments to tables and columns.
+SQLMesh supports adding comments to tables and columns with automatic truncation to Doris limits.
 
-- **Table Comments**: Use the `description` property in the `MODEL` definition.
-- **Column Comments**: Use the `column_descriptions` property in the `MODEL` definition.
+- **Table Comments**: Use the `description` property in the `MODEL` definition
+- **Column Comments**: Use the `column_descriptions` property in the `MODEL` definition
 
 ```sql
 MODEL (
   name my_commented_table,
   kind TABLE,
-  description 'This is a table comment.'
+  description 'This is a comprehensive table comment that describes the purpose and usage of this table in detail.',
   column_descriptions (
-    id = "This is a column comment"
+    id = "Unique identifier for each record",
+    user_id = "Foreign key reference to users table",
+    event_type = "Type of event that occurred"
+  )
 );
 ```
 
-**Note:** Doris has comment length limits: `2048` characters for tables and `255` for columns. SQLMesh will automatically truncate longer comments to fit these limits.
+**Limits:**
+- Table comments: 2048 characters (automatically truncated)
+- Column comments: 255 characters (automatically truncated)
 
 ## Views
 
-- Only regular views are supported. Doris materialized views are not supported by SQLMesh, due to Doris limitations (e.g., no table alias or schema name in materialized view definitions).
-- `CREATE OR REPLACE VIEW` is not supported. If `replace=True`, SQLMesh will drop the view first and then create it.
-- The `CASCADE` clause is not supported for dropping views.
+SQLMesh supports both regular and materialized views in Doris.
+
+### Regular Views
+
+```sql
+MODEL (
+  name user_summary_view,
+  kind VIEW
+);
+
+SELECT 
+  user_id,
+  COUNT(*) as event_count,
+  MAX(event_time) as last_event
+FROM user_events
+GROUP BY user_id;
+```
+
+### View Limitations
+
+- `CREATE OR REPLACE VIEW` is not supported. If `replace=True`, SQLMesh will drop the view first and then create it
+- The `CASCADE` clause is not supported for dropping views
+- Materialized views support all Doris-specific properties and optimizations
+
+## Schema Management
+
+### Creating Schemas
+
+```sql
+-- Schemas in Doris are databases
+CREATE DATABASE IF NOT EXISTS my_schema;
+```
+
+### Dropping Schemas
+
+```sql
+-- Doris doesn't support CASCADE clause
+DROP DATABASE my_schema;
+```
+
+## Data Operations
+
+### Table Operations
+
+**Create Table Like:**
+```sql
+-- Create a new table with the same structure as an existing table
+CREATE TABLE new_table LIKE existing_table;
+```
+
+**Rename Table:**
+```sql
+-- Rename a table
+ALTER TABLE old_table_name RENAME new_table_name;
+```
+
+**Delete Operations:**
+```sql
+-- Delete specific records
+DELETE FROM table_name WHERE condition;
+
+-- Full table deletion uses TRUNCATE for better performance
+DELETE FROM table_name WHERE TRUE;  -- Executes as TRUNCATE TABLE
+```
 
 ## Dependencies
 
@@ -208,16 +387,6 @@ pip install "sqlmesh[doris]"
 # or
 pip install pymysql
 ```
-
-## Limitations
-
-- **Transactions**: Doris does not support transactions. SQLMesh manages data consistency by creating new table versions and swapping them atomically.
-- **Unsupported DDL**:
-  - `REPLACE TABLE` is not supported.
-  - `DROP SCHEMA ... CASCADE` is not supported and will be executed without the `CASCADE` clause.
-- **Materialized Views**: SQLMesh does not currently support creating materialized views in Doris.
-- **Schema Changes**: Some schema modifications may require table recreation, which SQLMesh handles automatically.
-- **Identifier Length**: Doris limits identifiers (e.g., table/column names) to 64 characters.
 
 ## Resources
 

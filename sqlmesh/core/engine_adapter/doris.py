@@ -42,7 +42,7 @@ class DorisEngineAdapter(
     DIALECT = "doris"
     DEFAULT_BATCH_SIZE = 200
     SUPPORTS_TRANSACTIONS = False  # Doris doesn't support transactions
-    SUPPORTS_INDEXES = True  # Doris supports various indexes (inverted, bloom filter, etc.)
+    SUPPORTS_INDEXES = True  # Doris supports various indexes
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
     MAX_TABLE_COMMENT_LENGTH = 2048
