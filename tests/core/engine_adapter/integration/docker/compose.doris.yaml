@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   doris-fe:
-    image: apache/doris:2.0.3-fe-x86_64
+    image: apache/doris:fe-2.1.10.cir-17116
+
     hostname: doris-fe
     container_name: doris-fe
     environment:
@@ -24,7 +25,7 @@ services:
       start_period: 60s
 
   doris-be:
-    image: apache/doris:2.0.3-be-x86_64
+    image: apache/doris:be-2.1.10.cir-17116
     hostname: doris-be
     container_name: doris-be
     environment:
