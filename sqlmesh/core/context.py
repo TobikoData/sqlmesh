@@ -2904,9 +2904,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
         for node in nodes.values():
-            kwargs = {}
+            kwargs: t.Dict[str, t.Any] = {}
             if node.project in self._projects:
-                kwargs["ttl"] = self.config_for_node(node).snapshot_ttl
+                config = self.config_for_node(node)
+                kwargs["ttl"] = config.snapshot_ttl
+                kwargs["table_naming_convention"] = config.physical_table_naming_convention
 
             snapshot = Snapshot.from_node(
                 node,
