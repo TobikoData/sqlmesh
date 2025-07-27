@@ -125,7 +125,6 @@ gateways:
       port: 9030
       user: root
       password: ""
-      database: test
       check_import: false
     state_connection:
       type: duckdb
