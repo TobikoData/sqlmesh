@@ -90,7 +90,7 @@ def _rename_cte(cte_references: t.List[LSPCteReference], new_name: str) -> Works
     changes: t.Dict[str, t.List[TextEdit]] = {}
 
     for ref in cte_references:
-        uri = ref.uri
+        uri = URI.from_path(ref.path).value
         if uri not in changes:
             changes[uri] = []
 

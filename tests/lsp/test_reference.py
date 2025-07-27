@@ -25,9 +25,9 @@ def test_reference() -> None:
     references = get_model_definitions_for_a_path(lsp_context, active_customers_uri)
 
     assert len(references) == 1
-    uri = references[0].uri
-    assert uri is not None
-    assert URI(uri) == URI.from_path(sushi_customers_path)
+    path = references[0].path
+    assert path is not None
+    assert path == sushi_customers_path
 
     # Check that the reference in the correct range is sushi.customers
     path = active_customers_uri.to_path()
@@ -61,7 +61,7 @@ def test_reference_with_alias() -> None:
     with open(waiter_revenue_by_day_path, "r") as file:
         read_file = file.readlines()
 
-    assert references[0].uri.endswith("orders.py")
+    assert str(references[0].path).endswith("orders.py")
     assert get_string_from_range(read_file, references[0].range) == "sushi.orders"
     assert (
         references[0].markdown_description
@@ -76,9 +76,9 @@ def test_reference_with_alias() -> None:
 | end_ts | INT |  |
 | event_date | DATE |  |"""
     )
-    assert references[1].uri.endswith("order_items.py")
+    assert str(references[1].path).endswith("order_items.py")
     assert get_string_from_range(read_file, references[1].range) == "sushi.order_items"
-    assert references[2].uri.endswith("items.py")
+    assert str(references[2].path).endswith("items.py")
     assert get_string_from_range(read_file, references[2].range) == "sushi.items"
 
 
@@ -102,7 +102,7 @@ def test_standalone_audit_reference() -> None:
     references = get_model_definitions_for_a_path(lsp_context, URI.from_path(audit_path))
 
     assert len(references) == 1
-    assert references[0].uri == URI.from_path(items_path).value
+    assert references[0].path == items_path
 
     # Check that the reference in the correct range is sushi.items
     with open(audit_path, "r") as file:
@@ -161,7 +161,7 @@ def test_filter_references_by_position() -> None:
         position_inside = Position(line=middle_line, character=middle_char)
         filtered = list(filter(by_position(position_inside), all_references))
         assert len(filtered) == 1
-        assert filtered[0].uri == reference.uri
+        assert filtered[0].path == reference.path
         assert filtered[0].range == reference.range
 
         # For testing outside position, use a position before the current reference
