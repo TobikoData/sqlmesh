@@ -1,5 +1,5 @@
-from lsprotocol.types import Position
 from sqlmesh.core.context import Context
+from sqlmesh.core.linter.rule import Position
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlmesh.lsp.reference import LSPModelReference, get_model_definitions_for_a_path, by_position
 from sqlmesh.lsp.uri import URI

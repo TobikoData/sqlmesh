@@ -48,6 +48,7 @@ from sqlmesh.lsp.custom import (
     CustomMethod,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
+from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
     LSPCteReference,
@@ -418,7 +419,7 @@ class SQLMeshLanguageServer:
                 context = self._context_get_or_load(uri)
                 document = ls.workspace.get_text_document(params.text_document.uri)
 
-                references = get_references(context, uri, params.position)
+                references = get_references(context, uri, to_sqlmesh_position(params.position))
                 if not references:
                     return None
                 reference = references[0]
@@ -429,7 +430,7 @@ class SQLMeshLanguageServer:
                         kind=types.MarkupKind.Markdown,
                         value=reference.markdown_description,
                     ),
-                    range=reference.range,
+                    range=to_lsp_range(reference.range),
                 )
 
             except Exception as e:
@@ -464,7 +465,7 @@ class SQLMeshLanguageServer:
                 uri = URI(params.text_document.uri)
                 context = self._context_get_or_load(uri)
 
-                references = get_references(context, uri, params.position)
+                references = get_references(context, uri, to_sqlmesh_position(params.position))
                 location_links = []
                 for reference in references:
                     # Use target_range if available (CTEs, Macros, and external models in YAML)
@@ -489,12 +490,12 @@ class SQLMeshLanguageServer:
                             end=types.Position(line=0, character=0),
                         )
                         if reference.target_range is not None:
-                            target_range = reference.target_range
-                            target_selection_range = reference.target_range
+                            target_range = to_lsp_range(reference.target_range)
+                            target_selection_range = to_lsp_range(reference.target_range)
                     else:
                         # CTEs and Macros always have target_range
-                        target_range = reference.target_range
-                        target_selection_range = reference.target_range
+                        target_range = to_lsp_range(reference.target_range)
+                        target_selection_range = to_lsp_range(reference.target_range)
 
                     if reference.path is not None:
                         location_links.append(
@@ -502,7 +503,7 @@ class SQLMeshLanguageServer:
                                 target_uri=URI.from_path(reference.path).value,
                                 target_selection_range=target_selection_range,
                                 target_range=target_range,
-                                origin_selection_range=reference.range,
+                                origin_selection_range=to_lsp_range(reference.range),
                             )
                         )
                 return location_links
@@ -519,11 +520,13 @@ class SQLMeshLanguageServer:
                 uri = URI(params.text_document.uri)
                 context = self._context_get_or_load(uri)
 
-                all_references = get_all_references(context, uri, params.position)
+                all_references = get_all_references(
+                    context, uri, to_sqlmesh_position(params.position)
+                )
 
                 # Convert references to Location objects
                 locations = [
-                    types.Location(uri=URI.from_path(ref.path).value, range=ref.range)
+                    types.Location(uri=URI.from_path(ref.path).value, range=to_lsp_range(ref.range))
                     for ref in all_references
                     if ref.path is not None
                 ]

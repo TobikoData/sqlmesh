@@ -1,12 +1,10 @@
 from pathlib import Path
 
-from lsprotocol.types import Position
-
 from sqlmesh import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.helpers import read_range_from_file
+from sqlmesh.core.linter.rule import Position
 from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.helpers import to_sqlmesh_range
 from sqlmesh.lsp.reference import get_references, LSPExternalModelReference
 from sqlmesh.lsp.uri import URI
 from tests.utils.test_filesystem import create_temp_file
@@ -34,14 +32,14 @@ def test_reference() -> None:
     assert path is not None
     assert str(path).endswith("external_models.yaml")
 
-    source_range = read_range_from_file(customers, to_sqlmesh_range(reference.range))
+    source_range = read_range_from_file(customers, reference.range)
     assert source_range == "raw.demographics"
 
     if reference.target_range is None:
         raise AssertionError("Reference target range should not be None")
     path = reference.path
     assert path is not None
-    target_range = read_range_from_file(path, to_sqlmesh_range(reference.target_range))
+    target_range = read_range_from_file(path, reference.target_range)
     assert target_range == "raw.demographics"
 
 
@@ -61,4 +59,4 @@ def test_unregistered_external_model(tmp_path: Path):
     assert reference.path is None
     assert reference.target_range is None
     assert reference.markdown_description == "Unregistered external model"
-    assert read_range_from_file(model_path, to_sqlmesh_range(reference.range)) == "external_model"
+    assert read_range_from_file(model_path, reference.range) == "external_model"
