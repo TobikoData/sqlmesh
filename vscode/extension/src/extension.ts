@@ -115,10 +115,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   )
 
-  const restart = async () => {
+  const restart = async (invokedByUser = false) => {
     if (lspClient) {
       traceVerbose('Restarting LSP client')
-      const restartResult = await lspClient.restart()
+      const restartResult = await lspClient.restart(invokedByUser)
       if (isErr(restartResult)) {
         return handleError(
           authProvider,
@@ -130,7 +130,7 @@ export async function activate(context: vscode.ExtensionContext) {
       context.subscriptions.push(lspClient)
     } else {
       lspClient = new LSPClient()
-      const result = await lspClient.start()
+      const result = await lspClient.start(invokedByUser)
       if (isErr(result)) {
         return handleError(
           authProvider,
@@ -159,7 +159,7 @@ export async function activate(context: vscode.ExtensionContext) {
       await restart()
     }),
     registerCommand(`sqlmesh.restart`, async () => {
-      await restart()
+      await restart(true)
     }),
     registerCommand(`sqlmesh.stop`, stop(lspClient)),
     registerCommand(`sqlmesh.printEnvironment`, printEnvironment()),
