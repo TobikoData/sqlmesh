@@ -30,6 +30,7 @@ from sqlglot import exp
 
 from sqlmesh.core.console import get_console
 
+SQLMESH_VARS = "__sqlmesh__vars__"
 SQLMESH_BLUEPRINT_VARS = "__sqlmesh__blueprint__vars__"
 METADATA_HASH_EXPRESSIONS = {"on_virtual_update", "audits", "signals", "audit_definitions"}
 
@@ -62,9 +63,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
         python_env = node.get("python_env") or {}
 
-        if (
-            SQLMESH_BLUEPRINT_VARS in python_env
-            or any(v.get("is_metadata") for v in python_env.values())
+        if (SQLMESH_VARS in python_env or SQLMESH_BLUEPRINT_VARS in python_env) and (
+            any(v.get("is_metadata") for v in python_env.values())
             or any(node.get(k) for k in METADATA_HASH_EXPRESSIONS)
         ):
             get_console().log_warning(warning)
