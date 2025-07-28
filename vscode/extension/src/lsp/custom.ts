@@ -32,6 +32,7 @@ export type CustomLSPMethods =
   | AllModelsForRenderMethod
   | SupportedMethodsMethod
   | FormatProjectMethod
+  | ListWorkspaceTests
 
 interface AllModelsRequest {
   textDocument: {

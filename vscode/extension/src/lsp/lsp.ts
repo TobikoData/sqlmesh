@@ -252,8 +252,8 @@ export class LSPClient implements Disposable {
 
     try {
       const result = await this.client.sendRequest<Response>(method, request)
-      if (result.response_error) {
-        return err(result.response_error)
+      if ((result as any).response_error) {
+        return err((result as any).response_error)
       }
       return ok(result)
     } catch (error) {

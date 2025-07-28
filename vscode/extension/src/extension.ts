@@ -21,6 +21,7 @@ import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
 import { RenderedModelProvider } from './providers/renderedModelProvider'
 import { sleep } from './utilities/sleep'
+import { controller as testController, setupTestController } from './tests/tests'
 
 let lspClient: LSPClient | undefined
 
@@ -128,6 +129,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
       }
       context.subscriptions.push(lspClient)
+      setupTestController(lspClient)
     } else {
       lspClient = new LSPClient()
       const result = await lspClient.start()
@@ -140,6 +142,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
       } else {
         context.subscriptions.push(lspClient)
+        setupTestController(lspClient)
       }
     }
   }
@@ -175,6 +178,8 @@ export async function activate(context: vscode.ExtensionContext) {
     )
   } else {
     context.subscriptions.push(lspClient)
+    setupTestController(lspClient)
+    context.subscriptions.push(testController)
   }
 
   if (lspClient && !lspClient.hasCompletionCapability()) {

@@ -1,5 +1,9 @@
 import * as vscode from 'vscode'
+import path from 'path'
 import { LSPClient } from '../lsp/lsp'
+import { isErr } from '@bus/result'
+import { sqlmeshExec } from '../utilities/sqlmesh/sqlmesh'
+import { execAsync } from '../utilities/exec'
 
 export const controller = vscode.tests.createTestController(
   'sqlmeshTests',
@@ -7,60 +11,77 @@ export const controller = vscode.tests.createTestController(
 )
 
 export const setupTestController = (lsp: LSPClient) => {
-  // First, create the `resolveHandler`. This may initially be called with
-  // "undefined" to ask for all tests in the workspace to be discovered, usually
-  // when the user opens the Test Explorer for the first time.
-  controller.resolveHandler = async test => {
-    if (!test) {
-      await discoverAllFilesInWorkspace()
-    } else {
-      await parseTestsInFileContents(test)
-    }
+  controller.resolveHandler = async () => {
+    await discoverWorkspaceTests()
   }
 
-  // When text documents are open, parse tests in them.
-  vscode.workspace.onDidOpenTextDocument(parseTestsInDocument)
-  // We could also listen to document changes to re-parse unsaved changes:
-  vscode.workspace.onDidChangeTextDocument(e =>
-    parseTestsInDocument(e.document),
+  controller.createRunProfile(
+    'Run',
+    vscode.TestRunProfileKind.Run,
+    (request, token) => runTests(request, token),
+    true,
   )
 
-  // In this function, we'll get the file TestItem if we've already found it,
-  // otherwise we'll create it with `canResolveChildren = true` to indicate it
-  // can be passed to the `controller.resolveHandler` to gets its children.
-  function getOrCreateFile(uri: vscode.Uri) {
-    const existing = controller.items.get(uri.toString())
-    if (existing) {
-      return existing
+  async function discoverWorkspaceTests() {
+    const result = await lsp.call_custom_method('sqlmesh/list_workspace_tests', {})
+    if (isErr(result)) {
+      vscode.window.showErrorMessage(`Failed to list SQLMesh tests: ${result.error.message}`)
+      return
     }
-
-    const file = controller.createTestItem(
-      uri.toString(),
-      uri.path.split('/').pop()!,
-      uri,
-    )
-    file.canResolveChildren = true
-    return file
+    controller.items.replace([])
+    const files = new Map<string, vscode.TestItem>()
+    for (const entry of result.value.tests) {
+      const uri = vscode.Uri.parse(entry.uri)
+      let fileItem = files.get(uri.toString())
+      if (!fileItem) {
+        fileItem = controller.createTestItem(uri.toString(), path.basename(uri.fsPath), uri)
+        fileItem.canResolveChildren = true
+        files.set(uri.toString(), fileItem)
+        controller.items.add(fileItem)
+      }
+      const testId = `${uri.toString()}::${entry.name}`
+      const testItem = controller.createTestItem(testId, entry.name, uri)
+      fileItem.children.add(testItem)
+    }
   }
 
-  function parseTestsInDocument(e: vscode.TextDocument) {
-    if (e.uri.scheme === 'file' && e.uri.path.endsWith('.md')) {
-      parseTestsInFileContents(getOrCreateFile(e.uri), e.getText())
-    }
-  }
-
-  async function parseTestsInFileContents(
-    file: vscode.TestItem,
-    contents?: string,
-  ) {
-    // If a document is open, VS Code already knows its contents. If this is being
-    // called from the resolveHandler when a document isn't open, we'll need to
-    // read them from disk ourselves.
-    if (contents === undefined) {
-      const rawContent = await vscode.workspace.fs.readFile(file.uri)
-      contents = new TextDecoder().decode(rawContent)
+  async function runTests(request: vscode.TestRunRequest, token: vscode.CancellationToken) {
+    const run = controller.createTestRun(request)
+    const exec = await sqlmeshExec()
+    if (isErr(exec)) {
+      vscode.window.showErrorMessage(`Unable to run tests: ${JSON.stringify(exec.error)}`)
+      run.end()
+      return
     }
 
-    // some custom logic to fill in test.children from the contents...
+    const tests: vscode.TestItem[] = []
+    const collect = (item: vscode.TestItem) => {
+      if (item.children.size === 0) tests.push(item)
+      item.children.forEach(collect)
+    }
+
+    if (request.include) request.include.forEach(collect)
+    else controller.items.forEach(collect)
+
+    for (const t of tests) run.started(t)
+
+    const patterns = tests.map(t => {
+      const [uriStr, name] = t.id.split('::')
+      const uri = vscode.Uri.parse(uriStr)
+      return `${uri.fsPath}::${name}`
+    })
+
+    const result = await execAsync(exec.value.bin, [...exec.value.args, 'test', ...patterns], {
+      cwd: exec.value.workspacePath,
+      env: exec.value.env,
+      signal: token as unknown as AbortSignal,
+    })
+
+    const passed = result.exitCode === 0
+    for (const t of tests) {
+      if (passed) run.passed(t)
+      else run.failed(t, new vscode.TestMessage(result.stderr || 'Failed'))
+    }
+    run.end()
   }
 }
