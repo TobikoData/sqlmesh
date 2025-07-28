@@ -496,10 +496,10 @@ class SQLMeshLanguageServer:
                         target_range = reference.target_range
                         target_selection_range = reference.target_range
 
-                    if reference.uri is not None:
+                    if reference.path is not None:
                         location_links.append(
                             types.LocationLink(
-                                target_uri=reference.uri,
+                                target_uri=URI.from_path(reference.path).value,
                                 target_selection_range=target_selection_range,
                                 target_range=target_range,
                                 origin_selection_range=reference.range,
@@ -523,9 +523,9 @@ class SQLMeshLanguageServer:
 
                 # Convert references to Location objects
                 locations = [
-                    types.Location(uri=ref.uri, range=ref.range)
+                    types.Location(uri=URI.from_path(ref.path).value, range=ref.range)
                     for ref in all_references
-                    if ref.uri is not None
+                    if ref.path is not None
                 ]
 
                 return locations if locations else None

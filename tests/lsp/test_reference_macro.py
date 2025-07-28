@@ -25,5 +25,5 @@ def test_macro_references() -> None:
     # Check that all references point to the utils.py file
     for ref in macro_references:
         assert isinstance(ref, LSPMacroReference)
-        assert ref.uri.endswith("sushi/macros/utils.py")
+        assert URI.from_path(ref.path).value.endswith("sushi/macros/utils.py")
         assert ref.target_range is not None
