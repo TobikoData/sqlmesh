@@ -2,7 +2,11 @@ import { test, expect } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openServerPage, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Autocomplete for model names', async ({ page, sharedCodeServer }) => {
@@ -28,7 +32,7 @@ test('Autocomplete for model names', async ({ page, sharedCodeServer }) => {
     .click()
 
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   await page.locator('text=grain').first().click()
 
@@ -83,7 +87,7 @@ test.describe('Macro Completions', () => {
       .click()
 
     await page.waitForSelector('text=grain')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
 
     await page.locator('text=grain').first().click()
 
@@ -133,7 +137,7 @@ test.describe('Macro Completions', () => {
       .click()
 
     await page.waitForSelector('text=grain')
-    await page.waitForSelector('text=Loaded SQLMesh Context')
+    await waitForLoadedSQLMesh(page)
 
     await page.locator('text=grain').first().click()
 

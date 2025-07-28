@@ -2472,6 +2472,24 @@ def _create_model(
 
     statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
+    # Merge default pre_statements with model-specific pre_statements
+    if "pre_statements" in defaults:
+        kwargs["pre_statements"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["pre_statements"]
+        ] + kwargs.get("pre_statements", [])
+
+    # Merge default post_statements with model-specific post_statements
+    if "post_statements" in defaults:
+        kwargs["post_statements"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["post_statements"]
+        ] + kwargs.get("post_statements", [])
+
+    # Merge default on_virtual_update with model-specific on_virtual_update
+    if "on_virtual_update" in defaults:
+        kwargs["on_virtual_update"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["on_virtual_update"]
+        ] + kwargs.get("on_virtual_update", [])
+
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
     if "query" in kwargs:

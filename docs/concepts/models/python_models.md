@@ -102,6 +102,8 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
+**Project-level defaults:** You can also define pre/post-statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
+
 ``` python linenums="1" hl_lines="8-12"
 @model(
     "db.test_model",
@@ -181,6 +183,8 @@ The optional on-virtual-update statements allow you to execute SQL commands afte
 These can be used, for example, to grant privileges on views of the virtual layer.
 
 Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
+
+**Project-level defaults:** You can also define on-virtual-update statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project (including Python models) and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
 
 ``` python linenums="1" hl_lines="8"
 @model(

@@ -70,7 +70,9 @@ class Rule(abc.ABC, metaclass=_Rule):
         self.context = context
 
     @abc.abstractmethod
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+    def check_model(
+        self, model: Model
+    ) -> t.Optional[t.Union[RuleViolation, t.List[RuleViolation]]]:
         """The evaluation function that'll check for a violation of this rule."""
 
     @property

@@ -9,6 +9,7 @@ from lsprotocol.types import (
 )
 
 from sqlmesh.lsp.context import LSPContext
+from sqlmesh.lsp.helpers import to_sqlmesh_position, to_lsp_range
 from sqlmesh.lsp.reference import (
     _position_within_range,
     get_cte_references,
@@ -18,7 +19,7 @@ from sqlmesh.lsp.uri import URI
 
 
 def prepare_rename(
-    lsp_context: LSPContext, document_uri: URI, position: Position
+    lsp_context: LSPContext, document_uri: URI, lsp_position: Position
 ) -> t.Optional[PrepareRenameResult_Type1]:
     """
     Prepare for rename operation by checking if the symbol at the position can be renamed.
@@ -32,6 +33,7 @@ def prepare_rename(
         PrepareRenameResult if the symbol can be renamed, None otherwise
     """
     # Check if there's a CTE at this position
+    position = to_sqlmesh_position(lsp_position)
     cte_references = get_cte_references(lsp_context, document_uri, position)
     if cte_references:
         # Find the target CTE definition to get its range
@@ -46,14 +48,16 @@ def prepare_rename(
                 target_range = ref.target_range
                 break
         if target_range:
-            return PrepareRenameResult_Type1(range=target_range, placeholder="cte_name")
+            return PrepareRenameResult_Type1(
+                range=to_lsp_range(target_range), placeholder="cte_name"
+            )
 
     # For now, only CTEs are supported
     return None
 
 
 def rename_symbol(
-    lsp_context: LSPContext, document_uri: URI, position: Position, new_name: str
+    lsp_context: LSPContext, document_uri: URI, lsp_position: Position, new_name: str
 ) -> t.Optional[WorkspaceEdit]:
     """
     Perform rename operation on the symbol at the given position.
@@ -68,7 +72,9 @@ def rename_symbol(
         WorkspaceEdit with the changes, or None if no symbol to rename
     """
     # Check if there's a CTE at this position
-    cte_references = get_cte_references(lsp_context, document_uri, position)
+    cte_references = get_cte_references(
+        lsp_context, document_uri, to_sqlmesh_position(lsp_position)
+    )
     if cte_references:
         return _rename_cte(cte_references, new_name)
 
@@ -90,12 +96,12 @@ def _rename_cte(cte_references: t.List[LSPCteReference], new_name: str) -> Works
     changes: t.Dict[str, t.List[TextEdit]] = {}
 
     for ref in cte_references:
-        uri = ref.uri
+        uri = URI.from_path(ref.path).value
         if uri not in changes:
             changes[uri] = []
 
         # Create a text edit for this reference
-        text_edit = TextEdit(range=ref.range, new_text=new_name)
+        text_edit = TextEdit(range=to_lsp_range(ref.range), new_text=new_name)
         changes[uri].append(text_edit)
 
     return WorkspaceEdit(changes=changes)
@@ -119,7 +125,7 @@ def get_document_highlights(
         List of DocumentHighlight objects or None if no symbol found
     """
     # Check if there's a CTE at this position
-    cte_references = get_cte_references(lsp_context, document_uri, position)
+    cte_references = get_cte_references(lsp_context, document_uri, to_sqlmesh_position(position))
     if cte_references:
         highlights = []
         for ref in cte_references:
@@ -130,7 +136,7 @@ def get_document_highlights(
                 else DocumentHighlightKind.Read
             )
 
-            highlights.append(DocumentHighlight(range=ref.range, kind=kind))
+            highlights.append(DocumentHighlight(range=to_lsp_range(ref.range), kind=kind))
         return highlights
 
     # For now, only CTEs are supported

@@ -8,6 +8,7 @@ import {
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
 import {
@@ -182,7 +183,7 @@ test('signed in and not installed shows installation window', async ({
       page.locator('text=Installing enterprise python package'),
     ).toHaveCount(2)
 
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   } finally {
     await stopCodeServer(context)
   }
@@ -258,7 +259,7 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when read
       .click()
 
     // Verify the context loads successfully
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   } finally {
     // Clean up
     await fs.remove(tempDir)
@@ -334,7 +335,7 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
       .click()
 
     // Verify the context loads successfully
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   } finally {
     // Clean up
     await fs.remove(tempDir)
@@ -419,7 +420,7 @@ test.skip('tcloud not signed in and not installed, shows sign in window and then
 
     await page.waitForSelector('text=Installing enterprise python package')
 
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   } finally {
     await stopCodeServer(context)
   }

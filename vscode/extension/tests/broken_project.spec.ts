@@ -8,6 +8,7 @@ import {
   openProblemsView,
   saveFile,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
@@ -64,7 +65,7 @@ test('working project, then broken through adding double model, then refixed', a
 
   // Open the lineage view to confirm it loads properly
   await openLineageView(page)
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 
   // Read the customers.sql file
   const customersSql = await fs.readFile(
@@ -292,6 +293,5 @@ test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
   await page.getByText('grain').click()
   await saveFile(page)
 
-  // Wait for successful context load
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 })

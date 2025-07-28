@@ -1,4 +1,3 @@
-from lsprotocol.types import Range, Position
 import typing as t
 from pathlib import Path
 from pydantic import Field
@@ -8,13 +7,13 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
 )
+from sqlmesh.core.linter.rule import Range, Position
 from sqlmesh.core.model.definition import SqlModel, ExternalModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 from sqlmesh.lsp.description import generate_markdown_description
 from sqlglot.optimizer.scope import build_scope
 
-from sqlmesh.lsp.helpers import to_lsp_range, to_lsp_position
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -29,7 +28,7 @@ class LSPModelReference(PydanticModel):
     """A LSP reference to a model, excluding external models."""
 
     type: t.Literal["model"] = "model"
-    uri: str
+    path: Path
     range: Range
     markdown_description: t.Optional[str] = None
 
@@ -38,17 +37,20 @@ class LSPExternalModelReference(PydanticModel):
     """A LSP reference to an external model."""
 
     type: t.Literal["external_model"] = "external_model"
-    uri: str
     range: Range
-    markdown_description: t.Optional[str] = None
     target_range: t.Optional[Range] = None
+    path: t.Optional[Path] = None
+    """The path of the external model, typically a YAML file, it is optional because
+    external models can be unregistered and so the path is not available."""
+
+    markdown_description: t.Optional[str] = None
 
 
 class LSPCteReference(PydanticModel):
     """A LSP reference to a CTE."""
 
     type: t.Literal["cte"] = "cte"
-    uri: str
+    path: Path
     range: Range
     target_range: Range
 
@@ -57,7 +59,7 @@ class LSPMacroReference(PydanticModel):
     """A LSP reference to a macro."""
 
     type: t.Literal["macro"] = "macro"
-    uri: str
+    path: Path
     range: Range
     target_range: Range
     markdown_description: t.Optional[str] = None
@@ -200,15 +202,11 @@ def get_model_definitions_for_a_path(
                                 table.this.meta
                             ).to_range(read_file)
 
-                            # Convert SQLMesh Range to LSP Range
-                            target_range = to_lsp_range(target_range_sqlmesh)
-                            table_range = to_lsp_range(table_range_sqlmesh)
-
                             references.append(
                                 LSPCteReference(
-                                    uri=document_uri.value,  # Same file
-                                    range=table_range,
-                                    target_range=target_range,
+                                    path=document_uri.to_path(),  # Same file
+                                    range=table_range_sqlmesh,
+                                    target_range=target_range_sqlmesh,
                                 )
                             )
 
@@ -216,15 +214,15 @@ def get_model_definitions_for_a_path(
                                 scope=scope,
                                 reference_name=table.name,
                                 read_file=read_file,
-                                referenced_model_uri=document_uri,
+                                referenced_model_path=document_uri.to_path(),
                                 description="",
                                 reference_type="cte",
-                                cte_target_range=target_range,
+                                cte_target_range=target_range_sqlmesh,
                             )
                             references.extend(column_references)
                     continue
 
-                # For non-CTE tables, process as before (external model references)
+                # For non-CTE tables, process these as before (external model references)
                 # Normalize the table reference
                 unaliased = table.copy()
                 if unaliased.args.get("alias") is not None:
@@ -247,6 +245,19 @@ def get_model_definitions_for_a_path(
                     model_or_snapshot=normalized_reference_name, raise_if_missing=False
                 )
                 if referenced_model is None:
+                    table_meta = TokenPositionDetails.from_meta(table.this.meta)
+                    table_range_sqlmesh = table_meta.to_range(read_file)
+                    start_pos_sqlmesh = table_range_sqlmesh.start
+                    end_pos_sqlmesh = table_range_sqlmesh.end
+                    references.append(
+                        LSPExternalModelReference(
+                            range=Range(
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
+                            ),
+                            markdown_description="Unregistered external model",
+                        )
+                    )
                     continue
                 referenced_model_path = referenced_model._path
                 if referenced_model_path is None:
@@ -254,7 +265,6 @@ def get_model_definitions_for_a_path(
                 # Check whether the path exists
                 if not referenced_model_path.is_file():
                     continue
-                referenced_model_uri = URI.from_path(referenced_model_path)
 
                 # Extract metadata for positioning
                 table_meta = TokenPositionDetails.from_meta(table.this.meta)
@@ -283,10 +293,10 @@ def get_model_definitions_for_a_path(
                         )
                     references.append(
                         LSPExternalModelReference(
-                            uri=referenced_model_uri.value,
+                            path=referenced_model_path,
                             range=Range(
-                                start=to_lsp_position(start_pos_sqlmesh),
-                                end=to_lsp_position(end_pos_sqlmesh),
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
                             ),
                             markdown_description=description,
                             target_range=yaml_target_range,
@@ -297,7 +307,7 @@ def get_model_definitions_for_a_path(
                         scope=scope,
                         reference_name=normalized_reference_name,
                         read_file=read_file,
-                        referenced_model_uri=referenced_model_uri,
+                        referenced_model_path=referenced_model_path,
                         description=description,
                         yaml_target_range=yaml_target_range,
                         reference_type="external_model",
@@ -308,10 +318,10 @@ def get_model_definitions_for_a_path(
                 else:
                     references.append(
                         LSPModelReference(
-                            uri=referenced_model_uri.value,
+                            path=referenced_model_path,
                             range=Range(
-                                start=to_lsp_position(start_pos_sqlmesh),
-                                end=to_lsp_position(end_pos_sqlmesh),
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
                             ),
                             markdown_description=description,
                         )
@@ -321,7 +331,7 @@ def get_model_definitions_for_a_path(
                         scope=scope,
                         reference_name=normalized_reference_name,
                         read_file=read_file,
-                        referenced_model_uri=referenced_model_uri,
+                        referenced_model_path=referenced_model_path,
                         description=description,
                         reference_type="model",
                         default_catalog=lint_context.context.default_catalog,
@@ -417,7 +427,7 @@ def get_macro_reference(
             macro_range = TokenPositionDetails.from_meta(node.meta).to_range(read_file)
 
             # Check if it's a built-in method
-            if builtin := get_built_in_macro_reference(macro_name, to_lsp_range(macro_range)):
+            if builtin := get_built_in_macro_reference(macro_name, macro_range):
                 return builtin
         else:
             # Skip if we can't get the position
@@ -465,11 +475,10 @@ def get_macro_reference(
             return None
 
         # Create a reference to the macro definition
-        macro_uri = URI.from_path(path)
 
         return LSPMacroReference(
-            uri=macro_uri.value,
-            range=to_lsp_range(macro_range),
+            path=path,
+            range=macro_range,
             target_range=Range(
                 start=Position(line=start_line - 1, character=0),
                 end=Position(line=end_line - 1, character=get_length_of_end_line),
@@ -501,7 +510,7 @@ def get_built_in_macro_reference(macro_name: str, macro_range: Range) -> t.Optio
     end_line_number = line_number + len(source_lines) - 1
 
     return LSPMacroReference(
-        uri=URI.from_path(Path(filename)).value,
+        path=Path(filename),
         range=macro_range,
         target_range=Range(
             start=Position(line=line_number - 1, character=0),
@@ -543,12 +552,12 @@ def get_model_find_all_references(
 
     assert isinstance(model_at_position, LSPModelReference)  # for mypy
 
-    target_model_uri = model_at_position.uri
+    target_model_path = model_at_position.path
 
     # Start with the model definition
     all_references: t.List[LSPModelReference] = [
         LSPModelReference(
-            uri=model_at_position.uri,
+            path=model_at_position.path,
             range=Range(
                 start=Position(line=0, character=0),
                 end=Position(line=0, character=0),
@@ -559,7 +568,7 @@ def get_model_find_all_references(
 
     # Then add references from the current file
     current_file_refs = filter(
-        lambda ref: isinstance(ref, LSPModelReference) and ref.uri == target_model_uri,
+        lambda ref: isinstance(ref, LSPModelReference) and ref.path == target_model_path,
         get_model_definitions_for_a_path(lint_context, document_uri),
     )
 
@@ -568,7 +577,7 @@ def get_model_find_all_references(
 
         all_references.append(
             LSPModelReference(
-                uri=document_uri.value,
+                path=document_uri.to_path(),
                 range=ref.range,
                 markdown_description=ref.markdown_description,
             )
@@ -584,7 +593,7 @@ def get_model_find_all_references(
 
         # Get model references that point to the target model
         matching_refs = filter(
-            lambda ref: isinstance(ref, LSPModelReference) and ref.uri == target_model_uri,
+            lambda ref: isinstance(ref, LSPModelReference) and ref.path == target_model_path,
             get_model_definitions_for_a_path(lint_context, file_uri),
         )
 
@@ -593,7 +602,7 @@ def get_model_find_all_references(
 
             all_references.append(
                 LSPModelReference(
-                    uri=file_uri.value,
+                    path=path,
                     range=ref.range,
                     markdown_description=ref.markdown_description,
                 )
@@ -646,7 +655,7 @@ def get_cte_references(
     # Add the CTE definition
     matching_references = [
         LSPCteReference(
-            uri=document_uri.value,
+            path=document_uri.to_path(),
             range=target_cte_definition_range,
             target_range=target_cte_definition_range,
         )
@@ -657,7 +666,7 @@ def get_cte_references(
         if ref.target_range == target_cte_definition_range:
             matching_references.append(
                 LSPCteReference(
-                    uri=document_uri.value,
+                    path=document_uri.to_path(),
                     range=ref.range,
                     target_range=ref.target_range,
                 )
@@ -697,13 +706,13 @@ def get_macro_find_all_references(
 
     assert isinstance(macro_at_position, LSPMacroReference)  # for mypy
 
-    target_macro_uri = macro_at_position.uri
+    target_macro_path = macro_at_position.path
     target_macro_target_range = macro_at_position.target_range
 
     # Start with the macro definition
     all_references: t.List[LSPMacroReference] = [
         LSPMacroReference(
-            uri=target_macro_uri,
+            path=target_macro_path,
             range=target_macro_target_range,
             target_range=target_macro_target_range,
             markdown_description=None,
@@ -717,7 +726,7 @@ def get_macro_find_all_references(
         # Get macro references that point to the same macro definition
         matching_refs = filter(
             lambda ref: isinstance(ref, LSPMacroReference)
-            and ref.uri == target_macro_uri
+            and ref.path == target_macro_path
             and ref.target_range == target_macro_target_range,
             get_macro_definitions_for_a_path(lsp_context, file_uri),
         )
@@ -726,7 +735,7 @@ def get_macro_find_all_references(
             assert isinstance(ref, LSPMacroReference)  # for mypy
             all_references.append(
                 LSPMacroReference(
-                    uri=file_uri.value,
+                    path=path,
                     range=ref.range,
                     target_range=ref.target_range,
                     markdown_description=ref.markdown_description,
@@ -797,8 +806,8 @@ def _get_column_table_range(column: exp.Column, read_file: t.List[str]) -> Range
     end_range = TokenPositionDetails.from_meta(table_parts[-1].meta).to_range(read_file)
 
     return Range(
-        start=to_lsp_position(start_range.start),
-        end=to_lsp_position(end_range.end),
+        start=start_range.start,
+        end=end_range.end,
     )
 
 
@@ -806,7 +815,7 @@ def _process_column_references(
     scope: t.Any,
     reference_name: str,
     read_file: t.List[str],
-    referenced_model_uri: URI,
+    referenced_model_path: Path,
     description: t.Optional[str] = None,
     yaml_target_range: t.Optional[Range] = None,
     reference_type: t.Literal["model", "external_model", "cte"] = "model",
@@ -821,7 +830,7 @@ def _process_column_references(
         scope: The SQL scope to search for columns
         reference_name: The full reference name (may include database/catalog)
         read_file: The file content as list of lines
-        referenced_model_uri: URI of the referenced model
+        referenced_model_path: Path of the referenced model
         description: Markdown description for the reference
         yaml_target_range: Target range for external models (YAML files)
         reference_type: Type of reference - "model", "external_model", or "cte"
@@ -841,7 +850,7 @@ def _process_column_references(
                     table_range = _get_column_table_range(column, read_file)
                     references.append(
                         LSPCteReference(
-                            uri=referenced_model_uri.value,
+                            path=referenced_model_path,
                             range=table_range,
                             target_range=cte_target_range,
                         )
@@ -859,7 +868,7 @@ def _process_column_references(
                     if reference_type == "external_model":
                         references.append(
                             LSPExternalModelReference(
-                                uri=referenced_model_uri.value,
+                                path=referenced_model_path,
                                 range=table_range,
                                 markdown_description=description,
                                 target_range=yaml_target_range,
@@ -868,7 +877,7 @@ def _process_column_references(
                     else:
                         references.append(
                             LSPModelReference(
-                                uri=referenced_model_uri.value,
+                                path=referenced_model_path,
                                 range=table_range,
                                 markdown_description=description,
                             )

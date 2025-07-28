@@ -1,7 +1,11 @@
 import fs from 'fs-extra'
 import path from 'path'
 import os from 'os'
-import { openProblemsView, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openProblemsView,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { test, expect } from './fixtures'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
@@ -66,7 +70,7 @@ test('noselectstar quickfix', async ({ page, sharedCodeServer }) => {
     .locator('a')
     .click()
 
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 
   await openProblemsView(page)
 

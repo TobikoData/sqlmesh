@@ -27,7 +27,7 @@ def test_cte_parsing():
     position = Position(line=ranges[1].start.line, character=ranges[1].start.character + 4)
     references = get_references(lsp_context, URI.from_path(sushi_customers_path), position)
     assert len(references) == 1
-    assert references[0].uri == URI.from_path(sushi_customers_path).value
+    assert references[0].path == sushi_customers_path
     assert isinstance(references[0], LSPCteReference)
     assert (
         references[0].range.start.line == ranges[1].start.line
@@ -42,7 +42,7 @@ def test_cte_parsing():
     position = Position(line=ranges[1].start.line, character=ranges[1].start.character + 4)
     references = get_references(lsp_context, URI.from_path(sushi_customers_path), position)
     assert len(references) == 1
-    assert references[0].uri == URI.from_path(sushi_customers_path).value
+    assert references[0].path == sushi_customers_path
     assert isinstance(references[0], LSPCteReference)
     assert (
         references[0].range.start.line == ranges[1].start.line

@@ -20,5 +20,5 @@ def test_macro_references_multirepo() -> None:
     assert len(macro_references) == 2
     for ref in macro_references:
         assert isinstance(ref, LSPMacroReference)
-        assert ref.uri.endswith("multi/repo_2/macros/__init__.py")
+        assert str(URI.from_path(ref.path).value).endswith("multi/repo_2/macros/__init__.py")
         assert ref.target_range is not None

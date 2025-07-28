@@ -61,11 +61,14 @@ from sqlmesh.core.snapshot.definition import (
     get_next_model_interval_start,
     check_ready_intervals,
     _contiguous_intervals,
+    table_name,
+    TableNamingConvention,
 )
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
+from sqlmesh.utils.hashing import md5
 from sqlmesh.core.console import get_console
 
 
@@ -163,6 +166,7 @@ def test_json(snapshot: Snapshot):
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
+        "table_naming_convention": "schema_and_table",
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
@@ -1131,12 +1135,15 @@ def test_stamp(model: Model):
     assert original_fingerprint != stamped_fingerprint
 
 
-def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
+def test_snapshot_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
@@ -1186,6 +1193,63 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     )
 
 
+def test_table_name_naming_convention_table_only(make_snapshot: t.Callable[..., Snapshot]):
+    # 3-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.TABLE_ONLY
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.TABLE_ONLY
+
+    assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.baz__{snapshot.version}"
+    assert (
+        snapshot.table_name(is_deployable=False) == f"foo.sqlmesh__bar.baz__{snapshot.version}__dev"
+    )
+
+    # 2-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.table_name(is_deployable=True) == f"sqlmesh__foo.bar__{snapshot.version}"
+    assert snapshot.table_name(is_deployable=False) == f"sqlmesh__foo.bar__{snapshot.version}__dev"
+
+
+def test_table_name_naming_convention_hash_md5(make_snapshot: t.Callable[..., Snapshot]):
+    # 3-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+
+    hash = md5(f"foo.sqlmesh__bar.bar__baz__{snapshot.version}")
+    assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.sqlmesh_md5__{hash}"
+    hash_dev = md5(f"foo.sqlmesh__bar.bar__baz__{snapshot.version}__dev")
+    assert (
+        snapshot.table_name(is_deployable=False) == f"foo.sqlmesh__bar.sqlmesh_md5__{hash_dev}__dev"
+    )
+
+    # 2-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    hash = md5(f"sqlmesh__foo.foo__bar__{snapshot.version}")
+    assert snapshot.table_name(is_deployable=True) == f"sqlmesh__foo.sqlmesh_md5__{hash}"
+
+    hash_dev = md5(f"sqlmesh__foo.foo__bar__{snapshot.version}__dev")
+    assert snapshot.table_name(is_deployable=False) == f"sqlmesh__foo.sqlmesh_md5__{hash_dev}__dev"
+
+
 def test_table_name_view(make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot = make_snapshot(SqlModel(name="name", query=parse_one("select 1"), kind="VIEW"))
@@ -1215,6 +1279,36 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert new_snapshot.dev_version == new_snapshot.fingerprint.to_version()
     assert new_snapshot.version == snapshot.version
     assert new_snapshot.dev_version != snapshot.dev_version
+
+
+def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
+    # Ensure that snapshots that trigger "reuse previous version" inherit the naming convention of the previous snapshot
+    original_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds")),
+        table_naming_convention=TableNamingConvention.SCHEMA_AND_TABLE,
+    )
+    original_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert original_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert original_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+
+    changed_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, 'forward_only' as a, ds")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    changed_snapshot.previous_versions = original_snapshot.all_versions
+
+    assert changed_snapshot.previous_version == original_snapshot.data_version
+
+    changed_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    # inherited from previous version even though changed_snapshot was created with TableNamingConvention.HASH_MD5
+    assert changed_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert (
+        changed_snapshot.previous_version.table_naming_convention
+        == TableNamingConvention.SCHEMA_AND_TABLE
+    )
+    assert changed_snapshot.table_name() == "sqlmesh__default.a__4145234055"
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -2131,6 +2225,177 @@ def test_deployability_index_missing_parent(make_snapshot):
 
     assert not deplyability_index.is_deployable(snapshot_b)
     assert not deplyability_index.is_deployable(snapshot_a)
+
+
+@pytest.mark.parametrize(
+    "call_kwargs, expected",
+    [
+        ########################################
+        # TableNamingConvention.SCHEMA_AND_TABLE
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar", version="1234"),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="foo.bar", version="1234"),
+            "sqlmesh__foo.foo__bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar", version="1234", catalog="foo"),
+            "foo.sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar.baz", version="1234", catalog="foo"),
+            "foo.sqlmesh__foo.bar__baz__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar.baz", version="1234", suffix="dev"),
+            "sqlmesh__foo.bar__baz__1234__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+            ),
+            "foo.sqlmesh__foo.bar__baz__1234__dev",
+        ),
+        ##################################
+        # TableNamingConvention.TABLE_ONLY
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="foo.bar",
+                version="1234",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__bar.baz__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                suffix="dev",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__bar.baz__1234__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__bar.baz__1234__dev",
+        ),
+        #################################
+        # TableNamingConvention.HASH_MD5
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="foo.bar",
+                version="1234",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.foo__bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__baz__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                suffix="dev",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.bar__baz__1234__dev')}__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__baz__1234__dev')}__dev",
+        ),
+    ],
+)
+def test_table_name(call_kwargs: t.Dict[str, t.Any], expected: str):
+    """
+    physical_schema: str
+    name: str
+    version: str
+    catalog: t.Optional[str]
+    suffix: t.Optional[str]
+    naming_convention: t.Optional[TableNamingConvention]
+    """
+    assert table_name(**call_kwargs) == expected
 
 
 @pytest.mark.parametrize(
