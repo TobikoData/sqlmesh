@@ -1708,8 +1708,8 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
     DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
     driver: t.Literal["pyodbc"] = "pyodbc"
-    workspace: str
-    tenant: str
+    workspace_id: str
+    tenant_id: str
     autocommit: t.Optional[bool] = True
 
     @property
@@ -1723,8 +1723,8 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
         return {
             "database": self.database,
             "catalog_support": CatalogSupport.FULL_SUPPORT,
-            "workspace": self.workspace,
-            "tenant": self.tenant,
+            "workspace_id": self.workspace_id,
+            "tenant_id": self.tenant_id,
             "user": self.user,
             "password": self.password,
         }

@@ -82,7 +82,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def _get_access_token(self) -> str:
         """Get access token using Service Principal authentication."""
-        tenant_id = self._extra_config.get("tenant")
+        tenant_id = self._extra_config.get("tenant_id")
         client_id = self._extra_config.get("user")
         client_secret = self._extra_config.get("password")
 
@@ -127,14 +127,14 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         if not requests:
             raise SQLMeshError("requests library is required for Fabric catalog operations")
 
-        workspace = self._extra_config.get("workspace")
-        if not workspace:
+        workspace_id = self._extra_config.get("workspace_id")
+        if not workspace_id:
             raise SQLMeshError(
-                "workspace parameter is required in connection config for Fabric catalog operations"
+                "workspace_id parameter is required in connection config for Fabric catalog operations"
             )
 
         base_url = "https://api.fabric.microsoft.com/v1"
-        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
+        url = f"{base_url}/workspaces/{workspace_id}/{endpoint}"
 
         headers = self._get_fabric_auth_headers()
 
@@ -177,14 +177,14 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         if not requests:
             raise SQLMeshError("requests library is required for Fabric catalog operations")
 
-        workspace = self._extra_config.get("workspace")
-        if not workspace:
+        workspace_id = self._extra_config.get("workspace_id")
+        if not workspace_id:
             raise SQLMeshError(
-                "workspace parameter is required in connection config for Fabric catalog operations"
+                "workspace_id parameter is required in connection config for Fabric catalog operations"
             )
 
         base_url = "https://api.fabric.microsoft.com/v1"
-        url = f"{base_url}/workspaces/{workspace}/{endpoint}"
+        url = f"{base_url}/workspaces/{workspace_id}/{endpoint}"
         headers = self._get_fabric_auth_headers()
 
         try:
@@ -445,10 +445,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             catalog_name = table.catalog
 
             # Build the full schema name
-            if catalog_name:
-                full_schema_name = f"{catalog_name}.{schema_name}"
-            else:
-                full_schema_name = schema_name
+            full_schema_name = f"{catalog_name}.{schema_name}" if catalog_name else schema_name
 
             logger.debug(f"Ensuring schema exists: {full_schema_name}")
 

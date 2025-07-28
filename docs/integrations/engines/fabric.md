@@ -29,6 +29,6 @@ pip install "sqlmesh[fabric]"
 | `autocommit`      | Is autocommit mode enabled. Default: false                   |     bool     |    N     |
 | `driver`          | The driver to use for the connection. Default: pyodbc            |    string    |    N     |
 | `driver_name`     | The driver name to use for the connection. E.g., *ODBC Driver 18 for SQL Server* |    string    |    N     |
-| `tenant`          | The Fabric tenant UUID                             |    string    |    Y     |
-| `workspace`       | The Fabric workspace UUID                             |    string    |    Y     |
+| `tenant_id`          | The Azure / Entra tenant UUID                             |    string    |    Y     |
+| `workspace_id`       | The Fabric workspace UUID. The preferred way to retrieve it is by running `notebookutils.runtime.context.get("currentWorkspaceId")` in a python notebook.                             |    string    |    Y     |
 | `odbc_properties` | The dict of ODBC connection properties. E.g., authentication: ActiveDirectoryServicePrincipal. See more [here](https://learn.microsoft.com/en-us/sql/connect/odbc/dsn-connection-string-attribute?view=sql-server-ver16). | dict |    N     |
