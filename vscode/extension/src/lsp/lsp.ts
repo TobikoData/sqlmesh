@@ -36,6 +36,13 @@ export class LSPClient implements Disposable {
    */
   private supportedMethodsState: SupportedMethodsState = { type: 'not-fetched' }
 
+  /**
+   * Explicitly stopped remembers whether the LSP client has been explicitly stopped
+   * by the user. This is used to prevent the client from being restarted unless the user
+   * explicitly calls the `restart` method.
+   */
+  private explicitlyStopped = false
+
   constructor() {
     this.client = undefined
   }
@@ -54,7 +61,15 @@ export class LSPClient implements Disposable {
     return completion !== undefined
   }
 
-  public async start(): Promise<Result<undefined, ErrorType>> {
+  public async start(
+    overrideStoppedByUser = false,
+  ): Promise<Result<undefined, ErrorType>> {
+    if (this.explicitlyStopped && !overrideStoppedByUser) {
+      traceInfo(
+        'LSP client has been explicitly stopped by user, not starting again.',
+      )
+      return ok(undefined)
+    }
     if (!outputChannel) {
       outputChannel = window.createOutputChannel('sqlmesh-lsp')
     }
@@ -124,17 +139,23 @@ export class LSPClient implements Disposable {
     return ok(undefined)
   }
 
-  public async restart(): Promise<Result<undefined, ErrorType>> {
+  public async restart(
+    overrideByUser = false,
+  ): Promise<Result<undefined, ErrorType>> {
     await this.stop()
-    return await this.start()
+    return await this.start(overrideByUser)
   }
 
-  public async stop() {
+  public async stop(stoppedByUser = false): Promise<void> {
     if (this.client) {
       await this.client.stop()
       this.client = undefined
       // Reset supported methods state when the client stops
       this.supportedMethodsState = { type: 'not-fetched' }
+    }
+    if (stoppedByUser) {
+      this.explicitlyStopped = true
+      traceInfo('SQLMesh LSP client stopped by user.')
     }
   }
 
