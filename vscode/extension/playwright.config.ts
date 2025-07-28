@@ -27,6 +27,7 @@ export default defineConfig({
         },
         viewport: { width: 1512, height: 944 },
         video: 'retain-on-failure',
+        trace: 'retain-on-first-failure',
       },
       dependencies: ['setup'],
     },
