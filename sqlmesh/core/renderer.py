@@ -639,14 +639,12 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
         except SqlglotError as ex:
             self._violated_rules[AmbiguousOrInvalidColumn] = ex
-
             query = original
-
         except Exception as ex:
-            raise_config_error(
-                f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex}",
-                self._path,
+            logger.warning(
+                f"Failed to optimize query, please file an issue at https://github.com/TobikoData/sqlmesh/issues/new. {ex} at '{self._path}'",
             )
+            query = original
 
         if not query.type:
             for select in query.expressions:
