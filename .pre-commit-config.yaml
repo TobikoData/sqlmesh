@@ -23,3 +23,9 @@ repos:
         files: *files
         require_serial: true
         exclude: ^(tests/fixtures)
+      - id: check-migration-duplicates
+        name: Check migration duplicates
+        language: script
+        entry: ./scripts/check_migration_duplicates.sh
+        files: ^sqlmesh/migrations/v\d{4}_.*\.py$
+        pass_filenames: false
