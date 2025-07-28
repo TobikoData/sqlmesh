@@ -11046,7 +11046,7 @@ def entrypoint(
     assert customer1_model.enabled
     assert "blueprints" not in customer1_model.all_fields()
     assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5}
+        {"customer": "customer1", "field_a": "x", "field_b": "y"}
     )
 
     # Test second blueprint
@@ -11054,7 +11054,7 @@ def entrypoint(
     assert customer2_model is not None
     assert customer2_model.cron == "*/10 * * * *"
     assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10}
+        {"customer": "customer2", "field_a": "z", "field_b": "w"}
     )
 
     # Test that the models can be planned and applied
