@@ -1,4 +1,3 @@
-from lsprotocol.types import Range, Position
 import typing as t
 from pathlib import Path
 from pydantic import Field
@@ -8,13 +7,13 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
 )
+from sqlmesh.core.linter.rule import Range, Position
 from sqlmesh.core.model.definition import SqlModel, ExternalModel
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
 from sqlglot import exp
 from sqlmesh.lsp.description import generate_markdown_description
 from sqlglot.optimizer.scope import build_scope
 
-from sqlmesh.lsp.helpers import to_lsp_range, to_lsp_position
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -203,15 +202,11 @@ def get_model_definitions_for_a_path(
                                 table.this.meta
                             ).to_range(read_file)
 
-                            # Convert SQLMesh Range to LSP Range
-                            target_range = to_lsp_range(target_range_sqlmesh)
-                            table_range = to_lsp_range(table_range_sqlmesh)
-
                             references.append(
                                 LSPCteReference(
                                     path=document_uri.to_path(),  # Same file
-                                    range=table_range,
-                                    target_range=target_range,
+                                    range=table_range_sqlmesh,
+                                    target_range=target_range_sqlmesh,
                                 )
                             )
 
@@ -222,7 +217,7 @@ def get_model_definitions_for_a_path(
                                 referenced_model_path=document_uri.to_path(),
                                 description="",
                                 reference_type="cte",
-                                cte_target_range=target_range,
+                                cte_target_range=target_range_sqlmesh,
                             )
                             references.extend(column_references)
                     continue
@@ -257,8 +252,8 @@ def get_model_definitions_for_a_path(
                     references.append(
                         LSPExternalModelReference(
                             range=Range(
-                                start=to_lsp_position(start_pos_sqlmesh),
-                                end=to_lsp_position(end_pos_sqlmesh),
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
                             ),
                             markdown_description="Unregistered external model",
                         )
@@ -300,8 +295,8 @@ def get_model_definitions_for_a_path(
                         LSPExternalModelReference(
                             path=referenced_model_path,
                             range=Range(
-                                start=to_lsp_position(start_pos_sqlmesh),
-                                end=to_lsp_position(end_pos_sqlmesh),
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
                             ),
                             markdown_description=description,
                             target_range=yaml_target_range,
@@ -325,8 +320,8 @@ def get_model_definitions_for_a_path(
                         LSPModelReference(
                             path=referenced_model_path,
                             range=Range(
-                                start=to_lsp_position(start_pos_sqlmesh),
-                                end=to_lsp_position(end_pos_sqlmesh),
+                                start=start_pos_sqlmesh,
+                                end=end_pos_sqlmesh,
                             ),
                             markdown_description=description,
                         )
@@ -432,7 +427,7 @@ def get_macro_reference(
             macro_range = TokenPositionDetails.from_meta(node.meta).to_range(read_file)
 
             # Check if it's a built-in method
-            if builtin := get_built_in_macro_reference(macro_name, to_lsp_range(macro_range)):
+            if builtin := get_built_in_macro_reference(macro_name, macro_range):
                 return builtin
         else:
             # Skip if we can't get the position
@@ -483,7 +478,7 @@ def get_macro_reference(
 
         return LSPMacroReference(
             path=path,
-            range=to_lsp_range(macro_range),
+            range=macro_range,
             target_range=Range(
                 start=Position(line=start_line - 1, character=0),
                 end=Position(line=end_line - 1, character=get_length_of_end_line),
@@ -811,8 +806,8 @@ def _get_column_table_range(column: exp.Column, read_file: t.List[str]) -> Range
     end_range = TokenPositionDetails.from_meta(table_parts[-1].meta).to_range(read_file)
 
     return Range(
-        start=to_lsp_position(start_range.start),
-        end=to_lsp_position(end_range.end),
+        start=start_range.start,
+        end=end_range.end,
     )
 
 

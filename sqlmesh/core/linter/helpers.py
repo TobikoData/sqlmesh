@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlmesh.core.linter.rule import Position, Range
+from sqlmesh.core.linter.rule import Range, Position
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot import tokenize, TokenType
 import typing as t

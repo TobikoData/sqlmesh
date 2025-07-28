@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from lsprotocol.types import Position
 from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.context import Context
+from sqlmesh.core.linter.rule import Position
 from sqlmesh.lsp.context import LSPContext, ModelTarget
 from sqlmesh.lsp.reference import get_all_references
 from sqlmesh.lsp.uri import URI
