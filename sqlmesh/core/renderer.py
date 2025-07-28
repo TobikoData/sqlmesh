@@ -215,6 +215,9 @@ class BaseExpressionRenderer:
             try:
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
+                logger.debug(
+                    f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
+                )
                 if rendered_expression.strip():
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 

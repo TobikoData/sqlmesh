@@ -8534,6 +8534,38 @@ def test_comments_in_jinja_query():
         model.render_query()
 
 
+def test_jinja_render_debug_logging(caplog):
+    """Test that rendered Jinja expressions are logged for debugging."""
+    import logging
+
+    # Set log level to DEBUG to capture debug logs
+    caplog.set_level(logging.DEBUG, logger="sqlmesh.core.renderer")
+
+    # Create a model with unparseable Jinja that will be rendered
+    expressions = d.parse(
+        """
+        MODEL (name db.test_model);
+
+        JINJA_QUERY_BEGIN;
+        {{ 'SELECT invalid syntax here!' }}
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    # Attempt to render - this should fail due to invalid SQL syntax
+    with pytest.raises(ConfigError, match=r"Could not render or parse jinja"):
+        model.render_query()
+
+    # Check that the rendered Jinja was logged
+    assert any(
+        'Rendered Jinja expression for model \'"db"."test_model"\'' in record.message
+        and "SELECT invalid syntax here!" in record.message
+        for record in caplog.records
+    )
+
+
 def test_staged_file_path():
     expressions = d.parse(
         """
