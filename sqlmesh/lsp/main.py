@@ -114,7 +114,7 @@ class SQLMeshLanguageServer:
         :param server_name: Name for the language server.
         :param version: Version string.
         """
-        self.server = LanguageServer(server_name, version)
+        self.server = LanguageServer(server_name, version, max_workers=1)
         self.context_class = context_class
         self.context_state: ContextState = NoContext()
         self.workspace_folders: t.List[Path] = []
