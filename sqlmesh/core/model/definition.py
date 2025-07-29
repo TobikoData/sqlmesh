@@ -2514,7 +2514,7 @@ def _create_model(
     if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
         statements.append(kwargs["kind"].merge_filter)
 
-    jinja_macro_references, used_variables = extract_macro_references_and_variables(
+    jinja_macro_references, referenced_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
@@ -2537,11 +2537,13 @@ def _create_model(
             _extract_migrated_dbt_variable_references(jinja_macros, variables)
         )
 
-        used_variables.update(nested_macro_used_variables)
+        referenced_variables.update(nested_macro_used_variables)
         variables.update(flattened_package_variables)
     else:
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            referenced_variables.update(
+                extract_macro_references_and_variables(jinja_macro.definition)[1]
+            )
 
     # Merge model-specific audits with default audits
     if default_audits := defaults.pop("audits", None):
@@ -2603,7 +2605,7 @@ def _create_model(
         module_path,
         macros or macro.get_registry(),
         variables=variables,
-        used_variables=used_variables,
+        referenced_variables=referenced_variables,
         path=path,
         python_env=python_env,
         strict_resolution=depends_on is None,
