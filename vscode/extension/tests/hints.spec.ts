@@ -1,7 +1,5 @@
 import { test, expect } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   openServerPage,
   SUSHI_SOURCE_PATH,
@@ -9,8 +7,7 @@ import {
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Model type hinting', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Model type hinting', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
   await openServerPage(page, tempDir, sharedCodeServer)

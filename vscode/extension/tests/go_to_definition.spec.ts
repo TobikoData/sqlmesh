@@ -1,7 +1,5 @@
 import { test, expect } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   goToDefinition,
   openServerPage,
@@ -10,8 +8,7 @@ import {
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Stop server works', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Stop server works', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
   await openServerPage(page, tempDir, sharedCodeServer)
@@ -42,8 +39,11 @@ test('Stop server works', async ({ page, sharedCodeServer }) => {
   await expect(page.locator('text=def multiply(')).toBeVisible()
 })
 
-test('Go to definition for model', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Go to definition for model', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 

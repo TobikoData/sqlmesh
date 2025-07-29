@@ -1,6 +1,5 @@
 import fs from 'fs-extra'
 import path from 'path'
-import os from 'os'
 import {
   openProblemsView,
   SUSHI_SOURCE_PATH,
@@ -9,11 +8,7 @@ import {
 import { test, expect } from './fixtures'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('noselectstar quickfix', async ({ page, sharedCodeServer }) => {
-  // Base test setup
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('noselectstar quickfix', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 

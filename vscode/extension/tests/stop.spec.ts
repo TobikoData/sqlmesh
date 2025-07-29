@@ -1,17 +1,14 @@
-import path from 'path'
 import {
   openServerPage,
   runCommand,
   SUSHI_SOURCE_PATH,
   waitForLoadedSQLMesh,
 } from './utils'
-import os from 'os'
 import { test } from './fixtures'
 import fs from 'fs-extra'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Stop server works', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Stop server works', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -55,8 +52,8 @@ test('Stop server works', async ({ page, sharedCodeServer }) => {
 test('Stopped server only restarts when explicitly requested', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)

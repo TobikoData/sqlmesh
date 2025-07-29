@@ -28,8 +28,8 @@ async function testLineageWithProjectPath(page: Page): Promise<void> {
 test('Lineage panel renders correctly - no project path config (default)', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -39,6 +39,7 @@ test('Lineage panel renders correctly - no project path config (default)', async
 
 test.skip('Lineage panel renders correctly - relative project path', async ({
   page,
+  sharedCodeServer,
 }) => {
   const workspaceDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),
@@ -71,6 +72,8 @@ test.skip('Lineage panel renders correctly - relative project path', async ({
 
 test.skip('Lineage panel renders correctly - absolute project path', async ({
   page,
+  tempDir,
+  sharedCodeServer,
 }) => {
   const workspaceDir = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),
@@ -103,6 +106,8 @@ test.skip('Lineage panel renders correctly - absolute project path', async ({
 
 test.skip('Lineage panel renders correctly - relative project outside of workspace', async ({
   page,
+  sharedCodeServer,
+  tempDir,
 }) => {
   const tempFolder = await fs.mkdtemp(
     path.join(os.tmpdir(), 'vscode-test-workspace-'),

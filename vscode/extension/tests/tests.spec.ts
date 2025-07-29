@@ -1,7 +1,5 @@
 import { test } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   openServerPage,
   runCommand,
@@ -10,8 +8,11 @@ import {
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Format project works correctly', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Format project works correctly', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
