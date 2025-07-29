@@ -23,6 +23,10 @@ from sqlmesh.lsp.api import (
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
+
+# Define the command constant
+EXTERNAL_MODEL_UPDATE_COLUMNS = "sqlmesh.external_model_update_columns"
+
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
@@ -60,15 +64,15 @@ from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
-    LSPCteReference,
-    LSPModelReference,
-    LSPExternalModelReference,
+    CTEReference,
+    ModelReference,
     get_references,
     get_all_references,
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.lineage import ExternalModelReference
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
@@ -479,7 +483,7 @@ class SQLMeshLanguageServer:
                 if not references:
                     return None
                 reference = references[0]
-                if isinstance(reference, LSPCteReference) or not reference.markdown_description:
+                if isinstance(reference, CTEReference) or not reference.markdown_description:
                     return None
                 return types.Hover(
                     contents=types.MarkupContent(
@@ -525,7 +529,7 @@ class SQLMeshLanguageServer:
                 location_links = []
                 for reference in references:
                     # Use target_range if available (CTEs, Macros, and external models in YAML)
-                    if isinstance(reference, LSPModelReference):
+                    if isinstance(reference, ModelReference):
                         # Regular SQL models - default to start of file
                         target_range = types.Range(
                             start=types.Position(line=0, character=0),
@@ -535,7 +539,7 @@ class SQLMeshLanguageServer:
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
                         )
-                    elif isinstance(reference, LSPExternalModelReference):
+                    elif isinstance(reference, ExternalModelReference):
                         # External models may have target_range set for YAML files
                         target_range = types.Range(
                             start=types.Position(line=0, character=0),

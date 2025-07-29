@@ -84,19 +84,8 @@ class TokenPositionDetails(PydanticModel):
         )
 
 
-def read_range_from_file(file: Path, text_range: Range) -> str:
-    """
-    Read the file and return the content within the specified range.
-
-    Args:
-        file: Path to the file to read
-        text_range: The range of text to extract
-
-    Returns:
-        The content within the specified range
-    """
-    with file.open("r", encoding="utf-8") as f:
-        lines = f.readlines()
+def read_range_from_string(content: str, text_range: Range) -> str:
+    lines = content.splitlines(keepends=False)
 
     # Ensure the range is within bounds
     start_line = max(0, text_range.start.line)
@@ -114,6 +103,23 @@ def read_range_from_file(file: Path, text_range: Range) -> str:
         result.append(line[start_char:end_char])
 
     return "".join(result)
+
+
+def read_range_from_file(file: Path, text_range: Range) -> str:
+    """
+    Read the file and return the content within the specified range.
+
+    Args:
+        file: Path to the file to read
+        text_range: The range of text to extract
+
+    Returns:
+        The content within the specified range
+    """
+    with file.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    return read_range_from_string("".join(lines), text_range)
 
 
 def get_range_of_model_block(

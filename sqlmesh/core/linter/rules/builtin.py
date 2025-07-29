@@ -7,10 +7,16 @@ import typing as t
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
-from sqlmesh.core.linter.helpers import TokenPositionDetails, get_range_of_model_block
+from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.linter.helpers import (
+    TokenPositionDetails,
+    get_range_of_model_block,
+    read_range_from_string,
+)
 from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
 
 
 class NoSelectStar(Rule):
@@ -113,7 +119,9 @@ class NoMissingAudits(Rule):
 class NoMissingExternalModels(Rule):
     """All external models must be registered in the external_models.yaml file"""
 
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+    def check_model(
+        self, model: Model
+    ) -> t.Optional[t.Union[RuleViolation, t.List[RuleViolation]]]:
         # Ignore external models themselves, because either they are registered,
         # and if they are not, they will be caught as referenced in another model.
         if isinstance(model, ExternalModel):
@@ -129,10 +137,74 @@ class NoMissingExternalModels(Rule):
         if not not_registered_external_models:
             return None
 
+        # If the model is anything other than a sql model that and has a path
+        # that ends with .sql, we cannot extract the references from the query.
+        path = model._path
+        if not isinstance(model, SqlModel) or not path or not str(path).endswith(".sql"):
+            return self._standard_error_message(
+                model_name=model.fqn,
+                external_models=not_registered_external_models,
+            )
+
+        with open(path, "r", encoding="utf-8") as file:
+            read_file = file.read()
+        split_read_file = read_file.splitlines()
+
+        # If there are any unregistered external models, return a violation find
+        # the ranges for them.
+        references = extract_references_from_query(
+            query=model.query,
+            context=self.context,
+            document_path=path,
+            read_file=split_read_file,
+            depends_on=model.depends_on,
+            dialect=model.dialect,
+        )
+        external_references = {
+            normalize_model_name(
+                table=read_range_from_string(read_file, ref.range),
+                default_catalog=model.default_catalog,
+                dialect=model.dialect,
+            ): ref
+            for ref in references
+            if isinstance(ref, ExternalModelReference) and ref.path is None
+        }
+
+        # Ensure that depends_on and external references match.
+        if not_registered_external_models != set(external_references.keys()):
+            return self._standard_error_message(
+                model_name=model.fqn,
+                external_models=not_registered_external_models,
+            )
+
+        # Return a violation for each unregistered external model with its range.
+        violations = []
+        for ref_name, ref in external_references.items():
+            if ref_name in not_registered_external_models:
+                violations.append(
+                    RuleViolation(
+                        rule=self,
+                        violation_msg=f"Model '{model.fqn}' depends on unregistered external model '{ref_name}'. "
+                        "Please register it in the external models file. This can be done by running 'sqlmesh create_external_models'.",
+                        violation_range=ref.range,
+                    )
+                )
+
+        if len(violations) < len(not_registered_external_models):
+            return self._standard_error_message(
+                model_name=model.fqn,
+                external_models=not_registered_external_models,
+            )
+
+        return violations
+
+    def _standard_error_message(
+        self, model_name: str, external_models: t.Set[str]
+    ) -> RuleViolation:
         return RuleViolation(
             rule=self,
-            violation_msg=f"Model '{model.name}' depends on unregistered external models: "
-            f"{', '.join(m for m in not_registered_external_models)}. "
+            violation_msg=f"Model '{model_name}' depends on unregistered external models: "
+            f"{', '.join(m for m in external_models)}. "
             "Please register them in the external models file. This can be done by running 'sqlmesh create_external_models'.",
         )
 

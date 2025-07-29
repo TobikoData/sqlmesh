@@ -1,7 +1,7 @@
 from sqlmesh.core.context import Context
 from sqlmesh.core.linter.rule import Position
 from sqlmesh.lsp.context import LSPContext, ModelTarget, AuditTarget
-from sqlmesh.lsp.reference import LSPModelReference, get_model_definitions_for_a_path, by_position
+from sqlmesh.lsp.reference import ModelReference, get_model_definitions_for_a_path, by_position
 from sqlmesh.lsp.uri import URI
 
 
@@ -54,7 +54,7 @@ def test_reference_with_alias() -> None:
         for ref in get_model_definitions_for_a_path(
             lsp_context, URI.from_path(waiter_revenue_by_day_path)
         )
-        if isinstance(ref, LSPModelReference)
+        if isinstance(ref, ModelReference)
     ]
     assert len(references) == 3
 
