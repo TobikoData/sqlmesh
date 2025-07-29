@@ -643,8 +643,6 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
         time_column=ctx.time_column,
         columns_to_types=ctx.columns_to_types,
     )
-    logger.info(f"[Doris] Inserted data into {table.name}")
-    logger.info(f"[Doris] Current data: {ctx.get_current_data(table)}")
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
