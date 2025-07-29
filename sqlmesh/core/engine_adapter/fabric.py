@@ -390,11 +390,18 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """
         logger.debug(f"drop_schema called with: {schema_name} (type: {type(schema_name)})")
 
-        # If it's a string with a dot, assume it's catalog.schema format
-        if isinstance(schema_name, str) and "." in schema_name:
-            parts = schema_name.split(".", 1)  # Split only on first dot
-            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
-            schema_only = parts[1].strip('"[]')
+        # Parse schema_name into an exp.Table to properly handle both string and Table cases
+        table = exp.to_table(schema_name)
+
+        if table.catalog:
+            # 3-part name detected (catalog.db.table) - this shouldn't happen for schema operations
+            raise SQLMeshError(
+                f"Invalid schema name format: {schema_name}. Expected 'schema' or 'catalog.schema'"
+            )
+        elif table.db:
+            # Catalog-qualified schema: catalog.schema
+            catalog_name = table.db
+            schema_only = table.name
             logger.debug(
                 f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
             )
@@ -421,11 +428,18 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """
         logger.debug(f"create_schema called with: {schema_name} (type: {type(schema_name)})")
 
-        # If it's a string with a dot, assume it's catalog.schema format
-        if isinstance(schema_name, str) and "." in schema_name:
-            parts = schema_name.split(".", 1)  # Split only on first dot
-            catalog_name = parts[0].strip('"[]')  # Remove quotes/brackets
-            schema_only = parts[1].strip('"[]')
+        # Parse schema_name into an exp.Table to properly handle both string and Table cases
+        table = exp.to_table(schema_name)
+
+        if table.catalog:
+            # 3-part name detected (catalog.db.table) - this shouldn't happen for schema operations
+            raise SQLMeshError(
+                f"Invalid schema name format: {schema_name}. Expected 'schema' or 'catalog.schema'"
+            )
+        elif table.db:
+            # Catalog-qualified schema: catalog.schema
+            catalog_name = table.db
+            schema_only = table.name
             logger.debug(
                 f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
             )
@@ -572,89 +586,52 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """
         logger.debug(f"create_view called with: {view_name} (type: {type(view_name)})")
 
+        # Parse view_name into an exp.Table to properly handle both string and Table cases
+        table = exp.to_table(view_name)
+
         # Ensure schema exists for the view
-        if isinstance(view_name, exp.Table):
-            self._ensure_schema_exists(view_name)
-        elif isinstance(view_name, str):
-            # Parse string to table for schema extraction
-            parsed_table = exp.to_table(view_name)
-            self._ensure_schema_exists(parsed_table)
+        self._ensure_schema_exists(table)
 
-        # Handle exp.Table objects that might be catalog-qualified
-        if isinstance(view_name, exp.Table):
-            if view_name.catalog:
-                # Has catalog qualification - switch to catalog and use schema.table
-                catalog_name = view_name.catalog
-                schema_name = view_name.db or ""
-                table_name = view_name.name
+        if table.catalog:
+            # 3-part name: catalog.schema.view
+            catalog_name = table.catalog
+            schema_name = table.db or ""
+            view_only = table.name
 
-                logger.debug(
-                    f"Detected exp.Table with catalog: catalog='{catalog_name}', schema='{schema_name}', table='{table_name}'"
-                )
+            logger.debug(
+                f"Detected catalog.schema.view format: catalog='{catalog_name}', schema='{schema_name}', view='{view_only}'"
+            )
 
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
 
-                # Create new Table expression without catalog
-                unqualified_view = exp.Table(this=table_name, db=schema_name)
+            # Create new Table expression without catalog
+            unqualified_view = exp.Table(this=view_only, db=schema_name)
 
-                super().create_view(
-                    unqualified_view,
-                    query_or_df,
-                    columns_to_types,
-                    replace,
-                    materialized,
-                    materialized_properties,
-                    table_description,
-                    column_descriptions,
-                    view_properties,
-                    **create_kwargs,
-                )
-                return
-
-        # Handle string view names that might be catalog-qualified
-        elif isinstance(view_name, str):
-            # Check if it's in catalog.schema.view format
-            parts = view_name.split(".")
-            if len(parts) == 3:
-                # catalog.schema.view format
-                catalog_name = parts[0].strip('"[]')
-                schema_name = parts[1].strip('"[]')
-                view_only = parts[2].strip('"[]')
-                unqualified_view_str = f"{schema_name}.{view_only}"
-                logger.debug(
-                    f"Detected catalog.schema.view format: catalog='{catalog_name}', unqualified='{unqualified_view_str}'"
-                )
-
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
-
-                # Use just the schema.view name
-                super().create_view(
-                    unqualified_view_str,
-                    query_or_df,
-                    columns_to_types,
-                    replace,
-                    materialized,
-                    materialized_properties,
-                    table_description,
-                    column_descriptions,
-                    view_properties,
-                    **create_kwargs,
-                )
-                return
-
-        # No catalog qualification, use as-is
-        logger.debug(f"No catalog detected, using original: {view_name}")
-        super().create_view(
-            view_name,
-            query_or_df,
-            columns_to_types,
-            replace,
-            materialized,
-            materialized_properties,
-            table_description,
-            column_descriptions,
-            view_properties,
-            **create_kwargs,
-        )
+            super().create_view(
+                unqualified_view,
+                query_or_df,
+                columns_to_types,
+                replace,
+                materialized,
+                materialized_properties,
+                table_description,
+                column_descriptions,
+                view_properties,
+                **create_kwargs,
+            )
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {view_name}")
+            super().create_view(
+                view_name,
+                query_or_df,
+                columns_to_types,
+                replace,
+                materialized,
+                materialized_properties,
+                table_description,
+                column_descriptions,
+                view_properties,
+                **create_kwargs,
+            )
