@@ -4,7 +4,7 @@ services:
     container_name: "doris-fe-01"
     hostname: "fe-01"
     environment:
-      - FE_SERVERS=fe1:172.20.80.2:9010
+      - FE_SERVERS=fe1:127.0.0.1:9010
       - FE_ID=1
     ports:
       - 8031:8030
@@ -12,9 +12,6 @@ services:
     volumes:
       - /data/fe-01/doris-meta:/opt/apache-doris/fe/doris-meta
       - /data/fe-01/log:/opt/apache-doris/fe/log
-    networks:
-      doris_net:
-        ipv4_address: 172.20.80.2
   docker-be-01:
     image: "apache/doris:be-2.1.10"
     container_name: "doris-be-01"
@@ -22,17 +19,14 @@ services:
     depends_on:
       - docker-fe-01
     environment:
-      - FE_SERVERS=fe1:172.20.80.2:9010
-      - BE_ADDR=172.20.80.5:9050
+      - FE_SERVERS=fe1:127.0.0.1:9010
+      - BE_ADDR=127.0.0.1:9050
     ports:
       - 8041:8040
     volumes:
       - /data/be-01/storage:/opt/apache-doris/be/storage
       - /data/be-01/script:/docker-entrypoint-initdb.d
       - /data/be-01/log:/opt/apache-doris/be/log
-    networks:
-      doris_net:
-        ipv4_address: 172.20.80.5
   docker-be-02:
     image: "apache/doris:be-2.1.10"
     container_name: "doris-be-02"
@@ -40,17 +34,14 @@ services:
     depends_on:
       - docker-fe-01
     environment:
-      - FE_SERVERS=fe1:172.20.80.2:9010
-      - BE_ADDR=172.20.80.6:9050
+      - FE_SERVERS=fe1:127.0.0.1:9010
+      - BE_ADDR=127.0.0.1:9060
     ports:
       - 8042:8040
     volumes:
       - /data/be-02/storage:/opt/apache-doris/be/storage
       - /data/be-02/script:/docker-entrypoint-initdb.d
       - /data/be-02/log:/opt/apache-doris/be/log
-    networks:
-      doris_net:
-        ipv4_address: 172.20.80.6
   docker-be-03:
     image: "apache/doris:be-2.1.10"
     container_name: "doris-be-03"
@@ -58,19 +49,11 @@ services:
     depends_on:
       - docker-fe-01
     environment:
-      - FE_SERVERS=fe1:172.20.80.2:9010
-      - BE_ADDR=172.20.80.7:9050
+      - FE_SERVERS=fe1:127.0.0.1:9010
+      - BE_ADDR=127.0.0.1:9070
     ports:
       - 8043:8040
     volumes:
       - /data/be-03/storage:/opt/apache-doris/be/storage
       - /data/be-03/script:/docker-entrypoint-initdb.d
       - /data/be-03/log:/opt/apache-doris/be/log
-    networks:
-      doris_net:
-        ipv4_address: 172.20.80.7
-networks:
-  doris_net:
-    ipam:
-      config:
-        - subnet: 172.20.80.0/24

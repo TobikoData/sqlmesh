@@ -647,17 +647,16 @@ class DorisEngineAdapter(
             table_description: Optional table description.
             column_descriptions: Optional column descriptions.
         """
-        # Set default replication_allocation to 1 for testing environments if not specified
         table_properties = kwargs.get("table_properties", {})
 
-        # Set default replication_allocation to 1 for testing environments if not specified
+        # Set default replication_num to 1 for testing environments if not specified
         if (
             "replication_num" not in table_properties
             and "replication_allocation" not in table_properties
         ):
-            table_properties["replication_allocation"] = "tag.location.default: 1"
+            table_properties["replication_num"] = "1"
             logger.info(
-                f"[Doris] Added default replication_allocation for testing: {table_properties['replication_allocation']}"
+                f"[Doris] Added default replication_num for testing: {table_properties['replication_num']}"
             )
 
         # Convert primary_key to unique_key for Doris (Doris doesn't support primary keys)
