@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import typing as t
 import logging
-import time
 from sqlglot import exp
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -225,47 +225,53 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         except requests.exceptions.RequestException as e:
             raise SQLMeshError(f"Fabric API request failed: {e}")
 
-    def _poll_operation_status(self, location_url: str, operation_name: str) -> None:
-        """Poll the operation status until completion."""
+    @retry(
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        stop=stop_after_attempt(60),
+        retry=retry_if_result(lambda result: result not in ["Succeeded", "Failed"]),
+    )
+    def _check_operation_status(self, location_url: str, operation_name: str) -> str:
+        """Check the operation status and return the status string."""
         if not requests:
             raise SQLMeshError("requests library is required for Fabric catalog operations")
 
         headers = self._get_fabric_auth_headers()
-        max_attempts = 60  # Poll for up to 10 minutes
-        initial_delay = 1  # Start with 1 second
 
-        for attempt in range(max_attempts):
-            try:
-                response = requests.get(location_url, headers=headers)
-                response.raise_for_status()
+        try:
+            response = requests.get(location_url, headers=headers)
+            response.raise_for_status()
 
-                result = response.json()
-                status = result.get("status", "Unknown")
+            result = response.json()
+            status = result.get("status", "Unknown")
 
-                logger.info(f"Operation {operation_name} status: {status}")
+            logger.info(f"Operation {operation_name} status: {status}")
 
-                if status == "Succeeded":
-                    return
-                if status == "Failed":
-                    error_msg = result.get("error", {}).get("message", "Unknown error")
-                    raise SQLMeshError(f"Operation {operation_name} failed: {error_msg}")
-                elif status in ["InProgress", "Running"]:
-                    # Use exponential backoff with max of 30 seconds
-                    delay = min(initial_delay * (2 ** min(attempt // 3, 4)), 30)
-                    logger.info(f"Waiting {delay} seconds before next status check...")
-                    time.sleep(delay)
-                else:
-                    logger.warning(f"Unknown status '{status}' for operation {operation_name}")
-                    time.sleep(5)
+            if status == "Failed":
+                error_msg = result.get("error", {}).get("message", "Unknown error")
+                raise SQLMeshError(f"Operation {operation_name} failed: {error_msg}")
+            elif status in ["InProgress", "Running"]:
+                logger.info(f"Operation {operation_name} still in progress...")
+            elif status not in ["Succeeded"]:
+                logger.warning(f"Unknown status '{status}' for operation {operation_name}")
 
-            except requests.exceptions.RequestException as e:
-                if attempt < max_attempts - 1:
-                    logger.warning(f"Failed to poll status (attempt {attempt + 1}): {e}")
-                    time.sleep(5)
-                else:
-                    raise SQLMeshError(f"Failed to poll operation status: {e}")
+            return status
 
-        raise SQLMeshError(f"Operation {operation_name} did not complete within timeout")
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to poll status: {e}")
+            raise SQLMeshError(f"Failed to poll operation status: {e}")
+
+    def _poll_operation_status(self, location_url: str, operation_name: str) -> None:
+        """Poll the operation status until completion."""
+        try:
+            final_status = self._check_operation_status(location_url, operation_name)
+            if final_status != "Succeeded":
+                raise SQLMeshError(
+                    f"Operation {operation_name} completed with status: {final_status}"
+                )
+        except Exception as e:
+            if "retry" in str(e).lower():
+                raise SQLMeshError(f"Operation {operation_name} did not complete within timeout")
+            raise
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
