@@ -54,7 +54,7 @@ def make_python_env(
     variables = variables or {}
     blueprint_variables = blueprint_variables or {}
 
-    used_macros: t.Dict[str, t.Tuple[MacroCallable, t.Optional[bool]]] = {}
+    used_macros: t.Dict[str, t.Tuple[MacroCallable, bool]] = {}
     used_variable_referenced_in_metadata_expression = dict.fromkeys(used_variables or set(), False)
 
     # For an expression like @foo(@v1, @bar(@v1, @v2), @v3), the following mapping would be:
@@ -66,7 +66,7 @@ def make_python_env(
         if isinstance(expression_metadata, tuple):
             expression, is_metadata = expression_metadata
         else:
-            expression, is_metadata = expression_metadata, None
+            expression, is_metadata = expression_metadata, False
 
         if isinstance(expression, d.Jinja):
             continue
@@ -98,7 +98,7 @@ def make_python_env(
                     var_name = args[0].this.lower()
                     used_variable_referenced_in_metadata_expression[var_name] = (
                         used_variable_referenced_in_metadata_expression.get(var_name, True)
-                        and bool(is_metadata)
+                        and is_metadata
                     )
                 else:
                     for var_ref in _extract_macro_func_variable_references(macro_func_or_var):
@@ -114,7 +114,7 @@ def make_python_env(
                 elif name in variables or name in blueprint_variables:
                     used_variable_referenced_in_metadata_expression[name] = (
                         used_variable_referenced_in_metadata_expression.get(name, True)
-                        and bool(is_metadata)
+                        and is_metadata
                     )
             elif (
                 isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
@@ -126,12 +126,12 @@ def make_python_env(
                     if var_name in variables or var_name in blueprint_variables:
                         used_variable_referenced_in_metadata_expression[var_name] = (
                             used_variable_referenced_in_metadata_expression.get(var_name, True)
-                            and bool(is_metadata)
+                            and is_metadata
                         )
 
     for macro_ref in jinja_macro_references or set():
         if macro_ref.package is None and macro_ref.name in macros:
-            used_macros[macro_ref.name] = (macros[macro_ref.name], None)
+            used_macros[macro_ref.name] = (macros[macro_ref.name], False)
 
     for name, (used_macro, is_metadata) in used_macros.items():
         if isinstance(used_macro, Executable):
