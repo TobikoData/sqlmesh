@@ -7,13 +7,14 @@ import typing as t
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
+from sqlmesh.core.constants import EXTERNAL_MODELS_YAML
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
     get_range_of_model_block,
     read_range_from_string,
 )
-from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit
+from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit, Position
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
 from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
@@ -185,12 +186,14 @@ class NoMissingExternalModels(Rule):
         violations = []
         for ref_name, ref in external_references.items():
             if ref_name in not_registered_external_models:
+                fix = self.create_fix(ref_name)
                 violations.append(
                     RuleViolation(
                         rule=self,
                         violation_msg=f"Model '{model.fqn}' depends on unregistered external model '{ref_name}'. "
                         "Please register it in the external models file. This can be done by running 'sqlmesh create_external_models'.",
                         violation_range=ref.range,
+                        fixes=[fix] if fix else [],
                     )
                 )
 
@@ -210,6 +213,47 @@ class NoMissingExternalModels(Rule):
             violation_msg=f"Model '{model_name}' depends on unregistered external models: "
             f"{', '.join(m for m in external_models)}. "
             "Please register them in the external models file. This can be done by running 'sqlmesh create_external_models'.",
+        )
+
+    def create_fix(self, model_name: str) -> t.Optional[Fix]:
+        """
+        Add an external model to the external models file.
+        - If no external models file exists, it will create one with the model.
+        - If the model already exists, it will not add it again.
+        """
+        root = self.context.path
+        if not root:
+            return None
+
+        external_models_path = root / EXTERNAL_MODELS_YAML
+        if not external_models_path.exists():
+            return None
+
+        # Figure out the position to insert the new external model at the end of the file, whether
+        # needs new line or not.
+        with open(external_models_path, "r", encoding="utf-8") as file:
+            lines = file.read()
+
+        # If a file ends in newline, we can add the new model directly.
+        split_lines = lines.splitlines()
+        if lines.endswith("\n"):
+            new_text = f"- name: '{model_name}'\n"
+            position = Position(line=len(split_lines), character=0)
+        else:
+            new_text = f"\n- name: '{model_name}'\n"
+            position = Position(
+                line=len(split_lines) - 1, character=len(split_lines[-1]) if split_lines else 0
+            )
+
+        return Fix(
+            title="Add external model",
+            edits=[
+                TextEdit(
+                    path=external_models_path,
+                    range=Range(start=position, end=position),
+                    new_text=new_text,
+                )
+            ],
         )
 
 
