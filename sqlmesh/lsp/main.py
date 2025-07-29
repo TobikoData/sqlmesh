@@ -24,9 +24,6 @@ from sqlmesh.lsp.api import (
     ApiResponseGetModels,
 )
 
-# Define the command constant
-EXTERNAL_MODEL_UPDATE_COLUMNS = "sqlmesh.external_model_update_columns"
-
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
