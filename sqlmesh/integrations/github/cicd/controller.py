@@ -478,13 +478,11 @@ class GithubController:
         return self._pull_request.base.ref in self.bot_config.prod_branch_names
 
     @property
-    def forward_only_plan(self) -> t.Optional[bool]:
-        if self.bot_config.forward_only_branch_suffix is not None:
-            head_ref = self._pull_request.head.ref
-            if isinstance(head_ref, str):
-                return head_ref.endswith(self.bot_config.forward_only_branch_suffix)
-            return False
-        return None
+    def forward_only_plan(self) -> bool:
+        head_ref = self._pull_request.head.ref
+        if isinstance(head_ref, str):
+            return head_ref.endswith(self.bot_config.forward_only_branch_suffix)
+        return False
 
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
