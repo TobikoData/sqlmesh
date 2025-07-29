@@ -358,6 +358,7 @@ class PlanStagesBuilder:
             demoted_environment_naming_info,
             snapshots | full_demoted_snapshots,
             deployability_index,
+            plan.is_dev,
         )
         if virtual_layer_update_stage:
             stages.append(virtual_layer_update_stage)
@@ -437,11 +438,18 @@ class PlanStagesBuilder:
         demoted_environment_naming_info: t.Optional[EnvironmentNamingInfo],
         all_snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: DeployabilityIndex,
+        is_dev: bool,
     ) -> t.Optional[VirtualLayerUpdateStage]:
-        promoted_snapshots = {s for s in promoted_snapshots if s.is_model and not s.is_symbolic}
-        demoted_snapshots = {s for s in demoted_snapshots if s.is_model and not s.is_symbolic}
+        def _should_update_virtual_layer(snapshot: SnapshotTableInfo) -> bool:
+            # Skip virtual layer update for snapshots with virtual environment support disabled
+            virtual_environment_enabled = is_dev or snapshot.virtual_environment_mode.is_full
+            return snapshot.is_model and not snapshot.is_symbolic and virtual_environment_enabled
+
+        promoted_snapshots = {s for s in promoted_snapshots if _should_update_virtual_layer(s)}
+        demoted_snapshots = {s for s in demoted_snapshots if _should_update_virtual_layer(s)}
         if not promoted_snapshots and not demoted_snapshots:
             return None
+
         return VirtualLayerUpdateStage(
             promoted_snapshots=promoted_snapshots,
             demoted_snapshots=demoted_snapshots,

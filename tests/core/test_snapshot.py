@@ -167,6 +167,7 @@ def test_json(snapshot: Snapshot):
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
         "table_naming_convention": "schema_and_table",
+        "virtual_environment_mode": "full",
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,

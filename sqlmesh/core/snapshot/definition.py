@@ -13,7 +13,7 @@ from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.config import TableNamingConvention
+from sqlmesh.core.config.common import TableNamingConvention, VirtualEnvironmentMode
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -230,6 +230,7 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     dev_table_suffix: str
     table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
+    virtual_environment_mode: VirtualEnvironmentMode = Field(default=VirtualEnvironmentMode.default)
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
@@ -338,6 +339,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     dev_table_suffix: str
     table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
     forward_only: bool
+    virtual_environment_mode: VirtualEnvironmentMode
 
     @cached_property
     def identifier(self) -> str:
@@ -443,6 +445,10 @@ class SnapshotInfoMixin(ModelKindMixin):
         if self.is_external:
             return self.name
 
+        if is_deployable and self.virtual_environment_mode.is_dev_only:
+            # Use the model name as is if the target is deployable and the virtual environment mode is set to dev-only
+            return self.name
+
         is_dev_table = not is_deployable
         if is_dev_table:
             version = self.dev_version
@@ -459,6 +465,7 @@ class SnapshotInfoMixin(ModelKindMixin):
             fqt = self.fully_qualified_table.copy()
             fqt.set("catalog", None)
             base_table_name = fqt.sql()
+
         return table_name(
             self.physical_schema,
             base_table_name,
@@ -499,6 +506,8 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     dev_table_suffix: str
     model_gateway: t.Optional[str] = None
     forward_only: bool = False
+    table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
+    virtual_environment_mode: VirtualEnvironmentMode = Field(default=VirtualEnvironmentMode.default)
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -540,6 +549,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
             physical_schema=self.physical_schema,
             dev_table_suffix=self.dev_table_suffix,
             table_naming_convention=self.table_naming_convention,
+            virtual_environment_mode=self.virtual_environment_mode,
         )
 
     @property
@@ -627,6 +637,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         default=TableNamingConvention.default, alias="table_naming_convention"
     )
     forward_only: bool = False
+    virtual_environment_mode: VirtualEnvironmentMode = Field(default=VirtualEnvironmentMode.default)
 
     @field_validator("ttl")
     @classmethod
@@ -679,6 +690,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
         table_naming_convention: TableNamingConvention = TableNamingConvention.default,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -690,6 +702,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             cache: Cache of node name to fingerprints.
             table_naming_convention: Convention to follow when generating the physical table name
+            virtual_environment_mode: Mode for handling virtual environments
 
         Returns:
             The newly created snapshot.
@@ -722,6 +735,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             ttl=ttl,
             version=version,
             table_naming_convention=table_naming_convention,
+            virtual_environment_mode=virtual_environment_mode,
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -876,16 +890,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             other: The target snapshot to inherit intervals from.
         """
-        effective_from_ts = self.normalized_effective_from_ts or 0
-        apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
-
-        for start, end in other.intervals:
-            # If the effective_from is set, then intervals that come after it must come from
-            # the current snapshost.
-            if apply_effective_from and start < effective_from_ts:
-                end = min(end, effective_from_ts)
-            if not apply_effective_from or end <= effective_from_ts:
-                self.add_interval(start, end)
+        if self.is_no_rebuild or self.virtual_environment_mode.is_full or not self.is_paused:
+            # If the virtual environment mode is not full we can only merge prod intervals if this snapshot
+            # is currently promoted in production or if it's forward-only / metadata / indirect non-breaking.
+            # Otherwise, we want to ignore any existing intervals and backfill this snapshot from scratch.
+            effective_from_ts = self.normalized_effective_from_ts or 0
+            apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
+            for start, end in other.intervals:
+                # If the effective_from is set, then intervals that come after it must come from
+                # the current snapshost.
+                if apply_effective_from and start < effective_from_ts:
+                    end = min(end, effective_from_ts)
+                if not apply_effective_from or end <= effective_from_ts:
+                    self.add_interval(start, end)
 
         if self.dev_version == other.dev_version:
             # Merge dev intervals if the dev versions match which would mean
@@ -1035,7 +1052,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
             SnapshotChangeCategory.METADATA,
         )
-        if self.is_model and self.model.physical_version:
+        if self.is_model and not self.virtual_environment_mode.is_full:
+            # Hardcode the version if the virtual environment is not fully enabled.
+            self.version = "novde"
+        elif self.is_model and self.model.physical_version:
             # If the model has a pinned version then use that.
             self.version = self.model.physical_version
         elif is_no_rebuild and self.previous_version:
@@ -1239,6 +1259,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             model_gateway=self.model_gateway,
             table_naming_convention=self.table_naming_convention,  # type: ignore
             forward_only=self.forward_only,
+            virtual_environment_mode=self.virtual_environment_mode,
         )
 
     @property
@@ -1252,6 +1273,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             physical_schema=self.physical_schema,
             dev_table_suffix=self.dev_table_suffix,
             table_naming_convention=self.table_naming_convention,
+            virtual_environment_mode=self.virtual_environment_mode,
         )
 
     @property
@@ -1535,14 +1557,20 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         for node in dag:
             if node not in snapshots:
                 continue
-            # Make sure that the node is deployable according to all its parents
-            this_deployable = all(
-                children_deployability_mapping[p_id]
-                for p_id in snapshots[node].parents
-                if p_id in children_deployability_mapping
-            )
+            snapshot = snapshots[node]
+
+            if not snapshot.virtual_environment_mode.is_full:
+                # If the virtual environment is not fully enabled, then the snapshot can never be deployable
+                this_deployable = False
+            else:
+                # Make sure that the node is deployable according to all its parents
+                this_deployable = all(
+                    children_deployability_mapping[p_id]
+                    for p_id in snapshots[node].parents
+                    if p_id in children_deployability_mapping
+                )
+
             if this_deployable:
-                snapshot = snapshots[node]
                 is_forward_only_model = (
                     snapshot.is_model and snapshot.model.forward_only and not snapshot.is_metadata
                 )
