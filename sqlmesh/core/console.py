@@ -1060,6 +1060,7 @@ class TerminalConsole(Console):
         """Update the snapshot evaluation progress."""
         if (
             self.evaluation_total_progress
+            and self.evaluation_total_task is not None
             and self.evaluation_model_progress
             and self.evaluation_progress_live
         ):
@@ -1102,7 +1103,7 @@ class TerminalConsole(Console):
                 self.evaluation_progress_live.console.print(msg)
 
             self.evaluation_total_progress.update(
-                self.evaluation_total_task or TaskID(0), refresh=True, advance=1
+                self.evaluation_total_task, refresh=True, advance=1
             )
 
             model_task_id = self.evaluation_model_tasks[snapshot.name]
