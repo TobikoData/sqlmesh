@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlmesh.core.model import Model
 
@@ -43,6 +44,7 @@ class Range:
 class TextEdit:
     """A text edit to apply to a file."""
 
+    path: Path
     range: Range
     new_text: str
 
