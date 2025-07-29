@@ -334,6 +334,10 @@ class Loader(abc.ABC):
         def _load(path: Path) -> t.List[Model]:
             try:
                 with open(path, "r", encoding="utf-8") as file:
+                    yaml = YAML().load(file)
+                    # Allow empty YAML files to return an empty list
+                    if yaml is None:
+                        return []
                     return [
                         create_external_model(
                             defaults=self.config.model_defaults.dict(),
@@ -346,7 +350,7 @@ class Loader(abc.ABC):
                                 **row,
                             },
                         )
-                        for row in YAML().load(file.read())
+                        for row in yaml
                     ]
             except Exception as ex:
                 raise ConfigError(self._failed_to_load_model_error(path, ex), path)
