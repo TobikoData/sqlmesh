@@ -1,4 +1,3 @@
-import os from 'os'
 import {
   openServerPage,
   SUSHI_SOURCE_PATH,
@@ -10,12 +9,9 @@ import fs from 'fs-extra'
 import path from 'path'
 
 test.describe('External model files trigger lsp', () => {
-  test('external_models.yaml', async ({ page, sharedCodeServer }) => {
+  test('external_models.yaml', async ({ page, sharedCodeServer, tempDir }) => {
     const file = 'external_models.yaml'
 
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-sushi-'),
-    )
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
     // Assert external_models.yaml exists
@@ -38,12 +34,9 @@ test.describe('External model files trigger lsp', () => {
     await waitForLoadedSQLMesh(page)
   })
 
-  test('external_models.yml', async ({ page, sharedCodeServer }) => {
+  test('external_models.yml', async ({ page, sharedCodeServer, tempDir }) => {
     const file = 'external_models.yml'
 
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-sushi-'),
-    )
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
     // Move external_models.yaml to external_models.yml

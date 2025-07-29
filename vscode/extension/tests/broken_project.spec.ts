@@ -1,6 +1,5 @@
 import { test, expect } from './fixtures'
 import fs from 'fs-extra'
-import os from 'os'
 import path from 'path'
 import {
   openLineageView,
@@ -12,10 +11,11 @@ import {
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('bad project, double model', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('bad project, double model', async ({
+  tempDir,
+  page,
+  sharedCodeServer,
+}) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   // Read the customers.sql file
@@ -52,11 +52,9 @@ test('bad project, double model', async ({ page, sharedCodeServer }) => {
 
 test('working project, then broken through adding double model, then refixed', async ({
   page,
+  tempDir,
   sharedCodeServer,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -149,11 +147,9 @@ test('working project, then broken through adding double model, then refixed', a
 
 test('bad project, double model, then fixed', async ({
   page,
+  tempDir,
   sharedCodeServer,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   // Read the customers.sql file
@@ -218,10 +214,8 @@ test('bad project, double model, then fixed', async ({
 test('bad project, double model, check lineage', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   // Read the customers.sql file
@@ -248,10 +242,11 @@ test('bad project, double model, check lineage', async ({
   await page.waitForTimeout(500)
 })
 
-test('bad model block, then fixed', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('bad model block, then fixed', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   // Copy over the sushi project
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
