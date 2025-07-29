@@ -53,12 +53,16 @@ class NoSelectStar(Rule):
         columns = model.columns_to_types
         if not columns:
             return None
+        path = model._path
+        if path is None:
+            return None
         new_text = ", ".join(columns.keys())
         return [
             Fix(
                 title="Replace SELECT * with explicit column list",
                 edits=[
                     TextEdit(
+                        path=path,
                         range=violation_range,
                         new_text=new_text,
                     )
