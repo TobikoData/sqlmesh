@@ -440,6 +440,8 @@ class LSPContext:
         Update the columns for an external model in the YAML file. Returns True if changed, False if didn't because
         of the columns already being up to date.
 
+        In this case, the model name is the name of the external model as is defined in the YAML file, not any other version of it.
+
         Errors still throw exceptions to be handled by the caller.
         """
         models = yaml.load(uri.to_path())
