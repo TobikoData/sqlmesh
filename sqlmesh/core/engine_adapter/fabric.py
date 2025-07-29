@@ -11,7 +11,7 @@ from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import TableName, SchemaName
 
 
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
@@ -379,7 +379,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def drop_schema(
         self,
-        schema_name: t.Union[str, exp.Table],
+        schema_name: SchemaName,
         ignore_if_not_exists: bool = True,
         cascade: bool = False,
         **drop_args: t.Any,
@@ -411,7 +411,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def create_schema(
         self,
-        schema_name: t.Union[str, exp.Table],
+        schema_name: SchemaName,
         ignore_if_exists: bool = True,
         **kwargs: t.Any,
     ) -> None:
@@ -555,7 +555,7 @@ class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def create_view(
         self,
-        view_name: t.Union[str, exp.Table],
+        view_name: SchemaName,
         query_or_df: t.Any,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
