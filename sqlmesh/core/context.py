@@ -2909,6 +2909,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 config = self.config_for_node(node)
                 kwargs["ttl"] = config.snapshot_ttl
                 kwargs["table_naming_convention"] = config.physical_table_naming_convention
+                kwargs["virtual_environment_mode"] = config.virtual_environment_mode
 
             snapshot = Snapshot.from_node(
                 node,
@@ -2936,7 +2937,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _plan_preview_enabled(self) -> bool:
         if self.config.plan.enable_preview is not None:
             return self.config.plan.enable_preview
-        # It is dangerous to enable preview by default for dbt projects that rely on engines that don’t support cloning.
+        # It is dangerous to enable preview by default for dbt projects that rely on engines that don't support cloning.
         # Enabling previews in such cases can result in unintended full refreshes because dbt incremental models rely on
         # the maximum timestamp value in the target table.
         return self._project_type == c.NATIVE or self.engine_adapter.SUPPORTS_CLONING
