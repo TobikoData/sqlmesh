@@ -24,6 +24,7 @@ from sqlmesh.lsp.api import (
     ApiResponseGetModels,
 )
 
+from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
@@ -367,6 +368,44 @@ class SQLMeshLanguageServer:
                 return function_call
 
             self.server.feature(name)(create_function_call(method))
+
+        @self.server.command(EXTERNAL_MODEL_UPDATE_COLUMNS)
+        def command_external_models_update_columns(ls: LanguageServer, raw: t.Any) -> None:
+            try:
+                if not isinstance(raw, list):
+                    raise ValueError("Invalid command parameters")
+                if len(raw) != 1:
+                    raise ValueError("Command expects exactly one parameter")
+                model_name = raw[0]
+                if not isinstance(model_name, str):
+                    raise ValueError("Command parameter must be a string")
+
+                context = self._context_get_or_load()
+                if not isinstance(context, LSPContext):
+                    raise ValueError("Context is not loaded or invalid")
+                model = context.context.get_model(model_name)
+                if model is None:
+                    raise ValueError(f"External model '{model_name}' not found")
+                if model._path is None:
+                    raise ValueError(f"External model '{model_name}' does not have a file path")
+                uri = URI.from_path(model._path)
+                updated = context.update_external_model_columns(
+                    ls=ls,
+                    uri=uri,
+                    model_name=model_name,
+                )
+                if updated:
+                    ls.show_message(
+                        f"Updated columns for '{model_name}'",
+                        types.MessageType.Info,
+                    )
+                else:
+                    ls.show_message(
+                        f"Columns for '{model_name}' are already up to date",
+                    )
+            except Exception as e:
+                ls.show_message(f"Error executing command: {e}", types.MessageType.Error)
+                return None
 
         @self.server.feature(types.INITIALIZE)
         def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
@@ -749,6 +788,17 @@ class SQLMeshLanguageServer:
             except Exception as e:
                 ls.log_trace(f"Error getting code actions: {e}")
                 return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_CODE_LENS)
+        def code_lens(ls: LanguageServer, params: types.CodeLensParams) -> t.List[types.CodeLens]:
+            try:
+                uri = URI(params.text_document.uri)
+                context = self._context_get_or_load(uri)
+                code_lenses = context.get_code_lenses(uri)
+                return code_lenses if code_lenses else []
+            except Exception as e:
+                ls.log_trace(f"Error getting code lenses: {e}")
+                return []
 
         @self.server.feature(
             types.TEXT_DOCUMENT_COMPLETION,

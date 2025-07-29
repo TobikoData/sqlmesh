@@ -1,16 +1,21 @@
 from dataclasses import dataclass
 from pathlib import Path
+from pygls.server import LanguageServer
 from sqlmesh.core.context import Context
 import typing as t
-
 from sqlmesh.core.linter.rule import Range
-from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.model.definition import SqlModel, ExternalModel
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.core.schema_loader import get_columns
+from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
 from sqlmesh.lsp.custom import ModelForRendering, TestEntry, RunTestResponse
 from sqlmesh.lsp.custom import AllModelsResponse, RenderModelEntry
 from sqlmesh.lsp.tests_ranges import get_test_ranges
+from sqlmesh.lsp.helpers import to_lsp_range
 from sqlmesh.lsp.uri import URI
 from lsprotocol import types
+from sqlmesh.utils import yaml
+from sqlmesh.utils.lineage import get_yaml_model_name_ranges
 
 
 @dataclass
@@ -298,6 +303,36 @@ class LSPContext:
 
         return code_actions if code_actions else None
 
+    def get_code_lenses(self, uri: URI) -> t.Optional[t.List[types.CodeLens]]:
+        models_in_file = self.map.get(uri.to_path())
+        if isinstance(models_in_file, ModelTarget):
+            models = [self.context.get_model(model) for model in models_in_file.names]
+            if any(isinstance(model, ExternalModel) for model in models):
+                code_lenses = self._get_external_model_code_lenses(uri)
+                if code_lenses:
+                    return code_lenses
+
+        return None
+
+    def _get_external_model_code_lenses(self, uri: URI) -> t.List[types.CodeLens]:
+        """Get code lenses for external models YAML files."""
+        ranges = get_yaml_model_name_ranges(uri.to_path())
+        if ranges is None:
+            return []
+        return [
+            types.CodeLens(
+                range=to_lsp_range(range),
+                command=types.Command(
+                    title="Update Columns",
+                    command=EXTERNAL_MODEL_UPDATE_COLUMNS,
+                    arguments=[
+                        name,
+                    ],
+                ),
+            )
+            for name, range in ranges.items()
+        ]
+
     def list_of_models_for_rendering(self) -> t.List[ModelForRendering]:
         """Get a list of models for rendering.
 
@@ -399,3 +434,72 @@ class LSPContext:
             code=diagnostic.rule.name,
             code_description=types.CodeDescription(href=rule_uri),
         )
+
+    def update_external_model_columns(self, ls: LanguageServer, uri: URI, model_name: str) -> bool:
+        """
+        Update the columns for an external model in the YAML file. Returns True if changed, False if didn't because
+        of the columns already being up to date.
+
+        Errors still throw exceptions to be handled by the caller.
+        """
+        models = yaml.load(uri.to_path())
+        if not isinstance(models, list):
+            raise ValueError(
+                f"Expected a list of models in {uri.to_path()}, but got {type(models).__name__}"
+            )
+
+        existing_model = next((model for model in models if model.get("name") == model_name), None)
+        if existing_model is None:
+            raise ValueError(f"Could not find model {model_name} in {uri.to_path()}")
+
+        existing_model_columns = existing_model.get("columns")
+
+        # Get the adapter and fetch columns
+        adapter = self.context.engine_adapter
+        # Get columns for the model
+        new_columns = get_columns(
+            adapter=adapter,
+            dialect=self.context.config.model_defaults.dialect,
+            table=model_name,
+            strict=True,
+        )
+        # Compare existing columns and matching types and if they are the same, do not update
+        if existing_model_columns is not None:
+            if existing_model_columns == new_columns:
+                return False
+
+        # Model index to update
+        model_index = next(
+            (i for i, model in enumerate(models) if model.get("name") == model_name), None
+        )
+        if model_index is None:
+            raise ValueError(f"Could not find model {model_name} in {uri.to_path()}")
+
+        # Get end of the file to set the edit range
+        with open(uri.to_path(), "r", encoding="utf-8") as file:
+            read_file = file.read()
+
+        end_line = read_file.count("\n")
+        end_character = len(read_file.splitlines()[-1]) if end_line > 0 else 0
+
+        models[model_index]["columns"] = new_columns
+        edit = types.TextDocumentEdit(
+            text_document=types.OptionalVersionedTextDocumentIdentifier(
+                uri=uri.value,
+                version=None,
+            ),
+            edits=[
+                types.TextEdit(
+                    range=types.Range(
+                        start=types.Position(line=0, character=0),
+                        end=types.Position(
+                            line=end_line,
+                            character=end_character,
+                        ),
+                    ),
+                    new_text=yaml.dump(models),
+                )
+            ],
+        )
+        ls.apply_edit(types.WorkspaceEdit(document_changes=[edit]))
+        return True

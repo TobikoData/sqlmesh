@@ -387,6 +387,22 @@ def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:
     Returns:
         The Range of the model block in the YAML file, or None if not found
     """
+    model_name_ranges = get_yaml_model_name_ranges(path)
+    if model_name_ranges is None:
+        return None
+    return model_name_ranges.get(model_name, None)
+
+
+def get_yaml_model_name_ranges(path: Path) -> t.Optional[t.Dict[str, Range]]:
+    """
+    Get the ranges of all model names in a YAML file.
+
+    Args:
+        path: Path to the YAML file
+
+    Returns:
+        A dictionary mapping model names to their ranges in the YAML file.
+    """
     yaml = YAML()
     with path.open("r", encoding="utf-8") as f:
         data = yaml.load(f)
@@ -394,11 +410,15 @@ def _get_yaml_model_range(path: Path, model_name: str) -> t.Optional[Range]:
     if not isinstance(data, list):
         return None
 
+    model_name_ranges = {}
     for item in data:
-        if isinstance(item, dict) and item.get("name") == model_name:
-            # Get size of block by taking the earliest line/col in the items block and the last line/col of the block
+        if isinstance(item, dict):
             position_data = item.lc.data["name"]  # type: ignore
             start = Position(line=position_data[2], character=position_data[3])
             end = Position(line=position_data[2], character=position_data[3] + len(item["name"]))
-            return Range(start=start, end=end)
-    return None
+            name = item.get("name")
+            if not name:
+                continue
+            model_name_ranges[name] = Range(start=start, end=end)
+
+    return model_name_ranges
