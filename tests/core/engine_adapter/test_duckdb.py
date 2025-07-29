@@ -114,7 +114,7 @@ def test_ducklake_partitioning(adapter: EngineAdapter, duck_conn, tmp_path):
     duck_conn.install_extension("ducklake")
     duck_conn.load_extension("ducklake")
     duck_conn.execute(
-        f"ATTACH 'ducklake:{catalog}.ducklake' AS {catalog} (DATA_PATH '{tmp_path}');"
+        f"ATTACH 'ducklake:{tmp_path}/{catalog}.ducklake' AS {catalog} (DATA_PATH '{tmp_path}');"
     )
 
     # no partitions on catalog creation
