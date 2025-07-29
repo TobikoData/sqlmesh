@@ -811,7 +811,7 @@ class PlanBuilder:
                 and not candidate.model.forward_only
                 and promoted.is_forward_only
                 and not promoted.is_paused
-                and not candidate.reuses_previous_version
+                and not candidate.is_no_rebuild
                 and promoted.version == candidate.version
             ):
                 raise PlanError(

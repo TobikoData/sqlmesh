@@ -49,6 +49,35 @@ class EnvironmentSuffixTarget(str, Enum):
         return str(self)
 
 
+class VirtualEnvironmentMode(str, Enum):
+    """Mode for virtual environment behavior.
+
+    FULL: Use full virtual environment functionality with hashed table names and virtual layer updates.
+    DEV_ONLY: Bypass virtual environments in production, using simple table names without hashes.
+    """
+
+    FULL = "full"
+    DEV_ONLY = "dev_only"
+
+    @property
+    def is_full(self) -> bool:
+        return self == VirtualEnvironmentMode.FULL
+
+    @property
+    def is_dev_only(self) -> bool:
+        return self == VirtualEnvironmentMode.DEV_ONLY
+
+    @classproperty
+    def default(cls) -> VirtualEnvironmentMode:
+        return VirtualEnvironmentMode.FULL
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
 class TableNamingConvention(str, Enum):
     # Causes table names at the physical layer to follow the convention:
     # <schema-name>__<table-name>__<fingerprint>
