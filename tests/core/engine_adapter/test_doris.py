@@ -112,7 +112,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable[..., DorisEngineAda
         column_descriptions={"a": "test_column_description"},
     )
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') UNIQUE KEY (`a`) PROPERTIES ('replication_allocation'='tag.location.default: 1')",
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') UNIQUE KEY (`a`) DISTRIBUTED BY HASH (`a`) BUCKETS 10 PROPERTIES ('replication_allocation'='tag.location.default: 1')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') DUPLICATE KEY (`a`) PROPERTIES ('replication_allocation'='tag.location.default: 1')",
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT COMMENT 'test_column_description') COMMENT 'test_description' PROPERTIES ('replication_allocation'='tag.location.default: 1')",
     ]
@@ -168,52 +168,29 @@ def test_replace_by_key(
     adapter = make_mocked_engine_adapter(DorisEngineAdapter)
     temp_table = parse_one("temp_table")
     mocker.patch.object(adapter, "_get_temp_table", return_value=temp_table)
-    ctas_mock = mocker.patch.object(adapter, "ctas")
-    delete_from_mock = mocker.patch.object(adapter, "delete_from")
-    drop_table_mock = mocker.patch.object(adapter, "drop_table")
+    mocker.patch.object(adapter, "ctas")
+    mocker.patch.object(adapter, "delete_from")
+    mocker.patch.object(adapter, "drop_table")
 
     columns_to_types = {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
     source_query = parse_one("SELECT a, b FROM src")
     target_table = "target_table"
 
-    # Single key, is_unique_key True and False
-    for key, is_unique_key, expected_insert_sql in [
-        (
-            [exp.column("a")],
-            True,
-            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a` ORDER BY `a`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
-        ),
-        (
-            [exp.column("a")],
-            False,
-            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
-        ),
-        (
-            [exp.column("a"), exp.column("b")],
-            True,
-            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a`, `b` ORDER BY `a`, `b`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
-        ),
-        (
-            [exp.column("a"), exp.column("b")],
-            False,
-            "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
-        ),
-    ]:
-        ctas_mock.reset_mock()
-        delete_from_mock.reset_mock()
-        drop_table_mock.reset_mock()
-        adapter.cursor.execute.reset_mock()
+    adapter._replace_by_key(target_table, source_query, columns_to_types, [exp.column("a")], True)
+    adapter._replace_by_key(target_table, source_query, columns_to_types, [exp.column("a")], False)
+    adapter._replace_by_key(
+        target_table, source_query, columns_to_types, [exp.column("a"), exp.column("b")], True
+    )
+    adapter._replace_by_key(
+        target_table, source_query, columns_to_types, [exp.column("a"), exp.column("b")], False
+    )
 
-        adapter._replace_by_key(target_table, source_query, columns_to_types, key, is_unique_key)
-
-        ctas_mock.assert_called_once()
-        drop_table_mock.assert_called_once_with(temp_table)
-        # delete_from is only called if not is_replace_where (default)
-        delete_from_mock.assert_called_once()
-        sql_calls = to_sql_calls(adapter)
-        assert any(expected_insert_sql in sql for sql in sql_calls), (
-            f"Expected SQL not found: {expected_insert_sql}, get {sql_calls}"
-        )
+    assert to_sql_calls(adapter, identify=True) == [
+        "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a` ORDER BY `a`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
+        "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
+        "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT `a` AS `a`, `b` AS `b`, ROW_NUMBER() OVER (PARTITION BY `a`, `b` ORDER BY `a`, `b`) AS _row_number FROM `temp_table`) AS _t WHERE _row_number = 1",
+        "INSERT INTO `target_table` (`a`, `b`) SELECT `a`, `b` FROM `temp_table`",
+    ]
 
 
 def test_create_index(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):
@@ -446,4 +423,80 @@ def test_create_table_with_single_string_distributed_by(
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`recordid` INT, `name` VARCHAR) DISTRIBUTED BY HASH (`recordid`) BUCKETS 10 PROPERTIES ('replication_allocation'='tag.location.default: 1')",
+    ]
+
+
+def test_delete_from_with_subquery(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    # Test DELETE FROM with IN subquery
+    adapter.delete_from(
+        "test_schema_xtll416o.test_table",
+        "id IN (SELECT id FROM test_schema_xtll416o.temp_test_table_ik29031e)",
+    )
+
+    # Test DELETE FROM with NOT IN subquery
+    adapter.delete_from(
+        "test_schema_xtll416o.test_table",
+        "id NOT IN (SELECT id FROM test_schema_xtll416o.temp_test_table_ik29031e)",
+    )
+
+    # Test simple DELETE FROM (should use base implementation)
+    adapter.delete_from("test_schema_xtll416o.test_table", "id = 1")
+
+    assert to_sql_calls(adapter) == [
+        "DELETE FROM `test_schema_xtll416o`.`test_table` AS `_t1` USING (SELECT `id` FROM `test_schema_xtll416o`.`temp_test_table_ik29031e`) AS `_t2` WHERE `_t1`.`id` = `_t2`.`id`",
+        "DELETE FROM `test_schema_xtll416o`.`test_table` AS `_t1` USING (SELECT `id` FROM `test_schema_xtll416o`.`temp_test_table_ik29031e`) AS `_t2` WHERE `_t1`.`id` <> `_t2`.`id`",
+        "DELETE FROM `test_schema_xtll416o`.`test_table` WHERE `id` = 1",
+    ]
+
+
+def test_delete_from_with_complex_subquery(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    # Test DELETE FROM with complex subquery (multiple columns)
+    adapter.delete_from(
+        "test_schema_xtll416o.test_table",
+        "(id, name) IN (SELECT id, name FROM test_schema_xtll416o.temp_test_table_ik29031e WHERE active = 1)",
+    )
+
+    # Test DELETE FROM with subquery that has WHERE clause
+    adapter.delete_from(
+        "test_schema_xtll416o.test_table",
+        "id IN (SELECT id FROM test_schema_xtll416o.temp_test_table_ik29031e WHERE created_date > '2024-01-01')",
+    )
+
+    assert to_sql_calls(adapter) == [
+        "DELETE FROM `test_schema_xtll416o`.`test_table` AS `_t1` USING (SELECT `id`, `name` FROM `test_schema_xtll416o`.`temp_test_table_ik29031e` WHERE `active` = 1) AS `_t2` WHERE `_t1`.`id` = `_t2`.`id` AND `_t1`.`name` = `_t2`.`name`",
+        "DELETE FROM `test_schema_xtll416o`.`test_table` AS `_t1` USING (SELECT `id` FROM `test_schema_xtll416o`.`temp_test_table_ik29031e` WHERE `created_date` > '2024-01-01') AS `_t2` WHERE `_t1`.`id` = `_t2`.`id`",
+    ]
+
+
+def test_delete_from_fallback_to_base(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    # Test DELETE FROM with simple conditions (should use base implementation)
+    adapter.delete_from("test_table", "id = 1")
+    adapter.delete_from("test_table", "name = 'test' AND status = 'active'")
+    adapter.delete_from("test_table", "id IN (1, 2, 3)")  # Simple IN with values, not subquery
+
+    assert to_sql_calls(adapter) == [
+        "DELETE FROM `test_table` WHERE `id` = 1",
+        "DELETE FROM `test_table` WHERE `name` = 'test' AND `status` = 'active'",
+        "DELETE FROM `test_table` WHERE `id` IN (1, 2, 3)",
+    ]
+
+
+def test_delete_from_full_table(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+
+    # Test DELETE FROM with WHERE TRUE (should use TRUNCATE)
+    adapter.delete_from("test_table", exp.true())
+
+    assert to_sql_calls(adapter) == [
+        "TRUNCATE TABLE `test_table`",
     ]

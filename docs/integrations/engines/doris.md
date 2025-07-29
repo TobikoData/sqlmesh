@@ -262,6 +262,8 @@ MODEL (
 | `unique_key` | Unique key columns | `'user_id'` or `['user_id', 'date']` |
 | `duplicate_key` | Duplicate key columns | `'user_id'` or `['user_id', 'date']` |
 | `partitioned_by_expr` | Custom partition expression. Applies only if `partitioned_by` is not specified. | `'date_trunc(event_date, "month")'` |
+| `materialized_type` | Materialized type | `SYNC`, `ASYNC` |
+| `source_table` | Source table of synchronous materialized view | `schema_name`.`table_name` |
 
 ## Indexing
 
