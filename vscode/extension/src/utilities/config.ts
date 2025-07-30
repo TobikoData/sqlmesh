@@ -6,6 +6,7 @@ import { traceVerbose, traceInfo } from './common/log'
 
 export interface SqlmeshConfiguration {
   projectPath: string
+  lspEntryPoint: string
 }
 
 /**
@@ -13,12 +14,38 @@ export interface SqlmeshConfiguration {
  *
  * @returns The SQLMesh configuration
  */
-export function getSqlmeshConfiguration(): SqlmeshConfiguration {
+function getSqlmeshConfiguration(): SqlmeshConfiguration {
   const config = workspace.getConfiguration('sqlmesh')
   const projectPath = config.get<string>('projectPath', '')
+  const lspEntryPoint = config.get<string>('lspEntrypoint', '')
   return {
     projectPath,
+    lspEntryPoint,
   }
+}
+
+/**
+ * Get the SQLMesh LSP entry point from VS Code settings. undefined if not set
+ * it's expected to be a string in the format "command arg1 arg2 ...".
+ */
+export function getSqlmeshLspEntryPoint():
+  | {
+      entrypoint: string
+      args: string[]
+    }
+  | undefined {
+  const config = getSqlmeshConfiguration()
+  if (config.lspEntryPoint === '') {
+    return undefined
+  }
+  // Split the entry point into command and arguments
+  const parts = config.lspEntryPoint.split(' ')
+  const entrypoint = parts[0]
+  const args = parts.slice(1)
+  if (args.length === 0) {
+    return { entrypoint, args: [] }
+  }
+  return { entrypoint, args }
 }
 
 /**
