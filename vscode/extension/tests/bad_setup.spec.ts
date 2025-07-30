@@ -91,7 +91,7 @@ test('lineage, no sqlmesh found', async ({
 // Checks that if you have another file open like somewhere else, it still checks the workspace first for a successful context
 // it's very flaky but runs when debugging
 // - the typing in of the file name is very flaky
-test.skip('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({
+test('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({
   page,
   sharedCodeServer,
   tempDir,
