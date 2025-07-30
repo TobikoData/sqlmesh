@@ -538,6 +538,42 @@ sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00__dev
 
 This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
 
+#### Virtual Data Environment modes
+
+By default, Virtual Data Environments (VDE) are applied across both development and production environments. This allows SQLMesh to reuse physical tables when appropriate, even when promoting from development to production.
+
+However, users may sometimes prefer their production environment to be non-virtual. The non-exhaustive list of reasons may include:
+
+- Integration with third-party tools and platforms, such as data catalogs, may not work well with the virtual view layer that SQLMesh imposes by default
+- A desire to rely on time travel features provided by cloud data warehouses such as BigQuery, Snowflake, and Databricks
+
+To mitigate this, SQLMesh offers an alternative 'dev-only' mode for using VDE. It can be enabled in the project configuration like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    virtual_environment_mode: dev_only
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config
+
+    config = Config(
+        virtual_environment_mode="dev_only",
+    )
+    ```
+
+As the name suggests, 'dev-only' mode means that VDE is applied only in development environments, while in production, model tables and views are updated directly, bypassing the virtual layer. This also means that physical tables in production will be created using the original, unversioned model names. Users will still benefit from VDE and data reuse across development environments.
+
+Please note that enabling this mode means that all data inserted in development environments is used only for [preview](../concepts/plans.md#data-preview-for-forward-only-changes) and will **not** be reused in production.
+
+
+!!! warning
+    Switching the mode for an existing project will result in a complete rebuild of all models in the project. Refer to the [Table Migration Guide](./table_migration.md) to migrate existing tables without rebuilding them from scratch.
+
+
 #### Environment view catalogs
 
 By default, SQLMesh creates an environment view in the same [catalog](../concepts/glossary.md#catalog) as the physical table the view points to. The physical table's catalog is determined by either the catalog specified in the model name or the default catalog defined in the connection.
