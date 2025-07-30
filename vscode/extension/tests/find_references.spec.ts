@@ -259,7 +259,7 @@ test.describe('Model References', () => {
     ).toBeVisible()
   })
 
-  test.skip('Find All Model References from Audit', async ({
+  test('Find All Model References from Audit', async ({
     page,
     sharedCodeServer,
     tempDir,
