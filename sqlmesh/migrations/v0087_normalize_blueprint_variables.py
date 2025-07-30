@@ -17,6 +17,7 @@ import logging
 from dataclasses import dataclass
 
 from sqlglot import exp
+from sqlmesh.core.console import get_console
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
@@ -74,25 +75,25 @@ def migrate(state_sync, **kwargs):  # type: ignore
         node = parsed_snapshot["node"]
         python_env = node.get("python_env") or {}
 
-        # Intentionally checking for falsey value here, since that accounts for empty dicts and None
         if blueprint_vars_executable := python_env.get(SQLMESH_BLUEPRINT_VARS):
             blueprint_vars = eval(blueprint_vars_executable["payload"])
 
             for var, value in dict(blueprint_vars).items():
                 lowercase_var = var.lower()
                 if var != lowercase_var:
-                    # Ensures that we crash instead of overwriting snapshot payloads incorrectly
-                    assert lowercase_var not in blueprint_vars, (
-                        "SQLMesh could not migrate the state database successfully, because it detected "
-                        f"two different blueprint variable names ('{var}' and '{lowercase_var}') that resolve "
-                        f"to the same name ('{lowercase_var}') for model '{node['name']}'. Downgrade the local "
-                        "SQLMesh version to the previously-installed one, rename either of these variables, "
-                        "apply the corresponding plan and try again."
-                    )
-
-                    del blueprint_vars[var]
-                    blueprint_vars[lowercase_var] = value
-                    migration_needed = True
+                    if lowercase_var in blueprint_vars:
+                        get_console().log_warning(
+                            "SQLMesh is unable to fully migrate the state database, because the "
+                            f"model '{node['name']}' contains two blueprint variables ('{var}' and "
+                            f"'{lowercase_var}') that resolve to the same value ('{lowercase_var}'). "
+                            "This may result in unexpected changes being reported by the next "
+                            "`sqlmesh plan` command. If this happens, consider renaming either variable, "
+                            "so that the lowercase version of their names are different."
+                        )
+                    else:
+                        del blueprint_vars[var]
+                        blueprint_vars[lowercase_var] = value
+                        migration_needed = True
 
             if migration_needed:
                 blueprint_vars_executable["payload"] = repr(blueprint_vars)
