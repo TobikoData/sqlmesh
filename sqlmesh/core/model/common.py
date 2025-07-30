@@ -55,11 +55,46 @@ def make_python_env(
     blueprint_variables = blueprint_variables or {}
 
     used_macros: t.Dict[str, t.Tuple[MacroCallable, bool]] = {}
-    used_variables = dict.fromkeys(referenced_variables or set(), False)  # var -> is_metadata
+
+    # var -> True: var is metadata-only
+    # var -> False: var is not metadata-only
+    # var -> None: cannot determine whether var is metadata-only yet, need to walk macros first
+    used_variables: t.Dict[str, t.Optional[bool]] = dict.fromkeys(
+        referenced_variables or set(), False
+    )
+
+    # id(expr) -> true: expr appears under the AST of a metadata-only macro function
+    # id(expr) -> false: expr appears under the AST of a macro function whose metadata status we don't yet know
+    expr_under_metadata_macro_func: t.Dict[int, bool] = {}
 
     # For an expression like @foo(@v1, @bar(@v1, @v2), @v3), the following mapping would be:
     # v1 -> {"foo", "bar"}, v2 -> {"bar"}, v3 -> "foo"
     macro_funcs_by_used_var: t.DefaultDict[str, t.Set[str]] = defaultdict(set)
+
+    def _is_metadata_var(
+        name: str, expression: exp.Expression, appears_in_metadata_expression: bool
+    ) -> t.Optional[bool]:
+        is_metadata_so_far = used_variables.get(name, True)
+        if is_metadata_so_far is False:
+            return False
+
+        appears_under_metadata_macro_func = expr_under_metadata_macro_func.get(id(expression))
+        if is_metadata_so_far and (
+            appears_in_metadata_expression or appears_under_metadata_macro_func
+        ):
+            return True
+
+        if appears_under_metadata_macro_func is False:
+            return None
+
+        return False
+
+    def _is_metadata_macro(name: str, appears_in_metadata_expression: bool) -> bool:
+        if name in used_macros:
+            is_metadata_so_far = used_macros[name][1]
+            return is_metadata_so_far and appears_in_metadata_expression
+
+        return appears_in_metadata_expression
 
     expressions = ensure_list(expressions)
     for expression_metadata in expressions:
@@ -77,11 +112,8 @@ def make_python_env(
                 if name not in macros:
                     continue
 
-                # If this macro has been seen before as a non-metadata macro, prioritize that
-                used_macros[name] = (
-                    macros[name],
-                    used_macros.get(name, (None, is_metadata))[1] and is_metadata,
-                )
+                used_macros[name] = (macros[name], _is_metadata_macro(name, is_metadata))
+
                 if name in (c.VAR, c.BLUEPRINT_VAR):
                     args = macro_func_or_var.this.expressions
                     if len(args) < 1:
@@ -96,20 +128,22 @@ def make_python_env(
                         )
 
                     var_name = args[0].this.lower()
-                    used_variables[var_name] = used_variables.get(var_name, True) and is_metadata
+                    used_variables[var_name] = _is_metadata_var(
+                        name, macro_func_or_var, is_metadata
+                    )
                 else:
-                    for var_ref in _extract_macro_func_variable_references(macro_func_or_var):
+                    var_refs, _expr_under_metadata_macro_func = (
+                        _extract_macro_func_variable_references(macro_func_or_var, is_metadata)
+                    )
+                    expr_under_metadata_macro_func.update(_expr_under_metadata_macro_func)
+                    for var_ref in var_refs:
                         macro_funcs_by_used_var[var_ref].add(name)
             elif macro_func_or_var.__class__ is d.MacroVar:
                 name = macro_func_or_var.name.lower()
                 if name in macros:
-                    # If this macro has been seen before as a non-metadata macro, prioritize that
-                    used_macros[name] = (
-                        macros[name],
-                        used_macros.get(name, (None, is_metadata))[1] and is_metadata,
-                    )
+                    used_macros[name] = (macros[name], _is_metadata_macro(name, is_metadata))
                 elif name in variables or name in blueprint_variables:
-                    used_variables[name] = used_variables.get(name, True) and is_metadata
+                    used_variables[name] = _is_metadata_var(name, macro_func_or_var, is_metadata)
             elif (
                 isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
             ) and "@" in macro_func_or_var.name:
@@ -118,8 +152,8 @@ def make_python_env(
                 ):
                     var_name = braced_identifier or identifier
                     if var_name in variables or var_name in blueprint_variables:
-                        used_variables[var_name] = (
-                            used_variables.get(var_name, True) and is_metadata
+                        used_variables[var_name] = _is_metadata_var(
+                            var_name, macro_func_or_var, is_metadata
                         )
 
     for macro_ref in jinja_macro_references or set():
@@ -150,8 +184,12 @@ def make_python_env(
     )
 
 
-def _extract_macro_func_variable_references(macro_func: exp.Expression) -> t.Set[str]:
+def _extract_macro_func_variable_references(
+    macro_func: exp.Expression,
+    is_metadata: bool,
+) -> t.Tuple[t.Set[str], t.Dict[int, bool]]:
     references = set()
+    expr_under_metadata_macro_func = {}
 
     # Don't descend into nested MacroFunc nodes besides @VAR() and @BLUEPRINT_VAR(), because
     # they will be handled in a separate call of _extract_macro_func_variable_references.
@@ -169,20 +207,23 @@ def _extract_macro_func_variable_references(macro_func: exp.Expression) -> t.Set
 
             if this.name.lower() in (c.VAR, c.BLUEPRINT_VAR) and args and args[0].is_string:
                 references.add(args[0].this.lower())
+                expr_under_metadata_macro_func[id(n)] = is_metadata
         elif isinstance(n, d.MacroVar):
             references.add(n.name.lower())
+            expr_under_metadata_macro_func[id(n)] = is_metadata
         elif isinstance(n, (exp.Identifier, d.MacroStrReplace, d.MacroSQL)) and "@" in n.name:
             references.update(
                 (braced_identifier or identifier).lower()
                 for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(n.name)
             )
+            expr_under_metadata_macro_func[id(n)] = is_metadata
 
-    return references
+    return (references, expr_under_metadata_macro_func)
 
 
 def _add_variables_to_python_env(
     python_env: t.Dict[str, Executable],
-    used_variables: t.Dict[str, bool],
+    used_variables: t.Dict[str, t.Optional[bool]],
     variables: t.Optional[t.Dict[str, t.Any]],
     strict_resolution: bool = True,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
@@ -197,14 +238,18 @@ def _add_variables_to_python_env(
         blueprint_variables=blueprint_variables,
     )
     for var_name, is_metadata in python_used_variables.items():
-        used_variables[var_name] = used_variables.get(var_name, True) and is_metadata
+        used_variables[var_name] = is_metadata and used_variables.get(var_name)
 
     # Variables are treated as metadata when:
     # - They are only referenced in metadata-only contexts, such as `audits (...)`, virtual statements, etc
     # - They are only referenced in metadata-only macros, either as their arguments or within their definitions
     metadata_used_variables = set()
     for used_var, macro_names in (macro_funcs_by_used_var or {}).items():
-        if used_variables.get(used_var) or all(
+        used_var_is_metadata = used_variables.get(used_var)
+        if used_var_is_metadata is False:
+            continue
+
+        if used_var_is_metadata or all(
             name in python_env and python_env[name].is_metadata for name in macro_names
         ):
             metadata_used_variables.add(used_var)
