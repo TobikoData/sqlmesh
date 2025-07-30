@@ -52,8 +52,8 @@ class EnvironmentSuffixTarget(str, Enum):
 class VirtualEnvironmentMode(str, Enum):
     """Mode for virtual environment behavior.
 
-    FULL: Use full virtual environment functionality with hashed table names and virtual layer updates.
-    DEV_ONLY: Bypass virtual environments in production, using simple table names without hashes.
+    FULL: Use full virtual environment functionality with versioned table names and virtual layer updates.
+    DEV_ONLY: Bypass virtual environments in production, using original unversioned model names.
     """
 
     FULL = "full"
