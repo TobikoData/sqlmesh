@@ -165,7 +165,7 @@ class StateMigrator:
 
         logger.info("Migration rollback successful.")
 
-    def _run_pre_checks(self, state_sync: StateSync) -> t.List[t.Tuple[str, t.List[str]]]:
+    def _run_pre_checks(self, state_sync: StateSync) -> t.List[str]:
         """Run pre-checks for migrations between specified versions.
 
         Args:
@@ -185,7 +185,7 @@ class StateMigrator:
                 logger.info(f"Running pre-check for {migration_name}")
                 warnings = pre_check(state_sync)
                 if warnings:
-                    pre_check_warnings.append((migration_name, warnings))
+                    pre_check_warnings.extend(warnings)
 
         return pre_check_warnings
 
