@@ -64,6 +64,7 @@ from sqlmesh.core.snapshot.definition import (
     table_name,
     TableNamingConvention,
 )
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
@@ -3341,3 +3342,161 @@ def test_partitioned_by_roundtrip(make_snapshot: t.Callable):
 
     assert isinstance(deserialized.node, SqlModel)
     assert deserialized.node.partitioned_by == snapshot.node.partitioned_by
+
+
+def test_merge_intervals_virtual_environment_mode_full(make_snapshot):
+    model = SqlModel(
+        name="test_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds FROM parent_tbl"),
+    )
+
+    # Create source snapshot with intervals
+    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.FULL)
+    source_snapshot.add_interval("2020-01-01", "2020-01-03")
+    source_snapshot.add_interval("2020-01-05", "2020-01-07")
+
+    # Create target snapshot with different fingerprint and virtual_environment_mode FULL
+    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.FULL)
+    target_snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="different", metadata_hash="different", parent_data_hash="different"
+    )
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # When virtual_environment_mode is FULL, intervals should be merged
+    target_snapshot.merge_intervals(source_snapshot)
+
+    assert target_snapshot.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-08")),
+    ]
+
+
+def test_merge_intervals_virtual_environment_mode_dev_only_paused_breaking(make_snapshot):
+    model = SqlModel(
+        name="test_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds FROM parent_tbl"),
+    )
+
+    # Create source snapshot with intervals
+    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot.add_interval("2020-01-01", "2020-01-03")
+    source_snapshot.add_interval("2020-01-05", "2020-01-07")
+
+    # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
+    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="different", metadata_hash="different", parent_data_hash="different"
+    )
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Ensure snapshot is paused (unpaused_ts is None)
+    target_snapshot.unpaused_ts = None
+
+    # When virtual_environment_mode is DEV_ONLY and snapshot is paused and breaking, intervals should NOT be merged
+    target_snapshot.merge_intervals(source_snapshot)
+
+    assert target_snapshot.intervals == []
+
+
+def test_merge_intervals_virtual_environment_mode_dev_only_unpaused(make_snapshot):
+    model = SqlModel(
+        name="test_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds FROM parent_tbl"),
+    )
+
+    # Create source snapshot with intervals
+    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot.add_interval("2020-01-01", "2020-01-03")
+    source_snapshot.add_interval("2020-01-05", "2020-01-07")
+
+    # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
+    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="different", metadata_hash="different", parent_data_hash="different"
+    )
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Ensure snapshot is unpaused
+    target_snapshot.unpaused_ts = to_timestamp("2020-01-01")
+
+    # When snapshot is unpaused, intervals should be merged regardless of virtual_environment_mode
+    target_snapshot.merge_intervals(source_snapshot)
+
+    assert target_snapshot.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-08")),
+    ]
+
+
+def test_merge_intervals_virtual_environment_mode_dev_only_no_rebuild(make_snapshot):
+    model = SqlModel(
+        name="test_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds FROM parent_tbl"),
+    )
+
+    # Create source snapshot with intervals
+    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot.add_interval("2020-01-01", "2020-01-03")
+    source_snapshot.add_interval("2020-01-05", "2020-01-07")
+
+    # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
+    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="different", metadata_hash="different", parent_data_hash="different"
+    )
+    target_snapshot.categorize_as(
+        SnapshotChangeCategory.FORWARD_ONLY
+    )  # This is a no-rebuild category
+
+    # Ensure snapshot is paused
+    target_snapshot.unpaused_ts = None
+
+    # When change category is no-rebuild, intervals should be merged regardless of virtual_environment_mode
+    target_snapshot.merge_intervals(source_snapshot)
+
+    assert target_snapshot.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-08")),
+    ]
+
+
+@pytest.mark.parametrize(
+    "virtual_env_mode,is_deployable,expected_uses_name_as_is",
+    [
+        (VirtualEnvironmentMode.DEV_ONLY, True, True),
+        (VirtualEnvironmentMode.DEV_ONLY, False, False),
+        (VirtualEnvironmentMode.FULL, True, False),
+        (VirtualEnvironmentMode.FULL, False, False),
+    ],
+)
+def test_table_name_virtual_environment_mode(
+    make_snapshot,
+    virtual_env_mode: VirtualEnvironmentMode,
+    is_deployable: bool,
+    expected_uses_name_as_is: bool,
+):
+    model = SqlModel(
+        name="my_schema.my_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds"),
+    )
+
+    snapshot = make_snapshot(model, virtual_environment_mode=virtual_env_mode)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    table_name_result = snapshot.table_name(is_deployable=is_deployable)
+
+    if expected_uses_name_as_is:
+        assert table_name_result == '"my_schema"."my_model"'
+    else:
+        # Should contain the versioned table name with schema prefix
+        assert "sqlmesh__my_schema" in table_name_result
+        assert "my_schema__my_model" in table_name_result
+        if is_deployable:
+            assert table_name_result.endswith(snapshot.version)
+        else:
+            assert table_name_result.endswith(f"{snapshot.dev_version}__dev")
