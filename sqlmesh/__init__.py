@@ -5,6 +5,13 @@
 
 from __future__ import annotations
 
+# Work around dateparser upstream issue: https://github.com/scrapinghub/dateparser/issues/1282
+# This needs to happen before sqlmesh triggers an import of dateparser
+# This hack can be removed when the upstream issue is resolved
+from sqlmesh._hacks import fix_dateparser
+
+fix_dateparser()
+
 import glob
 import logging
 import os
