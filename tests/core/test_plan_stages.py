@@ -4,6 +4,7 @@ from sqlglot import parse_one
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import SqlModel, ModelKindName
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.plan.stages import (
@@ -1300,3 +1301,260 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
 
     migrate_schemas_stage = stages[4]
     assert {s.snapshot_id for s in migrate_schemas_stage.snapshots} == {new_snapshot_c.snapshot_id}
+
+
+def test_build_plan_stages_virtual_environment_mode_filtering(
+    make_snapshot, mocker: MockerFixture
+) -> None:
+    # Create snapshots with different virtual environment modes
+    snapshot_full = make_snapshot(
+        SqlModel(
+            name="full_model",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    snapshot_full.virtual_environment_mode = VirtualEnvironmentMode.FULL
+    snapshot_full.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_dev_only = make_snapshot(
+        SqlModel(
+            name="dev_only_model",
+            query=parse_one("select 2, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    snapshot_dev_only.virtual_environment_mode = VirtualEnvironmentMode.DEV_ONLY
+    snapshot_dev_only.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Mock state reader
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    # Test 1: Dev environment - both snapshots should be included
+    environment_dev = Environment(
+        name="dev",
+        snapshots=[snapshot_full.table_info, snapshot_dev_only.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+    )
+
+    plan_dev = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_full, snapshot_dev_only],
+        environment=environment_dev,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=True,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages_dev = build_plan_stages(plan_dev, state_reader, None)
+
+    # Find VirtualLayerUpdateStage
+    virtual_stage_dev = next(
+        stage for stage in stages_dev if isinstance(stage, VirtualLayerUpdateStage)
+    )
+
+    # In dev environment, both snapshots should be promoted regardless of virtual_environment_mode
+    assert {s.name for s in virtual_stage_dev.promoted_snapshots} == {
+        '"full_model"',
+        '"dev_only_model"',
+    }
+    assert len(virtual_stage_dev.demoted_snapshots) == 0
+
+    # Test 2: Production environment - only FULL mode snapshots should be included
+    environment_prod = Environment(
+        name="prod",
+        snapshots=[snapshot_full.table_info, snapshot_dev_only.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+    )
+
+    plan_prod = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_full, snapshot_dev_only],
+        environment=environment_prod,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages_prod = build_plan_stages(plan_prod, state_reader, None)
+
+    # Find VirtualLayerUpdateStage
+    virtual_stage_prod = next(
+        stage for stage in stages_prod if isinstance(stage, VirtualLayerUpdateStage)
+    )
+
+    # In production environment, only FULL mode snapshots should be promoted
+    assert {s.name for s in virtual_stage_prod.promoted_snapshots} == {'"full_model"'}
+    assert len(virtual_stage_prod.demoted_snapshots) == 0
+
+    # Test 3: Production environment with demoted snapshots
+    existing_environment = Environment(
+        name="prod",
+        snapshots=[snapshot_full.table_info, snapshot_dev_only.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+    state_reader.get_environment.return_value = existing_environment
+
+    # Remove both snapshots from the new environment
+    environment_prod_demote = Environment(
+        name="prod",
+        snapshots=[],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id="previous_plan",
+        promoted_snapshot_ids=[],
+    )
+
+    plan_prod_demote = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[],
+        environment=environment_prod_demote,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[snapshot_full.snapshot_id, snapshot_dev_only.snapshot_id],
+        requires_backfill=False,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages_prod_demote = build_plan_stages(plan_prod_demote, state_reader, None)
+
+    # Find VirtualLayerUpdateStage
+    virtual_stage_prod_demote = next(
+        stage for stage in stages_prod_demote if isinstance(stage, VirtualLayerUpdateStage)
+    )
+
+    # In production environment, only FULL mode snapshots should be demoted
+    assert len(virtual_stage_prod_demote.promoted_snapshots) == 0
+    assert {s.name for s in virtual_stage_prod_demote.demoted_snapshots} == {'"full_model"'}
+    assert (
+        virtual_stage_prod_demote.demoted_environment_naming_info
+        == existing_environment.naming_info
+    )
+
+
+def test_build_plan_stages_virtual_environment_mode_no_updates(
+    snapshot_a: Snapshot, make_snapshot, mocker: MockerFixture
+) -> None:
+    # Create snapshot with DEV_ONLY mode
+    snapshot_dev_only = make_snapshot(
+        SqlModel(
+            name="dev_only_model",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    snapshot_dev_only.virtual_environment_mode = VirtualEnvironmentMode.DEV_ONLY
+    snapshot_dev_only.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Mock state reader
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    # Production environment with only DEV_ONLY snapshots
+    environment = Environment(
+        name="prod",
+        snapshots=[snapshot_dev_only.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_dev_only.snapshot_id],
+    )
+
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_dev_only],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[snapshot_dev_only.snapshot_id],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages = build_plan_stages(plan, state_reader, None)
+
+    # No VirtualLayerUpdateStage should be created since all snapshots are filtered out
+    virtual_stages = [stage for stage in stages if isinstance(stage, VirtualLayerUpdateStage)]
+    assert len(virtual_stages) == 0
