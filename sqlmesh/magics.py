@@ -1155,7 +1155,6 @@ class SQLMeshMagics(Magics):
 
     def _fetchdf_athena_pandas_cursor(self, context: Context, sql: str) -> "pd.DataFrame":
         """Special implementation for Athena using PandasCursor with SQLGlot transpilation"""
-        import pandas as pd
         
         try:
             from pyathena.pandas.cursor import PandasCursor
