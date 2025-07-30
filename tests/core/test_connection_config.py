@@ -1692,7 +1692,13 @@ def test_mssql_pyodbc_connection_negative_timezone_offset():
 
 def test_fabric_connection_config_defaults(make_config):
     """Test Fabric connection config defaults to pyodbc and autocommit=True."""
-    config = make_config(type="fabric", host="localhost", check_import=False)
+    config = make_config(
+        type="fabric",
+        host="localhost",
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
+        check_import=False,
+    )
     assert isinstance(config, FabricConnectionConfig)
     assert config.driver == "pyodbc"
     assert config.autocommit is True
@@ -1713,6 +1719,8 @@ def test_fabric_connection_config_parameter_validation(make_config):
         trust_server_certificate=True,
         encrypt=False,
         odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
         check_import=False,
     )
     assert isinstance(config, FabricConnectionConfig)
@@ -1741,6 +1749,8 @@ def test_fabric_pyodbc_connection_string_generation():
             trust_server_certificate=True,
             encrypt=True,
             login_timeout=30,
+            workspace_id="test-workspace-id",
+            tenant_id="test-tenant-id",
             check_import=False,
         )
 
