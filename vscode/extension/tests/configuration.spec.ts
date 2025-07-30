@@ -66,7 +66,7 @@ ${sqlmeshLSPFile} "$@"`,
 }
 
 test.describe('Test LSP Entrypoint configuration', () => {
-  test('specify single entrypoint relalative path', async ({
+  test('specify single entrypoint relative path', async ({
     page,
     sharedCodeServer,
     tempDir,
