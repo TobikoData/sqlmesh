@@ -40,6 +40,7 @@ class Versions(PydanticModel):
     schema_version: int = 0
     sqlglot_version: str = "0.0.0"
     sqlmesh_version: str = "0.0.0"
+    pre_check_version: int = 0
 
     @property
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
@@ -54,9 +55,9 @@ class Versions(PydanticModel):
     def _package_version_validator(cls, v: t.Any) -> str:
         return "0.0.0" if v is None else str(v)
 
-    @field_validator("schema_version", mode="before")
+    @field_validator("schema_version", "pre_check_version", mode="before")
     @classmethod
-    def _schema_version_validator(cls, v: t.Any) -> int:
+    def _int_version_validator(cls, v: t.Any) -> int:
         return 0 if v is None else int(v)
 
 
@@ -66,7 +67,11 @@ MIGRATIONS = [
 ]
 SCHEMA_VERSION: int = len(MIGRATIONS)
 PRE_CHECK_VERSION: int = (
-    max(idx for idx, migration in enumerate(MIGRATIONS) if hasattr(migration, "pre_check")) + 1
+    max(
+        [idx for idx, migration in enumerate(MIGRATIONS) if hasattr(migration, "pre_check")],
+        default=-1,
+    )
+    + 1
 )
 
 
