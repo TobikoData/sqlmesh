@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import typing as t
+from types import ModuleType
 from unittest.mock import call, patch
 
 import duckdb  # noqa: TID253
@@ -11,8 +12,16 @@ import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.config import (
+    Config,
+    DuckDBConnectionConfig,
+    EnvironmentSuffixTarget,
+    GatewayConfig,
+    ModelDefaultsConfig,
+)
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment, EnvironmentStatements
@@ -48,6 +57,7 @@ from sqlmesh.core.state_sync.base import (
 )
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
+from tests.utils.test_helpers import use_terminal_console
 
 pytestmark = pytest.mark.slow
 
@@ -3629,3 +3639,81 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
         "@grant_schema_usage()",
         "@grant_select_privileges()",
     ]
+
+
+@use_terminal_console
+def test_pre_checks(tmp_path, mocker):
+    init_example_project(tmp_path, engine_type="duckdb")
+
+    db_path = str(tmp_path / "db.db")
+    config = Config(
+        gateways={"main": GatewayConfig(connection=DuckDBConnectionConfig(database=db_path))},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+    context.plan(auto_apply=True, no_prompts=True)
+
+    def mock_migrate(state_sync, **kwargs):
+        pass
+
+    def mock_pre_check_with_warnings(state_sync):
+        return [
+            "Warning: This migration will break compatibility with older versions",
+            "Warning: You must update all model configurations before applying this migration",
+            "Warning: Existing snapshots will need to be rebuilt",
+        ]
+
+    def mock_pre_check_without_warnings(state_sync):
+        return []
+
+    # Create a mock migration module with a pre_check function
+    mock_migration = ModuleType("v9999_test_pre_check")
+
+    setattr(mock_migration, "migrate", mock_migrate)
+    setattr(mock_migration, "pre_check", mock_pre_check_with_warnings)
+
+    versions_before_migrate = context.state_sync.get_versions()
+
+    import sqlmesh.core.state_sync as state_sync
+
+    test_migrations = state_sync.db.migrator.MIGRATIONS + [mock_migration]
+
+    # Test 1: Pre-check warnings are properly collected and displayed, user rejects migration
+    with (
+        patch.object(state_sync.db.migrator, "MIGRATIONS", test_migrations),
+        patch.object(context.console, "_confirm", return_value=False),
+    ):
+        console = context.console
+        log_pre_check_warnings_spy = mocker.spy(console, "log_pre_check_warnings")
+
+        context.migrate(pre_check_only=False)
+
+        calls = log_pre_check_warnings_spy.mock_calls
+        assert len(calls) == 1
+
+        pre_check_warnings = calls[0].args[0]
+        assert len(pre_check_warnings) == 1
+
+        assert pre_check_warnings[0][0] == "v9999_test_pre_check"
+        assert len(pre_check_warnings[0][1]) == 3
+        assert all(warning.startswith("Warning:") for warning in pre_check_warnings[0][1])
+
+        assert context.state_sync.get_versions() == versions_before_migrate
+
+    update_versions_spy = mocker.spy(state_sync.db.version.VersionState, "update_versions")
+
+    # Test 2: User accepts migration after being notified about pre-check warnings
+    with (
+        patch.object(state_sync.db.migrator, "MIGRATIONS", test_migrations),
+        patch.object(context.console, "_confirm", return_value=True),
+    ):
+        context.migrate(pre_check_only=False)
+        assert len(update_versions_spy.mock_calls) == 1
+
+    # Test 3: Pre-check without warning should automatically reuslt in a migration
+    setattr(mock_migration, "pre_check", mock_pre_check_without_warnings)
+    with patch.object(state_sync.db.migrator, "MIGRATIONS", test_migrations):
+        # Since the version module's SCHEMA_VERSION, etc, weren't patched, the old versions
+        # are still used, so the following should result in hitting the update_versions path
+        context.migrate(pre_check_only=False)
+        assert len(update_versions_spy.mock_calls) == 2
