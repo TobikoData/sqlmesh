@@ -34,7 +34,7 @@ The notebook interface works with both Jupyter and Databricks notebooks. Learn m
 ## 1. Create the SQLMesh project
 First, create a SQLMesh project directory with your operating system's graphical or command-line tools. Next, create a Jupyter or Databricks notebook file - it does not need to be in the SQLMesh project directory.
 
-If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
+If using a python virtual environment, ensure it's activated first by running the `source .venv/bin/activate` command from the folder used during [installation](../installation.md).
 
 Import the SQLMesh library to load the notebook magic commands:
 

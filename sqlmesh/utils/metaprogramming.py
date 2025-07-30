@@ -5,6 +5,7 @@ import dis
 import importlib
 import inspect
 import linecache
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,9 @@ from sqlmesh.core import constants as c
 from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
+
 
 IGNORE_DECORATORS = {"macro", "model", "signal"}
 SERIALIZABLE_CALLABLES = (type, types.FunctionType)
@@ -424,8 +428,11 @@ class Executable(PydanticModel):
         return self.kind == ExecutableKind.VALUE
 
     @classmethod
-    def value(cls, v: t.Any, is_metadata: t.Optional[bool] = None) -> Executable:
-        return Executable(payload=repr(v), kind=ExecutableKind.VALUE, is_metadata=is_metadata)
+    def value(
+        cls, v: t.Any, is_metadata: t.Optional[bool] = None, sort_root_dict: bool = False
+    ) -> Executable:
+        payload = _dict_sort(v) if sort_root_dict else repr(v)
+        return Executable(payload=payload, kind=ExecutableKind.VALUE, is_metadata=is_metadata)
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
@@ -631,6 +638,15 @@ def print_exception(
     """
     tb = format_evaluated_code_exception(exception, python_env)
     out.write(tb)
+
+
+def _dict_sort(obj: t.Any) -> str:
+    try:
+        if isinstance(obj, dict):
+            obj = dict(sorted(obj.items(), key=lambda x: str(x[0])))
+    except Exception:
+        logger.warning("Failed to sort non-recursive dict", exc_info=True)
+    return repr(obj)
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:

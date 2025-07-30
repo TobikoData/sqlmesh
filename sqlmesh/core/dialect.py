@@ -346,12 +346,14 @@ def _parse_select(
     table: bool = False,
     parse_subquery_alias: bool = True,
     parse_set_operation: bool = True,
+    consume_pipe: bool = True,
 ) -> t.Optional[exp.Expression]:
     select = self.__parse_select(  # type: ignore
         nested=nested,
         table=table,
         parse_subquery_alias=parse_subquery_alias,
         parse_set_operation=parse_set_operation,
+        consume_pipe=consume_pipe,
     )
 
     if (
@@ -415,6 +417,20 @@ def _parse_limit(
 
     macro.this.append("expressions", self.__parse_limit(this, top=top, skip_limit_token=True))  # type: ignore
     return macro
+
+
+def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expression]:
+    wrapped = self._match(TokenType.L_PAREN, advance=False)
+
+    # The base _parse_value method always constructs a Tuple instance. This is problematic when
+    # generating values with a macro function, because it's impossible to tell whether the user's
+    # intention was to construct a row or a column with the VALUES expression. To avoid this, we
+    # amend the AST such that the Tuple is replaced by the macro function call itself.
+    expr = self.__parse_value()  # type: ignore
+    if expr and not wrapped and isinstance(seq_get(expr.expressions, 0), MacroFunc):
+        return expr.expressions[0]
+
+    return expr
 
 
 def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
@@ -876,7 +892,7 @@ def parse(
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
 
-    tokens = dialect.tokenizer.tokenize(sql)
+    tokens = dialect.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
 
@@ -1061,6 +1077,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_limit)
+    _override(Parser, _parse_value)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)
@@ -1173,7 +1190,7 @@ def set_default_catalog(
     return table
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16384)
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
     default_catalog: t.Optional[str],
@@ -1386,17 +1403,27 @@ def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
 
-def replace_merge_table_aliases(expression: exp.Expression) -> exp.Expression:
+def replace_merge_table_aliases(
+    expression: exp.Expression, dialect: t.Optional[str] = None
+) -> exp.Expression:
     """
     Resolves references from the "source" and "target" tables (or their DBT equivalents)
     with the corresponding SQLMesh merge aliases (MERGE_SOURCE_ALIAS and MERGE_TARGET_ALIAS)
     """
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
+    normalized_merge_source_alias = quote_identifiers(
+        normalize_identifiers(exp.to_identifier(MERGE_SOURCE_ALIAS), dialect), dialect=dialect
+    )
+
+    normalized_merge_target_alias = quote_identifiers(
+        normalize_identifiers(exp.to_identifier(MERGE_TARGET_ALIAS), dialect), dialect=dialect
+    )
+
     if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
         if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS))
+            first_part.replace(normalized_merge_target_alias)
         elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS))
+            first_part.replace(normalized_merge_source_alias)
 
     return expression

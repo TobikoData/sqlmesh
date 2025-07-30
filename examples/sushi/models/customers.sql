@@ -37,8 +37,9 @@ LEFT JOIN (
       @ADD_ONE(1) AS another_column,
     FROM current_marketing_outer
   )
-  SELECT * FROM current_marketing
+  SELECT current_marketing.* FROM current_marketing WHERE current_marketing.customer_id != 100
 ) AS m
   ON o.customer_id = m.customer_id
 LEFT JOIN raw.demographics AS d
   ON o.customer_id = d.customer_id
+WHERE sushi.orders.customer_id > 0

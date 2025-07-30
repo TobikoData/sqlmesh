@@ -84,7 +84,7 @@ class ContextDiff(PydanticModel):
     """Python dependencies."""
     previous_environment_statements: t.List[EnvironmentStatements] = []
     """Previous environment statements."""
-    environment_statements: t.List[EnvironmentStatements] = []
+    environment_statements: t.List[EnvironmentStatements]
     """Environment statements."""
     diff_rendered: bool = False
     """Whether the diff should compare raw vs rendered models"""
@@ -268,6 +268,7 @@ class ContextDiff(PydanticModel):
         if not env:
             raise SQLMeshError(f"Environment '{environment}' must exist for this operation.")
 
+        environment_statements = state_reader.get_environment_statements(environment)
         snapshots = state_reader.get_snapshots(env.snapshots)
 
         return ContextDiff(
@@ -288,6 +289,7 @@ class ContextDiff(PydanticModel):
             previous_requirements=env.requirements,
             requirements=env.requirements,
             previous_environment_statements=[],
+            environment_statements=environment_statements,
             previous_gateway_managed_virtual_layer=env.gateway_managed,
             gateway_managed_virtual_layer=env.gateway_managed,
         )
@@ -309,7 +311,9 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_environment_statements_changes(self) -> bool:
-        return self.environment_statements != self.previous_environment_statements
+        return sorted(self.environment_statements, key=lambda s: s.project or "") != sorted(
+            self.previous_environment_statements, key=lambda s: s.project or ""
+        )
 
     @property
     def has_snapshot_changes(self) -> bool:

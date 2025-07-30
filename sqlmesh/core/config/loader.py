@@ -6,6 +6,7 @@ import typing as t
 from pathlib import Path
 
 from pydantic import ValidationError
+from dotenv import load_dotenv
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import constants as c
@@ -25,6 +26,7 @@ def load_configs(
     config_type: t.Type[C],
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
+    dotenv_path: t.Optional[Path] = None,
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
@@ -34,6 +36,14 @@ def load_configs(
         for path in ensure_list(paths)
         for p in (glob.glob(str(path)) or [str(path)])
     ]
+
+    if dotenv_path and dotenv_path.exists() and dotenv_path.is_file():
+        load_dotenv(dotenv_path=dotenv_path, override=True)
+    else:
+        for path in absolute_paths:
+            env_file = path / ".env"
+            if env_file.exists() and env_file.is_file():
+                load_dotenv(dotenv_path=env_file, override=True)
 
     if not isinstance(config, str):
         if type(config) != config_type:
@@ -81,6 +91,7 @@ def load_config_from_paths(
             "SQLMesh project config could not be found. Point the cli to the project path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
         )
 
+    yaml_config_path: t.Optional[Path] = None
     for path in [*project_paths, *personal_paths]:
         if not path.exists():
             continue
@@ -97,8 +108,9 @@ def load_config_from_paths(
         if extension in ("yml", "yaml"):
             if config_name != "config" and not python_config:
                 raise ConfigError(
-                    "YAML configs do not support multiple configs. Use Python instead."
+                    "YAML configs do not support multiple configs. Use Python instead.",
                 )
+            yaml_config_path = path.resolve()
             non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
             try:
@@ -139,7 +151,8 @@ def load_config_from_paths(
     except ValidationError as e:
         raise ConfigError(
             validation_error_message(e, "Invalid project config:")
-            + "\n\nVerify your config.yaml and environment variables."
+            + "\n\nVerify your config.yaml and environment variables.",
+            location=yaml_config_path,
         )
 
     no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
@@ -156,7 +169,14 @@ def load_config_from_paths(
 
 
 def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
-    return yaml_load(path)
+    content = yaml_load(path)
+    if not isinstance(content, dict):
+        raise ConfigError(
+            f"Invalid YAML configuration: expected a dictionary but got {type(content).__name__}. "
+            f"Please check the YAML syntax in your config file.",
+            location=path,
+        )
+    return content
 
 
 def load_config_from_python_module(
@@ -164,8 +184,14 @@ def load_config_from_python_module(
     module_path: Path,
     config_name: str = "config",
 ) -> C:
-    with sys_path(module_path.parent):
-        config_module = import_python_file(module_path, module_path.parent)
+    try:
+        with sys_path(module_path.parent):
+            config_module = import_python_file(module_path, module_path.parent)
+    except Exception as e:
+        raise ConfigError(
+            f"Failed to load config file: {e}",
+            location=module_path,
+        )
 
     try:
         config_obj = getattr(config_module, config_name)
@@ -174,7 +200,8 @@ def load_config_from_python_module(
 
     if config_obj is None or not isinstance(config_obj, Config):
         raise ConfigError(
-            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'."
+            f"Config needs to be a valid object of type sqlmesh.core.config.Config. Found `{config_obj}` instead at '{module_path}'.",
+            module_path,
         )
 
     return (

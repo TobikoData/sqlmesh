@@ -1,6 +1,8 @@
 from __future__ import annotations
 import logging
 import typing as t
+import time
+from datetime import datetime
 from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
@@ -24,6 +26,7 @@ from sqlmesh.core.snapshot import (
     snapshots_to_dag,
     Intervals,
 )
+from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
@@ -39,7 +42,16 @@ from sqlmesh.utils.date import (
     to_timestamp,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, NodeAuditsErrors, CircuitBreakerError, SQLMeshError
+from sqlmesh.utils.errors import (
+    AuditError,
+    NodeAuditsErrors,
+    CircuitBreakerError,
+    SQLMeshError,
+    SignalEvalError,
+)
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import ExecutionContext
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -94,7 +106,8 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -112,7 +125,8 @@ class Scheduler:
             execution_time: The date/time reference to use for execution time. Defaults to now.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
-            interval_end_per_model: The mapping from model FQNs to target end dates.
+            start_override_per_model: A mapping of model FQNs to target start dates.
+            end_override_per_model: A mapping of model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -125,7 +139,8 @@ class Scheduler:
             execution_time=execution_time,
             deployability_index=deployability_index,
             restatements=restatements,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
         )
@@ -146,6 +161,7 @@ class Scheduler:
         deployability_index: DeployabilityIndex,
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -177,6 +193,7 @@ class Scheduler:
             snapshots=snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
+            is_restatement=is_restatement,
             **kwargs,
         )
         audit_results = self._audit_snapshot(
@@ -201,7 +218,8 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -216,7 +234,8 @@ class Scheduler:
             end=end,
             execution_time=execution_time,
             remove_intervals=restatements,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -232,7 +251,8 @@ class Scheduler:
         start: TimeLike,
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -255,7 +275,8 @@ class Scheduler:
             end=end,
             execution_time=execution_time,
             remove_intervals=remove_intervals,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -269,6 +290,7 @@ class Scheduler:
         self,
         merged_intervals: SnapshotToIntervals,
         deployability_index: t.Optional[DeployabilityIndex],
+        environment_naming_info: EnvironmentNamingInfo,
     ) -> t.Dict[Snapshot, Intervals]:
         dag = snapshots_to_dag(merged_intervals)
 
@@ -303,7 +325,12 @@ class Scheduler:
                 default_catalog=self.default_catalog,
             )
 
-            intervals = snapshot.check_ready_intervals(intervals, context)
+            intervals = self._check_ready_intervals(
+                snapshot,
+                intervals,
+                context,
+                environment_naming_info,
+            )
             unready -= set(intervals)
 
             for parent in snapshot.parents:
@@ -324,10 +351,14 @@ class Scheduler:
                 ):
                     batches.append((next_batch[0][0], next_batch[-1][-1]))
                     next_batch = []
+
                 next_batch.append(interval)
+
             if next_batch:
                 batches.append((next_batch[0][0], next_batch[-1][-1]))
+
             snapshot_batches[snapshot] = batches
+
         return snapshot_batches
 
     def run_merged_intervals(
@@ -342,6 +373,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -359,7 +391,9 @@ class Scheduler:
         """
         execution_time = execution_time or now_timestamp()
 
-        batched_intervals = self.batch_intervals(merged_intervals, deployability_index)
+        batched_intervals = self.batch_intervals(
+            merged_intervals, deployability_index, environment_naming_info
+        )
 
         self.console.start_evaluation_progress(
             batched_intervals,
@@ -416,6 +450,10 @@ class Scheduler:
                         execution_time=execution_time,
                     )
                 else:
+                    # Determine if this snapshot and interval is a restatement (for SCD type 2)
+                    is_restatement = (
+                        restatements is not None and snapshot.snapshot_id in restatements
+                    )
                     audit_results = self.evaluate(
                         snapshot=snapshot,
                         environment_naming_info=environment_naming_info,
@@ -424,6 +462,7 @@ class Scheduler:
                         execution_time=execution_time,
                         deployability_index=deployability_index,
                         batch_index=batch_idx,
+                        is_restatement=is_restatement,
                     )
 
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
@@ -441,12 +480,27 @@ class Scheduler:
 
         try:
             with self.snapshot_evaluator.concurrent_context():
-                return concurrent_apply_to_dag(
+                errors, skipped_intervals = concurrent_apply_to_dag(
                     dag,
                     evaluate_node,
                     self.max_workers,
                     raise_on_error=False,
                 )
+                self.console.stop_evaluation_progress(success=not errors)
+
+                skipped_snapshots = {i[0] for i in skipped_intervals}
+                self.console.log_skipped_models(skipped_snapshots)
+                for skipped in skipped_snapshots:
+                    logger.info(f"SKIPPED snapshot {skipped}\n")
+
+                for error in errors:
+                    if isinstance(error.__cause__, CircuitBreakerError):
+                        raise error.__cause__
+                    logger.info(str(error), exc_info=error)
+
+                self.console.log_failed_models(errors)
+
+                return errors, skipped_intervals
         finally:
             if run_environment_statements:
                 execute_environment_statements(
@@ -527,7 +581,8 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         remove_intervals: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-        interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+        start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+        end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -548,7 +603,8 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             remove_intervals: A dict of snapshots to their intervals. For evaluation, these are the intervals that will be restated. For audits,
                               these are the intervals that will be reaudited
-            interval_end_per_model: The mapping from model FQNs to target end dates.
+            start_override_per_model: A mapping of model FQNs to target start dates.
+            end_override_per_model: A mapping of model FQNs to target end dates.
             ignore_cron: Whether to ignore the node's cron schedule.
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -596,7 +652,8 @@ class Scheduler:
             execution_time,
             deployability_index=deployability_index,
             restatements=remove_intervals,
-            interval_end_per_model=interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=end_override_per_model,
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
@@ -604,7 +661,7 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
-        errors, skipped_intervals = self.run_merged_intervals(
+        errors, _ = self.run_merged_intervals(
             merged_intervals=merged_intervals,
             deployability_index=deployability_index,
             environment_naming_info=environment_naming_info,
@@ -614,21 +671,8 @@ class Scheduler:
             end=end,
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
+            restatements=remove_intervals,
         )
-
-        self.console.stop_evaluation_progress(success=not errors)
-
-        skipped_snapshots = {i[0] for i in skipped_intervals}
-        self.console.log_skipped_models(skipped_snapshots)
-        for skipped in skipped_snapshots:
-            logger.info(f"SKIPPED snapshot {skipped}\n")
-
-        for error in errors:
-            if isinstance(error.__cause__, CircuitBreakerError):
-                raise error.__cause__
-            logger.info(str(error), exc_info=error)
-
-        self.console.log_failed_models(errors)
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
 
@@ -695,6 +739,76 @@ class Scheduler:
 
         return audit_results
 
+    def _check_ready_intervals(
+        self,
+        snapshot: Snapshot,
+        intervals: Intervals,
+        context: ExecutionContext,
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> Intervals:
+        """Checks if the intervals are ready for evaluation for the given snapshot.
+
+        This implementation also includes the signal progress tracking.
+        Note that this will handle gaps in the provided intervals. The returned intervals
+        may introduce new gaps.
+
+        Args:
+            snapshot: The snapshot to check.
+            intervals: The intervals to check.
+            context: The context to use.
+            environment_naming_info: The environment naming info to use.
+
+        Returns:
+            The intervals that are ready for evaluation.
+        """
+        signals = snapshot.is_model and snapshot.model.render_signal_calls()
+
+        if not (signals and signals.signals_to_kwargs):
+            return intervals
+
+        self.console.start_signal_progress(
+            snapshot,
+            self.default_catalog,
+            environment_naming_info or EnvironmentNamingInfo(),
+        )
+
+        for signal_idx, (signal_name, kwargs) in enumerate(signals.signals_to_kwargs.items()):
+            # Capture intervals before signal check for display
+            intervals_to_check = merge_intervals(intervals)
+
+            signal_start_ts = time.perf_counter()
+
+            try:
+                intervals = check_ready_intervals(
+                    signals.prepared_python_env[signal_name],
+                    intervals,
+                    context,
+                    python_env=signals.python_env,
+                    dialect=snapshot.model.dialect,
+                    path=snapshot.model._path,
+                    kwargs=kwargs,
+                )
+            except SQLMeshError as e:
+                raise SignalEvalError(
+                    f"{e} '{signal_name}' for '{snapshot.model.name}' at {snapshot.model._path}"
+                )
+
+            duration = time.perf_counter() - signal_start_ts
+
+            self.console.update_signal_progress(
+                snapshot=snapshot,
+                signal_name=signal_name,
+                signal_idx=signal_idx,
+                total_signals=len(signals.signals_to_kwargs),
+                ready_intervals=merge_intervals(intervals),
+                check_intervals=intervals_to_check,
+                duration=duration,
+            )
+
+        self.console.stop_signal_progress()
+
+        return intervals
+
 
 def merged_missing_intervals(
     snapshots: t.Collection[Snapshot],
@@ -703,7 +817,8 @@ def merged_missing_intervals(
     execution_time: t.Optional[TimeLike] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> SnapshotToIntervals:
@@ -721,7 +836,8 @@ def merged_missing_intervals(
         execution_time: The date/time reference to use for execution time. Defaults to now.
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         restatements: A set of snapshot names being restated.
-        interval_end_per_model: The mapping from model FQNs to target end dates.
+        start_override_per_model: A mapping of model FQNs to target start dates.
+        end_override_per_model: A mapping of model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
         end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -736,7 +852,8 @@ def merged_missing_intervals(
         deployability_index=deployability_index,
         execution_time=execution_time or now_timestamp(),
         restatements=restatements,
-        interval_end_per_model=interval_end_per_model,
+        start_override_per_model=start_override_per_model,
+        end_override_per_model=end_override_per_model,
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     )
@@ -750,7 +867,8 @@ def compute_interval_params(
     deployability_index: t.Optional[DeployabilityIndex] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None,
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
 ) -> SnapshotToIntervals:
@@ -768,7 +886,8 @@ def compute_interval_params(
         deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         execution_time: The date/time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
-        interval_end_per_model: The mapping from model FQNs to target end dates.
+        start_override_per_model: A mapping of model FQNs to target start dates.
+        end_override_per_model: A mapping of model FQNs to target end dates.
         ignore_cron: Whether to ignore the node's cron schedule.
         end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
@@ -785,7 +904,8 @@ def compute_interval_params(
         execution_time=execution_time,
         restatements=restatements,
         deployability_index=deployability_index,
-        interval_end_per_model=interval_end_per_model,
+        start_override_per_model=start_override_per_model,
+        end_override_per_model=end_override_per_model,
         ignore_cron=ignore_cron,
         end_bounded=end_bounded,
     ).items():

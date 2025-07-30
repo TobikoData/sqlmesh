@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 import unittest
 from unittest.mock import call, patch
-from shutil import copyfile
+from shutil import copyfile, rmtree
 
 import pandas as pd  # noqa: TID253
 import pytest
@@ -14,7 +14,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from IPython.utils.capture import capture_output
 
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
@@ -31,6 +31,8 @@ from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.core.test.context import TestExecutionContext
+from sqlmesh.utils import Verbosity
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, TestError
 from sqlmesh.utils.yaml import dump as dump_yaml
 from sqlmesh.utils.yaml import load as load_yaml
@@ -68,11 +70,14 @@ def _create_model(
     meta: str = SUSHI_FOO_META,
     dialect: t.Optional[str] = None,
     default_catalog: t.Optional[str] = None,
+    **kwargs: t.Any,
 ) -> SqlModel:
     parsed_definition = parse(f"{meta};{query}", default_dialect=dialect)
     return t.cast(
         SqlModel,
-        load_sql_based_model(parsed_definition, dialect=dialect, default_catalog=default_catalog),
+        load_sql_based_model(
+            parsed_definition, dialect=dialect, default_catalog=default_catalog, **kwargs
+        ),
     )
 
 
@@ -1021,6 +1026,97 @@ test_foo:
     )
 
 
+def test_index_preservation_with_later_rows() -> None:
+    # Test comparison with differences in later rows
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 300
+      - id: 4
+        value: 400
+  outputs:
+    query:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 999
+      - id: 4
+        value: 888
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT id, value FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+            "   value       \n"
+            "     exp    act\n"
+            "2  999.0  300.0\n"
+            "3  888.0  400.0\n"
+        ),
+    )
+
+    # Test with null values in later rows
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: null
+      - id: 4
+        value: 400
+      - id: 5
+        value: null
+  outputs:
+    query:
+      - id: 1
+        value: 100
+      - id: 2
+        value: 200
+      - id: 3
+        value: 300
+      - id: 4
+        value: null
+      - id: 5
+        value: 500
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT id, value FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        ).run(),
+        expected_msg=(
+            "AssertionError: Data mismatch (exp: expected, act: actual)\n\n"
+            "   value       \n"
+            "     exp    act\n"
+            "2  300.0    NaN\n"
+            "3    NaN  400.0\n"
+            "4  500.0    NaN\n"
+        ),
+    )
+
+
 def test_unknown_column_error() -> None:
     _check_successful_or_raise(
         _create_test(
@@ -1405,7 +1501,7 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
 
 
 def test_generate_input_data_using_sql(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         default_connection=DuckDBConnectionConfig(),
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -1591,7 +1687,7 @@ test_pyspark_model:
 
 
 def test_variable_usage(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     variables = {"gold": "gold_db", "silver": "silver_db"}
     incorrect_variables = {"gold": "foo", "silver": "bar"}
@@ -1872,7 +1968,7 @@ outputs:
 
 
 def test_test_generation(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2003,7 +2099,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
         )
         return load_yaml(context.path / c.TESTS / "test_foo.yaml")
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2022,7 +2118,7 @@ def test_test_generation_with_data_structures(tmp_path: Path, column: str, expec
 
 
 def test_test_generation_with_timestamp(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2059,7 +2155,7 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
 def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> None:
     from decimal import Decimal
 
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2095,7 +2191,7 @@ def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> 
 
 
 def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         default_connection=DuckDBConnectionConfig(),
@@ -2127,7 +2223,7 @@ def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
 
 
 def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         gateways={
@@ -2218,8 +2314,9 @@ test_resolve_template_macro:
     _check_successful_or_raise(context.test())
 
 
+@use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     original_test_file = tmp_path / "tests" / "test_full_model.yaml"
 
@@ -2243,8 +2340,8 @@ test_example_full_model:
       rows:
       - item_id: 1
         num_orders: 2
-      - item_id: 2
-        num_orders: 2 
+      - item_id: 4
+        num_orders: 3
         """
     )
 
@@ -2255,45 +2352,185 @@ test_example_full_model:
     )
     context = Context(paths=tmp_path, config=config)
 
-    # Case 1: Assert the log report is structured correctly
-    with capture_output() as output:
+    # Case 1: Ensure the log report is structured correctly
+    with capture_output() as captured_output:
         context.test()
 
-    # Order may change due to concurrent execution
-    assert "F." in output.stderr or ".F" in output.stderr
-    assert (
-        f"""======================================================================
-FAIL: test_example_full_model ({new_test_file})
-This is a test
-----------------------------------------------------------------------
-AssertionError: Data mismatch (exp: expected, act: actual)
+    output = captured_output.stdout
 
-  num_orders     
-         exp  act
-1        2.0  1.0
+    # Order may change due to concurrent execution
+    assert "F." in output or ".F" in output
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃     ┃ item_id:        ┃                 ┃ num_orders:     ┃ num_orders:      ┃
+┃ Row ┃ Expected        ┃ item_id: Actual ┃ Expected        ┃ Actual           ┃
+┡━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│  1  │       4.0       │       2.0       │       3.0       │       1.0        │
+└─────┴─────────────────┴─────────────────┴─────────────────┴──────────────────┘
 
 ----------------------------------------------------------------------"""
-        in output.stderr
+        in output
     )
 
-    assert "Ran 2 tests" in output.stderr
-    assert "FAILED (failures=1)" in output.stderr
+    assert "Ran 2 tests" in output
+    assert "Failed tests (1):" in output
 
-    # Case 2: Assert that concurrent execution is working properly
+    # Case 2: Ensure that the verbose log report is structured correctly
+    with capture_output() as captured_output:
+        context.test(verbosity=Verbosity.VERBOSE)
+
+    output = captured_output.stdout
+
+    assert (
+        f"""This is a test
+----------------------------------------------------------------------
+                 Column 'item_id' mismatch                  
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      1      │          4.0           │        2.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+                Column 'num_orders' mismatch                
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃     Row     ┃        Expected        ┃      Actual       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│      1      │          3.0           │        1.0        │
+└─────────────┴────────────────────────┴───────────────────┘
+
+----------------------------------------------------------------------"""
+        in output
+    )
+
+    # Case 3: Assert that concurrent execution is working properly
     for i in range(50):
         copyfile(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml")
         copyfile(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml")
 
-    with capture_output() as output:
+    with capture_output() as captured_output:
         context.test()
 
-    assert "Ran 102 tests" in output.stderr
-    assert "FAILED (failures=51)" in output.stderr
+    output = captured_output.stdout
+
+    assert "Ran 102 tests" in output
+    assert "Failed tests (51):" in output
+
+    # Case 4: Test that wide tables are split into even chunks for default verbosity
+    rmtree(tmp_path / "tests")
+
+    wide_model_query = (
+        "SELECT 1 AS col_1, 2 AS col_2, 3 AS col_3, 4 AS col_4, 5 AS col_5, 6 AS col_6, 7 AS col_7"
+    )
+
+    context.upsert_model(
+        _create_model(
+            meta="MODEL(name test.test_wide_model)",
+            query=wide_model_query,
+            default_catalog=context.default_catalog,
+        )
+    )
+
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    wide_test_file = tmp_path / "tests" / "test_wide_model.yaml"
+    wide_test_file_content = """
+    test_wide_model:
+      model: test.test_wide_model
+      outputs:
+        query:
+          rows:
+          - col_1: 6
+            col_2: 5
+            col_3: 4
+            col_4: 3
+            col_5: 2
+            col_6: 1
+            col_7: 0
+ 
+    """
+
+    wide_test_file.write_text(wide_test_file_content)
+
+    with capture_output() as captured_output:
+        context.test()
+
+    assert (
+        """Data mismatch                                  
+┏━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
+┃     ┃ col_1: ┃ col_1: ┃ col_2: ┃ col_2: ┃ col_3: ┃ col_3: ┃ col_4:  ┃ col_4: ┃
+┃ Row ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expec… ┃ Actual ┃ Expect… ┃ Actual ┃
+┡━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│  0  │   6    │   1    │   5    │   2    │   4    │   3    │    3    │   4    │
+└─────┴────────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┘
+
+                                 Data mismatch                                  
+┏━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃     ┃ col_5:    ┃ col_5:    ┃ col_6:    ┃ col_6:    ┃ col_7:    ┃ col_7:     ┃
+┃ Row ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual    ┃ Expected  ┃ Actual     ┃
+┡━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│  0  │     2     │     5     │     1     │     6     │     0     │     7      │
+└─────┴───────────┴───────────┴───────────┴───────────┴───────────┴────────────┘"""
+        in captured_output.stdout
+    )
+
+    # Case 5: Test null value difference in the 3rd row (index 2)
+    rmtree(tmp_path / "tests")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+
+    null_test_file = tmp_path / "tests" / "test_null_in_third_row.yaml"
+    null_test_file.write_text(
+        """
+test_null_third_row:
+  model: sqlmesh_example.full_model
+  description: Test null value in third row
+  inputs:
+    sqlmesh_example.incremental_model:
+      rows:
+      - id: 1
+        item_id: 1
+      - id: 2
+        item_id: 1
+      - id: 3
+        item_id: 2
+      - id: 4
+        item_id: 3
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+      - item_id: 3
+        num_orders: null
+        """
+    )
+
+    with capture_output() as captured_output:
+        context.test()
+
+    output = captured_output.stdout
+
+    # Check for null value difference in the 3rd row (index 2)
+    assert (
+        """
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Row  ┃   num_orders: Expected    ┃  num_orders: Actual   ┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│  2   │            nan            │          1.0          │
+└──────┴───────────────────────────┴───────────────────────┘"""
+        in output
+    )
 
 
 @use_terminal_console
 def test_test_output_with_invalid_model_name(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     wrong_test_file = tmp_path / "tests" / "test_incorrect_model_name.yaml"
     wrong_test_file.write_text(
@@ -2330,19 +2567,15 @@ test_example_full_model:
         with capture_output() as output:
             context.test()
 
-        assert (
-            f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
-            in mock_logger.call_args[0][0]
-        )
-        assert (
-            ".\n----------------------------------------------------------------------\nRan 1 test in"
-            in output.stderr
-        )
-        assert "OK" in output.stderr
+    assert (
+        f"""Model '"invalid_model"' was not found at {wrong_test_file}"""
+        in mock_logger.call_args[0][0]
+    )
+    assert "Successfully Ran 1 test" in output.stdout
 
 
 def test_number_of_tests_found(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     # Example project contains 1 test and we add a new file with 2 tests
     test_file = tmp_path / "tests" / "test_new.yaml"
@@ -2420,7 +2653,7 @@ from sqlmesh.core.macros import macro
 @macro()
 def test_datetime_now(evaluator):
   return exp.cast(exp.Literal.string(datetime.datetime.now(tz=datetime.timezone.utc)), exp.DataType.Type.DATE)
-  
+
 @macro()
 def test_sqlglot_expr(evaluator):
   return exp.CurrentDate().sql(evaluator.dialect)
@@ -2553,6 +2786,7 @@ test_test_upstream_table_python:
     )
 
 
+@use_terminal_console
 @pytest.mark.parametrize("is_error", [True, False])
 def test_model_test_text_result_reporting_no_traceback(
     sushi_context: Context, full_model_with_two_ctes: SqlModel, is_error: bool
@@ -2596,10 +2830,14 @@ test_foo:
         else:
             result.addFailure(test, (e.__class__, e, e.__traceback__))
 
-    result.log_test_report(0)
+        # Since we're simulating an error/failure, this doesn't go through the
+        # test runner logic, so we need to manually set how many tests were ran
+        result.testsRun = 1
 
-    stream.seek(0)
-    output = stream.read()
+    with capture_output() as captured_output:
+        get_console().log_test_results(result, "duckdb")
+
+    output = captured_output.stdout
 
     # Make sure that the traceback is not printed
     assert "Traceback" not in output
@@ -2640,3 +2878,452 @@ def test_timestamp_normalization() -> None:
             context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
         ).run()
     )
+
+
+@use_terminal_console
+def test_disable_test_logging_if_no_tests_found(mocker: MockerFixture, tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_test_connection=DuckDBConnectionConfig(concurrent_tasks=8),
+    )
+
+    rmtree(tmp_path / "tests")
+
+    with capture_output() as captured_output:
+        context = Context(paths=tmp_path, config=config)
+        context.plan(no_prompts=True, auto_apply=True)
+
+    output = captured_output.stdout
+    assert "test" not in output.lower()
+
+
+def test_test_generation_with_timestamp_nat(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    foo_sql_file = tmp_path / "models" / "foo.sql"
+    foo_sql_file.write_text(
+        "MODEL (name sqlmesh_example.foo); SELECT ts_col FROM sqlmesh_example.bar;"
+    )
+    bar_sql_file = tmp_path / "models" / "bar.sql"
+    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT ts_col FROM external_table;")
+
+    context = Context(paths=tmp_path, config=config)
+
+    # This simulates the scenario where upstream models have NULL timestamp values
+    input_queries = {
+        "sqlmesh_example.bar": """
+        SELECT ts_col FROM (
+            VALUES
+                (TIMESTAMP '2024-09-20 11:30:00.123456789'),
+                (CAST(NULL AS TIMESTAMP)),
+                (TIMESTAMP '2024-09-21 15:45:00.987654321')
+        ) AS t(ts_col)
+        """
+    }
+
+    # This should not raise an exception even with NULL timestamp values
+    context.create_test("sqlmesh_example.foo", input_queries=input_queries, overwrite=True)
+
+    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
+    assert len(test) == 1
+    assert "test_foo" in test
+
+    # Verify that the test was created with correct input and output data
+    inputs = test["test_foo"]["inputs"]
+    outputs = test["test_foo"]["outputs"]
+
+    # Check that we have the expected input table
+    assert '"memory"."sqlmesh_example"."bar"' in inputs
+    bar_data = inputs['"memory"."sqlmesh_example"."bar"']
+
+    # Verify we have 3 rows (2 with timestamps, 1 with NULL)
+    assert len(bar_data) == 3
+
+    # Verify that non-NULL timestamps are preserved
+    assert bar_data[0]["ts_col"] == datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)
+    assert bar_data[2]["ts_col"] == datetime.datetime(2024, 9, 21, 15, 45, 0, 987654)
+
+    # Verify that NULL timestamp is represented as None (not NaT)
+    assert bar_data[1]["ts_col"] is None
+
+    # Verify that the output matches the input (since the model just selects from bar)
+    query_output = outputs["query"]
+    assert len(query_output) == 3
+    assert query_output[0]["ts_col"] == datetime.datetime(2024, 9, 20, 11, 30, 0, 123456)
+    assert query_output[1]["ts_col"] is None
+    assert query_output[2]["ts_col"] == datetime.datetime(2024, 9, 21, 15, 45, 0, 987654)
+
+
+def test_parameterized_name_sql_model() -> None:
+    variables = {"table_catalog": "gold"}
+    model = _create_model(
+        "select 1 as id, 'foo' as name",
+        meta="""
+        MODEL (
+          name @{table_catalog}.sushi.foo,
+          kind FULL
+        )
+        """,
+        dialect="snowflake",
+        variables=variables,
+    )
+    assert model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  outputs:
+    query:
+      - id: 1
+        name: foo  
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+
+    _check_successful_or_raise(test.run())
+
+
+def test_parameterized_name_python_model() -> None:
+    variables = {"table_catalog": "gold"}
+
+    @model(
+        name="@{table_catalog}.sushi.foo",
+        columns={
+            "id": "int",
+            "name": "varchar",
+        },
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        return pd.DataFrame([{"ID": 1, "NAME": "foo"}])
+
+    python_model = model.get_registry()["@{table_catalog}.sushi.foo"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+
+    assert python_model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  outputs:
+    query:
+      - id: 1
+        name: foo  
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=python_model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+
+    _check_successful_or_raise(test.run())
+
+
+def test_parameterized_name_self_referential_model():
+    variables = {"table_catalog": "gold"}
+    model = _create_model(
+        """
+        with last_value as (
+          select coalesce(max(v), 0) as v from @{table_catalog}.sushi.foo
+        )
+        select v + 1 as v from last_value
+        """,
+        meta="""
+        MODEL (
+          name @{table_catalog}.sushi.foo,
+          kind FULL
+        )
+        """,
+        dialect="snowflake",
+        variables=variables,
+    )
+    assert model.fqn == '"GOLD"."SUSHI"."FOO"'
+
+    test1 = _create_test(
+        body=load_yaml(
+            """
+test_foo_intial_state:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  inputs:
+    {{ var('table_catalog' ) }}.sushi.foo:
+      rows: []
+      columns:
+        v: int
+  outputs:
+    query:
+      - v: 1 
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo_intial_state",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+    assert isinstance(test1, SqlModelTest)
+    assert test1.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    test1_model_query = test1._render_model_query().sql(dialect="snowflake")
+    assert '"GOLD"."SUSHI"."FOO"' not in test1_model_query
+    assert (
+        test1._test_fixture_table('"GOLD"."SUSHI"."FOO"').sql(dialect="snowflake", identify=True)
+        in test1_model_query
+    )
+
+    test2 = _create_test(
+        body=load_yaml(
+            """
+test_foo_cumulative:
+  model: {{ var('table_catalog' ) }}.sushi.foo
+  inputs:
+    {{ var('table_catalog' ) }}.sushi.foo:
+      rows:
+        - v: 5
+  outputs:
+    query:
+      - v: 6
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo_cumulative",
+        model=model,
+        context=Context(
+            config=Config(
+                model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables
+            )
+        ),
+    )
+    assert isinstance(test2, SqlModelTest)
+    assert test2.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    test2_model_query = test2._render_model_query().sql(dialect="snowflake")
+    assert '"GOLD"."SUSHI"."FOO"' not in test2_model_query
+    assert (
+        test2._test_fixture_table('"GOLD"."SUSHI"."FOO"').sql(dialect="snowflake", identify=True)
+        in test2_model_query
+    )
+
+    _check_successful_or_raise(test1.run())
+    _check_successful_or_raise(test2.run())
+
+
+def test_parameterized_name_self_referential_python_model():
+    variables = {"table_catalog": "gold"}
+
+    @model(
+        name="@{table_catalog}.sushi.foo",
+        columns={
+            "id": "int",
+        },
+        depends_on=["@{table_catalog}.sushi.bar"],
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        current_table = context.resolve_table(f"{context.var('table_catalog')}.sushi.foo")
+        current_df = context.fetchdf(f"select id from {current_table}")
+        upstream_table = context.resolve_table(f"{context.var('table_catalog')}.sushi.bar")
+        upstream_df = context.fetchdf(f"select id from {upstream_table}")
+
+        return pd.DataFrame([{"ID": upstream_df["ID"].sum() + current_df["ID"].sum()}])
+
+    @model(
+        name="@{table_catalog}.sushi.bar",
+        columns={
+            "id": "int",
+        },
+        dialect="snowflake",
+    )
+    def execute(
+        context: ExecutionContext,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        return pd.DataFrame([{"ID": 1}])
+
+    model_foo = model.get_registry()["@{table_catalog}.sushi.foo"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+    model_bar = model.get_registry()["@{table_catalog}.sushi.bar"].model(
+        module_path=Path("."), path=Path("."), variables=variables
+    )
+
+    assert model_foo.fqn == '"GOLD"."SUSHI"."FOO"'
+    assert model_bar.fqn == '"GOLD"."SUSHI"."BAR"'
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"), variables=variables)
+    )
+    ctx.upsert_model(model_foo)
+    ctx.upsert_model(model_bar)
+
+    test = _create_test(
+        body=load_yaml(
+            """
+test_foo:
+  model: {{ var('table_catalog') }}.sushi.foo
+  inputs:
+    {{ var('table_catalog') }}.sushi.foo:
+      rows:
+        - id: 3
+    {{ var('table_catalog') }}.sushi.bar:
+      rows:
+        - id: 5
+  outputs:
+    query:
+      - id: 8        
+            """,
+            variables=variables,
+        ),
+        test_name="test_foo",
+        model=model_foo,
+        context=ctx,
+    )
+
+    assert isinstance(test, PythonModelTest)
+
+    assert test.body["model"] == '"GOLD"."SUSHI"."FOO"'
+    assert '"GOLD"."SUSHI"."BAR"' in test.body["inputs"]
+
+    assert isinstance(test.context, TestExecutionContext)
+    assert '"GOLD"."SUSHI"."FOO"' in test.context._model_tables
+    assert '"GOLD"."SUSHI"."BAR"' in test.context._model_tables
+
+    with pytest.raises(SQLMeshError, match=r"Unable to find a table mapping"):
+        test.context.resolve_table("silver.sushi.bar")
+
+    _check_successful_or_raise(test.run())
+
+
+def test_python_model_test_variables_override(tmp_path: Path) -> None:
+    py_model = tmp_path / "models" / "test_var_model.py"
+    py_model.parent.mkdir(parents=True, exist_ok=True)
+    py_model.write_text(
+        """
+import pandas as pd  # noqa: TID253
+from sqlmesh import model, ExecutionContext
+import typing as t
+
+@model(
+  name="test_var_model",
+  columns={"id": "int", "flag_value": "boolean", "var_value": "varchar"},
+)
+def execute(context: ExecutionContext, **kwargs: t.Any) -> pd.DataFrame:
+  my_flag = context.var("my_flag")
+  other_var = context.var("other_var")
+
+  return pd.DataFrame([{
+      "id": 1 if my_flag else 2,
+      "flag_value": my_flag,
+      "var_value": other_var,
+  }])"""
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables={"my_flag": False, "other_var": "default_value"},
+    )
+    context = Context(config=config, paths=tmp_path)
+
+    python_model = context.models['"test_var_model"']
+
+    # Test when Flag is True
+    # Overriding the config default flag_value to True
+    # AND the var_value to use test one
+    test_flag_true = _create_test(
+        body=load_yaml("""
+test_flag_true:
+  model: test_var_model
+  vars:
+    my_flag: true
+    other_var: "test_value"
+  outputs:
+    query:
+      rows:
+        - id: 1
+          flag_value: true
+          var_value: "test_value"
+        """),
+        test_name="test_flag_true",
+        model=python_model,
+        context=context,
+    )
+
+    _check_successful_or_raise(test_flag_true.run())
+
+    # Test when Flag is False
+    # Overriding the config default flag_value to False
+    # AND the var_value to use test one (since the above would be false for both)
+    test_flag_false = _create_test(
+        body=load_yaml("""
+test_flag_false:
+  model: test_var_model
+  vars:
+    my_flag: false
+    other_var: "another_test_value"
+  outputs:
+    query:
+      rows:
+        - id: 2
+          flag_value: false
+          var_value: "another_test_value"
+        """),
+        test_name="test_flag_false",
+        model=python_model,
+        context=context,
+    )
+
+    _check_successful_or_raise(test_flag_false.run())
+
+    # Test with no vars specified
+    # (should use config defaults for both flag and var_value)
+    test_default_vars = _create_test(
+        body=load_yaml("""
+test_default_vars:
+  model: test_var_model
+  outputs:
+    query:
+      rows:
+        - id: 2
+          flag_value: false
+          var_value: "default_value"
+        """),
+        test_name="test_default_vars",
+        model=python_model,
+        context=context,
+    )
+    _check_successful_or_raise(test_default_vars.run())

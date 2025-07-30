@@ -7,6 +7,7 @@ import typing as t
 from pathlib import Path
 
 SQLMESH = "sqlmesh"
+SQLMESH_MANAGED = "sqlmesh_managed"
 SQLMESH_PATH = Path.home() / ".sqlmesh"
 
 PROD = "prod"
@@ -30,6 +31,9 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
 MAX_MODEL_DEFINITION_SIZE = 10000
 """Maximum number of characters in a model definition"""
+
+MIGRATED_DBT_PROJECT_NAME = "__dbt_project_name__"
+MIGRATED_DBT_PACKAGES = "__dbt_packages__"
 
 
 # The maximum number of fork processes, used for loading projects

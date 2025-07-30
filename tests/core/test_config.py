@@ -3,6 +3,7 @@ import pathlib
 import re
 from pathlib import Path
 from unittest import mock
+import typing as t
 
 import pytest
 from pytest_mock import MockerFixture
@@ -16,6 +17,8 @@ from sqlmesh.core.config import (
     BigQueryConnectionConfig,
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
+    EnvironmentSuffixTarget,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -23,11 +26,13 @@ from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
     load_config_from_python_module,
+    load_configs,
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.athena import AthenaEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
+from sqlmesh.core.loader import MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -560,6 +565,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
+        "filesystems": [],
         "database": "my_db",
     }
     assert serialized["default_test_connection"] == {
@@ -571,6 +577,7 @@ def test_connection_config_serialization():
         "pretty_sql": False,
         "connector_config": {},
         "secrets": [],
+        "filesystems": [],
         "database": "my_test_db",
     }
 
@@ -669,6 +676,65 @@ model_defaults:
     assert config.model_defaults.audits[1][1]["column"].this.this == "id"
     assert type(config.model_defaults.audits[1][1]["threshold"]) == exp.Literal
     assert config.model_defaults.audits[1][1]["threshold"].this == "1000"
+
+
+def test_load_model_defaults_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - CREATE TEMP TABLE temp_data AS SELECT 1 as id
+    post_statements:
+        - DROP TABLE IF EXISTS temp_data
+        - ANALYZE @this_model
+        - SET memory_limit = '5GB'
+    on_virtual_update:
+        - UPDATE stats_table SET last_update = CURRENT_TIMESTAMP
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.model_defaults.pre_statements is not None
+    assert len(config.model_defaults.pre_statements) == 2
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[0]), exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[1]), exp.Create)
+
+    assert config.model_defaults.post_statements is not None
+    assert len(config.model_defaults.post_statements) == 3
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[0]), exp.Drop)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[1]), exp.Analyze)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[2]), exp.Set)
+
+    assert config.model_defaults.on_virtual_update is not None
+    assert len(config.model_defaults.on_virtual_update) == 1
+    assert isinstance(exp.maybe_parse(config.model_defaults.on_virtual_update[0]), exp.Update)
+
+
+def test_load_model_defaults_validation_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements_wrong.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - 313
+        """
+        )
+
+    with pytest.raises(TypeError, match=r"expected str instance, int found"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
 
 
 def test_scheduler_config(tmp_path_factory):
@@ -1028,3 +1094,350 @@ def test_config_complex_types_supplied_as_json_strings_from_env(tmp_path: Path) 
         assert conn.project == "unit-test"
         assert conn.scopes == ("a", "b", "c")
         assert conn.keyfile_json == {"foo": "bar"}
+
+
+def test_loader_for_migrated_dbt_project(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+
+    variables:
+      __dbt_project_name__: sushi
+""")
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.loader == MigratedDbtProjectLoader
+
+
+def test_config_user_macro_function(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      bigquery:
+        connection:
+          type: bigquery
+          project: unit-test
+
+    default_gateway: bigquery
+
+    model_defaults:
+      dialect: bigquery
+
+    default_target_environment: dev_{{ user() }}
+""")
+
+    with mock.patch("getpass.getuser", return_value="test_user"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+    assert config.default_target_environment == "dev_test_user"
+
+
+def test_environment_suffix_target_catalog(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("""
+    gateways:
+      warehouse:
+        connection:
+          type: duckdb
+
+    default_gateway: warehouse
+
+    model_defaults:
+      dialect: duckdb
+
+    environment_suffix_target: catalog
+""")
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+    assert not config.environment_catalog_mapping
+
+    config_path.write_text("""
+    gateways:
+      warehouse:
+        connection:
+          type: duckdb
+
+    default_gateway: warehouse
+
+    model_defaults:
+      dialect: duckdb
+
+    environment_suffix_target: catalog
+
+    environment_catalog_mapping:
+      '.*': "foo"
+""")
+
+    with pytest.raises(ConfigError, match=r"mutually exclusive"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
+
+
+def test_load_python_config_dot_env_vars(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("python_config")
+    config_path = main_dir / "config.py"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+config = Config(gateways={"duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig())}, model_defaults=ModelDefaultsConfig(dialect=''))
+        """
+        )
+
+    # The environment variable value from the dot env file should be set
+    # SQLMESH__ variables override config fields directly if they follow the naming structure
+    dot_path = main_dir / ".env"
+    with open(dot_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__TYPE="bigquery"
+SQLMESH__GATEWAYS__DUCKDB_GATEWAY__STATE_CONNECTION__CHECK_IMPORT="false"
+SQLMESH__DEFAULT_GATEWAY="duckdb_gateway"
+        """
+        )
+
+    # Use mock.patch.dict to isolate environment variables between the tests
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(),
+                state_connection=BigQueryConnectionConfig(check_import=False),
+            ),
+        },
+        model_defaults=ModelDefaultsConfig(dialect=""),
+        default_gateway="duckdb_gateway",
+    )
+
+
+def test_load_yaml_config_dot_env_vars(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("yaml_config")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  duckdb_gateway:
+    connection:
+      type: duckdb
+      catalogs:
+        local: local.db
+        cloud_sales: {{ env_var('S3_BUCKET') }}
+      extensions:
+        - name: httpfs
+      secrets:
+        - type: "s3"
+          key_id: {{ env_var('S3_KEY') }}
+          secret: {{ env_var('S3_SECRET') }}
+model_defaults:
+  dialect: ""
+"""
+        )
+
+    # This test checks both using SQLMESH__ prefixed environment variables with underscores
+    # and setting a regular environment variable for use with env_var().
+    dot_path = main_dir / ".env"
+    with open(dot_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """S3_BUCKET="s3://metrics_bucket/sales.db"
+S3_KEY="S3_KEY_ID"
+S3_SECRET="XXX_S3_SECRET_XXX"
+SQLMESH__DEFAULT_GATEWAY="duckdb_gateway"
+SQLMESH__MODEL_DEFAULTS__DIALECT="athena"
+"""
+        )
+
+    # Use mock.patch.dict to isolate environment variables between the tests
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "duckdb_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    catalogs={
+                        "local": "local.db",
+                        "cloud_sales": "s3://metrics_bucket/sales.db",
+                    },
+                    extensions=[{"name": "httpfs"}],
+                    secrets=[{"type": "s3", "key_id": "S3_KEY_ID", "secret": "XXX_S3_SECRET_XXX"}],
+                ),
+            ),
+        },
+        default_gateway="duckdb_gateway",
+        model_defaults=ModelDefaultsConfig(dialect="athena"),
+    )
+
+
+def test_load_config_dotenv_directory_not_loaded(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("config_with_env_dir")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    # Create a .env directory instead of a file  to simulate a Python virtual environment
+    env_dir = main_dir / ".env"
+    env_dir.mkdir()
+    (env_dir / "pyvenv.cfg").touch()
+
+    # Also create a regular .env file in another project directory
+    other_dir = tmp_path_factory.mktemp("config_with_env_file")
+    other_config_path = other_dir / "config.yaml"
+    with open(other_config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: test.db
+model_defaults:
+  dialect: duckdb
+"""
+        )
+
+    env_file = other_dir / ".env"
+    with open(env_file, "w", encoding="utf-8") as fd:
+        fd.write('TEST_ENV_VAR="from_dotenv_file"')
+
+    # Test that the .env directory doesn't cause an error and is skipped
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+        )
+        # Should succeed without loading any env vars from the directory
+        assert "TEST_ENV_VAR" not in os.environ
+
+    # Test that a real .env file is still loaded properly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        load_configs(
+            "config",
+            Config,
+            paths=[other_dir],
+        )
+        # The env var should be loaded from the file
+        assert os.environ.get("TEST_ENV_VAR") == "from_dotenv_file"
+
+
+def test_load_yaml_config_custom_dotenv_path(tmp_path_factory):
+    main_dir = tmp_path_factory.mktemp("yaml_config_2")
+    config_path = main_dir / "config.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """gateways:
+  test_gateway:
+    connection:
+      type: duckdb
+      database: {{ env_var('DB_NAME') }}
+"""
+        )
+
+    # Create a custom dot env file in a different location
+    custom_env_dir = tmp_path_factory.mktemp("custom_env")
+    custom_env_path = custom_env_dir / ".my_env"
+    with open(custom_env_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """DB_NAME="custom_database.db"
+SQLMESH__DEFAULT_GATEWAY="test_gateway"
+SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
+"""
+        )
+
+    # Test that without custom dotenv path, env vars are not loaded
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(
+            ConfigError, match=r"Default model SQL dialect is a required configuratio*"
+        ):
+            load_configs(
+                "config",
+                Config,
+                paths=[main_dir],
+            )
+
+    # Test that with custom dotenv path, env vars are loaded correctly
+    with mock.patch.dict(os.environ, {}, clear=True):
+        configs = load_configs(
+            "config",
+            Config,
+            paths=[main_dir],
+            dotenv_path=custom_env_path,
+        )
+
+    assert next(iter(configs.values())) == Config(
+        gateways={
+            "test_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(
+                    database="custom_database.db",
+                ),
+            ),
+        },
+        default_gateway="test_gateway",
+        model_defaults=ModelDefaultsConfig(dialect="postgres"),
+    )
+
+
+@pytest.mark.parametrize(
+    "convention_str, expected",
+    [
+        (None, TableNamingConvention.SCHEMA_AND_TABLE),
+        ("schema_and_table", TableNamingConvention.SCHEMA_AND_TABLE),
+        ("table_only", TableNamingConvention.TABLE_ONLY),
+        ("hash_md5", TableNamingConvention.HASH_MD5),
+    ],
+)
+def test_physical_table_naming_convention(
+    convention_str: t.Optional[str], expected: t.Optional[TableNamingConvention], tmp_path: Path
+):
+    config_part = f"physical_table_naming_convention: {convention_str}" if convention_str else ""
+    (tmp_path / "config.yaml").write_text(f"""
+gateways:
+  test_gateway:
+    connection:
+      type: duckdb      
+model_defaults:
+  dialect: duckdb
+{config_part}
+    """)
+
+    config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+    assert config.physical_table_naming_convention == expected

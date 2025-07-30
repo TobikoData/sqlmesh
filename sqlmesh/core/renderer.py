@@ -43,7 +43,7 @@ class BaseExpressionRenderer:
         expression: exp.Expression,
         dialect: DialectType,
         macro_definitions: t.List[d.MacroDef],
-        path: Path = Path(),
+        path: t.Optional[Path] = None,
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
@@ -179,6 +179,7 @@ class BaseExpressionRenderer:
         )
 
         render_kwargs = {
+            "dialect": self._dialect,
             **date_dict(
                 to_datetime(execution_time or c.EPOCH),
                 start_time,
@@ -214,6 +215,9 @@ class BaseExpressionRenderer:
             try:
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
+                logger.debug(
+                    f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
+                )
                 if rendered_expression.strip():
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 

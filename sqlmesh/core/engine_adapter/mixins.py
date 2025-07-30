@@ -32,6 +32,7 @@ class LogicalMergeMixin(EngineAdapter):
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        **kwargs: t.Any,
     ) -> None:
         logical_merge(
             self,

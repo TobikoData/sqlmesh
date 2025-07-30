@@ -21,15 +21,14 @@ def test_cte_find_all_references():
 
     # Test finding all references of "current_marketing"
     ranges = find_ranges_from_regex(read_file, r"current_marketing(?!_outer)")
-    assert len(ranges) == 2
+    assert len(ranges) == 2  # regex finds 2 occurrences (definition and FROM clause)
 
     # Click on the CTE definition
     position = Position(line=ranges[0].start.line, character=ranges[0].start.character + 4)
     references = get_cte_references(lsp_context, URI.from_path(sushi_customers_path), position)
-
-    # Should find both the definition and the usage
-    assert len(references) == 2
-    assert all(ref.uri == URI.from_path(sushi_customers_path).value for ref in references)
+    # Should find the definition, FROM clause, and column prefix usages
+    assert len(references) == 4  # definition + FROM + 2 column prefix uses
+    assert all(ref.path == sushi_customers_path for ref in references)
 
     reference_ranges = [ref.range for ref in references]
     for expected_range in ranges:
@@ -46,8 +45,8 @@ def test_cte_find_all_references():
     references = get_cte_references(lsp_context, URI.from_path(sushi_customers_path), position)
 
     # Should find the same references
-    assert len(references) == 2
-    assert all(ref.uri == URI.from_path(sushi_customers_path).value for ref in references)
+    assert len(references) == 4  # definition + FROM + 2 column prefix uses
+    assert all(ref.path == sushi_customers_path for ref in references)
 
     reference_ranges = [ref.range for ref in references]
     for expected_range in ranges:
@@ -83,7 +82,7 @@ def test_cte_find_all_references_outer():
 
     # Should find both the definition and the usage
     assert len(references) == 2
-    assert all(ref.uri == URI.from_path(sushi_customers_path).value for ref in references)
+    assert all(ref.path == sushi_customers_path for ref in references)
 
     # Verify that we found both occurrences
     reference_ranges = [ref.range for ref in references]
@@ -102,7 +101,7 @@ def test_cte_find_all_references_outer():
 
     # Should find the same references
     assert len(references) == 2
-    assert all(ref.uri == URI.from_path(sushi_customers_path).value for ref in references)
+    assert all(ref.path == sushi_customers_path for ref in references)
 
     reference_ranges = [ref.range for ref in references]
     for expected_range in ranges:

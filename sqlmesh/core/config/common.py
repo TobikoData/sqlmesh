@@ -10,8 +10,21 @@ from sqlmesh.utils.pydantic import field_validator
 
 
 class EnvironmentSuffixTarget(str, Enum):
+    # Intended to create virtual environments in their own schemas, with names like "<model_schema_name>__<env name>". The view name is untouched.
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # would have its virtual layer view created as 'sqlmesh_example__dev.full_model'
     SCHEMA = "schema"
+
+    # Intended to create virtual environments in the same schema as their production counterparts by adjusting the table name.
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # would have its virtual layer view created as "sqlmesh_example.full_model__dev"
     TABLE = "table"
+
+    # Intended to create virtual environments in their own catalogs to preserve the schema and view name of the models
+    # For example, a model named 'sqlmesh_example.full_model' created in an environment called 'dev'
+    # with a default catalog of "warehouse" would have its virtual layer view created as "warehouse__dev.sqlmesh_example.full_model"
+    # note: this only works for engines that can query across catalogs
+    CATALOG = "catalog"
 
     @property
     def is_schema(self) -> bool:
@@ -21,9 +34,41 @@ class EnvironmentSuffixTarget(str, Enum):
     def is_table(self) -> bool:
         return self == EnvironmentSuffixTarget.TABLE
 
+    @property
+    def is_catalog(self) -> bool:
+        return self == EnvironmentSuffixTarget.CATALOG
+
     @classproperty
     def default(cls) -> EnvironmentSuffixTarget:
         return EnvironmentSuffixTarget.SCHEMA
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class TableNamingConvention(str, Enum):
+    # Causes table names at the physical layer to follow the convention:
+    # <schema-name>__<table-name>__<fingerprint>
+    SCHEMA_AND_TABLE = "schema_and_table"
+
+    # Causes table names at the physical layer to follow the convention:
+    # <table-name>__<fingerprint>
+    TABLE_ONLY = "table_only"
+
+    # Takes the table name that would be returned from SCHEMA_AND_TABLE and wraps it in md5()
+    # to generate a hash and prefixes the has with `sqlmesh_md5__`, for the following reasons:
+    # - at a glance, you can still see it's managed by sqlmesh and that md5 was used to generate the hash
+    # - unquoted identifiers that start with numbers can trip up DB engine parsers, so having a text prefix prevents this
+    # This causes table names at the physical layer to follow the convention:
+    # sqlmesh_md5__3b07384d113edec49eaa6238ad5ff00d
+    HASH_MD5 = "hash_md5"
+
+    @classproperty
+    def default(cls) -> TableNamingConvention:
+        return TableNamingConvention.SCHEMA_AND_TABLE
 
     def __str__(self) -> str:
         return self.name

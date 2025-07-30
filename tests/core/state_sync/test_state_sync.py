@@ -55,7 +55,9 @@ pytestmark = pytest.mark.slow
 @pytest.fixture
 def state_sync(duck_conn, tmp_path):
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
     state_sync.migrate(default_catalog=None)
     return state_sync
@@ -324,9 +326,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     remove_records_count = state_sync.engine_adapter.fetchone(
         "SELECT COUNT(*) FROM sqlmesh._intervals WHERE name = '\"a\"' AND version = 'a' AND is_removed"
     )[0]  # type: ignore
-    assert (
-        remove_records_count == num_of_removals * 4
-    )  # (1 dev record + 1 prod record) * 2 snapshots
+    assert remove_records_count == num_of_removals * 2  # 2 * snapshots
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
@@ -1115,7 +1115,7 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment_statements(env_a.name) == environment_statements
 
     deleted_environments = state_sync.delete_expired_environments()
-    assert deleted_environments == [env_a]
+    assert deleted_environments == [env_a.summary]
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
@@ -1632,7 +1632,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check old snapshot's intervals
@@ -1641,7 +1641,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1663,7 +1663,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,
@@ -1679,7 +1679,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
     assert stored_new_snapshot.dev_intervals == [
-        (to_timestamp("2023-01-04"), to_timestamp("2023-01-10")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-11")),
     ]
 
     # Check all intervals
@@ -1707,7 +1707,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
                 identifier=new_snapshot.identifier,
                 version=snapshot.version,
                 dev_version=new_snapshot.dev_version,
-                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-10"))],
+                dev_intervals=[(to_timestamp("2023-01-08"), to_timestamp("2023-01-11"))],
             ),
         ],
         key=compare_snapshot_intervals,
@@ -2082,12 +2082,14 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
     with pytest.raises(
         SQLMeshError,
-        match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '0'",
+        match=rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
     ):
         state_sync.get_versions()
 
@@ -2203,7 +2205,9 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture, tmp_
 
     # Start with a clean slate.
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(duckdb.connect, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
 
     state_sync.migrate(default_catalog=None)
@@ -2254,7 +2258,9 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
 
 def test_first_migration_failure(duck_conn, mocker: MockerFixture, tmp_path) -> None:
     state_sync = EngineAdapterStateSync(
-        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH, context_path=tmp_path
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
+        schema=c.SQLMESH,
+        cache_dir=tmp_path / c.CACHE,
     )
     mocker.patch.object(state_sync.migrator, "_migrate_rows", side_effect=Exception("mocked error"))
     with pytest.raises(

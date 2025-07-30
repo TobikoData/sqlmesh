@@ -13,6 +13,7 @@ import traceback
 import types
 import typing as t
 import uuid
+from dataclasses import dataclass
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
@@ -376,3 +377,29 @@ class CompletionStatus(Enum):
     @property
     def is_nothing_to_do(self) -> bool:
         return self == CompletionStatus.NOTHING_TO_DO
+
+
+def to_snake_case(name: str) -> str:
+    return "".join(
+        f"_{c.lower()}" if c.isupper() and idx != 0 else c.lower() for idx, c in enumerate(name)
+    )
+
+
+class JobType(Enum):
+    PLAN = "SQLMESH_PLAN"
+    RUN = "SQLMESH_RUN"
+
+
+@dataclass(frozen=True)
+class CorrelationId:
+    """ID that is added to each query in order to identify the job that created it."""
+
+    job_type: JobType
+    job_id: str
+
+    def __str__(self) -> str:
+        return f"{self.job_type.value}: {self.job_id}"
+
+    @classmethod
+    def from_plan_id(cls, plan_id: str) -> CorrelationId:
+        return CorrelationId(JobType.PLAN, plan_id)

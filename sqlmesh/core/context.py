@@ -40,13 +40,13 @@ import sys
 import time
 import traceback
 import typing as t
-import unittest.result
 from functools import cached_property
 from io import StringIO
 from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
+from datetime import datetime
 
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
@@ -122,11 +122,12 @@ from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    now_ds,
     to_timestamp,
     format_tz_datetime,
     now_timestamp,
     now,
+    to_datetime,
+    make_exclusive,
 )
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
@@ -212,6 +213,15 @@ class BaseContext(abc.ABC):
             The physical table name.
         """
         model_name = normalize_model_name(model_name, self.default_catalog, self.default_dialect)
+
+        if model_name not in self._model_tables:
+            model_name_list = "\n".join(list(self._model_tables))
+            logger.debug(
+                f"'{model_name}' not found in model to table mapping. Available model names: \n{model_name_list}"
+            )
+            raise SQLMeshError(
+                f"Unable to find a table mapping for model '{model_name}'. Has it been spelled correctly?"
+            )
 
         # We generate SQL for the default dialect because the table name may be used in a
         # fetchdf call and so the quotes need to be correct (eg. backticks for bigquery)
@@ -452,7 +462,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not self._snapshot_evaluator:
             self._snapshot_evaluator = SnapshotEvaluator(
                 {
-                    gateway: adapter.with_log_level(logging.INFO)
+                    gateway: adapter.with_settings(execute_log_level=logging.INFO)
                     for gateway, adapter in self.engine_adapters.items()
                 },
                 ddl_concurrent_tasks=self.concurrent_tasks,
@@ -506,7 +516,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             }
         )
 
-        update_model_schemas(self.dag, models=self._models, context_path=self.path)
+        update_model_schemas(
+            self.dag,
+            models=self._models,
+            cache_dir=self.cache_dir,
+        )
 
         if model.dialect:
             self._all_dialects.add(model.dialect)
@@ -515,7 +529,11 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return model
 
-    def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
+    def scheduler(
+        self,
+        environment: t.Optional[str] = None,
+        snapshot_evaluator: t.Optional[SnapshotEvaluator] = None,
+    ) -> Scheduler:
         """Returns the built-in scheduler.
 
         Args:
@@ -537,9 +555,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not snapshots:
             raise ConfigError("No models were found")
 
-        return self.create_scheduler(snapshots)
+        return self.create_scheduler(snapshots, snapshot_evaluator or self.snapshot_evaluator)
 
-    def create_scheduler(self, snapshots: t.Iterable[Snapshot]) -> Scheduler:
+    def create_scheduler(
+        self, snapshots: t.Iterable[Snapshot], snapshot_evaluator: SnapshotEvaluator
+    ) -> Scheduler:
         """Creates the built-in scheduler.
 
         Args:
@@ -550,7 +570,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """
         return Scheduler(
             snapshots,
-            self.snapshot_evaluator,
+            snapshot_evaluator,
             self.state_sync,
             default_catalog=self.default_catalog,
             max_workers=self.concurrent_tasks,
@@ -611,6 +631,15 @@ class GenericContext(BaseContext, t.Generic[C]):
                 BUILTIN_RULES.union(project.user_rules), config.linter
             )
 
+        # Load environment statements from state for projects not in current load
+        if any(self._projects):
+            prod = self.state_reader.get_environment(c.PROD)
+            if prod:
+                existing_statements = self.state_reader.get_environment_statements(c.PROD)
+                for stmt in existing_statements:
+                    if stmt.project and stmt.project not in self._projects:
+                        self._environment_statements.append(stmt)
+
         uncached = set()
 
         if any(self._projects):
@@ -642,7 +671,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                     self._models.update({fqn: model.copy(update={"mapping_schema": {}})})
                     continue
 
-            update_model_schemas(self.dag, models=self._models, context_path=self.path)
+            update_model_schemas(
+                self.dag,
+                models=self._models,
+                cache_dir=self.cache_dir,
+            )
 
             models = self.models.values()
             for model in models:
@@ -734,11 +767,9 @@ class GenericContext(BaseContext, t.Generic[C]):
                     raise SQLMeshError(f"Environment '{environment}' was not found.")
                 if environment_state.finalized_ts:
                     return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
+                self.console.log_warning(
+                    f"Environment '{environment}' is being updated by plan '{environment_state.plan_id}'. "
+                    f"Retrying in {self.config.run.environment_check_interval} seconds..."
                 )
                 time.sleep(self.config.run.environment_check_interval)
             raise SQLMeshError(
@@ -775,9 +806,8 @@ class GenericContext(BaseContext, t.Generic[C]):
                 )
                 done = True
             except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' modified while running. Restarting the run...",
-                    environment,
+                self.console.log_warning(
+                    f"Environment '{environment}' modified while running. Restarting the run..."
                 )
                 if exit_on_env_update:
                     interrupted = True
@@ -828,10 +858,52 @@ class GenericContext(BaseContext, t.Generic[C]):
     def destroy(self) -> bool:
         success = False
 
-        if self.console.start_destroy():
+        # Collect resources to be deleted
+        environments = self.state_reader.get_environments()
+        schemas_to_delete = set()
+        tables_to_delete = set()
+        views_to_delete = set()
+        all_snapshot_infos = set()
+
+        # For each environment find schemas and tables
+        for environment in environments:
+            all_snapshot_infos.update(environment.snapshots)
+            snapshots = self.state_reader.get_snapshots(environment.snapshots).values()
+            for snapshot in snapshots:
+                if snapshot.is_model and not snapshot.is_symbolic:
+                    # Get the appropriate adapter
+                    if environment.gateway_managed and snapshot.model_gateway:
+                        adapter = self.engine_adapters.get(
+                            snapshot.model_gateway, self.engine_adapter
+                        )
+                    else:
+                        adapter = self.engine_adapter
+
+                    if environment.suffix_target.is_schema or environment.suffix_target.is_catalog:
+                        schema = snapshot.qualified_view_name.schema_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        catalog = snapshot.qualified_view_name.catalog_for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        if catalog:
+                            schemas_to_delete.add(f"{catalog}.{schema}")
+                        else:
+                            schemas_to_delete.add(schema)
+
+                    if environment.suffix_target.is_table:
+                        view_name = snapshot.qualified_view_name.for_environment(
+                            environment.naming_info, dialect=adapter.dialect
+                        )
+                        views_to_delete.add(view_name)
+
+                    # Add snapshot tables
+                    table_name = snapshot.table_name()
+                    tables_to_delete.add(table_name)
+
+        if self.console.start_destroy(schemas_to_delete, views_to_delete, tables_to_delete):
             try:
-                self._destroy()
-                success = True
+                success = self._destroy()
             finally:
                 self.console.stop_destroy(success=success)
 
@@ -934,12 +1006,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                 pass
         return self.config, self.path
 
-    def config_for_node(self, node: str | Model | Audit) -> Config:
-        if isinstance(node, str):
-            return self.config_for_path(self.get_snapshot(node, raise_if_missing=True).node._path)[
-                0
-            ]  # type: ignore
-        return self.config_for_path(node._path)[0]  # type: ignore
+    def config_for_node(self, node: Model | Audit) -> Config:
+        path = node._path
+        if path is None:
+            return self.config
+        return self.config_for_path(path)[0]  # type: ignore
 
     @property
     def models(self) -> MappingProxyType[str, Model]:
@@ -999,7 +1070,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         Returns:
             The rendered expression.
         """
-        execution_time = execution_time or now_ds()
+        execution_time = execution_time or now()
 
         model = self.get_model(model_or_snapshot, raise_if_missing=True)
 
@@ -1219,6 +1290,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        min_intervals: t.Optional[int] = None,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1265,6 +1337,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered: Whether the diff should compare raw vs rendered models
             skip_linter: Linter runs by default so this will skip it if enabled
             explain: Whether to explain the plan instead of applying it.
+            min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
+                on every model when checking for missing intervals
 
         Returns:
             The populated Plan object.
@@ -1293,6 +1367,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
             explain=explain,
+            min_intervals=min_intervals,
         )
 
         plan = plan_builder.build()
@@ -1342,6 +1417,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        min_intervals: t.Optional[int] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1378,6 +1454,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             enable_preview: Indicates whether to enable preview for forward-only models in development environments.
             run: Whether to run latest intervals as part of the plan application.
             diff_rendered: Whether the diff should compare raw vs rendered models
+            min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
+                on every model when checking for missing intervals
 
         Returns:
             The plan builder.
@@ -1405,6 +1483,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             "run": run,
             "diff_rendered": diff_rendered,
             "skip_linter": skip_linter,
+            "min_intervals": min_intervals,
         }
         user_provided_flags: t.Dict[str, UserProvidedFlags] = {
             k: v for k, v in kwargs.items() if v is not None
@@ -1429,9 +1508,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             raise ConfigError(
                 "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
-
-        if run and is_dev:
-            raise ConfigError("The '--run' flag is only supported for the production environment.")
 
         if not skip_linter:
             self.lint_models()
@@ -1530,6 +1606,16 @@ class GenericContext(BaseContext, t.Generic[C]):
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
             self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
+        start_override_per_model = self._calculate_start_override_per_model(
+            min_intervals,
+            start or default_start,
+            end or default_end,
+            execution_time or now(),
+            backfill_models,
+            snapshots,
+            max_interval_end_per_model,
+        )
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
@@ -1560,7 +1646,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             ),
             end_bounded=not run,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-            interval_end_per_model=max_interval_end_per_model,
+            start_override_per_model=start_override_per_model,
+            end_override_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
             explain=explain or False,
@@ -1686,6 +1773,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         warn_grain_check: bool = False,
         temp_schema: t.Optional[str] = None,
         schema_diff_ignore_case: bool = False,
+        **kwargs: t.Any,  # catch-all to prevent an 'unexpected keyword argument' error if an table_diff extension passes in some extra arguments
     ) -> t.List[TableDiff]:
         """Show a diff between two tables.
 
@@ -1908,7 +1996,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
 
         return TableDiff(
-            adapter=adapter.with_log_level(logger.getEffectiveLevel()),
+            adapter=adapter.with_settings(execute_log_level=logger.getEffectiveLevel()),
             source=source,
             target=target,
             on=on,
@@ -2064,7 +2152,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
 
-        return run_tests(
+        result = run_tests(
             model_test_metadata=test_meta,
             models=self._models,
             config=self.config,
@@ -2076,6 +2164,13 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
             default_catalog_dialect=self.config.dialect or "",
         )
+
+        self.console.log_test_results(
+            result,
+            self.test_connection_config._engine_adapter.DIALECT,
+        )
+
+        return result
 
     @python_api_analytics
     def audit(
@@ -2336,6 +2431,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         """Releases all resources allocated by this context."""
         if self._snapshot_evaluator:
             self._snapshot_evaluator.close()
+
         if self._state_sync:
             self._state_sync.close()
 
@@ -2435,7 +2531,12 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def clear_caches(self) -> None:
         for path in self.configs:
-            rmtree(path / c.CACHE)
+            cache_path = path / c.CACHE
+            if cache_path.exists():
+                rmtree(cache_path)
+        if self.cache_dir.exists():
+            rmtree(self.cache_dir)
+
         if isinstance(self.state_sync, CachingStateSync):
             self.state_sync.clear_cache()
 
@@ -2499,28 +2600,20 @@ class GenericContext(BaseContext, t.Generic[C]):
 
     def _run_tests(
         self, verbosity: Verbosity = Verbosity.DEFAULT
-    ) -> t.Tuple[unittest.result.TestResult, str]:
+    ) -> t.Tuple[ModelTextTestResult, str]:
         test_output_io = StringIO()
         result = self.test(stream=test_output_io, verbosity=verbosity)
         return result, test_output_io.getvalue()
 
-    def _run_plan_tests(
-        self, skip_tests: bool = False
-    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+    def _run_plan_tests(self, skip_tests: bool = False) -> t.Optional[ModelTextTestResult]:
         if not skip_tests:
-            result, test_output = self._run_tests()
-            if result.testsRun > 0:
-                self.console.log_test_results(
-                    result,
-                    test_output,
-                    self.test_connection_config._engine_adapter.DIALECT,
-                )
+            result = self.test()
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again."
                 )
-            return result, test_output
-        return None, None
+            return result
+        return None
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:
@@ -2544,14 +2637,28 @@ class GenericContext(BaseContext, t.Generic[C]):
         }
 
     @cached_property
+    def cache_dir(self) -> Path:
+        if self.config.cache_dir:
+            cache_path = Path(self.config.cache_dir)
+            if cache_path.is_absolute():
+                return cache_path
+            return self.path / cache_path
+
+        # Default to .cache directory in the project path
+        return self.path / c.CACHE
+
+    @cached_property
     def engine_adapters(self) -> t.Dict[str, EngineAdapter]:
-        """Returns all the engine adapters for the gateways defined in the configuration."""
+        """Returns all the engine adapters for the gateways defined in the configurations."""
         adapters: t.Dict[str, EngineAdapter] = {self.selected_gateway: self.engine_adapter}
-        for gateway_name in self.config.gateways:
-            if gateway_name != self.selected_gateway:
-                connection = self.config.get_connection(gateway_name)
-                adapter = connection.create_engine_adapter(concurrent_tasks=self.concurrent_tasks)
-                adapters[gateway_name] = adapter
+        for config in self.configs.values():
+            for gateway_name in config.gateways:
+                if gateway_name not in adapters:
+                    connection = config.get_connection(gateway_name)
+                    adapter = connection.create_engine_adapter(
+                        concurrent_tasks=self.concurrent_tasks,
+                    )
+                    adapters[gateway_name] = adapter
         return adapters
 
     @cached_property
@@ -2661,7 +2768,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             always_recreate_environment=always_recreate_environment,
         )
 
-    def _destroy(self) -> None:
+    def _destroy(self) -> bool:
         # Invalidate all environments, including prod
         for environment in self.state_reader.get_environments():
             self.state_sync.invalidate_environment(name=environment.name, protect_prod=False)
@@ -2676,6 +2783,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # Finally clear caches
         self.clear_caches()
+
+        return True
 
     def _run_janitor(self, ignore_ttl: bool = False) -> None:
         current_ts = now_timestamp()
@@ -2701,15 +2810,21 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:
         current_ts = current_ts or now_timestamp()
 
-        expired_environments = self.state_sync.get_expired_environments(current_ts=current_ts)
-
-        cleanup_expired_views(
-            default_adapter=self.engine_adapter,
-            engine_adapters=self.engine_adapters,
-            environments=expired_environments,
-            warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
-            console=self.console,
+        expired_environments_summaries = self.state_sync.get_expired_environments(
+            current_ts=current_ts
         )
+
+        for expired_env_summary in expired_environments_summaries:
+            expired_env = self.state_reader.get_environment(expired_env_summary.name)
+
+            if expired_env:
+                cleanup_expired_views(
+                    default_adapter=self.engine_adapter,
+                    engine_adapters=self.engine_adapters,
+                    environments=[expired_env],
+                    warn_on_delete_failure=self.config.janitor.warn_on_delete_failure,
+                    console=self.console,
+                )
 
         self.state_sync.delete_expired_environments(current_ts=current_ts)
 
@@ -2734,6 +2849,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             dag=dag,
             default_catalog=self.default_catalog,
             dialect=self.default_dialect,
+            cache_dir=self.cache_dir,
         )
 
     def _register_notification_targets(self) -> None:
@@ -2788,9 +2904,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
         for node in nodes.values():
-            kwargs = {}
+            kwargs: t.Dict[str, t.Any] = {}
             if node.project in self._projects:
-                kwargs["ttl"] = self.config_for_node(node).snapshot_ttl
+                config = self.config_for_node(node)
+                kwargs["ttl"] = config.snapshot_ttl
+                kwargs["table_naming_convention"] = config.physical_table_naming_convention
 
             snapshot = Snapshot.from_node(
                 node,
@@ -2826,7 +2944,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _get_plan_default_start_end(
         self,
         snapshots: t.Dict[str, Snapshot],
-        max_interval_end_per_model: t.Dict[str, int],
+        max_interval_end_per_model: t.Dict[str, datetime],
         backfill_models: t.Optional[t.Set[str]],
         modified_model_names: t.Set[str],
         execution_time: t.Optional[TimeLike] = None,
@@ -2834,7 +2952,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if not max_interval_end_per_model:
             return None, None
 
-        default_end = max(max_interval_end_per_model.values())
+        default_end = to_timestamp(max(max_interval_end_per_model.values()))
         default_start: t.Optional[int] = None
         # Infer the default start by finding the smallest interval start that corresponds to the default end.
         for model_name in backfill_models or modified_model_names or max_interval_end_per_model:
@@ -2863,19 +2981,101 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return default_start, default_end
 
+    def _calculate_start_override_per_model(
+        self,
+        min_intervals: t.Optional[int],
+        plan_start: t.Optional[TimeLike],
+        plan_end: t.Optional[TimeLike],
+        plan_execution_time: TimeLike,
+        backfill_model_fqns: t.Optional[t.Set[str]],
+        snapshots_by_model_fqn: t.Dict[str, Snapshot],
+        end_override_per_model: t.Optional[t.Dict[str, datetime]],
+    ) -> t.Dict[str, datetime]:
+        if not min_intervals or not backfill_model_fqns or not plan_start:
+            # If there are no models to backfill, there are no intervals to consider for backfill, so we dont need to consider a minimum number
+            # If the plan doesnt have a start date, all intervals are considered already so we dont need to consider a minimum number
+            # If we dont have a minimum number of intervals to consider, then we dont need to adjust the start date on a per-model basis
+            return {}
+
+        start_overrides: t.Dict[str, datetime] = {}
+        end_override_per_model = end_override_per_model or {}
+
+        plan_execution_time_dt = to_datetime(plan_execution_time)
+        plan_start_dt = to_datetime(plan_start, relative_base=plan_execution_time_dt)
+        plan_end_dt = to_datetime(
+            plan_end or plan_execution_time_dt, relative_base=plan_execution_time_dt
+        )
+
+        # we need to take the DAG into account so that parent models can be expanded to cover at least as much as their children
+        # for example, A(hourly) <- B(daily)
+        # if min_intervals=1, A would have 1 hour and B would have 1 day
+        # but B depends on A so in order for B to have 1 valid day, A needs to be expanded to 24 hours
+        backfill_dag: DAG[str] = DAG()
+        for fqn in backfill_model_fqns:
+            backfill_dag.add(
+                fqn,
+                [
+                    p.name
+                    for p in snapshots_by_model_fqn[fqn].parents
+                    if p.name in backfill_model_fqns
+                ],
+            )
+
+        # start from the leaf nodes and work back towards the root because the min_start at the root node is determined by the calculated starts in the leaf nodes
+        reversed_dag = backfill_dag.reversed
+        graph = reversed_dag.graph
+
+        for model_fqn in reversed_dag:
+            # Get the earliest start from all immediate children of this snapshot
+            # this works because topological ordering guarantees that they've already been visited
+            # and we always set a start override
+            min_child_start = min(
+                [start_overrides[immediate_child_fqn] for immediate_child_fqn in graph[model_fqn]],
+                default=plan_start_dt,
+            )
+
+            snapshot = snapshots_by_model_fqn.get(model_fqn)
+
+            if not snapshot:
+                continue
+
+            starting_point = end_override_per_model.get(model_fqn, plan_end_dt)
+            if node_end := snapshot.node.end:
+                # if we dont do this, if the node end is a *date* (as opposed to a timestamp)
+                # we end up incorrectly winding back an extra day
+                node_end_dt = make_exclusive(node_end)
+
+                if node_end_dt < plan_end_dt:
+                    # if the model has an end date that has already elapsed, use that as a starting point for calculating min_intervals
+                    # instead of the plan end. If we use the plan end, we will return intervals in the future which are invalid
+                    starting_point = node_end_dt
+
+            snapshot_start = snapshot.node.cron_floor(starting_point)
+
+            for _ in range(min_intervals):
+                # wind back the starting point by :min_intervals intervals to arrive at the minimum snapshot start date
+                snapshot_start = snapshot.node.cron_prev(snapshot_start)
+
+            start_overrides[model_fqn] = min(min_child_start, snapshot_start)
+
+        return start_overrides
+
     def _get_max_interval_end_per_model(
         self, snapshots: t.Dict[str, Snapshot], backfill_models: t.Optional[t.Set[str]]
-    ) -> t.Dict[str, int]:
+    ) -> t.Dict[str, datetime]:
         models_for_interval_end = (
             self._get_models_for_interval_end(snapshots, backfill_models)
             if backfill_models is not None
             else None
         )
-        return self.state_sync.max_interval_end_per_model(
-            c.PROD,
-            models=models_for_interval_end,
-            ensure_finalized_snapshots=self.config.plan.use_finalized_state,
-        )
+        return {
+            model_fqn: to_datetime(ts)
+            for model_fqn, ts in self.state_sync.max_interval_end_per_model(
+                c.PROD,
+                models=models_for_interval_end,
+                ensure_finalized_snapshots=self.config.plan.use_finalized_state,
+            ).items()
+        }
 
     @staticmethod
     def _get_models_for_interval_end(

@@ -165,27 +165,20 @@ class EnvironmentState:
             where=environment_filter,
         )
 
-    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         """Returns the expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
         Returns:
-            The list of environments to remove, the filter to remove environments.
+            The list of environment summaries to remove.
         """
-        rows = fetchall(
-            self.engine_adapter,
-            self._environments_query(
-                where=self._create_expiration_filter_expr(current_ts),
-                lock_for_update=True,
-            ),
+        return self._fetch_environment_summaries(
+            where=self._create_expiration_filter_expr(current_ts)
         )
-        expired_environments = [self._environment_from_row(r) for r in rows]
-
-        return expired_environments
 
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
-    ) -> t.List[Environment]:
+    ) -> t.List[EnvironmentSummary]:
         """Deletes expired environments.
 
         Returns:
@@ -228,13 +221,7 @@ class EnvironmentState:
         Returns:
             A list of all environment summaries.
         """
-        return [
-            self._environment_summmary_from_row(row)
-            for row in fetchall(
-                self.engine_adapter,
-                self._environments_query(required_fields=list(EnvironmentSummary.all_fields())),
-            )
-        ]
+        return self._fetch_environment_summaries()
 
     def get_environment(
         self, environment: str, lock_for_update: bool = False
@@ -329,6 +316,20 @@ class EnvironmentState:
             this=exp.column("expiration_ts"),
             expression=exp.Literal.number(current_ts),
         )
+
+    def _fetch_environment_summaries(
+        self, where: t.Optional[str | exp.Expression] = None
+    ) -> t.List[EnvironmentSummary]:
+        return [
+            self._environment_summmary_from_row(row)
+            for row in fetchall(
+                self.engine_adapter,
+                self._environments_query(
+                    where=where,
+                    required_fields=list(EnvironmentSummary.all_fields()),
+                ),
+            )
+        ]
 
 
 def _environment_to_df(environment: Environment) -> pd.DataFrame:

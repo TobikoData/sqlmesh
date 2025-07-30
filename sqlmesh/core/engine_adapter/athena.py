@@ -41,12 +41,16 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SCHEMA_DIFFER = TrinoEngineAdapter.SCHEMA_DIFFER
     MAX_TIMESTAMP_PRECISION = 3  # copied from Trino
+    # Athena does not deal with comments well, e.g:
+    # >>> self._execute('/* test */ DESCRIBE foo')
+    #     pyathena.error.OperationalError: FAILED: ParseException line 1:0 cannot recognize input near '/' '*' 'test'
+    ATTACH_CORRELATION_ID = False
 
     def __init__(
         self, *args: t.Any, s3_warehouse_location: t.Optional[str] = None, **kwargs: t.Any
     ):
         # Need to pass s3_warehouse_location to the superclass so that it goes into _extra_config
-        # which means that EngineAdapter.with_log_level() keeps this property when it makes a clone
+        # which means that EngineAdapter.with_settings() keeps this property when it makes a clone
         super().__init__(*args, s3_warehouse_location=s3_warehouse_location, **kwargs)
         self.s3_warehouse_location = s3_warehouse_location
 

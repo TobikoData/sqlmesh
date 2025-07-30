@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import getpass
 import io
 import typing as t
 from decimal import Decimal
@@ -14,6 +15,7 @@ from sqlmesh.utils.jinja import ENVIRONMENT, create_var
 
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
+    "user": lambda: getpass.getuser(),
 }
 
 

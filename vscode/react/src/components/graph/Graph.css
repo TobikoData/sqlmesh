@@ -29,6 +29,7 @@ react-flow__attribution {
   box-shadow: none;
   border: var(--vscode-button-border);
   background: var(--vscode-button-background);
+  color: var(--vscode-foreground);
 }
 .react-flow__controls-button:hover {
   background: var(--vscode-button-hoverBackground);

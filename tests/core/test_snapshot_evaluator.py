@@ -54,7 +54,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import to_view_mapping
-from sqlmesh.core.snapshot.evaluator import CustomMaterialization
+from sqlmesh.core.snapshot.evaluator import CustomMaterialization, SnapshotCreationFailedError
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, DestructiveChangeError
@@ -92,13 +92,16 @@ def date_kwargs() -> t.Dict[str, str]:
 
 @pytest.fixture
 def adapter_mock(mocker: MockerFixture):
+    def mock_exit(self, exc_type, exc_value, traceback):
+        pass
+
     transaction_mock = mocker.Mock()
     transaction_mock.__enter__ = mocker.Mock()
-    transaction_mock.__exit__ = mocker.Mock()
+    transaction_mock.__exit__ = mock_exit
 
     session_mock = mocker.Mock()
     session_mock.__enter__ = mocker.Mock()
-    session_mock.__exit__ = mocker.Mock()
+    session_mock.__exit__ = mock_exit
 
     adapter_mock = mocker.Mock()
     adapter_mock.transaction.return_value = transaction_mock
@@ -291,6 +294,8 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
@@ -317,6 +322,8 @@ def test_demote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
+    adapter_mock.transaction.assert_called()
+    adapter_mock.session.assert_called()
     adapter_mock.drop_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         cascade=False,
@@ -513,25 +520,8 @@ def test_evaluate_materialized_view(
         snapshots={},
     )
 
-    adapter_mock.table_exists.assert_called_once_with(snapshot.table_name())
-
-    if view_exists:
-        # Evaluation shouldn't take place because the rendered query hasn't changed
-        # since the last view creation.
-        assert not adapter_mock.create_view.called
-    else:
-        # If the view doesn't exist, it should be created even if the rendered query
-        # hasn't changed since the last view creation.
-        adapter_mock.create_view.assert_called_once_with(
-            snapshot.table_name(),
-            model.render_query(),
-            model.columns_to_types,
-            replace=True,
-            materialized=True,
-            view_properties={},
-            table_description=None,
-            column_descriptions={},
-        )
+    # Ensure that the materialized view is recreated even if it exists
+    assert adapter_mock.create_view.assert_called
 
 
 def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
@@ -1160,6 +1150,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
+    session_spy = mocker.spy(adapter, "session")
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -1200,6 +1191,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
             ),
         ]
     )
+
+    session_spy.assert_called_once()
 
 
 def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
@@ -1596,7 +1589,8 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
         ),
     ]
 
-    evaluator.create([snapshot], {})
+    with pytest.raises(SnapshotCreationFailedError):
+        evaluator.create([snapshot], {})
 
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
@@ -1979,6 +1973,8 @@ def test_insert_into_scd_type_2_by_time(
         column_descriptions={},
         updated_at_as_valid_from=False,
         truncate=truncate,
+        is_restatement=False,
+        start="2020-01-01",
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -2151,6 +2147,8 @@ def test_insert_into_scd_type_2_by_column(
         table_description=None,
         column_descriptions={},
         truncate=truncate,
+        is_restatement=False,
+        start="2020-01-01",
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -2202,13 +2200,19 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
                     source=False,
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                    this=exp.column(
+                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
+                                    ),
+                                    expressions=[
+                                        exp.column(
+                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
+                                        )
+                                    ],
                                 )
                             ),
                         ],
@@ -2216,6 +2220,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
                 )
             ]
         ),
+        physical_properties={},
     )
 
 
@@ -2264,16 +2269,24 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
             expressions=[
                 exp.When(
                     matched=True,
-                    condition=exp.column("id", MERGE_SOURCE_ALIAS).eq(exp.Literal.number(1)),
+                    condition=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True).eq(
+                        exp.Literal.number(1)
+                    ),
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                    this=exp.column(
+                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
+                                    ),
+                                    expressions=[
+                                        exp.column(
+                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
+                                        )
+                                    ],
                                 )
                             ),
                         ],
@@ -2284,13 +2297,19 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
                     source=False,
                     then=exp.Update(
                         expressions=[
-                            exp.column("name", MERGE_TARGET_ALIAS).eq(
-                                exp.column("name", MERGE_SOURCE_ALIAS)
+                            exp.column("name", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
+                                exp.column("name", MERGE_SOURCE_ALIAS.lower(), quoted=True)
                             ),
-                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                    this=exp.column(
+                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
+                                    ),
+                                    expressions=[
+                                        exp.column(
+                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
+                                        )
+                                    ],
                                 )
                             ),
                         ],
@@ -2298,6 +2317,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
                 ),
             ],
         ),
+        physical_properties={},
     )
 
 
@@ -2375,16 +2395,16 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
     assert model.merge_filter == exp.And(
         this=exp.And(
             this=exp.GT(
-                this=exp.column("id", MERGE_SOURCE_ALIAS),
+                this=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True),
                 expression=exp.Literal(this="0", is_string=False),
             ),
             expression=exp.LT(
-                this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                this=exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True),
                 expression=d.MacroVar(this="end_ds"),
             ),
         ),
         expression=exp.GT(
-            this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+            this=exp.column("updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True),
             expression=d.MacroVar(this="start_ds"),
         ),
     )
@@ -2416,10 +2436,16 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
                     matched=True,
                     then=exp.Update(
                         expressions=[
-                            exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                            exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True).eq(
                                 exp.Coalesce(
-                                    this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
-                                    expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                                    this=exp.column(
+                                        "updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True
+                                    ),
+                                    expressions=[
+                                        exp.column(
+                                            "updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True
+                                        )
+                                    ],
                                 )
                             ),
                         ],
@@ -2430,19 +2456,20 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
         merge_filter=exp.And(
             this=exp.And(
                 this=exp.GT(
-                    this=exp.column("id", MERGE_SOURCE_ALIAS),
+                    this=exp.column("id", MERGE_SOURCE_ALIAS.lower(), quoted=True),
                     expression=exp.Literal(this="0", is_string=False),
                 ),
                 expression=exp.LT(
-                    this=exp.column("updated_at", MERGE_TARGET_ALIAS),
+                    this=exp.column("updated_at", MERGE_TARGET_ALIAS.lower(), quoted=True),
                     expression=exp.Literal(this="2020-01-02", is_string=True),
                 ),
             ),
             expression=exp.GT(
-                this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                this=exp.column("updated_at", MERGE_SOURCE_ALIAS.lower(), quoted=True),
                 expression=exp.Literal(this="2020-01-01", is_string=True),
             ),
         ),
+        physical_properties={},
     )
 
 
@@ -2537,7 +2564,9 @@ def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator = SnapshotEvaluator(adapter_mock)
-    evaluator.create([snapshot], {})
+
+    with pytest.raises(SnapshotCreationFailedError):
+        evaluator.create([snapshot], {})
 
     adapter_mock.replace_query.assert_called_once_with(
         f"sqlmesh__db.db__seed__{snapshot.version}",

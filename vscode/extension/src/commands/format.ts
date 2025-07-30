@@ -11,12 +11,18 @@ export const format =
   (
     authProvider: AuthenticationProviderTobikoCloud,
     lsp: LSPClient | undefined,
+    restartLSP: () => Promise<void>,
   ) =>
   async (): Promise<void> => {
     traceLog('Calling format')
     const out = await internalFormat(lsp)
     if (isErr(out)) {
-      return handleError(authProvider, out.error, 'Project format failed')
+      return handleError(
+        authProvider,
+        restartLSP,
+        out.error,
+        'Project format failed',
+      )
     }
     vscode.window.showInformationMessage('Project formatted successfully')
   }
