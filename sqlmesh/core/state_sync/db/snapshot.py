@@ -8,7 +8,6 @@ from collections import defaultdict
 from sqlglot import exp
 from pydantic import Field
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
     snapshot_name_version_filter,
@@ -53,7 +52,7 @@ class SnapshotState:
         self,
         engine_adapter: EngineAdapter,
         schema: t.Optional[str] = None,
-        context_path: Path = Path(),
+        cache_dir: Path = Path(),
     ):
         self.engine_adapter = engine_adapter
         self.snapshots_table = exp.table_("_snapshots", db=schema)
@@ -79,7 +78,7 @@ class SnapshotState:
             "next_auto_restatement_ts": exp.DataType.build("bigint"),
         }
 
-        self._snapshot_cache = SnapshotCache(context_path / c.CACHE)
+        self._snapshot_cache = SnapshotCache(cache_dir)
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         """Pushes snapshots to the state store.
@@ -374,25 +373,31 @@ class SnapshotState:
         Args:
             next_auto_restatement_ts: A dictionary of snapshot name version to the next auto restatement timestamp.
         """
+        next_auto_restatement_ts_deleted = []
+        next_auto_restatement_ts_filtered = {}
+        for k, v in next_auto_restatement_ts.items():
+            if v is None:
+                next_auto_restatement_ts_deleted.append(k)
+            else:
+                next_auto_restatement_ts_filtered[k] = v
+
         for where in snapshot_name_version_filter(
             self.engine_adapter,
-            next_auto_restatement_ts,
+            next_auto_restatement_ts_deleted,
             column_prefix="snapshot",
             alias=None,
             batch_size=self.SNAPSHOT_BATCH_SIZE,
         ):
             self.engine_adapter.delete_from(self.auto_restatements_table, where=where)
 
-        next_auto_restatement_ts_filtered = {
-            k: v for k, v in next_auto_restatement_ts.items() if v is not None
-        }
         if not next_auto_restatement_ts_filtered:
             return
 
-        self.engine_adapter.insert_append(
+        self.engine_adapter.merge(
             self.auto_restatements_table,
             _auto_restatements_to_df(next_auto_restatement_ts_filtered),
             columns_to_types=self._auto_restatement_columns_to_types,
+            unique_key=(exp.column("snapshot_name"), exp.column("snapshot_version")),
         )
 
     def count(self) -> int:

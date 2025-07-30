@@ -59,13 +59,16 @@ from sqlmesh.core.snapshot.definition import (
     apply_auto_restatements,
     display_name,
     get_next_model_interval_start,
-    _check_ready_intervals,
+    check_ready_intervals,
     _contiguous_intervals,
+    table_name,
+    TableNamingConvention,
 )
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
+from sqlmesh.utils.hashing import md5
 from sqlmesh.core.console import get_console
 
 
@@ -163,6 +166,7 @@ def test_json(snapshot: Snapshot):
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
+        "table_naming_convention": "schema_and_table",
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
@@ -549,6 +553,50 @@ def test_missing_intervals_past_end_date_with_lookback(make_snapshot):
     # running way in the future, no missing intervals because subtracting 2 days for lookback still exceeds the models end date
     end_time = to_timestamp("2024-01-01")
     assert snapshot.missing_intervals(start_time, end_time, execution_time=end_time) == []
+
+
+def test_missing_intervals_start_override_per_model(make_snapshot: t.Callable[..., Snapshot]):
+    snapshot = make_snapshot(
+        load_sql_based_model(
+            parse("""
+            MODEL (
+                name a,
+                kind FULL,
+                start '2023-02-01',
+                cron '@daily'
+            );
+            SELECT 1;
+            """)
+        ),
+        version="a",
+    )
+
+    # base case - no override
+    assert list(
+        missing_intervals(execution_time="2023-02-08 00:05:07", snapshots=[snapshot]).values()
+    )[0] == [
+        (to_timestamp("2023-02-01"), to_timestamp("2023-02-02")),
+        (to_timestamp("2023-02-02"), to_timestamp("2023-02-03")),
+        (to_timestamp("2023-02-03"), to_timestamp("2023-02-04")),
+        (to_timestamp("2023-02-04"), to_timestamp("2023-02-05")),
+        (to_timestamp("2023-02-05"), to_timestamp("2023-02-06")),
+        (to_timestamp("2023-02-06"), to_timestamp("2023-02-07")),
+        (to_timestamp("2023-02-07"), to_timestamp("2023-02-08")),
+    ]
+
+    # with override, should use the overridden start date when calculating missing intervals
+    assert list(
+        missing_intervals(
+            start="1 day ago",
+            execution_time="2023-02-08 00:05:07",
+            snapshots=[snapshot],
+            start_override_per_model={snapshot.name: to_datetime("2023-02-05 00:00:00")},
+        ).values()
+    )[0] == [
+        (to_timestamp("2023-02-05"), to_timestamp("2023-02-06")),
+        (to_timestamp("2023-02-06"), to_timestamp("2023-02-07")),
+        (to_timestamp("2023-02-07"), to_timestamp("2023-02-08")),
+    ]
 
 
 def test_incremental_time_self_reference(make_snapshot):
@@ -1087,12 +1135,15 @@ def test_stamp(model: Model):
     assert original_fingerprint != stamped_fingerprint
 
 
-def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
+def test_snapshot_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__dev"
@@ -1142,6 +1193,83 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     )
 
 
+def test_table_name_naming_convention_table_only(make_snapshot: t.Callable[..., Snapshot]):
+    # 3-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.TABLE_ONLY
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.TABLE_ONLY
+
+    assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.baz__{snapshot.version}"
+    assert (
+        snapshot.table_name(is_deployable=False) == f"foo.sqlmesh__bar.baz__{snapshot.version}__dev"
+    )
+
+    # 2-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.table_name(is_deployable=True) == f"sqlmesh__foo.bar__{snapshot.version}"
+    assert snapshot.table_name(is_deployable=False) == f"sqlmesh__foo.bar__{snapshot.version}__dev"
+
+
+def test_table_name_naming_convention_hash_md5(make_snapshot: t.Callable[..., Snapshot]):
+    # 3-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+
+    hash = md5(f"foo.sqlmesh__bar.bar__baz__{snapshot.version}")
+    assert snapshot.table_name(is_deployable=True) == f"foo.sqlmesh__bar.sqlmesh_md5__{hash}"
+    hash_dev = md5(f"foo.sqlmesh__bar.bar__baz__{snapshot.version}__dev")
+    assert (
+        snapshot.table_name(is_deployable=False) == f"foo.sqlmesh__bar.sqlmesh_md5__{hash_dev}__dev"
+    )
+
+    # 2-part naming
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    hash = md5(f"sqlmesh__foo.foo__bar__{snapshot.version}")
+    assert snapshot.table_name(is_deployable=True) == f"sqlmesh__foo.sqlmesh_md5__{hash}"
+
+    hash_dev = md5(f"sqlmesh__foo.foo__bar__{snapshot.version}__dev")
+    assert snapshot.table_name(is_deployable=False) == f"sqlmesh__foo.sqlmesh_md5__{hash_dev}__dev"
+
+
+def test_table_naming_convention_passed_around_correctly(make_snapshot: t.Callable[..., Snapshot]):
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.table_info.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert (
+        snapshot.table_info.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+    )
+    assert snapshot.table_info.table_info.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert (
+        snapshot.table_info.table_info.data_version.table_naming_convention
+        == TableNamingConvention.HASH_MD5
+    )
+
+
 def test_table_name_view(make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot = make_snapshot(SqlModel(name="name", query=parse_one("select 1"), kind="VIEW"))
@@ -1171,6 +1299,36 @@ def test_table_name_view(make_snapshot: t.Callable):
     assert new_snapshot.dev_version == new_snapshot.fingerprint.to_version()
     assert new_snapshot.version == snapshot.version
     assert new_snapshot.dev_version != snapshot.dev_version
+
+
+def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
+    # Ensure that snapshots that trigger "reuse previous version" inherit the naming convention of the previous snapshot
+    original_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds")),
+        table_naming_convention=TableNamingConvention.SCHEMA_AND_TABLE,
+    )
+    original_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert original_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert original_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+
+    changed_snapshot: Snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, 'forward_only' as a, ds")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    changed_snapshot.previous_versions = original_snapshot.all_versions
+
+    assert changed_snapshot.previous_version == original_snapshot.data_version
+
+    changed_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    # inherited from previous version even though changed_snapshot was created with TableNamingConvention.HASH_MD5
+    assert changed_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
+    assert (
+        changed_snapshot.previous_version.table_naming_convention
+        == TableNamingConvention.SCHEMA_AND_TABLE
+    )
+    assert changed_snapshot.table_name() == "sqlmesh__default.a__4145234055"
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -1780,7 +1938,31 @@ def test_is_valid_start(make_snapshot):
             EnvironmentNamingInfo(name="dev", catalog_name_override="g-h"),
             '"g-h".default__dev."e-f"',
         ),
-        (QualifiedViewName(table="e-f"), EnvironmentNamingInfo(name="dev"), 'default__dev."e-f"'),
+        (
+            QualifiedViewName(table="e-f"),
+            EnvironmentNamingInfo(name="dev"),
+            'default__dev."e-f"',
+        ),
+        # EnvironmentSuffixTarget.CATALOG
+        (
+            QualifiedViewName(
+                catalog="default-foo", schema_name="sqlmesh_example", table="full_model"
+            ),
+            EnvironmentNamingInfo(
+                name="dev",
+                suffix_target=EnvironmentSuffixTarget.CATALOG,
+            ),
+            '"default-foo__dev".sqlmesh_example.full_model',
+        ),
+        (
+            QualifiedViewName(catalog="default", schema_name="sqlmesh_example", table="full_model"),
+            EnvironmentNamingInfo(
+                name=c.PROD,
+                catalog_name_override=None,
+                suffix_target=EnvironmentSuffixTarget.CATALOG,
+            ),
+            "default.sqlmesh_example.full_model",
+        ),
     ),
 )
 def test_qualified_view_name(qualified_view_name, environment_naming_info, expected):
@@ -2066,6 +2248,177 @@ def test_deployability_index_missing_parent(make_snapshot):
 
 
 @pytest.mark.parametrize(
+    "call_kwargs, expected",
+    [
+        ########################################
+        # TableNamingConvention.SCHEMA_AND_TABLE
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar", version="1234"),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="foo.bar", version="1234"),
+            "sqlmesh__foo.foo__bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar", version="1234", catalog="foo"),
+            "foo.sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar.baz", version="1234", catalog="foo"),
+            "foo.sqlmesh__foo.bar__baz__1234",
+        ),
+        (
+            dict(physical_schema="sqlmesh__foo", name="bar.baz", version="1234", suffix="dev"),
+            "sqlmesh__foo.bar__baz__1234__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+            ),
+            "foo.sqlmesh__foo.bar__baz__1234__dev",
+        ),
+        ##################################
+        # TableNamingConvention.TABLE_ONLY
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="foo.bar",
+                version="1234",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__foo.bar__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__bar.baz__1234",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                suffix="dev",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "sqlmesh__bar.baz__1234__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__bar",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+                naming_convention=TableNamingConvention.TABLE_ONLY,
+            ),
+            "foo.sqlmesh__bar.baz__1234__dev",
+        ),
+        #################################
+        # TableNamingConvention.HASH_MD5
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="foo.bar",
+                version="1234",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.foo__bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__baz__1234')}",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                suffix="dev",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"sqlmesh__foo.sqlmesh_md5__{md5('sqlmesh__foo.bar__baz__1234__dev')}__dev",
+        ),
+        (
+            dict(
+                physical_schema="sqlmesh__foo",
+                name="bar.baz",
+                version="1234",
+                catalog="foo",
+                suffix="dev",
+                naming_convention=TableNamingConvention.HASH_MD5,
+            ),
+            f"foo.sqlmesh__foo.sqlmesh_md5__{md5('foo.sqlmesh__foo.bar__baz__1234__dev')}__dev",
+        ),
+    ],
+)
+def test_table_name(call_kwargs: t.Dict[str, t.Any], expected: str):
+    """
+    physical_schema: str
+    name: str
+    version: str
+    catalog: t.Optional[str]
+    suffix: t.Optional[str]
+    naming_convention: t.Optional[TableNamingConvention]
+    """
+    assert table_name(**call_kwargs) == expected
+
+
+@pytest.mark.parametrize(
     "model_name, environment_naming_info, default_catalog, dialect, expected",
     (
         (
@@ -2153,6 +2506,21 @@ def test_deployability_index_missing_parent(make_snapshot):
             "default_catalog",
             "snowflake",
             "CATALOG_OVERRIDE.test_db.test_model__DEV",
+        ),
+        # EnvironmentSuffixTarget.CATALOG
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.CATALOG),
+            "default_catalog",
+            "duckdb",
+            "default_catalog__dev.test_db.test_model",
+        ),
+        (
+            "test_db.test_model",
+            EnvironmentNamingInfo(name="dev", suffix_target=EnvironmentSuffixTarget.CATALOG),
+            "default_catalog",
+            "snowflake",
+            "DEFAULT_CATALOG__DEV.test_db.test_model",
         ),
     ),
 )
@@ -2324,7 +2692,7 @@ def test_snapshot_pickle_intervals(make_snapshot):
     assert len(snapshot.dev_intervals) > 0
 
 
-def test_missing_intervals_interval_end_per_model(make_snapshot):
+def test_missing_intervals_end_override_per_model(make_snapshot):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -2347,9 +2715,9 @@ def test_missing_intervals_interval_end_per_model(make_snapshot):
         [snapshot_a, snapshot_b],
         start="2023-01-04",
         end="2023-01-10",
-        interval_end_per_model={
-            snapshot_a.name: to_timestamp("2023-01-09"),
-            snapshot_b.name: to_timestamp("2023-01-06"),
+        end_override_per_model={
+            snapshot_a.name: to_datetime("2023-01-09"),
+            snapshot_b.name: to_datetime("2023-01-06"),
         },
     ) == {
         snapshot_a: [
@@ -2369,9 +2737,9 @@ def test_missing_intervals_interval_end_per_model(make_snapshot):
         [snapshot_a, snapshot_b],
         start="2023-01-08",
         end="2023-01-08",
-        interval_end_per_model={
-            snapshot_a.name: to_timestamp("2023-01-09"),
-            snapshot_b.name: to_timestamp(
+        end_override_per_model={
+            snapshot_a.name: to_datetime("2023-01-09"),
+            snapshot_b.name: to_datetime(
                 "2023-01-06"
             ),  # The interval end is before the start. The snapshot will be skipped
         },
@@ -2501,7 +2869,7 @@ def test_contiguous_intervals():
 def test_check_ready_intervals(mocker: MockerFixture):
     def assert_always_signal(intervals):
         assert (
-            _check_ready_intervals(lambda _: True, intervals, mocker.Mock(), mocker.Mock())
+            check_ready_intervals(lambda _: True, intervals, mocker.Mock(), mocker.Mock())
             == intervals
         )
 
@@ -2511,9 +2879,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_always_signal([(0, 1), (2, 3)])
 
     def assert_never_signal(intervals):
-        assert (
-            _check_ready_intervals(lambda _: False, intervals, mocker.Mock(), mocker.Mock()) == []
-        )
+        assert check_ready_intervals(lambda _: False, intervals, mocker.Mock(), mocker.Mock()) == []
 
     assert_never_signal([])
     assert_never_signal([(0, 1)])
@@ -2521,7 +2887,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     assert_never_signal([(0, 1), (2, 3)])
 
     def assert_empty_signal(intervals):
-        assert _check_ready_intervals(lambda _: [], intervals, mocker.Mock(), mocker.Mock()) == []
+        assert check_ready_intervals(lambda _: [], intervals, mocker.Mock(), mocker.Mock()) == []
 
     assert_empty_signal([])
     assert_empty_signal([(0, 1)])
@@ -2538,7 +2904,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     ):
         mock = mocker.Mock()
         mock.side_effect = [to_intervals(r) for r in ready]
-        _check_ready_intervals(mock, intervals, mocker.Mock(), mocker.Mock()) == expected
+        check_ready_intervals(mock, intervals, mocker.Mock(), mocker.Mock()) == expected
 
     assert_check_intervals([], [], [])
     assert_check_intervals([(0, 1)], [[]], [])
@@ -2579,7 +2945,7 @@ def test_check_ready_intervals(mocker: MockerFixture):
     )
 
     with pytest.raises(SignalEvalError):
-        _check_ready_intervals(
+        check_ready_intervals(
             lambda _: (_ for _ in ()).throw(MemoryError("Some exception")),
             [(0, 1), (1, 2)],
             mocker.Mock(),

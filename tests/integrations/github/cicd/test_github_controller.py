@@ -1,26 +1,31 @@
 # type: ignore
+import typing as t
 import os
 import pathlib
 from unittest import mock
 from unittest.mock import PropertyMock, call
 
 import pytest
+import time_machine
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.core.user import User, UserRole
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
-    GithubCheckStatus,
     MergeStateStatus,
+    GithubCheckConclusion,
 )
+from sqlmesh.integrations.github.cicd.controller import GithubController
+from sqlmesh.integrations.github.cicd.command import _update_pr_environment
 from sqlmesh.utils.date import to_datetime, now
 from tests.integrations.github.cicd.conftest import MockIssueComment
+from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.github
 
@@ -252,6 +257,18 @@ def test_pr_plan_auto_categorization(github_client, make_controller):
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
     assert controller._pr_plan_builder._categorizer_config == custom_categorizer_config
     assert controller.pr_plan.start == default_start_absolute
+    assert not controller.pr_plan.start_override_per_model
+
+
+def test_pr_plan_min_intervals(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(default_pr_start="1 day ago", pr_min_intervals=1),
+    )
+    assert controller.pr_plan.environment.name == "hello_world_2"
+    assert isinstance(controller.pr_plan, Plan)
+    assert controller.pr_plan.start_override_per_model
 
 
 def test_prod_plan(github_client, make_controller):
@@ -545,16 +562,11 @@ def test_uncategorized(
     make_mock_issue_comment,
     tmp_path: pathlib.Path,
 ):
-    snapshot_categrozied = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot_categrozied.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot_uncategorized = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
     mocker.patch(
-        "sqlmesh.core.plan.Plan.modified_snapshots",
+        "sqlmesh.core.plan.Plan.uncategorized",
         PropertyMock(
-            return_value={
-                snapshot_categrozied.snapshot_id: snapshot_categrozied,
-                snapshot_uncategorized.snapshot_id: snapshot_uncategorized,
-            },
+            return_value=[snapshot_uncategorized],
         ),
     )
     mock_repo = github_client.get_repo()
@@ -570,21 +582,199 @@ def test_uncategorized(
         )
     )
     mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    # note: context is deliberately not mocked out so that context.apply() throws UncategorizedPlanError due to the uncategorized snapshot
     controller = make_controller(
-        "tests/fixtures/github/pull_request_synchronized.json", github_client
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
     )
+    assert controller.pr_plan.uncategorized
 
     github_output_file = tmp_path / "github_output.txt"
 
     with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
-        controller.update_pr_environment_check(GithubCheckStatus.COMPLETED)
+        _update_pr_environment(controller)
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
     pr_environment_check_run = controller._check_run_mapping[
         "SQLMesh - PR Environment Synced"
     ].all_kwargs
-    assert len(pr_environment_check_run) == 1
-    assert (
-        pr_environment_check_run[0]["output"]["summary"]
-        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>a</td><td>Breaking</td><td>N/A</td></tr><tr><td>b</td><td>Uncategorized</td><td>N/A</td></tr></tbody></table>"""
+    assert len(pr_environment_check_run) == 2
+    assert pr_environment_check_run[0]["status"] == "in_progress"
+    assert pr_environment_check_run[1]["status"] == "completed"
+    assert pr_environment_check_run[1]["conclusion"] == "action_required"
+    summary = pr_environment_check_run[1]["output"]["summary"]
+    assert "Action Required to create or update PR Environment" in summary
+    assert "The following models could not be categorized automatically" in summary
+    assert '- "b"' in summary
+    assert "Run `sqlmesh plan hello_world_2` locally to apply these changes" in summary
+
+
+@time_machine.travel("2025-07-07 00:00:00 UTC", tick=False)
+def test_get_plan_summary_doesnt_truncate_backfill_list(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
     )
+
+    summary = controller.get_plan_summary(controller.prod_plan)
+
+    assert "more ...." not in summary
+
+    assert (
+        """**Models needing backfill:**
+* `memory.raw.demographics`: [full refresh]
+* `memory.sushi.active_customers`: [full refresh]
+* `memory.sushi.count_customers_active`: [full refresh]
+* `memory.sushi.count_customers_inactive`: [full refresh]
+* `memory.sushi.customer_revenue_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customer_revenue_lifetime`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.customers`: [full refresh]
+* `memory.sushi.items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.latest_order`: [full refresh]
+* `memory.sushi.marketing`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.order_items`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.orders`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.raw_marketing`: [full refresh]
+* `memory.sushi.top_waiters`: [recreate view]
+* `memory.sushi.waiter_as_customer_by_day`: [2025-06-30 - 2025-07-06]
+* `memory.sushi.waiter_names`: [full refresh]
+* `memory.sushi.waiter_revenue_by_day`: [2025-06-30 - 2025-07-06]"""
+        in summary
+    )
+
+
+def test_get_plan_summary_includes_warnings_and_errors(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    controller._console.log_warning("Warning 1\nWith multiline")
+    controller._console.log_warning("Warning 2")
+    controller._console.log_error("Error 1")
+
+    summary = controller.get_plan_summary(controller.prod_plan)
+
+    assert ("> [!WARNING]\n>\n> - Warning 1\n> With multiline\n>\n> - Warning 2\n\n") in summary
+
+    assert ("> [!CAUTION]\n>\n> Error 1\n\n") in summary
+
+
+def test_get_pr_environment_summary_includes_warnings_and_errors(
+    github_client, make_controller: t.Callable[..., GithubController]
+):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+    )
+
+    controller._console.log_warning("Warning 1")
+    controller._console.log_error("Error 1")
+
+    # completed with no exception triggers a SUCCESS conclusion and only shows warnings
+    success_summary = controller.get_pr_environment_summary(
+        conclusion=GithubCheckConclusion.SUCCESS
+    )
+    assert "> [!WARNING]\n>\n> Warning 1\n" in success_summary
+    assert "> [!CAUTION]\n>\n> Error 1" not in success_summary
+
+    # since they got consumed in the previous call
+    controller._console.log_warning("Warning 1")
+    controller._console.log_error("Error 1")
+
+    # completed with an exception triggers a FAILED conclusion and shows errors
+    error_summary = controller.get_pr_environment_summary(
+        conclusion=GithubCheckConclusion.FAILURE, exception=SQLMeshError("Something broke")
+    )
+    assert "> [!WARNING]\n>\n> Warning 1\n" in error_summary
+    assert "> [!CAUTION]\n>\n> Error 1" in error_summary
+
+
+def test_pr_comment_deploy_indicator_includes_command_namespace(
+    mocker: MockerFixture,
+    github_client,
+    make_mock_issue_comment,
+    make_controller: t.Callable[..., GithubController],
+):
+    mock_repo = github_client.get_repo()
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+        bot_config=GithubCICDBotConfig(
+            enable_deploy_command=True,
+            merge_method=MergeMethod.SQUASH,
+            command_namespace="#SQLMesh",
+        ),
+    )
+
+    _update_pr_environment(controller)
+
+    assert len(created_comments) > 0
+
+    comment = created_comments[0].body
+
+    assert "To **apply** this PR's plan to prod, comment:\n  - `/deploy`" not in comment
+    assert "To **apply** this PR's plan to prod, comment:\n  - `#SQLMesh/deploy`" in comment
+
+
+def test_forward_only_config_falls_back_to_plan_config(
+    github_client,
+    make_controller: t.Callable[..., GithubController],
+    mocker: MockerFixture,
+):
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+    mock_pull_request.head.ref = "unit-test-test-pr"
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.SQUASH,
+            enable_deploy_command=True,
+            forward_only_branch_suffix="-forward-only",
+        ),
+        mock_out_context=False,
+    )
+
+    controller._context.config.plan.forward_only = True
+    assert controller.forward_only_plan
+
+    controller._context.config.plan.forward_only = False
+    assert controller.forward_only_plan is False

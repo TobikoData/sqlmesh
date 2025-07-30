@@ -49,7 +49,7 @@ def make_pull_request_review(github_client) -> t.Callable:
             github_client.requester,
             {},
             {
-                # Name is whatever they provide in their GitHub profile or login as fallback. Always use login.
+                # Name is whatever they provide in their GitHub profile or login as a fallback. Always use login.
                 "user": AttributeDict(name="Unrelated", login=username),
                 "state": state,
                 **kwargs,
@@ -117,7 +117,7 @@ def make_controller(
 
         orig_console = get_console()
         try:
-            set_console(MarkdownConsole())
+            set_console(MarkdownConsole(warning_capture_only=True, error_capture_only=True))
 
             return GithubController(
                 paths=paths,

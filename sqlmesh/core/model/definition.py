@@ -27,6 +27,7 @@ from sqlmesh.core.model.common import (
     expression_validator,
     make_python_env,
     parse_dependencies,
+    parse_strings_with_macro_refs,
     single_value_or_tuple,
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
@@ -72,15 +73,24 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 PROPERTIES = {"physical_properties", "session_properties", "virtual_properties"}
 
 RUNTIME_RENDERED_MODEL_FIELDS = {
     "audits",
     "signals",
-    "description",
-    "cron",
     "merge_filter",
 } | PROPERTIES
+
+CRON_SHORTCUTS = {
+    "@midnight",
+    "@hourly",
+    "@daily",
+    "@weekly",
+    "@monthly",
+    "@yearly",
+    "@annually",
+}
 
 
 class _Model(ModelMeta, frozen=True):
@@ -627,14 +637,22 @@ class _Model(ModelMeta, frozen=True):
             {k: _render(v) for k, v in signal.items()} for name, signal in self.signals if not name
         ]
 
-    def render_signal_calls(self) -> t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]:
-        return {
+    def render_signal_calls(self) -> EvaluatableSignals:
+        python_env = self.python_env
+        env = prepare_env(python_env)
+        signals_to_kwargs = {
             name: {
                 k: seq_get(self._create_renderer(v).render() or [], 0) for k, v in kwargs.items()
             }
             for name, kwargs in self.signals
             if name
         }
+
+        return EvaluatableSignals(
+            signals_to_kwargs=signals_to_kwargs,
+            python_env=python_env,
+            prepared_python_env=env,
+        )
 
     def render_merge_filter(
         self,
@@ -653,7 +671,7 @@ class _Model(ModelMeta, frozen=True):
         )
         if len(rendered_exprs) != 1:
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
-        return rendered_exprs[0].transform(d.replace_merge_table_aliases)
+        return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
         self, properties: t.Dict[str, exp.Expression] | SessionProperties, **render_kwargs: t.Any
@@ -1638,6 +1656,8 @@ class SeedModel(_Model):
     def seed_path(self) -> Path:
         seed_path = Path(self.kind.path)
         if not seed_path.is_absolute():
+            if self._path is None:
+                raise SQLMeshError(f"Seed model '{self.name}' has no path")
             return self._path.parent / seed_path
         return seed_path
 
@@ -1857,6 +1877,15 @@ class AuditResult(PydanticModel):
     blocking: bool = True
 
 
+class EvaluatableSignals(PydanticModel):
+    signals_to_kwargs: t.Dict[str, t.Dict[str, t.Optional[exp.Expression]]]
+    """A mapping of signal names to the kwargs passed to the signal."""
+    python_env: t.Dict[str, Executable]
+    """The Python environment that should be used to evaluated the rendered signal calls."""
+    prepared_python_env: t.Dict[str, t.Any]
+    """The prepared Python environment that should be used to evaluated the rendered signal calls."""
+
+
 def _extract_blueprints(blueprints: t.Any, path: Path) -> t.List[t.Any]:
     if not blueprints:
         return [None]
@@ -2003,7 +2032,7 @@ def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
@@ -2017,6 +2046,7 @@ def load_sql_based_model(
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     infer_names: t.Optional[bool] = False,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    migrated_dbt_project_name: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -2153,6 +2183,8 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
     # The name of the model will be inferred from its path relative to `models/`, if it's not explicitly specified
     name = meta_fields.pop("name", "")
     if not name and infer_names:
+        if path is None:
+            raise ValueError(f"Model {name} must have a name")
         name = get_model_name(path)
 
     if not name:
@@ -2193,6 +2225,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
             query_or_seed_insert,
             kind=kind,
             time_column_format=time_column_format,
+            migrated_dbt_project_name=migrated_dbt_project_name,
             **common_kwargs,
         )
 
@@ -2230,7 +2263,7 @@ def create_seed_model(
     name: TableName,
     seed_kind: SeedKind,
     *,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     module_path: Path = Path(),
     **kwargs: t.Any,
 ) -> Model:
@@ -2249,7 +2282,12 @@ def create_seed_model(
         seed_path = module_path.joinpath(*subdirs)
         seed_kind.path = str(seed_path)
     elif not seed_path.is_absolute():
-        seed_path = path / seed_path if path.is_dir() else path.parent / seed_path
+        if path is None:
+            seed_path = seed_path
+        elif path.is_dir():
+            seed_path = path / seed_path
+        else:
+            seed_path = path.parent / seed_path
 
     seed = create_seed(seed_path)
 
@@ -2331,7 +2369,7 @@ def create_python_model(
 
     used_variables = {k: v for k, v in (variables or {}).items() if k in referenced_variables}
     if used_variables:
-        python_env[c.SQLMESH_VARS] = Executable.value(used_variables)
+        python_env[c.SQLMESH_VARS] = Executable.value(used_variables, sort_root_dict=True)
 
     return _create_model(
         PythonModel,
@@ -2384,7 +2422,7 @@ def _create_model(
     name: TableName,
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
-    path: Path = Path(),
+    path: t.Optional[Path] = None,
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
@@ -2400,10 +2438,14 @@ def _create_model(
     signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    migrated_dbt_project_name: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     validate_extra_and_required_fields(
-        klass, {"name", *kwargs} - {"grain", "table_properties"}, "MODEL block"
+        klass,
+        {"name", *kwargs} - {"grain", "table_properties"},
+        "MODEL block",
+        path,
     )
 
     for prop in PROPERTIES:
@@ -2428,7 +2470,25 @@ def _create_model(
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
 
-    statements = []
+    statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
+
+    # Merge default pre_statements with model-specific pre_statements
+    if "pre_statements" in defaults:
+        kwargs["pre_statements"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["pre_statements"]
+        ] + kwargs.get("pre_statements", [])
+
+    # Merge default post_statements with model-specific post_statements
+    if "post_statements" in defaults:
+        kwargs["post_statements"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["post_statements"]
+        ] + kwargs.get("post_statements", [])
+
+    # Merge default on_virtual_update with model-specific on_virtual_update
+    if "on_virtual_update" in defaults:
+        kwargs["on_virtual_update"] = [
+            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["on_virtual_update"]
+        ] + kwargs.get("on_virtual_update", [])
 
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
@@ -2449,19 +2509,37 @@ def _create_model(
         if isinstance(property_values, exp.Tuple):
             statements.extend(property_values.expressions)
 
+    if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
+        statements.append(kwargs["kind"].merge_filter)
+
     jinja_macro_references, used_variables = extract_macro_references_and_variables(
-        *(gen(e) for e in statements)
+        *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
     if jinja_macros:
         jinja_macros = (
-            jinja_macros if jinja_macros.trimmed else jinja_macros.trim(jinja_macro_references)
+            jinja_macros
+            if jinja_macros.trimmed
+            else jinja_macros.trim(jinja_macro_references, package=migrated_dbt_project_name)
         )
     else:
         jinja_macros = JinjaMacroRegistry()
 
-    for jinja_macro in jinja_macros.root_macros.values():
-        used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+    if migrated_dbt_project_name:
+        # extract {{ var() }} references used in all jinja macro dependencies to check for any variables specific
+        # to a migrated DBT package and resolve them accordingly
+        # vars are added into __sqlmesh_vars__ in the Python env so that the native SQLMesh var() function can resolve them
+        variables = variables or {}
+
+        nested_macro_used_variables, flattened_package_variables = (
+            _extract_migrated_dbt_variable_references(jinja_macros, variables)
+        )
+
+        used_variables.update(nested_macro_used_variables)
+        variables.update(flattened_package_variables)
+    else:
+        for jinja_macro in jinja_macros.root_macros.values():
+            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
     model = klass(
         name=name,
@@ -2553,7 +2631,7 @@ INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 def _split_sql_model_statements(
     expressions: t.List[exp.Expression],
-    path: Path,
+    path: t.Optional[Path],
     dialect: t.Optional[str] = None,
 ) -> t.Tuple[
     t.Optional[exp.Expression],
@@ -2674,7 +2752,7 @@ def _refs_to_sql(values: t.Any) -> exp.Expression:
 def render_meta_fields(
     fields: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2716,21 +2794,28 @@ def render_meta_fields(
 
     for field_name, field_info in ModelMeta.all_field_infos().items():
         field = field_info.alias or field_name
+        field_value = fields.get(field)
 
-        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+        # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
+        if (
+            field == "cron"
+            and isinstance(field_value, str)
+            and field_value.lower() in CRON_SHORTCUTS
+        ) or field_value is None:
             continue
 
-        field_value = fields.get(field)
-        if field_value is None:
+        if field in RUNTIME_RENDERED_MODEL_FIELDS:
+            fields[field] = parse_strings_with_macro_refs(field_value, dialect)
             continue
 
         if isinstance(field_value, dict):
             rendered_dict = {}
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
-                    rendered_dict[key] = value
+                    rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
+
             if rendered_dict:
                 fields[field] = rendered_dict
             else:
@@ -2758,7 +2843,7 @@ def render_meta_fields(
 def render_model_defaults(
     defaults: t.Dict[str, t.Any],
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry],
     macros: t.Optional[MacroRegistry],
     dialect: DialectType,
@@ -2808,7 +2893,7 @@ def parse_defaults_properties(
 def render_expression(
     expression: exp.Expression,
     module_path: Path,
-    path: Path,
+    path: t.Optional[Path],
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     macros: t.Optional[MacroRegistry] = None,
     dialect: DialectType = None,
@@ -2844,7 +2929,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "cron_tz": lambda value: exp.Literal.string(value),
     "partitioned_by_": _single_expr_or_tuple,
     "clustered_by": _single_expr_or_tuple,
-    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
+    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)) if value else "()",
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
     "audits": _list_of_calls_to_exp,
@@ -2868,6 +2953,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
             for name, args in values
         )
     ),
+    "formatting": str,
 }
 
 
@@ -2913,6 +2999,39 @@ def clickhouse_partition_func(
         ),
         col_type,
     )
+
+
+def _extract_migrated_dbt_variable_references(
+    jinja_macros: JinjaMacroRegistry, project_variables: t.Dict[str, t.Any]
+) -> t.Tuple[t.Set[str], t.Dict[str, t.Any]]:
+    if not jinja_macros.trimmed:
+        raise ValueError("Expecting a trimmed JinjaMacroRegistry")
+
+    used_variables = set()
+    # note: JinjaMacroRegistry is trimmed here so "all_macros" should be just be all the macros used by this model
+    for _, _, jinja_macro in jinja_macros.all_macros:
+        _, extracted_variable_names = extract_macro_references_and_variables(jinja_macro.definition)
+        used_variables.update(extracted_variable_names)
+
+    flattened = {}
+    if (dbt_package_variables := project_variables.get(c.MIGRATED_DBT_PACKAGES)) and isinstance(
+        dbt_package_variables, dict
+    ):
+        # flatten the nested dict structure from the migrated dbt package variables in the SQLmesh config into __dbt_packages.<package>.<variable>
+        # to match what extract_macro_references_and_variables() returns. This allows the usage checks in create_python_env() to work
+        def _flatten(prefix: str, root: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+            acc = {}
+            for k, v in root.items():
+                key_with_prefix = f"{prefix}.{k}"
+                if isinstance(v, dict):
+                    acc.update(_flatten(key_with_prefix, v))
+                else:
+                    acc[key_with_prefix] = v
+            return acc
+
+        flattened = _flatten(c.MIGRATED_DBT_PACKAGES, dbt_package_variables)
+
+    return used_variables, flattened
 
 
 TIME_COL_PARTITION_FUNC = {"clickhouse": clickhouse_partition_func}

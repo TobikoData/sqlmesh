@@ -38,6 +38,9 @@ class BaseAdapter(abc.ABC):
         self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
         self.jinja_globals["adapter"] = self
         self.project_dialect = project_dialect
+        self.jinja_globals["dialect"] = (
+            project_dialect  # so the dialect is available in the jinja env created by self.dispatch()
+        )
         self.quote_policy = quote_policy or Policy()
 
     @abc.abstractmethod

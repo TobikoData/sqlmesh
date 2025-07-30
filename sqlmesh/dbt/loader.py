@@ -5,7 +5,6 @@ import sys
 import typing as t
 import sqlmesh.core.dialect as d
 from pathlib import Path
-from sqlmesh.core import constants as c
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -99,11 +98,12 @@ class DbtLoader(Loader):
         for file in macro_files:
             self._track_file(file)
 
-        # This doesn't do anything, the actual content will be loaded from the manifest
-        return (
-            macro.get_registry(),
-            JinjaMacroRegistry(),
-        )
+        jinja_macros = JinjaMacroRegistry()
+        for project in self._load_projects():
+            jinja_macros = jinja_macros.merge(project.context.jinja_macros)
+            jinja_macros.add_globals(project.context.jinja_globals)
+
+        return (macro.get_registry(), jinja_macros)
 
     def _load_models(
         self,
@@ -277,6 +277,7 @@ class DbtLoader(Loader):
                         ],
                         python_env={},
                         jinja_macros=jinja_registry,
+                        project=package_name,
                     )
                     project_names.add(package_name)
 
@@ -329,8 +330,8 @@ class DbtLoader(Loader):
             self._yaml_max_mtimes = yaml_max_mtimes
 
             target = t.cast(TargetConfig, project.context.target)
-            cache_path = loader.config_path / c.CACHE / target.name
-            self._model_cache = ModelCache(cache_path)
+            cache_dir = loader.context.cache_dir / target.name
+            self._model_cache = ModelCache(cache_dir)
 
         def get_or_load_models(
             self, target_path: Path, loader: t.Callable[[], t.List[Model]]

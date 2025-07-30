@@ -17,7 +17,7 @@ from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
@@ -744,6 +744,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=True,
+        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -807,6 +808,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=False,
+        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -899,6 +901,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=True,
+        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -970,6 +973,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=False,
+        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1583,7 +1587,7 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    init_example_project(tmp_path, ctx.dialect, schema_name=schema_name)
+    init_example_project(tmp_path, ctx.mark.split("_")[0], schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,
@@ -2349,15 +2353,17 @@ def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
     row_diff = table_diff.row_diff()
 
     assert row_diff.full_match_count == 7
-    assert row_diff.full_match_pct == 93.33
-    assert row_diff.s_only_count == 2
-    assert row_diff.t_only_count == 5
-    assert row_diff.stats["join_count"] == 4
-    assert row_diff.stats["null_grain_count"] == 4
-    assert row_diff.stats["s_count"] != row_diff.stats["distinct_count_s"]
+    assert row_diff.full_match_pct == 82.35
+    assert row_diff.s_only_count == 0
+    assert row_diff.t_only_count == 3
+    assert row_diff.stats["join_count"] == 7
+    assert (
+        row_diff.stats["null_grain_count"] == 4
+    )  # null grain currently (2025-07-24) means "any key column is null" as opposed to "all key columns are null"
     assert row_diff.stats["distinct_count_s"] == 7
-    assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
+    assert row_diff.stats["s_count"] == row_diff.stats["distinct_count_s"]
     assert row_diff.stats["distinct_count_t"] == 10
+    assert row_diff.stats["t_count"] == row_diff.stats["distinct_count_t"]
     assert row_diff.s_sample.shape == (row_diff.s_only_count, 3)
     assert row_diff.t_sample.shape == (row_diff.t_only_count, 3)
 

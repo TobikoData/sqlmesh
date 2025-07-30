@@ -569,6 +569,8 @@ def test_scd_type_2_by_time(
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        start=datetime(2020, 1, 1, 0, 0, 0),
+        truncate=True,
     )
 
     assert to_sql_calls(adapter) == [
@@ -613,7 +615,7 @@ def test_scd_type_2_by_time(
     TRUE AS `_exists`
   FROM `db`.`temp_target_abcdefgh`
   WHERE
-    NOT `test_valid_to` IS NULL
+    NOT `test_valid_to` IS NULL LIMIT 0
 ), `latest` AS (
   SELECT
     `id`,
@@ -625,7 +627,7 @@ def test_scd_type_2_by_time(
     TRUE AS `_exists`
   FROM `db`.`temp_target_abcdefgh`
   WHERE
-    `test_valid_to` IS NULL
+    `test_valid_to` IS NULL LIMIT 0
 ), `deleted` AS (
   SELECT
     `static`.`id`,

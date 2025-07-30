@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from sqlmesh.core.linter.rule import Position, Range
+from sqlmesh.core.linter.rule import Range, Position
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlglot import tokenize, TokenType
 import typing as t
 
 
@@ -83,19 +84,8 @@ class TokenPositionDetails(PydanticModel):
         )
 
 
-def read_range_from_file(file: Path, text_range: Range) -> str:
-    """
-    Read the file and return the content within the specified range.
-
-    Args:
-        file: Path to the file to read
-        text_range: The range of text to extract
-
-    Returns:
-        The content within the specified range
-    """
-    with file.open("r", encoding="utf-8") as f:
-        lines = f.readlines()
+def read_range_from_string(content: str, text_range: Range) -> str:
+    lines = content.splitlines(keepends=False)
 
     # Ensure the range is within bounds
     start_line = max(0, text_range.start.line)
@@ -113,3 +103,58 @@ def read_range_from_file(file: Path, text_range: Range) -> str:
         result.append(line[start_char:end_char])
 
     return "".join(result)
+
+
+def read_range_from_file(file: Path, text_range: Range) -> str:
+    """
+    Read the file and return the content within the specified range.
+
+    Args:
+        file: Path to the file to read
+        text_range: The range of text to extract
+
+    Returns:
+        The content within the specified range
+    """
+    with file.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    return read_range_from_string("".join(lines), text_range)
+
+
+def get_range_of_model_block(
+    sql: str,
+    dialect: str,
+) -> t.Optional[Range]:
+    """
+    Get the range of the model block in an SQL file.
+    """
+    tokens = tokenize(sql, dialect=dialect)
+
+    # Find start of the model block
+    start = next(
+        (t for t in tokens if t.token_type is TokenType.VAR and t.text.upper() == "MODEL"),
+        None,
+    )
+    end = next((t for t in tokens if t.token_type is TokenType.SEMICOLON), None)
+
+    if start is None or end is None:
+        return None
+
+    start_position = TokenPositionDetails(
+        line=start.line,
+        col=start.col,
+        start=start.start,
+        end=start.end,
+    )
+    end_position = TokenPositionDetails(
+        line=end.line,
+        col=end.col,
+        start=end.start,
+        end=end.end,
+    )
+
+    splitlines = sql.splitlines()
+    return Range(
+        start=start_position.to_range(splitlines).start, end=end_position.to_range(splitlines).end
+    )

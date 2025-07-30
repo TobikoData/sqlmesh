@@ -79,10 +79,11 @@ export class AuthenticationProviderTobikoCloud
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
-      tcloudBinPath,
+      tcloudBinPath.bin,
       ['auth', 'vscode', 'status'],
       {
         cwd: workspacePath.uri.fsPath,
+        env: tcloudBinPath.env,
       },
     )
     if (result.exitCode !== 0) {
@@ -162,8 +163,9 @@ export class AuthenticationProviderTobikoCloud
       throw new Error('Failed to get tcloud bin')
     }
     const tcloudBinPath = tcloudBin.value
-    const result = await execAsync(tcloudBinPath, ['auth', 'logout'], {
+    const result = await execAsync(tcloudBinPath.bin, ['auth', 'logout'], {
       cwd: workspacePath.uri.fsPath,
+      env: tcloudBinPath.env,
     })
     if (result.exitCode !== 0) {
       throw new Error('Failed to logout from tcloud')
@@ -187,7 +189,7 @@ export class AuthenticationProviderTobikoCloud
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
-      tcloudBinPath,
+      tcloudBinPath.bin,
       ['auth', 'vscode', 'login-url'],
       {
         cwd: workspacePath.uri.fsPath,
@@ -214,11 +216,12 @@ export class AuthenticationProviderTobikoCloud
         1000 * 60 * 5,
       )
       const backgroundServerForLogin = execAsync(
-        tcloudBinPath,
+        tcloudBinPath.bin,
         ['auth', 'vscode', 'start-server', urlCode.verifier_code],
         {
           cwd: workspacePath.uri.fsPath,
           signal: ac.signal,
+          env: tcloudBinPath.env,
         },
       )
 
@@ -283,10 +286,11 @@ export class AuthenticationProviderTobikoCloud
     }
     const tcloudBinPath = tcloudBin.value
     const result = await execAsync(
-      tcloudBinPath,
+      tcloudBinPath.bin,
       ['auth', 'vscode', 'device'],
       {
         cwd: workspacePath.uri.fsPath,
+        env: tcloudBinPath.env,
       },
     )
     if (result.exitCode !== 0) {
@@ -305,11 +309,12 @@ export class AuthenticationProviderTobikoCloud
         1000 * 60 * 5,
       )
       const waiting = execAsync(
-        tcloudBinPath,
+        tcloudBinPath.bin,
         ['auth', 'vscode', 'poll_device', deviceCodeResponse.device_code],
         {
           cwd: workspacePath.uri.fsPath,
           signal: ac.signal,
+          env: tcloudBinPath.env,
         },
       )
 

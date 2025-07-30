@@ -8,8 +8,8 @@ from sqlmesh.lsp.custom import (
 from sqlmesh import macro
 import typing as t
 from sqlmesh.lsp.context import AuditTarget, LSPContext, ModelTarget
-from sqlmesh.lsp.description import generate_markdown_description
 from sqlmesh.lsp.uri import URI
+from sqlmesh.utils.lineage import generate_markdown_description
 
 
 def get_sql_completions(

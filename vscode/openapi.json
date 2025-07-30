@@ -1382,8 +1382,14 @@
         "properties": {
           "name": { "type": "string", "title": "Name" },
           "fqn": { "type": "string", "title": "Fqn" },
-          "path": { "type": "string", "title": "Path" },
-          "full_path": { "type": "string", "title": "Full Path" },
+          "path": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Path"
+          },
+          "full_path": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Full Path"
+          },
           "dialect": { "type": "string", "title": "Dialect" },
           "type": { "$ref": "#/components/schemas/ModelType" },
           "columns": {
@@ -1417,16 +1423,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "name",
-          "fqn",
-          "path",
-          "full_path",
-          "dialect",
-          "type",
-          "columns",
-          "hash"
-        ],
+        "required": ["name", "fqn", "dialect", "type", "columns", "hash"],
         "title": "Model"
       },
       "ModelDetails": {
@@ -2143,7 +2140,7 @@
       "TestCase": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
-          "path": { "type": "string", "format": "path", "title": "Path" }
+          "path": { "type": "string", "title": "Path" }
         },
         "additionalProperties": false,
         "type": "object",
@@ -2153,7 +2150,7 @@
       "TestErrorOrFailure": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
-          "path": { "type": "string", "format": "path", "title": "Path" },
+          "path": { "type": "string", "title": "Path" },
           "tb": { "type": "string", "title": "Tb" }
         },
         "additionalProperties": false,
@@ -2193,7 +2190,7 @@
       "TestSkipped": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
-          "path": { "type": "string", "format": "path", "title": "Path" },
+          "path": { "type": "string", "title": "Path" },
           "reason": { "type": "string", "title": "Reason" }
         },
         "additionalProperties": false,

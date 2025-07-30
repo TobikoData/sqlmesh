@@ -12,9 +12,10 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
-from sqlmesh.cli.example_project import init_example_project, ProjectTemplate
+from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from pydantic import ValidationError
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator, ValidationError
@@ -42,6 +43,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
+    IncrementalByUniqueKeyKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -63,7 +65,13 @@ from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroExtractor,
+    MacroReference,
+    SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+)
 from sqlmesh.utils.metaprogramming import Executable, SqlValue
 from sqlmesh.core.macros import RuntimeStage
 from tests.utils.test_helpers import use_terminal_console
@@ -473,7 +481,7 @@ def test_model_missing_audits(tmp_path: Path):
 
 
 def test_project_is_set_in_standalone_audit(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -689,7 +697,7 @@ def test_no_model_statement(tmp_path: Path):
         load_sql_based_model(expressions)
 
     # Name inference is enabled => MODEL (...) not required
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     test_sql_file = tmp_path / "models/test_schema/test_model.sql"
     test_sql_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1681,6 +1689,115 @@ def test_enable_audits_from_model_defaults():
 
 def test_description(sushi_context):
     assert sushi_context.models['"memory"."sushi"."orders"'].description == "Table of sushi orders."
+
+
+def test_model_defaults_statements_merge():
+    model_defaults = ModelDefaultsConfig(
+        dialect="duckdb",
+        pre_statements=[
+            "SET enable_progress_bar = true",
+            "CREATE TEMP TABLE default_temp AS SELECT 1",
+        ],
+        post_statements=[
+            "DROP TABLE IF EXISTS default_temp",
+            "grant select on @this_model to group reporter",
+        ],
+        on_virtual_update=["ANALYZE"],
+    )
+
+    # Create a model with its own statements as well
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    CREATE TEMP TABLE model_temp AS SELECT 2;
+
+    SELECT * FROM test_table;
+
+    DROP TABLE IF EXISTS model_temp;
+
+    ON_VIRTUAL_UPDATE_BEGIN;
+    UPDATE stats_table SET last_update = CURRENT_TIMESTAMP;
+    ON_VIRTUAL_UPDATE_END;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=model_defaults.dict(),
+    )
+
+    # Check that pre_statements contains both default and model-specific statements
+    assert len(model.pre_statements) == 3
+    assert model.pre_statements[0].sql() == "SET enable_progress_bar = TRUE"
+    assert model.pre_statements[1].sql() == "CREATE TEMPORARY TABLE default_temp AS SELECT 1"
+    assert model.pre_statements[2].sql() == "CREATE TEMPORARY TABLE model_temp AS SELECT 2"
+
+    # Check that post_statements contains both default and model-specific statements
+    assert len(model.post_statements) == 3
+    assert model.post_statements[0].sql() == "DROP TABLE IF EXISTS default_temp"
+    assert model.post_statements[1].sql() == "GRANT SELECT ON @this_model TO GROUP reporter"
+    assert model.post_statements[2].sql() == "DROP TABLE IF EXISTS model_temp"
+
+    # Check that the query is rendered correctly with @this_model resolved to table name
+    assert (
+        model.render_post_statements()[1].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "reporter"'
+    )
+
+    # Check that on_virtual_update contains both default and model-specific statements
+    assert len(model.on_virtual_update) == 2
+    assert model.on_virtual_update[0].sql() == "ANALYZE"
+    assert (
+        model.on_virtual_update[1].sql()
+        == "UPDATE stats_table SET last_update = CURRENT_TIMESTAMP()"
+    )
+
+
+def test_model_defaults_statements_integration():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="postgres",
+            pre_statements=["SET memory_limit = '10GB'"],
+            post_statements=["VACUUM ANALYZE"],
+            on_virtual_update=["GRANT SELECT ON @this_model TO GROUP public"],
+        )
+    )
+
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    SELECT * FROM source_table;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=config.model_defaults.dict(),
+    )
+
+    # Verify defaults were applied
+    assert len(model.pre_statements) == 1
+    assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
+
+    assert len(model.post_statements) == 1
+    assert isinstance(model.post_statements[0], exp.Command)
+
+    assert len(model.on_virtual_update) == 1
+    assert model.on_virtual_update[0].sql() == "GRANT SELECT ON @this_model TO GROUP public"
+    assert (
+        model.render_on_virtual_update()[0].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "public"'
+    )
 
 
 def test_render_definition():
@@ -3080,7 +3197,7 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     db_path = str(tmp_path / "db.db")
     config = Config(
@@ -3103,7 +3220,7 @@ def test_model_cache_gateway(tmp_path: Path, mocker: MockerFixture):
 
 @pytest.mark.slow
 def test_model_cache_default_catalog(tmp_path: Path, mocker: MockerFixture):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     Context(paths=tmp_path)
 
     patched_cache_put = mocker.patch("sqlmesh.utils.cache.FileCache.put")
@@ -3282,7 +3399,7 @@ def test_no_depends_on_runtime_jinja_query():
     model = load_sql_based_model(expressions)
     with pytest.raises(
         ConfigError,
-        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
+        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime",
     ):
         model.validate_definition()
 
@@ -4255,6 +4372,7 @@ def test_project_level_properties_python_model():
 def test_model_defaults_macros(make_snapshot):
     model_defaults = ModelDefaultsConfig(
         table_format="@IF(@gateway = 'dev', 'iceberg', NULL)",
+        cron="@cron_macro",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
@@ -4290,7 +4408,7 @@ def test_model_defaults_macros(make_snapshot):
             default_dialect="snowflake",
         ),
         defaults=model_defaults.dict(),
-        variables={"gateway": "dev", "create_type": "SECURE"},
+        variables={"gateway": "dev", "create_type": "SECURE", "cron_macro": "@daily"},
     )
 
     snapshot: Snapshot = make_snapshot(model)
@@ -4303,6 +4421,7 @@ def test_model_defaults_macros(make_snapshot):
     assert not model.allow_partials
     assert model.interval_unit == IntervalUnit.DAY
     assert model.table_format == "iceberg"
+    assert model.cron == "@daily"
 
     # Validate disabling of conditional model default
     assert not model.storage_format
@@ -4355,6 +4474,7 @@ def test_model_defaults_macros_python_model(make_snapshot):
             "partition_expiration_days": 13,
             "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
         },
+        "cron": "@cron_macro_expr",
         "table_format": "@IF(@gateway = 'local', 'iceberg', NULL)",
         "storage_format": "@IF(@gateway = 'dev', 'parquet', NULL)",
         "optimize_query": "@IF(@gateway = 'local', True, False)",
@@ -4383,13 +4503,14 @@ def test_model_defaults_macros_python_model(make_snapshot):
         path=Path("."),
         dialect="duckdb",
         defaults=model_defaults,
-        variables={"gateway": "local", "create_type": "SECURE"},
+        variables={"gateway": "local", "create_type": "SECURE", "cron_macro_expr": "0 */2 * * *"},
     )
 
     # Even if in the project wide defaults this is ignored for python models
     assert not m.optimize_query
 
     # Validate rendering of model defaults
+    assert m.cron == "0 */2 * * *"
     assert m.enabled
     assert m.start == "2024-01-01"
     assert m.allow_partials
@@ -5295,6 +5416,30 @@ def test_signals():
     )
 
 
+def test_load_python_model_with_signals():
+    @signal()
+    def always_true(batch):
+        return True
+
+    @model(
+        name="model_with_signal",
+        kind="full",
+        columns={'"COL"': "int"},
+        signals=[("always_true", {})],
+    )
+    def model_with_signal(context, **kwargs):
+        return pd.DataFrame([{"COL": 1}])
+
+    models = model.get_registry()["model_with_signal"].models(
+        get_variables=lambda _: {},
+        path=Path("."),
+        module_path=Path("."),
+        signal_definitions=signal.get_registry(),
+    )
+    assert len(models) == 1
+    assert models[0].signals == [("always_true", {})]
+
+
 def test_null_column_type():
     expressions = d.parse(
         """
@@ -5334,13 +5479,13 @@ def test_when_matched():
     """
     )
 
-    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary))"
+    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`))"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.when_matched.sql() == expected_when_matched
+    assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
 
     expressions = d.parse(
         """
@@ -5368,9 +5513,9 @@ def test_when_matched():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__._operation = 1 THEN DELETE
-      WHEN MATCHED AND __MERGE_SOURCE__._operation <> 1 THEN UPDATE SET
-        __MERGE_TARGET__.purchase_order_id = 1
+      WHEN MATCHED AND "__merge_source__"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "__merge_source__"."_operation" <> 1 THEN UPDATE SET
+        "__merge_target__"."purchase_order_id" = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5421,7 +5566,7 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND __MERGE_SOURCE__.salary <> __MERGE_TARGET__.salary THEN UPDATE SET
+      WHEN MATCHED AND "__merge_source__"."salary" <> "__merge_target__"."salary" THEN UPDATE SET
         ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
@@ -5455,21 +5600,21 @@ def test_when_matched_multiple():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.salary = COALESCE(__MERGE_SOURCE__.salary, __MERGE_TARGET__.salary)",
+        "WHEN MATCHED AND `__merge_source__`.`x` = 1 THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
+        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
     ]
 
     model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert whens.expressions[0].sql(dialect="hive") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="hive") == expected_when_matched[1]
 
     model = SqlModel.parse_raw(model.json())
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
+    assert whens.expressions[0].sql(dialect="hive") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="hive") == expected_when_matched[1]
 
 
 def test_when_matched_merge_filter_multi_part_columns():
@@ -5497,28 +5642,86 @@ def test_when_matched_merge_filter_multi_part_columns():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND __MERGE_SOURCE__.record.nested_record.field = 1 THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field = COALESCE(__MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field, __MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field)",
+        "WHEN MATCHED AND `__merge_source__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
     ]
 
     expected_merge_filter = (
-        "__MERGE_SOURCE__.record.nested_record.field < __MERGE_TARGET__.record.nested_record.field AND "
-        "__MERGE_TARGET__.repeated_record.sub_repeated_record.sub_field > __MERGE_SOURCE__.repeated_record.sub_repeated_record.sub_field"
+        "`__merge_source__`.`record`.`nested_record`.`field` < `__merge_target__`.`record`.`nested_record`.`field` AND "
+        "`__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
     )
 
     model = load_sql_based_model(expressions, dialect="bigquery", variables={"schema": "db"})
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
-    assert model.merge_filter.sql() == expected_merge_filter
+    assert whens.expressions[0].sql(dialect="bigquery") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="bigquery") == expected_when_matched[1]
+    assert model.merge_filter.sql(dialect="bigquery") == expected_merge_filter
 
     model = SqlModel.parse_raw(model.json())
     whens = model.kind.when_matched
     assert len(whens.expressions) == 2
-    assert whens.expressions[0].sql() == expected_when_matched[0]
-    assert whens.expressions[1].sql() == expected_when_matched[1]
-    assert model.merge_filter.sql() == expected_merge_filter
+    assert whens.expressions[0].sql(dialect="bigquery") == expected_when_matched[0]
+    assert whens.expressions[1].sql(dialect="bigquery") == expected_when_matched[1]
+    assert model.merge_filter.sql(dialect="bigquery") == expected_merge_filter
+
+
+def test_when_matched_normalization() -> None:
+    # unquoted should be normalized and quoted
+    expressions = d.parse(
+        """
+        MODEL (
+          name test.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched (
+                WHEN MATCHED THEN UPDATE SET
+                    target.key_a = source.key_a,
+                    target.key_b = source.key_b,
+            )
+          )
+        );
+        SELECT 'name' AS name, 1 AS key_a, 2 AS key_b;
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="snowflake")
+
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert isinstance(model.kind.when_matched, exp.Whens)
+    first_expression = model.kind.when_matched.expressions[0]
+    assert isinstance(first_expression, exp.Expression)
+    assert (
+        first_expression.sql(dialect="snowflake")
+        == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."KEY_A" = "__MERGE_SOURCE__"."KEY_A", "__MERGE_TARGET__"."KEY_B" = "__MERGE_SOURCE__"."KEY_B"'
+    )
+
+    # quoted should be preserved
+    expressions = d.parse(
+        """
+        MODEL (
+          name test.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            when_matched (
+                WHEN MATCHED THEN UPDATE SET
+                    target."kEy_A" = source."kEy_A",
+                    target."kEY_b" = source.key_b,
+            )
+          )
+        );
+        SELECT 'name' AS name, 1 AS "kEy_A", 2 AS "kEY_b";
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="snowflake")
+
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert isinstance(model.kind.when_matched, exp.Whens)
+    first_expression = model.kind.when_matched.expressions[0]
+    assert isinstance(first_expression, exp.Expression)
+    assert (
+        first_expression.sql(dialect="snowflake")
+        == 'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."kEy_A" = "__MERGE_SOURCE__"."kEy_A", "__MERGE_TARGET__"."kEY_b" = "__MERGE_SOURCE__"."KEY_B"'
+    )
 
 
 def test_default_catalog_sql(assert_exp_eq):
@@ -6026,7 +6229,8 @@ def test_named_variable_macros() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6052,7 +6256,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6076,7 +6281,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6171,6 +6377,59 @@ def test_variables_python_model(mocker: MockerFixture) -> None:
     assert df.to_dict(orient="records") == [{"a": "test_value", "b": "default_value", "c": None}]
 
 
+def test_variables_migrated_dbt_package_macro():
+    expressions = parse(
+        """
+        MODEL(
+            name test_model,
+            kind FULL,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT '{{ var('TEST_VAR_A') }}' as a, '{{ test.test_macro_var() }}' as b
+        JINJA_END;
+    """,
+        default_dialect="bigquery",
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        create_builtins_module=SQLMESH_DBT_COMPATIBILITY_PACKAGE,
+        packages={
+            "test": {
+                "test_macro_var": MacroInfo(
+                    definition="""
+                    {% macro test_macro_var() %}
+                        {{- var('test_var_b', __dbt_package='test') }}
+                    {%- endmacro %}""",
+                    depends_on=[MacroReference(name="var")],
+                )
+            }
+        },
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        variables={
+            "test_var_a": "test_var_a_value",
+            c.MIGRATED_DBT_PACKAGES: {
+                "test": {"test_var_b": "test_var_b_value", "unused": "unused_value"},
+            },
+            "test_var_c": "test_var_c_value",
+        },
+        jinja_macros=jinja_macros,
+        migrated_dbt_project_name="test",
+        dialect="bigquery",
+    )
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"},
+        sort_root_dict=True,
+    )
+    assert (
+        model.render_query().sql(dialect="bigquery")
+        == "SELECT 'test_var_a_value' AS `a`, 'test_var_b_value' AS `b`"
+    )
+
+
 def test_load_external_model_python(sushi_context) -> None:
     @model(
         "test_load_external_model_python",
@@ -6233,6 +6492,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
         columns={"a": "string"},
         kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="@{time_col}"),
         stamp="@{stamp}",
+        cron="@some_cron_var",
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         enabled="@IF(@gateway = 'dev', True, False)",
         start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
@@ -6260,6 +6520,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
             "prod_owner": "pr_1",
             "stamp": "bump",
             "time_col": "a",
+            "some_cron_var": "@daily",
         },
     )
 
@@ -6271,6 +6532,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
     assert python_model.stamp == "bump"
     assert python_model.time_column.column == exp.column("a", quoted=True)
     assert python_model.partitioned_by[0].sql() == 'DATETIME_TRUNC("a", MONTH)'
+    assert python_model.cron == "@daily"
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
@@ -6294,7 +6556,7 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         stamp="@{stamp}",
         tags=["@{tag1}", "@{tag2}"],
-        description="Model desc @{test_}",
+        description="'Model desc @{test_}'",
     )
     def model_with_macros(evaluator, **kwargs):
         return exp.select(
@@ -6338,6 +6600,88 @@ def test_macros_python_sql_model(mocker: MockerFixture) -> None:
     assert query.sql() == """SELECT 'test_value' AS "a" """.strip()
 
 
+def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
+    model = load_sql_based_model(
+        parse(
+            """
+            MODEL (
+              name db.employees,
+              kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key @{key},
+                merge_filter source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var
+              ),
+              cron '@daily',
+              allow_partials @IF(@gateway = 'dev', True, False),
+              physical_properties (
+                location1 = @'s3://bucket/prefix/@{schema_name}/@{table_name}',
+                location2 = @IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}'),
+                foo = @physical_var
+              ),
+              virtual_properties (
+                creatable_type = @{create_type},
+                bar = @virtual_var,
+              ),
+              session_properties (
+                'spark.executor.cores' = @IF(@gateway = 'dev', 1, 2),
+                'spark.executor.memory' = '1G',
+                baz = @session_var
+              ),
+            );
+
+            SELECT * FROM src;
+        """
+        ),
+        variables={
+            "gateway": "dev",
+            "key": "a",  # Not included in python_env because kind is rendered at load time
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        },
+    )
+
+    assert model.python_env[c.SQLMESH_VARS] == Executable.value(
+        {
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        },
+        sort_root_dict=True,
+    )
+
+    assert "location1" in model.physical_properties
+    assert "location2" in model.physical_properties
+
+    # The properties will stay unrendered at load time
+    assert model.session_properties == {
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
+        "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
+    }
+    assert model.virtual_properties["creatable_type"] == exp.maybe_parse("@{create_type}")
+
+    assert (
+        model.physical_properties["location1"].sql()
+        == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
+    )
+    assert (
+        model.physical_properties["location2"].sql()
+        == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
+    )
+
+    # merge_filter will stay unrendered as well
+    assert model.unique_key[0] == exp.column("a", quoted=True)
+    assert (
+        t.cast(exp.Expression, model.merge_filter).sql()
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+    )
+
+
 def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     @model(
         "test_unrendered_macros_python_model_@{bar}",
@@ -6345,7 +6689,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         kind=dict(
             name=ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
             unique_key="@{key}",
-            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds",
+            merge_filter="source.id > 0 and target.updated_at < @end_ds and source.updated_at > @start_ds and @merge_filter_var",
         ),
         cron="@daily",
         columns={"a": "string"},
@@ -6353,11 +6697,13 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
         physical_properties=dict(
             location1="@'s3://bucket/prefix/@{schema_name}/@{table_name}'",
             location2="@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')",
+            foo="@physical_var",
         ),
-        virtual_properties={"creatable_type": "@{create_type}"},
+        virtual_properties={"creatable_type": "@{create_type}", "bar": "@virtual_var"},
         session_properties={
             "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
             "spark.executor.memory": "1G",
+            "baz": "@session_var",
         },
     )
     def model_with_macros(evaluator, **kwargs):
@@ -6375,12 +6721,25 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "gateway": "dev",
             "key": "a",
             "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
         },
     )
 
     assert python_sql_model.name == "test_unrendered_macros_python_model_suffix"
     assert python_sql_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value"}
+        {
+            "test_var_a": "test_value",
+            "gateway": "dev",
+            "create_type": "'SECURE'",
+            "merge_filter_var": True,
+            "physical_var": "bla",
+            "virtual_var": "blb",
+            "session_var": "blc",
+        },
+        sort_root_dict=True,
     )
     assert python_sql_model.enabled
 
@@ -6394,25 +6753,28 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
 
     # The properties will stay unrendered at load time
     assert python_sql_model.session_properties == {
-        "spark.executor.cores": "@IF(@gateway = 'dev', 1, 2)",
+        "spark.executor.cores": exp.maybe_parse("@IF(@gateway = 'dev', 1, 2)"),
         "spark.executor.memory": "1G",
+        "baz": exp.maybe_parse("@session_var"),
     }
-    assert python_sql_model.virtual_properties["creatable_type"] == exp.convert("@{create_type}")
+    assert python_sql_model.virtual_properties["creatable_type"] == exp.maybe_parse(
+        "@{create_type}"
+    )
 
     assert (
-        python_sql_model.physical_properties["location1"].text("this")
+        python_sql_model.physical_properties["location1"].sql()
         == "@'s3://bucket/prefix/@{schema_name}/@{table_name}'"
     )
     assert (
-        python_sql_model.physical_properties["location2"].text("this")
+        python_sql_model.physical_properties["location2"].sql()
         == "@IF(@gateway = 'dev', @'hdfs://@{catalog_name}/@{schema_name}/dev/@{table_name}', @'s3://prod/@{table_name}')"
     )
 
-    # Merge_filter will stay unrendered as well
+    # merge_filter will stay unrendered as well
     assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         python_sql_model.merge_filter.sql()
-        == "source.id > 0 AND target.updated_at < @end_ds AND source.updated_at > @start_ds"
+        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -6469,7 +6831,7 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     )
 
     assert python_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value", "start": "2024-01-01"}
+        {"test_var_a": "test_value", "start": "2024-01-01"}, sort_root_dict=True
     )
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
@@ -7221,7 +7583,7 @@ def test_model_table_name_inference(
     ],
 )
 def test_python_model_name_inference(tmp_path: Path, path: str, expected_name: str) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7241,7 +7603,7 @@ def my_model(context, **kwargs):
 
 
 def test_python_model_name_inference_multiple_models(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         model_naming=NameInferenceConfig(infer_names=True),
@@ -7499,7 +7861,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7527,7 +7889,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED AND __MERGE_SOURCE__.x = 1 THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b) WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.b = COALESCE(__MERGE_SOURCE__.b, __MERGE_TARGET__.b)),
+when_matched (WHEN MATCHED AND "__merge_source__"."x" = 1 THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b") WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7727,6 +8089,37 @@ materialized TRUE
     )
 
 
+def test_incremental_by_unique_key_batch_concurrency():
+    with pytest.raises(ValidationError, match=r"Input should be 1"):
+        load_sql_based_model(
+            d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 2
+            )
+        );
+        select 1;
+        """)
+        )
+
+    model = load_sql_based_model(
+        d.parse("""
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a,
+                batch_concurrency 1
+            )
+        );
+        select 1;
+        """)
+    )
+    assert isinstance(model.kind, IncrementalByUniqueKeyKind)
+    assert model.kind.batch_concurrency == 1
+
+
 def test_bad_model_kind():
     with pytest.raises(
         SQLMeshError,
@@ -7757,13 +8150,14 @@ def test_merge_filter():
     """
     )
 
-    expected_incremental_predicate = f"{MERGE_SOURCE_ALIAS}.salary > 0"
+    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS.lower()}`.`salary` > 0"
 
     model = load_sql_based_model(expressions, dialect="hive")
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == expected_incremental_predicate
+    assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
+    assert model.dialect == "hive"
 
     expressions = d.parse(
         """
@@ -7779,7 +8173,7 @@ def test_merge_filter():
                 source.ds > (SELECT MAX(ds) FROM db.test) AND
                 source.ds > @start_ds AND
                 source._operation <> 1 AND
-                target.start_date > dateadd(day, -7, current_date)
+                target.start_date > date_add(current_date, interval 7 day)
             )
           )
         );
@@ -7791,26 +8185,27 @@ def test_merge_filter():
         """
     )
 
-    model = SqlModel.parse_raw(load_sql_based_model(expressions).json())
-    assert d.format_model_expressions(model.render_definition()) == (
+    model = SqlModel.parse_raw(load_sql_based_model(expressions, dialect="duckdb").json())
+    assert d.format_model_expressions(model.render_definition(), dialect=model.dialect) == (
         f"""MODEL (
   name db.test,
+  dialect duckdb,
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation = 1 THEN DELETE
-      WHEN MATCHED AND {MERGE_SOURCE_ALIAS}._operation <> 1 THEN UPDATE SET
-        {MERGE_TARGET_ALIAS}.purchase_order_id = 1
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1 THEN UPDATE SET
+        "{MERGE_TARGET_ALIAS.lower()}"."purchase_order_id" = 1
     ),
     merge_filter (
-      {MERGE_SOURCE_ALIAS}.ds > (
+      "{MERGE_SOURCE_ALIAS.lower()}"."ds" > (
         SELECT
-          MAX(ds)
-        FROM db.test
+          MAX("ds")
+        FROM "db"."test"
       )
-      AND {MERGE_SOURCE_ALIAS}.ds > @start_ds
-      AND {MERGE_SOURCE_ALIAS}._operation <> 1
-      AND {MERGE_TARGET_ALIAS}.start_date > DATEADD(day, -7, CURRENT_DATE)
+      AND "{MERGE_SOURCE_ALIAS.lower()}"."ds" > @start_ds
+      AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1
+      AND "{MERGE_TARGET_ALIAS.lower()}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -7827,9 +8222,45 @@ FROM db.upstream"""
 
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
     assert (
-        rendered_merge_filters.sql()
-        == "(__MERGE_SOURCE__.ds > (SELECT MAX(ds) FROM db.test) AND __MERGE_SOURCE__.ds > '2023-01-01' AND __MERGE_SOURCE__._operation <> 1 AND __MERGE_TARGET__.start_date > DATEADD(day, -7, CURRENT_DATE))"
+        rendered_merge_filters.sql(dialect="hive")
+        == "(`__merge_source__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__merge_source__`.`ds` > '2023-01-01' AND `__merge_source__`.`_operation` <> 1 AND `__merge_target__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
     )
+
+
+def test_merge_filter_normalization():
+    # unquoted gets normalized and quoted
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source.salary > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS salary;
+    """
+    )
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.merge_filter.sql(dialect="snowflake") == '"__MERGE_SOURCE__"."SALARY" > 0'
+
+    # quoted gets preserved
+    expressions = d.parse(
+        """
+        MODEL (
+          name db.employees,
+          kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key name,
+            merge_filter source."SaLArY" > 0
+          )
+        );
+        SELECT 'name' AS name, 1 AS "SaLArY";
+    """
+    )
+
+    model = load_sql_based_model(expressions, dialect="snowflake")
+    assert model.merge_filter.sql(dialect="snowflake") == '"__MERGE_SOURCE__"."SaLArY" > 0'
 
 
 def test_merge_filter_macro():
@@ -7854,19 +8285,20 @@ def test_merge_filter_macro():
     """
     )
 
-    unrendered_merge_filter = (
-        f"@predicate(update_datetime) AND {MERGE_TARGET_ALIAS}.update_datetime > @start_dt"
+    unrendered_merge_filter = f"""@predicate("UPDATE_DATETIME") AND "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME" > @start_dt"""
+    expected_merge_filter = (
+        f"""\"{MERGE_SOURCE_ALIAS}"."UPDATE_DATETIME" > DATEADD(DAY, -7, "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME") """
+        f"""AND "{MERGE_TARGET_ALIAS}"."UPDATE_DATETIME" > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"""
     )
-    expected_merge_filter = f"{MERGE_SOURCE_ALIAS}.UPDATE_DATETIME > DATE_ADD({MERGE_TARGET_ALIAS}.UPDATE_DATETIME, -7, 'DAY') AND {MERGE_TARGET_ALIAS}.UPDATE_DATETIME > CAST('2023-01-01 15:00:00+00:00' AS TIMESTAMPTZ)"
 
     model = load_sql_based_model(expressions, dialect="snowflake")
-    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+    assert model.kind.merge_filter.sql(dialect=model.dialect) == unrendered_merge_filter
 
     model = SqlModel.parse_raw(model.json())
-    assert model.kind.merge_filter.sql() == unrendered_merge_filter
+    assert model.kind.merge_filter.sql(dialect=model.dialect) == unrendered_merge_filter
 
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01 15:00:00")
-    assert rendered_merge_filters.sql() == expected_merge_filter
+    assert rendered_merge_filters.sql(dialect=model.dialect) == expected_merge_filter
 
 
 @pytest.mark.parametrize(
@@ -8014,7 +8446,7 @@ def test_physical_version():
 
     with pytest.raises(
         ConfigError,
-        match=r"Pinning a physical version is only supported for forward only models at.*",
+        match=r"Pinning a physical version is only supported for forward only models( at.*)?",
     ):
         load_sql_based_model(
             d.parse(
@@ -8102,6 +8534,38 @@ def test_comments_in_jinja_query():
         model.render_query()
 
 
+def test_jinja_render_debug_logging(caplog):
+    """Test that rendered Jinja expressions are logged for debugging."""
+    import logging
+
+    # Set log level to DEBUG to capture debug logs
+    caplog.set_level(logging.DEBUG, logger="sqlmesh.core.renderer")
+
+    # Create a model with unparseable Jinja that will be rendered
+    expressions = d.parse(
+        """
+        MODEL (name db.test_model);
+
+        JINJA_QUERY_BEGIN;
+        {{ 'SELECT invalid syntax here!' }}
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    # Attempt to render - this should fail due to invalid SQL syntax
+    with pytest.raises(ConfigError, match=r"Could not render or parse jinja"):
+        model.render_query()
+
+    # Check that the rendered Jinja was logged
+    assert any(
+        'Rendered Jinja expression for model \'"db"."test_model"\'' in record.message
+        and "SELECT invalid syntax here!" in record.message
+        for record in caplog.records
+    )
+
+
 def test_staged_file_path():
     expressions = d.parse(
         """
@@ -8148,7 +8612,7 @@ def test_cache():
 
 
 def test_snowflake_macro_func_as_table(tmp_path: Path):
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     custom_macro_file = tmp_path / "macros/custom_macros.py"
     custom_macro_file.parent.mkdir(parents=True, exist_ok=True)
@@ -8819,7 +9283,7 @@ def test_partition_interval_unit():
 
 
 def test_model_blueprinting(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -8980,7 +9444,7 @@ def entrypoint(evaluator):
 
 
 def test_dynamic_blueprinting_using_custom_macro(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_custom_macro.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -9043,7 +9507,7 @@ def gen_blueprints(evaluator):
 
 
 def test_dynamic_blueprinting_using_each(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     dynamic_template_sql = tmp_path / "models/dynamic_template_each.sql"
     dynamic_template_sql.parent.mkdir(parents=True, exist_ok=True)
@@ -9090,7 +9554,7 @@ def entrypoint(evaluator):
 
 
 def test_single_blueprint(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     single_blueprint = tmp_path / "models/single_blueprint.sql"
     single_blueprint.parent.mkdir(parents=True, exist_ok=True)
@@ -9115,7 +9579,7 @@ def test_single_blueprint(tmp_path: Path) -> None:
 
 
 def test_blueprinting_with_quotes(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     template_with_quoted_vars = tmp_path / "models/template_with_quoted_vars.sql"
     template_with_quoted_vars.parent.mkdir(parents=True, exist_ok=True)
@@ -9148,7 +9612,7 @@ def test_blueprinting_with_quotes(tmp_path: Path) -> None:
 
 
 def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9233,7 +9697,7 @@ def test_blueprint_variable_precedence_sql(tmp_path: Path, assert_exp_eq: t.Call
 
 
 def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.sql"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9282,7 +9746,7 @@ def test_blueprint_variable_jinja(tmp_path: Path, assert_exp_eq: t.Callable) -> 
 
 
 def test_blueprint_variable_precedence_python(tmp_path: Path, mocker: MockerFixture) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     blueprint_variables = tmp_path / "models/blueprint_variables.py"
     blueprint_variables.parent.mkdir(parents=True, exist_ok=True)
@@ -9507,7 +9971,7 @@ def test_data_hash_unchanged_when_column_type_uses_default_dialect():
 
 
 def test_transitive_dependency_of_metadata_only_object_is_metadata_only(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9586,7 +10050,7 @@ def metadata_macro(evaluator):
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9642,7 +10106,7 @@ def m2(evaluator):
 def test_macros_referenced_in_metadata_statements_and_properties_are_metadata_only(
     tmp_path: Path,
 ) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     test_model = tmp_path / "models/test_model.sql"
     test_model.parent.mkdir(parents=True, exist_ok=True)
@@ -9791,9 +10255,9 @@ def test_signal_always_true(batch, arg1, arg2):
 
 
 def test_scd_type_2_full_history_restatement():
-    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
-    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
-    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is False
     assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
 
 
@@ -9858,9 +10322,9 @@ def test_formatting_flag_serde():
     )
 
     model = load_sql_based_model(expressions)
+    assert model.render_definition()[0].sql() == "MODEL (\nname test_model,\nformatting False\n)"
 
     model_json = model.json()
-
     assert "formatting" not in json.loads(model_json)
 
     deserialized_model = SqlModel.parse_raw(model_json)
@@ -9909,7 +10373,7 @@ def test_python_env_references_are_unequal_but_point_to_same_definition(tmp_path
     # in sqlmesh.utils.metaprogramming.import_python_file. Depending on the module loading
     # order, we could get a "duplicate symbol in python env" error, even though the references
     # essentially pointed to the same definition (e.g. function or class).
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -9991,7 +10455,7 @@ def second_macro(evaluator):
 
 
 def test_unequal_duplicate_python_env_references_are_prohibited(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_path = str(tmp_path / "db.db")
     db_connection = DuckDBConnectionConfig(database=db_path)
@@ -10032,7 +10496,7 @@ def f():
 
 
 def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
     config = Config(
@@ -10266,13 +10730,16 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
     )
 
     assert m.python_env.get(c.SQLMESH_VARS) == Executable.value(
-        {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
+        {"selector": "bla", "bla_variable": 1, "baz_variable": 2},
+        sort_root_dict=True,
     )
-    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"selector": "baz"}, sort_root_dict=True
+    )
 
 
 def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 
@@ -10315,7 +10782,7 @@ def check_self_schema(evaluator):
 
 
 def test_model_relies_on_os_getenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    init_example_project(tmp_path, dialect="duckdb", template=ProjectTemplate.EMPTY)
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     (tmp_path / "macros" / "getenv_macro.py").write_text(
         """
@@ -10354,7 +10821,7 @@ def test_invalid_sql_model_query() -> None:
             load_sql_based_model(expressions)
 
 
-def test_query_label_and_authorization_macro():
+def test_query_label_and_authorization_macro() -> None:
     @macro()
     def test_query_label_macro(evaluator):
         return "[('key', 'value')]"
@@ -10387,3 +10854,210 @@ def test_query_label_and_authorization_macro():
         "query_label": d.parse_one("[('key', 'value')]"),
         "authorization": d.parse_one("'test_authorization'"),
     }
+
+
+def test_boolean_property_validation() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+           name db.table,
+           enabled @IF(TRUE, TRUE, FALSE),
+           dialect tsql
+        );
+
+        SELECT 1 AS c;
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="tsql")
+    assert model.enabled
+
+
+def test_datetime_without_timezone_variable_redshift() -> None:
+    expressions = d.parse(
+        """
+        MODEL (
+            name test,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column test_time_col,
+                batch_size 1,
+                batch_concurrency 1
+            ),
+            start '2025-06-01',
+            dialect redshift
+        );
+
+        SELECT @start_dtntz AS test_time_col
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="redshift")
+
+    assert (
+        model.render_query_or_raise().sql("redshift")
+        == '''SELECT CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS "test_time_col"'''
+    )
+
+
+def test_python_model_cron_with_blueprints(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_blueprint_model = tmp_path / "models" / "cron_blueprint.py"
+    cron_blueprint_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_blueprint_model.write_text(
+        """
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "@{customer}.some_table",
+    kind="FULL",
+    cron="@'*/@{min} * * * *'",
+    blueprints=[
+        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5},
+        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10},
+    ],
+    columns={
+        "field_a": "text",
+        "field_b": "text",
+        "customer": "text",
+    },
+    enabled=True
+)
+def entrypoint(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "field_a": [context.blueprint_var("field_a")],
+            "field_b": [context.blueprint_var("field_b")],
+            "customer": [context.blueprint_var("customer")],
+        }
+    )
+"""
+    )
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+    models = context.models
+
+    # Test first blueprint
+    customer1_model = models.get('"memory"."customer1"."some_table"')
+    assert customer1_model is not None
+    assert customer1_model.cron == "*/5 * * * *"
+    assert customer1_model.enabled
+    assert "blueprints" not in customer1_model.all_fields()
+    assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5}
+    )
+
+    # Test second blueprint
+    customer2_model = models.get('"memory"."customer2"."some_table"')
+    assert customer2_model is not None
+    assert customer2_model.cron == "*/10 * * * *"
+    assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10}
+    )
+
+    # Test that the models can be planned and applied
+    context.plan(no_prompts=True, auto_apply=True, no_diff=True)
+
+    # Verify the data
+    assert context.fetchdf('from "memory"."customer1"."some_table"').to_dict() == {
+        "field_a": {0: "x"},
+        "field_b": {0: "y"},
+        "customer": {0: "customer1"},
+    }
+    assert context.fetchdf('from "memory"."customer2"."some_table"').to_dict() == {
+        "field_a": {0: "z"},
+        "field_b": {0: "w"},
+        "customer": {0: "customer2"},
+    }
+
+
+def test_python_model_cron_macro_rendering(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_macro_model = tmp_path / "models" / "cron_macro.py"
+    cron_macro_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_macro_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "msc.test_cron_model",
+    kind="FULL",
+    cron="@{cron_schedule}",
+    columns={"a": "int"},
+)
+def entrypoint(context, **kwargs):
+    return pd.DataFrame([{"a": 1}])
+"""
+    )
+
+    # Test with cron alias
+    context_daily = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "@daily"},
+        ),
+    )
+    model_daily = context_daily.models.get('"memory"."msc"."test_cron_model"')
+
+    assert model_daily is not None
+    assert model_daily.cron == "@daily"
+
+    # Test with cron expression
+    context_expr = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "0 */2 * * *"},
+        ),
+    )
+    model_expr = context_expr.models.get('"memory"."msc"."test_cron_model"')
+    assert model_expr is not None
+    assert model_expr.cron == "0 */2 * * *"
+
+
+def test_python_model_normal_cron(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_macro_model = tmp_path / "models" / "cron_macro.py"
+    cron_macro_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_macro_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "msc.normal_test_cron_model",
+    kind="FULL",
+    cron="@daily",
+    columns={"a": "int"},
+)
+def entrypoint(context, **kwargs):
+    return pd.DataFrame([{"a": 1}])
+"""
+    )
+
+    # Test with cron alias
+    context_daily = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "@daily"},
+        ),
+    )
+    model_daily = context_daily.models.get('"memory"."msc"."normal_test_cron_model"')
+
+    assert model_daily is not None
+    assert model_daily.cron == "@daily"

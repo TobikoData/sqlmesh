@@ -109,6 +109,17 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
+        """Updates given snapshots with latest intervals from the state.
+
+        Args:
+            snapshots: The snapshots to refresh.
+
+        Returns:
+            The updated snapshots.
+        """
+
+    @abc.abstractmethod
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         """Returns the node names that exist in the state sync.
 
@@ -234,6 +245,15 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
                 )
 
+            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
+                raise_error(
+                    "SQLMesh",
+                    SQLMESH_VERSION,
+                    versions.sqlmesh_version,
+                    remote_package_version=versions.sqlmesh_version,
+                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
+                )
+
             if SCHEMA_VERSION != versions.schema_version:
                 raise_error(
                     "SQLMesh",
@@ -250,15 +270,6 @@ class StateReader(abc.ABC):
                     versions.sqlglot_version,
                     remote_package_version=versions.sqlglot_version,
                     ahead=major_minor(SQLGLOT_VERSION) > major_minor(versions.sqlglot_version),
-                )
-
-            if major_minor(SQLMESH_VERSION) != major_minor(versions.sqlmesh_version):
-                raise_error(
-                    "SQLMesh",
-                    SQLMESH_VERSION,
-                    versions.sqlmesh_version,
-                    remote_package_version=versions.sqlmesh_version,
-                    ahead=major_minor(SQLMESH_VERSION) > major_minor(versions.sqlmesh_version),
                 )
 
         return versions
@@ -293,12 +304,12 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_expired_environments(self, current_ts: int) -> t.List[Environment]:
+    def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
         """Returns the expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
         Returns:
-            The list of environments to remove, the filter to remove environments.
+            The list of environment summaries to remove.
         """
 
 
@@ -374,17 +385,6 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
-        """Updates given snapshots with latest intervals from the state.
-
-        Args:
-            snapshots: The snapshots to refresh.
-
-        Returns:
-            The updated snapshots.
-        """
-
-    @abc.abstractmethod
     def promote(
         self,
         environment: Environment,
@@ -418,7 +418,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def delete_expired_environments(
         self, current_ts: t.Optional[int] = None
-    ) -> t.List[Environment]:
+    ) -> t.List[EnvironmentSummary]:
         """Removes expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.

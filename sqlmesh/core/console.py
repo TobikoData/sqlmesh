@@ -7,6 +7,7 @@ import unittest
 import uuid
 import logging
 import textwrap
+from itertools import zip_longest
 from pathlib import Path
 from hyperscript import h
 from rich.console import Console as RichConsole
@@ -26,6 +27,7 @@ from rich.table import Table
 from rich.tree import Tree
 from sqlglot import exp
 
+from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
@@ -46,6 +48,7 @@ from sqlmesh.utils.errors import (
     NodeAuditsErrors,
     format_destructive_change_msg,
 )
+from sqlmesh.utils.rich import strip_ansi_codes
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -183,8 +186,18 @@ class DestroyConsole(abc.ABC):
     """Console for describing a destroy operation"""
 
     @abc.abstractmethod
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         """Start a destroy operation.
+
+        Args:
+            schemas_to_delete: Set of schemas that will be deleted
+            views_to_delete: Set of views that will be deleted
+            tables_to_delete: Set of tables that will be deleted
 
         Returns:
             Whether or not the destroy operation should proceed
@@ -286,11 +299,17 @@ class TableDiffConsole(abc.ABC):
 
 class BaseConsole(abc.ABC):
     @abc.abstractmethod
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
         """Display error info to the user."""
 
     @abc.abstractmethod
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
         """Display warning info to the user.
 
         Args:
@@ -316,7 +335,47 @@ class PlanBuilderConsole(BaseConsole, abc.ABC):
         """Display a destructive change error or warning to the user."""
 
 
+class UnitTestConsole(abc.ABC):
+    @abc.abstractmethod
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        """Display the test result and output.
+
+        Args:
+            result: The unittest test result that contains metrics like num success, fails, ect.
+            target_dialect: The dialect that tests were run against. Assumes all tests run against the same dialect.
+        """
+
+
+class SignalConsole(abc.ABC):
+    @abc.abstractmethod
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+
+    @abc.abstractmethod
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+
+    @abc.abstractmethod
+    def stop_signal_progress(self) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+
+
 class Console(
+    SignalConsole,
     PlanBuilderConsole,
     LinterConsole,
     StateExporterConsole,
@@ -327,6 +386,7 @@ class Console(
     DifferenceConsole,
     TableDiffConsole,
     BaseConsole,
+    UnitTestConsole,
     abc.ABC,
 ):
     """Abstract base class for defining classes used for displaying information to the user and also interact
@@ -461,18 +521,6 @@ class Console(
         """
 
     @abc.abstractmethod
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
-        """Display the test result and output.
-
-        Args:
-            result: The unittest test result that contains metrics like num success, fails, ect.
-            output: The generated output from the unittest.
-            target_dialect: The dialect that tests were run against. Assumes all tests run against the same dialect.
-        """
-
-    @abc.abstractmethod
     def show_sql(self, sql: str) -> None:
         """Display to the user SQL."""
 
@@ -531,6 +579,29 @@ class NoopConsole(Console):
         pass
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
+        pass
+
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        pass
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        pass
+
+    def stop_signal_progress(self) -> None:
         pass
 
     def start_creation_progress(
@@ -668,9 +739,7 @@ class NoopConsole(Console):
         if auto_apply:
             plan_builder.apply()
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         pass
 
     def show_sql(self, sql: str) -> None:
@@ -771,7 +840,12 @@ class NoopConsole(Console):
     ) -> None:
         pass
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         return True
 
     def stop_destroy(self, success: bool = True) -> None:
@@ -859,6 +933,9 @@ class TerminalConsole(Console):
         self.table_diff_model_tasks: t.Dict[str, TaskID] = {}
         self.table_diff_progress_live: t.Optional[Live] = None
 
+        self.signal_progress_logged = False
+        self.signal_status_tree: t.Optional[Tree] = None
+
         self.verbosity = verbosity
         self.dialect = dialect
         self.ignore_warnings = ignore_warnings
@@ -900,6 +977,10 @@ class TerminalConsole(Console):
         audit_only: bool = False,
     ) -> None:
         """Indicates that a new snapshot evaluation/auditing progress has begun."""
+        # Add a newline to separate signal checking from evaluation
+        if self.signal_progress_logged:
+            self._print("")
+
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = make_progress_bar(
                 "Executing model batches" if not audit_only else "Auditing models", self.console
@@ -1049,6 +1130,89 @@ class TerminalConsole(Console):
         self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
+    def start_signal_progress(
+        self,
+        snapshot: Snapshot,
+        default_catalog: t.Optional[str],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        """Indicates that signal checking has begun for a snapshot."""
+        display_name = snapshot.display_name(
+            environment_naming_info,
+            default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            dialect=self.dialect,
+        )
+        self.signal_status_tree = Tree(f"Checking signals for {display_name}")
+
+    def update_signal_progress(
+        self,
+        snapshot: Snapshot,
+        signal_name: str,
+        signal_idx: int,
+        total_signals: int,
+        ready_intervals: Intervals,
+        check_intervals: Intervals,
+        duration: float,
+    ) -> None:
+        """Updates the signal checking progress."""
+        tree = Tree(f"[{signal_idx + 1}/{total_signals}] {signal_name} {duration:.2f}s")
+
+        formatted_check_intervals = [_format_signal_interval(snapshot, i) for i in check_intervals]
+        formatted_ready_intervals = [_format_signal_interval(snapshot, i) for i in ready_intervals]
+
+        if not formatted_check_intervals:
+            formatted_check_intervals = ["no intervals"]
+        if not formatted_ready_intervals:
+            formatted_ready_intervals = ["no intervals"]
+
+        # Color coding to help detect partial interval ranges quickly
+        if ready_intervals == check_intervals:
+            msg = "All ready"
+            color = "green"
+        elif ready_intervals:
+            msg = "Some ready"
+            color = "yellow"
+        else:
+            msg = "None ready"
+            color = "red"
+
+        if self.verbosity < Verbosity.VERY_VERBOSE:
+            num_check_intervals = len(formatted_check_intervals)
+            if num_check_intervals > 3:
+                formatted_check_intervals = formatted_check_intervals[:3]
+                formatted_check_intervals.append(f"... and {num_check_intervals - 3} more")
+
+            num_ready_intervals = len(formatted_ready_intervals)
+            if num_ready_intervals > 3:
+                formatted_ready_intervals = formatted_ready_intervals[:3]
+                formatted_ready_intervals.append(f"... and {num_ready_intervals - 3} more")
+
+            check = ", ".join(formatted_check_intervals)
+            tree.add(f"Check: {check}")
+
+            ready = ", ".join(formatted_ready_intervals)
+            tree.add(f"[{color}]{msg}: {ready}[/{color}]")
+        else:
+            check_tree = Tree("Check")
+            tree.add(check_tree)
+            for interval in formatted_check_intervals:
+                check_tree.add(interval)
+
+            ready_tree = Tree(f"[{color}]{msg}[/{color}]")
+            tree.add(ready_tree)
+            for interval in formatted_ready_intervals:
+                ready_tree.add(f"[{color}]{interval}[/{color}]")
+
+        if self.signal_status_tree is not None:
+            self.signal_status_tree.add(tree)
+
+    def stop_signal_progress(self) -> None:
+        """Indicates that signal checking has completed for a snapshot."""
+        if self.signal_status_tree is not None:
+            self._print(self.signal_status_tree)
+            self.signal_status_tree = None
+            self.signal_progress_logged = True
+
     def start_creation_progress(
         self,
         snapshots: t.List[Snapshot],
@@ -1133,16 +1297,40 @@ class TerminalConsole(Console):
         else:
             self.log_error("Cleanup failed!")
 
-    def start_destroy(self) -> bool:
+    def start_destroy(
+        self,
+        schemas_to_delete: t.Optional[t.Set[str]] = None,
+        views_to_delete: t.Optional[t.Set[str]] = None,
+        tables_to_delete: t.Optional[t.Set[str]] = None,
+    ) -> bool:
         self.log_warning(
-            (
-                "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
-                "The operation is irreversible and may disrupt any currently running or scheduled plans.\n"
-                "Use this command only when you intend to fully reset the project."
-            )
+            "This will permanently delete all engine-managed objects, state tables and SQLMesh cache.\n"
+            "The operation may disrupt any currently running or scheduled plans.\n"
         )
-        if not self._confirm("Proceed?"):
-            self.log_error("Destroy aborted!")
+
+        if schemas_to_delete or views_to_delete or tables_to_delete:
+            if schemas_to_delete:
+                self.log_error("Schemas to be deleted:")
+                for schema in sorted(schemas_to_delete):
+                    self.log_error(f"  • {schema}")
+
+            if views_to_delete:
+                self.log_error("\nEnvironment views to be deleted:")
+                for view in sorted(views_to_delete):
+                    self.log_error(f"  • {view}")
+
+            if tables_to_delete:
+                self.log_error("\nSnapshot tables to be deleted:")
+                for table in sorted(tables_to_delete):
+                    self.log_error(f"  • {table}")
+
+            self.log_error(
+                "\nThis action will DELETE ALL the above resources managed by SQLMesh AND\n"
+                "potentially external resources created by other tools in these schemas.\n"
+            )
+
+        if not self._confirm("Are you ABSOLUTELY SURE you want to proceed with deletion?"):
+            self.log_error("Destroy operation cancelled.")
             return False
         return True
 
@@ -1933,8 +2121,8 @@ class TerminalConsole(Console):
             if not plan_builder.override_end:
                 if plan.provided_end:
                     blank_meaning = f"'{time_like_to_str(plan.provided_end)}'"
-                elif plan.interval_end_per_model:
-                    max_end = max(plan.interval_end_per_model.values())
+                elif plan.end_override_per_model:
+                    max_end = max(plan.end_override_per_model.values())
                     blank_meaning = f"'{time_like_to_str(max_end)}'"
                 else:
                     blank_meaning = "now"
@@ -1952,29 +2140,42 @@ class TerminalConsole(Console):
         ):
             plan_builder.apply()
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         divider_length = 70
+
+        self._log_test_details(result)
+
+        message = (
+            f"Ran {result.testsRun} tests against {target_dialect} in {result.duration} seconds."
+        )
         if result.wasSuccessful():
             self._print("=" * divider_length)
             self._print(
-                f"Successfully Ran {str(result.testsRun)} tests against {target_dialect}",
+                f"Successfully {message}",
                 style="green",
             )
             self._print("-" * divider_length)
         else:
             self._print("-" * divider_length)
-            self._print("Test Failure Summary")
+            self._print("Test Failure Summary", style="red")
             self._print("=" * divider_length)
-            self._print(
-                f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}"
-            )
+            failures = len(result.failures) + len(result.errors)
+            self._print(f"{message} \n")
+
+            self._print(f"Failed tests ({failures}):")
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"Failure Test: {test.model.name} {test.test_name}")
-            self._print("=" * divider_length)
-            self._print(output)
+                    self._print(f" • {test.path}::{test.test_name}")
+            self._print("=" * divider_length, end="\n\n")
+
+    def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
+        with self.console.capture() as capture:
+            self._log_test_details(result)
+        return strip_ansi_codes(capture.get())
 
     def show_sql(self, sql: str) -> None:
         self._print(Syntax(sql, "sql", word_wrap=True), crop=False)
@@ -2484,13 +2685,84 @@ class TerminalConsole(Console):
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
     ) -> None:
         severity = "errors" if is_error else "warnings"
-        violations_msg = "\n".join(f" - {violation}" for violation in violations)
+
+        # Sort violations by line, then alphabetically the name of the violation
+        # Violations with no range go first
+        sorted_violations = sorted(
+            violations,
+            key=lambda v: (
+                v.violation_range.start.line if v.violation_range else -1,
+                v.rule.name.lower(),
+            ),
+        )
+        violations_text = [
+            (
+                f" - Line {v.violation_range.start.line + 1}: {v.rule.name} - {v.violation_msg}"
+                if v.violation_range
+                else f" - {v.rule.name}: {v.violation_msg}"
+            )
+            for v in sorted_violations
+        ]
+        violations_msg = "\n".join(violations_text)
         msg = f"Linter {severity} for {model._path}:\n{violations_msg}"
 
         if is_error:
             self.log_error(msg)
         else:
             self.log_warning(msg)
+
+    def _log_test_details(
+        self, result: ModelTextTestResult, unittest_char_separator: bool = True
+    ) -> None:
+        """
+        This is a helper method that encapsulates the logic for logging the relevant unittest for the result.
+        The top level method (`log_test_results`) reuses `_log_test_details` differently based on the console.
+
+        Args:
+            result: The unittest test result that contains metrics like num success, fails, ect.
+        """
+
+        if result.wasSuccessful():
+            self._print("\n", end="")
+            return
+
+        errors = result.errors
+        failures = result.failures
+        skipped = result.skipped
+
+        infos = []
+        if failures:
+            infos.append(f"failures={len(failures)}")
+        if errors:
+            infos.append(f"errors={len(errors)}")
+        if skipped:
+            infos.append(f"skipped={skipped}")
+
+        if unittest_char_separator:
+            self._print(f"\n{unittest.TextTestResult.separator1}\n\n", end="")
+
+        for (test_case, failure), test_failure_tables in zip_longest(  # type: ignore
+            failures, result.failure_tables
+        ):
+            self._print(unittest.TextTestResult.separator2)
+            self._print(f"FAIL: {test_case}")
+
+            if test_description := test_case.shortDescription():
+                self._print(test_description)
+            self._print(f"{unittest.TextTestResult.separator2}")
+
+            if not test_failure_tables:
+                self._print(failure)
+            else:
+                for failure_table in test_failure_tables:
+                    self._print(failure_table)
+                    self._print("\n", end="")
+
+        for test_case, error in errors:
+            self._print(unittest.TextTestResult.separator2)
+            self._print(f"ERROR: {test_case}")
+            self._print(f"{unittest.TextTestResult.separator2}")
+            self._print(error)
 
 
 def _cells_match(x: t.Any, y: t.Any) -> bool:
@@ -2502,8 +2774,16 @@ def _cells_match(x: t.Any, y: t.Any) -> bool:
     def _normalize(val: t.Any) -> t.Any:
         # Convert Pandas null to Python null for the purposes of comparison to prevent errors like the following on boolean fields:
         # - TypeError: boolean value of NA is ambiguous
-        if pd.isnull(val):
+        # note pd.isnull() returns either a bool or a ndarray[bool] depending on if the input
+        # is scalar or an array
+        isnull = pd.isnull(val)
+
+        if isinstance(isnull, bool):  # scalar
+            if isnull:
+                val = None
+        elif all(isnull):  # array
             val = None
+
         return list(val) if isinstance(val, (pd.Series, np.ndarray)) else val
 
     return _normalize(x) == _normalize(y)
@@ -2763,9 +3043,11 @@ class NotebookMagicConsole(TerminalConsole):
         )
         self.display(radio)
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
         import ipywidgets as widgets
 
         divider_length = 70
@@ -2774,6 +3056,11 @@ class NotebookMagicConsole(TerminalConsole):
             "font-weight": "bold",
             "font-family": "Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace",
         }
+
+        message = (
+            f"Ran {result.testsRun} tests against {target_dialect} in {result.duration} seconds."
+        )
+
         if result.wasSuccessful():
             success_color = {"color": "#008000"}
             header = str(h("span", {"style": shared_style}, "-" * divider_length))
@@ -2781,41 +3068,43 @@ class NotebookMagicConsole(TerminalConsole):
                 h(
                     "span",
                     {"style": {**shared_style, **success_color}},
-                    f"Successfully Ran {str(result.testsRun)} Tests Against {target_dialect}",
+                    f"Successfully {message}",
                 )
             )
             footer = str(h("span", {"style": shared_style}, "=" * divider_length))
             self.display(widgets.HTML("<br>".join([header, message, footer])))
         else:
+            output = self._captured_unit_test_results(result)
+
             fail_color = {"color": "#db3737"}
             fail_shared_style = {**shared_style, **fail_color}
             header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
             message = str(h("span", {"style": fail_shared_style}, "Test Failure Summary"))
-            num_success = str(
-                h(
-                    "span",
-                    {"style": fail_shared_style},
-                    f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}",
+            failed_tests = [
+                str(
+                    h(
+                        "span",
+                        {"style": fail_shared_style},
+                        f"Failed tests ({len(result.failures) + len(result.errors)}):",
+                    )
                 )
-            )
-            failure_tests = []
+            ]
+
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    failure_tests.append(
+                    failed_tests.append(
                         str(
                             h(
                                 "span",
                                 {"style": fail_shared_style},
-                                f"Failure Test: {test.model.name} {test.test_name}",
+                                f" • {test.model.name}::{test.test_name}",
                             )
                         )
                     )
-            failures = "<br>".join(failure_tests)
+            failures = "<br>".join(failed_tests)
             footer = str(h("span", {"style": fail_shared_style}, "=" * divider_length))
             error_output = widgets.Textarea(output, layout={"height": "300px", "width": "100%"})
-            test_info = widgets.HTML(
-                "<br>".join([header, message, footer, num_success, failures, footer])
-            )
+            test_info = widgets.HTML("<br>".join([header, message, footer, failures, footer]))
             self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
@@ -2831,6 +3120,7 @@ class CaptureTerminalConsole(TerminalConsole):
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
         self._captured_outputs: t.List[str] = []
+        self._warnings: t.List[str] = []
         self._errors: t.List[str] = []
 
     @property
@@ -2838,28 +3128,48 @@ class CaptureTerminalConsole(TerminalConsole):
         return "".join(self._captured_outputs)
 
     @property
+    def captured_warnings(self) -> str:
+        return "".join(self._warnings)
+
+    @property
     def captured_errors(self) -> str:
         return "".join(self._errors)
 
     def consume_captured_output(self) -> str:
-        output = self.captured_output
-        self.clear_captured_outputs()
-        return output
+        try:
+            return self.captured_output
+        finally:
+            self._captured_outputs = []
+
+    def consume_captured_warnings(self) -> str:
+        try:
+            return self.captured_warnings
+        finally:
+            self._warnings = []
 
     def consume_captured_errors(self) -> str:
-        errors = self.captured_errors
-        self.clear_captured_errors()
-        return errors
+        try:
+            return self.captured_errors
+        finally:
+            self._errors = []
 
-    def clear_captured_outputs(self) -> None:
-        self._captured_outputs = []
+    def log_warning(
+        self,
+        short_message: str,
+        long_message: t.Optional[str] = None,
+        *args: t.Any,
+        **kwargs: t.Any,
+    ) -> None:
+        if short_message not in self._warnings:
+            self._warnings.append(short_message)
+        if kwargs.pop("print", True):
+            super().log_warning(short_message, long_message)
 
-    def clear_captured_errors(self) -> None:
-        self._errors = []
-
-    def log_error(self, message: str) -> None:
-        self._errors.append(message)
-        super().log_error(message)
+    def log_error(self, message: str, *args: t.Any, **kwargs: t.Any) -> None:
+        if message not in self._errors:
+            self._errors.append(message)
+        if kwargs.pop("print", True):
+            super().log_error(message)
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
@@ -2869,9 +3179,8 @@ class CaptureTerminalConsole(TerminalConsole):
             super().log_skipped_models(snapshot_names)
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
-        if errors:
-            self._errors.append("\n".join(str(ex) for ex in errors))
-            super().log_failed_models(errors)
+        self._errors.extend([str(ex) for ex in errors if str(ex) not in self._errors])
+        super().log_failed_models(errors)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
@@ -2892,7 +3201,19 @@ class MarkdownConsole(CaptureTerminalConsole):
     AUDIT_PADDING = 7
 
     def __init__(self, **kwargs: t.Any) -> None:
-        super().__init__(**{**kwargs, "console": RichConsole(no_color=True)})
+        self.alert_block_max_content_length = int(kwargs.pop("alert_block_max_content_length", 500))
+        self.alert_block_collapsible_threshold = int(
+            kwargs.pop("alert_block_collapsible_threshold", 200)
+        )
+
+        # capture_only = True: capture but dont print to console
+        # capture_only = False: capture and also print to console
+        self.warning_capture_only = kwargs.pop("warning_capture_only", False)
+        self.error_capture_only = kwargs.pop("error_capture_only", False)
+
+        super().__init__(
+            **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
+        )
 
     def show_environment_difference_summary(
         self,
@@ -3009,8 +3330,9 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
         else:
             for snapshot_table_info in models:
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot_table_info.change_category]
                 self._print(
-                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                    f"- `{snapshot_table_info.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({category_str})"
                 )
 
     def _print_modified_models(
@@ -3022,7 +3344,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         no_diff: bool = True,
     ) -> None:
         directly_modified = []
-        indirectly_modified = []
+        indirectly_modified: t.List[Snapshot] = []
         metadata_modified = []
         for snapshot in modified_snapshots:
             if context_diff.directly_modified(snapshot.name):
@@ -3034,11 +3356,40 @@ class MarkdownConsole(CaptureTerminalConsole):
         if directly_modified:
             self._print("\n**Directly Modified:**")
             for snapshot in sorted(directly_modified):
+                category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
                 self._print(
-                    f"- `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}`"
+                    f"* `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({category_str})"
                 )
+
+                indirectly_modified_children = sorted(
+                    [s for s in indirectly_modified if snapshot.snapshot_id in s.parents]
+                )
+
                 if not no_diff:
-                    self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```")
+                    diff_text = context_diff.text_diff(snapshot.name)
+                    # sometimes there is no text_diff, like on a seed model where the data has been updated
+                    if diff_text:
+                        diff_text = f"\n```diff\n{diff_text}\n```"
+                        # these are part of a Markdown list, so indent them by 2 spaces to relate them to the current list item
+                        diff_text_indented = "\n".join(
+                            [f"  {line}" for line in diff_text.splitlines()]
+                        )
+                        self._print(diff_text_indented)
+                    else:
+                        if indirectly_modified_children:
+                            self._print("\n")
+
+                if indirectly_modified_children:
+                    self._print("  Indirectly Modified Children:")
+                    for child_snapshot in indirectly_modified_children:
+                        child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                            child_snapshot.change_category
+                        ]
+                        self._print(
+                            f"    - `{child_snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({child_category_str})"
+                        )
+                    self._print("\n")
+
         if indirectly_modified:
             self._print("\n**Indirectly Modified:**")
             self._print_models_with_threshold(
@@ -3134,40 +3485,56 @@ class MarkdownConsole(CaptureTerminalConsole):
         super().stop_promotion_progress(success)
         self._print("\n")
 
+    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
+        super().log_warning(short_message, long_message, print=not self.warning_capture_only)
+
+    def log_error(self, message: str) -> None:
+        super().log_error(message, print=not self.error_capture_only)
+
     def log_success(self, message: str) -> None:
         self._print(message)
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
+        # We don't log the test results if no tests were ran
+        if not result.testsRun:
+            return
+
+        message = f"Ran `{result.testsRun}` Tests Against `{target_dialect}`"
+
         if result.wasSuccessful():
-            self._print(
-                f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
-            )
+            self._print(f"**Successfully {message}**\n\n")
         else:
-            self._print(
-                f"**Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}**\n\n"
-            )
+            self._print("```")
+            self._log_test_details(result, unittest_char_separator=False)
+            self._print("```\n\n")
+
+            failures = len(result.failures) + len(result.errors)
+            self._print(f"**{message}**\n")
+            self._print(f"**Failed tests ({failures}):**")
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
-            self._print(f"```{output}```\n\n")
+                    self._print(f" • `{test.model.name}`::`{test.test_name}`\n\n")
 
     def log_skipped_models(self, snapshot_names: t.Set[str]) -> None:
         if snapshot_names:
-            msg = "  " + "\n  ".join(snapshot_names)
-            self._print(f"**Skipped models**\n\n{msg}")
+            self._print(f"**Skipped models**")
+            for snapshot_name in snapshot_names:
+                self._print(f"* `{snapshot_name}`")
+            self._print("")
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
         if errors:
-            self._print("\n```\nFailed models\n")
+            self._print("**Failed models**")
 
             error_messages = _format_node_errors(errors)
 
             for node_name, msg in error_messages.items():
-                self._print(f"  **{node_name}**\n\n{msg}")
+                self._print(f"* `{node_name}`\n")
+                self._print("  ```")
+                self._print(msg)
+                self._print("  ```")
 
-            self._print("```\n")
+            self._print("")
 
     def show_linter_violations(
         self, violations: t.List[RuleViolation], model: Model, is_error: bool = False
@@ -3179,18 +3546,40 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(msg)
         self._errors.append(msg)
 
-    def log_error(self, message: str) -> None:
-        super().log_error(f"```\n\\[ERROR] {message}```\n\n")
+    @property
+    def captured_warnings(self) -> str:
+        return self._render_alert_block("WARNING", self._warnings)
 
-    def log_warning(self, short_message: str, long_message: t.Optional[str] = None) -> None:
-        logger.warning(long_message or short_message)
+    @property
+    def captured_errors(self) -> str:
+        return self._render_alert_block("CAUTION", self._errors)
 
-        if not short_message.endswith("\n"):
-            short_message += (
-                "\n"  # so that the closing ``` ends up on a newline which is important for GitHub
-            )
+    def _render_alert_block(self, block_type: str, items: t.List[str]) -> str:
+        # GitHub Markdown alert syntax, https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts
+        if items:
+            item_contents = ""
+            list_indicator = "- " if len(items) > 1 else ""
 
-        self._print(f"```\n\\[WARNING] {short_message}```\n\n")
+            for item in items:
+                item = item.replace("\n", "\n> ")
+                item_contents += f">\n> {list_indicator}{item}\n"
+
+                if len(item_contents) > self.alert_block_max_content_length:
+                    truncation_msg = (
+                        "...\n>\n> Truncated. Please check the console for full information.\n"
+                    )
+                    item_contents = item_contents[
+                        0 : self.alert_block_max_content_length - len(truncation_msg)
+                    ]
+                    item_contents += truncation_msg
+                    break
+
+            if len(item_contents) > self.alert_block_collapsible_threshold:
+                item_contents = f"> <details>\n{item_contents}> </details>"
+
+            return f"> [!{block_type}]\n{item_contents}\n"
+
+        return ""
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -3217,7 +3606,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super()._print(value, **kwargs)
         for captured_output in self._captured_outputs:
             print(captured_output)
-        self.clear_captured_outputs()
+        self.consume_captured_output()
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)
@@ -3530,9 +3919,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         for modified in context_diff.modified_snapshots:
             self._write(f"  Modified: {modified}")
 
-    def log_test_results(
-        self, result: unittest.result.TestResult, output: t.Optional[str], target_dialect: str
-    ) -> None:
+    def log_test_results(self, result: ModelTextTestResult, target_dialect: str) -> None:
         self._write("Test Results:", result)
 
     def show_sql(self, sql: str) -> None:
@@ -3731,19 +4118,34 @@ def _format_audits_errors(error: NodeAuditsErrors) -> str:
     return "  " + "\n".join(error_messages)
 
 
+def _format_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval with an optional prefix."""
+    inclusive_interval = make_inclusive(interval[0], interval[1])
+    if snapshot.model.interval_unit.is_date_granularity:
+        return f"{to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
+
+    if inclusive_interval[0].date() == inclusive_interval[1].date():
+        # omit end date if interval start/end on same day
+        return f"{to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
+
+    return f"{inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+def _format_signal_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for signal output (without 'insert' prefix)."""
+    return _format_interval(snapshot, interval)
+
+
 def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) -> str:
+    """Format an interval for evaluation output (with 'insert' prefix)."""
     if snapshot.is_model and (
         snapshot.model.kind.is_incremental
         or snapshot.model.kind.is_managed
         or snapshot.model.kind.is_custom
     ):
-        inclusive_interval = make_inclusive(interval[0], interval[1])
-        if snapshot.model.interval_unit.is_date_granularity:
-            return f"insert {to_ds(inclusive_interval[0])} - {to_ds(inclusive_interval[1])}"
-        # omit end date if interval start/end on same day
-        if inclusive_interval[0].date() == inclusive_interval[1].date():
-            return f"insert {to_ds(inclusive_interval[0])} {inclusive_interval[0].strftime('%H:%M:%S')}-{inclusive_interval[1].strftime('%H:%M:%S')}"
-        return f"insert {inclusive_interval[0].strftime('%Y-%m-%d %H:%M:%S')} - {inclusive_interval[1].strftime('%Y-%m-%d %H:%M:%S')}"
+        formatted_interval = _format_interval(snapshot, interval)
+        return f"insert {formatted_interval}"
+
     return ""
 
 

@@ -1,4 +1,8 @@
 {
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "scripts": {
     "ci": "pnpm run lint && pnpm run -r ci",
     "fmt": "prettier --write .",
@@ -7,6 +11,6 @@
     "lint:fix": "pnpm run fmt && pnpm run -r lint:fix"
   },
   "devDependencies": {
-    "prettier": "^3.5.3"
+    "prettier": "^3.6.2"
   }
 }

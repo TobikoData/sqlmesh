@@ -31,6 +31,9 @@ class IntervalUnit(str, Enum):
     IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
     based on the cron schedule of a node. The minimum time delta between a sample set of dates
     is used to determine which unit a node's schedule is.
+
+    It's designed to align with common partitioning schemes, hence why there is no WEEK unit
+    because generally tables are not partitioned by week
     """
 
     YEAR = "year"
@@ -196,7 +199,7 @@ class _Node(PydanticModel):
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
-    _path: Path = Path()
+    _path: t.Optional[Path] = None
     _data_hash: t.Optional[str] = None
     _metadata_hash: t.Optional[str] = None
 

@@ -2,7 +2,7 @@ import logging
 import pathlib
 import typing as t
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from tempfile import TemporaryDirectory
 from unittest.mock import PropertyMock, call, patch
 
@@ -15,7 +15,7 @@ from sqlglot import ParseError, exp, parse_one, Dialect
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
-from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.console import get_console, TerminalConsole
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
@@ -36,12 +36,12 @@ from sqlmesh.core.console import create_console, get_console
 from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.plan import BuiltInPlanEvaluator, PlanBuilder
 from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
 from sqlmesh.utils.connection_pool import SingletonConnectionPool, ThreadLocalSharedConnectionPool
@@ -53,7 +53,13 @@ from sqlmesh.utils.date import (
     to_timestamp,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, LinterError, PlanError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    SQLMeshError,
+    LinterError,
+    PlanError,
+    NoChangesPlanError,
+)
 from sqlmesh.utils.metaprogramming import Executable
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
@@ -271,24 +277,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     sushi_context.console = mock_console
     yesterday = yesterday_ds()
     success = sushi_context.run(start=yesterday, end=yesterday)
-
-    plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync,
-        sushi_context.snapshot_evaluator,
-        sushi_context.create_scheduler,
-        sushi_context.default_catalog,
-    )
-
-    plan = PlanBuilder(
-        context_diff=sushi_context._context_diff("prod"),
-    ).build()
-
-    # stringify used to trigger an unhashable exception due to
-    # https://github.com/pydantic/pydantic/issues/8016
-    assert str(plan) != ""
-
-    promotion_result = plan_evaluator._promote(plan.to_evaluatable(), plan.snapshots)
-    plan_evaluator._update_views(plan.to_evaluatable(), plan.snapshots, promotion_result)
 
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
@@ -659,6 +647,101 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
     assert models_dir.exists()
 
+    # Test clearing caches when cache directory doesn't exist
+    # This should not raise an exception
+    context.clear_caches()
+    assert not cache_dir.exists()
+
+
+def test_cache_path_configurations(tmp_path: pathlib.Path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir(parents=True)
+    config_file = project_dir / "config.yaml"
+
+    # Test relative path
+    config_file.write_text("model_defaults:\n  dialect: duckdb\ncache_dir: .my_cache")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == project_dir / ".my_cache"
+
+    # Test absolute path
+    abs_cache = tmp_path / "abs_cache"
+    config_file.write_text(f"model_defaults:\n  dialect: duckdb\ncache_dir: {abs_cache}")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == abs_cache
+
+    # Test default
+    config_file.write_text("model_defaults:\n  dialect: duckdb")
+    context = Context(paths=str(project_dir))
+    assert context.cache_dir == project_dir / ".cache"
+
+
+def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
+    sushi_paths = copy_to_temp_path("examples/sushi")
+    sushi_path = sushi_paths[0]
+    custom_cache_dir = sushi_path.parent / "custom_cache"
+
+    # Modify the existing config.py to add cache_dir to test_config
+    config_py_path = sushi_path / "config.py"
+    with open(config_py_path, "r") as f:
+        config_content = f.read()
+
+    # Add cache_dir to the test_config definition
+    config_content = config_content.replace(
+        'test_config = Config(\n    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},\n    default_gateway="in_memory",\n    plan=PlanConfig(\n        auto_categorize_changes=CategorizerConfig(\n            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF\n        )\n    ),\n    model_defaults=model_defaults,\n)',
+        f"""test_config = Config(
+    gateways={{"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())}},
+    default_gateway="in_memory",
+    plan=PlanConfig(
+        auto_categorize_changes=CategorizerConfig(
+            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF
+        )
+    ),
+    model_defaults=model_defaults,
+    cache_dir="{custom_cache_dir.as_posix()}",
+)""",
+    )
+
+    with open(config_py_path, "w") as f:
+        f.write(config_content)
+
+    # Create context with the test config
+    context = Context(paths=sushi_path, config="test_config")
+    custom_cache_dir = context.cache_dir
+    assert "custom_cache" in str(custom_cache_dir)
+    assert (custom_cache_dir / "optimized_query").exists()
+    assert (custom_cache_dir / "model_definition").exists()
+    assert not (custom_cache_dir / "snapshot").exists()
+
+    # Clear the cache
+    context.clear_caches()
+    assert not custom_cache_dir.exists()
+
+    plan = context.plan("dev", create_from="prod", skip_tests=True)
+    context.apply(plan)
+
+    # Cache directory should now exist again
+    assert custom_cache_dir.exists()
+    assert any(custom_cache_dir.iterdir())
+
+    # Since the cache has been deleted post loading here only snapshot should exist
+    assert (custom_cache_dir / "snapshot").exists()
+    assert not (custom_cache_dir / "optimized_query").exists()
+    assert not (custom_cache_dir / "model_definition").exists()
+
+    # New context should load same models and create the cache for optimized_query and model_definition
+    initial_model_count = len(context.models)
+    context2 = Context(paths=context.path, config="test_config")
+    cached_model_count = len(context2.models)
+
+    assert initial_model_count == cached_model_count > 0
+    assert (custom_cache_dir / "optimized_query").exists()
+    assert (custom_cache_dir / "model_definition").exists()
+    assert (custom_cache_dir / "snapshot").exists()
+
+    # Clear caches should remove the custom cache directory
+    context.clear_caches()
+    assert not custom_cache_dir.exists()
+
 
 def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(
@@ -873,9 +956,9 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.dialect = "duckdb"
     state_sync_mock = mocker.MagicMock()
 
-    state_sync_mock.get_expired_environments.return_value = [
+    environments = [
         Environment(
-            name="test_environment",
+            name="test_environment1",
             suffix_target=EnvironmentSuffixTarget.TABLE,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -884,7 +967,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
         Environment(
-            name="test_environment",
+            name="test_environment2",
             suffix_target=EnvironmentSuffixTarget.SCHEMA,
             snapshots=[x.table_info for x in sushi_context.snapshots.values()],
             start_at="2022-01-01",
@@ -893,6 +976,11 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
             previous_plan_id="test_plan_id",
         ),
     ]
+
+    state_sync_mock.get_expired_environments.return_value = [env.summary for env in environments]
+    state_sync_mock.get_environment = lambda name: next(
+        env for env in environments if env.name == name
+    )
 
     sushi_context._engine_adapter = adapter_mock
     sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
@@ -905,7 +993,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_schema.assert_has_calls(
         [
             call(
-                schema_("sushi__test_environment", "memory"),
+                schema_("sushi__test_environment2", "memory"),
                 cascade=True,
                 ignore_if_not_exists=True,
             ),
@@ -917,7 +1005,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     adapter_mock.drop_view.assert_has_calls(
         [
             call(
-                "memory.sushi.waiter_as_customer_by_day__test_environment",
+                "memory.sushi.waiter_as_customer_by_day__test_environment1",
                 ignore_if_not_exists=True,
             ),
         ]
@@ -1752,7 +1840,7 @@ def access_adapter(evaluator):
 
     assert (
         model.pre_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = now())"
+        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = NOW())"
     )
     assert (
         model.post_statements[0].sql()
@@ -1834,7 +1922,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
         ctx.plan_builder("dev")
 
     # Case: Ensure error violations are cached if the model did not pass linting
-    cache = OptimizedQueryCache(tmp_path / c.CACHE)
+    cache = OptimizedQueryCache(ctx.cache_dir)
 
     assert_cached_violations_exist(cache, error_model)
 
@@ -1864,7 +1952,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
             ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
 
             assert (
-                """noselectstar: Query should not contain SELECT * on its outer most projections"""
+                """noselectstar - Query should not contain SELECT * on its outer most projections"""
                 in mock_logger.call_args[0][0]
             )
 
@@ -2097,6 +2185,7 @@ def test_plan_audit_intervals(tmp_path: pathlib.Path, caplog):
     plan = ctx.plan(
         environment="dev", auto_apply=True, no_prompts=True, start="2025-02-01", end="2025-02-01"
     )
+    assert plan.missing_intervals
 
     date_snapshot = next(s for s in plan.new_snapshots if "date_example" in s.name)
     timestamp_snapshot = next(s for s in plan.new_snapshots if "timestamp_example" in s.name)
@@ -2121,11 +2210,11 @@ def test_check_intervals(sushi_context, mocker):
     ):
         sushi_context.check_intervals(environment="dev", no_signals=False, select_models=[])
 
-    spy = mocker.spy(sqlmesh.core.snapshot.definition, "_check_ready_intervals")
+    spy = mocker.spy(sqlmesh.core.snapshot.definition, "check_ready_intervals")
     intervals = sushi_context.check_intervals(environment=None, no_signals=False, select_models=[])
 
     min_intervals = 19
-    assert spy.call_count == 1
+    assert spy.call_count == 2
     assert len(intervals) >= min_intervals
 
     for i in intervals.values():
@@ -2186,7 +2275,7 @@ def test_audit():
 
 
 def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path) -> None:
-    init_example_project(tmp_path, dialect="duckdb")
+    init_example_project(tmp_path, engine_type="duckdb")
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -2227,3 +2316,554 @@ def test_plan_explain_skips_tests(sushi_context: Context, mocker: MockerFixture)
     spy = mocker.spy(sushi_context, "_run_plan_tests")
     sushi_context.plan(environment="dev", explain=True, no_prompts=True, include_unmodified=True)
     spy.assert_called_once_with(skip_tests=True)
+
+
+def test_dev_environment_virtual_update_with_environment_statements(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    model_sql = """
+    MODEL (
+        name db.test_model,
+        kind FULL
+    );
+
+    SELECT 1 as id, 'test' as name
+    """
+
+    with open(models_dir / "test_model.sql", "w") as f:
+        f.write(model_sql)
+
+    # Create initial context without environment statements
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # First, apply to production
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Try to create dev environment without changes (should fail)
+    with pytest.raises(NoChangesPlanError, match="Creating a new environment requires a change"):
+        context.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Now create a new context with only new environment statements
+    config_with_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=["CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_with_statements = Context(paths=tmp_path, config=config_with_statements)
+
+    # This should succeed because environment statements are different
+    context_with_statements.plan("dev", auto_apply=True, no_prompts=True)
+    env = context_with_statements.state_reader.get_environment("dev")
+    assert env is not None
+    assert env.name == "dev"
+
+    # Verify the environment statements were stored
+    stored_statements = context_with_statements.state_reader.get_environment_statements("dev")
+    assert len(stored_statements) == 1
+    assert stored_statements[0].before_all == [
+        "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))"
+    ]
+    assert stored_statements[0].after_all == [
+        "INSERT INTO audit_log VALUES (1, 'environment_created')"
+    ]
+
+    # Update environment statements and plan again (should trigger another virtual update)
+    config_updated_statements = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={"duckdb": GatewayConfig(connection=DuckDBConnectionConfig())},
+        before_all=[
+            "CREATE TABLE IF NOT EXISTS audit_log (id INT, action VARCHAR(100))",
+            "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)",
+        ],
+        after_all=["INSERT INTO audit_log VALUES (1, 'environment_created')"],
+    )
+
+    context_updated = Context(paths=tmp_path, config=config_updated_statements)
+    context_updated.plan("dev", auto_apply=True, no_prompts=True)
+
+    # Verify the updated statements were stored
+    updated_statements = context_updated.state_reader.get_environment_statements("dev")
+    assert len(updated_statements) == 1
+    assert len(updated_statements[0].before_all) == 2
+    assert (
+        updated_statements[0].before_all[1]
+        == "CREATE TABLE IF NOT EXISTS metrics (metric_name VARCHAR(50), value INT)"
+    )
+
+
+def test_table_diff_ignores_extra_args(sushi_context: Context):
+    sushi_context.plan(environment="dev", auto_apply=True, include_unmodified=True)
+
+    # the test fails if this call throws an exception
+    sushi_context.table_diff(
+        source="prod",
+        target="dev",
+        select_models=["sushi.customers"],
+        on=["customer_id"],
+        show_sample=True,
+        some_tcloud_option=1_000,
+    )
+
+
+def test_plan_min_intervals(tmp_path: Path):
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+
+    current_time = to_datetime("2020-02-01 00:00:01")
+
+    # initial state of example project
+    context.plan(auto_apply=True, execution_time=current_time)
+
+    (tmp_path / "models" / "daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@daily'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "weekly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.weekly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@weekly'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                        
+    """)
+
+    (tmp_path / "models" / "monthly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.monthly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@monthly'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                         
+    """)
+
+    (tmp_path / "models" / "ended_daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.ended_daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      end '2020-01-18',
+      cron '@daily'
+    );                        
+
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                 
+    """)
+
+    context.load()
+
+    # initial state - backfill from 2020-01-01 -> now() (2020-01-02 00:00:01) on new models
+    plan = context.plan(execution_time=current_time)
+
+    assert to_datetime(plan.start) == to_datetime("2020-01-01 00:00:00")
+    assert to_datetime(plan.end) == to_datetime("2020-02-01 00:00:00")
+    assert to_datetime(plan.execution_time) == to_datetime("2020-02-01 00:00:01")
+
+    def _get_missing_intervals(plan: Plan, name: str) -> t.List[t.Tuple[datetime, datetime]]:
+        snapshot_id = context.get_snapshot(name, raise_if_missing=True).snapshot_id
+        snapshot_intervals = next(
+            si for si in plan.missing_intervals if si.snapshot_id == snapshot_id
+        )
+        return [(to_datetime(s), to_datetime(e)) for s, e in snapshot_intervals.merged_intervals]
+
+    # check initial intervals - should be full time range between start and execution time
+    assert len(plan.missing_intervals) == 4
+
+    assert _get_missing_intervals(plan, "sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.weekly_model") == [
+        (
+            to_datetime("2020-01-01 00:00:00"),
+            to_datetime("2020-01-26 00:00:00"),
+        )  # last week in 2020-01 hasnt fully elapsed yet
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.monthly_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.ended_daily_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-19 00:00:00"))
+    ]
+
+    # now, create a dev env for "1 day ago" with min_intervals=1
+    plan = context.plan(
+        environment="pr_env",
+        start="1 day ago",
+        execution_time=current_time,
+        min_intervals=1,
+    )
+
+    # this should pick up last day for daily model, last week for weekly model, last month for the monthly model and the last day of "ended_daily_model" before it ended
+    assert len(plan.missing_intervals) == 4
+
+    assert _get_missing_intervals(plan, "sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-31 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.weekly_model") == [
+        (
+            to_datetime("2020-01-19 00:00:00"),  # last completed week
+            to_datetime("2020-01-26 00:00:00"),
+        )
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.monthly_model") == [
+        (
+            to_datetime("2020-01-01 00:00:00"),  # last completed month
+            to_datetime("2020-02-01 00:00:00"),
+        )
+    ]
+    assert _get_missing_intervals(plan, "sqlmesh_example.ended_daily_model") == [
+        (
+            to_datetime("2020-01-18 00:00:00"),  # last day before the model end date
+            to_datetime("2020-01-19 00:00:00"),
+        )
+    ]
+
+    # run the plan for '1 day ago' but min_intervals=1
+    context.apply(plan)
+
+    # show that the data was created (which shows that when the Plan became an EvaluatablePlan and eventually evaluated, the start date overrides didnt get dropped)
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.daily_model"
+    ) == [(to_datetime("2020-01-31 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.weekly_model"
+    ) == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-25 23:59:59.999999")),
+    ]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.monthly_model"
+    ) == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-31 23:59:59.999999")),
+    ]
+    assert context.engine_adapter.fetchall(
+        "select start_dt, end_dt from sqlmesh_example__pr_env.ended_daily_model"
+    ) == [
+        (to_datetime("2020-01-18 00:00:00"), to_datetime("2020-01-18 23:59:59.999999")),
+    ]
+
+
+def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
+    """
+    Scenario:
+        A(hourly) <- B(daily) <- C(weekly)
+                  <- D(two-hourly)
+        E(monthly)
+
+    We need to ensure that :min_intervals covers at least :min_intervals of all downstream models for the dag to be valid
+    In this scenario, if min_intervals=1:
+        - A would need to cover at least (7 days * 24 hours) because its downstream model C is weekly. It should also be unaffected by its sibling, E
+        - B would need to cover at least 7 days because its downstream model C is weekly
+        - C would need to cover at least 1 week because min_intervals: 1
+        - D would need to cover at least 2 hours because min_intervals: 1 and should be unaffected by C
+        - E is unrelated to A, B, C and D so would need to cover 1 month satisfy min_intervals: 1.
+            - It also ensures that each tree branch has a unique cumulative date, because
+              if the dag is iterated purely in topological order with a global min date it would set A to to 1 month instead if 1 week
+    """
+
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+
+    current_time = to_datetime("2020-02-01 00:00:01")
+
+    # initial state of example project
+    context.plan(auto_apply=True, execution_time=current_time)
+
+    (tmp_path / "models" / "hourly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.hourly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt,
+        batch_size 1
+      ),
+      start '2020-01-01',
+      cron '@hourly'
+    );                        
+
+    select @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "two_hourly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.two_hourly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt        
+      ),
+      start '2020-01-01',
+      cron '0 */2 * * *'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    (tmp_path / "models" / "unrelated_monthly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.unrelated_monthly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt        
+      ),
+      start '2020-01-01',
+      cron '@monthly'
+    );                        
+
+    select @start_dt as start_dt, @end_dt as end_dt;
+    """)
+
+    (tmp_path / "models" / "daily_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.daily_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@daily'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    (tmp_path / "models" / "weekly_model.sql").write_text("""
+    MODEL (
+      name sqlmesh_example.weekly_model,
+      kind INCREMENTAL_BY_TIME_RANGE (
+        time_column start_dt
+      ),
+      start '2020-01-01',
+      cron '@weekly'
+    );                        
+
+    select start_dt, end_dt from sqlmesh_example.daily_model where start_dt between @start_dt and @end_dt;
+    """)
+
+    context.load()
+
+    # create a dev env for "1 day ago" with min_intervals=1
+    # this should force a weeks worth of intervals for every model
+    plan = context.plan(
+        environment="pr_env",
+        start="1 day ago",
+        execution_time=current_time,
+        min_intervals=1,
+    )
+
+    def _get_missing_intervals(name: str) -> t.List[t.Tuple[datetime, datetime]]:
+        snapshot_id = context.get_snapshot(name, raise_if_missing=True).snapshot_id
+        snapshot_intervals = next(
+            si for si in plan.missing_intervals if si.snapshot_id == snapshot_id
+        )
+        return [(to_datetime(s), to_datetime(e)) for s, e in snapshot_intervals.merged_intervals]
+
+    # We only operate on completed intervals, so given the current_time this is the range of the last completed week
+    _get_missing_intervals("sqlmesh_example.weekly_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-26 00:00:00"))
+    ]
+
+    # The daily model needs to cover the week, so it gets its start date moved back to line up
+    _get_missing_intervals("sqlmesh_example.daily_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The hourly model needs to cover both the daily model and the weekly model, so it also gets its start date moved back to line up with the weekly model
+    assert _get_missing_intervals("sqlmesh_example.hourly_model") == [
+        (to_datetime("2020-01-19 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The two-hourly model only needs to cover 2 hours and should be unaffected by the fact its sibling node has a weekly child node
+    # However it still gets backfilled for 24 hours because the plan start is 1 day and this satisfies min_intervals: 1
+    assert _get_missing_intervals("sqlmesh_example.two_hourly_model") == [
+        (to_datetime("2020-01-31 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # The unrelated model has no upstream constraints, so its start date doesnt get moved to line up with the weekly model
+    # However it still gets backfilled for 24 hours because the plan start is 1 day and this satisfies min_intervals: 1
+    _get_missing_intervals("sqlmesh_example.unrelated_monthly_model") == [
+        (to_datetime("2020-01-01 00:00:00"), to_datetime("2020-02-01 00:00:00"))
+    ]
+
+    # Check that actually running the plan produces the correct result, since missing intervals are re-calculated in the evaluator
+    context.apply(plan)
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.weekly_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-25 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.daily_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.hourly_model"
+    ) == [(to_datetime("2020-01-19 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.two_hourly_model"
+    ) == [(to_datetime("2020-01-31 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+    assert context.engine_adapter.fetchall(
+        "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.unrelated_monthly_model"
+    ) == [(to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+
+def test_defaults_pre_post_statements(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    models_path = tmp_path / "models"
+    models_path.mkdir()
+
+    # Create config with default statements
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - SET threads = @var1
+    post_statements:
+        - ANALYZE @this_model
+variables:
+    var1: 4
+"""
+    )
+
+    # Create a model
+    model_path = models_path / "test_model.sql"
+    model_path.write_text(
+        """
+MODEL (
+    name test_model,
+    kind FULL
+);
+
+SELECT 1 as id, 'test' as status;
+"""
+    )
+
+    ctx = Context(paths=[tmp_path])
+
+    # Initial plan and apply
+    initial_plan = ctx.plan(auto_apply=True, no_prompts=True)
+    assert len(initial_plan.new_snapshots) == 1
+
+    snapshot = list(initial_plan.new_snapshots)[0]
+    model = snapshot.model
+
+    # Verify statements are in the model and python environment has been popuplated
+    assert len(model.pre_statements) == 2
+    assert len(model.post_statements) == 1
+    assert model.python_env[c.SQLMESH_VARS].payload == "{'var1': 4}"
+
+    # Verify the statements contain the expected SQL
+    assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
+    assert model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '10GB'"
+    assert model.pre_statements[1].sql() == "SET threads = @var1"
+    assert model.render_pre_statements()[1].sql() == 'SET "threads" = 4'
+
+    # Update config to change pre_statement
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '5GB'  # Changed value
+    post_statements:
+        - ANALYZE @this_model
+"""
+    )
+
+    # Reload context and create new plan
+    ctx = Context(paths=[tmp_path])
+    updated_plan = ctx.plan(no_prompts=True)
+
+    # Should detect a change due to different pre_statements
+    assert len(updated_plan.directly_modified) == 1
+
+    # Apply the plan
+    ctx.apply(updated_plan)
+
+    # Reload the models to get the updated version
+    ctx.load()
+    new_model = ctx.models['"test_model"']
+
+    # Verify updated statements
+    assert len(new_model.pre_statements) == 1
+    assert new_model.pre_statements[0].sql() == "SET memory_limit = '5GB'"
+    assert new_model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '5GB'"
+
+    # Verify the change was detected by the plan
+    assert len(updated_plan.directly_modified) == 1
+
+
+def test_model_defaults_statements_with_on_virtual_update(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    models_path = tmp_path / "models"
+    models_path.mkdir()
+
+    # Create config with on_virtual_update
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    on_virtual_update:
+        - SELECT  'Model-defailt virtual update' AS message
+"""
+    )
+
+    # Create a model with its own on_virtual_update as wel
+    model_path = models_path / "test_model.sql"
+    model_path.write_text(
+        """
+MODEL (
+    name test_model,
+    kind FULL
+);
+
+SELECT 1 as id, 'test' as name;
+
+ON_VIRTUAL_UPDATE_BEGIN;
+SELECT 'Model-specific update' AS message;
+ON_VIRTUAL_UPDATE_END;
+"""
+    )
+
+    ctx = Context(paths=[tmp_path])
+
+    # Plan and apply
+    plan = ctx.plan(auto_apply=True, no_prompts=True)
+
+    snapshot = list(plan.new_snapshots)[0]
+    model = snapshot.model
+
+    # Verify both default and model-specific on_virtual_update statements
+    assert len(model.on_virtual_update) == 2
+
+    # Default statements should come first
+    assert model.on_virtual_update[0].sql() == "SELECT 'Model-defailt virtual update' AS message"
+    assert model.on_virtual_update[1].sql() == "SELECT 'Model-specific update' AS message"

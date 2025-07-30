@@ -98,7 +98,52 @@ All software runs within a system environment that stores information as "enviro
 
 SQLMesh can access environment variables during configuration, which enables approaches like storing passwords/secrets outside the configuration file and changing configuration parameters dynamically based on which user is running SQLMesh.
 
-You can use environment variables in two ways: specifying them in the configuration file or creating properly named variables to override configuration file values.
+You can specify environment variables in the configuration file or by storing them in a `.env` file.
+
+### .env files
+
+SQLMesh automatically loads environment variables from a `.env` file in your project directory. This provides a convenient way to manage environment variables without having to set them in your shell.
+
+Create a `.env` file in your project root with key-value pairs:
+
+```bash
+# .env file
+SNOWFLAKE_PW=my_secret_password
+S3_BUCKET=s3://my-data-bucket/warehouse
+DATABASE_URL=postgresql://user:pass@localhost/db
+
+# Override specific SQLMesh configuration values
+SQLMESH__DEFAULT_GATEWAY=production
+SQLMESH__MODEL_DEFAULTS__DIALECT=snowflake
+```
+
+See the [overrides](#overrides) section for a detailed explanation of how these are defined.
+
+The rest of the `.env` file variables can be used in your configuration files with `{{ env_var('VARIABLE_NAME') }}` syntax in YAML or accessed via `os.environ['VARIABLE_NAME']` in Python.
+
+#### Custom dot env file location and name
+
+By default, SQLMesh loads `.env` files from each project directory. However, you can specify a custom path using the `--dotenv` CLI flag directly when running a command:
+
+```bash
+sqlmesh --dotenv /path/to/custom/.env plan
+```
+
+!!! note
+    The `--dotenv` flag is a global option and must be placed **before** the subcommand (e.g. `plan`, `run`), not after.
+
+Alternatively, you can export the `SQLMESH_DOTENV_PATH` environment variable once, to persist a custom path across all subsequent commands in your shell session:
+
+```bash
+export SQLMESH_DOTENV_PATH=/path/to/custom/.custom_env
+sqlmesh plan
+sqlmesh run
+```
+
+**Important considerations:**
+- Add `.env` to your `.gitignore` file to avoid committing sensitive information
+- SQLMesh will only load the `.env` file if it exists in the project directory (unless a custom path is specified)
+- When using a custom path, that specific file takes precedence over any `.env` file in the project directory.
 
 ### Configuration file
 
@@ -151,6 +196,55 @@ The examples specify a Snowflake connection whose password is stored in an envir
     )
     ```
 
+#### Default target environment
+
+The SQLMesh `plan` command acts on the `prod` environment by default (i.e., `sqlmesh plan` is equivalent to `sqlmesh plan prod`).
+
+In some organizations, users never run plans directly against `prod` - they do all SQLMesh work in a development environment unique to them. In a standard SQLMesh configuration, this means they need to include their development environment name every time they issue the `plan` command (e.g., `sqlmesh plan dev_tony`).
+
+If your organization works like this, it may be convenient to change the `plan` command's default environment from `prod` to each user's development environment. That way people can issue `sqlmesh plan` without typing the environment name every time.
+
+The SQLMesh configuration `user()` function returns the name of the user currently logged in and running SQLMesh. It retrieves the username from system environment variables like `USER` on MacOS/Linux or `USERNAME` on Windows.
+
+Call `user()` inside Jinja curly braces with the syntax `{{ user() }}`, which allows you to combine the user name with a prefix or suffix.
+
+The example configuration below constructs the environment name by appending the username to the end of the string `dev_`. If the user running SQLMesh is `tony`, the default target environment when they run SQLMesh will be `dev_tony`. In other words, `sqlmesh plan` will be equivalent to `sqlmesh plan dev_tony`.
+
+=== "YAML"
+
+    Default target environment is `dev_` combined with the username running SQLMesh.
+
+    ```yaml
+    default_target_environment: dev_{{ user() }}
+    ```
+
+=== "Python"
+
+    Default target environment is `dev_` combined with the username running SQLMesh.
+
+    Retrieve the username with the `getpass.getuser()` function, and combine it with `dev_` in a Python f-string.
+
+    ```python linenums="1" hl_lines="1 17"
+    import getpass
+    import os
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        SnowflakeConnectionConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        gateways={
+            "my_gateway": GatewayConfig(
+                connection=DuckDBConnectionConfig(),
+            ),
+        },
+        default_target_environment=f"dev_{getpass.getuser()}",
+    )
+    ```
+
 ### Overrides
 
 Environment variables have the highest precedence among configuration methods, as [noted above](#configuration-files). They will automatically override configuration file specifications if they follow a specific naming structure.
@@ -194,14 +288,46 @@ Conceptually, we can group the root level parameters into the following types. E
 
 The rest of this page provides additional detail for some of the configuration options and provides brief examples. Comprehensive lists of configuration options are at the [configuration reference page](../reference/configuration.md).
 
+### Cache directory
+
+By default, the SQLMesh cache is stored in a `.cache` directory within your project folder. You can customize the cache location using the `cache_dir` configuration option:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    # Relative path to project directory
+    cache_dir: my_custom_cache
+
+    # Absolute path
+    cache_dir: /tmp/sqlmesh_cache
+
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        cache_dir="/tmp/sqlmesh_cache",
+    )
+    ```
+
+The cache directory is automatically created if it doesn't exist. You can clear the cache using the `sqlmesh clean` command.
+
 ### Table/view storage locations
 
 SQLMesh creates schemas, physical tables, and views in the data warehouse/engine. Learn more about why and how SQLMesh creates schema in the ["Why does SQLMesh create schemas?" FAQ](../faq/faq.md#schema-question).
 
-The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override where SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options. These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
+The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override *where* SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options.
+
+You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option. 
+
+These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
 #### Physical table schemas
-By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.
+By default, SQLMesh creates physical schemas for a model with a naming convention of `sqlmesh__[model schema]`.
 
 This can be overridden on a per-schema basis using the `physical_schema_mapping` option, which removes the `sqlmesh__` prefix and uses the [regex pattern](https://docs.python.org/3/library/re.html#regular-expression-syntax) you provide to map the schemas defined in your model to their corresponding physical schemas.
 
@@ -244,7 +370,9 @@ This only applies to the _physical tables_ that SQLMesh creates - the views are 
 
 SQLMesh stores `prod` environment views in the schema in a model's name - for example, the `prod` views for a model `my_schema.users` will be located in `my_schema`.
 
-By default, for non-prod environments SQLMesh creates a new schema that appends the environment name to the model name's schema. For example, by default the view for a model `my_schema.users` in a SQLMesh environment named `dev` will be located in the schema `my_schema__dev`.
+By default, for non-prod environments SQLMesh creates a new schema that appends the environment name to the model name's schema. For example, by default the view for a model `my_schema.users` in a SQLMesh environment named `dev` will be located in the schema `my_schema__dev` as `my_schema__dev.users`.
+
+##### Show at the table level instead
 
 This behavior can be changed to append a suffix at the end of a _table/view_ name instead. Appending the suffix to a table/view name means that non-prod environment views will be created in the same schema as the `prod` environment. The prod and non-prod views are differentiated by non-prod view names ending with `__<env>`.
 
@@ -260,7 +388,7 @@ Config example:
 
 === "Python"
 
-    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE` or `EnvironmentSuffixTarget.SCHEMA` (default).
+    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE`, `EnvironmentSuffixTarget.CATALOG` or `EnvironmentSuffixTarget.SCHEMA` (default).
 
     ```python linenums="1"
     from sqlmesh.core.config import Config, ModelDefaultsConfig, EnvironmentSuffixTarget
@@ -271,15 +399,155 @@ Config example:
     )
     ```
 
-The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
+!!! info "Default behavior"
+    The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
+
+##### Show at the catalog level instead
+
+If neither the schema (default) nor the table level are sufficient for your use case, you can indicate the environment at the catalog level instead.
+
+This can be useful if you have downstream BI reporting tools and you would like to point them at a development environment to test something out without renaming all the table / schema references within the report query.
+
+In order to achieve this, you can configure [environment_suffix_target](../reference/configuration.md#environments) like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    environment_suffix_target: catalog
+    ```
+
+=== "Python"
+
+    The Python `environment_suffix_target` argument takes an `EnvironmentSuffixTarget` enumeration with a value of `EnvironmentSuffixTarget.TABLE`, `EnvironmentSuffixTarget.CATALOG` or `EnvironmentSuffixTarget.SCHEMA` (default).
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, EnvironmentSuffixTarget
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        environment_suffix_target=EnvironmentSuffixTarget.CATALOG,
+    )
+    ```
+
+Given the example of a model called `my_schema.users` with a default catalog of `warehouse` this will cause the following behavior:
+
+- For the `prod` environment, the default catalog as configured in the gateway will be used. So the view will be created at `warehouse.my_schema.users`
+- For any other environment, eg `dev`, the environment name will be appended to the default catalog. So the view will be created at `warehouse__dev.my_schema.users`
+- If a model is fully qualified with a catalog already, eg `finance_mart.my_schema.users`, then the environment catalog will be based off the model catalog and not the default catalog. In this example, the view will be created at `finance_mart__dev.my_schema.users`
+
+
+!!! warning "Caveats"
+    - Using `environment_suffix_target: catalog` only works on engines that support querying across different catalogs. If your engine does not support cross-catalog queries then you will need to use `environment_suffix_target: schema` or `environment_suffix_target: table` instead.
+    - Automatic catalog creation is not supported on all engines even if they support cross-catalog queries. For engines where it is not supported, the catalogs must be managed externally from SQLMesh and exist prior to invoking SQLMesh.
+
+#### Physical table naming convention
+
+Out of the box, SQLMesh has the following defaults set:
+
+ - `environment_suffix_target: schema`
+ - `physical_table_naming_convention: schema_and_table`
+ - no `physical_schema_mapping` overrides, so a `sqlmesh__<model schema>` physical schema will be created for each model schema
+
+This means that given a catalog of `warehouse` and a model named `finance_mart.transaction_events_over_threshold`, SQLMesh will create physical tables using the following convention:
+
+```
+# <catalog>.sqlmesh__<schema>.<schema>__<table>__<fingerprint>
+
+warehouse.sqlmesh__finance_mart.finance_mart__transaction_events_over_threshold__<fingerprint>
+```
+
+This deliberately contains some redundancy with the *model* schema as it's repeated at the physical layer in both the physical schema name as well as the physical table name.
+
+This default exists to make the physical table names portable between different configurations. If you were to define a `physical_schema_mapping` that maps all models to the same physical schema, since the model schema is included in the table name as well, there are no naming conflicts.
+
+##### Table only
+
+Some engines have object name length limitations which cause them to [silently truncate](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS) table and view names that exceed this limit. This behaviour breaks SQLMesh, so we raise a runtime error if we detect the engine would silently truncate the name of the table we are trying to create.
+
+Having redundancy in the physical table names does reduce the number of characters that can be utilised in model names. To increase the number of characters available to model names, you can use `physical_table_naming_convention` like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    physical_table_naming_convention: table_only
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, TableNamingConvention
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
+    )
+    ```
+
+This will cause SQLMesh to omit the model schema from the table name and generate physical names that look like (using the above example):
+```
+# <catalog>.sqlmesh__<schema>.<table>__<fingerprint>
+
+warehouse.sqlmesh__finance_mart.transaction_events_over_threshold__<fingerprint>
+```
+
+Notice that the model schema name is no longer part of the physical table name. This allows for slightly longer model names on engines with low identifier length limits, which may be useful for your project.
+
+In this configuration, it is your responsibility to ensure that any schema overrides in `physical_schema_mapping` result in each model schema getting mapped to a unique physical schema.
+
+For example, the following configuration will cause **data corruption**:
+
+```yaml
+physical_table_naming_convention: table_only
+physical_schema_mapping:
+  '.*': sqlmesh
+```
+
+This is because every model schema is mapped to the same physical schema but the model schema name is omitted from the physical table name.
+
+##### MD5 hash
+
+If you *still* need more characters, you can set `physical_table_naming_convention: hash_md5` like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    physical_table_naming_convention: hash_md5
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config, ModelDefaultsConfig, TableNamingConvention
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        physical_table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    ```
+
+This will cause SQLMesh generate physical names that are always 45-50 characters in length and look something like:
+
+```
+# sqlmesh_md5__<hash of what we would have generated using 'schema_and_table'>
+
+sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00
+
+# or, for a dev preview
+sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00__dev
+```
+
+This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
 
 #### Environment view catalogs
 
 By default, SQLMesh creates an environment view in the same [catalog](../concepts/glossary.md#catalog) as the physical table the view points to. The physical table's catalog is determined by either the catalog specified in the model name or the default catalog defined in the connection.
 
-Some companies fully segregate `prod` and non-prod environment objects by catalog. For example, they might have a "prod" catalog that contains all `prod` environment physical tables and views and a separate "dev" catalog that contains all `dev` environment physical tables and views.
+It can be desirable to create `prod` and non-prod virtual layer objects in separate catalogs instead. For example, there might be a "prod" catalog that contains all `prod` environment views and a separate "dev" catalog that contains all `dev` environment views.
 
 Separate prod and non-prod catalogs can also be useful if you have a CI/CD pipeline that creates environments, like the [SQLMesh Github Actions CI/CD Bot](../integrations/github.md). You might want to store the CI/CD environment objects in a dedicated catalog since there can be many of them.
+
+!!! info "Virtual layer only"
+    Note that the following setting only affects the [virtual layer](../concepts/glossary.md#virtual-layer). If you need full segregation by catalog between environments in the [physical layer](../concepts/glossary.md#physical-layer) as well, see the [Isolated Systems Guide](../guides/isolated_systems.md).
 
 To configure separate catalogs, provide a mapping from [regex patterns](https://en.wikipedia.org/wiki/Regular_expression) to catalog names. SQLMesh will compare the name of an environment to the regex patterns; when it finds a match it will store the environment's objects in the corresponding catalog.
 
@@ -316,6 +584,9 @@ With the example configuration above, SQLMesh would evaluate environment names a
 * If the environment name is `prod`, the catalog will be `prod`.
 * If the environment name starts with `dev`, the catalog will be `dev`.
 * If the environment name starts with `analytics_repo`, the catalog will be `cicd`.
+
+!!! warning
+    This feature is mutually exclusive with `environment_suffix_target: catalog` in order to prevent ambiguous mappings from being defined. Attempting to specify both `environment_catalog_mapping` and `environment_suffix_target: catalog` will raise an error on project load
 
 *Note:* This feature is only available for engines that support querying across catalogs. At the time of writing, the following engines are **NOT** supported:
 
@@ -441,15 +712,15 @@ SELECT 2 AS col
     └── Directly Modified:
         └── sqlmesh_example__dev.test_model
 
-    ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-    +++                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-                                                                                                
-    kind FULL                                                                                                                                                                                                                                    
-    )                                                                                                                                                                                                                                              
-    SELECT                                                                                                                                                                                                                                         
-    -  1 AS col                                                                                                                                                                                                                                     
-    +  2 AS col  
+    ---
+    +++
+
+
+    kind FULL
+    )
+    SELECT
+    -  1 AS col
+    +  2 AS col
     ```
 
 3. Second (metadata) change in `dev`:
@@ -469,27 +740,27 @@ SELECT 5 AS col
     └── Directly Modified:
         └── sqlmesh_example__dev.test_model
 
-    ---                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-    +++                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                    
-    @@ -1,8 +1,9 @@                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                    
-    MODEL (                                                                                                                                                                                                                                        
-    name sqlmesh_example.test_model,                                                                                                                                                                                                             
-    +  owner "John Doe",                                                                                                                                                                                                                                                                                                                                                                                                                                                        
-    kind FULL                                                                                                                                                                                                                                    
-    )                                                                                                                                                                                                                                              
-    SELECT                                                                                                                                                                                                                                         
-    -  1 AS col                                                                                                                                                                                                                                     
-    +  2 AS col                                                                                                                                                                                                                                     
+    ---
+
+    +++
+
+    @@ -1,8 +1,9 @@
+
+    MODEL (
+    name sqlmesh_example.test_model,
+    +  owner "John Doe",
+    kind FULL
+    )
+    SELECT
+    -  1 AS col
+    +  2 AS col
 
     Directly Modified: sqlmesh_example__dev.test_model (Breaking)
     Models needing backfill:
     └── sqlmesh_example__dev.test_model: [full refresh]
     ```
 
-Even though the second change should have been a metadata change (thus not requiring a backfill), it will still be classified as a breaking change because the comparison is against production instead of the previous development state. This is intentional and may cause additional backfills as more changes are accumulated.  
+Even though the second change should have been a metadata change (thus not requiring a backfill), it will still be classified as a breaking change because the comparison is against production instead of the previous development state. This is intentional and may cause additional backfills as more changes are accumulated.
 
 
 ### Gateways

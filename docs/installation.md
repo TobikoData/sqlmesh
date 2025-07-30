@@ -8,12 +8,12 @@ It is recommended, but not required, that you use a python virtual environment w
 
 First, create the virtual environment:
 ```bash
-python -m venv .env
+python -m venv .venv
 ```
 
 Then activate it:
 ```bash
-source .env/bin/activate
+source .venv/bin/activate
 ```
 
 ## Install SQLMesh core

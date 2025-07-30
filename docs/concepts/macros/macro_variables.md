@@ -68,6 +68,7 @@ Prefixes:
 Postfixes:
 
 * dt - A python datetime object that converts into a native SQL `TIMESTAMP` (or SQL engine equivalent)
+* dtntz - A python datetime object that converts into a native SQL `TIMESTAMP WITHOUT TIME ZONE` (or SQL engine equivalent)
 * date - A python date object that converts into a native SQL `DATE`
 * ds - A date string with the format: '%Y-%m-%d'
 * ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'
@@ -82,6 +83,11 @@ All predefined temporal macro variables:
     * @start_dt
     * @end_dt
     * @execution_dt
+
+* dtntz
+    * @start_dtntz
+    * @end_dtntz
+    * @execution_dtntz
 
 * date
     * @start_date
@@ -126,7 +132,8 @@ SQLMesh provides additional predefined variables used to modify model behavior b
     * 'loading' - The project is being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The model query logic is being evaluated.
-    * 'promoting' - The model is being promoted in the target environment (virtual layer update).
+    * 'promoting' - The model is being promoted in the target environment (view created during virtual layer update).
+    * 'demoting' - The model is being demoted in the target environment (view dropped during virtual layer update).
     * 'auditing' - The audit is being run.
     * 'testing' - The model query logic is being evaluated in the context of a unit test.
 * @gateway - A string value containing the name of the current [gateway](../../guides/connections.md).

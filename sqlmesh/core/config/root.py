@@ -14,7 +14,7 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
-from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.config import EnvironmentSuffixTarget, TableNamingConvention
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
@@ -39,7 +39,7 @@ from sqlmesh.core.config.scheduler import (
     scheduler_config_validator,
 )
 from sqlmesh.core.config.ui import UIConfig
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.loader import Loader, SqlMeshLoader, MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
@@ -106,6 +106,7 @@ class Config(BaseConfig):
         model_defaults: Default values for model definitions.
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
+        physical_table_naming_convention: Indicates how tables should be named at the physical layer
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
         infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
@@ -120,6 +121,7 @@ class Config(BaseConfig):
         disable_anonymized_analytics: Whether to disable the anonymized analytics collection.
         before_all: SQL statements or macros to be executed at the start of the `sqlmesh plan` and `sqlmesh run` commands.
         after_all: SQL statements or macros to be executed at the end of the `sqlmesh plan` and `sqlmesh run` commands.
+        cache_dir: The directory to store the SQLMesh cache. Defaults to .cache in the project folder.
     """
 
     gateways: GatewayDict = {"": GatewayConfig()}
@@ -146,6 +148,9 @@ class Config(BaseConfig):
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
+    physical_table_naming_convention: TableNamingConvention = Field(
+        default=TableNamingConvention.default
+    )
     gateway_managed_virtual_layer: bool = False
     infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
@@ -165,6 +170,7 @@ class Config(BaseConfig):
     after_all: t.Optional[t.List[str]] = None
     linter: LinterConfig = LinterConfig()
     janitor: JanitorConfig = JanitorConfig()
+    cache_dir: t.Optional[str] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,
@@ -219,6 +225,13 @@ class Config(BaseConfig):
                 f"^{k}$": v for k, v in physical_schema_override.items()
             }
 
+        if (
+            (variables := data.get("variables", ""))
+            and isinstance(variables, dict)
+            and c.MIGRATED_DBT_PROJECT_NAME in variables
+        ):
+            data["loader"] = MigratedDbtProjectLoader
+
         return data
 
     @model_validator(mode="after")
@@ -235,10 +248,31 @@ class Config(BaseConfig):
                 },
             )
 
+        if (
+            self.environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+            and self.environment_catalog_mapping
+        ):
+            raise ConfigError(
+                f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
+                "Please specify one or the other"
+            )
+
         if self.environment_catalog_mapping:
             _normalize_identifiers("environment_catalog_mapping")
         if self.physical_schema_mapping:
             _normalize_identifiers("physical_schema_mapping")
+
+        return self
+
+    @model_validator(mode="after")
+    def _inherit_project_config_in_cicd_bot(self) -> Self:
+        if self.cicd_bot:
+            # inherit the project-level settings into the CICD bot if they have not been explicitly overridden
+            if self.cicd_bot.auto_categorize_changes_ is None:
+                self.cicd_bot.auto_categorize_changes_ = self.plan.auto_categorize_changes
+
+            if self.cicd_bot.pr_include_unmodified_ is None:
+                self.cicd_bot.pr_include_unmodified_ = self.plan.include_unmodified
 
         return self
 

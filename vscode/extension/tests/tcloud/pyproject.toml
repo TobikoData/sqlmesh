@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mock-tcloud"
+version = "0.1.0"
+description = "Mock tcloud CLI for testing VSCode extension"
+requires-python = ">=3.8"
+dependencies = [
+    "click>=8.0",
+]
+
+[project.scripts]
+tcloud = "mock_tcloud.cli:cli"
+
+[tool.setuptools]
+packages = ["mock_tcloud"]

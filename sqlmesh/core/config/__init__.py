@@ -2,7 +2,10 @@ from sqlmesh.core.config.categorizer import (
     AutoCategorizationMode as AutoCategorizationMode,
     CategorizerConfig as CategorizerConfig,
 )
-from sqlmesh.core.config.common import EnvironmentSuffixTarget as EnvironmentSuffixTarget
+from sqlmesh.core.config.common import (
+    EnvironmentSuffixTarget as EnvironmentSuffixTarget,
+    TableNamingConvention as TableNamingConvention,
+)
 from sqlmesh.core.config.connection import (
     AthenaConnectionConfig as AthenaConnectionConfig,
     BaseDuckDBConnectionConfig as BaseDuckDBConnectionConfig,

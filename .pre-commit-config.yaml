@@ -23,3 +23,8 @@ repos:
         files: *files
         require_serial: true
         exclude: ^(tests/fixtures)
+      - id: valid migrations
+        name: valid migrations
+        entry: tooling/validating_migration_numbers.sh
+        language: system
+        pass_filenames: false

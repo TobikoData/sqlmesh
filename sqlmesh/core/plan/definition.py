@@ -57,7 +57,8 @@ class Plan(PydanticModel, frozen=True):
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
-    interval_end_per_model: t.Optional[t.Dict[str, int]]
+    start_override_per_model: t.Optional[t.Dict[str, datetime]]
+    end_override_per_model: t.Optional[t.Dict[str, datetime]]
 
     selected_models_to_backfill: t.Optional[t.Set[str]] = None
     """Models that have been explicitly selected for backfill by a user."""
@@ -177,7 +178,8 @@ class Plan(PydanticModel, frozen=True):
                 execution_time=self.execution_time,
                 restatements=self.restatements,
                 deployability_index=self.deployability_index,
-                interval_end_per_model=self.interval_end_per_model,
+                start_override_per_model=self.start_override_per_model,
+                end_override_per_model=self.end_override_per_model,
                 end_bounded=self.end_bounded,
             ).items()
             if snapshot.is_model and missing
@@ -261,10 +263,12 @@ class Plan(PydanticModel, frozen=True):
             indirectly_modified_snapshots={
                 s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
             },
+            metadata_updated_snapshots=sorted(self.metadata_updated),
             removed_snapshots=sorted(self.context_diff.removed_snapshots),
             requires_backfill=self.requires_backfill,
             models_to_backfill=self.models_to_backfill,
-            interval_end_per_model=self.interval_end_per_model,
+            start_override_per_model=self.start_override_per_model,
+            end_override_per_model=self.end_override_per_model,
             execution_time=self.execution_time,
             disabled_restatement_models={
                 s.name
@@ -298,10 +302,12 @@ class EvaluatablePlan(PydanticModel):
     ensure_finalized_snapshots: bool
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
+    metadata_updated_snapshots: t.List[SnapshotId]
     removed_snapshots: t.List[SnapshotId]
     requires_backfill: bool
     models_to_backfill: t.Optional[t.Set[str]] = None
-    interval_end_per_model: t.Optional[t.Dict[str, int]] = None
+    start_override_per_model: t.Optional[t.Dict[str, datetime]] = None
+    end_override_per_model: t.Optional[t.Dict[str, datetime]] = None
     execution_time: t.Optional[TimeLike] = None
     disabled_restatement_models: t.Set[str]
     environment_statements: t.Optional[t.List[EnvironmentStatements]] = None

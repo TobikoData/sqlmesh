@@ -145,8 +145,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 source .venv/bin/activate # reactivate the venv to ensure you're using the right installation
-sqlmesh init duckdb # get started right away with a local duckdb instance
-sqlmesh plan # see the plan for the changes you're making
+sqlmesh init # follow the prompts to get started (choose DuckDB)
 ```
 
 </details>
@@ -163,13 +162,12 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install 'sqlmesh[lsp]' # install the sqlmesh package with extensions to work with VSCode
 .\.venv\Scripts\Activate.ps1 # reactivate the venv to ensure you're using the right installation
-sqlmesh init duckdb # get started right away with a local duckdb instance
-sqlmesh plan # see the plan for the changes you're making
+sqlmesh init # follow the prompts to get started (choose DuckDB)
 ```
 </details>
 
 
-Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/#1-create-the-sqlmesh-project) to learn how to use SQLMesh. You already have a head start!
+Follow the [quickstart guide](https://sqlmesh.readthedocs.io/en/stable/quickstart/cli/) to learn how to use SQLMesh. You already have a head start!
 
 Follow the [crash course](https://sqlmesh.readthedocs.io/en/stable/examples/sqlmesh_cli_crash_course/) to learn the core movesets and use the easy to reference cheat sheet. 
 
