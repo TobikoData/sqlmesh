@@ -513,13 +513,9 @@ class Console(
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
-    def log_pre_check_warnings(
-        self,
-        pre_check_warnings: t.List[t.Tuple[str, t.List[str]]],
-        pre_check_only: bool,
-    ) -> bool:
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
         """
-        Log warnings emitted by pre-check scripts and ask user whether they'd like to
+        Log warnings emitted by pre-checks and ask user whether they'd like to
         proceed with the migration (true) or not (false).
         """
 
@@ -690,11 +686,7 @@ class NoopConsole(Console):
     def stop_env_migration_progress(self, success: bool = True) -> None:
         pass
 
-    def log_pre_check_warnings(
-        self,
-        pre_check_warnings: t.List[t.Tuple[str, t.List[str]]],
-        pre_check_only: bool,
-    ) -> bool:
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
         return True
 
     def start_state_export(
@@ -1519,16 +1511,11 @@ class TerminalConsole(Console):
             if success:
                 self.log_success("Environments migrated successfully")
 
-    def log_pre_check_warnings(
-        self,
-        pre_check_warnings: t.List[t.Tuple[str, t.List[str]]],
-        pre_check_only: bool,
-    ) -> bool:
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
         if pre_check_warnings:
-            for pre_check, warnings in pre_check_warnings:
-                tree = Tree(f"[bold]Pre-migration warnings for {pre_check}[/bold]")
-                for warning in warnings:
-                    tree.add(f"[yellow]{warning}[/yellow]")
+            tree = Tree(f"[bold]Pre-migration warnings[/bold]")
+            for warning in pre_check_warnings:
+                tree.add(f"[yellow]{warning}[/yellow]")
 
                 self._print(tree)
 

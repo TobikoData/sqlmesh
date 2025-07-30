@@ -3617,11 +3617,8 @@ def test_pre_checks(tmp_path, mocker):
         assert len(calls) == 1
 
         pre_check_warnings = calls[0].args[0]
-        assert len(pre_check_warnings) == 1
-
-        assert pre_check_warnings[0][0] == "v9999_test_pre_check"
-        assert len(pre_check_warnings[0][1]) == 3
-        assert all(warning.startswith("Warning:") for warning in pre_check_warnings[0][1])
+        assert len(pre_check_warnings) == 3
+        assert all(warning.startswith("Warning:") for warning in pre_check_warnings)
 
         assert context.state_sync.get_versions() == versions_before_migrate
 
