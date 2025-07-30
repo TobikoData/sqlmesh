@@ -479,10 +479,11 @@ class GithubController:
 
     @property
     def forward_only_plan(self) -> bool:
+        default = self._context.config.plan.forward_only
         head_ref = self._pull_request.head.ref
         if isinstance(head_ref, str):
-            return head_ref.endswith(self.bot_config.forward_only_branch_suffix)
-        return False
+            return head_ref.endswith(self.bot_config.forward_only_branch_suffix) or default
+        return default
 
     @classmethod
     def _append_output(cls, key: str, value: str) -> None:
