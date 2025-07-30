@@ -611,7 +611,13 @@ class SQLMeshMagics(Magics):
     def fetchdf(self, context: Context, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
-        df = context.fetchdf(sql)
+        
+        # Check if we're using Athena and use PandasCursor directly
+        if hasattr(context.engine_adapter, 'DIALECT') and context.engine_adapter.DIALECT == 'athena':
+            df = self._fetchdf_athena_pandas_cursor(context, sql)
+        else:
+            df = context.fetchdf(sql)
+            
         if args.df_var:
             self._shell.user_ns[args.df_var] = df
         self.display(df)
@@ -1146,6 +1152,72 @@ class SQLMeshMagics(Magics):
     def destroy(self, context: Context, line: str) -> None:
         """Removes all project resources, engine-managed objects, state tables and clears the SQLMesh cache."""
         context.destroy()
+
+    def _fetchdf_athena_pandas_cursor(self, context: Context, sql: str) -> "pd.DataFrame":
+        """Special implementation for Athena using PandasCursor with SQLGlot transpilation"""
+        import pandas as pd
+        
+        try:
+            from pyathena.pandas.cursor import PandasCursor
+            from pyathena import connect
+        except ImportError as e:
+            raise MagicError(f"PyAthena with pandas support is required: {e}")
+        
+        # Use SQLMesh's transpilation to convert SQL to Athena dialect
+        # This handles features like QUALIFY that need transpilation
+        try:
+            # Parse the SQL string into a SQLGlot expression first
+            from sqlmesh.core.dialect import parse
+            parsed_expressions = parse(sql, default_dialect=context.config.dialect)
+            
+            # Get the first expression (should be a SELECT statement)
+            if parsed_expressions:
+                transpiled_sql = context.engine_adapter._to_sql(parsed_expressions[0], quote=False)
+            else:
+                raise ValueError("No valid SQL expressions found")
+                
+        except Exception as e:
+            context.console.log_error(f"SQL transpilation failed: {e}")
+            # Fall back to the regular fetchdf method if transpilation fails
+            return context.fetchdf(sql)
+        
+        # Get the connection configuration for Athena
+        conn_config = context.config.get_connection(context.config.default_connection)
+        
+        # Build connection kwargs using the same logic as SQLMesh
+        connection_kwargs = {
+            k: v for k, v in conn_config.dict().items() 
+            if k in conn_config._connection_kwargs_keys and v is not None
+        }
+        
+        # Create connection with PandasCursor specifically
+        try:
+            with connect(
+                cursor_class=PandasCursor,
+                **connection_kwargs
+            ) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(transpiled_sql)
+                    
+                    # PyAthena PandasCursor needs to be converted to DataFrame manually
+                    # It returns data but we need to use pandas.DataFrame constructor
+                    data = cursor.fetchall()
+                    
+                    if data:
+                        # Get column names from cursor description
+                        columns = [desc[0] for desc in cursor.description] if cursor.description else None
+                        df = pd.DataFrame(data, columns=columns)
+                    else:
+                        # Empty result set
+                        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                        df = pd.DataFrame(columns=columns)
+                
+            return df
+            
+        except Exception as e:
+            # Fall back to the regular fetchdf method if PandasCursor fails
+            context.console.log_error(f"PandasCursor failed, falling back to standard method: {e}")
+            return context.fetchdf(sql)
 
 
 def register_magics() -> None:
