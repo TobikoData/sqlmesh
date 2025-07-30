@@ -13,6 +13,7 @@ from sqlmesh.core.state_sync.db.utils import (
     SQLMESH_VERSION,
 )
 from sqlmesh.core.state_sync.base import (
+    PRE_CHECK_VERSION,
     SCHEMA_VERSION,
     Versions,
 )
@@ -31,6 +32,7 @@ class VersionState:
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build(index_type),
             "sqlmesh_version": exp.DataType.build(index_type),
+            "pre_check_version": exp.DataType.build("int"),
         }
 
     def update_versions(
@@ -38,6 +40,7 @@ class VersionState:
         schema_version: int = SCHEMA_VERSION,
         sqlglot_version: str = SQLGLOT_VERSION,
         sqlmesh_version: str = SQLMESH_VERSION,
+        pre_check_version: int = PRE_CHECK_VERSION,
     ) -> None:
         import pandas as pd
 
@@ -51,6 +54,7 @@ class VersionState:
                         "schema_version": schema_version,
                         "sqlglot_version": sqlglot_version,
                         "sqlmesh_version": sqlmesh_version,
+                        "pre_check_version": pre_check_version,
                     }
                 ]
             ),
@@ -69,5 +73,8 @@ class VersionState:
             return no_version
 
         return Versions(
-            schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=seq_get(row, 2)
+            schema_version=row[0],
+            sqlglot_version=row[1],
+            sqlmesh_version=seq_get(row, 2),
+            pre_check_version=seq_get(row, 3),
         )
