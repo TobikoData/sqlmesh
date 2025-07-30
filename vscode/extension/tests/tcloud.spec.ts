@@ -1,7 +1,6 @@
 import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   createVirtualEnvironment,
   openServerPage,
@@ -43,10 +42,8 @@ async function setupPythonEnvironment(envDir: string): Promise<string> {
 test('not signed in, shows sign in window', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   const context = await startCodeServer({ tempDir })
@@ -116,10 +113,8 @@ test('not signed in, shows sign in window', async ({
 test('signed in and not installed shows installation window', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   const context = await startCodeServer({ tempDir })
@@ -192,10 +187,8 @@ test('signed in and not installed shows installation window', async ({
 test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when ready', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   try {
@@ -269,10 +262,8 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in old version when read
 test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when ready', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   try {
@@ -346,10 +337,8 @@ test('tcloud sqlmesh_lsp command starts the sqlmesh_lsp in new version when read
 // but the test is still useful when running it manually.
 test.skip('tcloud not signed in and not installed, shows sign in window and then fact that loaded', async ({
   page,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
 
   // Create a tcloud.yaml to mark this as a tcloud project

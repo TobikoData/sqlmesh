@@ -11,7 +11,7 @@ export const stop = (lspClient: LSPClient | undefined) => {
       return
     }
 
-    await lspClient.stop()
+    await lspClient.stop(true)
     await window.showInformationMessage('LSP server stopped')
     traceInfo('LSP server stopped successfully')
   }

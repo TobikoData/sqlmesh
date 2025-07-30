@@ -221,7 +221,7 @@ This example specifies that the model `docs_example.full_model` should not run t
 ```sql linenums="1"
 MODEL(
   name docs_example.full_model,
-  ignored_rules: ["invalidselectstarexpansion"] # or "ALL" to turn off linting completely
+  ignored_rules ["invalidselectstarexpansion"] # or "ALL" to turn off linting completely
 );
 ```
 

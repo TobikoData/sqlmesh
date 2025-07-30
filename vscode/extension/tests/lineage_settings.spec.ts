@@ -1,7 +1,5 @@
 import { test, expect } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   openLineageView,
   openServerPage,
@@ -13,8 +11,8 @@ import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 test('Settings button is visible in the lineage view', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 

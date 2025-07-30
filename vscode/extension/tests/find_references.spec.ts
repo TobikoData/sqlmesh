@@ -1,7 +1,5 @@
 import { test, expect, Page } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   findAllReferences,
   goToReferences,
@@ -12,11 +10,9 @@ import {
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 // Helper function to set up a test environment for model references
-async function setupModelTestEnvironment(): Promise<string> {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+async function setupModelTestEnvironment(tempDir: string): Promise<void> {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
-  return tempDir
 }
 
 // Helper function to navigate to models folder
@@ -63,8 +59,9 @@ test.describe('Model References', () => {
   test('Go to References (Shift+F12) for Model usage', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
     await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open customers.sql which contains references to other models
@@ -130,8 +127,9 @@ test.describe('Model References', () => {
   test('Find All References (Alt+Shift+F12) for Model', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
 
@@ -179,8 +177,9 @@ test.describe('Model References', () => {
   test('Go to References for Model from Audit', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
     await openServerPage(page, tempDir, sharedCodeServer)
 
     // Open assert_item_price_above_zero.sql audit file which references sushi.items model
@@ -263,8 +262,9 @@ test.describe('Model References', () => {
   test.skip('Find All Model References from Audit', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
 
@@ -325,8 +325,9 @@ test.describe('CTE References', () => {
   test('Go to references from definition of CTE', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
     await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
@@ -363,8 +364,9 @@ test.describe('CTE References', () => {
   test('Go to references from usage of CTE', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
 
@@ -403,8 +405,9 @@ test.describe('CTE References', () => {
   test('Go to references for nested CTE', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
     await openServerPage(page, tempDir, sharedCodeServer)
 
     await openCustomersFile(page)
@@ -440,8 +443,12 @@ test.describe('CTE References', () => {
     await page.waitForSelector('text=FROM current_marketing')
   })
 
-  test('Find all references for CTE', async ({ page, sharedCodeServer }) => {
-    const tempDir = await setupModelTestEnvironment()
+  test('Find all references for CTE', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
     await openCustomersFile(page)
@@ -464,8 +471,9 @@ test.describe('CTE References', () => {
   test('Find all references from usage for CTE', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
 
@@ -489,8 +497,9 @@ test.describe('CTE References', () => {
   test('Find all references for nested CTE', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
     await openCustomersFile(page)
@@ -518,8 +527,9 @@ test.describe('Macro References', () => {
   test('Go to References for @ADD_ONE macro', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
     await openTopWaitersFile(page)
@@ -553,8 +563,10 @@ test.describe('Macro References', () => {
   test('Find All References for @MULTIPLY macro', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
+
     await openServerPage(page, tempDir, sharedCodeServer)
 
     await openTopWaitersFile(page)
@@ -606,8 +618,9 @@ test.describe('Macro References', () => {
   test('Go to References for @SQL_LITERAL macro', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await setupModelTestEnvironment()
+    await setupModelTestEnvironment(tempDir)
 
     await openServerPage(page, tempDir, sharedCodeServer)
     await openTopWaitersFile(page)

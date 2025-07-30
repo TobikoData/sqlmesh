@@ -1250,6 +1250,26 @@ def test_table_name_naming_convention_hash_md5(make_snapshot: t.Callable[..., Sn
     assert snapshot.table_name(is_deployable=False) == f"sqlmesh__foo.sqlmesh_md5__{hash_dev}__dev"
 
 
+def test_table_naming_convention_passed_around_correctly(make_snapshot: t.Callable[..., Snapshot]):
+    snapshot = make_snapshot(
+        SqlModel(name='"foo"."bar"."baz"', query=parse_one("select 1")),
+        table_naming_convention=TableNamingConvention.HASH_MD5,
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert snapshot.table_info.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert (
+        snapshot.table_info.data_version.table_naming_convention == TableNamingConvention.HASH_MD5
+    )
+    assert snapshot.table_info.table_info.table_naming_convention == TableNamingConvention.HASH_MD5
+    assert (
+        snapshot.table_info.table_info.data_version.table_naming_convention
+        == TableNamingConvention.HASH_MD5
+    )
+
+
 def test_table_name_view(make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot = make_snapshot(SqlModel(name="name", query=parse_one("select 1"), kind="VIEW"))

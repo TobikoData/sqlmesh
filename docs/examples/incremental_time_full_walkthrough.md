@@ -172,7 +172,7 @@ We have data like the below that gets ingested into our data warehouse on a dail
 
 I can answer some of the questions above by walking through the model's config, coupled with the business logic/code I prepared ahead of time.
 
-You can see this code in a SQLMesh project context [here](https://github.com/sungchun12/sqlmesh-demos/blob/incremental-demo/models/examples/incrementals_demo.sql).
+You can see this code in a SQLMesh project context [here](https://github.com/sungchun12/sqlmesh-demos/blob/incremental-demo/models/examples/incremental_model.sql).
 
 ```sql
 MODEL (

@@ -527,6 +527,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
             change_category=self.change_category,
             physical_schema=self.physical_schema,
             dev_table_suffix=self.dev_table_suffix,
+            table_naming_convention=self.table_naming_convention,
         )
 
     @property

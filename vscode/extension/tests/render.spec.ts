@@ -1,7 +1,5 @@
 import { test, expect } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   openLineageView,
   openServerPage,
@@ -11,8 +9,7 @@ import {
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Render works correctly', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
+test('Render works correctly', async ({ page, sharedCodeServer, tempDir }) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -47,8 +44,8 @@ test('Render works correctly', async ({ page, sharedCodeServer }) => {
 test('Render works correctly with model without a description', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -83,8 +80,8 @@ test('Render works correctly with model without a description', async ({
 test('Render works correctly with every rendered model opening a new tab', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
 
   await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -127,8 +124,8 @@ test('Render works correctly with every rendered model opening a new tab', async
 test('Render shows model picker when no active editor is open', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 

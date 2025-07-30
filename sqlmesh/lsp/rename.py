@@ -13,7 +13,7 @@ from sqlmesh.lsp.helpers import to_sqlmesh_position, to_lsp_range
 from sqlmesh.lsp.reference import (
     _position_within_range,
     get_cte_references,
-    LSPCteReference,
+    CTEReference,
 )
 from sqlmesh.lsp.uri import URI
 
@@ -82,7 +82,7 @@ def rename_symbol(
     return None
 
 
-def _rename_cte(cte_references: t.List[LSPCteReference], new_name: str) -> WorkspaceEdit:
+def _rename_cte(cte_references: t.List[CTEReference], new_name: str) -> WorkspaceEdit:
     """
     Create a WorkspaceEdit for renaming a CTE.
 

@@ -107,6 +107,14 @@ def cli(
     if "--help" in sys.argv:
         return
 
+    configure_logging(
+        debug,
+        log_to_stdout,
+        log_file_dir=log_file_dir,
+        ignore_warnings=ignore_warnings,
+    )
+    configure_console(ignore_warnings=ignore_warnings)
+
     load = True
 
     if len(paths) == 1:
@@ -116,14 +124,6 @@ def cli(
             return
         if ctx.invoked_subcommand in SKIP_LOAD_COMMANDS:
             load = False
-
-    configure_logging(
-        debug,
-        log_to_stdout,
-        log_file_dir=log_file_dir,
-        ignore_warnings=ignore_warnings,
-    )
-    configure_console(ignore_warnings=ignore_warnings)
 
     configs = load_configs(config, Context.CONFIG_TYPE, paths, dotenv_path=dotenv)
     log_limit = list(configs.values())[0].log_limit
@@ -884,6 +884,13 @@ def info(obj: Context, skip_connection: bool, verbose: int) -> None:
 @cli_analytics
 def ui(ctx: click.Context, host: str, port: int, mode: str) -> None:
     """Start a browser-based SQLMesh UI."""
+    from sqlmesh.core.console import get_console
+
+    get_console().log_warning(
+        "The UI is deprecated and will be removed in a future version. Please use the SQLMesh VSCode extension instead. "
+        "Learn more at https://sqlmesh.readthedocs.io/en/stable/guides/vscode/"
+    )
+
     try:
         import uvicorn
     except ModuleNotFoundError as e:

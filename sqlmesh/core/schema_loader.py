@@ -57,28 +57,17 @@ def create_external_models_file(
         external_model_fqns -= existing_model_fqns
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-
-        def _get_columns(table: str) -> t.Optional[t.Dict[str, t.Any]]:
-            try:
-                return adapter.columns(table, include_pseudo_columns=True)
-            except Exception as e:
-                msg = f"Unable to get schema for '{table}': '{e}'."
-                if strict:
-                    raise SQLMeshError(msg) from e
-                get_console().log_warning(msg)
-                return None
-
         gateway_part = {"gateway": gateway} if gateway else {}
 
         schemas = [
             {
                 "name": exp.to_table(table).sql(dialect=dialect),
-                "columns": {c: dtype.sql(dialect=dialect) for c, dtype in columns.items()},
+                "columns": columns,
                 **gateway_part,
             }
             for table, columns in sorted(
                 pool.map(
-                    lambda table: (table, _get_columns(table)),
+                    lambda table: (table, get_columns(adapter, dialect, table, strict)),
                     external_model_fqns,
                 )
             )
@@ -94,3 +83,20 @@ def create_external_models_file(
 
         with open(path, "w", encoding="utf-8") as file:
             yaml.dump(entries_to_keep + schemas, file)
+
+
+def get_columns(
+    adapter: EngineAdapter, dialect: DialectType, table: str, strict: bool
+) -> t.Optional[t.Dict[str, t.Any]]:
+    """
+    Return the column and their types in a dictionary
+    """
+    try:
+        columns = adapter.columns(table, include_pseudo_columns=True)
+        return {c: dtype.sql(dialect=dialect) for c, dtype in columns.items()}
+    except Exception as e:
+        msg = f"Unable to get schema for '{table}': '{e}'."
+        if strict:
+            raise SQLMeshError(msg) from e
+        get_console().log_warning(msg)
+        return None

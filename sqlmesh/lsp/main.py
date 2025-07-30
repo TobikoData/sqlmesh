@@ -23,6 +23,8 @@ from sqlmesh.lsp.api import (
     ApiResponseGetLineage,
     ApiResponseGetModels,
 )
+
+from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
 from sqlmesh.lsp.completions import get_sql_completions
 from sqlmesh.lsp.context import (
     LSPContext,
@@ -46,20 +48,29 @@ from sqlmesh.lsp.custom import (
     FormatProjectRequest,
     FormatProjectResponse,
     CustomMethod,
+    LIST_WORKSPACE_TESTS_FEATURE,
+    ListWorkspaceTestsRequest,
+    ListWorkspaceTestsResponse,
+    LIST_DOCUMENT_TESTS_FEATURE,
+    ListDocumentTestsRequest,
+    ListDocumentTestsResponse,
+    RUN_TEST_FEATURE,
+    RunTestRequest,
+    RunTestResponse,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
 from sqlmesh.lsp.hints import get_hints
 from sqlmesh.lsp.reference import (
-    LSPCteReference,
-    LSPModelReference,
-    LSPExternalModelReference,
+    CTEReference,
+    ModelReference,
     get_references,
     get_all_references,
 )
 from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highlights
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.lineage import ExternalModelReference
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
@@ -105,7 +116,7 @@ class SQLMeshLanguageServer:
         :param server_name: Name for the language server.
         :param version: Version string.
         """
-        self.server = LanguageServer(server_name, version)
+        self.server = LanguageServer(server_name, version, max_workers=1)
         self.context_class = context_class
         self.context_state: ContextState = NoContext()
         self.workspace_folders: t.List[Path] = []
@@ -127,10 +138,57 @@ class SQLMeshLanguageServer:
             API_FEATURE: self._custom_api,
             SUPPORTED_METHODS_FEATURE: self._custom_supported_methods,
             FORMAT_PROJECT_FEATURE: self._custom_format_project,
+            LIST_WORKSPACE_TESTS_FEATURE: self._list_workspace_tests,
+            LIST_DOCUMENT_TESTS_FEATURE: self._list_document_tests,
+            RUN_TEST_FEATURE: self._run_test,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
         self._register_features()
+
+    def _list_workspace_tests(
+        self,
+        ls: LanguageServer,
+        params: ListWorkspaceTestsRequest,
+    ) -> ListWorkspaceTestsResponse:
+        """List all tests in the current workspace."""
+        try:
+            context = self._context_get_or_load()
+            tests = context.list_workspace_tests()
+            return ListWorkspaceTestsResponse(tests=tests)
+        except Exception as e:
+            ls.log_trace(f"Error listing workspace tests: {e}")
+            return ListWorkspaceTestsResponse(tests=[])
+
+    def _list_document_tests(
+        self,
+        ls: LanguageServer,
+        params: ListDocumentTestsRequest,
+    ) -> ListDocumentTestsResponse:
+        """List tests for a specific document."""
+        try:
+            uri = URI(params.textDocument.uri)
+            context = self._context_get_or_load(uri)
+            tests = context.get_document_tests(uri)
+            return ListDocumentTestsResponse(tests=tests)
+        except Exception as e:
+            ls.log_trace(f"Error listing document tests: {e}")
+            return ListDocumentTestsResponse(tests=[])
+
+    def _run_test(
+        self,
+        ls: LanguageServer,
+        params: RunTestRequest,
+    ) -> RunTestResponse:
+        """Run a specific test."""
+        try:
+            uri = URI(params.textDocument.uri)
+            context = self._context_get_or_load(uri)
+            result = context.run_test(uri, params.testName)
+            return result
+        except Exception as e:
+            ls.log_trace(f"Error running test: {e}")
+            return RunTestResponse(success=False, response_error=str(e))
 
     # All the custom LSP methods are registered here and prefixed with _custom
     def _custom_all_models(self, ls: LanguageServer, params: AllModelsRequest) -> AllModelsResponse:
@@ -311,6 +369,44 @@ class SQLMeshLanguageServer:
 
             self.server.feature(name)(create_function_call(method))
 
+        @self.server.command(EXTERNAL_MODEL_UPDATE_COLUMNS)
+        def command_external_models_update_columns(ls: LanguageServer, raw: t.Any) -> None:
+            try:
+                if not isinstance(raw, list):
+                    raise ValueError("Invalid command parameters")
+                if len(raw) != 1:
+                    raise ValueError("Command expects exactly one parameter")
+                model_name = raw[0]
+                if not isinstance(model_name, str):
+                    raise ValueError("Command parameter must be a string")
+
+                context = self._context_get_or_load()
+                if not isinstance(context, LSPContext):
+                    raise ValueError("Context is not loaded or invalid")
+                model = context.context.get_model(model_name)
+                if model is None:
+                    raise ValueError(f"External model '{model_name}' not found")
+                if model._path is None:
+                    raise ValueError(f"External model '{model_name}' does not have a file path")
+                uri = URI.from_path(model._path)
+                updated = context.update_external_model_columns(
+                    ls=ls,
+                    uri=uri,
+                    model_name=model_name,
+                )
+                if updated:
+                    ls.show_message(
+                        f"Updated columns for '{model_name}'",
+                        types.MessageType.Info,
+                    )
+                else:
+                    ls.show_message(
+                        f"Columns for '{model_name}' are already up to date",
+                    )
+            except Exception as e:
+                ls.show_message(f"Error executing command: {e}", types.MessageType.Error)
+                return None
+
         @self.server.feature(types.INITIALIZE)
         def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
             """Initialize the server when the client connects."""
@@ -423,7 +519,7 @@ class SQLMeshLanguageServer:
                 if not references:
                     return None
                 reference = references[0]
-                if isinstance(reference, LSPCteReference) or not reference.markdown_description:
+                if isinstance(reference, CTEReference) or not reference.markdown_description:
                     return None
                 return types.Hover(
                     contents=types.MarkupContent(
@@ -469,7 +565,7 @@ class SQLMeshLanguageServer:
                 location_links = []
                 for reference in references:
                     # Use target_range if available (CTEs, Macros, and external models in YAML)
-                    if isinstance(reference, LSPModelReference):
+                    if isinstance(reference, ModelReference):
                         # Regular SQL models - default to start of file
                         target_range = types.Range(
                             start=types.Position(line=0, character=0),
@@ -479,7 +575,7 @@ class SQLMeshLanguageServer:
                             start=types.Position(line=0, character=0),
                             end=types.Position(line=0, character=0),
                         )
-                    elif isinstance(reference, LSPExternalModelReference):
+                    elif isinstance(reference, ExternalModelReference):
                         # External models may have target_range set for YAML files
                         target_range = types.Range(
                             start=types.Position(line=0, character=0),
@@ -692,6 +788,17 @@ class SQLMeshLanguageServer:
             except Exception as e:
                 ls.log_trace(f"Error getting code actions: {e}")
                 return None
+
+        @self.server.feature(types.TEXT_DOCUMENT_CODE_LENS)
+        def code_lens(ls: LanguageServer, params: types.CodeLensParams) -> t.List[types.CodeLens]:
+            try:
+                uri = URI(params.text_document.uri)
+                context = self._context_get_or_load(uri)
+                code_lenses = context.get_code_lenses(uri)
+                return code_lenses if code_lenses else []
+            except Exception as e:
+                ls.log_trace(f"Error getting code lenses: {e}")
+                return []
 
         @self.server.feature(
             types.TEXT_DOCUMENT_COMPLETION,

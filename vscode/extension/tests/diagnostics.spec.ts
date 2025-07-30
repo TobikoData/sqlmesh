@@ -10,8 +10,8 @@ import yaml from 'yaml'
 test('Workspace diagnostics show up in the diagnostics panel', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -55,10 +55,8 @@ test.describe('Bad config.py/config.yaml file issues', () => {
   test('sqlmesh init, then corrupted config.yaml, bad yaml', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
     await setup(tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -135,10 +133,8 @@ test.describe('Bad config.py/config.yaml file issues', () => {
   test('sushi example, correct python, bad config', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -170,10 +166,11 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     await expect(errorElement).toBeVisible({ timeout: 5000 })
   })
 
-  test('sushi example, bad config.py', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('sushi example, bad config.py', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -205,10 +202,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
 })
 
 test.describe('Diagnostics for bad SQLMesh models', () => {
-  test('duplicate model names', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('duplicate model names', async ({ page, sharedCodeServer, tempDir }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -246,10 +240,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
       .isVisible({ timeout: 5_000 })
   })
 
-  test('bad model block', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('bad model block', async ({ page, sharedCodeServer, tempDir }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -289,11 +280,11 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
 })
 
 test.describe('Diagnostics for bad audits', () => {
-  test('bad audit block in audit', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
-
+  test('bad audit block in audit', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)

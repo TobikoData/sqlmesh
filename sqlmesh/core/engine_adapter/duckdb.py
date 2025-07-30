@@ -142,3 +142,56 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             exp.cast(col, "DOUBLE"),
             f"DECIMAL(38, {precision})",
         )
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        table_kind: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        catalog = self.get_current_catalog()
+        catalog_type_tuple = self.fetchone(
+            exp.select("type")
+            .from_("duckdb_databases()")
+            .where(exp.column("database_name").eq(catalog))
+        )
+        catalog_type = catalog_type_tuple[0] if catalog_type_tuple else None
+
+        partitioned_by_exps = None
+        if catalog_type == "ducklake":
+            partitioned_by_exps = kwargs.pop("partitioned_by", None)
+
+        super()._create_table(
+            table_name_or_schema,
+            expression,
+            exists,
+            replace,
+            columns_to_types,
+            table_description,
+            column_descriptions,
+            table_kind,
+            **kwargs,
+        )
+
+        if partitioned_by_exps:
+            # Schema object contains column definitions, so we extract Table
+            table_name = (
+                table_name_or_schema.this
+                if isinstance(table_name_or_schema, exp.Schema)
+                else table_name_or_schema
+            )
+            table_name_str = (
+                table_name.sql(dialect=self.dialect)
+                if isinstance(table_name, exp.Table)
+                else table_name
+            )
+            partitioned_by_str = ", ".join(
+                expr.sql(dialect=self.dialect) for expr in partitioned_by_exps
+            )
+            self.execute(f"ALTER TABLE {table_name_str} SET PARTITIONED BY ({partitioned_by_str});")

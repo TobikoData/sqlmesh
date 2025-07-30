@@ -9,8 +9,11 @@ import {
 } from './utils_code_server'
 
 // Worker-scoped fixture to start/stop VS Code server once per worker
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export const test = base.extend<{}, { sharedCodeServer: CodeServerContext }>({
+export const test = base.extend<
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  {},
+  { sharedCodeServer: CodeServerContext; tempDir: string }
+>({
   sharedCodeServer: [
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
@@ -36,6 +39,24 @@ export const test = base.extend<{}, { sharedCodeServer: CodeServerContext }>({
       await stopCodeServer(context)
     },
     { scope: 'worker', auto: true },
+  ],
+  tempDir: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      // Create a temporary directory for each test
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'vscode-test-temp-'),
+      )
+      console.log(`Created temporary directory: ${tempDir}`)
+      await use(tempDir)
+
+      // Clean up after each test
+      console.log(`Cleaning up temporary directory: ${tempDir}`)
+      await fs.remove(tempDir)
+    },
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
+    { auto: true },
   ],
 })
 

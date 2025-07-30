@@ -361,8 +361,37 @@ class MacroEvaluator:
             return None
 
         if isinstance(result, (tuple, list)):
-            return [self.parse_one(item) for item in result if item is not None]
-        return self.parse_one(result)
+            result = [self.parse_one(item) for item in result if item is not None]
+
+            if (
+                len(result) == 1
+                and isinstance(result[0], (exp.Array, exp.Tuple))
+                and node.find_ancestor(MacroFunc)
+            ):
+                """
+                if:
+                 - the output of evaluating this node is being passed as an argument to another macro function
+                 - and that output is something that _norm_var_arg_lambda() will unpack into varargs
+                   > (a list containing a single item of type exp.Tuple/exp.Array)
+                then we will get inconsistent behaviour depending on if this node emits a list with a single item vs multiple items.
+                
+                In the first case, emitting a list containing a single array item will cause that array to get unpacked and its *members* passed to the calling macro
+                In the second case, emitting a list containing multiple array items will cause each item to get passed as-is to the calling macro
+                
+                To prevent this inconsistency, we wrap this node output in an exp.Array so that _norm_var_arg_lambda() can "unpack" that into the
+                actual argument we want to pass to the parent macro function
+                
+                Note we only do this for evaluation results that get passed as an argument to another macro, because when the final
+                result is given to something like SELECT, we still want that to be unpacked into a list of items like:
+                 - SELECT ARRAY(1), ARRAY(2)
+                rather than a single item like:
+                 - SELECT ARRAY(ARRAY(1), ARRAY(2))                
+                """
+                result = [exp.Array(expressions=result)]
+        else:
+            result = self.parse_one(result)
+
+        return result
 
     def eval_expression(self, node: t.Any) -> t.Any:
         """Converts a SQLGlot expression into executable Python code and evals it.

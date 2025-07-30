@@ -1,41 +1,43 @@
-import { test, expect } from './fixtures'
+import { test } from './fixtures'
 import fs from 'fs-extra'
 import {
   openServerPage,
+  runCommand,
   SUSHI_SOURCE_PATH,
   waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
-test('Model type hinting', async ({ page, sharedCodeServer, tempDir }) => {
+test('Format project works correctly', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
+
   await createPythonInterpreterSettingsSpecifier(tempDir)
   await openServerPage(page, tempDir, sharedCodeServer)
 
-  // Wait for the models folder to be visible
+  //   Wait for the models folder to be visible
   await page.waitForSelector('text=models')
 
-  // Click on the models folder
+  // Click on the models folder, excluding external_models
   await page
     .getByRole('treeitem', { name: 'models', exact: true })
     .locator('a')
     .click()
 
-  // Open the customers_revenue_by_day model
+  // Open the customer_revenue_lifetime model
   await page
-    .getByRole('treeitem', {
-      name: 'customer_revenue_by_day.sql',
-      exact: true,
-    })
+    .getByRole('treeitem', { name: 'customers.sql', exact: true })
     .locator('a')
     .click()
 
   await page.waitForSelector('text=grain')
   await waitForLoadedSQLMesh(page)
 
-  // Wait a moment for hints to appear
-  await page.waitForTimeout(500)
+  // Format the project
+  await runCommand(page, 'Test: Run All Tests')
 
-  // Check if the hint is visible
-  expect(await page.locator('text="country code"::INT').count()).toBe(1)
+  await page.waitForSelector('text=test_order_items')
 })
