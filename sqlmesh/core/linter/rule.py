@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlmesh.core.model import Model
@@ -50,11 +50,20 @@ class TextEdit:
 
 
 @dataclass(frozen=True)
+class CreateFile:
+    """Create a new file with the provided text."""
+
+    path: Path
+    text: str
+
+
+@dataclass(frozen=True)
 class Fix:
     """A fix that can be applied to resolve a rule violation."""
 
     title: str
     edits: t.List[TextEdit]
+    create_files: t.List[CreateFile] = field(default_factory=list)
 
 
 class _Rule(abc.ABCMeta):
