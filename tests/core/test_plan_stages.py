@@ -1312,9 +1312,9 @@ def test_build_plan_stages_virtual_environment_mode_filtering(
             name="full_model",
             query=parse_one("select 1, ds"),
             kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+            virtual_environment_mode=VirtualEnvironmentMode.FULL,
         )
     )
-    snapshot_full.virtual_environment_mode = VirtualEnvironmentMode.FULL
     snapshot_full.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_dev_only = make_snapshot(
@@ -1322,9 +1322,9 @@ def test_build_plan_stages_virtual_environment_mode_filtering(
             name="dev_only_model",
             query=parse_one("select 2, ds"),
             kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+            virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
         )
     )
-    snapshot_dev_only.virtual_environment_mode = VirtualEnvironmentMode.DEV_ONLY
     snapshot_dev_only.categorize_as(SnapshotChangeCategory.BREAKING)
 
     # Mock state reader
@@ -1506,9 +1506,9 @@ def test_build_plan_stages_virtual_environment_mode_no_updates(
             name="dev_only_model",
             query=parse_one("select 1, ds"),
             kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+            virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
         )
     )
-    snapshot_dev_only.virtual_environment_mode = VirtualEnvironmentMode.DEV_ONLY
     snapshot_dev_only.categorize_as(SnapshotChangeCategory.BREAKING)
 
     # Mock state reader

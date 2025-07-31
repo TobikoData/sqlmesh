@@ -339,7 +339,6 @@ class SnapshotInfoMixin(ModelKindMixin):
     dev_table_suffix: str
     table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
     forward_only: bool
-    virtual_environment_mode: VirtualEnvironmentMode
 
     @cached_property
     def identifier(self) -> str:
@@ -383,6 +382,10 @@ class SnapshotInfoMixin(ModelKindMixin):
 
     @cached_property
     def fully_qualified_table(self) -> t.Optional[exp.Table]:
+        raise NotImplementedError
+
+    @property
+    def virtual_environment_mode(self) -> VirtualEnvironmentMode:
         raise NotImplementedError
 
     @property
@@ -506,8 +509,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     dev_table_suffix: str
     model_gateway: t.Optional[str] = None
     forward_only: bool = False
-    table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
-    virtual_environment_mode: VirtualEnvironmentMode = Field(default=VirtualEnvironmentMode.default)
+    table_naming_convention: TableNamingConvention = TableNamingConvention.default
+    virtual_environment_mode_: VirtualEnvironmentMode = Field(
+        default=VirtualEnvironmentMode.default, alias="virtual_environment_mode"
+    )
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -538,6 +543,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to return self."""
         return self
+
+    @property
+    def virtual_environment_mode(self) -> VirtualEnvironmentMode:
+        return self.virtual_environment_mode_
 
     @property
     def data_version(self) -> SnapshotDataVersion:
@@ -637,7 +646,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         default=TableNamingConvention.default, alias="table_naming_convention"
     )
     forward_only: bool = False
-    virtual_environment_mode: VirtualEnvironmentMode = Field(default=VirtualEnvironmentMode.default)
 
     @field_validator("ttl")
     @classmethod
@@ -690,7 +698,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
         table_naming_convention: TableNamingConvention = TableNamingConvention.default,
-        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
 
@@ -702,7 +709,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             cache: Cache of node name to fingerprints.
             table_naming_convention: Convention to follow when generating the physical table name
-            virtual_environment_mode: Mode for handling virtual environments
 
         Returns:
             The newly created snapshot.
@@ -735,7 +741,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             ttl=ttl,
             version=version,
             table_naming_convention=table_naming_convention,
-            virtual_environment_mode=virtual_environment_mode,
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -1417,6 +1422,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_custom:
             return t.cast(CustomKind, self.model.kind).materialization
         return None
+
+    @property
+    def virtual_environment_mode(self) -> VirtualEnvironmentMode:
+        return (
+            self.model.virtual_environment_mode if self.is_model else VirtualEnvironmentMode.default
+        )
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:

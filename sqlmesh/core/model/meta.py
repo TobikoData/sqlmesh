@@ -10,6 +10,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.common import (
@@ -83,6 +84,7 @@ class ModelMeta(_Node):
         default=None, exclude=True, alias="ignored_rules"
     )
     formatting: t.Optional[bool] = Field(default=None, exclude=True)
+    virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator

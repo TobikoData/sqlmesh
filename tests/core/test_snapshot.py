@@ -163,12 +163,12 @@ def test_json(snapshot: Snapshot):
             "signals": [],
             "enabled": True,
             "extract_dependencies_from_query": True,
+            "virtual_environment_mode": "full",
         },
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
         "table_naming_convention": "schema_and_table",
-        "virtual_environment_mode": "full",
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
@@ -912,7 +912,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1312415267",
+        data_hash="3301649319",
         metadata_hash="1125608408",
     )
 
@@ -973,7 +973,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1909791099",
+        data_hash="1586624913",
         metadata_hash="2315134974",
     )
 
@@ -1012,7 +1012,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="923305614",
+        data_hash="2908339239",
         metadata_hash="1125608408",
     )
 
@@ -1314,7 +1314,7 @@ def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
     original_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     assert original_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
-    assert original_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+    assert original_snapshot.table_name() == f"sqlmesh__default.a__{original_snapshot.version}"
 
     changed_snapshot: Snapshot = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, 'forward_only' as a, ds")),
@@ -1332,7 +1332,7 @@ def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
         changed_snapshot.previous_version.table_naming_convention
         == TableNamingConvention.SCHEMA_AND_TABLE
     )
-    assert changed_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+    assert changed_snapshot.table_name() == f"sqlmesh__default.a__{changed_snapshot.version}"
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -3349,15 +3349,16 @@ def test_merge_intervals_virtual_environment_mode_full(make_snapshot):
         name="test_model",
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         query=parse_one("SELECT 1, ds FROM parent_tbl"),
+        virtual_environment_mode=VirtualEnvironmentMode.FULL,
     )
 
     # Create source snapshot with intervals
-    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.FULL)
+    source_snapshot = make_snapshot(model)
     source_snapshot.add_interval("2020-01-01", "2020-01-03")
     source_snapshot.add_interval("2020-01-05", "2020-01-07")
 
     # Create target snapshot with different fingerprint and virtual_environment_mode FULL
-    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.FULL)
+    target_snapshot = make_snapshot(model)
     target_snapshot.fingerprint = SnapshotFingerprint(
         data_hash="different", metadata_hash="different", parent_data_hash="different"
     )
@@ -3377,15 +3378,16 @@ def test_merge_intervals_virtual_environment_mode_dev_only_paused_breaking(make_
         name="test_model",
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         query=parse_one("SELECT 1, ds FROM parent_tbl"),
+        virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
     )
 
     # Create source snapshot with intervals
-    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot = make_snapshot(model)
     source_snapshot.add_interval("2020-01-01", "2020-01-03")
     source_snapshot.add_interval("2020-01-05", "2020-01-07")
 
     # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
-    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot = make_snapshot(model)
     target_snapshot.fingerprint = SnapshotFingerprint(
         data_hash="different", metadata_hash="different", parent_data_hash="different"
     )
@@ -3405,15 +3407,16 @@ def test_merge_intervals_virtual_environment_mode_dev_only_unpaused(make_snapsho
         name="test_model",
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         query=parse_one("SELECT 1, ds FROM parent_tbl"),
+        virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
     )
 
     # Create source snapshot with intervals
-    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot = make_snapshot(model)
     source_snapshot.add_interval("2020-01-01", "2020-01-03")
     source_snapshot.add_interval("2020-01-05", "2020-01-07")
 
     # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
-    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot = make_snapshot(model)
     target_snapshot.fingerprint = SnapshotFingerprint(
         data_hash="different", metadata_hash="different", parent_data_hash="different"
     )
@@ -3436,15 +3439,16 @@ def test_merge_intervals_virtual_environment_mode_dev_only_no_rebuild(make_snaps
         name="test_model",
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         query=parse_one("SELECT 1, ds FROM parent_tbl"),
+        virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
     )
 
     # Create source snapshot with intervals
-    source_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    source_snapshot = make_snapshot(model)
     source_snapshot.add_interval("2020-01-01", "2020-01-03")
     source_snapshot.add_interval("2020-01-05", "2020-01-07")
 
     # Create target snapshot with different fingerprint and virtual_environment_mode DEV_ONLY
-    target_snapshot = make_snapshot(model, virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY)
+    target_snapshot = make_snapshot(model)
     target_snapshot.fingerprint = SnapshotFingerprint(
         data_hash="different", metadata_hash="different", parent_data_hash="different"
     )
@@ -3483,9 +3487,10 @@ def test_table_name_virtual_environment_mode(
         name="my_schema.my_model",
         kind=IncrementalByTimeRangeKind(time_column="ds"),
         query=parse_one("SELECT 1, ds"),
+        virtual_environment_mode=virtual_env_mode,
     )
 
-    snapshot = make_snapshot(model, virtual_environment_mode=virtual_env_mode)
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     table_name_result = snapshot.table_name(is_deployable=is_deployable)
