@@ -75,6 +75,8 @@ def migrate(state_sync, **kwargs):  # type: ignore
         node = parsed_snapshot["node"]
         python_env = node.get("python_env") or {}
 
+        migrate_snapshot = False
+
         if blueprint_vars_executable := python_env.get(SQLMESH_BLUEPRINT_VARS):
             blueprint_vars = eval(blueprint_vars_executable["payload"])
 
@@ -93,9 +95,10 @@ def migrate(state_sync, **kwargs):  # type: ignore
                     else:
                         del blueprint_vars[var]
                         blueprint_vars[lowercase_var] = value
-                        migration_needed = True
+                        migrate_snapshot = True
 
-            if migration_needed:
+            if migrate_snapshot:
+                migration_needed = True
                 blueprint_vars_executable["payload"] = repr(blueprint_vars)
 
         new_snapshots.append(
