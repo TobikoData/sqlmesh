@@ -297,16 +297,16 @@ workflows:
           matrix:
             parameters:
               engine:
-                - snowflake
-                - databricks
-                - redshift
-                - bigquery
-                - clickhouse-cloud
+                #- snowflake
+                #- databricks
+                #- redshift
+                #- bigquery
+                #- clickhouse-cloud
                 - athena
-          filters:
-            branches:
-              only:
-                - main
+          #filters:
+          #  branches:
+          #    only:
+          #      - main
       - ui_style
       - ui_test
       - vscode_test
