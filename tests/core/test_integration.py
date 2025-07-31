@@ -1862,6 +1862,77 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
 
 
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # add auto restatement to orders
+    model = context.get_model("sushi.orders")
+    kind = {
+        **model.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    kwargs = {
+        **model.dict(),
+        "kind": kind,
+    }
+    context.upsert_model(PythonModel.parse_obj(kwargs))
+    plan = context.plan_builder(skip_tests=True).build()
+    context.apply(plan)
+
+    # Mock run_merged_intervals to capture triggers arg
+    scheduler = context.scheduler()
+    run_merged_intervals_mock = mocker.patch.object(
+        scheduler, "run_merged_intervals", return_value=([], [])
+    )
+
+    # User selects top_waiters and waiter_revenue_by_day, others added as auto-upstream
+    selected_models = {"top_waiters", "waiter_revenue_by_day"}
+    selected_models_auto_upstream = {"order_items", "orders", "items"}
+    selected_snapshots = {
+        f'"memory"."sushi"."{model}"' for model in selected_models | selected_models_auto_upstream
+    }
+    selected_snapshots_auto_upstream = selected_snapshots - {
+        f'"memory"."sushi"."{model}"' for model in selected_models
+    }
+
+    with time_machine.travel("2023-01-09 00:00:01 UTC"):
+        scheduler.run(
+            environment=c.PROD,
+            selected_snapshots=selected_snapshots,
+            selected_snapshots_auto_upstream=selected_snapshots_auto_upstream,
+            start="2023-01-01",
+            auto_restatement_enabled=True,
+        )
+
+    assert run_merged_intervals_mock.called
+
+    actual_triggers = run_merged_intervals_mock.call_args.kwargs["snapshot_evaluation_triggers"]
+
+    # validate ignore_cron not passed and all model crons ready
+    assert all(
+        not trigger.ignore_cron_flag and trigger.cron_ready for trigger in actual_triggers.values()
+    )
+
+    for id, trigger in actual_triggers.items():
+        # top_waiters is its own trigger, waiter_revenue_by_day is upstream of it, everyone else is upstream of both
+        select_triggers = [t.name for t in trigger.select_snapshot_triggers]
+        assert (
+            select_triggers == ['"memory"."sushi"."top_waiters"']
+            if id.name == '"memory"."sushi"."top_waiters"'
+            else ['"memory"."sushi"."waiter_revenue_by_day"', '"memory"."sushi"."top_waiters"']
+        )
+
+        # everyone other than items is downstream of orders
+        auto_restatement_triggers = [t.name for t in trigger.auto_restatement_triggers]
+        assert (
+            auto_restatement_triggers == []
+            if id.name == '"memory"."sushi"."items"'
+            else ['"memory"."sushi"."orders"']
+        )
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_max_interval_end_per_model_not_applied_when_end_is_provided(
     init_and_plan_context: t.Callable,
@@ -7705,7 +7776,7 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -7749,7 +7820,7 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 2 as id,
                 3 as new_column,
@@ -7803,9 +7874,9 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
                 start '2023-01-01',
                 cron '@daily'
             );
-        
+
             SELECT
-                *, 
+                *,
                 2 as id,
                 CAST(4 AS STRING) as new_column,
                 @start_ds as ds
@@ -7844,8 +7915,8 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
                 start '2023-01-01',
                 cron '@daily'
             );
-    
-            SELECT 
+
+            SELECT
                 *,
                 2 as id,
                 CAST(5 AS STRING) as new_column,
@@ -7905,7 +7976,7 @@ def test_incremental_by_unique_key_model_ignore_destructive_change(tmp_path: Pat
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -7949,7 +8020,7 @@ def test_incremental_by_unique_key_model_ignore_destructive_change(tmp_path: Pat
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 2 as id,
                 3 as new_column,
@@ -8016,7 +8087,7 @@ def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -8059,7 +8130,7 @@ def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
             );
 
             SELECT
-                *, 
+                *,
                 2 as id,
                 3 as new_column,
                 @start_ds as ds
@@ -8240,7 +8311,7 @@ def test_scd_type_2_by_column_ignore_destructive_change(tmp_path: Path):
             cron '@daily'
         );
 
-        SELECT 
+        SELECT
             *,
             1 as id,
             'test_name' as name,
@@ -8285,7 +8356,7 @@ def test_scd_type_2_by_column_ignore_destructive_change(tmp_path: Path):
         );
 
         SELECT
-            *, 
+            *,
             1 as id,
             3 as new_column,
             @start_ds as ds
@@ -8352,7 +8423,7 @@ def test_incremental_partition_ignore_destructive_change(tmp_path: Path):
             cron '@daily'
         );
 
-        SELECT 
+        SELECT
             *,
             1 as id,
             'test_name' as name,
@@ -8396,7 +8467,7 @@ def test_incremental_partition_ignore_destructive_change(tmp_path: Path):
         );
 
         SELECT
-            *, 
+            *,
             1 as id,
             3 as new_column,
             @start_ds as ds
@@ -8467,7 +8538,7 @@ def test_incremental_by_time_model_ignore_destructive_change_unit_test(tmp_path:
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         id,
         name,
         ds
@@ -8479,7 +8550,7 @@ def test_incremental_by_time_model_ignore_destructive_change_unit_test(tmp_path:
     (models_dir / "test_model.sql").write_text(initial_model)
 
     initial_test = f"""
-    
+
 test_test_model:
   model: test_model
   inputs:
@@ -8534,8 +8605,8 @@ test_test_model:
                 start '2023-01-01',
                 cron '@daily'
             );
-            
-            SELECT 
+
+            SELECT
                 id,
                 new_column,
                 ds

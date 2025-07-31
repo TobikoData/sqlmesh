@@ -3819,7 +3819,17 @@ class DebuggerTerminalConsole(TerminalConsole):
         audit_only: bool = False,
         snapshot_evaluation_triggers: t.Optional[SnapshotEvaluationTriggers] = None,
     ) -> None:
-        message = f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+        message = f"Evaluated {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+
+        if snapshot_evaluation_triggers:
+            if snapshot_evaluation_triggers.ignore_cron_flag is not None:
+                message += f" | ignore_cron_flag={snapshot_evaluation_triggers.ignore_cron_flag}"
+            if snapshot_evaluation_triggers.cron_ready is not None:
+                message += f" | cron_ready={snapshot_evaluation_triggers.cron_ready}"
+            if snapshot_evaluation_triggers.auto_restatement_triggers:
+                message += f" | auto_restatement_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.auto_restatement_triggers)}"
+            if snapshot_evaluation_triggers.select_snapshot_triggers:
+                message += f" | select_snapshot_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.select_snapshot_triggers)}"
 
         if snapshot_evaluation_triggers:
             if snapshot_evaluation_triggers.auto_restatement_triggers:
@@ -3828,7 +3838,7 @@ class DebuggerTerminalConsole(TerminalConsole):
                 message += f" | select_snapshot_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.select_snapshot_triggers)}"
 
         if audit_only:
-            message = f"Auditing {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+            message = f"Audited {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
 
         self._write(message)
 

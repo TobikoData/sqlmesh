@@ -2898,9 +2898,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             dag.add(fqn, model.depends_on)
         model_selector = self._new_selector(models=models, dag=dag)
         result = set(model_selector.expand_model_selections(select_models))
-        if not no_auto_upstream:
-            result_with_upstream = set(dag.subdag(*result))
-        return result, result_with_upstream - result
+        if no_auto_upstream:
+            return result, set()
+        result_with_upstream = set(dag.subdag(*result))
+        return result_with_upstream, result_with_upstream - result
 
     @cached_property
     def _project_type(self) -> str:
