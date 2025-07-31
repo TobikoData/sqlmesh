@@ -71,10 +71,18 @@ from sqlmesh.lsp.rename import prepare_rename, rename_symbol, get_document_highl
 from sqlmesh.lsp.uri import URI
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.lineage import ExternalModelReference
+from sqlmesh.utils.pydantic import PydanticModel
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
 from typing import Union
 from dataclasses import dataclass, field
+
+
+class InitializationOptions(PydanticModel):
+    """Initialization options for the SQLMesh Language Server, that
+    are passed from the client to the server."""
+
+    project_paths: t.Optional[t.List[str]] = None
 
 
 @dataclass
@@ -105,6 +113,11 @@ ContextState = Union[NoContext, ContextLoaded, ContextFailed]
 
 
 class SQLMeshLanguageServer:
+    # Specified folders take precedence over workspace folders or looking
+    # for a config files. They are explicitly set by the user and optionally
+    # pass in at init
+    specified_paths: t.Optional[t.List[Path]] = None
+
     def __init__(
         self,
         context_class: t.Type[Context],
@@ -411,6 +424,12 @@ class SQLMeshLanguageServer:
         def initialize(ls: LanguageServer, params: types.InitializeParams) -> None:
             """Initialize the server when the client connects."""
             try:
+                # Check the custom options
+                if params.initialization_options:
+                    options = InitializationOptions.model_validate(params.initialization_options)
+                    if options.project_paths is not None:
+                        self.specified_paths = [Path(path) for path in options.project_paths]
+
                 # Check if the client supports pull diagnostics
                 if params.capabilities and params.capabilities.text_document:
                     diagnostics = getattr(params.capabilities.text_document, "diagnostic", None)
@@ -906,7 +925,12 @@ class SQLMeshLanguageServer:
                 raise Exception(state.error)
             raise state.error
         if isinstance(state, NoContext):
-            self._ensure_context_for_document(document_uri)
+            if self.specified_paths is not None:
+                # If specified paths are provided, create context from them
+                if self._create_lsp_context(self.specified_paths):
+                    loaded_sqlmesh_message(self.server)
+            else:
+                self._ensure_context_for_document(document_uri)
         if isinstance(state, ContextLoaded):
             return state.lsp_context
         raise RuntimeError("Context failed to load")
