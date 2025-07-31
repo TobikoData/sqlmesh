@@ -132,7 +132,7 @@ def _get_plan_changes(context: Context, plan: Plan) -> models.PlanChanges:
 
 def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
     """Get plan backfills"""
-    merged_intervals = context.scheduler().merged_missing_intervals()
+    merged_intervals, _ = context.scheduler().merged_missing_intervals()
     batches = context.scheduler().batch_intervals(merged_intervals, None, EnvironmentNamingInfo())
     tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
     snapshots = plan.context_diff.snapshots

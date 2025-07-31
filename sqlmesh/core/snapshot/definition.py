@@ -325,6 +325,13 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return table
 
 
+class SnapshotEvaluationTriggers(PydanticModel):
+    ignore_cron_flag: t.Optional[bool] = None
+    cron_ready: t.Optional[bool] = None
+    auto_restatement_triggers: t.List[SnapshotId] = []
+    select_snapshot_triggers: t.List[SnapshotId] = []
+
+
 class SnapshotInfoMixin(ModelKindMixin):
     name: str
     dev_version_: t.Optional[str]
@@ -2124,7 +2131,7 @@ def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
 
 def apply_auto_restatements(
     snapshots: t.Dict[SnapshotId, Snapshot], execution_time: TimeLike
-) -> t.List[SnapshotIntervals]:
+) -> t.Tuple[t.List[SnapshotIntervals], t.Dict[SnapshotId, t.List[SnapshotId]]]:
     """Applies auto restatements to the snapshots.
 
     This operation results in the removal of intervals for snapshots that are ready to be restated based
@@ -2139,6 +2146,7 @@ def apply_auto_restatements(
         A list of SnapshotIntervals with **new** intervals that need to be restated.
     """
     dag = snapshots_to_dag(snapshots.values())
+    auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
     auto_restated_intervals_per_snapshot: t.Dict[SnapshotId, Interval] = {}
     for s_id in dag:
         if s_id not in snapshots:
@@ -2153,6 +2161,7 @@ def apply_auto_restatements(
             for parent_s_id in snapshot.parents
             if parent_s_id in auto_restated_intervals_per_snapshot
         ]
+        upstream_triggers = []
         if next_auto_restated_interval:
             logger.info(
                 "Calculated the next auto restated interval (%s, %s) for snapshot %s",
@@ -2161,6 +2170,17 @@ def apply_auto_restatements(
                 snapshot.snapshot_id,
             )
             auto_restated_intervals.append(next_auto_restated_interval)
+
+            # auto-restated snapshot is its own trigger
+            upstream_triggers = [s_id]
+
+        for parent_s_id in snapshot.parents:
+            if parent_s_id in auto_restatement_triggers:
+                upstream_triggers.extend(auto_restatement_triggers[parent_s_id])
+
+        # remove duplicate triggers
+        if upstream_triggers:
+            auto_restatement_triggers[s_id] = list(dict.fromkeys(upstream_triggers))
 
         if auto_restated_intervals:
             auto_restated_interval_start = sys.maxsize
@@ -2191,20 +2211,22 @@ def apply_auto_restatements(
 
         snapshot.apply_pending_restatement_intervals()
         snapshot.update_next_auto_restatement_ts(execution_time)
-
-    return [
-        SnapshotIntervals(
-            name=snapshots[s_id].name,
-            identifier=None,
-            version=snapshots[s_id].version,
-            dev_version=None,
-            intervals=[],
-            dev_intervals=[],
-            pending_restatement_intervals=[interval],
-        )
-        for s_id, interval in auto_restated_intervals_per_snapshot.items()
-        if s_id in snapshots
-    ]
+    return (
+        [
+            SnapshotIntervals(
+                name=snapshots[s_id].name,
+                identifier=None,
+                version=snapshots[s_id].version,
+                dev_version=None,
+                intervals=[],
+                dev_intervals=[],
+                pending_restatement_intervals=[interval],
+            )
+            for s_id, interval in auto_restated_intervals_per_snapshot.items()
+            if s_id in snapshots
+        ],
+        auto_restatement_triggers,
+    )
 
 
 def parent_snapshots_by_name(
