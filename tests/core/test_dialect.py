@@ -12,7 +12,9 @@ from sqlmesh.core.dialect import (
     select_from_values_for_batch_range,
     text_diff,
 )
+import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.config.connection import DIALECT_TO_TYPE
 
 
 def test_format_model_expressions():
@@ -700,3 +702,18 @@ def test_model_name_cannot_be_string():
 
 def test_parse_snowflake_create_schema_ddl():
     assert parse_one("CREATE SCHEMA d.s", dialect="snowflake").sql() == "CREATE SCHEMA d.s"
+
+
+@pytest.mark.parametrize("dialect", set(DIALECT_TO_TYPE.values()))
+def test_sqlglot_extended_correctly(dialect: str) -> None:
+    # MODEL is a SQLMesh extension and not part of SQLGlot
+    # If we can roundtrip an expression containing MODEL across every dialect, then the SQLMesh extensions have been registered correctly
+    ast = d.parse_one("MODEL (name foo)", dialect=dialect)
+    assert isinstance(ast, d.Model)
+    name_prop = ast.find(exp.Property)
+    assert isinstance(name_prop, exp.Property)
+    assert name_prop.this == "name"
+    value = name_prop.args["value"]
+    assert isinstance(value, exp.Table)
+    assert value.sql() == "foo"
+    assert ast.sql(dialect=dialect) == "MODEL (\nname foo\n)"
