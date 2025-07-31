@@ -9396,14 +9396,14 @@ def entrypoint(evaluator):
         MODEL (
           name @{customer}.my_table,
           blueprints (
-            (customer := customer1, customer_field := 'bar'),
-            (customer := customer2, customer_field := qux),
+            (customer := customer1, Customer_Field := 'bar'),
+            (customer := customer2, Customer_Field := qux),
           ),
           kind FULL
         );
 
         SELECT
-          @customer_field AS foo,
+          @customer_FIELD AS foo,
           @{customer_field} AS foo2,
           @BLUEPRINT_VAR('customer_field') AS foo3,
         FROM @{customer}.my_source
