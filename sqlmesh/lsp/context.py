@@ -278,10 +278,12 @@ class LSPContext:
                         t.Union[
                             types.TextDocumentEdit,
                             types.CreateFile,
+                            types.RenameFile,
+                            types.DeleteFile,
                         ]
                     ] = []
 
-                    for create in getattr(fix, "create_files", []):
+                    for create in fix.create_files:
                         create_uri = URI.from_path(create.path).value
                         document_changes.append(types.CreateFile(uri=create_uri))
                         document_changes.append(

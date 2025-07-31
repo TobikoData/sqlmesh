@@ -57,7 +57,7 @@ def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
     assert len(fix.create_files) == 1
     create = fix.create_files[0]
     assert create.path == sushi_path / "external_models.yaml"
-    assert create.text == "- name: '\"memory\".\"raw\".\"demographics\"'\n"
+    assert create.text == '- name: \'"memory"."raw"."demographics"\'\n'
 
 
 def test_no_missing_external_models_with_existing_file_ending_in_newline(

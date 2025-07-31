@@ -166,7 +166,9 @@ def test_code_actions_create_file(copy_to_temp_path: t.Callable) -> None:
 
     params = types.CodeActionParams(
         text_document=types.TextDocumentIdentifier(uri=uri.value),
-        range=types.Range(start=types.Position(line=0, character=0), end=types.Position(line=1, character=0)),
+        range=types.Range(
+            start=types.Position(line=0, character=0), end=types.Position(line=1, character=0)
+        ),
         context=types.CodeActionContext(diagnostics=diagnostics),
     )
 

@@ -62,7 +62,7 @@ class Fix:
     """A fix that can be applied to resolve a rule violation."""
 
     title: str
-    edits: t.List[TextEdit]
+    edits: t.List[TextEdit] = field(default_factory=list)
     create_files: t.List[CreateFile] = field(default_factory=list)
 
 
