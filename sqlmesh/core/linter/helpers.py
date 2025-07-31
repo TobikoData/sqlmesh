@@ -158,3 +158,55 @@ def get_range_of_model_block(
     return Range(
         start=start_position.to_range(splitlines).start, end=end_position.to_range(splitlines).end
     )
+
+
+def get_range_of_a_key_in_model_block(
+    sql: str,
+    dialect: str,
+    key: str,
+) -> t.Optional[Range]:
+    """
+    Get the range of a specific key in the model block of an SQL file.
+    """
+    tokens = tokenize(sql, dialect=dialect)
+    if tokens is None:
+        return None
+
+    # Find the start of the model block
+    start_index = next(
+        (
+            i
+            for i, t in enumerate(tokens)
+            if t.token_type is TokenType.VAR and t.text.upper() == "MODEL"
+        ),
+        None,
+    )
+    end_index = next(
+        (i for i, t in enumerate(tokens) if t.token_type is TokenType.SEMICOLON),
+        None,
+    )
+    if start_index is None or end_index is None:
+        return None
+    if start_index >= end_index:
+        return None
+
+    tokens_of_interest = tokens[start_index + 1 : end_index]
+    # Find the key token
+    key_token = next(
+        (
+            t
+            for t in tokens_of_interest
+            if t.token_type is TokenType.VAR and t.text.upper() == key.upper()
+        ),
+        None,
+    )
+    if key_token is None:
+        return None
+
+    position = TokenPositionDetails(
+        line=key_token.line,
+        col=key_token.col,
+        start=key_token.start,
+        end=key_token.end,
+    )
+    return position.to_range(sql.splitlines())

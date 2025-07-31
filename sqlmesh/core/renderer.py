@@ -523,8 +523,6 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
-        needs_optimization = needs_optimization and self._optimize_query_flag
-
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
@@ -560,7 +558,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
                 raise
 
-            if needs_optimization:
+            if needs_optimization and self._optimize_query_flag:
                 deps = d.find_tables(
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
