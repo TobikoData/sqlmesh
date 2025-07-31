@@ -10,6 +10,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -30,7 +31,6 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config.common import VirtualEnvironmentMode
     from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
