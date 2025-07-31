@@ -12,6 +12,9 @@ from pathlib import Path
 
 from hyperscript import h
 
+if t.TYPE_CHECKING:
+    import pandas as pd
+
 try:
     from IPython.core.display import display  # type: ignore
 except ImportError:
@@ -1195,7 +1198,7 @@ class SQLMeshMagics(Magics):
         """Removes all project resources, engine-managed objects, state tables and clears the SQLMesh cache."""
         context.destroy()
 
-    def _fetchdf_athena_pandas_cursor(self, context: Context, sql: str) -> "pd.DataFrame":
+    def _fetchdf_athena_pandas_cursor(self, context: Context, sql: str) -> pd.DataFrame:
         """Special implementation for Athena using PandasCursor with SQLGlot transpilation"""
         
         try:
