@@ -162,7 +162,7 @@ class PlanBuilder:
 
         self._start = start
         if not self._start and (
-            self._forward_only_preview_needed or self._auto_restatement_preview_needed
+            self._forward_only_preview_needed or self._non_forward_only_preview_needed
         ):
             self._start = default_start or yesterday_ds()
 
@@ -871,12 +871,18 @@ class PlanBuilder:
         )
 
     @cached_property
-    def _auto_restatement_preview_needed(self) -> bool:
-        return self._is_dev and any(
-            snapshot.model.auto_restatement_cron is not None
-            for snapshot in self._modified_and_added_snapshots
-            if snapshot.is_model
-        )
+    def _non_forward_only_preview_needed(self) -> bool:
+        if not self._is_dev:
+            return False
+        for snapshot in self._modified_and_added_snapshots:
+            if not snapshot.is_model:
+                continue
+            if (
+                not snapshot.virtual_environment_mode.is_full
+                or snapshot.model.auto_restatement_cron is not None
+            ):
+                return True
+        return False
 
     @cached_property
     def _modified_and_added_snapshots(self) -> t.List[Snapshot]:
