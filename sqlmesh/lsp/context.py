@@ -273,13 +273,41 @@ class LSPContext:
             if found_violation is not None and found_violation.fixes:
                 # Create code actions for each fix
                 for fix in found_violation.fixes:
-                    # Convert our Fix to LSP TextEdits
                     changes: t.Dict[str, t.List[types.TextEdit]] = {}
+                    document_changes: t.List[
+                        t.Union[
+                            types.TextDocumentEdit,
+                            types.CreateFile,
+                            types.RenameFile,
+                            types.DeleteFile,
+                        ]
+                    ] = []
+
+                    for create in fix.create_files:
+                        create_uri = URI.from_path(create.path).value
+                        document_changes.append(types.CreateFile(uri=create_uri))
+                        document_changes.append(
+                            types.TextDocumentEdit(
+                                text_document=types.OptionalVersionedTextDocumentIdentifier(
+                                    uri=create_uri,
+                                    version=None,
+                                ),
+                                edits=[
+                                    types.TextEdit(
+                                        range=types.Range(
+                                            start=types.Position(line=0, character=0),
+                                            end=types.Position(line=0, character=0),
+                                        ),
+                                        new_text=create.text,
+                                    )
+                                ],
+                            )
+                        )
+
                     for edit in fix.edits:
                         uri_key = URI.from_path(edit.path).value
                         if uri_key not in changes:
                             changes[uri_key] = []
-                        # Create a TextEdit for the LSP
                         changes[uri_key].append(
                             types.TextEdit(
                                 range=types.Range(
@@ -296,12 +324,15 @@ class LSPContext:
                             )
                         )
 
-                    # Create the code action
+                    workspace_edit = types.WorkspaceEdit(
+                        changes=changes if changes else None,
+                        document_changes=document_changes if document_changes else None,
+                    )
                     code_action = types.CodeAction(
                         title=fix.title,
                         kind=types.CodeActionKind.QuickFix,
                         diagnostics=[diagnostic],
-                        edit=types.WorkspaceEdit(changes=changes),
+                        edit=workspace_edit,
                     )
                     code_actions.append(code_action)
 

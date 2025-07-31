@@ -51,7 +51,13 @@ def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
         lint.violation_msg
         == """Model '"memory"."sushi"."customers"' depends on unregistered external model '"memory"."raw"."demographics"'. Please register it in the external models file. This can be done by running 'sqlmesh create_external_models'."""
     )
-    assert len(lint.fixes) == 0
+    assert len(lint.fixes) == 1
+    fix = lint.fixes[0]
+    assert len(fix.edits) == 0
+    assert len(fix.create_files) == 1
+    create = fix.create_files[0]
+    assert create.path == sushi_path / "external_models.yaml"
+    assert create.text == '- name: \'"memory"."raw"."demographics"\'\n'
 
 
 def test_no_missing_external_models_with_existing_file_ending_in_newline(
