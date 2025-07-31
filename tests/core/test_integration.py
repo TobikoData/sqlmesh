@@ -2455,6 +2455,131 @@ def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_c
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+
+    assert all(
+        s.virtual_environment_mode.is_dev_only or not s.is_model or s.is_symbolic
+        for s in context.snapshots.values()
+    )
+
+    # Init prod
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make a change in dev
+    original_model = context.get_model("sushi.waiter_revenue_by_day")
+    original_fingerprint = context.get_snapshot(original_model.name).fingerprint
+    model = original_model.copy(update={"query": original_model.query.order_by("waiter_id")})
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+
+    plan_dev = context.plan_builder("dev").build()
+    assert to_timestamp(plan_dev.start) == to_timestamp("2023-01-07")
+    assert plan_dev.requires_backfill
+    assert plan_dev.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+    ]
+    context.apply(plan_dev)
+
+    # Make sure the waiter_revenue_by_day model is a table in prod and a view in dev
+    table_types_df = context.engine_adapter.fetchdf(
+        "SELECT table_schema, table_type FROM INFORMATION_SCHEMA.TABLES WHERE table_name = 'waiter_revenue_by_day'"
+    )
+    assert table_types_df.to_dict("records") == [
+        {"table_schema": "sushi", "table_type": "BASE TABLE"},
+        {"table_schema": "sushi__dev", "table_type": "VIEW"},
+    ]
+
+    # Check that the specified dates were backfilled
+    min_event_date = context.engine_adapter.fetchone(
+        "SELECT MIN(event_date) FROM sushi__dev.waiter_revenue_by_day"
+    )[0]
+    assert min_event_date == to_date("2023-01-07")
+
+    # Make sure the changed models are fully rebuilt when deploying to prod
+    plan_prod = context.plan_builder("prod").build()
+    assert plan_prod.requires_backfill
+    assert plan_prod.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+    context.apply(plan_prod)
+    assert "one" in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+    assert (
+        context.engine_adapter.fetchone(
+            "SELECT COUNT(*) FROM sushi.waiter_revenue_by_day WHERE one is NULL"
+        )[0]
+        == 0
+    )
+
+    # Make sure the revert of a breaking changes results in a full rebuild
+    context.upsert_model(original_model)
+    assert context.get_snapshot(original_model.name).fingerprint == original_fingerprint
+
+    plan_prod = context.plan_builder("prod").build()
+    assert plan_prod.requires_backfill
+    assert plan_prod.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+    context.apply(plan_prod)
+    assert "one" not in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
