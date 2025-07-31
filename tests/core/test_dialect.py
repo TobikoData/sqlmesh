@@ -704,7 +704,7 @@ def test_parse_snowflake_create_schema_ddl():
     assert parse_one("CREATE SCHEMA d.s", dialect="snowflake").sql() == "CREATE SCHEMA d.s"
 
 
-@pytest.mark.parametrize("dialect", set(DIALECT_TO_TYPE.values()))
+@pytest.mark.parametrize("dialect", sorted(set(DIALECT_TO_TYPE.values())))
 def test_sqlglot_extended_correctly(dialect: str) -> None:
     # MODEL is a SQLMesh extension and not part of SQLGlot
     # If we can roundtrip an expression containing MODEL across every dialect, then the SQLMesh extensions have been registered correctly
