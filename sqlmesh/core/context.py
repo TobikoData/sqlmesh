@@ -2909,7 +2909,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 config = self.config_for_node(node)
                 kwargs["ttl"] = config.snapshot_ttl
                 kwargs["table_naming_convention"] = config.physical_table_naming_convention
-                kwargs["virtual_environment_mode"] = config.virtual_environment_mode
 
             snapshot = Snapshot.from_node(
                 node,
