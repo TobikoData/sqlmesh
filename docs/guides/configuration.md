@@ -567,8 +567,10 @@ To mitigate this, SQLMesh offers an alternative 'dev-only' mode for using VDE. I
 
 As the name suggests, 'dev-only' mode means that VDE is applied only in development environments, while in production, model tables and views are updated directly, bypassing the virtual layer. This also means that physical tables in production will be created using the original, unversioned model names. Users will still benefit from VDE and data reuse across development environments.
 
-Please note that enabling this mode means that all data inserted in development environments is used only for [preview](../concepts/plans.md#data-preview-for-forward-only-changes) and will **not** be reused in production.
+Please note the following tradeoffs when enabling this mode:
 
+- All data inserted in development environments is used only for [preview](../concepts/plans.md#data-preview-for-forward-only-changes) and will **not** be reused in production
+- Reverting a model to a previous version will trigger a full rebuild (unless the model is forward-only), as there is no versioned physical table to revert to
 
 !!! warning
     Switching the mode for an existing project will result in a complete rebuild of all models in the project. Refer to the [Table Migration Guide](./table_migration.md) to migrate existing tables without rebuilding them from scratch.
