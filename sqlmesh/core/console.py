@@ -2163,13 +2163,12 @@ class TerminalConsole(Console):
             self._print("-" * divider_length)
             self._print("Test Failure Summary", style="red")
             self._print("=" * divider_length)
-            failures = len(result.failures) + len(result.errors)
+            fail_and_error_tests = result.get_fail_and_error_tests()
             self._print(f"{message} \n")
 
-            self._print(f"Failed tests ({failures}):")
-            for test, _ in result.failures + result.errors:
-                if isinstance(test, ModelTest):
-                    self._print(f" • {test.path}::{test.test_name}")
+            self._print(f"Failed tests ({len(fail_and_error_tests)}):")
+            for test in fail_and_error_tests:
+                self._print(f" • {test.path}::{test.test_name}")
             self._print("=" * divider_length, end="\n\n")
 
     def _captured_unit_test_results(self, result: ModelTextTestResult) -> str:
@@ -2721,28 +2720,15 @@ class TerminalConsole(Console):
         Args:
             result: The unittest test result that contains metrics like num success, fails, ect.
         """
-
         if result.wasSuccessful():
             self._print("\n", end="")
             return
-
-        errors = result.errors
-        failures = result.failures
-        skipped = result.skipped
-
-        infos = []
-        if failures:
-            infos.append(f"failures={len(failures)}")
-        if errors:
-            infos.append(f"errors={len(errors)}")
-        if skipped:
-            infos.append(f"skipped={skipped}")
 
         if unittest_char_separator:
             self._print(f"\n{unittest.TextTestResult.separator1}\n\n", end="")
 
         for (test_case, failure), test_failure_tables in zip_longest(  # type: ignore
-            failures, result.failure_tables
+            result.failures, result.failure_tables
         ):
             self._print(unittest.TextTestResult.separator2)
             self._print(f"FAIL: {test_case}")
@@ -2758,7 +2744,7 @@ class TerminalConsole(Console):
                     self._print(failure_table)
                     self._print("\n", end="")
 
-        for test_case, error in errors:
+        for test_case, error in result.errors:
             self._print(unittest.TextTestResult.separator2)
             self._print(f"ERROR: {test_case}")
             self._print(f"{unittest.TextTestResult.separator2}")
@@ -3080,27 +3066,27 @@ class NotebookMagicConsole(TerminalConsole):
             fail_shared_style = {**shared_style, **fail_color}
             header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
             message = str(h("span", {"style": fail_shared_style}, "Test Failure Summary"))
+            fail_and_error_tests = result.get_fail_and_error_tests()
             failed_tests = [
                 str(
                     h(
                         "span",
                         {"style": fail_shared_style},
-                        f"Failed tests ({len(result.failures) + len(result.errors)}):",
+                        f"Failed tests ({len(fail_and_error_tests)}):",
                     )
                 )
             ]
 
-            for test, _ in result.failures + result.errors:
-                if isinstance(test, ModelTest):
-                    failed_tests.append(
-                        str(
-                            h(
-                                "span",
-                                {"style": fail_shared_style},
-                                f" • {test.model.name}::{test.test_name}",
-                            )
+            for test in fail_and_error_tests:
+                failed_tests.append(
+                    str(
+                        h(
+                            "span",
+                            {"style": fail_shared_style},
+                            f" • {test.model.name}::{test.test_name}",
                         )
                     )
+                )
             failures = "<br>".join(failed_tests)
             footer = str(h("span", {"style": fail_shared_style}, "=" * divider_length))
             error_output = widgets.Textarea(output, layout={"height": "300px", "width": "100%"})
@@ -3508,10 +3494,10 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._log_test_details(result, unittest_char_separator=False)
             self._print("```\n\n")
 
-            failures = len(result.failures) + len(result.errors)
+            fail_and_error_tests = result.get_fail_and_error_tests()
             self._print(f"**{message}**\n")
-            self._print(f"**Failed tests ({failures}):**")
-            for test, _ in result.failures + result.errors:
+            self._print(f"**Failed tests ({len(fail_and_error_tests)}):**")
+            for test in fail_and_error_tests:
                 if isinstance(test, ModelTest):
                     self._print(f" • `{test.model.name}`::`{test.test_name}`\n\n")
 
