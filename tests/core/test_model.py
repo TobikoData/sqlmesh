@@ -10189,6 +10189,43 @@ def m2_references_v_non_metadata(evaluator):
     assert python_env.get(c.SQLMESH_VARS) == Executable.value({"v": 1})
 
 
+def test_only_top_level_macro_func_impacts_var_descendant_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL); @m1_metadata(@m2_non_metadata(@v)); SELECT 1 AS c;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_metadata(evaluator, *args):
+    return None
+
+@macro()
+def m2_non_metadata(evaluator, *args):
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), variables={"v": 1}),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 3
+    assert set(python_env) > {"m1_metadata", "m2_non_metadata"}
+    assert python_env.get(c.SQLMESH_VARS_METADATA) == Executable.value({"v": 1}, is_metadata=True)
+
+
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
     init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
@@ -11304,7 +11341,7 @@ def test_each_macro_with_paren_expression_arg(assert_exp_eq):
         ("@M(@SQL('@v1'))", {"v1"}),
         ("@M(@'@{v1}_foo')", {"v1"}),
         ("@M1(@VAR('v1'))", {"v1"}),
-        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v3"}),
+        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v2", "v3"}),
         ("@M1(@BLUEPRINT_VAR(@VAR('v1')))", {"v1"}),
     ],
 )

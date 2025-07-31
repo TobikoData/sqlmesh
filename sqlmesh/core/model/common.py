@@ -5,7 +5,6 @@ import typing as t
 from pathlib import Path
 
 from astor import to_source
-from collections import defaultdict
 from difflib import get_close_matches
 from sqlglot import exp
 from sqlglot.helper import ensure_list
@@ -67,9 +66,9 @@ def make_python_env(
     # id(expr) -> false: expr appears under the AST of a macro function whose metadata status we don't yet know
     expr_under_metadata_macro_func: t.Dict[int, bool] = {}
 
-    # For an expression like @foo(@v1, @bar(@v1, @v2), @v3), the following mapping would be:
-    # v1 -> {"foo", "bar"}, v2 -> {"bar"}, v3 -> "foo"
-    macro_funcs_by_used_var: t.DefaultDict[str, t.Set[str]] = defaultdict(set)
+    # For @m1(@m2(@x), @y), we'd get x -> m1 and y -> m1
+    outermost_macro_func_ancestor_by_var: t.Dict[str, str] = {}
+    visited_macro_funcs: t.Set[int] = set()
 
     def _is_metadata_var(
         name: str, expression: exp.Expression, appears_in_metadata_expression: bool
@@ -131,13 +130,13 @@ def make_python_env(
                     used_variables[var_name] = _is_metadata_var(
                         name, macro_func_or_var, is_metadata
                     )
-                else:
-                    var_refs, _expr_under_metadata_macro_func = (
+                elif id(macro_func_or_var) not in visited_macro_funcs:
+                    var_refs, _expr_under_metadata_macro_func, _visited_macro_funcs = (
                         _extract_macro_func_variable_references(macro_func_or_var, is_metadata)
                     )
                     expr_under_metadata_macro_func.update(_expr_under_metadata_macro_func)
-                    for var_ref in var_refs:
-                        macro_funcs_by_used_var[var_ref].add(name)
+                    visited_macro_funcs.update(_visited_macro_funcs)
+                    outermost_macro_func_ancestor_by_var |= {var_ref: name for var_ref in var_refs}
             elif macro_func_or_var.__class__ is d.MacroVar:
                 name = macro_func_or_var.name.lower()
                 if name in macros:
@@ -180,28 +179,22 @@ def make_python_env(
         blueprint_variables=blueprint_variables,
         dialect=dialect,
         strict_resolution=strict_resolution,
-        macro_funcs_by_used_var=macro_funcs_by_used_var,
+        outermost_macro_func_ancestor_by_var=outermost_macro_func_ancestor_by_var,
     )
 
 
 def _extract_macro_func_variable_references(
     macro_func: exp.Expression,
     is_metadata: bool,
-) -> t.Tuple[t.Set[str], t.Dict[int, bool]]:
+) -> t.Tuple[t.Set[str], t.Dict[int, bool], t.Set[int]]:
     references = set()
+    visited_macro_funcs = set()
     expr_under_metadata_macro_func = {}
 
-    # Don't descend into nested MacroFunc nodes besides @VAR() and @BLUEPRINT_VAR(), because
-    # they will be handled in a separate call of _extract_macro_func_variable_references.
-    def _prune_nested_macro_func(expression: exp.Expression) -> bool:
-        return (
-            type(expression) is d.MacroFunc
-            and expression is not macro_func
-            and expression.this.name.lower() not in (c.VAR, c.BLUEPRINT_VAR)
-        )
-
-    for n in macro_func.walk(prune=_prune_nested_macro_func):
+    for n in macro_func.walk():
         if type(n) is d.MacroFunc:
+            visited_macro_funcs.add(id(n))
+
             this = n.this
             args = this.expressions
 
@@ -218,7 +211,7 @@ def _extract_macro_func_variable_references(
             )
             expr_under_metadata_macro_func[id(n)] = is_metadata
 
-    return (references, expr_under_metadata_macro_func)
+    return (references, expr_under_metadata_macro_func, visited_macro_funcs)
 
 
 def _add_variables_to_python_env(
@@ -228,7 +221,7 @@ def _add_variables_to_python_env(
     strict_resolution: bool = True,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     dialect: DialectType = None,
-    macro_funcs_by_used_var: t.Optional[t.DefaultDict[str, t.Set[str]]] = None,
+    outermost_macro_func_ancestor_by_var: t.Optional[t.Dict[str, str]] = None,
 ) -> t.Dict[str, Executable]:
     _, python_used_variables = parse_dependencies(
         python_env,
@@ -244,13 +237,13 @@ def _add_variables_to_python_env(
     # - They are only referenced in metadata-only contexts, such as `audits (...)`, virtual statements, etc
     # - They are only referenced in metadata-only macros, either as their arguments or within their definitions
     metadata_used_variables = set()
-    for used_var, macro_names in (macro_funcs_by_used_var or {}).items():
+    for used_var, outermost_macro_func in (outermost_macro_func_ancestor_by_var or {}).items():
         used_var_is_metadata = used_variables.get(used_var)
         if used_var_is_metadata is False:
             continue
 
-        if used_var_is_metadata or all(
-            name in python_env and python_env[name].is_metadata for name in macro_names
+        if used_var_is_metadata or (
+            outermost_macro_func in python_env and python_env[outermost_macro_func].is_metadata
         ):
             metadata_used_variables.add(used_var)
 
