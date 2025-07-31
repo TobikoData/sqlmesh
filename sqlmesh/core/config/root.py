@@ -264,6 +264,11 @@ class Config(BaseConfig):
                 "Please specify one or the other"
             )
 
+        if self.plan.use_finalized_state and not self.virtual_environment_mode.is_full:
+            raise ConfigError(
+                "Using the finalized state is only supported when `virtual_environment_mode` is set to `full`."
+            )
+
         if self.environment_catalog_mapping:
             _normalize_identifiers("environment_catalog_mapping")
         if self.physical_schema_mapping:
