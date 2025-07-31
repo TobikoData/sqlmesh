@@ -15,12 +15,12 @@ except ImportError:
     SUPPORTS_DELIMITER = False
 from sqlglot import exp
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.column import ColumnConfig
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config.common import VirtualEnvironmentMode
     from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
 
