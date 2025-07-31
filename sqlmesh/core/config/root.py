@@ -153,9 +153,7 @@ class Config(BaseConfig):
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     physical_schema_mapping: RegexKeyDict = {}
-    environment_suffix_target: EnvironmentSuffixTarget = Field(
-        default=EnvironmentSuffixTarget.default
-    )
+    environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default
     physical_table_naming_convention: TableNamingConvention = TableNamingConvention.default
     virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
     gateway_managed_virtual_layer: bool = False
