@@ -303,6 +303,7 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
+                - fabric
           filters:
             branches:
               only:
