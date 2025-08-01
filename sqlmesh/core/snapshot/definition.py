@@ -630,9 +630,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     base_table_name_override: t.Optional[str] = None
     next_auto_restatement_ts: t.Optional[int] = None
     dev_table_suffix: str = "dev"
-    table_naming_convention_: TableNamingConvention = Field(
-        default=TableNamingConvention.default, alias="table_naming_convention"
-    )
+    table_naming_convention: TableNamingConvention = TableNamingConvention.default
 
     @field_validator("ttl")
     @classmethod
