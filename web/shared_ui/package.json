@@ -1,0 +1,41 @@
+{
+  "name": "sqlmesh-shared-ui",
+  "version": "0.0.1",
+  "private": false,
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "main": "dist/sqlmesh-shared-ui.umd.js",
+  "module": "dist/sqlmesh-shared-ui.es.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/sqlmesh-shared-ui.es.js",
+      "require": "./dist/sqlmesh-shared-ui.umd.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && vite build --base './'",
+    "build:storybook": "storybook build",
+    "dev": "storybook dev -p 6006",
+    "lint": "eslint --max-warnings 0 --fix .",
+    "pretty": "prettier --write .",
+    "format": "pnpm run pretty && pnpm run lint",
+    "test": "vitest",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-dts": "^4.5.4"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
