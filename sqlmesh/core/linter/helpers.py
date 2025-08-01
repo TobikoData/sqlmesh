@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from sqlmesh.core.linter.rule import Range, Position
+from sqlmesh.core.linter.definition import AnnotatedRuleViolation
+from sqlmesh.core.linter.rule import Range, Position, TextEdit
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot import tokenize, TokenType
 import typing as t
@@ -210,3 +211,46 @@ def get_range_of_a_key_in_model_block(
         end=key_token.end,
     )
     return position.to_range(sql.splitlines())
+
+
+def apply_text_edits(path: Path, edits: t.Sequence[TextEdit]) -> None:
+    """Apply a sequence of TextEdits to a file."""
+    if not edits:
+        return
+
+    with open(path, "r", encoding="utf-8") as file:
+        content = file.read()
+
+    lines = content.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+
+    def to_offset(pos: Position) -> int:
+        line = min(pos.line, len(lines) - 1)
+        char = min(pos.character, len(lines[line]))
+        return offsets[line] + char
+
+    sorted_edits = sorted(
+        edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+    )
+    for edit in sorted_edits:
+        start = to_offset(edit.range.start)
+        end = to_offset(edit.range.end)
+        content = content[:start] + edit.new_text + content[end:]
+
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(content)
+
+
+def apply_fixes(violations: t.Iterable[AnnotatedRuleViolation]) -> None:
+    """Apply fixes from the provided violations."""
+    edits_by_path: dict[Path, list[TextEdit]] = {}
+
+    for violation in violations:
+        for fix in violation.fixes:
+            for edit in fix.edits:
+                edits_by_path.setdefault(edit.path, []).append(edit)
+
+    for path, edits in edits_by_path.items():
+        apply_text_edits(path, edits)

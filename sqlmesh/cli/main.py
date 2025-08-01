@@ -23,7 +23,7 @@ from sqlmesh.core.console import configure_console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.utils import Verbosity
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError
+from sqlmesh.utils.errors import MissingDependencyError, SQLMeshError, LinterError
 
 logger = logging.getLogger(__name__)
 
@@ -1201,15 +1201,34 @@ def environments(obj: Context) -> None:
     multiple=True,
     help="A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.",
 )
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Automatically apply available fixes and fail if unfixable errors remain.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
 def lint(
     obj: Context,
     models: t.Iterator[str],
+    fix: bool = False,
 ) -> None:
     """Run the linter for the target model(s)."""
-    obj.lint_models(models)
+    if fix:
+        violations = obj.lint_models(models, raise_on_error=False)
+        if violations:
+            from sqlmesh.core.linter.helpers import apply_fixes
+
+            apply_fixes(violations)
+            violations = obj.lint_models(models, raise_on_error=False)
+            remaining_errors = [v for v in violations if v.violation_type == "error"]
+            if remaining_errors:
+                raise LinterError(
+                    "Linter detected errors that could not be automatically fixed."
+                )
+    else:
+        obj.lint_models(models)
 
 
 @cli.group(no_args_is_help=True)
