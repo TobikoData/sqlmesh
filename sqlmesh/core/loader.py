@@ -710,6 +710,8 @@ class SqlMeshLoader(Loader):
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
 
+        base_signals = signal.get_registry()
+
         signals_max_mtime: t.Optional[float] = None
 
         for path in self._glob_paths(
@@ -729,7 +731,10 @@ class SqlMeshLoader(Loader):
 
         self._signals_max_mtime = signals_max_mtime
 
-        return signal.get_registry()
+        signals = signal.get_registry()
+        signal.set_registry(base_signals)
+
+        return signals
 
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry

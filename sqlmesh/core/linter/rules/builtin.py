@@ -14,7 +14,15 @@ from sqlmesh.core.linter.helpers import (
     get_range_of_model_block,
     read_range_from_string,
 )
-from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix, TextEdit, Position
+from sqlmesh.core.linter.rule import (
+    Rule,
+    RuleViolation,
+    Range,
+    Fix,
+    TextEdit,
+    Position,
+    CreateFile,
+)
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
 from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
@@ -227,7 +235,16 @@ class NoMissingExternalModels(Rule):
 
         external_models_path = root / EXTERNAL_MODELS_YAML
         if not external_models_path.exists():
-            return None
+            return Fix(
+                title="Add external model file",
+                edits=[],
+                create_files=[
+                    CreateFile(
+                        path=external_models_path,
+                        text=f"- name: '{model_name}'\n",
+                    )
+                ],
+            )
 
         # Figure out the position to insert the new external model at the end of the file, whether
         # needs new line or not.
