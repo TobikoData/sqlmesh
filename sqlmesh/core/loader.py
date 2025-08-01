@@ -603,6 +603,7 @@ class SqlMeshLoader(Loader):
                 infer_names=self.config.model_naming.infer_names,
                 signal_definitions=signals,
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                virtual_environment_mode=self.config.virtual_environment_mode,
                 **loading_default_kwargs or {},
             )
 
@@ -683,6 +684,7 @@ class SqlMeshLoader(Loader):
                             audit_definitions=audits,
                             signal_definitions=signals,
                             default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                            virtual_environment_mode=self.config.virtual_environment_mode,
                         ):
                             if model.enabled:
                                 models[model.fqn] = model

@@ -338,7 +338,7 @@ class SnapshotEvaluator:
                 continue
             deployability_flags = [True]
             if (
-                snapshot.reuses_previous_version
+                snapshot.is_no_rebuild
                 or snapshot.is_managed
                 or (snapshot.is_model and snapshot.model.forward_only)
                 or (deployability_index and not deployability_index.is_deployable(snapshot))
@@ -2278,8 +2278,10 @@ def _check_destructive_schema_change(
     alter_expressions: t.List[exp.Alter],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
-    if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
-        alter_expressions
+    if (
+        snapshot.is_no_rebuild
+        and snapshot.needs_destructive_check(allow_destructive_snapshots)
+        and has_drop_alteration(alter_expressions)
     ):
         snapshot_name = snapshot.name
         dropped_column_names = get_dropped_column_names(alter_expressions)
