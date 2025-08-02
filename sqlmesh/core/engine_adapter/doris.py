@@ -649,16 +649,6 @@ class DorisEngineAdapter(
         """
         table_properties = kwargs.get("table_properties", {})
 
-        # Set default replication_num to 1 for testing environments if not specified
-        if (
-            "replication_num" not in table_properties
-            and "replication_allocation" not in table_properties
-        ):
-            table_properties["replication_num"] = "1"
-            logger.info(
-                f"[Doris] Added default replication_num for testing: {table_properties['replication_num']}"
-            )
-
         # Convert primary_key to unique_key for Doris (Doris doesn't support primary keys)
         if primary_key and "unique_key" not in table_properties:
             table_properties["unique_key"] = primary_key
@@ -688,7 +678,6 @@ class DorisEngineAdapter(
     ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.PartitionByRangeProperty, exp.Property]]:
         """Doris supports range and list partition, but sqlglot only supports range partition, so we use PartitionByRangeProperty."""
         # Handle partitioned_by_expr from kwargs
-        logging.info(f"[Doris] _build_partitioned_by_exp called with kwargs: {kwargs}")
         partitioned_by_expr = kwargs.get("partitioned_by_expr")
         create_expressions = None
 
@@ -861,8 +850,8 @@ class DorisEngineAdapter(
                     dynamic_partition_props = {
                         "dynamic_partition.enable": "true",
                         "dynamic_partition.time_unit": "DAY",
-                        "dynamic_partition.history_partition_num": "400",
-                        "dynamic_partition.end": "7",
+                        "dynamic_partition.start": "-490",
+                        "dynamic_partition.end": "10",
                         "dynamic_partition.prefix": "p",
                         "dynamic_partition.buckets": "32",
                         "dynamic_partition.create_history_partition": "true",
@@ -870,9 +859,11 @@ class DorisEngineAdapter(
 
                     # Use partition_interval_unit if provided to set the time_unit
                     if partition_interval_unit:
-                        dynamic_partition_props["dynamic_partition.time_unit"] = (
-                            partition_interval_unit.upper()
-                        )
+                        if hasattr(partition_interval_unit, "value"):
+                            time_unit = partition_interval_unit.value.upper()
+                        else:
+                            time_unit = str(partition_interval_unit).upper()
+                        dynamic_partition_props["dynamic_partition.time_unit"] = time_unit
 
                     # Add missing dynamic partition properties to table_properties_copy
                     for key, value in dynamic_partition_props.items():
