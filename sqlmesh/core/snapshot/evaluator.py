@@ -1821,6 +1821,13 @@ class SCDType2Strategy(MaterializableStrategy):
     ) -> None:
         # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
         columns_to_types = self.adapter.columns(table_name)
+        if kwargs.get("physical_properties", model.physical_properties):
+            call_kwargs = {
+                "table_properties": kwargs.get("physical_properties", model.physical_properties)
+            }
+        else:
+            call_kwargs = {}
+
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1839,6 +1846,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 truncate=is_first_insert,
                 start=kwargs["start"],
                 is_restatement=kwargs.get("is_restatement", False),
+                **call_kwargs,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1858,6 +1866,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 truncate=is_first_insert,
                 start=kwargs["start"],
                 is_restatement=kwargs.get("is_restatement", False),
+                **call_kwargs,
             )
         else:
             raise SQLMeshError(
@@ -1989,6 +1998,10 @@ class ViewStrategy(PromotableStrategy):
                 "clustered_by": model.clustered_by,
                 "partition_interval_unit": model.partition_interval_unit,
             }
+            # Include physical properties in materialized_properties for materialized views
+            physical_properties = kwargs.get("physical_properties", model.physical_properties)
+            if physical_properties:
+                materialized_properties.update(physical_properties)
         self.adapter.create_view(
             table_name,
             model.render_query_or_raise(**render_kwargs),

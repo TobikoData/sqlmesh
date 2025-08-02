@@ -34,6 +34,10 @@ clickhouse_ready() {
     probe_port 8123
 }
 
+doris_ready() {
+    probe_port 9030
+}
+
 postgres_ready() {
     probe_port 5432
 }

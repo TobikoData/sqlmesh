@@ -149,6 +149,9 @@ trino-test: engine-trino-up
 risingwave-test: engine-risingwave-up
 	pytest -n auto -m "risingwave" --retries 3 --junitxml=test-results/junit-risingwave.xml
 
+doris-test: engine-doris-up
+	pytest -n auto -m "doris" --retries 3 --junitxml=test-results/junit-doris.xml
+
 #################
 # Cloud Engines #
 #################
