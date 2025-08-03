@@ -36,6 +36,23 @@ clickhouse_ready() {
 
 doris_ready() {
     probe_port 9030
+    
+    # Check that we have 3 alive backends
+    echo "Checking for 3 alive Doris backends..."
+    
+    while true; do
+        echo "Checking Doris backends..."
+        # Use docker compose exec to run mysql command inside the fe-01 container
+        # Use timeout to prevent hanging, and handle connection errors gracefully
+        ALIVE_BACKENDS=$(timeout 10 docker compose -f tests/core/engine_adapter/integration/docker/compose.doris.yaml exec -T fe-01 mysql -uroot -e "show backends \G" 2>/dev/null | grep -c "Alive: true" || echo "0")
+        echo "Found $ALIVE_BACKENDS alive backends"
+        if [ "$ALIVE_BACKENDS" -ge 3 ]; then
+            echo "Doris has 3 or more alive backends"
+            break
+        fi
+        echo "Waiting for more backends to become alive..."
+        sleep 5
+    done
 }
 
 postgres_ready() {
