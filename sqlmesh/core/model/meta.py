@@ -468,9 +468,9 @@ class ModelMeta(_Node):
         if self.physical_properties_:
             properties = {e.this.name: e.expression for e in self.physical_properties_.expressions}
 
-        # For INCREMENTAL_BY_UNIQUE_KEY models, add the unique_key to physical_properties
+        # For INCREMENTAL_BY_UNIQUE_KEY models for doris dialect, add the unique_key to physical_properties
         # so it gets passed to table_properties during table creation
-        if isinstance(self.kind, IncrementalByUniqueKeyKind) and self.unique_key:
+        if isinstance(self.kind, IncrementalByUniqueKeyKind) and self.unique_key and self.dialect == "doris":
             # Convert unique_key expressions to a format suitable for table_properties
             if len(self.unique_key) == 1:
                 # Single column key
