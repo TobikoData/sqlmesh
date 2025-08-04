@@ -60,6 +60,9 @@ jobs:
       - halt_unless_core
       - checkout
       - run:
+          name: Fetch full git history and tags
+          command: git fetch --unshallow --tags
+      - run:
           name: Install dependencies
           command: make install-dev install-doc
       - run:
@@ -78,6 +81,9 @@ jobs:
     steps:
       - halt_unless_core
       - checkout
+      - run:
+          name: Fetch full git history and tags
+          command: git fetch --unshallow --tags
       - run:
           name: Install OpenJDK
           command: sudo apt-get update && sudo apt-get install default-jdk
@@ -113,6 +119,9 @@ jobs:
           command: git config --global core.symlinks true
       - checkout
       - run:
+          name: Fetch full git history and tags
+          command: git fetch --unshallow --tags
+      - run:
           name: Install System Dependencies
           command: |
             choco install make which -y
@@ -143,6 +152,9 @@ jobs:
     steps:
       - halt_unless_core
       - checkout
+      - run:
+          name: Fetch full git history and tags
+          command: git fetch --unshallow --tags
       - run:
           name: Run the migration test
           command: ./.circleci/test_migration.sh
@@ -214,6 +226,9 @@ jobs:
     steps:
       - halt_unless_core
       - checkout
+      - run:
+          name: Fetch full git history and tags
+          command: git fetch --unshallow --tags
       - run:
           name: Install OS-level dependencies
           command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
