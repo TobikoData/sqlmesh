@@ -61,7 +61,7 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags
+          command: git fetch --unshallow --tags || true
       - run:
           name: Install dependencies
           command: make install-dev install-doc
@@ -83,7 +83,7 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags
+          command: git fetch --unshallow --tags || true
       - run:
           name: Install OpenJDK
           command: sudo apt-get update && sudo apt-get install default-jdk
@@ -120,7 +120,7 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags
+          command: git fetch --unshallow --tags || true
       - run:
           name: Install System Dependencies
           command: |
@@ -154,7 +154,7 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags
+          command: git fetch --unshallow --tags || true
       - run:
           name: Run the migration test
           command: ./.circleci/test_migration.sh
@@ -228,7 +228,7 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags
+          command: git fetch --unshallow --tags || true
       - run:
           name: Install OS-level dependencies
           command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
