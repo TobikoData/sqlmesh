@@ -1221,6 +1221,12 @@ def test_load_gateway_specific_external_models(copy_to_temp_path):
     # gateway explicitly set to prod; prod model should now show
     assert "prod_raw.model1" in _get_external_model_names(gateway="prod")
 
+    # test uppercase gateway name should match lowercase external model definition
+    assert "prod_raw.model1" in _get_external_model_names(gateway="PROD")
+
+    # test mixed case gateway name should also work
+    assert "prod_raw.model1" in _get_external_model_names(gateway="Prod")
+
 
 def test_disabled_model(copy_to_temp_path):
     path = copy_to_temp_path("examples/sushi")
@@ -2867,3 +2873,132 @@ ON_VIRTUAL_UPDATE_END;
     # Default statements should come first
     assert model.on_virtual_update[0].sql() == "SELECT 'Model-defailt virtual update' AS message"
     assert model.on_virtual_update[1].sql() == "SELECT 'Model-specific update' AS message"
+
+
+def test_uppercase_gateway_external_models(tmp_path):
+    # Create a temporary SQLMesh project with uppercase gateway name
+    config_py = tmp_path / "config.py"
+    config_py.write_text("""
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+
+config = Config(
+    gateways={
+        "UPPERCASE_GATEWAY": GatewayConfig(
+            connection=DuckDBConnectionConfig(),
+        ),
+    },
+    default_gateway="UPPERCASE_GATEWAY",
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+)
+""")
+
+    # Create external models file with lowercase gateway name (this should still match uppercase)
+    external_models_yaml = tmp_path / "external_models.yaml"
+    external_models_yaml.write_text("""
+- name: test_db.uppercase_gateway_table
+  description: Test external model with lowercase gateway name that should match uppercase gateway
+  gateway: uppercase_gateway  # lowercase in external model, but config has UPPERCASE_GATEWAY
+  columns:
+    id: int
+    name: text
+
+- name: test_db.no_gateway_table
+  description: Test external model without gateway (should be available for all gateways)
+  columns:
+    id: int
+    name: text
+""")
+
+    # Create a model that references the external model
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    model_sql = models_dir / "test_model.sql"
+    model_sql.write_text("""
+MODEL (
+    name test.my_model,
+    kind FULL,
+);
+
+SELECT * FROM test_db.uppercase_gateway_table;
+""")
+
+    # Test with uppercase gateway name - this should find both models
+    context_uppercase = Context(paths=[tmp_path], gateway="UPPERCASE_GATEWAY")
+
+    # Verify external model with lowercase gateway name in YAML is found when using uppercase gateway
+    gateway_specific_models = [
+        model
+        for model in context_uppercase.models.values()
+        if model.name == "test_db.uppercase_gateway_table"
+    ]
+    assert len(gateway_specific_models) == 1, (
+        f"External model with lowercase gateway name should be found with uppercase gateway. Found {len(gateway_specific_models)} models"
+    )
+
+    # Verify external model without gateway is also found
+    no_gateway_models = [
+        model
+        for model in context_uppercase.models.values()
+        if model.name == "test_db.no_gateway_table"
+    ]
+    assert len(no_gateway_models) == 1, (
+        f"External model without gateway should be found. Found {len(no_gateway_models)} models"
+    )
+
+    # Check that the column types are properly loaded (not UNKNOWN)
+    external_model = gateway_specific_models[0]
+    column_types = {name: str(dtype) for name, dtype in external_model.columns_to_types.items()}
+    assert column_types == {"id": "INT", "name": "TEXT"}, (
+        f"External model column types should not be UNKNOWN, got: {column_types}"
+    )
+
+    # Test that when using a different case for the gateway parameter, we get the same results
+    context_mixed_case = Context(
+        paths=[tmp_path], gateway="uppercase_gateway"
+    )  # lowercase parameter
+
+    gateway_specific_models_mixed = [
+        model
+        for model in context_mixed_case.models.values()
+        if model.name == "test_db.uppercase_gateway_table"
+    ]
+    # This should work but might fail if case sensitivity is not handled correctly
+    assert len(gateway_specific_models_mixed) == 1, (
+        f"External model should be found regardless of gateway parameter case. Found {len(gateway_specific_models_mixed)} models"
+    )
+
+    # Test a case that should demonstrate the potential issue:
+    # Create another external model file with uppercase gateway name in the YAML
+    external_models_yaml_uppercase = tmp_path / "external_models_uppercase.yaml"
+    external_models_yaml_uppercase.write_text("""
+- name: test_db.uppercase_in_yaml
+  description: Test external model with uppercase gateway name in YAML
+  gateway: UPPERCASE_GATEWAY  # uppercase in external model yaml
+  columns:
+    id: int
+    status: text
+""")
+
+    # Add the new external models file to the project
+    models_dir = tmp_path / "external_models"
+    models_dir.mkdir(exist_ok=True)
+    (models_dir / "uppercase_gateway_models.yaml").write_text("""
+- name: test_db.uppercase_in_yaml
+  description: Test external model with uppercase gateway name in YAML
+  gateway: UPPERCASE_GATEWAY  # uppercase in external model yaml
+  columns:
+    id: int
+    status: text
+""")
+
+    # Reload context to pick up the new external models
+    context_reloaded = Context(paths=[tmp_path], gateway="UPPERCASE_GATEWAY")
+
+    uppercase_in_yaml_models = [
+        model
+        for model in context_reloaded.models.values()
+        if model.name == "test_db.uppercase_in_yaml"
+    ]
+    assert len(uppercase_in_yaml_models) == 1, (
+        f"External model with uppercase gateway in YAML should be found. Found {len(uppercase_in_yaml_models)} models"
+    )
