@@ -121,11 +121,10 @@ jobs:
       - run:
           name: Fetch full git history and tags
           command: |
-            try {
-              git fetch --unshallow --tags -ErrorAction Stop
-            }
-            catch {
-              Write-Host "Repository is already complete. Continuing..."
+            git fetch --unshallow --tags
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Ignoring git fetch error. This is expected if the repository is already complete."
+              exit 0
             }
       - run:
           name: Install System Dependencies
@@ -229,6 +228,7 @@ jobs:
     resource_class: large
     environment:
       SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
+      FABRIC_HOST: "dummy-host"
     steps:
       - halt_unless_core
       - checkout
