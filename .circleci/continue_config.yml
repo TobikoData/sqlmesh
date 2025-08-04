@@ -218,6 +218,9 @@ jobs:
           name: Install OS-level dependencies
           command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
       - run:
+          name: Install ODBC
+          command: sudo apt-get install unixodbc-dev
+      - run:
           name: Run tests
           command: make << parameters.engine >>-test
           no_output_timeout: 20m
