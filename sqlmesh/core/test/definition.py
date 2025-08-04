@@ -317,6 +317,13 @@ class ModelTest(unittest.TestCase):
             #
             # This is a bit of a hack, but it's a way to get the best of both worlds.
             args: t.List[t.Any] = []
+
+            failed_subtest = ""
+
+            if subtest := getattr(self, "_subtest", None):
+                if cte := subtest.params.get("cte"):
+                    failed_subtest = f" (CTE {cte})"
+
             if expected.shape != actual.shape:
                 _raise_if_unexpected_columns(expected.columns, actual.columns)
 
@@ -325,13 +332,13 @@ class ModelTest(unittest.TestCase):
                 missing_rows = _row_difference(expected, actual)
                 if not missing_rows.empty:
                     args[0] += f"\n\nMissing rows:\n\n{missing_rows}"
-                    args.append(df_to_table("Missing rows", missing_rows))
+                    args.append(df_to_table(f"Missing rows{failed_subtest}", missing_rows))
 
                 unexpected_rows = _row_difference(actual, expected)
 
                 if not unexpected_rows.empty:
                     args[0] += f"\n\nUnexpected rows:\n\n{unexpected_rows}"
-                    args.append(df_to_table("Unexpected rows", unexpected_rows))
+                    args.append(df_to_table(f"Unexpected rows{failed_subtest}", unexpected_rows))
 
             else:
                 diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
@@ -341,7 +348,8 @@ class ModelTest(unittest.TestCase):
                 diff.rename(columns={"exp": "Expected", "act": "Actual"}, inplace=True)
                 if self.verbosity == Verbosity.DEFAULT:
                     args.extend(
-                        df_to_table("Data mismatch", df) for df in _split_df_by_column_pairs(diff)
+                        df_to_table(f"Data mismatch{failed_subtest}", df)
+                        for df in _split_df_by_column_pairs(diff)
                     )
                 else:
                     from pandas import MultiIndex
@@ -351,7 +359,8 @@ class ModelTest(unittest.TestCase):
                         col_diff = diff[col]
                         if not col_diff.empty:
                             table = df_to_table(
-                                f"[bold red]Column '{col}' mismatch[/bold red]", col_diff
+                                f"[bold red]Column '{col}' mismatch{failed_subtest}[/bold red]",
+                                col_diff,
                             )
                             args.append(table)
 
@@ -799,7 +808,7 @@ class PythonModelTest(ModelTest):
         with self._concurrent_render_context():
             variables = self.body.get("vars", {}).copy()
             time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
-            df = next(self.model.render(context=self.context, **time_kwargs, **variables))
+            df = next(self.model.render(context=self.context, variables=variables, **time_kwargs))
 
         assert not isinstance(df, exp.Expression)
         return df if isinstance(df, pd.DataFrame) else df.toPandas()

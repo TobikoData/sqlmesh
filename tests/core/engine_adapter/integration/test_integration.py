@@ -2352,15 +2352,17 @@ def test_table_diff_grain_check_multiple_keys(ctx: TestContext):
     row_diff = table_diff.row_diff()
 
     assert row_diff.full_match_count == 7
-    assert row_diff.full_match_pct == 93.33
-    assert row_diff.s_only_count == 2
-    assert row_diff.t_only_count == 5
-    assert row_diff.stats["join_count"] == 4
-    assert row_diff.stats["null_grain_count"] == 4
-    assert row_diff.stats["s_count"] != row_diff.stats["distinct_count_s"]
+    assert row_diff.full_match_pct == 82.35
+    assert row_diff.s_only_count == 0
+    assert row_diff.t_only_count == 3
+    assert row_diff.stats["join_count"] == 7
+    assert (
+        row_diff.stats["null_grain_count"] == 4
+    )  # null grain currently (2025-07-24) means "any key column is null" as opposed to "all key columns are null"
     assert row_diff.stats["distinct_count_s"] == 7
-    assert row_diff.stats["t_count"] != row_diff.stats["distinct_count_t"]
+    assert row_diff.stats["s_count"] == row_diff.stats["distinct_count_s"]
     assert row_diff.stats["distinct_count_t"] == 10
+    assert row_diff.stats["t_count"] == row_diff.stats["distinct_count_t"]
     assert row_diff.s_sample.shape == (row_diff.s_only_count, 3)
     assert row_diff.t_sample.shape == (row_diff.t_only_count, 3)
 

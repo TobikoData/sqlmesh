@@ -6,12 +6,15 @@ import { RenderedModelProvider } from '../providers/renderedModelProvider'
 
 export async function reRenderModelForSourceFile(
   sourceUri: string,
-  lspClient: LSPClient,
+  lspClient: LSPClient | undefined,
   renderedModelProvider: RenderedModelProvider,
 ): Promise<void> {
   const renderedUri = renderedModelProvider.getRenderedUriForSource(sourceUri)
   if (!renderedUri) {
     return // No rendered model exists for this source file
+  }
+  if (!lspClient) {
+    return
   }
 
   // Call the render model API

@@ -697,3 +697,84 @@ def test_get_pr_environment_summary_includes_warnings_and_errors(
     )
     assert "> [!WARNING]\n>\n> Warning 1\n" in error_summary
     assert "> [!CAUTION]\n>\n> Error 1" in error_summary
+
+
+def test_pr_comment_deploy_indicator_includes_command_namespace(
+    mocker: MockerFixture,
+    github_client,
+    make_mock_issue_comment,
+    make_controller: t.Callable[..., GithubController],
+):
+    mock_repo = github_client.get_repo()
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        mock_out_context=False,
+        bot_config=GithubCICDBotConfig(
+            enable_deploy_command=True,
+            merge_method=MergeMethod.SQUASH,
+            command_namespace="#SQLMesh",
+        ),
+    )
+
+    _update_pr_environment(controller)
+
+    assert len(created_comments) > 0
+
+    comment = created_comments[0].body
+
+    assert "To **apply** this PR's plan to prod, comment:\n  - `/deploy`" not in comment
+    assert "To **apply** this PR's plan to prod, comment:\n  - `#SQLMesh/deploy`" in comment
+
+
+def test_forward_only_config_falls_back_to_plan_config(
+    github_client,
+    make_controller: t.Callable[..., GithubController],
+    mocker: MockerFixture,
+):
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(lambda: [])
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+    mock_pull_request.head.ref = "unit-test-test-pr"
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.SQUASH,
+            enable_deploy_command=True,
+            forward_only_branch_suffix="-forward-only",
+        ),
+        mock_out_context=False,
+    )
+
+    controller._context.config.plan.forward_only = True
+    assert controller.forward_only_plan
+
+    controller._context.config.plan.forward_only = False
+    assert controller.forward_only_plan is False

@@ -7,6 +7,7 @@ from datetime import timedelta
 from unittest import mock
 from unittest.mock import patch
 import logging
+from textwrap import dedent
 import os
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
@@ -34,6 +35,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.console import Console, get_console
@@ -47,6 +49,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnmanagedKind,
     Model,
     ModelKind,
     ModelKindName,
@@ -2482,6 +2485,54 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     ]
 
     context.apply(plan)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_plan_across_environments_snapshot_with_shared_version(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Change kind to incremental unmanaged
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    previous_kind = model.kind.copy(update={"forward_only": True})
+    assert isinstance(previous_kind, IncrementalByTimeRangeKind)
+
+    model = model.copy(
+        update={"kind": IncrementalUnmanagedKind(), "physical_version": "pinned_version_12345"}
+    )
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make some change and deploy it to both dev and prod environments
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    context.plan("dev_a", auto_apply=True, no_prompts=True)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Change the kind back to incremental by time range and deploy to prod
+    model = model.copy(update={"kind": previous_kind})
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Restate the model and verify that the interval hasn't been expanded because of the old snapshot
+    # with the same version
+    context.plan(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-06",
+        end="2023-01-08",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    assert (
+        context.fetchdf(
+            "SELECT COUNT(*) AS cnt FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL AND event_date < '2023-01-06'"
+        )["cnt"][0]
+        == 0
+    )
+    plan = context.plan_builder("prod").build()
+    assert not plan.missing_intervals
 
 
 def test_restatement_plan_hourly_with_downstream_daily_restates_correct_intervals(tmp_path: Path):
@@ -6916,3 +6967,272 @@ def test_plan_evaluator_correlation_id(tmp_path: Path):
         assert str(correlation_id) == f"SQLMESH_PLAN: {plan.plan_id}"
 
         assert _correlation_id_in_sqls(correlation_id, mock_logger)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    raw_employee_status = d.parse("""
+    MODEL (
+        name memory.hr_system.raw_employee_status,
+        kind FULL
+    );
+
+    SELECT
+        1001 AS employee_id,
+        'engineering' AS department,
+        'EMEA' AS region,
+        '2023-01-08 15:00:00 UTC' AS last_modified;
+    """)
+
+    employee_history = d.parse("""
+    MODEL (
+        name memory.hr_system.employee_history,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key employee_id,
+            updated_at_name last_modified,
+            disable_restatement false
+        ),
+        owner hr_analytics,
+        cron '0 7 * * *',
+        grain employee_id,
+        description 'Historical tracking of employee status changes'
+    );
+
+    SELECT
+        employee_id::INT AS employee_id,
+        department::TEXT AS department,
+        region::TEXT AS region,
+        last_modified AS last_modified
+    FROM
+        memory.hr_system.raw_employee_status;
+    """)
+
+    raw_employee_status_model = load_sql_based_model(raw_employee_status)
+    employee_history_model = load_sql_based_model(employee_history)
+    context.upsert_model(raw_employee_status_model)
+    context.upsert_model(employee_history_model)
+
+    # Initial plan and apply
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    context.apply(plan)
+
+    query = "SELECT employee_id, department, region, valid_from, valid_to FROM memory.hr_system.employee_history ORDER BY employee_id, valid_from"
+    initial_data = context.engine_adapter.fetchdf(query)
+
+    assert len(initial_data) == 1
+    assert initial_data["valid_to"].isna().all()
+    assert initial_data["department"].tolist() == ["engineering"]
+    assert initial_data["region"].tolist() == ["EMEA"]
+
+    # Apply a future plan with source changes a few hours before the cron time of the SCD Type 2 model BUT on the same day
+    with time_machine.travel("2023-01-09 00:10:00 UTC"):
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'engineering' AS department,
+            'AMER' AS region,
+            '2023-01-09 00:10:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    # The 7th hour of the day the run is kicked off for the SCD Type 2 model
+    with time_machine.travel("2023-01-09 07:00:01 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 records for employee 1001
+        assert len(data_after_change) == 2
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-09 00:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-09 00:10:00"
+        assert pd.isna(data_after_change.iloc[1]["valid_to"])
+
+        # Update source model again a bit later on the same day
+        raw_employee_status_v2 = d.parse("""
+        MODEL (
+            name memory.hr_system.raw_employee_status,
+            kind FULL
+        );
+
+        SELECT
+            1001 AS employee_id,
+            'sales' AS department,
+            'ANZ' AS region,
+            '2023-01-09 07:26:00 UTC' AS last_modified;
+        """)
+        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
+        context.upsert_model(raw_employee_status_v2_model)
+        context.plan(
+            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
+        )
+
+    # A day later the run is kicked off for the SCD Type 2 model again
+    with time_machine.travel("2023-01-10 07:00:00 UTC"):
+        context.run()
+        data_after_change = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history for employee 1001 after second change with the historical records intact
+        assert len(data_after_change) == 3
+        assert data_after_change.iloc[0]["employee_id"] == 1001
+        assert data_after_change.iloc[0]["department"] == "engineering"
+        assert data_after_change.iloc[0]["region"] == "EMEA"
+        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-09 00:10:00"
+        assert data_after_change.iloc[1]["employee_id"] == 1001
+        assert data_after_change.iloc[1]["department"] == "engineering"
+        assert data_after_change.iloc[1]["region"] == "AMER"
+        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-09 00:10:00"
+        assert str(data_after_change.iloc[1]["valid_to"]) == "2023-01-09 07:26:00"
+        assert data_after_change.iloc[2]["employee_id"] == 1001
+        assert data_after_change.iloc[2]["department"] == "sales"
+        assert data_after_change.iloc[2]["region"] == "ANZ"
+        assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-09 07:26:00"
+        assert pd.isna(data_after_change.iloc[2]["valid_to"])
+
+    # Now test restatement still works as expected by restating from 2023-01-09 00:10:00 (first change)
+    with time_machine.travel("2023-01-10 07:38:00 UTC"):
+        plan = context.plan_builder(
+            "prod",
+            skip_tests=True,
+            restate_models=["memory.hr_system.employee_history"],
+            start="2023-01-09 00:10:00",
+        ).build()
+        context.apply(plan)
+        restated_data = context.engine_adapter.fetchdf(query)
+
+        # Validate the SCD2 history after restatement
+        assert len(restated_data) == 2
+        assert restated_data.iloc[0]["employee_id"] == 1001
+        assert restated_data.iloc[0]["department"] == "engineering"
+        assert restated_data.iloc[0]["region"] == "EMEA"
+        assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
+        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-09 07:26:00"
+        assert restated_data.iloc[1]["employee_id"] == 1001
+        assert restated_data.iloc[1]["department"] == "sales"
+        assert restated_data.iloc[1]["region"] == "ANZ"
+        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-09 07:26:00"
+        assert pd.isna(restated_data.iloc[1]["valid_to"])
+
+
+def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
+    paths = copy_to_temp_path("examples/multi")
+    repo_1_path = paths[0] / "repo_1"
+    repo_2_path = paths[0] / "repo_2"
+
+    # Add an extra gateway to repo_2's config
+    repo_2_config_path = repo_2_path / "config.yaml"
+    config_content = repo_2_config_path.read_text()
+
+    modified_config = config_content.replace(
+        "default_gateway: local",
+        dedent("""
+              extra:
+                connection:
+                  type: duckdb
+                  database: extra.duckdb
+
+            default_gateway: local
+        """),
+    )
+
+    repo_2_config_path.write_text(modified_config)
+
+    # Create context with both repos but using the repo_1 path first
+    context = Context(
+        paths=(repo_1_path, repo_2_path),
+        gateway="memory",
+    )
+
+    # Verify all gateways from both repos are present
+    gathered_gateways = context.engine_adapters.keys()
+    expected_gateways = {"local", "memory", "extra"}
+    assert gathered_gateways == expected_gateways
+
+
+def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.TABLE_ONLY
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.TABLE_ONLY
+        for s in prod_env_snapshots.values()
+    )
+
+
+def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.HASH_MD5,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.HASH_MD5
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+    assert all([t["table"].startswith("sqlmesh_md5") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.HASH_MD5
+        for s in prod_env_snapshots.values()
+    )

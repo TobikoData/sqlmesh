@@ -1,6 +1,6 @@
 from sqlmesh.core.context import Context
 from sqlmesh.lsp.context import LSPContext, ModelTarget
-from sqlmesh.lsp.reference import LSPMacroReference, get_macro_definitions_for_a_path
+from sqlmesh.lsp.reference import MacroReference, get_macro_definitions_for_a_path
 from sqlmesh.lsp.uri import URI
 
 
@@ -19,6 +19,6 @@ def test_macro_references_multirepo() -> None:
 
     assert len(macro_references) == 2
     for ref in macro_references:
-        assert isinstance(ref, LSPMacroReference)
-        assert ref.uri.endswith("multi/repo_2/macros/__init__.py")
+        assert isinstance(ref, MacroReference)
+        assert str(URI.from_path(ref.path).value).endswith("multi/repo_2/macros/__init__.py")
         assert ref.target_range is not None

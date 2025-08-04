@@ -8,8 +8,8 @@ import {
   PythonEnvironment,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
-import os from 'os'
 import path from 'path'
 import { setTcloudVersion, setupAuthenticatedState } from './tcloud_utils'
 import { CodeServerContext } from './utils_code_server'
@@ -40,13 +40,9 @@ async function runTest(
   await openLineageView(page)
 }
 
-async function setupEnvironment(): Promise<{
-  tempDir: string
+async function setupEnvironment(tempDir: string): Promise<{
   pythonDetails: PythonEnvironment
 }> {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   const pythonEnvDir = path.join(tempDir, '.venv')
   const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
@@ -66,24 +62,24 @@ async function setupEnvironment(): Promise<{
   await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
     spaces: 2,
   })
-  return { tempDir, pythonDetails }
+  return { pythonDetails }
 }
 
 test.describe('python environment variable injection on sqlmesh_lsp', () => {
-  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
-    const { tempDir } = await setupEnvironment()
+  test('normal setup - error ', async ({ page, sharedCodeServer, tempDir }) => {
+    await setupEnvironment(tempDir)
     writeEnvironmentConfig(tempDir)
     await runTest(page, sharedCodeServer, tempDir)
     await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page, sharedCodeServer }) => {
-    const { tempDir } = await setupEnvironment()
+  test('normal setup - set', async ({ page, sharedCodeServer, tempDir }) => {
+    await setupEnvironment(tempDir)
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
     await runTest(page, sharedCodeServer, tempDir)
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   })
 })
 
@@ -112,21 +108,21 @@ async function setupTcloudProject(
 }
 
 test.describe('tcloud version', () => {
-  test('normal setup - error ', async ({ page, sharedCodeServer }) => {
-    const { tempDir, pythonDetails } = await setupEnvironment()
+  test('normal setup - error ', async ({ page, sharedCodeServer, tempDir }) => {
+    const { pythonDetails } = await setupEnvironment(tempDir)
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     await runTest(page, sharedCodeServer, tempDir)
     await page.waitForSelector('text=Error creating context')
   })
 
-  test('normal setup - set', async ({ page, sharedCodeServer }) => {
-    const { tempDir, pythonDetails } = await setupEnvironment()
+  test('normal setup - set', async ({ page, sharedCodeServer, tempDir }) => {
+    const { pythonDetails } = await setupEnvironment(tempDir)
     await setupTcloudProject(tempDir, pythonDetails)
     writeEnvironmentConfig(tempDir)
     const env_file = path.join(tempDir, '.env')
     fs.writeFileSync(env_file, 'TEST_VAR=test_value')
     await runTest(page, sharedCodeServer, tempDir)
-    await page.waitForSelector('text=Loaded SQLMesh context')
+    await waitForLoadedSQLMesh(page)
   })
 })

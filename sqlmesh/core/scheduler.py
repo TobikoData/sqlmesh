@@ -161,6 +161,7 @@ class Scheduler:
         deployability_index: DeployabilityIndex,
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -192,6 +193,7 @@ class Scheduler:
             snapshots=snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
+            is_restatement=is_restatement,
             **kwargs,
         )
         audit_results = self._audit_snapshot(
@@ -371,6 +373,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -447,6 +450,10 @@ class Scheduler:
                         execution_time=execution_time,
                     )
                 else:
+                    # Determine if this snapshot and interval is a restatement (for SCD type 2)
+                    is_restatement = (
+                        restatements is not None and snapshot.snapshot_id in restatements
+                    )
                     audit_results = self.evaluate(
                         snapshot=snapshot,
                         environment_naming_info=environment_naming_info,
@@ -455,6 +462,7 @@ class Scheduler:
                         execution_time=execution_time,
                         deployability_index=deployability_index,
                         batch_index=batch_idx,
+                        is_restatement=is_restatement,
                     )
 
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
@@ -663,6 +671,7 @@ class Scheduler:
             end=end,
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
+            restatements=remove_intervals,
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS

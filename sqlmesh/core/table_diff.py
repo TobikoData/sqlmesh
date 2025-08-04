@@ -421,21 +421,16 @@ class TableDiff:
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in s_index)), 1, 0).as_(
-                        "s_exists"
-                    ),
-                    exp.func("IF", exp.or_(*(c.is_(exp.Null()).not_() for c in t_index)), 1, 0).as_(
-                        "t_exists"
-                    ),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "s").is_(exp.Null()).not_(), 1, 0
+                    ).as_("s_exists"),
+                    exp.func(
+                        "IF", exp.column(SQLMESH_JOIN_KEY_COL, "t").is_(exp.Null()).not_(), 1, 0
+                    ).as_("t_exists"),
                     exp.func(
                         "IF",
-                        exp.and_(
-                            exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
-                                exp.column(SQLMESH_JOIN_KEY_COL, "t")
-                            ),
-                            exp.and_(
-                                *(c.is_(exp.Null()).not_() for c in s_index + t_index),
-                            ),
+                        exp.column(SQLMESH_JOIN_KEY_COL, "s").eq(
+                            exp.column(SQLMESH_JOIN_KEY_COL, "t")
                         ),
                         1,
                         0,

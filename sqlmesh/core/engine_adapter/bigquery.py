@@ -134,6 +134,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         }
         if self._extra_config.get("maximum_bytes_billed"):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
+        if self.correlation_id:
+            # BigQuery label keys must be lowercase
+            key = self.correlation_id.job_type.value.lower()
+            params["labels"] = {key: self.correlation_id.job_id}
         return params
 
     @property
@@ -202,6 +206,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         elif query_label_property is not None:
             raise SQLMeshError(
                 "Invalid value for `session_properties.query_label`. Must be an array or tuple."
+            )
+
+        if self.correlation_id:
+            parsed_query_label.append(
+                (self.correlation_id.job_type.value.lower(), self.correlation_id.job_id)
             )
 
         if parsed_query_label:
@@ -315,14 +324,26 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             bq_table = self._get_table(table)
             columns = create_mapping_schema(bq_table.schema)
 
-            if (
-                include_pseudo_columns
-                and bq_table.time_partitioning
-                and not bq_table.time_partitioning.field
-            ):
-                columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP", dialect="bigquery")
-                if bq_table.time_partitioning.type_ == "DAY":
-                    columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+            if include_pseudo_columns:
+                if bq_table.time_partitioning and not bq_table.time_partitioning.field:
+                    columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP", dialect="bigquery")
+                    if bq_table.time_partitioning.type_ == "DAY":
+                        columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
+                if bq_table.table_id.endswith("*"):
+                    columns["_TABLE_SUFFIX"] = exp.DataType.build("STRING", dialect="bigquery")
+                if (
+                    bq_table.external_data_configuration is not None
+                    and bq_table.external_data_configuration.source_format
+                    in (
+                        "CSV",
+                        "NEWLINE_DELIMITED_JSON",
+                        "AVRO",
+                        "PARQUET",
+                        "ORC",
+                        "DATASTORE_BACKUP",
+                    )
+                ):
+                    columns["_FILE_NAME"] = exp.DataType.build("STRING", dialect="bigquery")
 
         return columns
 

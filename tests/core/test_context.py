@@ -1952,7 +1952,7 @@ def test_model_linting(tmp_path: pathlib.Path, sushi_context) -> None:
             ctx.plan(environment="dev", auto_apply=True, no_prompts=True)
 
             assert (
-                """noselectstar: Query should not contain SELECT * on its outer most projections"""
+                """noselectstar - Query should not contain SELECT * on its outer most projections"""
                 in mock_logger.call_args[0][0]
             )
 
@@ -2731,3 +2731,139 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
     assert context.engine_adapter.fetchall(
         "select min(start_dt), max(end_dt) from sqlmesh_example__pr_env.unrelated_monthly_model"
     ) == [(to_datetime("2020-01-01 00:00:00"), to_datetime("2020-01-31 23:59:59.999999"))]
+
+
+def test_defaults_pre_post_statements(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    models_path = tmp_path / "models"
+    models_path.mkdir()
+
+    # Create config with default statements
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - SET threads = @var1
+    post_statements:
+        - ANALYZE @this_model
+variables:
+    var1: 4
+"""
+    )
+
+    # Create a model
+    model_path = models_path / "test_model.sql"
+    model_path.write_text(
+        """
+MODEL (
+    name test_model,
+    kind FULL
+);
+
+SELECT 1 as id, 'test' as status;
+"""
+    )
+
+    ctx = Context(paths=[tmp_path])
+
+    # Initial plan and apply
+    initial_plan = ctx.plan(auto_apply=True, no_prompts=True)
+    assert len(initial_plan.new_snapshots) == 1
+
+    snapshot = list(initial_plan.new_snapshots)[0]
+    model = snapshot.model
+
+    # Verify statements are in the model and python environment has been popuplated
+    assert len(model.pre_statements) == 2
+    assert len(model.post_statements) == 1
+    assert model.python_env[c.SQLMESH_VARS].payload == "{'var1': 4}"
+
+    # Verify the statements contain the expected SQL
+    assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
+    assert model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '10GB'"
+    assert model.pre_statements[1].sql() == "SET threads = @var1"
+    assert model.render_pre_statements()[1].sql() == 'SET "threads" = 4'
+
+    # Update config to change pre_statement
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '5GB'  # Changed value
+    post_statements:
+        - ANALYZE @this_model
+"""
+    )
+
+    # Reload context and create new plan
+    ctx = Context(paths=[tmp_path])
+    updated_plan = ctx.plan(no_prompts=True)
+
+    # Should detect a change due to different pre_statements
+    assert len(updated_plan.directly_modified) == 1
+
+    # Apply the plan
+    ctx.apply(updated_plan)
+
+    # Reload the models to get the updated version
+    ctx.load()
+    new_model = ctx.models['"test_model"']
+
+    # Verify updated statements
+    assert len(new_model.pre_statements) == 1
+    assert new_model.pre_statements[0].sql() == "SET memory_limit = '5GB'"
+    assert new_model.render_pre_statements()[0].sql() == "SET \"memory_limit\" = '5GB'"
+
+    # Verify the change was detected by the plan
+    assert len(updated_plan.directly_modified) == 1
+
+
+def test_model_defaults_statements_with_on_virtual_update(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    models_path = tmp_path / "models"
+    models_path.mkdir()
+
+    # Create config with on_virtual_update
+    config_path.write_text(
+        """
+model_defaults:
+    dialect: duckdb
+    on_virtual_update:
+        - SELECT  'Model-defailt virtual update' AS message
+"""
+    )
+
+    # Create a model with its own on_virtual_update as wel
+    model_path = models_path / "test_model.sql"
+    model_path.write_text(
+        """
+MODEL (
+    name test_model,
+    kind FULL
+);
+
+SELECT 1 as id, 'test' as name;
+
+ON_VIRTUAL_UPDATE_BEGIN;
+SELECT 'Model-specific update' AS message;
+ON_VIRTUAL_UPDATE_END;
+"""
+    )
+
+    ctx = Context(paths=[tmp_path])
+
+    # Plan and apply
+    plan = ctx.plan(auto_apply=True, no_prompts=True)
+
+    snapshot = list(plan.new_snapshots)[0]
+    model = snapshot.model
+
+    # Verify both default and model-specific on_virtual_update statements
+    assert len(model.on_virtual_update) == 2
+
+    # Default statements should come first
+    assert model.on_virtual_update[0].sql() == "SELECT 'Model-defailt virtual update' AS message"
+    assert model.on_virtual_update[1].sql() == "SELECT 'Model-specific update' AS message"
