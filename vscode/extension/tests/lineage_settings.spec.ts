@@ -1,15 +1,18 @@
 import { test, expect } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
-import { openLineageView, openServerPage, SUSHI_SOURCE_PATH } from './utils'
+import {
+  openLineageView,
+  openServerPage,
+  SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
+} from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 test('Settings button is visible in the lineage view', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -27,7 +30,7 @@ test('Settings button is visible in the lineage view', async ({
     .getByRole('treeitem', { name: 'waiters.py', exact: true })
     .locator('a')
     .click()
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 
   // Open lineage
   await openLineageView(page)

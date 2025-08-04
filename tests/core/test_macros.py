@@ -363,11 +363,24 @@ def test_ast_correctness(macro_evaluator):
             "SELECT column LIKE a OR column LIKE b OR column LIKE c",
             {},
         ),
+        ("SELECT @REDUCE([1], (x, y) -> x + y)", "SELECT 1", {}),
+        ("SELECT @REDUCE([1, 2], (x, y) -> x + y)", "SELECT 1 + 2", {}),
+        ("SELECT @REDUCE([[1]], (x, y) -> x + y)", "SELECT ARRAY(1)", {}),
+        ("SELECT @REDUCE([[1, 2]], (x, y) -> x + y)", "SELECT ARRAY(1, 2)", {}),
         (
             """select @EACH([a, b, c], x -> column like x AS @SQL('@{x}_y', 'Identifier')), @x""",
             "SELECT column LIKE a AS a_y, column LIKE b AS b_y, column LIKE c AS c_y, '3'",
             {"x": "3"},
         ),
+        ("SELECT @EACH([1], a -> [@a])", "SELECT ARRAY(1)", {}),
+        ("SELECT @EACH([1, 2], a -> [@a])", "SELECT ARRAY(1), ARRAY(2)", {}),
+        ("SELECT @REDUCE(@EACH([1], a -> [@a]), (x, y) -> x + y)", "SELECT ARRAY(1)", {}),
+        (
+            "SELECT @REDUCE(@EACH([1, 2], a -> [@a]), (x, y) -> x + y)",
+            "SELECT ARRAY(1) + ARRAY(2)",
+            {},
+        ),
+        ("SELECT @REDUCE([[1],[2]], (x, y) -> x + y)", "SELECT ARRAY(1) + ARRAY(2)", {}),
         (
             """@WITH(@do_with) all_cities as (select * from city) select all_cities""",
             "WITH all_cities AS (SELECT * FROM city) SELECT all_cities",
@@ -573,6 +586,26 @@ def test_ast_correctness(macro_evaluator):
         (
             """select @TEST_DEFAULT_ARG_COERCION()""",
             "SELECT 3",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v)) ) AS v",
+            "SELECT * FROM (VALUES (1), (2), (3)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v))) ) AS v",
+            "SELECT * FROM (VALUES ((1), (2), (3))) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES @EACH([1, 2, 3], v -> (v, @EVAL(@v + 1))) ) AS v",
+            "SELECT * FROM (VALUES (1, 2), (2, 3), (3, 4)) AS v",
+            {},
+        ),
+        (
+            "SELECT * FROM (VALUES (@EACH([1, 2, 3], v -> (v, @EVAL(@v + 1)))) ) AS v",
+            "SELECT * FROM (VALUES ((1, 2), (2, 3), (3, 4))) AS v",
             {},
         ),
     ],
@@ -856,12 +889,7 @@ def test_date_spine(assert_exp_eq, dialect, date_part):
 
     # Generate the expected SQL based on the dialect and date_part
     if dialect == "duckdb":
-        if date_part == "week":
-            interval = "(7 * INTERVAL '1' DAY)"
-        elif date_part == "quarter":
-            interval = "(90 * INTERVAL '1' DAY)"
-        else:
-            interval = f"INTERVAL '1' {date_part.upper()}"
+        interval = f"INTERVAL '1' {date_part.upper()}"
         expected_sql = f"""
         SELECT
             date_{date_part}

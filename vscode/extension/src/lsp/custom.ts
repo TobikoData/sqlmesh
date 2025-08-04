@@ -32,6 +32,9 @@ export type CustomLSPMethods =
   | AllModelsForRenderMethod
   | SupportedMethodsMethod
   | FormatProjectMethod
+  | ListWorkspaceTests
+  | ListDocumentTests
+  | RunTest
 
 interface AllModelsRequest {
   textDocument: {
@@ -110,4 +113,66 @@ interface FormatProjectResponse extends BaseResponse {}
 
 interface BaseResponse {
   response_error?: string
+}
+
+export interface ListWorkspaceTests {
+  method: 'sqlmesh/list_workspace_tests'
+  request: ListWorkspaceTestsRequest
+  response: ListWorkspaceTestsResponse
+}
+
+type ListWorkspaceTestsRequest = object
+
+interface Position {
+  line: number
+  character: number
+}
+
+interface Range {
+  start: Position
+  end: Position
+}
+
+interface TestEntry {
+  name: string
+  uri: string
+  range: Range
+}
+
+interface ListWorkspaceTestsResponse extends BaseResponse {
+  tests: TestEntry[]
+}
+
+export interface ListDocumentTests {
+  method: 'sqlmesh/list_document_tests'
+  request: ListDocumentTestsRequest
+  response: ListDocumentTestsResponse
+}
+
+export interface DocumentIdentifier {
+  uri: string
+}
+
+export interface ListDocumentTestsRequest {
+  textDocument: DocumentIdentifier
+}
+
+export interface ListDocumentTestsResponse extends BaseResponse {
+  tests: TestEntry[]
+}
+
+export interface RunTest {
+  method: 'sqlmesh/run_test'
+  request: RunTestRequest
+  response: RunTestResponse
+}
+
+export interface RunTestRequest {
+  textDocument: DocumentIdentifier
+  testName: string
+}
+
+export interface RunTestResponse extends BaseResponse {
+  success: boolean
+  error_message?: string
 }

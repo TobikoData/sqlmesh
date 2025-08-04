@@ -24,6 +24,10 @@ It then divides those into _batches_ (configured with the model's [batch_size](.
 
 Signal checking functions examines a batch of time intervals. The function is always called with a batch of time intervals (DateTimeRanges). It can also optionally be called with key word arguments. It may return `True` if all intervals are ready for evaluation, `False` if no intervals are ready, or the time intervals themselves if only some are ready. A checking function is defined with the `@signal` decorator.
 
+!!! note "One model, multiple signals"
+
+    Multiple signals may be specified for a model. SQLMesh categorizes a candidate interval as ready for evaluation if **all** the signal checking functions determine it is ready.
+
 ## Defining a signal
 
 To define a signal, create a `signals` directory in your project folder. Define your signal in a file named `__init__.py` in that directory (you can have additional python file names as well).
@@ -63,9 +67,9 @@ This example specifies that the `random_signal()` should evaluate once with a th
 MODEL (
   name example.signal_model,
   kind FULL,
-  signals [
+  signals (
     random_signal(threshold := 0.5), # specify threshold value
-  ]
+  )
 );
 
 SELECT 1
@@ -108,9 +112,9 @@ MODEL (
     time_column ds,
   ),
   start '2 week ago',
-  signals [
+  signals (
     one_week_ago(),
-  ]
+  )
 );
 
 

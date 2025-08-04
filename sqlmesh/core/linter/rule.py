@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlmesh.core.model import Model
 
@@ -43,8 +44,17 @@ class Range:
 class TextEdit:
     """A text edit to apply to a file."""
 
+    path: Path
     range: Range
     new_text: str
+
+
+@dataclass(frozen=True)
+class CreateFile:
+    """Create a new file with the provided text."""
+
+    path: Path
+    text: str
 
 
 @dataclass(frozen=True)
@@ -52,7 +62,8 @@ class Fix:
     """A fix that can be applied to resolve a rule violation."""
 
     title: str
-    edits: t.List[TextEdit]
+    edits: t.List[TextEdit] = field(default_factory=list)
+    create_files: t.List[CreateFile] = field(default_factory=list)
 
 
 class _Rule(abc.ABCMeta):
@@ -70,7 +81,9 @@ class Rule(abc.ABC, metaclass=_Rule):
         self.context = context
 
     @abc.abstractmethod
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+    def check_model(
+        self, model: Model
+    ) -> t.Optional[t.Union[RuleViolation, t.List[RuleViolation]]]:
         """The evaluation function that'll check for a violation of this rule."""
 
     @property

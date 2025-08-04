@@ -1691,6 +1691,115 @@ def test_description(sushi_context):
     assert sushi_context.models['"memory"."sushi"."orders"'].description == "Table of sushi orders."
 
 
+def test_model_defaults_statements_merge():
+    model_defaults = ModelDefaultsConfig(
+        dialect="duckdb",
+        pre_statements=[
+            "SET enable_progress_bar = true",
+            "CREATE TEMP TABLE default_temp AS SELECT 1",
+        ],
+        post_statements=[
+            "DROP TABLE IF EXISTS default_temp",
+            "grant select on @this_model to group reporter",
+        ],
+        on_virtual_update=["ANALYZE"],
+    )
+
+    # Create a model with its own statements as well
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    CREATE TEMP TABLE model_temp AS SELECT 2;
+
+    SELECT * FROM test_table;
+
+    DROP TABLE IF EXISTS model_temp;
+
+    ON_VIRTUAL_UPDATE_BEGIN;
+    UPDATE stats_table SET last_update = CURRENT_TIMESTAMP;
+    ON_VIRTUAL_UPDATE_END;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=model_defaults.dict(),
+    )
+
+    # Check that pre_statements contains both default and model-specific statements
+    assert len(model.pre_statements) == 3
+    assert model.pre_statements[0].sql() == "SET enable_progress_bar = TRUE"
+    assert model.pre_statements[1].sql() == "CREATE TEMPORARY TABLE default_temp AS SELECT 1"
+    assert model.pre_statements[2].sql() == "CREATE TEMPORARY TABLE model_temp AS SELECT 2"
+
+    # Check that post_statements contains both default and model-specific statements
+    assert len(model.post_statements) == 3
+    assert model.post_statements[0].sql() == "DROP TABLE IF EXISTS default_temp"
+    assert model.post_statements[1].sql() == "GRANT SELECT ON @this_model TO GROUP reporter"
+    assert model.post_statements[2].sql() == "DROP TABLE IF EXISTS model_temp"
+
+    # Check that the query is rendered correctly with @this_model resolved to table name
+    assert (
+        model.render_post_statements()[1].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "reporter"'
+    )
+
+    # Check that on_virtual_update contains both default and model-specific statements
+    assert len(model.on_virtual_update) == 2
+    assert model.on_virtual_update[0].sql() == "ANALYZE"
+    assert (
+        model.on_virtual_update[1].sql()
+        == "UPDATE stats_table SET last_update = CURRENT_TIMESTAMP()"
+    )
+
+
+def test_model_defaults_statements_integration():
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="postgres",
+            pre_statements=["SET memory_limit = '10GB'"],
+            post_statements=["VACUUM ANALYZE"],
+            on_virtual_update=["GRANT SELECT ON @this_model TO GROUP public"],
+        )
+    )
+
+    expressions = parse(
+        """
+    MODEL (
+        name test_model,
+        kind FULL
+    );
+
+    SELECT * FROM source_table;
+    """
+    )
+
+    model = load_sql_based_model(
+        expressions,
+        path=Path("./test_model.sql"),
+        defaults=config.model_defaults.dict(),
+    )
+
+    # Verify defaults were applied
+    assert len(model.pre_statements) == 1
+    assert model.pre_statements[0].sql() == "SET memory_limit = '10GB'"
+
+    assert len(model.post_statements) == 1
+    assert isinstance(model.post_statements[0], exp.Command)
+
+    assert len(model.on_virtual_update) == 1
+    assert model.on_virtual_update[0].sql() == "GRANT SELECT ON @this_model TO GROUP public"
+    assert (
+        model.render_on_virtual_update()[0].sql()
+        == 'GRANT SELECT ON "test_model" TO GROUP "public"'
+    )
+
+
 def test_render_definition():
     expressions = d.parse(
         """
@@ -4263,6 +4372,7 @@ def test_project_level_properties_python_model():
 def test_model_defaults_macros(make_snapshot):
     model_defaults = ModelDefaultsConfig(
         table_format="@IF(@gateway = 'dev', 'iceberg', NULL)",
+        cron="@cron_macro",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
@@ -4298,7 +4408,7 @@ def test_model_defaults_macros(make_snapshot):
             default_dialect="snowflake",
         ),
         defaults=model_defaults.dict(),
-        variables={"gateway": "dev", "create_type": "SECURE"},
+        variables={"gateway": "dev", "create_type": "SECURE", "cron_macro": "@daily"},
     )
 
     snapshot: Snapshot = make_snapshot(model)
@@ -4311,6 +4421,7 @@ def test_model_defaults_macros(make_snapshot):
     assert not model.allow_partials
     assert model.interval_unit == IntervalUnit.DAY
     assert model.table_format == "iceberg"
+    assert model.cron == "@daily"
 
     # Validate disabling of conditional model default
     assert not model.storage_format
@@ -4363,6 +4474,7 @@ def test_model_defaults_macros_python_model(make_snapshot):
             "partition_expiration_days": 13,
             "creatable_type": "@IF(@model_kind_name = 'FULL', 'TRANSIENT', NULL)",
         },
+        "cron": "@cron_macro_expr",
         "table_format": "@IF(@gateway = 'local', 'iceberg', NULL)",
         "storage_format": "@IF(@gateway = 'dev', 'parquet', NULL)",
         "optimize_query": "@IF(@gateway = 'local', True, False)",
@@ -4391,13 +4503,14 @@ def test_model_defaults_macros_python_model(make_snapshot):
         path=Path("."),
         dialect="duckdb",
         defaults=model_defaults,
-        variables={"gateway": "local", "create_type": "SECURE"},
+        variables={"gateway": "local", "create_type": "SECURE", "cron_macro_expr": "0 */2 * * *"},
     )
 
     # Even if in the project wide defaults this is ignored for python models
     assert not m.optimize_query
 
     # Validate rendering of model defaults
+    assert m.cron == "0 */2 * * *"
     assert m.enabled
     assert m.start == "2024-01-01"
     assert m.allow_partials
@@ -5564,7 +5677,7 @@ def test_when_matched_normalization() -> None:
             when_matched (
                 WHEN MATCHED THEN UPDATE SET
                     target.key_a = source.key_a,
-                    target.key_b = source.key_b,            
+                    target.key_b = source.key_b,
             )
           )
         );
@@ -6116,7 +6229,8 @@ def test_named_variable_macros() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6142,7 +6256,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6166,7 +6281,8 @@ def test_variables_in_templates() -> None:
     )
 
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"}
+        {c.GATEWAY: "in_memory", "test_var_a": "test_value", "overridden_var": "initial_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query_or_raise().sql()
@@ -6305,7 +6421,8 @@ def test_variables_migrated_dbt_package_macro():
         dialect="bigquery",
     )
     assert model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"}
+        {"test_var_a": "test_var_a_value", "__dbt_packages__.test.test_var_b": "test_var_b_value"},
+        sort_root_dict=True,
     )
     assert (
         model.render_query().sql(dialect="bigquery")
@@ -6375,6 +6492,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
         columns={"a": "string"},
         kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="@{time_col}"),
         stamp="@{stamp}",
+        cron="@some_cron_var",
         owner="@IF(@gateway = 'dev', @{dev_owner}, @{prod_owner})",
         enabled="@IF(@gateway = 'dev', True, False)",
         start="@IF(@gateway = 'dev', '1 month ago', '2024-01-01')",
@@ -6402,6 +6520,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
             "prod_owner": "pr_1",
             "stamp": "bump",
             "time_col": "a",
+            "some_cron_var": "@daily",
         },
     )
 
@@ -6413,6 +6532,7 @@ def test_macros_python_model(mocker: MockerFixture) -> None:
     assert python_model.stamp == "bump"
     assert python_model.time_column.column == exp.column("a", quoted=True)
     assert python_model.partitioned_by[0].sql() == 'DATETIME_TRUNC("a", MONTH)'
+    assert python_model.cron == "@daily"
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
     df = list(python_model.render(context=context))[0]
@@ -6530,7 +6650,8 @@ def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
             "physical_var": "bla",
             "virtual_var": "blb",
             "session_var": "blc",
-        }
+        },
+        sort_root_dict=True,
     )
 
     assert "location1" in model.physical_properties
@@ -6617,7 +6738,8 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
             "physical_var": "bla",
             "virtual_var": "blb",
             "session_var": "blc",
-        }
+        },
+        sort_root_dict=True,
     )
     assert python_sql_model.enabled
 
@@ -6709,7 +6831,7 @@ def test_named_variables_python_model(mocker: MockerFixture) -> None:
     )
 
     assert python_model.python_env[c.SQLMESH_VARS] == Executable.value(
-        {"test_var_a": "test_value", "start": "2024-01-01"}
+        {"test_var_a": "test_value", "start": "2024-01-01"}, sort_root_dict=True
     )
 
     context = ExecutionContext(mocker.Mock(), {}, None, None)
@@ -8412,6 +8534,38 @@ def test_comments_in_jinja_query():
         model.render_query()
 
 
+def test_jinja_render_debug_logging(caplog):
+    """Test that rendered Jinja expressions are logged for debugging."""
+    import logging
+
+    # Set log level to DEBUG to capture debug logs
+    caplog.set_level(logging.DEBUG, logger="sqlmesh.core.renderer")
+
+    # Create a model with unparseable Jinja that will be rendered
+    expressions = d.parse(
+        """
+        MODEL (name db.test_model);
+
+        JINJA_QUERY_BEGIN;
+        {{ 'SELECT invalid syntax here!' }}
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    # Attempt to render - this should fail due to invalid SQL syntax
+    with pytest.raises(ConfigError, match=r"Could not render or parse jinja"):
+        model.render_query()
+
+    # Check that the rendered Jinja was logged
+    assert any(
+        'Rendered Jinja expression for model \'"db"."test_model"\'' in record.message
+        and "SELECT invalid syntax here!" in record.message
+        for record in caplog.records
+    )
+
+
 def test_staged_file_path():
     expressions = d.parse(
         """
@@ -9242,14 +9396,14 @@ def entrypoint(evaluator):
         MODEL (
           name @{customer}.my_table,
           blueprints (
-            (customer := customer1, customer_field := 'bar'),
-            (customer := customer2, customer_field := qux),
+            (customer := customer1, Customer_Field := 'bar'),
+            (customer := customer2, Customer_Field := qux),
           ),
           kind FULL
         );
 
         SELECT
-          @customer_field AS foo,
+          @customer_FIELD AS foo,
           @{customer_field} AS foo2,
           @BLUEPRINT_VAR('customer_field') AS foo3,
         FROM @{customer}.my_source
@@ -10576,9 +10730,12 @@ def test_resolve_interpolated_variables_when_parsing_python_deps():
     )
 
     assert m.python_env.get(c.SQLMESH_VARS) == Executable.value(
-        {"selector": "bla", "bla_variable": 1, "baz_variable": 2}
+        {"selector": "bla", "bla_variable": 1, "baz_variable": 2},
+        sort_root_dict=True,
     )
-    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value({"selector": "baz"})
+    assert m.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"selector": "baz"}, sort_root_dict=True
+    )
 
 
 def test_extract_schema_in_post_statement(tmp_path: Path) -> None:
@@ -10737,4 +10894,205 @@ def test_datetime_without_timezone_variable_redshift() -> None:
     assert (
         model.render_query_or_raise().sql("redshift")
         == '''SELECT CAST('1970-01-01 00:00:00' AS TIMESTAMP) AS "test_time_col"'''
+    )
+
+
+def test_python_model_cron_with_blueprints(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_blueprint_model = tmp_path / "models" / "cron_blueprint.py"
+    cron_blueprint_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_blueprint_model.write_text(
+        """
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "@{customer}.some_table",
+    kind="FULL",
+    cron="@'*/@{min} * * * *'",
+    blueprints=[
+        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5},
+        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10},
+    ],
+    columns={
+        "field_a": "text",
+        "field_b": "text",
+        "customer": "text",
+    },
+    enabled=True
+)
+def entrypoint(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    execution_time: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "field_a": [context.blueprint_var("field_a")],
+            "field_b": [context.blueprint_var("field_b")],
+            "customer": [context.blueprint_var("customer")],
+        }
+    )
+"""
+    )
+
+    context = Context(
+        paths=tmp_path, config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    )
+    models = context.models
+
+    # Test first blueprint
+    customer1_model = models.get('"memory"."customer1"."some_table"')
+    assert customer1_model is not None
+    assert customer1_model.cron == "*/5 * * * *"
+    assert customer1_model.enabled
+    assert "blueprints" not in customer1_model.all_fields()
+    assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5}
+    )
+
+    # Test second blueprint
+    customer2_model = models.get('"memory"."customer2"."some_table"')
+    assert customer2_model is not None
+    assert customer2_model.cron == "*/10 * * * *"
+    assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10}
+    )
+
+    # Test that the models can be planned and applied
+    context.plan(no_prompts=True, auto_apply=True, no_diff=True)
+
+    # Verify the data
+    assert context.fetchdf('from "memory"."customer1"."some_table"').to_dict() == {
+        "field_a": {0: "x"},
+        "field_b": {0: "y"},
+        "customer": {0: "customer1"},
+    }
+    assert context.fetchdf('from "memory"."customer2"."some_table"').to_dict() == {
+        "field_a": {0: "z"},
+        "field_b": {0: "w"},
+        "customer": {0: "customer2"},
+    }
+
+
+def test_python_model_cron_macro_rendering(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_macro_model = tmp_path / "models" / "cron_macro.py"
+    cron_macro_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_macro_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "msc.test_cron_model",
+    kind="FULL",
+    cron="@{cron_schedule}",
+    columns={"a": "int"},
+)
+def entrypoint(context, **kwargs):
+    return pd.DataFrame([{"a": 1}])
+"""
+    )
+
+    # Test with cron alias
+    context_daily = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "@daily"},
+        ),
+    )
+    model_daily = context_daily.models.get('"memory"."msc"."test_cron_model"')
+
+    assert model_daily is not None
+    assert model_daily.cron == "@daily"
+
+    # Test with cron expression
+    context_expr = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "0 */2 * * *"},
+        ),
+    )
+    model_expr = context_expr.models.get('"memory"."msc"."test_cron_model"')
+    assert model_expr is not None
+    assert model_expr.cron == "0 */2 * * *"
+
+
+def test_python_model_normal_cron(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    cron_macro_model = tmp_path / "models" / "cron_macro.py"
+    cron_macro_model.parent.mkdir(parents=True, exist_ok=True)
+    cron_macro_model.write_text(
+        """
+import pandas as pd
+from sqlmesh import model
+
+@model(
+    "msc.normal_test_cron_model",
+    kind="FULL",
+    cron="@daily",
+    columns={"a": "int"},
+)
+def entrypoint(context, **kwargs):
+    return pd.DataFrame([{"a": 1}])
+"""
+    )
+
+    # Test with cron alias
+    context_daily = Context(
+        paths=tmp_path,
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"cron_schedule": "@daily"},
+        ),
+    )
+    model_daily = context_daily.models.get('"memory"."msc"."normal_test_cron_model"')
+
+    assert model_daily is not None
+    assert model_daily.cron == "@daily"
+
+
+def test_render_query_optimize_query_false(assert_exp_eq, sushi_context):
+    snapshots = sushi_context.snapshots
+
+    model = sushi_context.get_model("sushi.top_waiters")
+    model = model.copy(update={"optimize_query": False})
+
+    upstream_model_version = sushi_context.get_snapshot("sushi.waiter_revenue_by_day").version
+
+    assert_exp_eq(
+        model.render_query(snapshots=snapshots).sql(),
+        f"""
+        WITH "test_macros" AS (
+          SELECT
+            2 AS "lit_two",
+            "revenue" * 2.0 AS "sql_exp",
+            CAST("revenue" AS TEXT) AS "sql_lit"
+          FROM "memory"."sqlmesh__sushi"."sushi__waiter_revenue_by_day__{upstream_model_version}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+        )
+        SELECT
+          CAST("waiter_id" AS INT) AS "waiter_id",
+          CAST("revenue" AS DOUBLE) AS "revenue"
+        FROM "memory"."sqlmesh__sushi"."sushi__waiter_revenue_by_day__{upstream_model_version}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+        WHERE
+          "event_date" = (
+            SELECT
+              MAX("event_date")
+            FROM "memory"."sqlmesh__sushi"."sushi__waiter_revenue_by_day__{upstream_model_version}" AS "waiter_revenue_by_day" /* memory.sushi.waiter_revenue_by_day */
+          )
+        ORDER BY
+          "revenue" DESC
+        LIMIT 10
+        """,
     )

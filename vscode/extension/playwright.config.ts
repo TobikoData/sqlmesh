@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   // TODO: When stable, allow retries in CI
   retries: process.env.CI ? 2 : 0,
-  workers: 4,
+  workers: process.env.CI ? 2 : 4,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
   projects: [
     {
@@ -27,6 +27,7 @@ export default defineConfig({
         },
         viewport: { width: 1512, height: 944 },
         video: 'retain-on-failure',
+        trace: 'retain-on-first-failure',
       },
       dependencies: ['setup'],
     },

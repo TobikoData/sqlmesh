@@ -1,5 +1,9 @@
 # Browser UI
 
+!!! warning
+
+    Browser UI is deprecated. Please use the [VSCode extension](../guides/vscode.md) instead.
+
 In this quickstart, you'll use the SQLMesh browser user interface to get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 ??? info "Learn more about the quickstart project structure"

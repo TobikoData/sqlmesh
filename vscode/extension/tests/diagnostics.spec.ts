@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
-import { openServerPage, runCommand, SUSHI_SOURCE_PATH } from './utils'
+import { openProblemsView, openServerPage, SUSHI_SOURCE_PATH } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 import { execAsync } from '../src/utilities/exec'
 import yaml from 'yaml'
@@ -10,8 +10,8 @@ import yaml from 'yaml'
 test('Workspace diagnostics show up in the diagnostics panel', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -36,8 +36,7 @@ test('Workspace diagnostics show up in the diagnostics panel', async ({
     .locator('a')
     .click()
 
-  // Open problems panel
-  await runCommand(page, 'View: Focus Problems')
+  await openProblemsView(page)
 
   await page.waitForSelector('text=problems')
   await page.waitForSelector('text=All models should have an owner')
@@ -56,10 +55,8 @@ test.describe('Bad config.py/config.yaml file issues', () => {
   test('sqlmesh init, then corrupted config.yaml, bad yaml', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
     await setup(tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -82,8 +79,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -125,8 +121,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -138,10 +133,8 @@ test.describe('Bad config.py/config.yaml file issues', () => {
   test('sushi example, correct python, bad config', async ({
     page,
     sharedCodeServer,
+    tempDir,
   }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -164,8 +157,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Expect the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page
@@ -174,10 +166,11 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     await expect(errorElement).toBeVisible({ timeout: 5000 })
   })
 
-  test('sushi example, bad config.py', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('sushi example, bad config.py', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -200,8 +193,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
     // Expect the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page.getByText('Failed to load config file:').first()
@@ -210,10 +202,7 @@ test.describe('Bad config.py/config.yaml file issues', () => {
 })
 
 test.describe('Diagnostics for bad SQLMesh models', () => {
-  test('duplicate model names', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('duplicate model names', async ({ page, sharedCodeServer, tempDir }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -242,8 +231,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Asser that the error is present in the problems view
     await page
@@ -252,10 +240,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
       .isVisible({ timeout: 5_000 })
   })
 
-  test('bad model block', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
+  test('bad model block', async ({ page, sharedCodeServer, tempDir }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -284,8 +269,7 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert error is present in the problems view
     const errorElement = page
@@ -296,11 +280,11 @@ test.describe('Diagnostics for bad SQLMesh models', () => {
 })
 
 test.describe('Diagnostics for bad audits', () => {
-  test('bad audit block in audit', async ({ page, sharedCodeServer }) => {
-    const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-    )
-
+  test('bad audit block in audit', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
     // Copy over the sushi project
     await fs.copy(SUSHI_SOURCE_PATH, tempDir)
     await createPythonInterpreterSettingsSpecifier(tempDir)
@@ -331,8 +315,7 @@ test.describe('Diagnostics for bad audits', () => {
     // Wait for the error to appear
     await page.waitForSelector('text=Error creating context')
 
-    // Open the problems view
-    await runCommand(page, 'View: Focus Problems')
+    await openProblemsView(page)
 
     // Assert that the error is present in the problems view
     const errorElement = page

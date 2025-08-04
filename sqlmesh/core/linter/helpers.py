@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlmesh.core.linter.rule import Position, Range
+from sqlmesh.core.linter.rule import Range, Position
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlglot import tokenize, TokenType
 import typing as t
@@ -84,19 +84,8 @@ class TokenPositionDetails(PydanticModel):
         )
 
 
-def read_range_from_file(file: Path, text_range: Range) -> str:
-    """
-    Read the file and return the content within the specified range.
-
-    Args:
-        file: Path to the file to read
-        text_range: The range of text to extract
-
-    Returns:
-        The content within the specified range
-    """
-    with file.open("r", encoding="utf-8") as f:
-        lines = f.readlines()
+def read_range_from_string(content: str, text_range: Range) -> str:
+    lines = content.splitlines(keepends=False)
 
     # Ensure the range is within bounds
     start_line = max(0, text_range.start.line)
@@ -114,6 +103,23 @@ def read_range_from_file(file: Path, text_range: Range) -> str:
         result.append(line[start_char:end_char])
 
     return "".join(result)
+
+
+def read_range_from_file(file: Path, text_range: Range) -> str:
+    """
+    Read the file and return the content within the specified range.
+
+    Args:
+        file: Path to the file to read
+        text_range: The range of text to extract
+
+    Returns:
+        The content within the specified range
+    """
+    with file.open("r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    return read_range_from_string("".join(lines), text_range)
 
 
 def get_range_of_model_block(
@@ -152,3 +158,55 @@ def get_range_of_model_block(
     return Range(
         start=start_position.to_range(splitlines).start, end=end_position.to_range(splitlines).end
     )
+
+
+def get_range_of_a_key_in_model_block(
+    sql: str,
+    dialect: str,
+    key: str,
+) -> t.Optional[Range]:
+    """
+    Get the range of a specific key in the model block of an SQL file.
+    """
+    tokens = tokenize(sql, dialect=dialect)
+    if tokens is None:
+        return None
+
+    # Find the start of the model block
+    start_index = next(
+        (
+            i
+            for i, t in enumerate(tokens)
+            if t.token_type is TokenType.VAR and t.text.upper() == "MODEL"
+        ),
+        None,
+    )
+    end_index = next(
+        (i for i, t in enumerate(tokens) if t.token_type is TokenType.SEMICOLON),
+        None,
+    )
+    if start_index is None or end_index is None:
+        return None
+    if start_index >= end_index:
+        return None
+
+    tokens_of_interest = tokens[start_index + 1 : end_index]
+    # Find the key token
+    key_token = next(
+        (
+            t
+            for t in tokens_of_interest
+            if t.token_type is TokenType.VAR and t.text.upper() == key.upper()
+        ),
+        None,
+    )
+    if key_token is None:
+        return None
+
+    position = TokenPositionDetails(
+        line=key_token.line,
+        col=key_token.col,
+        start=key_token.start,
+        end=key_token.end,
+    )
+    return position.to_range(sql.splitlines())

@@ -13,6 +13,7 @@ from functools import lru_cache
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake
+import sqlglot.dialects.athena as athena
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -417,6 +418,20 @@ def _parse_limit(
 
     macro.this.append("expressions", self.__parse_limit(this, top=top, skip_limit_token=True))  # type: ignore
     return macro
+
+
+def _parse_value(self: Parser, values: bool = True) -> t.Optional[exp.Expression]:
+    wrapped = self._match(TokenType.L_PAREN, advance=False)
+
+    # The base _parse_value method always constructs a Tuple instance. This is problematic when
+    # generating values with a macro function, because it's impossible to tell whether the user's
+    # intention was to construct a row or a column with the VALUES expression. To avoid this, we
+    # amend the AST such that the Tuple is replaced by the macro function call itself.
+    expr = self.__parse_value()  # type: ignore
+    if expr and not wrapped and isinstance(seq_get(expr.expressions, 0), MacroFunc):
+        return expr.expressions[0]
+
+    return expr
 
 
 def _parse_macro_or_clause(self: Parser, parser: t.Callable) -> t.Optional[exp.Expression]:
@@ -1000,6 +1015,14 @@ def extend_sqlglot() -> None:
     generators = {Generator}
 
     for dialect in Dialect.classes.values():
+        # Athena picks a different Tokenizer / Parser / Generator depending on the query
+        # so this ensures that the extra ones it defines are also extended
+        if dialect == athena.Athena:
+            tokenizers.add(athena._TrinoTokenizer)
+            parsers.add(athena._TrinoParser)
+            generators.add(athena._TrinoGenerator)
+            generators.add(athena._HiveGenerator)
+
         if hasattr(dialect, "Tokenizer"):
             tokenizers.add(dialect.Tokenizer)
         if hasattr(dialect, "Parser"):
@@ -1063,6 +1086,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_limit)
+    _override(Parser, _parse_value)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)

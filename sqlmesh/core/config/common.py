@@ -49,6 +49,34 @@ class EnvironmentSuffixTarget(str, Enum):
         return str(self)
 
 
+class TableNamingConvention(str, Enum):
+    # Causes table names at the physical layer to follow the convention:
+    # <schema-name>__<table-name>__<fingerprint>
+    SCHEMA_AND_TABLE = "schema_and_table"
+
+    # Causes table names at the physical layer to follow the convention:
+    # <table-name>__<fingerprint>
+    TABLE_ONLY = "table_only"
+
+    # Takes the table name that would be returned from SCHEMA_AND_TABLE and wraps it in md5()
+    # to generate a hash and prefixes the has with `sqlmesh_md5__`, for the following reasons:
+    # - at a glance, you can still see it's managed by sqlmesh and that md5 was used to generate the hash
+    # - unquoted identifiers that start with numbers can trip up DB engine parsers, so having a text prefix prevents this
+    # This causes table names at the physical layer to follow the convention:
+    # sqlmesh_md5__3b07384d113edec49eaa6238ad5ff00d
+    HASH_MD5 = "hash_md5"
+
+    @classproperty
+    def default(cls) -> TableNamingConvention:
+        return TableNamingConvention.SCHEMA_AND_TABLE
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
 def _concurrent_tasks_validator(v: t.Any) -> int:
     if isinstance(v, str):
         v = int(v)

@@ -184,7 +184,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: mcr.microsoft.com/playwright:v1.53.2-jammy
+      - image: mcr.microsoft.com/playwright:v1.54.1-jammy
     resource_class: medium
     steps:
       - halt_unless_client

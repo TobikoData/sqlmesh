@@ -1,5 +1,7 @@
 from lsprotocol import types
 import typing as t
+
+from sqlmesh.core.linter.rule import Range
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -143,3 +145,52 @@ class FormatProjectResponse(CustomMethodResponseBaseClass):
     """
 
     pass
+
+
+LIST_WORKSPACE_TESTS_FEATURE = "sqlmesh/list_workspace_tests"
+
+
+class ListWorkspaceTestsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to list all tests in the current project.
+    """
+
+    pass
+
+
+class TestEntry(PydanticModel):
+    """
+    An entry representing a test in the workspace.
+    """
+
+    name: str
+    uri: str
+    range: Range
+
+
+class ListWorkspaceTestsResponse(CustomMethodResponseBaseClass):
+    tests: t.List[TestEntry]
+
+
+LIST_DOCUMENT_TESTS_FEATURE = "sqlmesh/list_document_tests"
+
+
+class ListDocumentTestsRequest(CustomMethodRequestBaseClass):
+    textDocument: types.TextDocumentIdentifier
+
+
+class ListDocumentTestsResponse(CustomMethodResponseBaseClass):
+    tests: t.List[TestEntry]
+
+
+RUN_TEST_FEATURE = "sqlmesh/run_test"
+
+
+class RunTestRequest(CustomMethodRequestBaseClass):
+    textDocument: types.TextDocumentIdentifier
+    testName: str
+
+
+class RunTestResponse(CustomMethodResponseBaseClass):
+    success: bool
+    error_message: t.Optional[str] = None

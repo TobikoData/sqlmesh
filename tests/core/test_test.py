@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 import unittest
 from unittest.mock import call, patch
-from shutil import copyfile, rmtree
+from shutil import rmtree
 
 import pandas as pd  # noqa: TID253
 import pytest
@@ -87,6 +87,7 @@ def _check_successful_or_raise(
     assert result is not None
     if not result.wasSuccessful():
         error_or_failure_traceback = (result.errors or result.failures)[0][1]
+        print(error_or_failure_traceback)
         if expected_msg:
             assert expected_msg in error_or_failure_traceback
         else:
@@ -2316,6 +2317,13 @@ test_resolve_template_macro:
 
 @use_terminal_console
 def test_test_output(tmp_path: Path) -> None:
+    def copy_test_file(test_file: Path, new_test_file: Path, index: int) -> None:
+        with open(test_file, "r") as file:
+            filedata = file.read()
+
+        with open(new_test_file, "w") as file:
+            file.write(filedata.replace("test_example_full_model", f"test_{index}"))
+
     init_example_project(tmp_path, engine_type="duckdb")
 
     original_test_file = tmp_path / "tests" / "test_full_model.yaml"
@@ -2407,8 +2415,8 @@ test_example_full_model:
 
     # Case 3: Assert that concurrent execution is working properly
     for i in range(50):
-        copyfile(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml")
-        copyfile(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml")
+        copy_test_file(original_test_file, tmp_path / "tests" / f"test_success_{i}.yaml", i)
+        copy_test_file(new_test_file, tmp_path / "tests" / f"test_failure_{i}.yaml", i)
 
     with capture_output() as captured_output:
         context.test()
@@ -3227,3 +3235,196 @@ test_foo:
         test.context.resolve_table("silver.sushi.bar")
 
     _check_successful_or_raise(test.run())
+
+
+def test_python_model_test_variables_override(tmp_path: Path) -> None:
+    py_model = tmp_path / "models" / "test_var_model.py"
+    py_model.parent.mkdir(parents=True, exist_ok=True)
+    py_model.write_text(
+        """
+import pandas as pd  # noqa: TID253
+from sqlmesh import model, ExecutionContext
+import typing as t
+
+@model(
+  name="test_var_model",
+  columns={"id": "int", "flag_value": "boolean", "var_value": "varchar"},
+)
+def execute(context: ExecutionContext, **kwargs: t.Any) -> pd.DataFrame:
+  my_flag = context.var("my_flag")
+  other_var = context.var("other_var")
+
+  return pd.DataFrame([{
+      "id": 1 if my_flag else 2,
+      "flag_value": my_flag,
+      "var_value": other_var,
+  }])"""
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        variables={"my_flag": False, "other_var": "default_value"},
+    )
+    context = Context(config=config, paths=tmp_path)
+
+    python_model = context.models['"test_var_model"']
+
+    # Test when Flag is True
+    # Overriding the config default flag_value to True
+    # AND the var_value to use test one
+    test_flag_true = _create_test(
+        body=load_yaml("""
+test_flag_true:
+  model: test_var_model
+  vars:
+    my_flag: true
+    other_var: "test_value"
+  outputs:
+    query:
+      rows:
+        - id: 1
+          flag_value: true
+          var_value: "test_value"
+        """),
+        test_name="test_flag_true",
+        model=python_model,
+        context=context,
+    )
+
+    _check_successful_or_raise(test_flag_true.run())
+
+    # Test when Flag is False
+    # Overriding the config default flag_value to False
+    # AND the var_value to use test one (since the above would be false for both)
+    test_flag_false = _create_test(
+        body=load_yaml("""
+test_flag_false:
+  model: test_var_model
+  vars:
+    my_flag: false
+    other_var: "another_test_value"
+  outputs:
+    query:
+      rows:
+        - id: 2
+          flag_value: false
+          var_value: "another_test_value"
+        """),
+        test_name="test_flag_false",
+        model=python_model,
+        context=context,
+    )
+
+    _check_successful_or_raise(test_flag_false.run())
+
+    # Test with no vars specified
+    # (should use config defaults for both flag and var_value)
+    test_default_vars = _create_test(
+        body=load_yaml("""
+test_default_vars:
+  model: test_var_model
+  outputs:
+    query:
+      rows:
+        - id: 2
+          flag_value: false
+          var_value: "default_value"
+        """),
+        test_name="test_default_vars",
+        model=python_model,
+        context=context,
+    )
+    _check_successful_or_raise(test_default_vars.run())
+
+
+@use_terminal_console
+def test_cte_failure(tmp_path: Path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "foo.sql").write_text(
+        """
+      MODEL (
+        name test.foo,
+        kind full
+      );
+
+      with model_cte as (
+        SELECT 1 AS id
+      )
+      SELECT id FROM model_cte
+      """
+    )
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+    context = Context(paths=tmp_path, config=config)
+
+    expected_cte_failure_output = """Data mismatch (CTE "model_cte")               
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+┃   Row    ┃      id: Expected       ┃     id: Actual      ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+│    0     │            2            │          1          │
+└──────────┴─────────────────────────┴─────────────────────┘"""
+
+    expected_query_failure_output = """Data mismatch                        
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+┃   Row    ┃      id: Expected       ┃     id: Actual      ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+│    0     │            2            │          1          │
+└──────────┴─────────────────────────┴─────────────────────┘"""
+
+    # Case 1: Ensure that a single CTE failure is reported correctly
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_foo.yaml").write_text(
+        """
+test_foo:
+  model: test.foo
+  outputs:
+    ctes:
+      model_cte:
+        rows:
+          - id: 2
+    query:
+      - id: 1
+    """
+    )
+
+    with capture_output() as captured_output:
+        context.test()
+
+    output = captured_output.stdout
+
+    assert expected_cte_failure_output in output
+    assert expected_query_failure_output not in output
+
+    assert "Ran 1 tests" in output
+    assert "Failed tests (1)" in output
+
+    # Case 2: Ensure that both CTE and query failures are reported correctly
+    (tests_dir / "test_foo.yaml").write_text(
+        """
+test_foo:
+  model: test.foo
+  outputs:
+    ctes:
+      model_cte:
+        rows:
+          - id: 2
+    query:
+      - id: 2
+    """
+    )
+
+    with capture_output() as captured_output:
+        context.test()
+
+    output = captured_output.stdout
+
+    assert expected_cte_failure_output in output
+    assert expected_query_failure_output in output
+
+    assert "Ran 1 tests" in output
+    assert "Failed tests (1)" in output

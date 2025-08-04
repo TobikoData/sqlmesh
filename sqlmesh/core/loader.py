@@ -334,6 +334,10 @@ class Loader(abc.ABC):
         def _load(path: Path) -> t.List[Model]:
             try:
                 with open(path, "r", encoding="utf-8") as file:
+                    yaml = YAML().load(file)
+                    # Allow empty YAML files to return an empty list
+                    if yaml is None:
+                        return []
                     return [
                         create_external_model(
                             defaults=self.config.model_defaults.dict(),
@@ -346,7 +350,7 @@ class Loader(abc.ABC):
                                 **row,
                             },
                         )
-                        for row in YAML().load(file.read())
+                        for row in yaml
                     ]
             except Exception as ex:
                 raise ConfigError(self._failed_to_load_model_error(path, ex), path)
@@ -706,6 +710,8 @@ class SqlMeshLoader(Loader):
     def _load_signals(self) -> UniqueKeyDict[str, signal]:
         """Loads signals for the built-in scheduler."""
 
+        base_signals = signal.get_registry()
+
         signals_max_mtime: t.Optional[float] = None
 
         for path in self._glob_paths(
@@ -725,7 +731,10 @@ class SqlMeshLoader(Loader):
 
         self._signals_max_mtime = signals_max_mtime
 
-        return signal.get_registry()
+        signals = signal.get_registry()
+        signal.set_registry(base_signals)
+
+        return signals
 
     def _load_audits(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry

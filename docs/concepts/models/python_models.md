@@ -102,6 +102,8 @@ For example, pre/post-statements might modify settings or create indexes. Howeve
 
 You can set the `pre_statements` and `post_statements` arguments to a list of SQL strings, SQLGlot expressions, or macro calls to define the model's pre/post-statements.
 
+**Project-level defaults:** You can also define pre/post-statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
+
 ``` python linenums="1" hl_lines="8-12"
 @model(
     "db.test_model",
@@ -181,6 +183,8 @@ The optional on-virtual-update statements allow you to execute SQL commands afte
 These can be used, for example, to grant privileges on views of the virtual layer.
 
 Similar to pre/post-statements you can set the `on_virtual_update` argument in the `@model` decorator to a list of SQL strings, SQLGlot expressions, or macro calls.
+
+**Project-level defaults:** You can also define on-virtual-update statements at the project level using `model_defaults` in your configuration. These will be applied to all models in your project (including Python models) and merged with any model-specific statements. Default statements are executed first, followed by model-specific statements. Learn more about this in the [model configuration reference](../../reference/model_configuration.md#model-defaults).
 
 ``` python linenums="1" hl_lines="8"
 @model(
@@ -393,6 +397,35 @@ It's also possible to use the `@EACH` macro, combined with a global list variabl
 )
 ...
 ```
+
+## Using macros in model properties
+
+Python models support macro variables in model properties. However, special care must be taken when the macro variable appears within a string.
+
+For example when using macro variables inside cron expressions, you need to wrap the entire expression in quotes and prefix it with `@` to ensure proper parsing:
+
+```python linenums="1"
+# Correct: Wrap the cron expression containing a macro variable
+@model(
+    "my_model",
+    cron="@'*/@{mins} * * * *'",  # Note the @'...' syntax
+    ...
+)
+
+# This also works with blueprint variables
+@model(
+    "@{customer}.scheduled_model",
+    cron="@'0 @{hour} * * *'",
+    blueprints=[
+        {"customer": "customer_1", "hour": 2}, # Runs at 2 AM
+        {"customer": "customer_2", "hour": 8}, # Runs at 8 AM
+    ],
+    ...
+)
+
+```
+
+This is necessary because cron expressions often use `@` for aliases (like `@daily`, `@hourly`), which can conflict with SQLMesh's macro syntax.
 
 ## Examples
 ### Basic
