@@ -74,6 +74,8 @@ Here are all of SQLMesh's built-in linting rules:
 | `invalidselectstarexpansion` | Correctness | The query's top-level selection may be `SELECT *`, but only if SQLMesh can expand the `SELECT *` into individual columns |
 | `noselectstar`               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
 | `nomissingaudits`             | Governance  | SQLMesh did not find any `audits` in the model's configuration to test data quality.                                                 |
+| `nomissingexternalmodels`   | Governance  | All external models must be registered in the external_models.yaml file                                                |
+| `cronvalidator`             | Governance  | Upstream model has a cron expression with longer intervals than downstream model.                                                 |
 
 ### User-defined rules
 

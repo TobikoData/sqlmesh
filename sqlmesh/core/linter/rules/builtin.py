@@ -275,7 +275,7 @@ class NoMissingExternalModels(Rule):
 
 
 class CronValidator(Rule):
-    """Upstream model has a cron expression with longer intervals than this model's."""
+    """Upstream model has a cron expression with longer intervals than downstream model."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         placeholder_start_date = "2020-01-01 10:00:00"
