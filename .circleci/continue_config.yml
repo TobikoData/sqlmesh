@@ -120,7 +120,13 @@ jobs:
       - checkout
       - run:
           name: Fetch full git history and tags
-          command: git fetch --unshallow --tags || true
+          command: |
+            try {
+              git fetch --unshallow --tags -ErrorAction Stop
+            }
+            catch {
+              Write-Host "Repository is already complete. Continuing..."
+            }
       - run:
           name: Install System Dependencies
           command: |
@@ -306,6 +312,7 @@ workflows:
                 - spark
                 - clickhouse
                 - risingwave
+                - fabric
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
           context:
