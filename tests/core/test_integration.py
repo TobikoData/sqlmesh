@@ -35,6 +35,7 @@ from sqlmesh.core.config import (
     GatewayConfig,
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.console import Console, get_console
@@ -48,6 +49,7 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnmanagedKind,
     Model,
     ModelKind,
     ModelKindName,
@@ -2483,6 +2485,54 @@ def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     ]
 
     context.apply(plan)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_plan_across_environments_snapshot_with_shared_version(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Change kind to incremental unmanaged
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    previous_kind = model.kind.copy(update={"forward_only": True})
+    assert isinstance(previous_kind, IncrementalByTimeRangeKind)
+
+    model = model.copy(
+        update={"kind": IncrementalUnmanagedKind(), "physical_version": "pinned_version_12345"}
+    )
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make some change and deploy it to both dev and prod environments
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    context.plan("dev_a", auto_apply=True, no_prompts=True)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Change the kind back to incremental by time range and deploy to prod
+    model = model.copy(update={"kind": previous_kind})
+    context.upsert_model(model)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Restate the model and verify that the interval hasn't been expanded because of the old snapshot
+    # with the same version
+    context.plan(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-06",
+        end="2023-01-08",
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    assert (
+        context.fetchdf(
+            "SELECT COUNT(*) AS cnt FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL AND event_date < '2023-01-06'"
+        )["cnt"][0]
+        == 0
+    )
+    plan = context.plan_builder("prod").build()
+    assert not plan.missing_intervals
 
 
 def test_restatement_plan_hourly_with_downstream_daily_restates_correct_intervals(tmp_path: Path):
@@ -7115,3 +7165,74 @@ def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
     gathered_gateways = context.engine_adapters.keys()
     expected_gateways = {"local", "memory", "extra"}
     assert gathered_gateways == expected_gateways
+
+
+def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.TABLE_ONLY
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.TABLE_ONLY
+        for s in prod_env_snapshots.values()
+    )
+
+
+def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
+    sushi_context = Context(
+        paths=copy_to_temp_path("examples/sushi"),
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            default_connection=DuckDBConnectionConfig(),
+            physical_table_naming_convention=TableNamingConvention.HASH_MD5,
+        ),
+    )
+
+    assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.HASH_MD5
+    sushi_context.plan(auto_apply=True)
+
+    adapter = sushi_context.engine_adapter
+
+    snapshot_tables = [
+        dict(catalog=str(r[0]), schema=str(r[1]), table=str(r[2]))
+        for r in adapter.fetchall(
+            "select table_catalog, table_schema, table_name from information_schema.tables where table_type='BASE TABLE'"
+        )
+    ]
+
+    assert all([not t["table"].startswith("sushi") for t in snapshot_tables])
+    assert all([t["table"].startswith("sqlmesh_md5") for t in snapshot_tables])
+
+    prod_env = sushi_context.state_reader.get_environment("prod")
+    assert prod_env
+
+    prod_env_snapshots = sushi_context.state_reader.get_snapshots(prod_env.snapshots)
+
+    assert all(
+        s.table_naming_convention == TableNamingConvention.HASH_MD5
+        for s in prod_env_snapshots.values()
+    )

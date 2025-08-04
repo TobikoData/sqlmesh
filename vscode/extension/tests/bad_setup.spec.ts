@@ -10,15 +10,14 @@ import {
   pipInstall,
   REPO_ROOT,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 
 test('missing LSP dependencies shows install prompt', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   const pythonEnvDir = path.join(tempDir, '.venv')
   const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
   const custom_materializations = path.join(
@@ -59,10 +58,11 @@ test('missing LSP dependencies shows install prompt', async ({
   expect(await page.locator('text=Install').count()).toBeGreaterThanOrEqual(1)
 })
 
-test('lineage, no sqlmesh found', async ({ page, sharedCodeServer }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
+test('lineage, no sqlmesh found', async ({
+  page,
+  sharedCodeServer,
+  tempDir,
+}) => {
   const pythonEnvDir = path.join(tempDir, '.venv')
   const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
 
@@ -91,13 +91,11 @@ test('lineage, no sqlmesh found', async ({ page, sharedCodeServer }) => {
 // Checks that if you have another file open like somewhere else, it still checks the workspace first for a successful context
 // it's very flaky but runs when debugging
 // - the typing in of the file name is very flaky
-test.skip('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({
+test('check that the LSP runs correctly by opening lineage when looking at another file before not in workspace', async ({
   page,
   sharedCodeServer,
+  tempDir,
 }) => {
-  const tempDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'vscode-test-tcloud-'),
-  )
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   const pythonEnvDir = path.join(tempDir, '.venv')
   const pythonDetails = await createVirtualEnvironment(pythonEnvDir)
@@ -132,5 +130,5 @@ test.skip('check that the LSP runs correctly by opening lineage when looking at 
   // Open the SQL file from the other directory
   await openFile(page, sqlFile)
 
-  await page.waitForSelector('text=Loaded SQLMesh context')
+  await waitForLoadedSQLMesh(page)
 })

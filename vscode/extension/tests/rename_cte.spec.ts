@@ -1,23 +1,23 @@
 import { test, expect, Page } from './fixtures'
-import path from 'path'
 import fs from 'fs-extra'
-import os from 'os'
 import {
   findAllReferences,
   openServerPage,
   renameSymbol,
   SUSHI_SOURCE_PATH,
+  waitForLoadedSQLMesh,
 } from './utils'
 import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 async function setupTestEnvironment({
   page,
   sharedCodeServer,
+  tempDir,
 }: {
   page: Page
   sharedCodeServer: any
+  tempDir: string
 }) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vscode-test-sushi-'))
   await fs.copy(SUSHI_SOURCE_PATH, tempDir)
   await createPythonInterpreterSettingsSpecifier(tempDir)
 
@@ -34,12 +34,16 @@ async function setupTestEnvironment({
     .locator('a')
     .click()
   await page.waitForSelector('text=grain')
-  await page.waitForSelector('text=Loaded SQLMesh Context')
+  await waitForLoadedSQLMesh(page)
 }
 
 test.describe('CTE Rename', () => {
-  test('Rename CTE from definition', async ({ page, sharedCodeServer }) => {
-    await setupTestEnvironment({ page, sharedCodeServer })
+  test('Rename CTE from definition', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
+    await setupTestEnvironment({ page, sharedCodeServer, tempDir })
     // Click on the inner CTE definition "current_marketing" (not the outer one)
     await page.locator('text=WITH current_marketing AS').click({
       position: { x: 100, y: 5 },
@@ -58,8 +62,8 @@ test.describe('CTE Rename', () => {
     await page.waitForSelector('text=WITH new_marketing AS')
   })
 
-  test('Rename CTE from usage', async ({ page, sharedCodeServer }) => {
-    await setupTestEnvironment({ page, sharedCodeServer })
+  test('Rename CTE from usage', async ({ page, sharedCodeServer, tempDir }) => {
+    await setupTestEnvironment({ page, sharedCodeServer, tempDir })
     // Click on CTE usage in FROM clause
     await page.locator('text=FROM current_marketing_outer').click({
       position: { x: 80, y: 5 },
@@ -80,8 +84,8 @@ test.describe('CTE Rename', () => {
     await page.waitForSelector('text=FROM updated_marketing_out')
   })
 
-  test('Cancel CTE rename', async ({ page, sharedCodeServer }) => {
-    await setupTestEnvironment({ page, sharedCodeServer })
+  test('Cancel CTE rename', async ({ page, sharedCodeServer, tempDir }) => {
+    await setupTestEnvironment({ page, sharedCodeServer, tempDir })
     // Click on the CTE to rename
     await page.locator('text=current_marketing_outer').first().click()
 
@@ -106,9 +110,10 @@ test.describe('CTE Rename', () => {
 
   test('Rename CTE updates all references', async ({
     page,
+    tempDir,
     sharedCodeServer,
   }) => {
-    await setupTestEnvironment({ page, sharedCodeServer })
+    await setupTestEnvironment({ page, sharedCodeServer, tempDir })
     // Click on the CTE definition
     await page.locator('text=WITH current_marketing AS').click({
       position: { x: 100, y: 5 },
@@ -140,8 +145,12 @@ test.describe('CTE Rename', () => {
     await page.waitForSelector('text=renamed_cte.customer_id != 100')
   })
 
-  test('Rename CTE with preview', async ({ page, sharedCodeServer }) => {
-    await setupTestEnvironment({ page, sharedCodeServer })
+  test('Rename CTE with preview', async ({
+    page,
+    sharedCodeServer,
+    tempDir,
+  }) => {
+    await setupTestEnvironment({ page, sharedCodeServer, tempDir })
     // Click on the CTE to rename
     await page.locator('text=WITH current_marketing AS').click({
       position: { x: 100, y: 5 },

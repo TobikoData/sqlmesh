@@ -11,7 +11,7 @@ import { execAsync } from '../exec'
 import z from 'zod'
 import { ProgressLocation, window } from 'vscode'
 import { IS_WINDOWS } from '../isWindows'
-import { resolveProjectPath } from '../config'
+import { getSqlmeshLspEntryPoint, resolveProjectPath } from '../config'
 import { isSemVerGreaterThanOrEqual } from '../semver'
 
 export interface SqlmeshExecInfo {
@@ -413,15 +413,7 @@ export const ensureSqlmeshLspDependenciesInstalled = async (): Promise<
 export const sqlmeshLspExec = async (): Promise<
   Result<SqlmeshExecInfo, ErrorType>
 > => {
-  const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
   const projectRoot = await getProjectRoot()
-  const envVariables = await getPythonEnvVariables()
-  if (isErr(envVariables)) {
-    return err({
-      type: 'generic',
-      message: envVariables.error,
-    })
-  }
   const resolvedPath = resolveProjectPath(projectRoot)
   if (isErr(resolvedPath)) {
     return err({
@@ -430,6 +422,26 @@ export const sqlmeshLspExec = async (): Promise<
     })
   }
   const workspacePath = resolvedPath.value
+
+  const configuredLSPExec = getSqlmeshLspEntryPoint()
+  if (configuredLSPExec) {
+    traceLog(`Using configured SQLMesh LSP entry point: ${configuredLSPExec.entrypoint} ${configuredLSPExec.args.join(' ')}`)
+    return ok({
+      bin: configuredLSPExec.entrypoint,
+      workspacePath,
+      env: process.env,
+      args: configuredLSPExec.args,
+    })
+  }
+  const sqlmeshLSP = IS_WINDOWS ? 'sqlmesh_lsp.exe' : 'sqlmesh_lsp'
+  const envVariables = await getPythonEnvVariables()
+  if (isErr(envVariables)) {
+    return err({
+      type: 'generic',
+      message: envVariables.error,
+    })
+  }
+
   const interpreterDetails = await getInterpreterDetails()
   traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
   if (interpreterDetails.path) {

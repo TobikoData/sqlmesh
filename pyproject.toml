@@ -11,7 +11,7 @@ dependencies = [
     "click",
     "croniter",
     "duckdb>=0.10.0,!=0.10.3",
-    "dateparser",
+    "dateparser<=1.2.1",
     "hyperscript>=0.1.0",
     "importlib-metadata; python_version<'3.12'",
     "ipywidgets",
@@ -23,7 +23,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=27.1.0",
+    "sqlglot[rs]~=27.6.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -104,7 +104,7 @@ dbt = ["dbt-core<2"]
 dlt = ["dlt"]
 duckdb = []
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
-github = ["PyGithub~=2.5.0"]
+github = ["PyGithub>=2.6.0"]
 llm = ["langchain", "openai"]
 motherduck = ["duckdb>=1.2.0"]
 mssql = ["pymssql"]
@@ -280,9 +280,20 @@ select = [
 ]
 extend-select = ["TID"]
 
+
 [tool.ruff.lint.flake8-tidy-imports]
 banned-module-level-imports = [
     "duckdb",
     "numpy",
     "pandas",
 ]
+
+# Bans imports from sqlmesh.lsp in files outside of sqlmesh/lsp
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlmesh.lsp".msg = "Only files within sqlmesh/lsp can import from sqlmesh.lsp"
+
+[tool.ruff.lint.per-file-ignores]
+# TID251 is used to ignore the import of sqlmesh.lsp in files outside sqlmesh/lsp
+"sqlmesh/lsp/**/*.py" = ["TID251"]
+"tests/lsp/**/*.py" = ["TID251"]
+"benchmarks/lsp*.py" = ["TID251"]

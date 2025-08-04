@@ -1,5 +1,10 @@
 # Browser UI guide
 
+!!! warning
+
+    Browser UI is deprecated. Please use the [VSCode extension](vscode.md) instead.
+
+
 SQLMesh's free, open-source browser user interface (UI) makes it easy to understand, explore, and modify your SQLMesh project.
 
 This page describes the UI's components and how they work.

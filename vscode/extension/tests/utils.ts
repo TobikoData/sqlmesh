@@ -88,6 +88,12 @@ export const openLineageView = async (page: Page) =>
   await runCommand(page, 'Lineage: Focus On View')
 
 /**
+ * Open the problems/diagnostics view in the given window.
+ */
+export const openProblemsView = async (page: Page) =>
+  await runCommand(page, 'View: Focus Problems')
+
+/**
  * Restart the SQLMesh servers
  */
 export const restartSqlmeshServers = async (page: Page) =>
@@ -169,17 +175,19 @@ export const openFile = async (page: Page, file: string): Promise<void> => {
   const maxRetries = 3
   const retryDelay = 3000
 
+  const fileName = path.basename(file)
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       await page.keyboard.press(
         process.platform === 'darwin' ? 'Meta+P' : 'Control+P',
       )
-      await page.waitForSelector('input[aria-label="Search files by name"]', {
-        timeout: 5000,
-      })
+      await page
+        .getByRole('textbox', { name: 'Search files by name' })
+        .waitFor({ state: 'visible', timeout: 5000 })
       await page.keyboard.type(file)
       const commandElement = await page.waitForSelector(
-        `a:has-text("${file}")`,
+        `a:has-text("${fileName}")`,
         { timeout: 5000 },
       )
       await commandElement.click()
@@ -195,6 +203,12 @@ export const openFile = async (page: Page, file: string): Promise<void> => {
     }
   }
 }
+
+/**
+ * Wait for SQLMesh context to be loaded.
+ */
+export const waitForLoadedSQLMesh = (page: Page) =>
+  page.waitForSelector('text=Loaded SQLMesh Context')
 
 /**
  * Go to VSCode page

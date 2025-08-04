@@ -3,6 +3,7 @@ import pathlib
 import re
 from pathlib import Path
 from unittest import mock
+import typing as t
 
 import pytest
 from pytest_mock import MockerFixture
@@ -17,6 +18,7 @@ from sqlmesh.core.config import (
     MotherDuckConnectionConfig,
     BuiltInSchedulerConfig,
     EnvironmentSuffixTarget,
+    TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
 from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
@@ -674,6 +676,65 @@ model_defaults:
     assert config.model_defaults.audits[1][1]["column"].this.this == "id"
     assert type(config.model_defaults.audits[1][1]["threshold"]) == exp.Literal
     assert config.model_defaults.audits[1][1]["threshold"].this == "1000"
+
+
+def test_load_model_defaults_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - SET memory_limit = '10GB'
+        - CREATE TEMP TABLE temp_data AS SELECT 1 as id
+    post_statements:
+        - DROP TABLE IF EXISTS temp_data
+        - ANALYZE @this_model
+        - SET memory_limit = '5GB'
+    on_virtual_update:
+        - UPDATE stats_table SET last_update = CURRENT_TIMESTAMP
+        """
+        )
+
+    config = load_config_from_paths(
+        Config,
+        project_paths=[config_path],
+    )
+
+    assert config.model_defaults.pre_statements is not None
+    assert len(config.model_defaults.pre_statements) == 2
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[0]), exp.Set)
+    assert isinstance(exp.maybe_parse(config.model_defaults.pre_statements[1]), exp.Create)
+
+    assert config.model_defaults.post_statements is not None
+    assert len(config.model_defaults.post_statements) == 3
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[0]), exp.Drop)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[1]), exp.Analyze)
+    assert isinstance(exp.maybe_parse(config.model_defaults.post_statements[2]), exp.Set)
+
+    assert config.model_defaults.on_virtual_update is not None
+    assert len(config.model_defaults.on_virtual_update) == 1
+    assert isinstance(exp.maybe_parse(config.model_defaults.on_virtual_update[0]), exp.Update)
+
+
+def test_load_model_defaults_validation_statements(tmp_path):
+    config_path = tmp_path / "config_model_defaults_statements_wrong.yaml"
+    with open(config_path, "w", encoding="utf-8") as fd:
+        fd.write(
+            """
+model_defaults:
+    dialect: duckdb
+    pre_statements:
+        - 313
+        """
+        )
+
+    with pytest.raises(TypeError, match=r"expected str instance, int found"):
+        config = load_config_from_paths(
+            Config,
+            project_paths=[config_path],
+        )
 
 
 def test_scheduler_config(tmp_path_factory):
@@ -1353,3 +1414,30 @@ SQLMESH__MODEL_DEFAULTS__DIALECT="postgres"
         default_gateway="test_gateway",
         model_defaults=ModelDefaultsConfig(dialect="postgres"),
     )
+
+
+@pytest.mark.parametrize(
+    "convention_str, expected",
+    [
+        (None, TableNamingConvention.SCHEMA_AND_TABLE),
+        ("schema_and_table", TableNamingConvention.SCHEMA_AND_TABLE),
+        ("table_only", TableNamingConvention.TABLE_ONLY),
+        ("hash_md5", TableNamingConvention.HASH_MD5),
+    ],
+)
+def test_physical_table_naming_convention(
+    convention_str: t.Optional[str], expected: t.Optional[TableNamingConvention], tmp_path: Path
+):
+    config_part = f"physical_table_naming_convention: {convention_str}" if convention_str else ""
+    (tmp_path / "config.yaml").write_text(f"""
+gateways:
+  test_gateway:
+    connection:
+      type: duckdb      
+model_defaults:
+  dialect: duckdb
+{config_part}
+    """)
+
+    config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
+    assert config.physical_table_naming_convention == expected

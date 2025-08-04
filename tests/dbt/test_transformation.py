@@ -247,6 +247,24 @@ def test_model_kind():
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
+        incremental_strategy="merge",
+        full_refresh=True,
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=False
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="merge",
+        full_refresh=False,
+    ).model_kind(context) == IncrementalByTimeRangeKind(
+        time_column="foo", dialect="duckdb", forward_only=True, disable_restatement=False
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
         incremental_strategy="append",
         disable_restatement=True,
     ).model_kind(context) == IncrementalByTimeRangeKind(

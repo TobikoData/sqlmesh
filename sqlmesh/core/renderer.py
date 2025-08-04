@@ -215,6 +215,9 @@ class BaseExpressionRenderer:
             try:
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
+                logger.debug(
+                    f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
+                )
                 if rendered_expression.strip():
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 
@@ -520,8 +523,6 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
-        needs_optimization = needs_optimization and self._optimize_query_flag
-
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
         else:
@@ -557,7 +558,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
                 raise
 
-            if needs_optimization:
+            if needs_optimization and self._optimize_query_flag:
                 deps = d.find_tables(
                     query, default_catalog=self._default_catalog, dialect=self._dialect
                 )
