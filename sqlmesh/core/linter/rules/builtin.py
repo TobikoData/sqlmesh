@@ -24,7 +24,7 @@ from sqlmesh.core.linter.rule import (
     CreateFile,
 )
 from sqlmesh.core.linter.definition import RuleSet
-from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.core.model import Model, SqlModel, ExternalModel, ModelKindName
 from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
 
 
@@ -274,7 +274,7 @@ class NoMissingExternalModels(Rule):
         )
 
 
-class CronValidator(Rule):
+class CronIntervalAlignment(Rule):
     """Upstream model has a cron expression with longer intervals than downstream model."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
@@ -290,7 +290,7 @@ class CronValidator(Rule):
                 continue
 
             # Skip model kinds since they don't run on cron schedules
-            skip_kinds = ["EXTERNAL", "EMBEDDED", "SEED"]
+            skip_kinds = [ModelKindName.EXTERNAL, ModelKindName.EMBEDDED, ModelKindName.SEED]
             if upstream_model.kind.name in skip_kinds:
                 continue
 

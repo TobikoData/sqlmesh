@@ -33,7 +33,7 @@ def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
-            "cronvalidator",
+            "cronintervalalignment",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -87,7 +87,7 @@ def test_no_missing_external_models_with_existing_file_ending_in_newline(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
-            "cronvalidator",
+            "cronintervalalignment",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -145,7 +145,7 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
-            "cronvalidator",
+            "cronintervalalignment",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -196,10 +196,10 @@ def test_cron_validator(tmp_path, copy_to_temp_path) -> None:
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
-            "cronvalidator",
+            "cronintervalalignment",
         ],
     ),"""
-    after = """linter=LinterConfig(enabled=True, rules=["cronvalidator"]),"""
+    after = """linter=LinterConfig(enabled=True, rules=["cronintervalalignment"]),"""
     read_file = read_file.replace(before, after)
     assert after in read_file
     with open(sushi_path / "config.py", "w") as f:

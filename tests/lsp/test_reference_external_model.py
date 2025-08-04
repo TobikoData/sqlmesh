@@ -94,7 +94,7 @@ def test_unregistered_external_model_with_schema(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
-            "cronvalidator",
+            "cronintervalalignment",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""

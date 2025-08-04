@@ -75,7 +75,7 @@ Here are all of SQLMesh's built-in linting rules:
 | `noselectstar`               | Stylistic   | The query's top-level selection may not be `SELECT *`, even if SQLMesh can expand the `SELECT *` into individual columns |
 | `nomissingaudits`             | Governance  | SQLMesh did not find any `audits` in the model's configuration to test data quality.                                                 |
 | `nomissingexternalmodels`   | Governance  | All external models must be registered in the external_models.yaml file                                                |
-| `cronvalidator`             | Governance  | Upstream model has a cron expression with longer intervals than downstream model. Example:  step_1(`@weekly`) -> step_2(`@daily`) -> step_3(`*/5 * * * *`). step_2 and step_3 are anchored to step_1's cron and will run on the same schedule as step_1. The fix is to align the schedules where a downstream model's cron is the same or has a longer cron interval than an upstream model's.                                         |
+| `cronintervalalignment`             | Governance  | Upstream model has a cron expression with longer intervals than downstream model. Example:  step_1(`@weekly`) -> step_2(`@daily`) -> step_3(`*/5 * * * *`). step_2 and step_3 are anchored to step_1's cron and will run on the same schedule as step_1. The fix is to align the schedules where a downstream model's cron is the same or has a longer cron interval than an upstream model's.                                         |
 
 ### User-defined rules
 
