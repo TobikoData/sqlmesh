@@ -131,6 +131,7 @@ def test_code_actions_create_file(copy_to_temp_path: t.Callable) -> None:
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""

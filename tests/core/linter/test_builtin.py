@@ -2,6 +2,8 @@ import os
 
 from sqlmesh import Context
 from sqlmesh.core.linter.rule import Position, Range
+from sqlmesh.core.model import load_sql_based_model
+from sqlmesh.core import dialect as d
 
 
 def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
@@ -31,6 +33,7 @@ def test_no_missing_external_models(tmp_path, copy_to_temp_path) -> None:
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -84,6 +87,7 @@ def test_no_missing_external_models_with_existing_file_ending_in_newline(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -141,6 +145,7 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],
     ),"""
     after = """linter=LinterConfig(enabled=True, rules=["nomissingexternalmodels"]),"""
@@ -172,3 +177,57 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
     )
     fix_path = sushi_path / "external_models.yaml"
     assert edit.path == fix_path
+
+
+def test_cron_validator(tmp_path, copy_to_temp_path) -> None:
+    sushi_paths = copy_to_temp_path("examples/sushi")
+    sushi_path = sushi_paths[0]
+
+    # Override the config.py to turn on lint
+    with open(sushi_path / "config.py", "r") as f:
+        read_file = f.read()
+
+    before = """    linter=LinterConfig(
+        enabled=False,
+        rules=[
+            "ambiguousorinvalidcolumn",
+            "invalidselectstarexpansion",
+            "noselectstar",
+            "nomissingaudits",
+            "nomissingowner",
+            "nomissingexternalmodels",
+            "cronvalidator",
+        ],
+    ),"""
+    after = """linter=LinterConfig(enabled=True, rules=["cronvalidator"]),"""
+    read_file = read_file.replace(before, after)
+    assert after in read_file
+    with open(sushi_path / "config.py", "w") as f:
+        f.writelines(read_file)
+
+    # Load the context with the temporary sushi path
+    context = Context(paths=[sushi_path])
+
+    context.load()
+
+    # Create model with shorter cron interval that depends on model with longer interval
+    upstream_model = load_sql_based_model(
+        d.parse("MODEL (name memory.sushi.step_1, cron '@weekly'); SELECT * FROM (SELECT 1)")
+    )
+
+    downstream_model = load_sql_based_model(
+        d.parse(
+            "MODEL (name memory.sushi.step_2, cron '@daily', depends_on ['memory.sushi.step_1']); SELECT * FROM (SELECT 1)"
+        )
+    )
+
+    context.upsert_model(upstream_model)
+    context.upsert_model(downstream_model)
+
+    lints = context.lint_models(raise_on_error=False)
+    assert len(lints) == 1
+    lint = lints[0]
+    assert (
+        lint.violation_msg
+        == 'Upstream model "memory"."sushi"."step_1" has longer cron interval (@weekly) than this model (@daily)'
+    )

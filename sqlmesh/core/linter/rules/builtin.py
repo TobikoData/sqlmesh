@@ -274,4 +274,34 @@ class NoMissingExternalModels(Rule):
         )
 
 
+class CronValidator(Rule):
+    """Upstream model has a cron expression with longer intervals than this model's."""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        placeholder_start_date = "2020-01-01 10:00:00"
+
+        this_model_cron_next = model.cron_next(placeholder_start_date)
+
+        for upstream_model_name in model.depends_on:
+            upstream_model = self.context.get_model(upstream_model_name)
+
+            # Skip if upstream model doesn't exist
+            if upstream_model is None:
+                continue
+
+            # Skip model kinds since they don't run on cron schedules
+            skip_kinds = ["EXTERNAL", "EMBEDDED", "SEED"]
+            if upstream_model.kind.name in skip_kinds:
+                continue
+
+            upstream_model_cron_next = upstream_model.cron_next(placeholder_start_date)
+
+            if upstream_model_cron_next > this_model_cron_next:
+                return self.violation(
+                    f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
+                    f"than this model ({model.cron})"
+                )
+        return None
+
+
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))

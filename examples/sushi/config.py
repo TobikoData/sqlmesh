@@ -49,6 +49,7 @@ config = Config(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],
     ),
 )

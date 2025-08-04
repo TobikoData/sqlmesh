@@ -35,6 +35,7 @@ test.fixme(
             "nomissingaudits",
             "nomissingowner",
             "nomissingexternalmodels",
+            "cronvalidator",
         ],`,
       targetRules,
     )
