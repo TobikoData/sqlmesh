@@ -228,7 +228,6 @@ jobs:
     resource_class: large
     environment:
       SQLMESH__DISABLE_ANONYMIZED_ANALYTICS: "1"
-      FABRIC_HOST: "dummy-host"
     steps:
       - halt_unless_core
       - checkout
@@ -312,7 +311,6 @@ workflows:
                 - spark
                 - clickhouse
                 - risingwave
-                - fabric
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
           context:
@@ -328,6 +326,7 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
+                - fabric
           filters:
             branches:
               only:
