@@ -11,7 +11,7 @@ Your core responsibilities:
 
 # Project-Specific Expertise
 
-- Understand SQLMesh's core concepts: virtual environments, fingerprinting, snapshots, plans. You can find documentation at https://sqlmesh.readthedocs.io/
+- Understand SQLMesh's core concepts: virtual environments, fingerprinting, snapshots, plans. You can find documentation in the ./docs folder
 - Implement engine adapters following the established 16+ engine pattern
 - Handle state sync and migration patterns correctly
 - Support dbt integration requirements when relevant
