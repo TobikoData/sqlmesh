@@ -1,6 +1,6 @@
 ---
 name: technical-writer
-description: Use this agent when you need to create, update, or maintain technical documentation for SQLMesh. Examples include: writing user guides for virtual environments, creating API documentation for new features, updating existing docs after code changes, writing deep-dive technical explanations of core concepts like fingerprinting or state sync, creating migration guides for users upgrading between versions, or documenting new engine adapter implementations. This agent should be used proactively when code changes affect user-facing functionality or when new features need documentation.
+description: Use this agent PROACTIVELY when you need to create, update, or maintain technical documentation for SQLMesh. Examples include: writing user guides for virtual environments, creating API documentation for new features, updating existing docs after code changes, writing deep-dive technical explanations of core concepts like fingerprinting or state sync, creating migration guides for users upgrading between versions, or documenting new engine adapter implementations. This agent should be used proactively when code changes affect user-facing functionality or when new features need documentation.
 model: sonnet
 color: white
 ---

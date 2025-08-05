@@ -4,21 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Agent-Based Development Workflow
 
-SQLMesh development follows a structured agent-based workflow to ensure high code quality and comprehensive documentation:
+Every time the user requests a feature or bug fix, you MUST follow the process below:
 
 ### Development Process
 
-1. **Feature Development & Bug Fixes**: Use the `developer` agent for implementing features and fixing bugs
-2. **Code Review**: After development work, invoke the `code-reviewer` agent to review the implementation
-3. **Iteration**: Use the `developer` agent again to address feedback from the code reviewer
-4. **Repeat**: Continue the developer → code-reviewer cycle until no more feedback remains
-5. **Documentation**: If the feature or bug fix requires documentation updates, invoke the `technical-writer` agent
+1. **Understanding The Task**: Use the `developer` agent to understand what the user is asking for and to read GitHub issues
+2. **Feature Development & Bug Fixes**: Use the `developer` agent for implementing features and fixing bugs
+3. **Code Review**: After development work, invoke the `code-reviewer` agent to review the implementation
+4. **Iteration**: Use the `developer` agent again to address feedback from the code reviewer
+5. **Repeat**: Continue the developer → code-reviewer cycle until no more feedback remains
+6. **Documentation**: If the feature or bug fix requires documentation updates, invoke the `technical-writer` agent
 
 IMPORTANT: Make sure to share the project overview, architecture overview, and other concepts outlined below with the agent when it is invoked.
 
 ### Agent Responsibilities
 
 **Developer Agent**:
+- Understands a feature request or a reported issue
 - Implements new features following SQLMesh's architecture patterns
 - Fixes bugs with proper understanding of the codebase
 - Writes comprehensive tests following SQLMesh's testing conventions
