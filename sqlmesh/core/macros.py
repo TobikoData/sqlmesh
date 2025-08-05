@@ -656,7 +656,7 @@ def _norm_var_arg_lambda(
         expressions = (
             item.expressions
             if isinstance(item, (exp.Array, exp.Tuple))
-            else item.this
+            else [item.this]
             if isinstance(item, exp.Paren)
             else item
         )
