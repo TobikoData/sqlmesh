@@ -49,7 +49,6 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     SignalEvalError,
 )
-from sqlmesh.utils.pydantic import serialize_expressions
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
@@ -64,27 +63,26 @@ SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
 class SignalListener:
     def on_signal_register(
         self,
-        snapshot_id: SnapshotId,
-        signals: t.Dict[str, t.Dict[str, str]],
+        snapshots: t.List[Snapshot],
     ) -> None:
         pass
 
     def on_signal_start(
         self,
-        snapshot_id: SnapshotId,
+        snapshot: Snapshot,
         signal_name: str,
         signal_index: int,
         intervals: Intervals,
-        signal_kwargs: t.Dict[str, str],
+        signal_kwargs: t.Dict[str, t.Optional[exp.Expression]],
     ) -> None:
         pass
 
     def on_signal_end(
         self,
-        snapshot_id: SnapshotId,
+        snapshot: Snapshot,
         signal_name: str,
         signal_index: int,
-        signal_kwargs: t.Dict[str, str],
+        signal_kwargs: t.Dict[str, t.Optional[exp.Expression]],
         intervals: Intervals,
         ready_intervals: Intervals,
         error: t.Optional[Exception] = None,
@@ -339,6 +337,7 @@ class Scheduler:
             )
             for snapshot, intervals in merged_intervals.items()
         }
+        self.signal_listener.on_signal_register(list(merged_intervals.keys()))
         snapshot_batches = {}
         all_unready_intervals: t.Dict[str, set[Interval]] = {}
         for snapshot_id in dag:
@@ -800,16 +799,6 @@ class Scheduler:
         if not (signals and signals.signals_to_kwargs):
             return intervals
 
-        signals_to_serialized_kwargs = {
-            signal_name: serialize_expressions(kwargs)
-            for signal_name, kwargs in signals.signals_to_kwargs.items()
-        }
-
-        self.signal_listener.on_signal_register(
-            snapshot_id=snapshot.snapshot_id,
-            signals=signals_to_serialized_kwargs,
-        )
-
         self.console.start_signal_progress(
             snapshot,
             self.default_catalog,
@@ -823,11 +812,11 @@ class Scheduler:
             signal_start_ts = time.perf_counter()
 
             self.signal_listener.on_signal_start(
-                snapshot_id=snapshot.snapshot_id,
+                snapshot=snapshot,
                 signal_name=signal_name,
                 signal_index=signal_idx,
                 intervals=intervals_to_check,
-                signal_kwargs=signals_to_serialized_kwargs[signal_name],
+                signal_kwargs=kwargs,
             )
 
             error = None
@@ -849,10 +838,10 @@ class Scheduler:
             finally:
                 ready_intervals = merge_intervals(intervals)
                 self.signal_listener.on_signal_end(
-                    snapshot_id=snapshot.snapshot_id,
+                    snapshot=snapshot,
                     signal_name=signal_name,
                     signal_index=signal_idx,
-                    signal_kwargs=signals_to_serialized_kwargs[signal_name],
+                    signal_kwargs=kwargs,
                     intervals=intervals_to_check,
                     ready_intervals=ready_intervals,
                     error=error,

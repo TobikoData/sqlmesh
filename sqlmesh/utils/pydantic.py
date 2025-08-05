@@ -60,13 +60,6 @@ def _expression_encoder(e: exp.Expression) -> str:
     return e.meta.get("sql") or e.sql(dialect=e.meta.get("dialect"))
 
 
-def serialize_expressions(kwargs: t.Dict[str, t.Optional[exp.Expression]]) -> t.Dict[str, str]:
-    serialized_kwargs: t.Dict[str, str] = {}
-    for key, value in kwargs.items():
-        serialized_kwargs[key] = _expression_encoder(value) if value else str(value)
-    return serialized_kwargs
-
-
 AuditQueryTypes = t.Union[exp.Query, d.JinjaQuery]
 ModelQueryTypes = t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
 
