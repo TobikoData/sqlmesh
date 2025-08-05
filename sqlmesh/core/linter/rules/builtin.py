@@ -291,7 +291,7 @@ class CronIntervalAlignment(Rule):
                 continue
 
             # Skip model kinds since they don't run on cron schedules
-            skip_kinds = [ModelKindName.EXTERNAL, ModelKindName.EMBEDDED, ModelKindName.SEED]
+            skip_kinds = {ModelKindName.EXTERNAL, ModelKindName.EMBEDDED, ModelKindName.SEED}
             if upstream_model.kind.name in skip_kinds:
                 continue
 

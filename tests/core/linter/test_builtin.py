@@ -179,7 +179,7 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
     assert edit.path == fix_path
 
 
-def test_cron_validator(tmp_path, copy_to_temp_path) -> None:
+def test_cron_interval_alignment(tmp_path, copy_to_temp_path) -> None:
     sushi_paths = copy_to_temp_path("examples/sushi")
     sushi_path = sushi_paths[0]
 
@@ -231,3 +231,57 @@ def test_cron_validator(tmp_path, copy_to_temp_path) -> None:
         lint.violation_msg
         == 'Upstream model "memory"."sushi"."step_1" has longer cron interval (@weekly) than this model (@daily)'
     )
+
+
+def test_cron_interval_alignment_valid_upstream(tmp_path, copy_to_temp_path) -> None:
+    sushi_paths = copy_to_temp_path("examples/sushi")
+    sushi_path = sushi_paths[0]
+
+    # Override the config.py to turn on lint
+    with open(sushi_path / "config.py", "r") as f:
+        read_file = f.read()
+
+    before = """    linter=LinterConfig(
+        enabled=False,
+        rules=[
+            "ambiguousorinvalidcolumn",
+            "invalidselectstarexpansion",
+            "noselectstar",
+            "nomissingaudits",
+            "nomissingowner",
+            "nomissingexternalmodels",
+            "cronintervalalignment",
+        ],
+    ),"""
+    after = """linter=LinterConfig(enabled=True, rules=["cronintervalalignment"]),"""
+    read_file = read_file.replace(before, after)
+    assert after in read_file
+    with open(sushi_path / "config.py", "w") as f:
+        f.writelines(read_file)
+
+    # Load the context with the temporary sushi path
+    context = Context(paths=[sushi_path])
+
+    context.load()
+
+    # Create model with shorter cron interval that depends on model with longer interval
+    upstream_model_a = load_sql_based_model(
+        d.parse("MODEL (name memory.sushi.step_a, cron '@weekly'); SELECT * FROM (SELECT 1)")
+    )
+
+    upstream_model_b = load_sql_based_model(
+        d.parse("MODEL (name memory.sushi.step_b, cron '@hourly'); SELECT * FROM (SELECT 1)")
+    )
+
+    downstream_model = load_sql_based_model(
+        d.parse(
+            "MODEL (name memory.sushi.step_c, cron '@daily', depends_on ['memory.sushi.step_1', 'memory.sushi.step_1_b']); SELECT * FROM (SELECT 1)"
+        )
+    )
+
+    context.upsert_model(upstream_model_a)
+    context.upsert_model(upstream_model_b)
+    context.upsert_model(downstream_model)
+
+    lints = context.lint_models(raise_on_error=False)
+    assert len(lints) == 0
