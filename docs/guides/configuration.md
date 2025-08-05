@@ -322,7 +322,7 @@ SQLMesh creates schemas, physical tables, and views in the data warehouse/engine
 
 The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override *where* SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options.
 
-You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option. 
+You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option.
 
 These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
@@ -767,7 +767,9 @@ Even though the second change should have been a metadata change (thus not requi
 
 The `gateways` configuration defines how SQLMesh should connect to the data warehouse, state backend, and scheduler. These options are in the [gateway](../reference/configuration.md#gateway) section of the configuration reference page.
 
-Each gateway key represents a unique gateway name and configures its connections. For example, this configures the `my_gateway` gateway:
+Each gateway key represents a unique gateway name and configures its connections. **Gateway names are case-insensitive** - SQLMesh automatically normalizes gateway names to lowercase during configuration validation. This means you can use any case in your configuration files (e.g., `MyGateway`, `mygateway`, `MYGATEWAY`) and they will all work correctly.
+
+For example, this configures the `my_gateway` gateway:
 
 === "YAML"
 
