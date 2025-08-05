@@ -14,3 +14,6 @@ custom_full_with_custom_kind = "custom_materializations.custom_kind:CustomFullWi
 
 [tool.setuptools.packages.find]
 include = ["custom_materializations"]
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0"
