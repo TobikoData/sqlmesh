@@ -275,7 +275,7 @@ def test_cron_interval_alignment_valid_upstream(tmp_path, copy_to_temp_path) -> 
 
     downstream_model = load_sql_based_model(
         d.parse(
-            "MODEL (name memory.sushi.step_c, cron '@daily', depends_on ['memory.sushi.step_1', 'memory.sushi.step_1_b']); SELECT * FROM (SELECT 1)"
+            "MODEL (name memory.sushi.step_c, cron '@daily', depends_on ['memory.sushi.step_1', 'memory.sushi.step_b']); SELECT * FROM (SELECT 1)"
         )
     )
 
