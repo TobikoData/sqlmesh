@@ -44,6 +44,10 @@ from tests.core.engine_adapter.integration import (
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class PlanResults(PydanticModel):
     plan: Plan
@@ -1920,6 +1924,7 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
                         unique_key item_id,
                         batch_size 1
                     ),
+                    dialect {ctx.dialect},
                     {table_format}
                     start '2020-01-01',
                     end '2020-01-07',

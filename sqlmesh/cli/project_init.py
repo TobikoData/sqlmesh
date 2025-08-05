@@ -7,7 +7,6 @@ from rich.console import Console
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
-from datetime import datetime
 
 from sqlmesh.core.config.connection import (
     CONNECTION_CONFIG_TO_TYPE,
@@ -161,7 +160,7 @@ class ExampleObjects:
     python_macros: t.Dict[str, str]
 
 
-def _gen_example_objects(schema_name: str, start_year: int) -> ExampleObjects:
+def _gen_example_objects(schema_name: str, dialect: str) -> ExampleObjects:
     sql_models: t.Dict[str, str] = {}
     python_models: t.Dict[str, str] = {}
     seeds: t.Dict[str, str] = {}
@@ -193,9 +192,10 @@ GROUP BY item_id
     sql_models[incremental_model_name] = f"""MODEL (
   name {incremental_model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column event_date
+    time_column event_date,
+    {"partition_by_time_column false" if dialect == "doris" else ""}
   ),
-  start '{start_year}-01-01',
+  start '2020-01-01',
   cron '@daily',
   grain (id, event_date)
 );
@@ -224,14 +224,14 @@ WHERE
 );
   """
 
-    seeds["seed_data"] = f"""id,item_id,event_date
-1,2,{start_year}-01-01
-2,1,{start_year}-01-01
-3,3,{start_year}-01-03
-4,1,{start_year}-01-04
-5,1,{start_year}-01-05
-6,1,{start_year}-01-06
-7,1,{start_year}-01-07
+    seeds["seed_data"] = """id,item_id,event_date
+1,2,2020-01-01
+2,1,2020-01-01
+3,3,2020-01-03
+4,1,2020-01-04
+5,1,2020-01-05
+6,1,2020-01-06
+7,1,2020-01-07
 """
 
     audits["assert_positive_order_ids"] = """AUDIT (
@@ -319,7 +319,7 @@ def init_example_project(
     settings = None
     start = None
     if engine_type and template == ProjectTemplate.DLT:
-        project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
+        project_dialect = dialect if dialect else DIALECT_TO_TYPE.get(engine_type)
         if pipeline and project_dialect:
             dlt_models, settings, start = generate_dlt_models_and_settings(
                 pipeline_name=pipeline, dialect=project_dialect, dlt_path=dlt_path
@@ -328,9 +328,6 @@ def init_example_project(
             raise SQLMeshError(
                 "Please provide a DLT pipeline with the `--dlt-pipeline` flag to generate a SQLMesh project from DLT."
             )
-
-        if engine_type == "doris":
-            start = datetime(datetime.now().year, 1, 1).strftime("%Y-%m-%d")
 
     _create_config(config_path, engine_type, dialect, settings, start, template, cli_mode)
     if template == ProjectTemplate.DBT:
@@ -344,7 +341,10 @@ def init_example_project(
         )
         return config_path
 
-    example_objects = _gen_example_objects(schema_name=schema_name, start_year=datetime.now().year)
+    example_objects = _gen_example_objects(
+        schema_name=schema_name,
+        dialect=dialect if dialect else DIALECT_TO_TYPE.get(engine_type, "duckdb"),
+    )
 
     if template != ProjectTemplate.EMPTY:
         _create_object_files(models_path, example_objects.sql_models, "sql")

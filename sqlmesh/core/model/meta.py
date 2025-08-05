@@ -48,6 +48,10 @@ if t.TYPE_CHECKING:
 
 FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
@@ -475,12 +479,9 @@ class ModelMeta(_Node):
             and self.unique_key
             and self.dialect == "doris"
         ):
-            # Convert unique_key expressions to a format suitable for table_properties
             if len(self.unique_key) == 1:
-                # Single column key
                 properties["unique_key"] = self.unique_key[0]
             else:
-                # Multiple column key - create a tuple expression
                 properties["unique_key"] = exp.Tuple(expressions=self.unique_key)
 
         return properties
