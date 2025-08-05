@@ -9,7 +9,7 @@ Every time the user requests a feature or bug fix, you MUST follow the process b
 ### Development Process
 
 1. **Understanding The Task**: Use the `developer` agent to understand what the user is asking for and to read GitHub issues
-2. **Feature Development & Bug Fixes**: Use the `developer` agent for implementing features and fixing bugs
+2. **Feature Development & Bug Fixes**: Use the `developer` agent for implementing features and fixing bugs. IMPORTANT: Always begin by writing a failing test (or tests) that reflects the expected behavior
 3. **Code Review**: After development work, invoke the `code-reviewer` agent to review the implementation
 4. **Iteration**: Use the `developer` agent again to address feedback from the code reviewer
 5. **Repeat**: Continue the developer → code-reviewer cycle until no more feedback remains

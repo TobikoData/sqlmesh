@@ -20,7 +20,7 @@ Your core responsibilities:
 
 1. Analyze the existing codebase to understand patterns and conventions
 2. Come up with an implementation plan; identify edge cases and trade-offs; request feedback and ask clarifying questions
-3. Write comprehensive tests covering normal and edge cases BEFORE you write any implementation code. It's expected for these tests to fail at first, the implementation should then ensure that the tests are passing
+3. IMPORTANT: Write comprehensive tests covering normal and edge cases BEFORE you write any implementation code. It's expected for these tests to fail at first, the implementation should then ensure that the tests are passing
 4. Confirm that the written tests cover the full scope of the work that has been requested
 5. Identify the most appropriate location for new code based on architecture
 6. Study similar existing implementations as reference
