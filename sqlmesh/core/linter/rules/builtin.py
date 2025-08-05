@@ -283,7 +283,6 @@ class CronIntervalAlignment(Rule):
         this_model_cron_next = model.cron_next(placeholder_start_date)
 
         violations = []
-        has_valid_upstream = False
         for upstream_model_name in model.depends_on:
             upstream_model = self.context.get_model(upstream_model_name)
 
@@ -307,10 +306,7 @@ class CronIntervalAlignment(Rule):
                     )
                 )
             elif upstream_model_cron_next <= this_model_cron_next:
-                has_valid_upstream = True
-                break
-        if has_valid_upstream:
-            return None
+                return None
         return violations
 
 
