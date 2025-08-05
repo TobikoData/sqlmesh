@@ -1947,6 +1947,7 @@ def test_incremental_by_unique_key_model_when_matched(ctx: TestContext):
                     kind INCREMENTAL_BY_UNIQUE_KEY (
                         unique_key item_id,
                         batch_size 1,
+                        merge_filter source.event_date > target.event_date,
                         when_matched WHEN MATCHED THEN UPDATE SET target.value = source.value, target.event_date = source.event_date
                     ),
                     {table_format}
@@ -1968,8 +1969,17 @@ def test_incremental_by_unique_key_model_when_matched(ctx: TestContext):
 
         test_model = context.get_model(f"{schema}.test_model_when_matched")
 
-        # Verify that the model has the when_matched clause configured
+        # Verify that the model has the when_matched clause and merge_filter
         assert test_model.kind.when_matched is not None
+        assert (
+            test_model.kind.when_matched.sql()
+            == '(WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."value" = "__MERGE_SOURCE__"."value", "__MERGE_TARGET__"."event_date" = "__MERGE_SOURCE__"."event_date")'
+        )
+        assert test_model.merge_filter is not None
+        assert (
+            test_model.merge_filter.sql()
+            == '"__MERGE_SOURCE__"."event_date" > "__MERGE_TARGET__"."event_date"'
+        )
 
         actual_df = (
             ctx.get_current_data(test_model.fqn).sort_values(by="item_id").reset_index(drop=True)
