@@ -277,11 +277,13 @@ class NoMissingExternalModels(Rule):
 class CronIntervalAlignment(Rule):
     """Upstream model has a cron expression with longer intervals than downstream model."""
 
-    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+    def check_model(self, model: Model) -> t.Optional[t.List[RuleViolation]]:
         placeholder_start_date = "2020-01-01 10:00:00"
 
         this_model_cron_next = model.cron_next(placeholder_start_date)
 
+        violations = []
+        has_valid_upstream = False
         for upstream_model_name in model.depends_on:
             upstream_model = self.context.get_model(upstream_model_name)
 
@@ -297,11 +299,19 @@ class CronIntervalAlignment(Rule):
             upstream_model_cron_next = upstream_model.cron_next(placeholder_start_date)
 
             if upstream_model_cron_next > this_model_cron_next:
-                return self.violation(
-                    f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
-                    f"than this model ({model.cron})"
+                violations.append(
+                    RuleViolation(
+                        rule=self,
+                        violation_msg=f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
+                        f"than this model ({model.cron})",
+                    )
                 )
-        return None
+            elif upstream_model_cron_next <= this_model_cron_next:
+                has_valid_upstream = True
+                break
+        if has_valid_upstream:
+            return None
+        return violations
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
