@@ -406,7 +406,7 @@ def function_with_custom_decorator():
         "SQLGLOT_META": Executable.value("sqlglot.meta"),
     }
 
-    assert all(is_metadata is None for (_, is_metadata) in env.values())
+    assert all(not is_metadata for (_, is_metadata) in env.values())
     assert serialized_env == expected_env
 
     # Annotate the entrypoint as "metadata only" to show how it propagates

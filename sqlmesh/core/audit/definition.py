@@ -438,13 +438,15 @@ def load_audit(
 
     extra_kwargs: t.Dict[str, t.Any] = {}
     if is_standalone:
-        jinja_macro_refrences, used_variables = extract_macro_references_and_variables(
+        jinja_macro_refrences, referenced_variables = extract_macro_references_and_variables(
             *(gen(s) for s in statements),
             gen(query),
         )
         jinja_macros = (jinja_macros or JinjaMacroRegistry()).trim(jinja_macro_refrences)
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            referenced_variables.update(
+                extract_macro_references_and_variables(jinja_macro.definition)[1]
+            )
 
         extra_kwargs["jinja_macros"] = jinja_macros
         extra_kwargs["python_env"] = make_python_env(
@@ -453,7 +455,7 @@ def load_audit(
             module_path,
             macros or macro.get_registry(),
             variables=variables,
-            used_variables=used_variables,
+            referenced_variables=referenced_variables,
         )
         extra_kwargs["default_catalog"] = default_catalog
         if project is not None:
