@@ -2,6 +2,40 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Agent-Based Development Workflow
+
+SQLMesh development follows a structured agent-based workflow to ensure high code quality and comprehensive documentation:
+
+### Development Process
+
+1. **Feature Development & Bug Fixes**: Use the `developer` agent for implementing features and fixing bugs
+2. **Code Review**: After development work, invoke the `code-reviewer` agent to review the implementation
+3. **Iteration**: Use the `developer` agent again to address feedback from the code reviewer
+4. **Repeat**: Continue the developer → code-reviewer cycle until no more feedback remains
+5. **Documentation**: If the feature or bug fix requires documentation updates, invoke the `technical-writer` agent
+
+IMPORTANT: Make sure to share the project overview, architecture overview, and other concepts outlined below with the agent when it is invoked.
+
+### Agent Responsibilities
+
+**Developer Agent**:
+- Implements new features following SQLMesh's architecture patterns
+- Fixes bugs with proper understanding of the codebase
+- Writes comprehensive tests following SQLMesh's testing conventions
+- Follows established code style and conventions
+
+**Code-Reviewer Agent**:
+- Reviews implementation for quality and architectural compliance
+- Identifies potential issues, edge cases, and improvements
+- Ensures adherence to SQLMesh patterns and best practices
+- Validates test coverage and quality
+
+**Technical-Writer Agent**:
+- Creates and updates user-facing documentation
+- Writes API documentation for new features
+- Updates existing docs after code changes
+- Creates migration guides and deep-dive technical explanations
+
 ## Project Overview
 
 SQLMesh is a next-generation data transformation framework that enables:
@@ -18,8 +52,8 @@ SQLMesh is a next-generation data transformation framework that enables:
 ### Environment setup
 ```bash
 # Create and activate a Python virtual environment (Python >= 3.9, < 3.13)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source ./.venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install development dependencies
 make install-dev
@@ -99,27 +133,6 @@ make ui-down   # Stop UI
 
 4. **Intervals**: Time-based partitioning system for incremental models, tracking what data has been processed.
 
-## Testing Philosophy
-
-- Tests are marked with pytest markers:
-  - **Type markers**: `fast`, `slow`, `docker`, `remote`, `cicdonly`, `isolated`, `registry_isolation`
-  - **Domain markers**: `cli`, `dbt`, `github`, `jupyter`, `web`
-  - **Engine markers**: `engine`, `athena`, `bigquery`, `clickhouse`, `databricks`, `duckdb`, `motherduck`, `mssql`, `mysql`, `postgres`, `redshift`, `snowflake`, `spark`, `trino`, `risingwave`
-- Default to `fast` tests during development
-- Engine tests use real connections when available, mocks otherwise
-- The `sushi` example project is used extensively in tests
-- Use `DuckDBMetadata` helper for validating table metadata in tests
-- Tests run in parallel by default (`pytest -n auto`)
-
-## Code Style Guidelines
-
-- Python: Black formatting, isort for imports, mypy for type checking, Ruff for linting
-- TypeScript/React: ESLint + Prettier configuration
-- SQL: SQLGlot handles parsing/formatting
-- All style checks run via `make style`
-- Pre-commit hooks enforce all style rules automatically
-- Important: Some modules (duckdb, numpy, pandas) are banned at module level to prevent import-time side effects
-
 ## Important Files
 
 - `sqlmesh/core/context.py`: Main orchestration class
@@ -127,18 +140,6 @@ make ui-down   # Stop UI
 - `web/server/main.py`: Web UI backend entry point
 - `web/client/src/App.tsx`: Web UI frontend entry point
 - `vscode/extension/src/extension.ts`: VSCode extension entry point
-
-## Common Pitfalls
-
-1. **Engine Tests**: Many tests require specific database credentials or Docker. Check test markers before running.
-
-2. **Path Handling**: Be careful with Windows paths - use `pathlib.Path` for cross-platform compatibility.
-
-3. **State Management**: Understanding the state sync mechanism is crucial for debugging environment issues.
-
-4. **Snapshot Versioning**: Changes to model logic create new versions - this is by design for safe deployments.
-
-5. **Module Imports**: Avoid importing duckdb, numpy, or pandas at module level - these are banned by Ruff to prevent long load times in cases where the libraries aren't used.
 
 ## GitHub CI/CD Bot Architecture
 
@@ -282,7 +283,7 @@ engine_adapter.drop_table(table_name)
 1. Version comparison (local vs remote schema)
 2. Backup creation of state tables
 3. Sequential migration execution (numerical order)
-4. Snapshot fingerprint recalculation if needed  
+4. Snapshot fingerprint recalculation if needed
 5. Environment updates with new snapshot references
 
 ## dbt Integration
