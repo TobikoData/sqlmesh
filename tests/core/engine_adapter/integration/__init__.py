@@ -680,6 +680,9 @@ class TestContext:
             except Exception:
                 pass
             self.engine_adapter.cursor.connection.autocommit(False)
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog creation functionality
+            self.engine_adapter.create_catalog(catalog_name)
         elif self.dialect == "snowflake":
             self.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
         elif self.dialect == "duckdb":
@@ -696,6 +699,9 @@ class TestContext:
             return  # bigquery cannot create/drop catalogs
         if self.dialect == "databricks":
             self.engine_adapter.execute(f"DROP CATALOG IF EXISTS {catalog_name} CASCADE")
+        elif self.dialect == "fabric":
+            # Use the engine adapter's built-in catalog dropping functionality
+            self.engine_adapter.drop_catalog(catalog_name)
         else:
             self.engine_adapter.execute(f'DROP DATABASE IF EXISTS "{catalog_name}"')
 

@@ -2253,7 +2253,10 @@ def test_table_diff_grain_check_single_key(ctx: TestContext):
     src_table = ctx.table("source")
     target_table = ctx.table("target")
 
-    columns_to_types = {"key1": exp.DataType.build("int"), "value": exp.DataType.build("varchar")}
+    columns_to_types = {
+        "key1": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+    }
 
     ctx.engine_adapter.create_table(src_table, columns_to_types)
     ctx.engine_adapter.create_table(target_table, columns_to_types)

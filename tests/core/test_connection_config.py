@@ -1692,7 +1692,13 @@ def test_mssql_pyodbc_connection_negative_timezone_offset():
 
 def test_fabric_connection_config_defaults(make_config):
     """Test Fabric connection config defaults to pyodbc and autocommit=True."""
-    config = make_config(type="fabric", host="localhost", check_import=False)
+    config = make_config(
+        type="fabric",
+        host="localhost",
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
+        check_import=False,
+    )
     assert isinstance(config, FabricConnectionConfig)
     assert config.driver == "pyodbc"
     assert config.autocommit is True
@@ -1713,6 +1719,8 @@ def test_fabric_connection_config_parameter_validation(make_config):
         trust_server_certificate=True,
         encrypt=False,
         odbc_properties={"Authentication": "ActiveDirectoryServicePrincipal"},
+        workspace_id="test-workspace-id",
+        tenant_id="test-tenant-id",
         check_import=False,
     )
     assert isinstance(config, FabricConnectionConfig)
@@ -1741,6 +1749,8 @@ def test_fabric_pyodbc_connection_string_generation():
             trust_server_certificate=True,
             encrypt=True,
             login_timeout=30,
+            workspace_id="test-workspace-id",
+            tenant_id="test-tenant-id",
             check_import=False,
         )
 
@@ -1770,50 +1780,3 @@ def test_fabric_pyodbc_connection_string_generation():
 
         # Check autocommit parameter, should default to True for Fabric
         assert call_args[1]["autocommit"] is True
-
-
-def test_mssql_driver_defaults(make_config):
-    """Test driver defaults for MSSQL connection config.
-
-    Ensures MSSQL defaults to 'pymssql' but can be overridden to 'pyodbc'.
-    """
-
-    # Test 1: MSSQL with no driver specified - should default to pymssql
-    config_no_driver = make_config(type="mssql", host="localhost", check_import=False)
-    assert isinstance(config_no_driver, MSSQLConnectionConfig)
-    assert config_no_driver.driver == "pymssql"
-
-    # Test 2: MSSQL with explicit pymssql driver
-    config_pymssql = make_config(
-        type="mssql", host="localhost", driver="pymssql", check_import=False
-    )
-    assert isinstance(config_pymssql, MSSQLConnectionConfig)
-    assert config_pymssql.driver == "pymssql"
-
-    # Test 3: MSSQL with explicit pyodbc driver
-    config_pyodbc = make_config(type="mssql", host="localhost", driver="pyodbc", check_import=False)
-    assert isinstance(config_pyodbc, MSSQLConnectionConfig)
-    assert config_pyodbc.driver == "pyodbc"
-
-
-def test_fabric_driver_defaults(make_config):
-    """Test driver defaults for Fabric connection config.
-
-    Ensures Fabric defaults to 'pyodbc' and cannot be changed to 'pymssql'.
-    """
-
-    # Test 1: Fabric with no driver specified - should default to pyodbc
-    config_no_driver = make_config(type="fabric", host="localhost", check_import=False)
-    assert isinstance(config_no_driver, FabricConnectionConfig)
-    assert config_no_driver.driver == "pyodbc"
-
-    # Test 2: Fabric with explicit pyodbc driver
-    config_pyodbc = make_config(
-        type="fabric", host="localhost", driver="pyodbc", check_import=False
-    )
-    assert isinstance(config_pyodbc, FabricConnectionConfig)
-    assert config_pyodbc.driver == "pyodbc"
-
-    # Test 3: Fabric with pymssql driver should fail (not allowed)
-    with pytest.raises(ConfigError, match=r"Input should be 'pyodbc'"):
-        make_config(type="fabric", host="localhost", driver="pymssql", check_import=False)

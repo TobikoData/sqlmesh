@@ -1529,14 +1529,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
         if not isinstance(data, dict):
             return data
 
-        # Get the default driver for this specific class
-        default_driver = "pymssql"
-        if hasattr(cls, "model_fields") and "driver" in cls.model_fields:
-            field_info = cls.model_fields["driver"]
-            if hasattr(field_info, "default") and field_info.default is not None:
-                default_driver = field_info.default
-
-        driver = data.get("driver", default_driver)
+        driver = data.get("driver", "pymssql")
 
         # Define the mapping of driver to import module and extra name
         driver_configs = {"pymssql": ("pymssql", "mssql"), "pyodbc": ("pyodbc", "mssql-odbc")}
@@ -1715,6 +1708,8 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
     DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
     driver: t.Literal["pyodbc"] = "pyodbc"
+    workspace_id: str
+    tenant_id: str
     autocommit: t.Optional[bool] = True
 
     @property
@@ -1727,7 +1722,11 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {
             "database": self.database,
-            "catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY,
+            "catalog_support": CatalogSupport.FULL_SUPPORT,
+            "workspace_id": self.workspace_id,
+            "tenant_id": self.tenant_id,
+            "user": self.user,
+            "password": self.password,
         }
 
 
