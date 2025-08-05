@@ -55,6 +55,7 @@ from sqlmesh.core.model import (
     create_seed_model,
     create_sql_model,
     load_sql_based_model,
+    load_sql_based_models,
     model,
 )
 from sqlmesh.core.model.common import parse_expression
@@ -11094,5 +11095,63 @@ def test_render_query_optimize_query_false(assert_exp_eq, sushi_context):
         ORDER BY
           "revenue" DESC
         LIMIT 10
+        """,
+    )
+
+
+def test_each_macro_with_paren_expression_arg(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name dataset.@table_name,
+            kind VIEW,
+            blueprints (
+                (
+                    table_name := model1,
+                    event_columns := (
+                        'value' AS property1,
+                        'value' AS property2
+                    )
+                ),
+                (
+                    table_name := model2,
+                    event_columns := (
+                        'value' AS property1
+                    )
+                )
+            ),
+        );
+
+        SELECT @EACH(@event_columns, x -> x)
+        """
+    )
+
+    models = load_sql_based_models(expressions, lambda _: {})
+
+    # Should generate 2 models from the blueprints
+    assert len(models) == 2
+
+    # Get the models sorted by name for consistent testing
+    model1 = next(m for m in models if "model1" in m.name)
+    model2 = next(m for m in models if "model2" in m.name)
+
+    # Verify model names
+    assert model1.name == "dataset.model1"
+    assert model2.name == "dataset.model2"
+
+    assert_exp_eq(
+        model1.render_query(),
+        """
+        SELECT
+          'value' AS "property1",
+          'value' AS "property2"
+        """,
+    )
+
+    assert_exp_eq(
+        model2.render_query(),
+        """
+        SELECT
+          'value' AS "property1"
         """,
     )
