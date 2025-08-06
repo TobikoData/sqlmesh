@@ -1309,10 +1309,17 @@ def test_delete_expired_snapshots_batching(
         snapshot_b.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
-        SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
-        SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
-    ]
+    deleted_snapshots = state_sync.delete_expired_snapshots()
+    assert len(deleted_snapshots) == 2
+
+    assert (
+        SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False)
+        in deleted_snapshots
+    )
+    assert (
+        SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False)
+        in deleted_snapshots
+    )
 
     assert not state_sync.get_snapshots(all_snapshots)
 
