@@ -32,12 +32,20 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        # Store the desired catalog for dynamic switching
-        self._target_catalog: t.Optional[str] = None
         # Store the original connection factory for wrapping
         self._original_connection_factory = self._connection_pool._connection_factory  # type: ignore
         # Replace the connection factory with our custom one
         self._connection_pool._connection_factory = self._create_fabric_connection  # type: ignore
+
+    @property
+    def _target_catalog(self) -> t.Optional[str]:
+        """Thread-local target catalog storage."""
+        return self._connection_pool.get_attribute("target_catalog")
+
+    @_target_catalog.setter
+    def _target_catalog(self, value: t.Optional[str]) -> None:
+        """Thread-local target catalog storage."""
+        self._connection_pool.set_attribute("target_catalog", value)
 
     def _create_fabric_connection(self) -> t.Any:
         """Custom connection factory that uses the target catalog if set."""
@@ -359,8 +367,14 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         # Set the target catalog for our custom connection factory
         self._target_catalog = catalog_name
 
+        # Save the target catalog before closing (close() clears thread-local storage)
+        target_catalog = self._target_catalog
+
         # Close all existing connections since Fabric requires reconnection for catalog changes
         self.close()
+
+        # Restore the target catalog after closing
+        self._target_catalog = target_catalog
 
         # Verify the catalog switch worked by getting a new connection
         try:
