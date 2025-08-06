@@ -26,6 +26,7 @@ from IPython.utils.capture import capture_output
 
 
 from sqlmesh import CustomMaterialization
+import sqlmesh
 from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -1867,26 +1868,97 @@ def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixt
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
+    # modify 3 models
+    # - 2 breaking changes for testing plan directly modified triggers
+    # - 1 adding an auto-restatement for subsequent `run` test
+    marketing = context.get_model("sushi.marketing")
+    marketing_kwargs = {
+        **marketing.dict(),
+        "query": d.parse_one(
+            f"{marketing.query.sql(dialect='duckdb')} ORDER BY customer_id", dialect="duckdb"
+        ),
+    }
+    context.upsert_model(SqlModel.parse_obj(marketing_kwargs))
+
+    customers = context.get_model("sushi.customers")
+    customers_kwargs = {
+        **customers.dict(),
+        "query": d.parse_one(
+            f"{customers.query.sql(dialect='duckdb')} ORDER BY customer_id", dialect="duckdb"
+        ),
+    }
+    context.upsert_model(SqlModel.parse_obj(customers_kwargs))
+
     # add auto restatement to orders
-    model = context.get_model("sushi.orders")
-    kind = {
-        **model.kind.dict(),
+    orders = context.get_model("sushi.orders")
+    orders_kind = {
+        **orders.kind.dict(),
         "auto_restatement_cron": "@hourly",
     }
-    kwargs = {
-        **model.dict(),
-        "kind": kind,
+    orders_kwargs = {
+        **orders.dict(),
+        "kind": orders_kind,
     }
-    context.upsert_model(PythonModel.parse_obj(kwargs))
-    plan = context.plan_builder(skip_tests=True).build()
-    context.apply(plan)
+    context.upsert_model(PythonModel.parse_obj(orders_kwargs))
 
-    # Mock run_merged_intervals to capture triggers arg
-    scheduler = context.scheduler()
-    run_merged_intervals_mock = mocker.patch.object(
-        scheduler, "run_merged_intervals", return_value=([], [])
+    spy = mocker.spy(sqlmesh.core.scheduler.Scheduler, "run_merged_intervals")
+
+    context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
+
+    # PLAN: directly modified triggers
+    actual_triggers = spy.call_args.kwargs["snapshot_evaluation_triggers"]
+    actual_triggers_name = {
+        k.name: sorted([s.name for s in v.directly_modified_triggers])
+        for k, v in actual_triggers.items()
+        if v.directly_modified_triggers
+    }
+    marketing_name = '"memory"."sushi"."marketing"'
+    customers_name = '"memory"."sushi"."customers"'
+    marketing_customers_names = sorted([marketing_name, customers_name])
+    children_names = [
+        f'"memory"."sushi"."{model}"'
+        for model in {
+            "waiter_as_customer_by_day",
+            "active_customers",
+            "count_customers_active",
+            "count_customers_inactive",
+        }
+    ]
+    assert actual_triggers_name == {
+        marketing_name: [marketing_name],
+        customers_name: [customers_name],
+        **{k: marketing_customers_names for k in children_names},
+    }
+
+    # PLAN: restatement triggers
+    spy.reset_mock()
+    context.plan(
+        restate_models=[
+            '"memory"."sushi"."marketing"',
+            '"memory"."sushi"."order_items"',
+            '"memory"."sushi"."waiter_revenue_by_day"',
+        ],
+        auto_apply=True,
+        no_prompts=True,
     )
 
+    order_items_name = '"memory"."sushi"."order_items"'
+    waiter_revenue_by_day_name = '"memory"."sushi"."waiter_revenue_by_day"'
+    actual_triggers = spy.call_args.kwargs["snapshot_evaluation_triggers"]
+    actual_triggers_name = {
+        k.name: sorted([s.name for s in v.restatement_triggers])
+        for k, v in actual_triggers.items()
+        if v.restatement_triggers
+    }
+    assert actual_triggers_name == {
+        waiter_revenue_by_day_name: [waiter_revenue_by_day_name, order_items_name],
+        order_items_name: [order_items_name],
+        '"memory"."sushi"."top_waiters"': [waiter_revenue_by_day_name],
+        '"memory"."sushi"."customer_revenue_by_day"': [order_items_name],
+        '"memory"."sushi"."customer_revenue_lifetime"': [order_items_name],
+    }
+
+    # RUN: select and auto-restatement triggers
     # User selects top_waiters and waiter_revenue_by_day, others added as auto-upstream
     selected_models = {"top_waiters", "waiter_revenue_by_day"}
     selected_models_auto_upstream = {"order_items", "orders", "items"}
@@ -1896,6 +1968,11 @@ def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixt
     selected_snapshots_auto_upstream = selected_snapshots - {
         f'"memory"."sushi"."{model}"' for model in selected_models
     }
+
+    scheduler = context.scheduler()
+    run_merged_intervals_mock = mocker.patch.object(
+        scheduler, "run_merged_intervals", return_value=([], [])
+    )
 
     with time_machine.travel("2023-01-09 00:00:01 UTC"):
         scheduler.run(

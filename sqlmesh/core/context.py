@@ -2309,7 +2309,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         if select_models:
             selected, _ = self._select_models_for_run(select_models, True, snapshots.values())
         else:
-            selected = t.cast(t.Set[str], snapshots.keys())
+            selected = set(snapshots.keys())
 
         results = {}
         execution_context = self.execution_context(snapshots=snapshots)

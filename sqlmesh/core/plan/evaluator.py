@@ -37,6 +37,7 @@ from sqlmesh.core.snapshot import (
     SnapshotCreationFailedError,
     SnapshotNameVersion,
 )
+from sqlmesh.core.snapshot.definition import SnapshotEvaluationTriggers
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import CorrelationId
@@ -243,6 +244,27 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not stage.snapshot_to_intervals:
             self.console.log_success("SKIP: No model batches to execute")
             return
+
+        directly_modified_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
+        for parent, children in plan.indirectly_modified_snapshots.items():
+            parent_id = stage.all_snapshots[parent].snapshot_id
+            directly_modified_triggers[parent_id] = directly_modified_triggers.get(
+                parent_id, []
+            ) + [parent_id]
+            for child in children:
+                directly_modified_triggers[child] = directly_modified_triggers.get(child, []) + [
+                    parent_id
+                ]
+        directly_modified_triggers = {
+            k: list(dict.fromkeys(v)) for k, v in directly_modified_triggers.items()
+        }
+        snapshot_evaluation_triggers = {
+            s_id: SnapshotEvaluationTriggers(
+                directly_modified_triggers=directly_modified_triggers.get(s_id, []),
+                restatement_triggers=plan.restatement_triggers.get(s_id, []),
+            )
+            for s_id in [s.snapshot_id for s in stage.all_snapshots.values()]
+        }
 
         scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
         errors, _ = scheduler.run_merged_intervals(
