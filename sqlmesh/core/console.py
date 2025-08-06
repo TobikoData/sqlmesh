@@ -3830,12 +3830,10 @@ class DebuggerTerminalConsole(TerminalConsole):
                 message += f" | auto_restatement_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.auto_restatement_triggers)}"
             if snapshot_evaluation_triggers.select_snapshot_triggers:
                 message += f" | select_snapshot_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.select_snapshot_triggers)}"
-
-        if snapshot_evaluation_triggers:
-            if snapshot_evaluation_triggers.auto_restatement_triggers:
-                message += f" | auto_restatement_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.auto_restatement_triggers)}"
-            if snapshot_evaluation_triggers.select_snapshot_triggers:
-                message += f" | select_snapshot_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.select_snapshot_triggers)}"
+            if snapshot_evaluation_triggers.directly_modified_triggers:
+                message += f" | directly_modified_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.directly_modified_triggers)}"
+            if snapshot_evaluation_triggers.restatement_triggers:
+                message += f" | restatement_triggers={','.join(trigger.name for trigger in snapshot_evaluation_triggers.restatement_triggers)}"
 
         if audit_only:
             message = f"Audited {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
