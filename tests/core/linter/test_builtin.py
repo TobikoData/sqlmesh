@@ -271,7 +271,7 @@ def test_cron_interval_alignment(
         ),
     ],
 )
-def test_cron_interval_alignment_valid_upstream_multiple_dependencies(
+def test_cron_interval_alignment_upstream_multiple_dependencies(
     tmp_path,
     copy_to_temp_path,
     upstream_cron_a,
