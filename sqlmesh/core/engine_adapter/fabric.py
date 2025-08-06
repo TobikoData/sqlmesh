@@ -47,6 +47,74 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """Thread-local target catalog storage."""
         self._connection_pool.set_attribute("target_catalog", value)
 
+    def _switch_to_catalog_if_needed(
+        self, table_or_name: t.Union[exp.Table, TableName, SchemaName]
+    ) -> exp.Table:
+        """
+        Switch to catalog if the table/name is catalog-qualified.
+
+        Returns the table object with catalog information parsed.
+        If catalog switching occurs, the returned table will have catalog removed.
+        """
+        table = exp.to_table(table_or_name)
+
+        if table.catalog:
+            catalog_name = table.catalog
+            logger.debug(f"Switching to catalog '{catalog_name}' for operation")
+            self.set_current_catalog(catalog_name)
+
+            # Return table without catalog for SQL generation
+            return exp.Table(this=table.name, db=table.db)
+
+        return table
+
+    def _handle_schema_with_catalog(self, schema_name: SchemaName) -> t.Tuple[t.Optional[str], str]:
+        """
+        Handle schema operations with catalog qualification.
+
+        Returns tuple of (catalog_name, schema_only_name).
+        If catalog switching occurs, it will be performed.
+        """
+        # Handle Table objects created by schema_() function
+        if isinstance(schema_name, exp.Table) and not schema_name.name:
+            # This is a schema Table object - check for catalog qualification
+            if schema_name.catalog:
+                # Catalog-qualified schema: catalog.schema
+                catalog_name = schema_name.catalog
+                schema_only = schema_name.db
+                logger.debug(
+                    f"Detected catalog-qualified schema: catalog='{catalog_name}', schema='{schema_only}'"
+                )
+                # Switch to the catalog first
+                self.set_current_catalog(catalog_name)
+                return catalog_name, schema_only
+            # Schema only, no catalog
+            schema_only = schema_name.db
+            logger.debug(f"Detected schema-only: schema='{schema_only}'")
+            return None, schema_only
+        # Handle string or table name inputs by parsing as table
+        table = exp.to_table(schema_name)
+
+        if table.catalog:
+            # 3-part name detected (catalog.db.table) - this shouldn't happen for schema operations
+            raise SQLMeshError(
+                f"Invalid schema name format: {schema_name}. Expected 'schema' or 'catalog.schema', got 3-part name"
+            )
+        elif table.db:
+            # Catalog-qualified schema: catalog.schema
+            catalog_name = table.db
+            schema_only = table.name
+            logger.debug(
+                f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
+            )
+            # Switch to the catalog first
+            self.set_current_catalog(catalog_name)
+            return catalog_name, schema_only
+        else:
+            # No catalog qualification, use as-is
+            logger.debug(f"No catalog detected, using original: {schema_name}")
+            return None, str(schema_name)
+
     def _create_fabric_connection(self) -> t.Any:
         """Custom connection factory that uses the target catalog if set."""
         # If we have a target catalog, we need to modify the connection parameters
@@ -403,49 +471,11 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """
         logger.debug(f"drop_schema called with: {schema_name} (type: {type(schema_name)})")
 
-        # Handle Table objects created by schema_() function
-        if isinstance(schema_name, exp.Table) and not schema_name.name:
-            # This is a schema Table object - check for catalog qualification
-            if schema_name.catalog:
-                # Catalog-qualified schema: catalog.schema
-                catalog_name = schema_name.catalog
-                schema_only = schema_name.db
-                logger.debug(
-                    f"Detected catalog-qualified schema: catalog='{catalog_name}', schema='{schema_only}'"
-                )
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
-                # Use just the schema name
-                super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
-            else:
-                # Schema only, no catalog
-                schema_only = schema_name.db
-                logger.debug(f"Detected schema-only: schema='{schema_only}'")
-                super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
-        else:
-            # Handle string or table name inputs by parsing as table
-            table = exp.to_table(schema_name)
+        # Use helper to handle catalog switching and get schema name
+        catalog_name, schema_only = self._handle_schema_with_catalog(schema_name)
 
-            if table.catalog:
-                # 3-part name detected (catalog.db.table) - this shouldn't happen for schema operations
-                raise SQLMeshError(
-                    f"Invalid schema name format: {schema_name}. Expected 'schema' or 'catalog.schema', got 3-part name"
-                )
-            elif table.db:
-                # Catalog-qualified schema: catalog.schema
-                catalog_name = table.db
-                schema_only = table.name
-                logger.debug(
-                    f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
-                )
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
-                # Use just the schema name
-                super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
-            else:
-                # No catalog qualification, use as-is
-                logger.debug(f"No catalog detected, using original: {schema_name}")
-                super().drop_schema(schema_name, ignore_if_not_exists, cascade, **drop_args)
+        # Use just the schema name for the operation
+        super().drop_schema(schema_only, ignore_if_not_exists, cascade, **drop_args)
 
     def create_schema(
         self,
@@ -457,50 +487,11 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         Override create_schema to handle catalog-qualified schema names.
         Fabric doesn't support 'CREATE SCHEMA [catalog].[schema]' syntax.
         """
+        # Use helper to handle catalog switching and get schema name
+        catalog_name, schema_only = self._handle_schema_with_catalog(schema_name)
 
-        # Handle Table objects created by schema_() function
-        if isinstance(schema_name, exp.Table) and not schema_name.name:
-            # This is a schema Table object - check for catalog qualification
-            if schema_name.catalog:
-                # Catalog-qualified schema: catalog.schema
-                catalog_name = schema_name.catalog
-                schema_only = schema_name.db
-                logger.debug(
-                    f"Detected catalog-qualified schema: catalog='{catalog_name}', schema='{schema_only}'"
-                )
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
-                # Use just the schema name
-                super().create_schema(schema_only, ignore_if_exists, **kwargs)
-            else:
-                # Schema only, no catalog
-                schema_only = schema_name.db
-                logger.debug(f"Detected schema-only: schema='{schema_only}'")
-                super().create_schema(schema_only, ignore_if_exists, **kwargs)
-        else:
-            # Handle string or table name inputs by parsing as table
-            table = exp.to_table(schema_name)
-
-            if table.catalog:
-                # 3-part name detected (catalog.db.table) - this shouldn't happen for schema operations
-                raise SQLMeshError(
-                    f"Invalid schema name format: {schema_name}. Expected 'schema' or 'catalog.schema', got 3-part name"
-                )
-            elif table.db:
-                # Catalog-qualified schema: catalog.schema
-                catalog_name = table.db
-                schema_only = table.name
-                logger.debug(
-                    f"Detected catalog.schema format: catalog='{catalog_name}', schema='{schema_only}'"
-                )
-                # Switch to the catalog first
-                self.set_current_catalog(catalog_name)
-                # Use just the schema name
-                super().create_schema(schema_only, ignore_if_exists, **kwargs)
-            else:
-                # No catalog qualification, use as-is
-                logger.debug(f"No catalog detected, using original: {schema_name}")
-                super().create_schema(schema_name, ignore_if_exists, **kwargs)
+        # Use just the schema name for the operation
+        super().create_schema(schema_only, ignore_if_exists, **kwargs)
 
     def _ensure_schema_exists(self, table_name: TableName) -> None:
         """
@@ -632,53 +623,21 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         Override create_view to handle catalog-qualified view names and ensure schema exists.
         Fabric doesn't support 'CREATE VIEW [catalog].[schema].[view]' syntax.
         """
-
-        # Parse view_name into an exp.Table to properly handle both string and Table cases
-        table = exp.to_table(view_name)
+        # Switch to catalog if needed and get unqualified table
+        unqualified_view = self._switch_to_catalog_if_needed(view_name)
 
         # Ensure schema exists for the view
-        self._ensure_schema_exists(table)
+        self._ensure_schema_exists(unqualified_view)
 
-        if table.catalog:
-            # 3-part name: catalog.schema.view
-            catalog_name = table.catalog
-            schema_name = table.db or ""
-            view_only = table.name
-
-            logger.debug(
-                f"Detected catalog.schema.view format: catalog='{catalog_name}', schema='{schema_name}', view='{view_only}'"
-            )
-
-            # Switch to the catalog first
-            self.set_current_catalog(catalog_name)
-
-            # Create new Table expression without catalog
-            unqualified_view = exp.Table(this=view_only, db=schema_name)
-
-            super().create_view(
-                unqualified_view,
-                query_or_df,
-                columns_to_types,
-                replace,
-                materialized,
-                materialized_properties,
-                table_description,
-                column_descriptions,
-                view_properties,
-                **create_kwargs,
-            )
-        else:
-            # No catalog qualification, use as-is
-            logger.debug(f"No catalog detected, using original: {view_name}")
-            super().create_view(
-                view_name,
-                query_or_df,
-                columns_to_types,
-                replace,
-                materialized,
-                materialized_properties,
-                table_description,
-                column_descriptions,
-                view_properties,
-                **create_kwargs,
-            )
+        super().create_view(
+            unqualified_view,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            materialized_properties,
+            table_description,
+            column_descriptions,
+            view_properties,
+            **create_kwargs,
+        )
