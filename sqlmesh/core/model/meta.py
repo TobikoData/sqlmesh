@@ -464,9 +464,23 @@ class ModelMeta(_Node):
     @cached_property
     def physical_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of properties that will be applied to the physical layer. It replaces table_properties which is deprecated."""
+        properties = {}
         if self.physical_properties_:
-            return {e.this.name: e.expression for e in self.physical_properties_.expressions}
-        return {}
+            properties = {e.this.name: e.expression for e in self.physical_properties_.expressions}
+
+        # For INCREMENTAL_BY_UNIQUE_KEY models for doris dialect, add the unique_key to physical_properties
+        # so it gets passed to table_properties during table creation
+        if (
+            isinstance(self.kind, IncrementalByUniqueKeyKind)
+            and self.unique_key
+            and self.dialect == "doris"
+        ):
+            if len(self.unique_key) == 1:
+                properties["unique_key"] = self.unique_key[0]
+            else:
+                properties["unique_key"] = exp.Tuple(expressions=self.unique_key)
+
+        return properties
 
     @cached_property
     def virtual_properties(self) -> t.Dict[str, exp.Expression]:
