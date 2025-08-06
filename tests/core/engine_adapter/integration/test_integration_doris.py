@@ -13,8 +13,6 @@ from tests.core.engine_adapter.integration import (
     IntegrationTestEngine,
 )
 
-pytestmark = [pytest.mark.doris, pytest.mark.engine, pytest.mark.slow]
-
 
 @pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["doris"])))
 def ctx(
