@@ -30,12 +30,40 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     SUPPORTS_CREATE_DROP_CATALOG = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
 
-    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
-        super().__init__(*args, **kwargs)
-        # Store the original connection factory for wrapping
-        self._original_connection_factory = self._connection_pool._connection_factory  # type: ignore
-        # Replace the connection factory with our custom one
-        self._connection_pool._connection_factory = self._create_fabric_connection  # type: ignore
+    def __init__(
+        self, connection_factory_or_pool: t.Union[t.Callable, t.Any], *args: t.Any, **kwargs: t.Any
+    ) -> None:
+        # Handle the connection factory wrapping before calling super().__init__
+        if not hasattr(connection_factory_or_pool, "get"):  # It's a connection factory, not a pool
+            # Wrap the connection factory to make it catalog-aware
+            original_factory = connection_factory_or_pool
+
+            def catalog_aware_factory() -> t.Any:
+                # Get the current target catalog from thread-local storage
+                target_catalog = (
+                    self._connection_pool.get_attribute("target_catalog")
+                    if hasattr(self, "_connection_pool")
+                    else None
+                )
+
+                # Call the original factory with target_catalog if it supports it
+                if hasattr(original_factory, "__call__"):
+                    try:
+                        # Try to call with target_catalog parameter first (for our custom Fabric factory)
+                        import inspect
+
+                        sig = inspect.signature(original_factory)
+                        if "target_catalog" in sig.parameters:
+                            return original_factory(target_catalog=target_catalog)
+                    except (TypeError, AttributeError):
+                        pass
+
+                # Fall back to calling without parameters
+                return original_factory()
+
+            connection_factory_or_pool = catalog_aware_factory
+
+        super().__init__(connection_factory_or_pool, *args, **kwargs)
 
     @property
     def _target_catalog(self) -> t.Optional[str]:
@@ -114,21 +142,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             # No catalog qualification, use as-is
             logger.debug(f"No catalog detected, using original: {schema_name}")
             return None, str(schema_name)
-
-    def _create_fabric_connection(self) -> t.Any:
-        """Custom connection factory that uses the target catalog if set."""
-        # If we have a target catalog, we need to modify the connection parameters
-        if self._target_catalog:
-            # The original factory was created with partial(), so we need to extract and modify the kwargs
-            if hasattr(self._original_connection_factory, "keywords"):
-                # It's a partial function, get the original keywords
-                original_kwargs = self._original_connection_factory.keywords.copy()
-                original_kwargs["database"] = self._target_catalog
-                # Call the underlying function with modified kwargs
-                return self._original_connection_factory.func(**original_kwargs)
-
-        # Use the original factory if no target catalog is set
-        return self._original_connection_factory()
 
     def _insert_overwrite_by_condition(
         self,
