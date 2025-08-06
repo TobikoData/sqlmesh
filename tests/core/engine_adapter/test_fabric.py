@@ -5,18 +5,18 @@ import typing as t
 import pytest
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.engine_adapter import FabricAdapter
+from sqlmesh.core.engine_adapter import FabricEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 
 pytestmark = [pytest.mark.engine, pytest.mark.fabric]
 
 
 @pytest.fixture
-def adapter(make_mocked_engine_adapter: t.Callable) -> FabricAdapter:
-    return make_mocked_engine_adapter(FabricAdapter)
+def adapter(make_mocked_engine_adapter: t.Callable) -> FabricEngineAdapter:
+    return make_mocked_engine_adapter(FabricEngineAdapter)
 
 
-def test_columns(adapter: FabricAdapter):
+def test_columns(adapter: FabricEngineAdapter):
     adapter.cursor.fetchall.return_value = [
         ("decimal_ps", "decimal", None, 5, 4),
         ("decimal", "decimal", None, 18, 0),
@@ -41,7 +41,7 @@ def test_columns(adapter: FabricAdapter):
     )
 
 
-def test_table_exists(adapter: FabricAdapter):
+def test_table_exists(adapter: FabricEngineAdapter):
     adapter.cursor.fetchone.return_value = (1,)
     assert adapter.table_exists("db.table")
     # Verify that the adapter queries the uppercase INFORMATION_SCHEMA
@@ -53,7 +53,7 @@ def test_table_exists(adapter: FabricAdapter):
     assert not adapter.table_exists("db.table")
 
 
-def test_insert_overwrite_by_time_partition(adapter: FabricAdapter):
+def test_insert_overwrite_by_time_partition(adapter: FabricEngineAdapter):
     adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
@@ -71,7 +71,7 @@ def test_insert_overwrite_by_time_partition(adapter: FabricAdapter):
     ]
 
 
-def test_replace_query(adapter: FabricAdapter):
+def test_replace_query(adapter: FabricEngineAdapter):
     adapter.cursor.fetchone.return_value = (1,)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 

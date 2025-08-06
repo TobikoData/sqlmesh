@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 requests = optional_import("requests")
 
 
-class FabricAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
+class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
     """

@@ -1714,9 +1714,9 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+        from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
 
-        return FabricAdapter
+        return FabricEngineAdapter
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
