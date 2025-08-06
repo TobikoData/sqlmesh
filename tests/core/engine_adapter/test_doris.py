@@ -11,7 +11,7 @@ from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 
 from pytest_mock.plugin import MockerFixture
 
-pytestmark = pytest.mark.doris
+pytestmark = [pytest.mark.doris, pytest.mark.engine]
 
 
 def test_create_view(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):
