@@ -1703,10 +1703,10 @@ def test_fabric_connection_config_defaults(make_config):
     assert config.driver == "pyodbc"
     assert config.autocommit is True
 
-    # Ensure it creates the FabricAdapter
-    from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+    # Ensure it creates the FabricEngineAdapter
+    from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
 
-    assert isinstance(config.create_engine_adapter(), FabricAdapter)
+    assert isinstance(config.create_engine_adapter(), FabricEngineAdapter)
 
 
 def test_fabric_connection_config_parameter_validation(make_config):

@@ -1714,9 +1714,46 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        from sqlmesh.core.engine_adapter.fabric import FabricAdapter
+        from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
 
-        return FabricAdapter
+        return FabricEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        """
+        Override connection factory to create a dynamic catalog-aware factory.
+        This factory closure can access runtime catalog information passed to it.
+        """
+
+        # Get the base connection factory from parent
+        base_factory = super()._connection_factory
+
+        def create_fabric_connection(
+            target_catalog: t.Optional[str] = None, **kwargs: t.Any
+        ) -> t.Any:
+            """
+            Create a Fabric connection with optional dynamic catalog override.
+
+            Args:
+                target_catalog: Optional catalog to use instead of the configured database
+                **kwargs: Additional connection parameters
+            """
+            # Use target_catalog if provided, otherwise fall back to configured database
+            effective_database = target_catalog if target_catalog is not None else self.database
+
+            # Create connection with the effective database
+            connection_kwargs = {
+                **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
+                **kwargs,
+            }
+
+            # Override database parameter
+            if effective_database:
+                connection_kwargs["database"] = effective_database
+
+            return base_factory(**connection_kwargs)
+
+        return create_fabric_connection
 
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
