@@ -38,10 +38,11 @@ doris_ready() {
     probe_port 9030
 
     echo "Checking for 3 alive Doris backends..."
+    sleep 15
 
     while true; do
         echo "Checking Doris backends..."
-        ALIVE_BACKENDS=$(timeout 10 docker exec -i doris-fe-01 mysql -h127.0.0.1 -P9030 -uroot -e "show backends \G" | grep -c "^ *Alive: true$")
+        ALIVE_BACKENDS=$(docker exec -i doris-fe-01 mysql -h127.0.0.1 -P9030 -uroot -e "show backends \G" | grep -c "^ *Alive: true$")
         
         # fallback value if failed to get number
         if ! [[ "$ALIVE_BACKENDS" =~ ^[0-9]+$ ]]; then
