@@ -7,7 +7,7 @@ By default, SQLMesh will halt plan application when an audit fails so potentiall
 
 A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models.
 
-**NOTE**: For incremental models, audits are only applied to intervals being processed - not for the entire underlying table.
+**NOTE**: For incremental by time range models, audits are only applied to intervals being processed - not for the entire underlying table.
 
 ## User-Defined Audits
 In SQLMesh, user-defined audits are defined in `.sql` files in an `audits` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Alternatively, audits can be defined inline within the model definition itself.
