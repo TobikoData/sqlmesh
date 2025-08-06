@@ -62,6 +62,9 @@ def gateways_ensure_dict(value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
             GatewayConfig.parse_obj(value)
         return {"": value}
     except Exception:
+        # Normalize all gateway keys to lowercase for case-insensitive matching
+        if isinstance(value, dict):
+            return {k.lower(): v for k, v in value.items()}
         return value
 
 
@@ -298,19 +301,23 @@ class Config(BaseConfig):
         if isinstance(self.gateways, dict):
             if name is None:
                 if self.default_gateway:
-                    if self.default_gateway not in self.gateways:
+                    # Normalize default_gateway name to lowercase for lookup
+                    default_key = self.default_gateway.lower()
+                    if default_key not in self.gateways:
                         raise ConfigError(f"Missing gateway with name '{self.default_gateway}'")
-                    return self.gateways[self.default_gateway]
+                    return self.gateways[default_key]
 
                 if "" in self.gateways:
                     return self.gateways[""]
 
                 return first(self.gateways.values())
 
-            if name not in self.gateways:
+            # Normalize lookup name to lowercase since gateway keys are already lowercase
+            lookup_key = name.lower()
+            if lookup_key not in self.gateways:
                 raise ConfigError(f"Missing gateway with name '{name}'.")
 
-            return self.gateways[name]
+            return self.gateways[lookup_key]
         if name is not None:
             raise ConfigError("Gateway name is not supported when only one gateway is configured.")
         return self.gateways

@@ -400,9 +400,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         self.environment_ttl = self.config.environment_ttl
         self.pinned_environments = Environment.sanitize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.plan.auto_categorize_changes
-        self.selected_gateway = gateway or self.config.default_gateway_name
+        self.selected_gateway = (gateway or self.config.default_gateway_name).lower()
 
-        gw_model_defaults = self.config.gateways[self.selected_gateway].model_defaults
+        gw_model_defaults = self.config.get_gateway(self.selected_gateway).model_defaults
         if gw_model_defaults:
             # Merge global model defaults with the selected gateway's, if it's overriden
             global_defaults = self.config.model_defaults.model_dump(exclude_unset=True)

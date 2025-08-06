@@ -374,6 +374,7 @@ class Loader(abc.ABC):
 
             # however, if there is a gateway defined, gateway-specific models take precedence
             if gateway:
+                gateway = gateway.lower()
                 for model in external_models:
                     if model.gateway == gateway:
                         if model.fqn in models and models[model.fqn].gateway == gateway:

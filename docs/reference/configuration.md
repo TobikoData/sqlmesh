@@ -141,7 +141,7 @@ SQLMesh UI settings.
 
 The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
 
-It takes one or more named `gateway` configuration keys, each of which can define its own connections. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+It takes one or more named `gateway` configuration keys, each of which can define its own connections. **Gateway names are case-insensitive** - SQLMesh normalizes all gateway names to lowercase during configuration validation, allowing you to use any case when referencing gateways. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
 
 For example, a project might configure the `gate1` and `gate2` gateways:
 
@@ -247,7 +247,7 @@ If a configuration contains multiple gateways, SQLMesh will use the first one in
 
 | Option            | Description                                                                                                                  |  Type  | Required |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
-| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option) | string |    N     |
+| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option). Gateway names are case-insensitive. | string |    N     |
 
 ### Default connections/scheduler
 

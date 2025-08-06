@@ -24,7 +24,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
+from sqlmesh.core.engine_adapter.mixins import RowDiffMixin, LogicalMergeMixin
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
@@ -1886,6 +1886,133 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
             [[2, "2020-01-01"], [3, "2020-01-03"], [1, "2020-01-07"]],
             columns=actual_df.columns,
         ).sort_values(by="event_date")
+
+        pd.testing.assert_frame_equal(
+            actual_df,
+            expected_df,
+            check_dtype=False,
+        )
+
+    finally:
+        ctx.cleanup(context)
+
+
+def test_incremental_by_unique_key_model_when_matched(ctx: TestContext):
+    if not ctx.supports_merge:
+        pytest.skip(f"{ctx.dialect} on {ctx.gateway} doesnt support merge")
+
+    # DuckDB and some other engines use logical_merge which doesn't support when_matched
+    if isinstance(ctx.engine_adapter, LogicalMergeMixin):
+        pytest.skip(
+            f"{ctx.dialect} on {ctx.gateway} uses logical merge which doesn't support when_matched"
+        )
+
+    def _mutate_config(current_gateway_name: str, config: Config):
+        connection = config.gateways[current_gateway_name].connection
+        connection.concurrent_tasks = 1
+        if current_gateway_name == "inttest_redshift":
+            connection.enable_merge = True
+
+    context = ctx.create_context(_mutate_config)
+    schema = ctx.schema(TEST_SCHEMA)
+
+    # Create seed data with multiple days
+    seed_query = ctx.input_data(
+        pd.DataFrame(
+            [
+                [1, "item_a", 100, "2020-01-01"],
+                [2, "item_b", 200, "2020-01-01"],
+                [1, "item_a_changed", 150, "2020-01-02"],  # Same item_id, different name and value
+                [2, "item_b_changed", 250, "2020-01-02"],  # Same item_id, different name and value
+                [3, "item_c", 300, "2020-01-02"],  # New item on day 2
+            ],
+            columns=["item_id", "name", "value", "event_date"],
+        ),
+        columns_to_types={
+            "item_id": exp.DataType.build("integer"),
+            "name": exp.DataType.build("text"),
+            "value": exp.DataType.build("integer"),
+            "event_date": exp.DataType.build("date"),
+        },
+    )
+    context.upsert_model(
+        create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
+    )
+
+    table_format = ""
+    if ctx.dialect == "athena":
+        # INCREMENTAL_BY_UNIQUE_KEY uses MERGE which is only supported in Athena on Iceberg tables
+        table_format = "table_format iceberg,"
+
+    # Create model with when_matched clause that only updates the value column
+    # BUT keeps the existing name column unchanged
+    # batch_size=1 is so that we trigger merge on second batch and verify behaviour of when_matched
+    context.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""MODEL (
+                    name {schema}.test_model_when_matched,
+                    kind INCREMENTAL_BY_UNIQUE_KEY (
+                        unique_key item_id,
+                        batch_size 1,
+                        merge_filter source.event_date > target.event_date,
+                        when_matched WHEN MATCHED THEN UPDATE SET target.value = source.value, target.event_date = source.event_date
+                    ),
+                    {table_format}
+                    start '2020-01-01',
+                    end '2020-01-02',
+                    cron '@daily'
+                );
+
+                select item_id, name, value, event_date
+                from {schema}.seed_model
+                where event_date between @start_date and @end_date""",
+            )
+        )
+    )
+
+    try:
+        # Initial plan to create the model and run it
+        context.plan(auto_apply=True, no_prompts=True)
+
+        test_model = context.get_model(f"{schema}.test_model_when_matched")
+
+        # Verify that the model has the when_matched clause and merge_filter
+        assert test_model.kind.when_matched is not None
+        assert (
+            test_model.kind.when_matched.sql()
+            == '(WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."value" = "__MERGE_SOURCE__"."value", "__MERGE_TARGET__"."event_date" = "__MERGE_SOURCE__"."event_date")'
+        )
+        assert test_model.merge_filter is not None
+        assert (
+            test_model.merge_filter.sql()
+            == '"__MERGE_SOURCE__"."event_date" > "__MERGE_TARGET__"."event_date"'
+        )
+
+        actual_df = (
+            ctx.get_current_data(test_model.fqn).sort_values(by="item_id").reset_index(drop=True)
+        )
+
+        # Expected results after batch processing:
+        # - Day 1: Items 1 and 2 are inserted (first insert)
+        # - Day 2: Items 1 and 2 are merged (when_matched clause preserves names but updates values/dates)
+        #          Item 3 is inserted as new
+        expected_df = (
+            pd.DataFrame(
+                [
+                    [1, "item_a", 150, "2020-01-02"],  # name from day 1, value and date from day 2
+                    [2, "item_b", 250, "2020-01-02"],  # name from day 1, value and date from day 2
+                    [3, "item_c", 300, "2020-01-02"],  # new item from day 2
+                ],
+                columns=["item_id", "name", "value", "event_date"],
+            )
+            .sort_values(by="item_id")
+            .reset_index(drop=True)
+        )
+
+        # Convert date columns to string for comparison
+        actual_df["event_date"] = actual_df["event_date"].astype(str)
+        expected_df["event_date"] = expected_df["event_date"].astype(str)
 
         pd.testing.assert_frame_equal(
             actual_df,
