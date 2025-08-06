@@ -1124,6 +1124,90 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment_statements(env_a.name) == []
 
 
+def test_get_expired_snapshots_includes_downstream_view_snapshots(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
+):
+    now_ts = now_timestamp()
+
+    # model_a: table snapshot
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="FULL",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot_a.ttl = "in 10 seconds"
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.updated_ts = now_ts - 15000  # now - 15 seconds = expired
+
+    # model_b: view snapshot that depends on model_a table snapshot
+    # in an actual scenario, this could have been created a few days later so expires a few days after the snapshot it depends on
+    # unlike a table, a view ceases to be valid if the upstream table it points to is dropped
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind="VIEW",
+            depends_on=["a"],
+            query=parse_one("select *, 'foo' as model_b from a"),
+        ),
+        nodes={'"a"': snapshot_a.model},
+    )
+    snapshot_b.ttl = "in 10 seconds"
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.updated_ts = now_ts  # now = not expired
+    assert snapshot_b.parents == (snapshot_a.snapshot_id,)
+
+    # model_c: table snapshot that depends on model_a table snapshot but since its a table it will still work if model_a is dropped
+    # so should not be considered when cleaning up expired snapshots (as it has not expired)
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            kind="FULL",
+            depends_on=["a"],
+            query=parse_one("select *, 'foo' as model_c from a"),
+        ),
+        nodes={'"a"': snapshot_a.model},
+    )
+    snapshot_c.ttl = "in 10 seconds"
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_c.updated_ts = now_ts  # now = not expired
+    assert snapshot_c.parents == (snapshot_a.snapshot_id,)
+
+    # model_d: view snapshot with no dependency on model a, so should not be dropped if model a is dropped
+    snapshot_d = make_snapshot(
+        SqlModel(
+            name="d",
+            kind="VIEW",
+            query=parse_one("select 'model_d' as d"),
+        ),
+    )
+    snapshot_d.ttl = "in 10 seconds"
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_d.updated_ts = now_ts  # now = not expired
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c, snapshot_d])
+    cleanup_targets = state_sync.get_expired_snapshots(now_ts)
+
+    # snapshot_a should be cleaned up because it's expired
+    # snapshot_b is unexpired but should be cleaned up because snapshot_a is being cleaned up
+    #   - since it's a view, it will stop working if the snapshot_a table it's pointing to is dropped, so thats why it needs to be dropped too
+    #   - additionally, if it isnt dropped, some engines will throw "cannot drop because other objects depend on it" when trying to drop the snapshot_a table
+    # snapshot_c is unexpired and should not be cleaned up even though its upstream snapshot_a has expired, since it's a table it will still continue to work
+    # snapshot_d is unexpired and should also not be cleaned up. While it's a view, it doesnt depend on anything that *has* expired, so is not a target for cleanup
+    assert len(cleanup_targets) == 2
+
+    snapshot_a_cleanup = next(
+        (t for t in cleanup_targets if t.snapshot.snapshot_id == snapshot_a.snapshot_id), None
+    )
+    assert snapshot_a_cleanup
+
+    snapshot_b_cleanup = next(
+        (t for t in cleanup_targets if t.snapshot.snapshot_id == snapshot_b.snapshot_id), None
+    )
+    assert snapshot_b_cleanup
+
+
 def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     now_ts = now_timestamp()
 

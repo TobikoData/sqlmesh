@@ -13,23 +13,26 @@ import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
+import time_machine
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
-from sqlmesh.core.config.connection import ConnectionConfig
+from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin, LogicalMergeMixin
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
-from sqlmesh.utils.date import now, to_date, to_time_column
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotId
+from sqlmesh.utils.date import now, to_date, to_time_column, to_ds
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -2799,3 +2802,180 @@ def test_identifier_length_limit(ctx: TestContext):
         match=re.escape(match),
     ):
         adapter.create_table(long_table_name, {"col": exp.DataType.build("int")})
+
+
+def test_janitor_drops_downstream_unexpired_hard_dependencies(
+    ctx: TestContext, tmp_path: pathlib.Path
+):
+    """
+    Scenario:
+
+    Ensure that cleaning up expired table snapshots also cleans up any unexpired view snapshots that depend on them
+
+    - We create a A (table) <- B (view)
+    - In dev, we modify A - triggers new version of A and a dev preview of B that both expire in 7 days
+    - We advance time by 3 days
+    - In dev, we modify B - triggers a new version of B that depends on A but expires 3 days after A
+    - We advance time by 5 days so that A has reached its expiry but B has not
+    - We expire dev so that none of these snapshots are promoted and are thus targets for cleanup
+    - We run the janitor
+
+    Expected outcome:
+        - All the dev versions of A and B should be dropped
+        - We should not get a 'ERROR: cannot drop table x because other objects depend on it' on engines that do schema binding
+    """
+
+    def _state_sync_engine_adapter(context: Context) -> EngineAdapter:
+        assert isinstance(context.state_sync, CachingStateSync)
+        assert isinstance(context.state_sync.state_sync, EngineAdapterStateSync)
+        return context.state_sync.state_sync.engine_adapter
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    schema = exp.to_table(ctx.schema(TEST_SCHEMA)).this
+
+    (models_dir / "model_a.sql").write_text(f"""
+    MODEL (
+        name {schema}.model_a,
+        kind FULL
+    );
+
+    SELECT 1 as a, 2 as b;
+    """)
+
+    (models_dir / "model_b.sql").write_text(f"""
+    MODEL (
+        name {schema}.model_b,
+        kind VIEW
+    );
+
+    SELECT a from {schema}.model_a;
+    """)
+
+    def _mutate_config(gateway: str, config: Config):
+        config.gateways[gateway].state_connection = DuckDBConnectionConfig(
+            database=str(tmp_path / "state.db")
+        )
+
+    with time_machine.travel("2020-01-01 00:00:00"):
+        sqlmesh = ctx.create_context(
+            path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
+        )
+        sqlmesh.plan(auto_apply=True)
+
+    model_a_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_a" in n)
+    # expiry is last updated + ttl
+    assert timedelta(milliseconds=model_a_snapshot.ttl_ms) == timedelta(weeks=1)
+    assert to_ds(model_a_snapshot.updated_ts) == "2020-01-01"
+    assert to_ds(model_a_snapshot.expiration_ts) == "2020-01-08"
+
+    model_b_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_b" in n)
+    assert timedelta(milliseconds=model_b_snapshot.ttl_ms) == timedelta(weeks=1)
+    assert to_ds(model_b_snapshot.updated_ts) == "2020-01-01"
+    assert to_ds(model_b_snapshot.expiration_ts) == "2020-01-08"
+
+    model_a_prod_snapshot = model_a_snapshot
+    model_b_prod_snapshot = model_b_snapshot
+
+    # move forward 1 days
+    # new dev environment - touch models to create new snapshots
+    # model a / b expiry in prod should remain unmodified
+    # model a / b expiry in dev should be as at today
+    with time_machine.travel("2020-01-02 00:00:00"):
+        (models_dir / "model_a.sql").write_text(f"""
+        MODEL (
+            name {schema}.model_a,
+            kind FULL
+        );
+
+        SELECT 1 as a, 2 as b, 3 as c;
+        """)
+
+        sqlmesh = ctx.create_context(
+            path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
+        )
+        sqlmesh.plan(environment="dev", auto_apply=True)
+
+        # should now have 4 snapshots in state - 2x model a and 2x model b
+        # the new model b is a dev preview because its upstream model changed
+        assert (
+            len(_state_sync_engine_adapter(sqlmesh).fetchall(f"select * from sqlmesh._snapshots"))
+            == 4
+        )
+
+        # context just has the two latest
+        assert len(sqlmesh.snapshots) == 2
+
+        # these expire 1 day later than what's in prod
+        model_a_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_a" in n)
+        assert timedelta(milliseconds=model_a_snapshot.ttl_ms) == timedelta(weeks=1)
+        assert to_ds(model_a_snapshot.updated_ts) == "2020-01-02"
+        assert to_ds(model_a_snapshot.expiration_ts) == "2020-01-09"
+
+        model_b_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_b" in n)
+        assert timedelta(milliseconds=model_b_snapshot.ttl_ms) == timedelta(weeks=1)
+        assert to_ds(model_b_snapshot.updated_ts) == "2020-01-02"
+        assert to_ds(model_b_snapshot.expiration_ts) == "2020-01-09"
+
+    # move forward 3 days
+    # touch model b in dev but leave model a
+    # this bumps the model b expiry but model a remains unchanged, so will expire before model b even though model b depends on it
+    with time_machine.travel("2020-01-05 00:00:00"):
+        (models_dir / "model_b.sql").write_text(f"""
+        MODEL (
+            name {schema}.model_b,
+            kind VIEW
+        );
+
+        SELECT a, 'b' as b from {schema}.model_a;
+        """)
+
+        sqlmesh = ctx.create_context(
+            path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
+        )
+        sqlmesh.plan(environment="dev", auto_apply=True)
+
+        # should now have 5 snapshots in state - 2x model a and 3x model b
+        assert (
+            len(_state_sync_engine_adapter(sqlmesh).fetchall(f"select * from sqlmesh._snapshots"))
+            == 5
+        )
+
+        # context just has the two latest
+        assert len(sqlmesh.snapshots) == 2
+
+        # model a expiry should not have changed
+        model_a_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_a" in n)
+        assert timedelta(milliseconds=model_a_snapshot.ttl_ms) == timedelta(weeks=1)
+        assert to_ds(model_a_snapshot.updated_ts) == "2020-01-02"
+        assert to_ds(model_a_snapshot.expiration_ts) == "2020-01-09"
+
+        # model b should now expire well after model a
+        model_b_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_b" in n)
+        assert timedelta(milliseconds=model_b_snapshot.ttl_ms) == timedelta(weeks=1)
+        assert to_ds(model_b_snapshot.updated_ts) == "2020-01-05"
+        assert to_ds(model_b_snapshot.expiration_ts) == "2020-01-12"
+
+    # move forward to date where after model a has expired but before model b has expired
+    # invalidate dev to trigger cleanups
+    # run janitor. model a is expired so will be cleaned up and this will cascade to model b.
+    with time_machine.travel("2020-01-10 00:00:00"):
+        sqlmesh = ctx.create_context(
+            path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
+        )
+
+        before_snapshots = _state_sync_engine_adapter(sqlmesh).fetchall(
+            f"select name, identifier from sqlmesh._snapshots"
+        )
+        sqlmesh.invalidate_environment("dev")
+        sqlmesh.run_janitor(ignore_ttl=False)
+        after_snapshots = _state_sync_engine_adapter(sqlmesh).fetchall(
+            f"select name, identifier from sqlmesh._snapshots"
+        )
+
+        assert len(before_snapshots) != len(after_snapshots)
+
+        # all that's left should be the two snapshots that were in prod
+        assert set(
+            [SnapshotId(name=name, identifier=identifier) for name, identifier in after_snapshots]
+        ) == set([model_a_prod_snapshot.snapshot_id, model_b_prod_snapshot.snapshot_id])

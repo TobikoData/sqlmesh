@@ -224,17 +224,53 @@ class SnapshotState:
 
         if not ignore_ttl:
             expired_query = expired_query.where(
-                (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
+                ((exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts)
+                # we need to include views even if they havent expired in case one depends on a table that /has/ expired
+                .or_(exp.column("kind_name").eq(ModelKindName.VIEW))
             )
 
-        expired_candidates = {
+        candidates = {
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
                 name=name, version=version
             )
             for name, identifier, version in fetchall(self.engine_adapter, expired_query)
         }
-        if not expired_candidates:
+
+        if not candidates:
             return set(), []
+
+        expired_candidates: t.Dict[SnapshotId, SnapshotNameVersion] = {}
+
+        if ignore_ttl:
+            expired_candidates = candidates
+        else:
+            # Fetch full snapshots because we need the dependency relationship
+            full_candidates = self.get_snapshots(candidates.keys())
+
+            # Include any non-expired views that depend on expired tables
+            for snapshot_id in full_candidates:
+                snapshot = full_candidates.get(snapshot_id, None)
+                if not snapshot:
+                    continue
+
+                if snapshot.expiration_ts <= current_ts:
+                    # All expired snapshots should be included
+                    expired_candidates[snapshot.snapshot_id] = snapshot.name_version
+                elif snapshot.model_kind_name == ModelKindName.VIEW:
+                    # With non-expired views, check if they point to an expired parent table
+                    immediate_parents = [
+                        full_candidates[parent_id]
+                        for parent_id in snapshot.parents
+                        if parent_id in full_candidates
+                    ]
+
+                    if any(
+                        parent.expiration_ts <= current_ts
+                        for parent in immediate_parents
+                        if parent.model_kind_name != ModelKindName.VIEW
+                    ):
+                        # an immediate upstream table has expired, therefore this view is no longer valid and needs to be cleaned up as well
+                        expired_candidates[snapshot.snapshot_id] = snapshot.name_version
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -253,37 +289,39 @@ class SnapshotState:
             unique_expired_versions, batch_size=self.SNAPSHOT_BATCH_SIZE
         )
         cleanup_targets = []
-        expired_snapshot_ids = set()
+        expired_sv_snapshot_ids = set()
         for versions_batch in version_batches:
-            snapshots = self._get_snapshots_with_same_version(versions_batch)
+            sv_snapshots = self._get_snapshots_with_same_version(versions_batch)
 
             snapshots_by_version = defaultdict(set)
             snapshots_by_dev_version = defaultdict(set)
-            for s in snapshots:
+            for s in sv_snapshots:
                 snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
                 snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
 
-            expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
-            expired_snapshot_ids.update([s.snapshot_id for s in expired_snapshots])
+            expired_sv_snapshots = [s for s in sv_snapshots if not _is_snapshot_used(s)]
+            expired_sv_snapshot_ids.update([s.snapshot_id for s in expired_sv_snapshots])
 
-            for snapshot in expired_snapshots:
-                shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
-                shared_version_snapshots.discard(snapshot.snapshot_id)
+            for sv_snapshot in expired_sv_snapshots:
+                shared_version_snapshots = snapshots_by_version[
+                    (sv_snapshot.name, sv_snapshot.version)
+                ]
+                shared_version_snapshots.discard(sv_snapshot.snapshot_id)
 
                 shared_dev_version_snapshots = snapshots_by_dev_version[
-                    (snapshot.name, snapshot.dev_version)
+                    (sv_snapshot.name, sv_snapshot.dev_version)
                 ]
-                shared_dev_version_snapshots.discard(snapshot.snapshot_id)
+                shared_dev_version_snapshots.discard(sv_snapshot.snapshot_id)
 
                 if not shared_dev_version_snapshots:
                     cleanup_targets.append(
                         SnapshotTableCleanupTask(
-                            snapshot=snapshot.full_snapshot.table_info,
+                            snapshot=sv_snapshot.full_snapshot.table_info,
                             dev_table_only=bool(shared_version_snapshots),
                         )
                     )
 
-        return expired_snapshot_ids, cleanup_targets
+        return expired_sv_snapshot_ids, cleanup_targets
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         """Deletes snapshots.
