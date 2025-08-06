@@ -319,7 +319,7 @@ def init_example_project(
     settings = None
     start = None
     if engine_type and template == ProjectTemplate.DLT:
-        project_dialect = dialect if dialect else DIALECT_TO_TYPE.get(engine_type)
+        project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
         if pipeline and project_dialect:
             dlt_models, settings, start = generate_dlt_models_and_settings(
                 pipeline_name=pipeline, dialect=project_dialect, dlt_path=dlt_path

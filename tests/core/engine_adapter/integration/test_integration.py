@@ -44,10 +44,6 @@ from tests.core.engine_adapter.integration import (
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class PlanResults(PydanticModel):
     plan: Plan

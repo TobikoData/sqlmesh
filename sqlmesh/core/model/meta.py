@@ -48,10 +48,6 @@ if t.TYPE_CHECKING:
 
 FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class ModelMeta(_Node):
     """Metadata for models which can be defined in SQL."""
