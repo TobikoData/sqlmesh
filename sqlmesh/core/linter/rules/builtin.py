@@ -7,6 +7,7 @@ import typing as t
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.constants import EXTERNAL_MODELS_YAML
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
@@ -297,14 +298,18 @@ class CronIntervalAlignment(Rule):
 
             upstream_model_cron_next = upstream_model.cron_next(placeholder_start_date)
 
+            upstream_cron_interval_unit = IntervalUnit.from_cron(upstream_model.cron)
+            this_cron_interval_unit = IntervalUnit.from_cron(model.cron)
+            rule_violation = RuleViolation(
+                rule=self,
+                violation_msg=f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
+                f"than this model ({model.cron})",
+            )
+
             if upstream_model_cron_next > this_model_cron_next:
-                violations.append(
-                    RuleViolation(
-                        rule=self,
-                        violation_msg=f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
-                        f"than this model ({model.cron})",
-                    )
-                )
+                violations.append(rule_violation)
+            elif upstream_cron_interval_unit.seconds > this_cron_interval_unit.seconds:
+                violations.append(rule_violation)
             elif upstream_model_cron_next <= this_model_cron_next:
                 return None
         return violations

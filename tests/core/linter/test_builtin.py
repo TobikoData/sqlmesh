@@ -1,4 +1,5 @@
 import os
+import pytest
 
 from sqlmesh import Context
 from sqlmesh.core.linter.rule import Position, Range
@@ -179,7 +180,27 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
     assert edit.path == fix_path
 
 
-def test_cron_interval_alignment(tmp_path, copy_to_temp_path) -> None:
+@pytest.mark.parametrize(
+    "upstream_cron,downstream_cron,expected_violations,violation_msg",
+    [
+        (
+            "@weekly",
+            "@daily",
+            1,
+            'Upstream model "memory"."sushi"."step_1" has longer cron interval (@weekly) than this model (@daily)',
+        ),
+        ("5 * * * *", "0 * * * *", 0, None),
+        (
+            "15 10 * * *",
+            "0 * * * *",
+            1,
+            'Upstream model "memory"."sushi"."step_1" has longer cron interval (15 10 * * *) than this model (0 * * * *)',
+        ),
+    ],
+)
+def test_cron_interval_alignment(
+    tmp_path, copy_to_temp_path, upstream_cron, downstream_cron, expected_violations, violation_msg
+) -> None:
     sushi_paths = copy_to_temp_path("examples/sushi")
     sushi_path = sushi_paths[0]
 
@@ -210,14 +231,16 @@ def test_cron_interval_alignment(tmp_path, copy_to_temp_path) -> None:
 
     context.load()
 
-    # Create model with shorter cron interval that depends on model with longer interval
+    # Create model with cron intervals
     upstream_model = load_sql_based_model(
-        d.parse("MODEL (name memory.sushi.step_1, cron '@weekly'); SELECT * FROM (SELECT 1)")
+        d.parse(
+            f"MODEL (name memory.sushi.step_1, cron '{upstream_cron}'); SELECT * FROM (SELECT 1)"
+        )
     )
 
     downstream_model = load_sql_based_model(
         d.parse(
-            "MODEL (name memory.sushi.step_2, cron '@daily', depends_on ['memory.sushi.step_1']); SELECT * FROM (SELECT 1)"
+            f"MODEL (name memory.sushi.step_2, cron '{downstream_cron}', depends_on ['memory.sushi.step_1']); SELECT * FROM (SELECT 1)"
         )
     )
 
@@ -225,15 +248,38 @@ def test_cron_interval_alignment(tmp_path, copy_to_temp_path) -> None:
     context.upsert_model(downstream_model)
 
     lints = context.lint_models(raise_on_error=False)
-    assert len(lints) == 1
-    lint = lints[0]
-    assert (
-        lint.violation_msg
-        == 'Upstream model "memory"."sushi"."step_1" has longer cron interval (@weekly) than this model (@daily)'
-    )
+    assert len(lints) == expected_violations
+
+    if expected_violations > 0:
+        lint = lints[0]
+        assert lint.violation_msg == violation_msg
 
 
-def test_cron_interval_alignment_valid_upstream(tmp_path, copy_to_temp_path) -> None:
+@pytest.mark.parametrize(
+    "upstream_cron_a,upstream_cron_b,downstream_cron,expected_violations,violation_msg",
+    [
+        ("@weekly", "@hourly", "@daily", 0, None),
+        (
+            "@weekly",
+            "@weekly",
+            "@daily",
+            2,
+            [
+                'Upstream model "memory"."sushi"."step_a" has longer cron interval (@weekly) than this model (@daily)',
+                'Upstream model "memory"."sushi"."step_b" has longer cron interval (@weekly) than this model (@daily)',
+            ],
+        ),
+    ],
+)
+def test_cron_interval_alignment_valid_upstream_multiple_dependencies(
+    tmp_path,
+    copy_to_temp_path,
+    upstream_cron_a,
+    upstream_cron_b,
+    downstream_cron,
+    expected_violations,
+    violation_msg,
+) -> None:
     sushi_paths = copy_to_temp_path("examples/sushi")
     sushi_path = sushi_paths[0]
 
@@ -266,16 +312,20 @@ def test_cron_interval_alignment_valid_upstream(tmp_path, copy_to_temp_path) -> 
 
     # Create model with shorter cron interval that depends on model with longer interval
     upstream_model_a = load_sql_based_model(
-        d.parse("MODEL (name memory.sushi.step_a, cron '@weekly'); SELECT * FROM (SELECT 1)")
+        d.parse(
+            f"MODEL (name memory.sushi.step_a, cron '{upstream_cron_a}'); SELECT * FROM (SELECT 1)"
+        )
     )
 
     upstream_model_b = load_sql_based_model(
-        d.parse("MODEL (name memory.sushi.step_b, cron '@hourly'); SELECT * FROM (SELECT 1)")
+        d.parse(
+            f"MODEL (name memory.sushi.step_b, cron '{upstream_cron_b}'); SELECT * FROM (SELECT 1)"
+        )
     )
 
     downstream_model = load_sql_based_model(
         d.parse(
-            "MODEL (name memory.sushi.step_c, cron '@daily', depends_on ['memory.sushi.step_1', 'memory.sushi.step_b']); SELECT * FROM (SELECT 1)"
+            f"MODEL (name memory.sushi.step_c, cron '{downstream_cron}', depends_on ['memory.sushi.step_a', 'memory.sushi.step_b']); SELECT * FROM (SELECT 1)"
         )
     )
 
@@ -284,4 +334,8 @@ def test_cron_interval_alignment_valid_upstream(tmp_path, copy_to_temp_path) -> 
     context.upsert_model(downstream_model)
 
     lints = context.lint_models(raise_on_error=False)
-    assert len(lints) == 0
+    assert len(lints) == expected_violations
+
+    if expected_violations > 0:
+        for lint in lints:
+            assert lint.violation_msg in violation_msg
