@@ -58,6 +58,7 @@ class Plan(PydanticModel, frozen=True):
 
     deployability_index: DeployabilityIndex
     restatements: t.Dict[SnapshotId, Interval]
+    restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
     start_override_per_model: t.Optional[t.Dict[str, datetime]]
     end_override_per_model: t.Optional[t.Dict[str, datetime]]
 
@@ -256,6 +257,7 @@ class Plan(PydanticModel, frozen=True):
             skip_backfill=self.skip_backfill,
             empty_backfill=self.empty_backfill,
             restatements={s.name: i for s, i in self.restatements.items()},
+            restatement_triggers=self.restatement_triggers,
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
             forward_only=self.forward_only,
@@ -298,6 +300,7 @@ class EvaluatablePlan(PydanticModel):
     skip_backfill: bool
     empty_backfill: bool
     restatements: t.Dict[str, Interval]
+    restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
     is_dev: bool
     allow_destructive_models: t.Set[str]
     forward_only: bool
