@@ -299,10 +299,10 @@ workflows:
               engine:
                 - snowflake
                 - databricks
-                # - redshift
+                - redshift
                 - bigquery
-                # - clickhouse-cloud
-                # - athena
+                - clickhouse-cloud
+                - athena
           # filters:
           #   branches:
           #     only:

@@ -24,7 +24,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.core.engine_adapter.mixins import RowDiffMixin
+from sqlmesh.core.engine_adapter.mixins import RowDiffMixin, LogicalMergeMixin
 from sqlmesh.core.model.definition import create_sql_model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.state_sync.db import EngineAdapterStateSync
@@ -1902,10 +1902,18 @@ def test_incremental_by_unique_key_model_when_matched(ctx: TestContext):
         pytest.skip(f"{ctx.dialect} on {ctx.gateway} doesnt support merge")
 
     # DuckDB and some other engines use logical_merge which doesn't support when_matched
-    if ctx.dialect not in ["bigquery", "databricks", "postgres", "snowflake", "spark"]:
-        pytest.skip(f"{ctx.dialect} doesn't support native MERGE with when_matched clause")
+    if isinstance(ctx.engine_adapter, LogicalMergeMixin):
+        pytest.skip(
+            f"{ctx.dialect} on {ctx.gateway} uses logical merge which doesn't support when_matched"
+        )
 
-    context = ctx.create_context()
+    def _mutate_config(current_gateway_name: str, config: Config):
+        connection = config.gateways[current_gateway_name].connection
+        connection.concurrent_tasks = 1
+        if current_gateway_name == "inttest_redshift":
+            connection.enable_merge = True
+
+    context = ctx.create_context(_mutate_config)
     schema = ctx.schema(TEST_SCHEMA)
 
     # Create seed data with multiple days
