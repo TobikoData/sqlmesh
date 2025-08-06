@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import typing as t
 import logging
+import requests
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.utils import optional_import
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -17,7 +17,6 @@ if t.TYPE_CHECKING:
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 
 logger = logging.getLogger(__name__)
-requests = optional_import("requests")
 
 
 class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
@@ -196,7 +195,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             # Check for errors first
             response.raise_for_status()
 
-            result = {"status_code": response.status_code}
+            result: t.Dict[str, t.Any] = {"status_code": response.status_code}
 
             # Extract location header for polling
             if "location" in response.headers:
@@ -444,7 +443,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         Override create_schema to handle catalog-qualified schema names.
         Fabric doesn't support 'CREATE SCHEMA [catalog].[schema]' syntax.
         """
-        logger.debug(f"create_schema called with: {schema_name} (type: {type(schema_name)})")
 
         # Handle Table objects created by schema_() function
         if isinstance(schema_name, exp.Table) and not schema_name.name:
@@ -620,7 +618,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         Override create_view to handle catalog-qualified view names and ensure schema exists.
         Fabric doesn't support 'CREATE VIEW [catalog].[schema].[view]' syntax.
         """
-        logger.debug(f"create_view called with: {view_name} (type: {type(view_name)})")
 
         # Parse view_name into an exp.Table to properly handle both string and Table cases
         table = exp.to_table(view_name)
