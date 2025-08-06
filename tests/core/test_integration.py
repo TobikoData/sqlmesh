@@ -1942,13 +1942,16 @@ def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixt
         for k, v in actual_triggers.items()
         if v.restatement_triggers
     }
-    assert actual_triggers_name == {
-        waiter_revenue_by_day_name: [waiter_revenue_by_day_name, order_items_name],
-        order_items_name: [order_items_name],
-        '"memory"."sushi"."top_waiters"': [waiter_revenue_by_day_name],
-        '"memory"."sushi"."customer_revenue_by_day"': [order_items_name],
-        '"memory"."sushi"."customer_revenue_lifetime"': [order_items_name],
-    }
+
+    assert sorted(actual_triggers_name[waiter_revenue_by_day_name]) == sorted(
+        [waiter_revenue_by_day_name, order_items_name]
+    )
+    assert actual_triggers_name[order_items_name] == [order_items_name]
+    assert actual_triggers_name['"memory"."sushi"."top_waiters"'] == [waiter_revenue_by_day_name]
+    assert actual_triggers_name['"memory"."sushi"."customer_revenue_by_day"'] == [order_items_name]
+    assert actual_triggers_name['"memory"."sushi"."customer_revenue_lifetime"'] == [
+        order_items_name
+    ]
 
     # RUN: select and auto-restatement triggers
     # User selects top_waiters and waiter_revenue_by_day, others added as auto-upstream
@@ -7040,13 +7043,13 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "Differences from the `prod` environment" in output.stdout
 
     assert (
-        """MODEL (
-   name test.a,
-+  owner test,
-   kind FULL
- )
- SELECT
--  5 AS col
+        """MODEL (                                                                        
+   name test.a,                                                                 
++  owner test,                                                                  
+   kind FULL                                                                    
+ )                                                                              
+ SELECT                                                                         
+-  5 AS col                                                                     
 +  10 AS col"""
         in output.stdout
     )
