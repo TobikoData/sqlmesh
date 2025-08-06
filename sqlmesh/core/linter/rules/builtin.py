@@ -7,7 +7,6 @@ import typing as t
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.constants import EXTERNAL_MODELS_YAML
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.linter.helpers import (
@@ -279,9 +278,7 @@ class CronIntervalAlignment(Rule):
     """Upstream model has a cron expression with longer intervals than downstream model."""
 
     def check_model(self, model: Model) -> t.Optional[t.List[RuleViolation]]:
-        placeholder_start_date = "2020-01-01 10:00:00"
-
-        this_model_cron_next = model.cron_next(placeholder_start_date)
+        placeholder_start_date = "2020-01-01 00:25:00"
 
         violations = []
         for upstream_model_name in model.depends_on:
@@ -296,22 +293,23 @@ class CronIntervalAlignment(Rule):
             if upstream_model.kind.name in skip_kinds:
                 continue
 
-            upstream_model_cron_next = upstream_model.cron_next(placeholder_start_date)
+            for _ in range(12):
+                this_next = model.cron_next(placeholder_start_date)
+                upstream_next = upstream_model.cron_next(placeholder_start_date)
+                current_time = this_next
 
-            upstream_cron_interval_unit = IntervalUnit.from_cron(upstream_model.cron)
-            this_cron_interval_unit = IntervalUnit.from_cron(model.cron)
-            rule_violation = RuleViolation(
-                rule=self,
-                violation_msg=f"Upstream model {upstream_model_name} has longer cron interval ({upstream_model.cron}) "
-                f"than this model ({model.cron})",
-            )
+                # Find the first iteration pair where upstream runs after downstream
+                if upstream_next > this_next:
+                    violations.append(
+                        RuleViolation(
+                            rule=self,
+                            violation_msg=f"Upstream model {upstream_model_name} runs less frequently ({upstream_model.cron}) than this model ({model.cron})",
+                        )
+                    )
+                    break  # Found violation, stop checking this upstream model
+                else:
+                    return None
 
-            if upstream_model_cron_next > this_model_cron_next:
-                violations.append(rule_violation)
-            elif upstream_cron_interval_unit.seconds > this_cron_interval_unit.seconds:
-                violations.append(rule_violation)
-            elif upstream_model_cron_next <= this_model_cron_next:
-                return None
         return violations
 
 

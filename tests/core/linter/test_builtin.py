@@ -187,14 +187,19 @@ def test_no_missing_external_models_with_existing_file_not_ending_in_newline(
             "@weekly",
             "@daily",
             1,
-            'Upstream model "memory"."sushi"."step_1" has longer cron interval (@weekly) than this model (@daily)',
+            'Upstream model "memory"."sushi"."step_1" runs less frequently (@weekly) than this model (@daily)',
         ),
-        ("5 * * * *", "0 * * * *", 0, None),
+        (
+            "5 * * * *",
+            "0 * * * *",
+            1,
+            'Upstream model "memory"."sushi"."step_1" runs less frequently (5 * * * *) than this model (0 * * * *)',
+        ),
         (
             "15 10 * * *",
             "0 * * * *",
             1,
-            'Upstream model "memory"."sushi"."step_1" has longer cron interval (15 10 * * *) than this model (0 * * * *)',
+            'Upstream model "memory"."sushi"."step_1" runs less frequently (15 10 * * *) than this model (0 * * * *)',
         ),
     ],
 )
@@ -265,8 +270,8 @@ def test_cron_interval_alignment(
             "@daily",
             2,
             [
-                'Upstream model "memory"."sushi"."step_a" has longer cron interval (@weekly) than this model (@daily)',
-                'Upstream model "memory"."sushi"."step_b" has longer cron interval (@weekly) than this model (@daily)',
+                'Upstream model "memory"."sushi"."step_a" runs less frequently (@weekly) than this model (@daily)',
+                'Upstream model "memory"."sushi"."step_b" runs less frequently (@weekly) than this model (@daily)',
             ],
         ),
     ],
