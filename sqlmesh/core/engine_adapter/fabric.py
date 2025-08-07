@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import typing as t
 import logging
+import inspect
+import threading
+import time
+from datetime import datetime, timedelta, timezone
 import requests
 from sqlglot import exp
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
+from tenacity import retry, wait_exponential, retry_if_result, stop_after_delay
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -20,6 +24,55 @@ from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 logger = logging.getLogger(__name__)
 
 
+# Global caches for performance optimization
+_signature_inspection_cache: t.Dict[
+    int, bool
+] = {}  # Cache for connection factory signature inspection
+_signature_cache_lock = threading.RLock()  # Thread-safe access to signature cache
+_warehouse_list_cache: t.Dict[
+    str, t.Tuple[t.Dict[str, t.Any], float]
+] = {}  # Cache for warehouse listings
+_warehouse_cache_lock = threading.RLock()  # Thread-safe access to warehouse cache
+
+
+class TokenCache:
+    """Thread-safe cache for authentication tokens with expiration handling."""
+
+    def __init__(self) -> None:
+        self._cache: t.Dict[str, t.Tuple[str, datetime]] = {}  # key -> (token, expires_at)
+        self._lock = threading.RLock()
+
+    def get(self, cache_key: str) -> t.Optional[str]:
+        """Get cached token if it exists and hasn't expired."""
+        with self._lock:
+            if cache_key in self._cache:
+                token, expires_at = self._cache[cache_key]
+                if datetime.now(timezone.utc) < expires_at:
+                    logger.debug(f"Using cached authentication token (expires at {expires_at})")
+                    return token
+                logger.debug(f"Cached token expired at {expires_at}, will refresh")
+                del self._cache[cache_key]
+            return None
+
+    def set(self, cache_key: str, token: str, expires_in: int) -> None:
+        """Cache token with expiration time."""
+        with self._lock:
+            # Add 5 minute buffer to prevent edge cases around expiration
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 300)
+            self._cache[cache_key] = (token, expires_at)
+            logger.debug(f"Cached authentication token (expires at {expires_at})")
+
+    def clear(self) -> None:
+        """Clear all cached tokens."""
+        with self._lock:
+            self._cache.clear()
+            logger.debug("Cleared authentication token cache")
+
+
+# Global token cache shared across all Fabric adapter instances
+_token_cache = TokenCache()
+
+
 class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     """
     Adapter for Microsoft Fabric.
@@ -31,26 +84,111 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     SUPPORTS_CREATE_DROP_CATALOG = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
 
+    # Configurable timeout constants
+    DEFAULT_AUTH_TIMEOUT = 30
+    DEFAULT_API_TIMEOUT = 60
+    DEFAULT_OPERATION_TIMEOUT = 600
+    DEFAULT_OPERATION_RETRY_MAX_WAIT = 30
+    DEFAULT_WAREHOUSE_CACHE_TTL = 300  # 5 minutes
+
     def __init__(
         self, connection_factory_or_pool: t.Union[t.Callable, t.Any], *args: t.Any, **kwargs: t.Any
     ) -> None:
+        # Thread lock for catalog switching operations
+        self._catalog_switch_lock = threading.RLock()
+
         # Wrap connection factory to support catalog switching
         if not isinstance(connection_factory_or_pool, ConnectionPool):
             original_connection_factory = connection_factory_or_pool
+            # Check upfront if factory supports target_catalog to avoid runtime issues
+            supports_target_catalog = self._connection_factory_supports_target_catalog(
+                original_connection_factory
+            )
 
             def catalog_aware_factory(*args: t.Any, **kwargs: t.Any) -> t.Any:
-                # Try to pass target_catalog if the factory accepts it
-                try:
+                # Use the pre-determined support flag
+                if supports_target_catalog:
                     return original_connection_factory(
                         target_catalog=self._target_catalog, *args, **kwargs
                     )
-                except TypeError:
-                    # Factory doesn't accept target_catalog, call without it
-                    return original_connection_factory(*args, **kwargs)
+                # Factory doesn't accept target_catalog, call without it
+                return original_connection_factory(*args, **kwargs)
 
             connection_factory_or_pool = catalog_aware_factory
 
         super().__init__(connection_factory_or_pool, *args, **kwargs)
+
+        # Initialize configuration with defaults that can be overridden
+        self._auth_timeout = self._extra_config.get("auth_timeout", self.DEFAULT_AUTH_TIMEOUT)
+        self._api_timeout = self._extra_config.get("api_timeout", self.DEFAULT_API_TIMEOUT)
+        self._operation_timeout = self._extra_config.get(
+            "operation_timeout", self.DEFAULT_OPERATION_TIMEOUT
+        )
+        self._operation_retry_max_wait = self._extra_config.get(
+            "operation_retry_max_wait", self.DEFAULT_OPERATION_RETRY_MAX_WAIT
+        )
+
+    def _connection_factory_supports_target_catalog(self, factory: t.Callable) -> bool:
+        """
+        Check if the connection factory accepts the target_catalog parameter
+        using cached function signature inspection for performance.
+        """
+        # Use factory object id as cache key for thread-safe caching
+        factory_id = id(factory)
+
+        with _signature_cache_lock:
+            if factory_id in _signature_inspection_cache:
+                cached_result = _signature_inspection_cache[factory_id]
+                logger.debug(f"Using cached signature inspection result: {cached_result}")
+                return cached_result
+
+        try:
+            # Get the function signature
+            sig = inspect.signature(factory)
+
+            # Check if target_catalog is an explicit parameter
+            if "target_catalog" in sig.parameters:
+                result = True
+            else:
+                # For factories with **kwargs, only use signature inspection
+                # Avoid test calls as they may have unintended side effects
+                has_var_keyword = any(
+                    param.kind == param.VAR_KEYWORD for param in sig.parameters.values()
+                )
+
+                # Be conservative: only assume support if there's **kwargs AND
+                # the function name suggests it might handle target_catalog
+                func_name = getattr(factory, "__name__", str(factory)).lower()
+                result = has_var_keyword and any(
+                    keyword in func_name
+                    for keyword in ["connection", "connect", "factory", "create"]
+                )
+
+                if not result and has_var_keyword:
+                    logger.debug(
+                        f"Connection factory {func_name} has **kwargs but name doesn't suggest "
+                        f"target_catalog support. Being conservative and assuming no support."
+                    )
+
+            # Cache the result
+            with _signature_cache_lock:
+                _signature_inspection_cache[factory_id] = result
+
+            logger.debug(
+                f"Signature inspection result for {getattr(factory, '__name__', 'unknown')}: {result}"
+            )
+            return result
+
+        except (ValueError, TypeError) as e:
+            # If we can't inspect the signature, log the issue and fallback to not using target_catalog
+            logger.debug(f"Could not inspect connection factory signature: {e}")
+            result = False
+
+            # Cache the negative result too
+            with _signature_cache_lock:
+                _signature_inspection_cache[factory_id] = result
+
+            return result
 
     @property
     def _target_catalog(self) -> t.Optional[str]:
@@ -141,7 +279,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         )
 
     def _get_access_token(self) -> str:
-        """Get access token using Service Principal authentication."""
+        """Get access token using Service Principal authentication with caching."""
         tenant_id = self._extra_config.get("tenant_id")
         client_id = self._extra_config.get("user")
         client_secret = self._extra_config.get("password")
@@ -152,25 +290,83 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
                 "in the Fabric connection configuration"
             )
 
-        # Use Azure AD OAuth2 token endpoint
-        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        # Create cache key from the credentials (without exposing secrets in logs)
+        cache_key = f"{tenant_id}:{client_id}:{hash(client_secret)}"
 
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "scope": "https://api.fabric.microsoft.com/.default",
-        }
+        # Try to get cached token first
+        cached_token = _token_cache.get(cache_key)
+        if cached_token:
+            return cached_token
 
-        try:
-            response = requests.post(token_url, data=data)
-            response.raise_for_status()
-            token_data = response.json()
-            return token_data["access_token"]
-        except requests.exceptions.RequestException as e:
-            raise SQLMeshError(f"Failed to authenticate with Azure AD: {e}")
-        except KeyError:
-            raise SQLMeshError("Invalid response from Azure AD token endpoint")
+        # Use double-checked locking to prevent multiple concurrent token requests
+        with _token_cache._lock:
+            # Check again inside the lock in case another thread got the token
+            cached_token = _token_cache.get(cache_key)
+            if cached_token:
+                return cached_token
+
+            logger.debug("No valid cached token found, requesting new token from Azure AD")
+
+            # Use Azure AD OAuth2 token endpoint
+            token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+            data = {
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scope": "https://api.fabric.microsoft.com/.default",
+            }
+
+            try:
+                response = requests.post(token_url, data=data, timeout=self._auth_timeout)
+                response.raise_for_status()
+                token_data = response.json()
+
+                access_token = token_data["access_token"]
+                expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour if not provided
+
+                # Cache the token (this method is already thread-safe)
+                _token_cache.set(cache_key, access_token, expires_in)
+
+                logger.debug(
+                    f"Successfully obtained new authentication token (expires in {expires_in}s)"
+                )
+                return access_token
+
+            except requests.exceptions.HTTPError as e:
+                error_details = ""
+                try:
+                    if response.content:
+                        error_response = response.json()
+                        error_code = error_response.get("error", "unknown_error")
+                        error_description = error_response.get(
+                            "error_description", "No description"
+                        )
+                        error_details = f"Azure AD Error {error_code}: {error_description}"
+                except (ValueError, AttributeError):
+                    error_details = f"HTTP {response.status_code}: {response.text}"
+
+                raise SQLMeshError(
+                    f"Authentication failed with Azure AD (HTTP {response.status_code}): {error_details}. "
+                    f"Please verify tenant_id, client_id, and client_secret are correct."
+                )
+            except requests.exceptions.Timeout:
+                raise SQLMeshError(
+                    f"Authentication request to Azure AD timed out after {self._auth_timeout}s. "
+                    f"Please check network connectivity or increase auth_timeout configuration."
+                )
+            except requests.exceptions.ConnectionError as e:
+                raise SQLMeshError(
+                    f"Failed to connect to Azure AD authentication endpoint: {e}. "
+                    f"Please check network connectivity and tenant_id."
+                )
+            except requests.exceptions.RequestException as e:
+                raise SQLMeshError(f"Authentication request to Azure AD failed: {e}")
+            except KeyError:
+                raise SQLMeshError(
+                    "Invalid response from Azure AD token endpoint - missing access_token. "
+                    "Please verify the Service Principal has proper permissions."
+                )
 
     def _get_fabric_auth_headers(self) -> t.Dict[str, str]:
         """Get authentication headers for Fabric REST API calls."""
@@ -197,13 +393,16 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
         headers = self._get_fabric_auth_headers()
 
+        # Use configurable timeout
+        timeout = self._api_timeout
+
         try:
             if method.upper() == "GET":
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, timeout=timeout)
             elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=timeout)
             elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers)
+                response = requests.delete(url, headers=headers, timeout=timeout)
             else:
                 raise SQLMeshError(f"Unsupported HTTP method: {method}")
 
@@ -230,16 +429,49 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
         except requests.exceptions.HTTPError as e:
             error_details = ""
+            azure_error_code = ""
             try:
                 if response.content:
                     error_response = response.json()
-                    error_details = error_response.get("error", {}).get(
-                        "message", str(error_response)
-                    )
+                    error_info = error_response.get("error", {})
+                    if isinstance(error_info, dict):
+                        error_details = error_info.get("message", str(error_response))
+                        azure_error_code = error_info.get("code", "")
+                    else:
+                        error_details = str(error_response)
             except (ValueError, AttributeError):
                 error_details = response.text if hasattr(response, "text") else str(e)
 
-            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
+            # Provide specific guidance based on status codes
+            status_guidance = {
+                400: "Bad request - check request parameters and data format",
+                401: "Unauthorized - verify authentication token and permissions",
+                403: "Forbidden - insufficient permissions for this operation",
+                404: "Resource not found - check workspace_id and resource names",
+                429: "Rate limit exceeded - reduce request frequency",
+                500: "Internal server error - Microsoft Fabric service issue",
+                503: "Service unavailable - Microsoft Fabric may be down",
+            }
+
+            guidance = status_guidance.get(
+                response.status_code, "Check Microsoft Fabric service status"
+            )
+            azure_code_msg = f" (Azure Error: {azure_error_code})" if azure_error_code else ""
+
+            raise SQLMeshError(
+                f"Fabric API HTTP error {response.status_code}{azure_code_msg}: {error_details}. "
+                f"Guidance: {guidance}"
+            )
+        except requests.exceptions.Timeout:
+            raise SQLMeshError(
+                f"Fabric API request timed out after {timeout}s. The operation may still be in progress. "
+                f"Check the Fabric portal to verify the operation status or increase api_timeout configuration."
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise SQLMeshError(
+                f"Failed to connect to Fabric API: {e}. "
+                "Please check network connectivity and workspace_id."
+            )
         except requests.exceptions.RequestException as e:
             raise SQLMeshError(f"Fabric API request failed: {e}")
 
@@ -249,18 +481,26 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         """Make a request to the Fabric REST API and return response with status code and location."""
         return self._make_fabric_api_request(method, endpoint, data, include_response_headers=True)
 
-    @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=30),
-        stop=stop_after_attempt(60),
-        retry=retry_if_result(lambda result: result not in ["Succeeded", "Failed"]),
-    )
     def _check_operation_status(self, location_url: str, operation_name: str) -> str:
-        """Check the operation status and return the status string."""
+        """Check the operation status and return the status string with configurable retry."""
+        # Create a retry decorator with instance-specific configuration
+        retry_decorator = retry(
+            wait=wait_exponential(multiplier=1, min=1, max=self._operation_retry_max_wait),
+            stop=stop_after_delay(self._operation_timeout),  # Use configurable timeout
+            retry=retry_if_result(lambda result: result not in ["Succeeded", "Failed"]),
+        )
+
+        # Apply retry to the actual status check method
+        retrying_check = retry_decorator(self._check_operation_status_impl)
+        return retrying_check(location_url, operation_name)
+
+    def _check_operation_status_impl(self, location_url: str, operation_name: str) -> str:
+        """Implementation of operation status checking (called by retry decorator)."""
 
         headers = self._get_fabric_auth_headers()
 
         try:
-            response = requests.get(location_url, headers=headers)
+            response = requests.get(location_url, headers=headers, timeout=self._api_timeout)
             response.raise_for_status()
 
             result = response.json()
@@ -291,8 +531,11 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
                     f"Operation {operation_name} completed with status: {final_status}"
                 )
         except Exception as e:
-            if "retry" in str(e).lower():
-                raise SQLMeshError(f"Operation {operation_name} did not complete within timeout")
+            if "retry" in str(e).lower() or "timeout" in str(e).lower():
+                raise SQLMeshError(
+                    f"Operation {operation_name} did not complete within {self._operation_timeout}s timeout. "
+                    f"You can increase the operation_timeout configuration if needed."
+                )
             raise
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
@@ -319,6 +562,38 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         else:
             raise SQLMeshError(f"Unexpected response from warehouse creation: {response}")
 
+    def _get_cached_warehouses(self) -> t.Dict[str, t.Any]:
+        """Get warehouse list with caching to improve performance."""
+        workspace_id = self._extra_config.get("workspace_id")
+        if not workspace_id:
+            raise SQLMeshError(
+                "workspace_id parameter is required in connection config for warehouse operations"
+            )
+
+        cache_key = workspace_id
+        current_time = time.time()
+
+        with _warehouse_cache_lock:
+            if cache_key in _warehouse_list_cache:
+                cached_data, cache_time = _warehouse_list_cache[cache_key]
+                if current_time - cache_time < self.DEFAULT_WAREHOUSE_CACHE_TTL:
+                    logger.debug(
+                        f"Using cached warehouse list (cached {current_time - cache_time:.1f}s ago)"
+                    )
+                    return cached_data
+                logger.debug("Warehouse list cache expired, refreshing")
+                del _warehouse_list_cache[cache_key]
+
+        # Cache miss or expired - fetch fresh data
+        logger.debug("Fetching warehouse list from Fabric API")
+        warehouses = self._make_fabric_api_request("GET", "warehouses")
+
+        # Cache the result
+        with _warehouse_cache_lock:
+            _warehouse_list_cache[cache_key] = (warehouses, current_time)
+
+        return warehouses
+
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
         warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
@@ -326,8 +601,8 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
 
         try:
-            # Get the warehouse ID by listing warehouses
-            warehouses = self._make_fabric_api_request("GET", "warehouses")
+            # Get the warehouse ID by listing warehouses (with caching)
+            warehouses = self._get_cached_warehouses()
 
             warehouse_id = next(
                 (
@@ -344,6 +619,14 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
             # Delete the warehouse by ID
             self._make_fabric_api_request("DELETE", f"warehouses/{warehouse_id}")
+
+            # Clear warehouse cache after successful deletion since the list changed
+            workspace_id = self._extra_config.get("workspace_id")
+            if workspace_id:
+                with _warehouse_cache_lock:
+                    _warehouse_list_cache.pop(workspace_id, None)
+                    logger.debug("Cleared warehouse cache after successful deletion")
+
             logger.info(f"Successfully deleted Fabric warehouse: {warehouse_name}")
 
         except SQLMeshError as e:
@@ -373,40 +656,37 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         See:
             https://learn.microsoft.com/en-us/fabric/data-warehouse/sql-query-editor#limitations
         """
-        current_catalog = self.get_current_catalog()
+        # Use thread-safe locking for catalog switching operations
+        with self._catalog_switch_lock:
+            current_catalog = self.get_current_catalog()
 
-        # If already using the requested catalog, do nothing
-        if current_catalog and current_catalog == catalog_name:
-            logger.debug(f"Already using catalog '{catalog_name}', no action needed")
-            return
+            # If already using the requested catalog, do nothing
+            if current_catalog and current_catalog == catalog_name:
+                logger.debug(f"Already using catalog '{catalog_name}', no action needed")
+                return
 
-        logger.info(f"Switching from catalog '{current_catalog}' to '{catalog_name}'")
+            logger.info(f"Switching from catalog '{current_catalog}' to '{catalog_name}'")
 
-        # Set the target catalog for our custom connection factory
-        self._target_catalog = catalog_name
+            # Set the target catalog for our custom connection factory
+            self._target_catalog = catalog_name
 
-        # Save the target catalog before closing (close() clears thread-local storage)
-        target_catalog = self._target_catalog
+            # Close all existing connections since Fabric requires reconnection for catalog changes
+            # Note: We don't need to save/restore target_catalog since we're using proper locking
+            self.close()
 
-        # Close all existing connections since Fabric requires reconnection for catalog changes
-        self.close()
+            # Verify the catalog switch worked by getting a new connection
+            try:
+                actual_catalog = self.get_current_catalog()
+                if actual_catalog and actual_catalog == catalog_name:
+                    logger.debug(f"Successfully switched to catalog '{catalog_name}'")
+                else:
+                    logger.warning(
+                        f"Catalog switch may have failed. Expected '{catalog_name}', got '{actual_catalog}'"
+                    )
+            except Exception as e:
+                logger.debug(f"Could not verify catalog switch: {e}")
 
-        # Restore the target catalog after closing
-        self._target_catalog = target_catalog
-
-        # Verify the catalog switch worked by getting a new connection
-        try:
-            actual_catalog = self.get_current_catalog()
-            if actual_catalog and actual_catalog == catalog_name:
-                logger.debug(f"Successfully switched to catalog '{catalog_name}'")
-            else:
-                logger.warning(
-                    f"Catalog switch may have failed. Expected '{catalog_name}', got '{actual_catalog}'"
-                )
-        except Exception as e:
-            logger.debug(f"Could not verify catalog switch: {e}")
-
-        logger.debug(f"Updated target catalog to '{catalog_name}' and closed connections")
+            logger.debug(f"Updated target catalog to '{catalog_name}' and closed connections")
 
     def drop_schema(
         self,
@@ -461,9 +741,24 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             try:
                 # Create the schema if it doesn't exist
                 self.create_schema(full_schema_name, ignore_if_exists=True)
+            except SQLMeshError as e:
+                error_msg = str(e).lower()
+                if any(
+                    keyword in error_msg for keyword in ["already exists", "duplicate", "exists"]
+                ):
+                    logger.debug(f"Schema {full_schema_name} already exists")
+                elif any(
+                    keyword in error_msg
+                    for keyword in ["permission", "access", "denied", "forbidden"]
+                ):
+                    logger.warning(
+                        f"Insufficient permissions to create schema {full_schema_name}: {e}"
+                    )
+                else:
+                    logger.warning(f"Failed to create schema {full_schema_name}: {e}")
             except Exception as e:
-                logger.debug(f"Error creating schema {full_schema_name}: {e}")
-                # Continue anyway - the schema might already exist or we might not have permissions
+                logger.warning(f"Unexpected error creating schema {full_schema_name}: {e}")
+                # Continue anyway for backward compatibility, but log as warning instead of debug
 
     def _create_table(
         self,
