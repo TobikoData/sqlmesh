@@ -76,6 +76,7 @@ class SnapshotChangeCategory(IntEnum):
 
     BREAKING = 1
     NON_BREAKING = 2
+    # FORWARD_ONLY category is deprecated and is kept for backwards compatibility.
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
     INDIRECT_NON_BREAKING = 5
@@ -336,6 +337,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
     table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
+    forward_only: bool
 
     @cached_property
     def identifier(self) -> str:
@@ -383,7 +385,7 @@ class SnapshotInfoMixin(ModelKindMixin):
 
     @property
     def is_forward_only(self) -> bool:
-        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+        return self.forward_only or self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
     def is_metadata(self) -> bool:
@@ -394,9 +396,18 @@ class SnapshotInfoMixin(ModelKindMixin):
         return self.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
 
     @property
-    def reuses_previous_version(self) -> bool:
-        return self.change_category in (
-            SnapshotChangeCategory.FORWARD_ONLY,
+    def is_no_rebuild(self) -> bool:
+        """Returns true if this snapshot doesn't require a rebuild in production."""
+        return self.forward_only or self.change_category in (
+            SnapshotChangeCategory.FORWARD_ONLY,  # Backwards compatibility
+            SnapshotChangeCategory.METADATA,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        )
+
+    @property
+    def is_no_preview(self) -> bool:
+        """Returns true if this snapshot doesn't require a preview in development."""
+        return self.forward_only and self.change_category in (
             SnapshotChangeCategory.METADATA,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
         )
@@ -487,6 +498,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     custom_materialization: t.Optional[str] = None
     dev_table_suffix: str
     model_gateway: t.Optional[str] = None
+    forward_only: bool = False
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -614,6 +626,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     table_naming_convention_: TableNamingConvention = Field(
         default=TableNamingConvention.default, alias="table_naming_convention"
     )
+    forward_only: bool = False
 
     @field_validator("ttl")
     @classmethod
@@ -1006,22 +1019,26 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 )
         return intervals
 
-    def categorize_as(self, category: SnapshotChangeCategory) -> None:
+    def categorize_as(self, category: SnapshotChangeCategory, forward_only: bool = False) -> None:
         """Assigns the given category to this snapshot.
 
         Args:
             category: The change category to assign to this snapshot.
+            forward_only: Whether or not this snapshot is applied going forward in production.
         """
+        assert category != SnapshotChangeCategory.FORWARD_ONLY, (
+            "FORWARD_ONLY change category is deprecated"
+        )
+
         self.dev_version_ = self.fingerprint.to_version()
-        reuse_previous_version = category in (
-            SnapshotChangeCategory.FORWARD_ONLY,
+        is_no_rebuild = forward_only or category in (
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
             SnapshotChangeCategory.METADATA,
         )
         if self.is_model and self.model.physical_version:
             # If the model has a pinned version then use that.
             self.version = self.model.physical_version
-        elif reuse_previous_version and self.previous_version:
+        elif is_no_rebuild and self.previous_version:
             previous_version = self.previous_version
             self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
@@ -1040,6 +1057,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.version = self.fingerprint.to_version()
 
         self.change_category = category
+        self.forward_only = forward_only
 
     @property
     def categorized(self) -> bool:
@@ -1220,6 +1238,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             dev_table_suffix=self.dev_table_suffix,
             model_gateway=self.model_gateway,
             table_naming_convention=self.table_naming_convention,  # type: ignore
+            forward_only=self.forward_only,
         )
 
     @property

@@ -218,7 +218,7 @@ def test_on_snapshots_created(
         context.get_snapshot("sushi.waiter_revenue_by_day"),
         context.get_snapshot("sushi.top_waiters"),
     ]
-    new_snapshots[0].categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshots[0].categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshots[0].effective_from = "2024-01-01"
     new_snapshots[0].version = "test_version"
 
@@ -239,7 +239,7 @@ def test_on_snapshots_created(
             "node_type": "model",
             "model_kind": "incremental_by_time_range",
             "is_sql": False,
-            "change_category": "forward_only",
+            "change_category": "breaking",
             "dialect": "duckdb",
             "audits_count": 0,
             "effective_from_set": True,

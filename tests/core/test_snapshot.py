@@ -171,6 +171,7 @@ def test_json(snapshot: Snapshot):
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
         "unrestorable": False,
+        "forward_only": False,
     }
 
 
@@ -264,7 +265,8 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
 def test_add_interval_dev(snapshot: Snapshot, make_snapshot):
     snapshot.version = "existing_version"
     snapshot.dev_version_ = "existing_dev_version"
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
     assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
@@ -1169,7 +1171,7 @@ def test_snapshot_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
         data_hash="2", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.previous_versions = (previous_data_version,)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3049392110__dev"
 
@@ -1320,7 +1322,7 @@ def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
 
     assert changed_snapshot.previous_version == original_snapshot.data_version
 
-    changed_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    changed_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     # inherited from previous version even though changed_snapshot was created with TableNamingConvention.HASH_MD5
     assert changed_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
@@ -1725,7 +1727,7 @@ def test_physical_schema(snapshot: Snapshot):
     new_snapshot.previous_versions = (snapshot.data_version,)
     new_snapshot.physical_schema_ = None
     new_snapshot.version = None
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert new_snapshot.physical_schema == "custom_schema"
     assert new_snapshot.data_version.physical_schema == "custom_schema"
@@ -1735,7 +1737,7 @@ def test_physical_schema(snapshot: Snapshot):
 def test_has_paused_forward_only(snapshot: Snapshot):
     assert not has_paused_forward_only([snapshot], [snapshot])
 
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     assert has_paused_forward_only([snapshot], [snapshot])
 
     snapshot.unpaused_ts = to_timestamp("2023-01-01")
@@ -2029,7 +2031,7 @@ def test_deployability_index(make_snapshot):
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.parents = (snapshot_a.snapshot_id,)
 
     snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT 1")))
@@ -2093,7 +2095,7 @@ def test_deployability_index(make_snapshot):
 
 def test_deployability_index_unpaused_forward_only(make_snapshot):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
-    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_a.unpaused_ts = 1
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
@@ -2120,7 +2122,7 @@ def test_deployability_index_unpaused_auto_restatement(make_snapshot):
         ),
     )
     snapshot_a = make_snapshot(model_a)
-    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_a.unpaused_ts = 1
 
     # Snapshot B is a child of a model with auto restatement and is not paused,
@@ -2216,11 +2218,11 @@ def test_deployability_index_categorized_forward_only_model(make_snapshot):
 
     snapshot_a = make_snapshot(model_a)
     snapshot_a.previous_versions = snapshot_a_old.all_versions
-    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
     snapshot_b.parents = (snapshot_a.snapshot_id,)
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     deployability_index = DeployabilityIndex.create(
         {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
@@ -2238,7 +2240,7 @@ def test_deployability_index_missing_parent(make_snapshot):
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.parents = (snapshot_a.snapshot_id,)
 
     deplyability_index = DeployabilityIndex.create({snapshot_b.snapshot_id: snapshot_b})
@@ -2802,7 +2804,7 @@ def test_physical_version_pin_for_new_forward_only_models(make_snapshot):
         ),
     )
     snapshot_c.previous_versions = snapshot_b.all_versions
-    snapshot_c.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot_b.fingerprint != snapshot_c.fingerprint
     assert snapshot_b.version == snapshot_c.version
@@ -2832,7 +2834,7 @@ def test_physical_version_pin_for_new_forward_only_models(make_snapshot):
         ),
     )
     snapshot_e.previous_versions = snapshot_d.all_versions
-    snapshot_e.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_e.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot_d.fingerprint != snapshot_e.fingerprint
     assert snapshot_d.version == snapshot_e.version
@@ -2849,7 +2851,7 @@ def test_physical_version_pin_for_new_forward_only_models(make_snapshot):
         ),
     )
     snapshot_f.previous_versions = snapshot_e.all_versions
-    snapshot_f.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_f.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot_f.version == "1234"
     assert snapshot_f.fingerprint != snapshot_e.fingerprint

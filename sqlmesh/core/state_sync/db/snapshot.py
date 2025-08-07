@@ -733,6 +733,7 @@ class SharedVersionSnapshot(PydanticModel):
     disable_restatement: bool
     effective_from: t.Optional[TimeLike]
     raw_snapshot: t.Dict[str, t.Any]
+    forward_only: bool
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -740,7 +741,7 @@ class SharedVersionSnapshot(PydanticModel):
 
     @property
     def is_forward_only(self) -> bool:
-        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+        return self.forward_only or self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
@@ -803,4 +804,5 @@ class SharedVersionSnapshot(PydanticModel):
             disable_restatement=raw_node.get("kind", {}).get("disable_restatement", False),
             effective_from=raw_snapshot.get("effective_from"),
             raw_snapshot=raw_snapshot,
+            forward_only=raw_snapshot.get("forward_only", False),
         )
