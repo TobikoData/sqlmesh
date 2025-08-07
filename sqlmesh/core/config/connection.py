@@ -1725,7 +1725,7 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
 
         def create_fabric_connection(
             target_catalog: t.Optional[str] = None, *args: t.Any, **kwargs: t.Any
-        ) -> t.Callable:
+        ) -> t.Any:
             kwargs["database"] = target_catalog or self.database
             return base_factory(*args, **kwargs)
 
