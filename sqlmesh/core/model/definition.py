@@ -2538,7 +2538,22 @@ def _create_model(
         for jinja_macro in jinja_macros.root_macros.values():
             used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
-    default_audits = defaults.get("audits", None) if kwargs.get("audits") else None
+    # Merge model-specific audits with default audits
+    model_audits = kwargs.pop("audits", [])
+    default_audits = defaults.pop("audits", [])
+
+    if isinstance(model_audits, (exp.Tuple, exp.Array)):
+        model_audits_list = [d.extract_func_call(i) for i in model_audits.expressions]
+    elif isinstance(model_audits, exp.Paren):
+        model_audits_list = [d.extract_func_call(model_audits.this)]
+    elif isinstance(model_audits, exp.Expression):
+        model_audits_list = [d.extract_func_call(model_audits)]
+    elif isinstance(model_audits, list):
+        model_audits_list = model_audits
+    else:
+        model_audits_list = []
+    merged_audits = default_audits + model_audits_list
+    kwargs["audits"] = merged_audits
 
     model = klass(
         name=name,
@@ -2556,9 +2571,6 @@ def _create_model(
         **(audit_definitions or {}),
         **(inline_audits or {}),
     }
-
-    if default_audits:
-        model = model.copy(update={"audits": default_audits + model.audits})
 
     used_audits: t.Set[str] = {audit_name for audit_name, _ in model.audits}
 
