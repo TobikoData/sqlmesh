@@ -647,6 +647,9 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
     assert models_dir.exists()
 
+    # Ensure that we don't initialize a CachingStateSync only to clear its (empty) caches
+    assert context._state_sync is None
+
     # Test clearing caches when cache directory doesn't exist
     # This should not raise an exception
     context.clear_caches()
