@@ -206,7 +206,11 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
     def _make_fabric_api_request(
-        self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
+        self,
+        method: str,
+        endpoint: str,
+        data: t.Optional[t.Dict[str, t.Any]] = None,
+        include_response_headers: bool = False,
     ) -> t.Dict[str, t.Any]:
         """Make a request to the Fabric REST API."""
 
@@ -233,6 +237,20 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
             response.raise_for_status()
 
+            if include_response_headers:
+                result: t.Dict[str, t.Any] = {"status_code": response.status_code}
+
+                # Extract location header for polling
+                if "location" in response.headers:
+                    result["location"] = response.headers["location"]
+
+                # Include response body if present
+                if response.content:
+                    json_data = response.json()
+                    if json_data:
+                        result.update(json_data)
+
+                return result
             if response.status_code == 204:  # No content
                 return {}
 
@@ -257,56 +275,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
     ) -> t.Dict[str, t.Any]:
         """Make a request to the Fabric REST API and return response with status code and location."""
-        if not requests:
-            raise SQLMeshError("requests library is required for Fabric catalog operations")
-
-        workspace_id = self._extra_config.get("workspace_id")
-        if not workspace_id:
-            raise SQLMeshError(
-                "workspace_id parameter is required in connection config for Fabric catalog operations"
-            )
-
-        base_url = "https://api.fabric.microsoft.com/v1"
-        url = f"{base_url}/workspaces/{workspace_id}/{endpoint}"
-        headers = self._get_fabric_auth_headers()
-
-        try:
-            if method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data)
-            else:
-                raise SQLMeshError(f"Unsupported HTTP method for location tracking: {method}")
-
-            # Check for errors first
-            response.raise_for_status()
-
-            result: t.Dict[str, t.Any] = {"status_code": response.status_code}
-
-            # Extract location header for polling
-            if "location" in response.headers:
-                result["location"] = response.headers["location"]
-
-            # Include response body if present
-            if response.content:
-                json_data = response.json()
-                if json_data:
-                    result.update(json_data)
-
-            return result
-
-        except requests.exceptions.HTTPError as e:
-            error_details = ""
-            try:
-                if response.content:
-                    error_response = response.json()
-                    error_details = error_response.get("error", {}).get(
-                        "message", str(error_response)
-                    )
-            except (ValueError, AttributeError):
-                error_details = response.text if hasattr(response, "text") else str(e)
-
-            raise SQLMeshError(f"Fabric API HTTP error ({response.status_code}): {error_details}")
-        except requests.exceptions.RequestException as e:
-            raise SQLMeshError(f"Fabric API request failed: {e}")
+        return self._make_fabric_api_request(method, endpoint, data, include_response_headers=True)
 
     @retry(
         wait=wait_exponential(multiplier=1, min=1, max=30),
