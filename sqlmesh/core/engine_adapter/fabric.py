@@ -356,12 +356,15 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         try:
             # Get the warehouse ID by listing warehouses
             warehouses = self._make_fabric_api_request("GET", "warehouses")
-            warehouse_id = None
 
-            for warehouse in warehouses.get("value", []):
-                if warehouse.get("displayName") == warehouse_name:
-                    warehouse_id = warehouse.get("id")
-                    break
+            warehouse_id = next(
+                (
+                    warehouse.get("id")
+                    for warehouse in warehouses.get("value", [])
+                    if warehouse.get("displayName") == warehouse_name
+                ),
+                None,
+            )
 
             if not warehouse_id:
                 logger.info(f"Fabric warehouse does not exist: {warehouse_name}")
