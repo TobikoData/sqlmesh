@@ -918,11 +918,7 @@ class SnapshotEvaluator:
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
     ) -> None:
-        if (
-            not snapshot.is_paused
-            or not snapshot.is_model
-            or (deployability_index.is_representative(snapshot) and not snapshot.is_view)
-        ):
+        if not snapshot.requires_schema_migration_in_prod:
             return
 
         deployability_index = DeployabilityIndex.all_deployable()
