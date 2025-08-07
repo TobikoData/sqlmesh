@@ -1381,6 +1381,35 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC", tick=True)
+def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Make a forward-only change
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = model.copy(update={"kind": model.kind.copy(update={"forward_only": True})})
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert len(plan.new_snapshots) == 2
+    assert all(s.change_category == SnapshotChangeCategory.FORWARD_ONLY for s in plan.new_snapshots)
+
+    # Follow-up with a metadata change in the same environment
+    model = model.copy(update={"owner": "new_owner"})
+    context.upsert_model(model)
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert len(plan.new_snapshots) == 2
+    assert all(s.change_category == SnapshotChangeCategory.METADATA for s in plan.new_snapshots)
+
+    # Deploy the latest change to prod
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    # Check that the new column was added in prod
+    columns = context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+    assert "one" in columns
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")

@@ -1353,6 +1353,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
+    def requires_schema_migration_in_prod(self) -> bool:
+        """Returns whether or not this snapshot requires a schema migration when deployed to production."""
+        return (
+            self.is_paused
+            and self.is_model
+            and not self.is_symbolic
+            and (
+                (self.previous_version and self.previous_version.version == self.version)
+                or self.model.forward_only
+                or bool(self.model.physical_version)
+                or self.is_view
+            )
+        )
+
+    @property
     def ttl_ms(self) -> int:
         return self.expiration_ts - self.updated_ts
 
