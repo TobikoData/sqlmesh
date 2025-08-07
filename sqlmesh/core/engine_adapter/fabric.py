@@ -9,6 +9,7 @@ from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.connection_pool import ConnectionPool
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName, SchemaName
@@ -33,33 +34,19 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     def __init__(
         self, connection_factory_or_pool: t.Union[t.Callable, t.Any], *args: t.Any, **kwargs: t.Any
     ) -> None:
-        # Handle the connection factory wrapping before calling super().__init__
-        if not hasattr(connection_factory_or_pool, "get"):  # It's a connection factory, not a pool
-            # Wrap the connection factory to make it catalog-aware
-            original_factory = connection_factory_or_pool
+        # Wrap connection factory to support catalog switching
+        if not isinstance(connection_factory_or_pool, ConnectionPool):
+            original_connection_factory = connection_factory_or_pool
 
-            def catalog_aware_factory() -> t.Any:
-                # Get the current target catalog from thread-local storage
-                target_catalog = (
-                    self._connection_pool.get_attribute("target_catalog")
-                    if hasattr(self, "_connection_pool")
-                    else None
-                )
-
-                # Call the original factory with target_catalog if it supports it
-                if hasattr(original_factory, "__call__"):
-                    try:
-                        # Try to call with target_catalog parameter first (for our custom Fabric factory)
-                        import inspect
-
-                        sig = inspect.signature(original_factory)
-                        if "target_catalog" in sig.parameters:
-                            return original_factory(target_catalog=target_catalog)
-                    except (TypeError, AttributeError):
-                        pass
-
-                # Fall back to calling without parameters
-                return original_factory()
+            def catalog_aware_factory(*args: t.Any, **kwargs: t.Any) -> t.Any:
+                # Try to pass target_catalog if the factory accepts it
+                try:
+                    return original_connection_factory(
+                        target_catalog=self._target_catalog, *args, **kwargs
+                    )
+                except TypeError:
+                    # Factory doesn't accept target_catalog, call without it
+                    return original_connection_factory(*args, **kwargs)
 
             connection_factory_or_pool = catalog_aware_factory
 
@@ -78,12 +65,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     def _switch_to_catalog_if_needed(
         self, table_or_name: t.Union[exp.Table, TableName, SchemaName]
     ) -> exp.Table:
-        """
-        Switch to catalog if the table/name is catalog-qualified.
-
-        Returns the table object with catalog information parsed.
-        If catalog switching occurs, the returned table will have catalog removed.
-        """
+        # Switch catalog context if needed for cross-catalog operations
         table = exp.to_table(table_or_name)
 
         if table.catalog:
@@ -97,12 +79,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         return table
 
     def _handle_schema_with_catalog(self, schema_name: SchemaName) -> t.Tuple[t.Optional[str], str]:
-        """
-        Handle schema operations with catalog qualification.
-
-        Returns tuple of (catalog_name, schema_only_name).
-        If catalog switching occurs, it will be performed.
-        """
+        # Parse and handle catalog-qualified schema names for cross-catalog operations
         # Handle Table objects created by schema_() function
         if isinstance(schema_name, exp.Table) and not schema_name.name:
             # This is a schema Table object - check for catalog qualification
@@ -152,12 +129,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
     ) -> None:
-        """
-        Implements the insert overwrite strategy for Fabric using DELETE and INSERT.
-
-        This method is overridden to avoid the MERGE statement from the parent
-        MSSQLEngineAdapter, which is not fully supported in Fabric.
-        """
+        # Override to avoid MERGE statement which isn't fully supported in Fabric
         return EngineAdapter._insert_overwrite_by_condition(
             self,
             table_name=table_name,
