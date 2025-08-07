@@ -502,60 +502,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             **kwargs,
         )
 
-    def create_table(
-        self,
-        table_name: TableName,
-        columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
-        exists: bool = True,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Override create_table to ensure schema exists before creating tables.
-        """
-        # Ensure the schema exists before creating the table
-        self._ensure_schema_exists(table_name)
-
-        # Call the parent implementation
-        super().create_table(
-            table_name=table_name,
-            columns_to_types=columns_to_types,
-            primary_key=primary_key,
-            exists=exists,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            **kwargs,
-        )
-
-    def ctas(
-        self,
-        table_name: TableName,
-        query_or_df: t.Any,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        exists: bool = True,
-        table_description: t.Optional[str] = None,
-        column_descriptions: t.Optional[t.Dict[str, str]] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Override ctas to ensure schema exists before creating tables.
-        """
-        # Ensure the schema exists before creating the table
-        self._ensure_schema_exists(table_name)
-
-        # Call the parent implementation
-        super().ctas(
-            table_name=table_name,
-            query_or_df=query_or_df,
-            columns_to_types=columns_to_types,
-            exists=exists,
-            table_description=table_description,
-            column_descriptions=column_descriptions,
-            **kwargs,
-        )
-
     def create_view(
         self,
         view_name: SchemaName,
