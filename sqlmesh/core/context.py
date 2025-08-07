@@ -1621,7 +1621,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                                 or to_timestamp(snapshot.node.start) > end_ts
                             ):
                                 raise SQLMeshError(
-                                    f"Start date / time ({to_datetime(start_ts)}) can't be greater than end date / time ({to_datetime(end_ts)}).\n"
+                                    f"Model '{model_name}': Start date / time ({to_datetime(start_ts)}) can't be greater than end date / time ({to_datetime(end_ts)}).\n"
                                     f"Set the `start` attribute in your project config model defaults to avoid this issue."
                                 )
 
