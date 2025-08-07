@@ -180,9 +180,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
                 "in the Fabric connection configuration"
             )
 
-        if not requests:
-            raise SQLMeshError("requests library is required for Fabric authentication")
-
         # Use Azure AD OAuth2 token endpoint
         token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
@@ -212,8 +209,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
         self, method: str, endpoint: str, data: t.Optional[t.Dict[str, t.Any]] = None
     ) -> t.Dict[str, t.Any]:
         """Make a request to the Fabric REST API."""
-        if not requests:
-            raise SQLMeshError("requests library is required for Fabric catalog operations")
 
         workspace_id = self._extra_config.get("workspace_id")
         if not workspace_id:
@@ -320,8 +315,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     )
     def _check_operation_status(self, location_url: str, operation_name: str) -> str:
         """Check the operation status and return the status string."""
-        if not requests:
-            raise SQLMeshError("requests library is required for Fabric catalog operations")
 
         headers = self._get_fabric_auth_headers()
 
