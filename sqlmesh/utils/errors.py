@@ -129,6 +129,10 @@ class DestructiveChangeError(SQLMeshError):
     pass
 
 
+class AdditiveChangeError(SQLMeshError):
+    pass
+
+
 class NotificationTargetError(SQLMeshError):
     pass
 
@@ -210,6 +214,57 @@ def raise_for_status(response: Response) -> None:
         raise ApiServerError(response.text, response.status_code)
 
 
+def _format_schema_change_msg(
+    snapshot_name: str,
+    is_destructive: bool,
+    column_names: t.List[str],
+    alter_expressions: t.List[exp.Alter],
+    dialect: str,
+    error: bool = True,
+) -> str:
+    """
+    Common function to format schema change messages.
+
+    Args:
+        snapshot_name: Name of the model/snapshot
+        is_destructive: if change is destructive else it would be additive
+        column_names: List of affected column names
+        alter_expressions: List of ALTER expressions
+        dialect: SQL dialect for formatting
+        error: Whether this is an error or warning
+    """
+    change_type = "destructive" if is_destructive else "additive"
+    setting_name = "on_destructive_change" if is_destructive else "on_additive_change"
+    action_verb = "drops" if is_destructive else "adds"
+    cli_flag = "--allow-destructive-model" if is_destructive else "--allow-additive-model"
+
+    column_str = "', '".join(column_names)
+    column_msg = (
+        f" that {action_verb} column{'s' if column_names and len(column_names) > 1 else ''} '{column_str}'"
+        if column_str
+        else ""
+    )
+
+    # Format ALTER expressions
+    alter_expr_msg = "\n\nSchema changes:\n  " + "\n  ".join(
+        [alter.sql(dialect) for alter in alter_expressions]
+    )
+
+    # Main warning message
+    warning_msg = (
+        f"Plan requires {change_type} change to forward-only model '{snapshot_name}'s schema"
+    )
+
+    if error:
+        permissive_values = "`warn`, `allow`, or `ignore`"
+        cli_part = f" or include the model in the plan's `{cli_flag}` option"
+        err_msg = f"\n\nTo allow the {change_type} change, set the model's `{setting_name}` setting to {permissive_values}{cli_part}.\n"
+    else:
+        err_msg = ""
+
+    return f"\n{warning_msg}{column_msg}.{alter_expr_msg}{err_msg}"
+
+
 def format_destructive_change_msg(
     snapshot_name: str,
     dropped_column_names: t.List[str],
@@ -217,20 +272,36 @@ def format_destructive_change_msg(
     dialect: str,
     error: bool = True,
 ) -> str:
-    dropped_column_str = "', '".join(dropped_column_names)
-    dropped_column_msg = (
-        f" that drops column{'s' if dropped_column_names and len(dropped_column_names) > 1 else ''} '{dropped_column_str}'"
-        if dropped_column_str
-        else ""
+    return _format_schema_change_msg(
+        snapshot_name=snapshot_name,
+        is_destructive=True,
+        column_names=dropped_column_names,
+        alter_expressions=alter_expressions,
+        dialect=dialect,
+        error=error,
     )
 
-    alter_expr_msg = "\n\nSchema changes:\n  " + "\n  ".join(
-        [alter.sql(dialect) for alter in alter_expressions]
-    )
 
-    warning_msg = (
-        f"Plan requires a destructive change to forward-only model '{snapshot_name}'s schema"
-    )
-    err_msg = "\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn` or `allow` or include the model in the plan's `--allow-destructive-model` option.\n"
+def format_additive_change_msg(
+    snapshot_name: str,
+    additive_changes: t.List[exp.Alter],
+    dialect: str,
+    error: bool = True,
+) -> str:
+    # Extract column names being added from the alter expressions
+    added_column_names = []
+    for alter in additive_changes:
+        actions = alter.args.get("actions", [])
+        for action in actions:
+            if isinstance(action, exp.ColumnDef):
+                # Adding columns
+                added_column_names.append(action.alias_or_name)
 
-    return f"\n{warning_msg}{dropped_column_msg}.{alter_expr_msg}{err_msg if error else ''}"
+    return _format_schema_change_msg(
+        snapshot_name=snapshot_name,
+        is_destructive=False,
+        column_names=added_column_names,
+        alter_expressions=additive_changes,
+        dialect=dialect,
+        error=error,
+    )

@@ -168,6 +168,7 @@ class TableAlterOperation(PydanticModel):
     add_position: t.Optional[TableAlterColumnPosition] = None
     current_type: t.Optional[exp.DataType] = None
     cascade: bool = False
+    is_part_of_destructive_change: bool = False
 
     @classmethod
     def add(
@@ -176,6 +177,7 @@ class TableAlterOperation(PydanticModel):
         column_type: t.Union[str, exp.DataType],
         expected_table_struct: t.Union[str, exp.DataType],
         position: t.Optional[TableAlterColumnPosition] = None,
+        is_part_of_destructive_change: bool = False,
     ) -> TableAlterOperation:
         return cls(
             op=TableAlterOperationType.ADD,
@@ -183,6 +185,7 @@ class TableAlterOperation(PydanticModel):
             column_type=exp.DataType.build(column_type),
             add_position=position,
             expected_table_struct=exp.DataType.build(expected_table_struct),
+            is_part_of_destructive_change=is_part_of_destructive_change,
         )
 
     @classmethod
@@ -256,15 +259,17 @@ class TableAlterOperation(PydanticModel):
         self, table_name: t.Union[str, exp.Table], array_element_selector: str
     ) -> exp.Alter:
         if self.is_alter_type:
+            alter_column = exp.AlterColumn(
+                this=self.column(array_element_selector),
+                dtype=self.column_type,
+            )
+            # Add current type metadata for additive classification
+            if self.current_type:
+                alter_column.meta["current_type"] = self.current_type
             return exp.Alter(
                 this=exp.to_table(table_name),
                 kind="TABLE",
-                actions=[
-                    exp.AlterColumn(
-                        this=self.column(array_element_selector),
-                        dtype=self.column_type,
-                    )
-                ],
+                actions=[alter_column],
             )
         if self.is_add:
             alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
@@ -272,6 +277,9 @@ class TableAlterOperation(PydanticModel):
             alter_table.set("actions", [column])
             if self.add_position:
                 column.set("position", self.add_position.column_position_node)
+            # Set metadata if this ADD operation supports destructive changes
+            if self.is_part_of_destructive_change:
+                column.meta["sqlmesh_destructive"] = True
             return alter_table
         if self.is_drop:
             alter_table = exp.Alter(this=exp.to_table(table_name), kind="TABLE")
@@ -530,6 +538,31 @@ class SchemaDiffer(PydanticModel):
             )
         ]
 
+    def _add_destructive_operation(
+        self,
+        columns: t.List[TableAlterColumn],
+        new_pos: int,
+        new_kwarg: exp.ColumnDef,
+        current_struct: exp.DataType,
+        root_struct: exp.DataType,
+    ) -> t.List[TableAlterOperation]:
+        """Add operation marked as destructive support (for DROP+ADD scenarios)."""
+        if self.support_positional_add:
+            col_pos = TableAlterColumnPosition.create(new_pos, current_struct.expressions)
+            current_struct.expressions.insert(new_pos, new_kwarg)
+        else:
+            col_pos = None
+            current_struct.expressions.append(new_kwarg)
+        return [
+            TableAlterOperation.add(
+                columns,
+                new_kwarg.args["kind"],
+                root_struct.copy(),
+                col_pos,
+                is_part_of_destructive_change=True,
+            )
+        ]
+
     def _resolve_add_operations(
         self,
         parent_columns: t.List[TableAlterColumn],
@@ -607,9 +640,13 @@ class SchemaDiffer(PydanticModel):
                     col_pos,
                 )
             ]
-        return self._drop_operation(columns, root_struct, pos, root_struct) + self._add_operation(
+        # This is a destructive change requiring DROP + ADD
+        drop_operations = self._drop_operation(columns, root_struct, pos, root_struct)
+        add_operations = self._add_destructive_operation(
             columns, pos, new_kwarg, struct, root_struct
         )
+
+        return drop_operations + add_operations
 
     def _resolve_alter_operations(
         self,
@@ -743,6 +780,76 @@ def get_schema_differ(dialect: str) -> SchemaDiffer:
     dialect = DIALECT_ALIASES.get(dialect, dialect)
     engine_adapter_class = DIALECT_TO_ENGINE_ADAPTER.get(dialect, EngineAdapter)
     return getattr(engine_adapter_class, "SCHEMA_DIFFER", SchemaDiffer())
+
+
+def has_additive_changes(alter_expressions: t.List[exp.Alter]) -> bool:
+    return len(get_additive_changes(alter_expressions)) > 0
+
+
+def _is_destructive_action(action: exp.Expression) -> bool:
+    if isinstance(action, exp.Drop):
+        # Dropping columns/constraints is destructive
+        return True
+    if isinstance(action, exp.AlterColumn):
+        # Altering column types is treated as additive (non-destructive)
+        return False
+    if isinstance(action, exp.ColumnDef):
+        # Adding columns is additive by default, but can be marked as destructive
+        # (e.g., when part of a DROP+ADD sequence for incompatible type changes)
+        return action.meta.get("sqlmesh_destructive", False)
+    # Conservative default: unknown action types are considered destructive
+    # This ensures safety - unknown actions won't be accidentally treated as safe
+    return True
+
+
+def _is_additive_action(action: exp.Expression) -> bool:
+    return not _is_destructive_action(action)
+
+
+def get_additive_changes(alter_expressions: t.List[exp.Alter]) -> t.List[exp.Alter]:
+    additive_changes = []
+
+    for alter in alter_expressions:
+        actions = alter.args.get("actions", [])
+        if actions and all(_is_additive_action(action) for action in actions):
+            additive_changes.append(alter)
+
+    return additive_changes
+
+
+def filter_additive_changes(alter_expressions: t.List[exp.Alter]) -> t.List[exp.Alter]:
+    filtered_expressions = []
+
+    for alter in alter_expressions:
+        actions = alter.args.get("actions", [])
+        non_additive_actions = [action for action in actions if not _is_additive_action(action)]
+
+        # Only include the ALTER expression if it has non-additive actions
+        if non_additive_actions:
+            filtered_alter = alter.copy()
+            filtered_alter.set("actions", non_additive_actions)
+            filtered_expressions.append(filtered_alter)
+
+    return filtered_expressions
+
+
+def filter_destructive_changes(alter_expressions: t.List[exp.Alter]) -> t.List[exp.Alter]:
+    filtered_expressions = []
+
+    for alter in alter_expressions:
+        actions = alter.args.get("actions", [])
+        # Use the single source of truth for destructive classification
+        non_destructive_actions = [
+            action for action in actions if not _is_destructive_action(action)
+        ]
+
+        # Only include the ALTER expression if it has non-destructive actions
+        if non_destructive_actions:
+            filtered_alter = alter.copy()
+            filtered_alter.set("actions", non_destructive_actions)
+            filtered_expressions.append(filtered_alter)
+
+    return filtered_expressions
 
 
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:

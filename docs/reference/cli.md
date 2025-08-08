@@ -367,6 +367,8 @@ Options:
   --forward-only                  Create a plan for forward-only changes.
   --allow-destructive-model TEXT  Allow destructive forward-only changes to
                                   models whose names match the expression.
+  --allow-additive-model TEXT     Allow additive forward-only changes to
+                                  models whose names match the expression.
   --effective-from TEXT           The effective date from which to apply
                                   forward-only changes on production.
   --no-prompts                    Disable interactive prompts for the backfill

@@ -50,8 +50,16 @@ from sqlmesh.core.model import (
     ViewKind,
     CustomKind,
 )
+from sqlmesh.core.model.kind import _Incremental
 from sqlmesh.utils import CompletionStatus
-from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
+from sqlmesh.core.schema_diff import (
+    has_drop_alteration,
+    get_dropped_column_names,
+    has_additive_changes,
+    get_additive_changes,
+    filter_additive_changes,
+    filter_destructive_changes,
+)
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
@@ -71,8 +79,10 @@ from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import (
     ConfigError,
     DestructiveChangeError,
+    AdditiveChangeError,
     SQLMeshError,
     format_destructive_change_msg,
+    format_additive_change_msg,
 )
 
 if sys.version_info >= (3, 12):
@@ -872,10 +882,17 @@ class SnapshotEvaluator:
                     alter_expressions = adapter.get_alter_expressions(
                         target_table_name, tmp_table_name
                     )
-                    _check_destructive_schema_change(
-                        snapshot, alter_expressions, allow_destructive_snapshots
+                    # Apply IGNORE filtering BEFORE validation and execution
+                    filtered_expressions = _filter_alter_expressions_by_ignore_settings(
+                        snapshot, alter_expressions
                     )
-                    adapter.alter_table(alter_expressions)
+                    _check_destructive_schema_change(
+                        snapshot, filtered_expressions, allow_destructive_snapshots
+                    )
+                    _check_additive_schema_change(
+                        snapshot, filtered_expressions, allow_destructive_snapshots
+                    )
+                    adapter.alter_table(filtered_expressions)
                 except Exception:
                     adapter.drop_table(target_table_name)
                     raise
@@ -1583,10 +1600,17 @@ class MaterializableStrategy(PromotableStrategy):
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
         alter_expressions = self.adapter.get_alter_expressions(target_table_name, source_table_name)
-        _check_destructive_schema_change(
-            snapshot, alter_expressions, kwargs["allow_destructive_snapshots"]
+        # Apply IGNORE filtering BEFORE validation and execution
+        filtered_expressions = _filter_alter_expressions_by_ignore_settings(
+            snapshot, alter_expressions
         )
-        self.adapter.alter_table(alter_expressions)
+        _check_destructive_schema_change(
+            snapshot, filtered_expressions, kwargs["allow_destructive_snapshots"]
+        )
+        _check_additive_schema_change(
+            snapshot, filtered_expressions, kwargs["allow_destructive_snapshots"]
+        )
+        self.adapter.alter_table(filtered_expressions)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
@@ -2261,6 +2285,36 @@ class EngineManagedStrategy(MaterializableStrategy):
             logger.info("Dropped dev preview for managed table '%s'", name)
 
 
+def _filter_alter_expressions_by_ignore_settings(
+    snapshot: Snapshot, alter_expressions: t.List[exp.Alter]
+) -> t.List[exp.Alter]:
+    """
+    Filter alter expressions based on the snapshot's ignore settings.
+
+    When IGNORE is set for a change type, this function removes those
+    change types from the alter expressions, ensuring they never reach
+    validation or execution.
+
+    Args:
+        snapshot: The snapshot with ignore settings
+        alter_expressions: The original alter expressions
+
+    Returns:
+        Filtered alter expressions with ignored change types removed
+    """
+    filtered_expressions = alter_expressions
+
+    # Filter destructive changes if on_destructive_change is IGNORE
+    if snapshot.model.on_destructive_change.is_ignore:
+        filtered_expressions = filter_destructive_changes(filtered_expressions)
+
+    # Filter additive changes if on_additive_change is IGNORE
+    if snapshot.model.on_additive_change.is_ignore:
+        filtered_expressions = filter_additive_changes(filtered_expressions)
+
+    return filtered_expressions
+
+
 def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> Intervals:
     return (
         snapshot.intervals
@@ -2277,6 +2331,8 @@ def _check_destructive_schema_change(
     if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
         alter_expressions
     ):
+        # Note: IGNORE filtering is applied before this function is called
+        # so if we reach here, destructive changes are not being ignored
         snapshot_name = snapshot.name
         dropped_column_names = get_dropped_column_names(alter_expressions)
         model_dialect = snapshot.model.dialect
@@ -2297,6 +2353,40 @@ def _check_destructive_schema_change(
                 snapshot_name, dropped_column_names, alter_expressions, model_dialect
             )
         )
+
+
+def _check_additive_schema_change(
+    snapshot: Snapshot,
+    alter_expressions: t.List[exp.Alter],
+    allow_destructive_snapshots: t.Set[str],
+) -> None:
+    # Only check additive changes for incremental models that have the on_additive_change property
+    if not isinstance(snapshot.model.kind, _Incremental):
+        return
+
+    if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_additive_changes(
+        alter_expressions
+    ):
+        # Note: IGNORE filtering is applied before this function is called
+        # so if we reach here, additive changes are not being ignored
+        snapshot_name = snapshot.name
+        additive_changes = get_additive_changes(alter_expressions)
+        model_dialect = snapshot.model.dialect
+
+        if snapshot.model.on_additive_change.is_warn:
+            logger.warning(
+                format_additive_change_msg(
+                    snapshot_name,
+                    additive_changes,
+                    model_dialect,
+                    error=False,
+                )
+            )
+            return
+        if snapshot.model.on_additive_change.is_error:
+            raise AdditiveChangeError(
+                format_additive_change_msg(snapshot_name, additive_changes, model_dialect)
+            )
 
 
 def _check_table_db_is_physical_schema(table_name: str, physical_schema: str) -> None:
