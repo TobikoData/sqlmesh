@@ -438,7 +438,7 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                     metadata_hash="test_metadata_hash",
                 ),
                 version="test_version",
-                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                change_category=SnapshotChangeCategory.NON_BREAKING,
                 dev_table_suffix="dev",
             ),
         )

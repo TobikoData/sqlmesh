@@ -338,7 +338,7 @@ class SnapshotEvaluator:
                 continue
             deployability_flags = [True]
             if (
-                snapshot.reuses_previous_version
+                snapshot.is_no_rebuild
                 or snapshot.is_managed
                 or (snapshot.is_model and snapshot.model.forward_only)
                 or (deployability_index and not deployability_index.is_deployable(snapshot))

@@ -594,14 +594,14 @@ def test_build_plan_stages_forward_only(
         snapshot_a.model.copy(update={"stamp": "new_version"}),
     )
     new_snapshot_a.previous_versions = snapshot_a.all_versions
-    new_snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_a.categorize_as(SnapshotChangeCategory.NON_BREAKING, forward_only=True)
 
     new_snapshot_b = make_snapshot(
         snapshot_b.model.copy(),
         nodes={'"a"': new_snapshot_a.model},
     )
     new_snapshot_b.previous_versions = snapshot_b.all_versions
-    new_snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_b.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only=True)
 
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {}
@@ -732,14 +732,14 @@ def test_build_plan_stages_forward_only_dev(
         snapshot_a.model.copy(update={"stamp": "new_version"}),
     )
     new_snapshot_a.previous_versions = snapshot_a.all_versions
-    new_snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_a.categorize_as(SnapshotChangeCategory.NON_BREAKING, forward_only=True)
 
     new_snapshot_b = make_snapshot(
         snapshot_b.model.copy(),
         nodes={'"a"': new_snapshot_a.model},
     )
     new_snapshot_b.previous_versions = snapshot_b.all_versions
-    new_snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_b.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only=True)
 
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {}
@@ -968,14 +968,14 @@ def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
         snapshot_a.model.copy(update={"stamp": "new_version"}),
     )
     new_snapshot_a.previous_versions = snapshot_a.all_versions
-    new_snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_a.categorize_as(SnapshotChangeCategory.NON_BREAKING, forward_only=True)
 
     new_snapshot_b = make_snapshot(
         snapshot_b.model.copy(),
         nodes={'"a"': new_snapshot_a.model},
     )
     new_snapshot_b.previous_versions = snapshot_b.all_versions
-    new_snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot_b.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only=True)
 
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {}

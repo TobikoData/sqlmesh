@@ -139,7 +139,7 @@ def test_push_snapshots(
         state_sync.push_snapshots([snapshot_a, snapshot_b])
 
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.version = "2"
 
     state_sync.push_snapshots([snapshot_a, snapshot_b])
@@ -258,7 +258,8 @@ def test_add_interval(
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
     intervals = get_snapshot_intervals(snapshot)
     assert intervals.intervals == [
@@ -1144,7 +1145,7 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 11000
 
@@ -1298,7 +1299,7 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1338,7 +1339,7 @@ def test_delete_expired_snapshots_shared_dev_table(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1430,7 +1431,7 @@ def test_delete_expired_snapshots_cleanup_intervals(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 12000
 
@@ -1497,7 +1498,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1612,7 +1613,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1740,7 +1741,7 @@ def test_compact_intervals_after_cleanup(
     )
     snapshot_b.previous_versions = snapshot_a.all_versions
     snapshot_b.ttl = "in 10 seconds"
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.updated_ts = now_ts - 12000
 
     # An indirect non-breaking change on top of the forward-only change. Not expired.
@@ -1872,7 +1873,7 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     new_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
 
     assert not new_snapshot.unpaused_ts
@@ -1917,7 +1918,7 @@ def test_unpause_snapshots_hourly(state_sync: EngineAdapterStateSync, make_snaps
             interval_unit="hour",
         )
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
 
     assert not new_snapshot.unpaused_ts
@@ -1974,7 +1975,7 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     new_forward_only_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 3, ds"), cron="@daily")
     )
-    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_forward_only_snapshot.version = "a"
 
     assert not new_forward_only_snapshot.unpaused_ts
@@ -2015,7 +2016,7 @@ def test_unpause_snapshots_remove_intervals(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
         version="a",
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
     new_snapshot.effective_from = "2023-01-03"
     state_sync.push_snapshots([new_snapshot])
@@ -2053,7 +2054,7 @@ def test_unpause_snapshots_remove_intervals_disabled_restatement(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily", kind=kind),
         version="a",
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
     new_snapshot.effective_from = "2023-01-03"
     state_sync.push_snapshots([new_snapshot])
@@ -3019,7 +3020,7 @@ def test_seed_model_metadata_update(
     model = model.copy(update={"owner": "jen"})
     new_snapshot = make_snapshot(model)
     new_snapshot.previous_versions = snapshot.all_versions
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot.fingerprint != new_snapshot.fingerprint
     assert snapshot.version == new_snapshot.version

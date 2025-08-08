@@ -114,18 +114,17 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
-        ),
         SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
@@ -256,12 +255,15 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert plan.start == to_datetime("2023-01-01")
     assert not plan.missing_intervals
 
@@ -362,20 +364,17 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
         SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
             intervals=[
@@ -429,7 +428,12 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     context.upsert_model(SqlModel.parse_obj(model_kwargs))
 
     # Apply the model change in dev
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert not plan.missing_intervals
     context.apply(plan)
 
@@ -496,55 +500,26 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     assert len(plan.new_snapshots) == 6
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[customers_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[active_customers_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[waiter_as_customer_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
 
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=active_customers_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=count_customers_active_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=count_customers_inactive_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=customers_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=waiter_as_customer_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
@@ -788,15 +763,6 @@ def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.C
         ),
         SnapshotIntervals(
             snapshot_id=context.get_snapshot(
-                "sushi.top_waiters", raise_if_missing=True
-            ).snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot(
                 "sushi.waiter_revenue_by_day", raise_if_missing=True
             ).snapshot_id,
             intervals=[
@@ -944,12 +910,13 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
     assert plan.start == to_datetime("2023-01-01")
     assert not plan.missing_intervals
 
@@ -1155,18 +1122,15 @@ def test_non_breaking_change_after_forward_only_in_dev(
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
-        ),
         SnapshotIntervals(
             snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
@@ -1267,11 +1231,17 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(model)
     snapshot = context.get_snapshot(model, raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
     assert not plan.requires_backfill
     context.apply(plan)
 
@@ -1393,7 +1363,7 @@ def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_c
     context.upsert_model(model)
     plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
     assert len(plan.new_snapshots) == 2
-    assert all(s.change_category == SnapshotChangeCategory.FORWARD_ONLY for s in plan.new_snapshots)
+    assert all(s.is_forward_only for s in plan.new_snapshots)
 
     # Follow-up with a metadata change in the same environment
     model = model.copy(update={"owner": "new_owner"})
@@ -1411,7 +1381,7 @@ def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_c
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_context: t.Callable):
+def test_indirect_non_breaking_downstream_of_forward_only(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
@@ -1425,14 +1395,20 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     forward_only_snapshot = context.get_snapshot(forward_only_model, raise_if_missing=True)
 
     non_breaking_model = context.get_model("sushi.waiter_revenue_by_day")
+    non_breaking_model = non_breaking_model.copy(update={"start": "2023-01-01"})
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, non_breaking_model)))
     non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
     top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert (
         plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.BREAKING
     )
     assert (
         plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].change_category
@@ -1440,10 +1416,26 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     )
     assert (
         plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].is_forward_only
+    assert not plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].is_forward_only
+    assert not plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].is_forward_only
+
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=top_waiter_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
         SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,
             intervals=[
@@ -2164,15 +2156,15 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     dev_plan = context.plan("dev", auto_apply=True, no_prompts=True, enable_preview=False)
     assert (
         dev_plan.snapshots[forward_only_model_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
         dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert not dev_plan.missing_intervals
 
@@ -2362,21 +2354,6 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
             SnapshotChangeCategory.METADATA,
             SnapshotChangeCategory.METADATA,
             SnapshotChangeCategory.METADATA,
-        ),
-        (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.INDIRECT_BREAKING,
-        ),
-        (
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
-        ),
-        (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
         ),
     ],
 )
@@ -4538,12 +4515,6 @@ def test_breaking_change(sushi_context: Context):
     validate_query_change(sushi_context, environment, SnapshotChangeCategory.BREAKING, False)
 
 
-def test_forward_only(sushi_context: Context):
-    environment = "dev"
-    initial_add(sushi_context, environment)
-    validate_query_change(sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False)
-
-
 def test_logical_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
@@ -4795,8 +4766,11 @@ def test_environment_promotion(sushi_context: Context):
             plan.context_diff.modified_snapshots[sushi_customer_revenue_by_day_snapshot.name][
                 0
             ].change_category
-            == SnapshotChangeCategory.FORWARD_ONLY
+            == SnapshotChangeCategory.NON_BREAKING
         )
+        assert plan.context_diff.snapshots[
+            sushi_customer_revenue_by_day_snapshot.snapshot_id
+        ].is_forward_only
 
     apply_to_environment(
         sushi_context,
@@ -6074,6 +6048,9 @@ def apply_to_environment(
         plan_builder.set_start(plan_start or start(context))
 
     if choice:
+        if choice == SnapshotChangeCategory.FORWARD_ONLY:
+            # FORWARD_ONLY is deprecated, fallback to NON_BREAKING to keep the existing tests
+            choice = SnapshotChangeCategory.NON_BREAKING
         plan_choice(plan_builder, choice)
     for validator in plan_validators:
         validator(context, plan_builder.build())

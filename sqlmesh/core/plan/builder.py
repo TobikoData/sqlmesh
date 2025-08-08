@@ -239,8 +239,6 @@ class PlanBuilder:
             snapshot: The target snapshot.
             choice: The user decision on how to version the target snapshot and its children.
         """
-        if self._forward_only:
-            raise PlanError("Choice setting is not supported by a forward-only plan.")
         if not self._is_new_snapshot(snapshot):
             raise PlanError(
                 f"A choice can't be changed for the existing version of {snapshot.name}."
@@ -250,8 +248,6 @@ class PlanBuilder:
             and snapshot.snapshot_id not in self._context_diff.added
         ):
             raise PlanError(f"Only directly modified models can be categorized ({snapshot.name}).")
-        if snapshot.is_model and snapshot.model.forward_only:
-            raise PlanError(f"Forward-only model {snapshot.name} cannot be categorized manually.")
 
         self._choices[snapshot.snapshot_id] = choice
         self._latest_plan = None
@@ -369,8 +365,10 @@ class PlanBuilder:
             restate_models = {
                 s.name
                 for s in self._context_diff.new_snapshots.values()
-                if s.is_materialized
-                and (self._forward_only or s.model.forward_only)
+                if s.is_model
+                and not s.is_symbolic
+                and (s.is_forward_only or s.model.forward_only)
+                and not s.is_no_preview
                 and (
                     # Metadata changes should not be previewed.
                     self._context_diff.directly_modified(s.name)
@@ -394,6 +392,9 @@ class PlanBuilder:
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
             snapshot = self._context_diff.snapshots[s_id]
+
+            if is_preview and snapshot.is_no_preview:
+                continue
 
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
@@ -526,6 +527,9 @@ class PlanBuilder:
 
     def _check_destructive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
         for s_id in sorted(directly_modified):
+            if s_id.name not in self._context_diff.modified_snapshots:
+                continue
+
             snapshot = self._context_diff.snapshots[s_id]
             # should we raise/warn if this snapshot has/inherits a destructive change?
             should_raise_or_warn = (
@@ -583,38 +587,38 @@ class PlanBuilder:
             if not snapshot or not self._is_new_snapshot(snapshot):
                 continue
 
+            forward_only = self._is_forward_only_change(s_id) or self._forward_only
+
             if s_id in self._choices:
-                snapshot.categorize_as(self._choices[s_id])
+                snapshot.categorize_as(self._choices[s_id], forward_only)
                 continue
 
             if s_id in self._context_diff.added:
-                snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-            elif self._is_forward_only_change(s_id) or self._forward_only:
-                # In case of the forward only plan any modifications result in reuse of the
-                # previous version for non-seed models.
-                # New snapshots of seed models are considered non-breaking ones.
-                category = (
-                    SnapshotChangeCategory.NON_BREAKING
-                    if snapshot.is_seed
-                    else SnapshotChangeCategory.FORWARD_ONLY
-                )
-                # If the model kind changes mark as breaking
-                if snapshot.is_model and snapshot.name in self._context_diff.modified_snapshots:
-                    _, old = self._context_diff.modified_snapshots[snapshot.name]
-                    if _is_breaking_kind_change(old, snapshot):
-                        category = SnapshotChangeCategory.BREAKING
-
-                snapshot.categorize_as(category)
+                snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
             elif s_id.name in self._context_diff.modified_snapshots:
-                self._categorize_snapshot(snapshot, dag, indirectly_modified)
+                self._categorize_snapshot(snapshot, forward_only, dag, indirectly_modified)
 
     def _categorize_snapshot(
-        self, snapshot: Snapshot, dag: DAG[SnapshotId], indirectly_modified: SnapshotMapping
+        self,
+        snapshot: Snapshot,
+        forward_only: bool,
+        dag: DAG[SnapshotId],
+        indirectly_modified: SnapshotMapping,
     ) -> None:
         s_id = snapshot.snapshot_id
 
         if self._context_diff.directly_modified(s_id.name):
+            new, old = self._context_diff.modified_snapshots[s_id.name]
+            is_breaking_kind_change = _is_breaking_kind_change(old, new)
+            if is_breaking_kind_change or snapshot.is_seed:
+                # Breaking kind changes and seed changes can't be forward-only.
+                forward_only = False
+
             if self._auto_categorization_enabled:
+                if is_breaking_kind_change:
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                    return
+
                 s_id_with_missing_columns: t.Optional[SnapshotId] = None
                 this_sid_with_downstream = indirectly_modified.get(s_id, set()) | {s_id}
                 for downstream_s_id in this_sid_with_downstream:
@@ -626,18 +630,18 @@ class PlanBuilder:
                         s_id_with_missing_columns = downstream_s_id
                         break
 
-                new, old = self._context_diff.modified_snapshots[s_id.name]
                 if s_id_with_missing_columns is None:
                     change_category = categorize_change(new, old, config=self._categorizer_config)
                     if change_category is not None:
-                        snapshot.categorize_as(change_category)
+                        snapshot.categorize_as(change_category, forward_only)
                 else:
                     mode = self._categorizer_config.dict().get(
                         new.model.source_type, AutoCategorizationMode.OFF
                     )
                     if mode == AutoCategorizationMode.FULL:
-                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
         elif self._context_diff.indirectly_modified(snapshot.name):
+            all_upstream_forward_only = set()
             all_upstream_categories = set()
             direct_parent_categories = set()
 
@@ -646,27 +650,30 @@ class PlanBuilder:
 
                 if parent and self._is_new_snapshot(parent):
                     all_upstream_categories.add(parent.change_category)
+                    all_upstream_forward_only.add(parent.is_forward_only)
                     if p_id in snapshot.parents:
                         direct_parent_categories.add(parent.change_category)
 
-            if snapshot.is_model and snapshot.model.forward_only:
-                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-            elif direct_parent_categories.intersection(
+            if all_upstream_forward_only == {True} or (
+                snapshot.is_model and snapshot.model.forward_only
+            ):
+                forward_only = True
+
+            if direct_parent_categories.intersection(
                 {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
             ):
-                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING, forward_only)
             elif not direct_parent_categories:
-                snapshot.categorize_as(self._get_orphaned_indirect_change_category(snapshot))
-            elif SnapshotChangeCategory.FORWARD_ONLY in all_upstream_categories:
-                # FORWARD_ONLY must take precedence over INDIRECT_NON_BREAKING
-                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                snapshot.categorize_as(
+                    self._get_orphaned_indirect_change_category(snapshot), forward_only
+                )
             elif all_upstream_categories == {SnapshotChangeCategory.METADATA}:
-                snapshot.categorize_as(SnapshotChangeCategory.METADATA)
+                snapshot.categorize_as(SnapshotChangeCategory.METADATA, forward_only)
             else:
-                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only)
         else:
             # Metadata updated.
-            snapshot.categorize_as(SnapshotChangeCategory.METADATA)
+            snapshot.categorize_as(SnapshotChangeCategory.METADATA, forward_only)
 
     def _get_orphaned_indirect_change_category(
         self, indirect_snapshot: Snapshot
@@ -769,10 +776,7 @@ class PlanBuilder:
             if snapshot.is_model and _is_breaking_kind_change(old, snapshot):
                 return False
         return (
-            snapshot.is_model
-            and snapshot.model.forward_only
-            and not snapshot.change_category
-            and bool(snapshot.previous_versions)
+            snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
         )
 
     def _is_new_snapshot(self, snapshot: Snapshot) -> bool:
@@ -811,7 +815,7 @@ class PlanBuilder:
                 and not candidate.model.forward_only
                 and promoted.is_forward_only
                 and not promoted.is_paused
-                and not candidate.reuses_previous_version
+                and not candidate.is_no_rebuild
                 and promoted.version == candidate.version
             ):
                 raise PlanError(
