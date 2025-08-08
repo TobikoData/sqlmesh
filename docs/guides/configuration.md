@@ -570,7 +570,7 @@ As the name suggests, 'dev-only' mode means that VDE is applied only in developm
 Please note the following tradeoffs when enabling this mode:
 
 - All data inserted in development environments is used only for [preview](../concepts/plans.md#data-preview-for-forward-only-changes) and will **not** be reused in production
-- Reverting a model to a previous version will trigger a full rebuild (unless the model is forward-only), as there is no versioned physical table to revert to
+- Reverting a model to a previous version will be applied going forward and may require an explicit data restatement
 
 !!! warning
     Switching the mode for an existing project will result in a complete rebuild of all models in the project. Refer to the [Table Migration Guide](./table_migration.md) to migrate existing tables without rebuilding them from scratch.

@@ -1616,6 +1616,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             max_interval_end_per_model,
         )
 
+        if not self.config.virtual_environment_mode.is_full:
+            forward_only = True
+        elif forward_only is None:
+            forward_only = self.config.plan.forward_only
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
@@ -1628,9 +1633,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             skip_backfill=skip_backfill,
             empty_backfill=empty_backfill,
             is_dev=is_dev,
-            forward_only=(
-                forward_only if forward_only is not None else self.config.plan.forward_only
-            ),
+            forward_only=forward_only,
             allow_destructive_models=expanded_destructive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
