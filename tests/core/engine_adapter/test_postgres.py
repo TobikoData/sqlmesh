@@ -94,8 +94,7 @@ def test_create_table_like(make_mocked_engine_adapter: t.Callable):
 
 def test_merge_version_gte_15(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
-    adapter._connection_pool.get().__class__.__module__ = "psycopg2.extensions"
-    adapter._connection_pool.get().info.server_version = 150000
+    adapter.server_version = (15, 0)
 
     adapter.merge(
         target_table="target",
@@ -118,8 +117,7 @@ def test_merge_version_lt_15(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
     adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
-    adapter._connection_pool.get().__class__.__module__ = "psycopg2.extensions"
-    adapter._connection_pool.get().info.server_version = 140000
+    adapter.server_version = (14, 0)
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test"
@@ -165,15 +163,17 @@ def test_alter_table_drop_column_cascade(make_mocked_engine_adapter: t.Callable)
     ]
 
 
-def test_get_server_version(make_mocked_engine_adapter: t.Callable):
+def test_server_version(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
 
-    adapter._connection_pool.get().__class__.__module__ = "psycopg2.extensions"
-    adapter._connection_pool.get().info.server_version = 150013
-    assert adapter.get_server_version() == (15, 13)
+    fetchone_mock = mocker.patch.object(adapter, "fetchone")
+    fetchone_mock.return_value = ("14.0",)
+    assert adapter.server_version == (14, 0)
 
-    adapter._connection_pool.get().__class__.__module__ = "pg8000.native"
-    adapter._connection_pool.get().parameter_statuses = {
-        "server_version": "15.13 (Debian 15.13-1.pgdg120+1)"
-    }
-    assert adapter.get_server_version() == (15, 13)
+    del adapter.server_version
+    fetchone_mock.return_value = ("15.8",)
+    assert adapter.server_version == (15, 8)
+
+    del adapter.server_version
+    fetchone_mock.return_value = ("15.13 (Debian 15.13-1.pgdg120+1)",)
+    assert adapter.server_version == (15, 13)
