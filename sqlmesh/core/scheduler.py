@@ -29,6 +29,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
+    SnapshotEvaluationTriggers,
     expand_range,
     parent_snapshots_by_name,
 )
@@ -111,7 +112,7 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
-    ) -> SnapshotToIntervals:
+    ) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
         """Find the largest contiguous date interval parameters based only on what is missing.
 
         For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -131,8 +132,11 @@ class Scheduler:
             end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
+
+        Returns:
+            A tuple containing a dict containing all snapshots needing to be run with their associated interval params and a list of snapshots that are ready to run based on their naive cron schedule (ignoring plan/run context and other attributes).
         """
-        snapshots_to_intervals = merged_missing_intervals(
+        snapshots_to_intervals, snapshots_naive_cron_ready = merged_missing_intervals(
             snapshots=self.snapshot_per_version.values(),
             start=start,
             end=end,
@@ -150,7 +154,7 @@ class Scheduler:
             snapshots_to_intervals = {
                 s: i for s, i in snapshots_to_intervals.items() if s.name in selected_snapshots
             }
-        return snapshots_to_intervals
+        return snapshots_to_intervals, snapshots_naive_cron_ready
 
     def evaluate(
         self,
@@ -223,6 +227,7 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
+        selected_snapshots_auto_upstream: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
@@ -239,6 +244,7 @@ class Scheduler:
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
+            selected_snapshots_auto_upstream=selected_snapshots_auto_upstream,
             circuit_breaker=circuit_breaker,
             deployability_index=deployability_index,
             auto_restatement_enabled=auto_restatement_enabled,
@@ -374,6 +380,7 @@ class Scheduler:
         run_environment_statements: bool = False,
         audit_only: bool = False,
         restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
+        snapshot_evaluation_triggers: t.Dict[SnapshotId, SnapshotEvaluationTriggers] = {},
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -476,6 +483,9 @@ class Scheduler:
                     evaluation_duration_ms,
                     num_audits - num_audits_failed,
                     num_audits_failed,
+                    snapshot_evaluation_triggers=snapshot_evaluation_triggers.get(
+                        snapshot.snapshot_id
+                    ),
                 )
 
         try:
@@ -586,6 +596,7 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
+        selected_snapshots_auto_upstream: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
@@ -609,6 +620,7 @@ class Scheduler:
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
+            selected_snapshots_auto_upstream: The set of selected_snapshots that were automatically added because they're upstream of a selected snapshot.
             circuit_breaker: An optional handler which checks if the run should be aborted.
             deployability_index: Determines snapshots that are deployable in the context of this render.
             auto_restatement_enabled: Whether to enable auto restatements.
@@ -639,14 +651,17 @@ class Scheduler:
         for s_id, interval in (remove_intervals or {}).items():
             self.snapshots[s_id].remove_interval(interval)
 
+        auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
         if auto_restatement_enabled:
-            auto_restated_intervals = apply_auto_restatements(self.snapshots, execution_time)
+            auto_restated_intervals, auto_restatement_triggers = apply_auto_restatements(
+                self.snapshots, execution_time
+            )
             self.state_sync.add_snapshots_intervals(auto_restated_intervals)
             self.state_sync.update_auto_restatements(
                 {s.name_version: s.next_auto_restatement_ts for s in self.snapshots.values()}
             )
 
-        merged_intervals = self.merged_missing_intervals(
+        merged_intervals, snapshots_naive_cron_ready = self.merged_missing_intervals(
             start,
             end,
             execution_time,
@@ -661,6 +676,41 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
+        merged_intervals_snapshots = {snapshot.snapshot_id for snapshot in merged_intervals}
+        select_snapshot_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
+        if selected_snapshots and selected_snapshots_auto_upstream:
+            # actually selected snapshots are their own triggers
+            selected_snapshots_no_auto_upstream = (
+                selected_snapshots - selected_snapshots_auto_upstream
+            )
+            select_snapshot_triggers = {
+                s_id: [s_id]
+                for s_id in [
+                    snapshot_id
+                    for snapshot_id in merged_intervals_snapshots
+                    if snapshot_id.name in selected_snapshots_no_auto_upstream
+                ]
+            }
+
+            # trace upstream by walking downstream on reversed dag
+            reversed_dag = snapshots_to_dag(self.snapshots.values()).reversed
+            for s_id in reversed_dag:
+                if s_id in merged_intervals_snapshots:
+                    triggers = select_snapshot_triggers.get(s_id, [])
+                    for parent_s_id in reversed_dag.graph.get(s_id, set()):
+                        triggers.extend(select_snapshot_triggers.get(parent_s_id, []))
+                    select_snapshot_triggers[s_id] = list(dict.fromkeys(triggers))
+
+        all_snapshot_triggers: t.Dict[SnapshotId, SnapshotEvaluationTriggers] = {
+            s_id: SnapshotEvaluationTriggers(
+                ignore_cron_flag=ignore_cron,
+                cron_ready=s_id in snapshots_naive_cron_ready,
+                auto_restatement_triggers=auto_restatement_triggers.get(s_id, []),
+                select_snapshot_triggers=select_snapshot_triggers.get(s_id, []),
+            )
+            for s_id in merged_intervals_snapshots
+        }
+
         errors, _ = self.run_merged_intervals(
             merged_intervals=merged_intervals,
             deployability_index=deployability_index,
@@ -672,6 +722,7 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
             restatements=remove_intervals,
+            snapshot_evaluation_triggers=all_snapshot_triggers,
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
@@ -821,7 +872,7 @@ def merged_missing_intervals(
     end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
-) -> SnapshotToIntervals:
+) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
     """Find the largest contiguous date interval parameters based only on what is missing.
 
     For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -871,7 +922,7 @@ def compute_interval_params(
     end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
-) -> SnapshotToIntervals:
+) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
     """Find the largest contiguous date interval parameters based only on what is missing.
 
     For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -893,7 +944,7 @@ def compute_interval_params(
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
 
     Returns:
-        A dict containing all snapshots needing to be run with their associated interval params.
+        A tuple containing a dict containing all snapshots needing to be run with their associated interval params and a list of snapshots that are ready to run based on their naive cron schedule (ignoring plan/run context and other attributes).
     """
     snapshot_merged_intervals = {}
 
@@ -921,7 +972,11 @@ def compute_interval_params(
             contiguous_batch.append((next_batch[0][0], next_batch[-1][-1]))
         snapshot_merged_intervals[snapshot] = contiguous_batch
 
-    return snapshot_merged_intervals
+    snapshots_naive_cron_ready = [
+        snap.snapshot_id for snap in missing_intervals(snapshots, execution_time=execution_time)
+    ]
+
+    return snapshot_merged_intervals, snapshots_naive_cron_ready
 
 
 def interval_diff(

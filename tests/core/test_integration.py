@@ -26,6 +26,7 @@ from IPython.utils.capture import capture_output
 
 
 from sqlmesh import CustomMaterialization
+import sqlmesh
 from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -1798,6 +1799,156 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     # Make sure that a view has been created for the downstream selected model.
     schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # modify 3 models
+    # - 2 breaking changes for testing plan directly modified triggers
+    # - 1 adding an auto-restatement for subsequent `run` test
+    marketing = context.get_model("sushi.marketing")
+    marketing_kwargs = {
+        **marketing.dict(),
+        "query": d.parse_one(
+            f"{marketing.query.sql(dialect='duckdb')} ORDER BY customer_id", dialect="duckdb"
+        ),
+    }
+    context.upsert_model(SqlModel.parse_obj(marketing_kwargs))
+
+    customers = context.get_model("sushi.customers")
+    customers_kwargs = {
+        **customers.dict(),
+        "query": d.parse_one(
+            f"{customers.query.sql(dialect='duckdb')} ORDER BY customer_id", dialect="duckdb"
+        ),
+    }
+    context.upsert_model(SqlModel.parse_obj(customers_kwargs))
+
+    # add auto restatement to orders
+    orders = context.get_model("sushi.orders")
+    orders_kind = {
+        **orders.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    orders_kwargs = {
+        **orders.dict(),
+        "kind": orders_kind,
+    }
+    context.upsert_model(PythonModel.parse_obj(orders_kwargs))
+
+    spy = mocker.spy(sqlmesh.core.scheduler.Scheduler, "run_merged_intervals")
+
+    context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
+
+    # PLAN: directly modified triggers
+    actual_triggers = spy.call_args.kwargs["snapshot_evaluation_triggers"]
+    actual_triggers_name = {
+        k.name: sorted([s.name for s in v.directly_modified_triggers])
+        for k, v in actual_triggers.items()
+        if v.directly_modified_triggers
+    }
+    marketing_name = '"memory"."sushi"."marketing"'
+    customers_name = '"memory"."sushi"."customers"'
+    marketing_customers_names = sorted([marketing_name, customers_name])
+    children_names = [
+        f'"memory"."sushi"."{model}"'
+        for model in {
+            "waiter_as_customer_by_day",
+            "active_customers",
+            "count_customers_active",
+            "count_customers_inactive",
+        }
+    ]
+    assert actual_triggers_name == {
+        marketing_name: [marketing_name],
+        customers_name: [customers_name],
+        **{k: marketing_customers_names for k in children_names},
+    }
+
+    # PLAN: restatement triggers
+    spy.reset_mock()
+    context.plan(
+        restate_models=[
+            '"memory"."sushi"."marketing"',
+            '"memory"."sushi"."order_items"',
+            '"memory"."sushi"."waiter_revenue_by_day"',
+        ],
+        auto_apply=True,
+        no_prompts=True,
+    )
+
+    order_items_name = '"memory"."sushi"."order_items"'
+    waiter_revenue_by_day_name = '"memory"."sushi"."waiter_revenue_by_day"'
+    actual_triggers = spy.call_args.kwargs["snapshot_evaluation_triggers"]
+    actual_triggers_name = {
+        k.name: sorted([s.name for s in v.restatement_triggers])
+        for k, v in actual_triggers.items()
+        if v.restatement_triggers
+    }
+
+    assert sorted(actual_triggers_name[waiter_revenue_by_day_name]) == sorted(
+        [waiter_revenue_by_day_name, order_items_name]
+    )
+    assert actual_triggers_name[order_items_name] == [order_items_name]
+    assert actual_triggers_name['"memory"."sushi"."top_waiters"'] == [waiter_revenue_by_day_name]
+    assert actual_triggers_name['"memory"."sushi"."customer_revenue_by_day"'] == [order_items_name]
+    assert actual_triggers_name['"memory"."sushi"."customer_revenue_lifetime"'] == [
+        order_items_name
+    ]
+
+    # RUN: select and auto-restatement triggers
+    # User selects top_waiters and waiter_revenue_by_day, others added as auto-upstream
+    selected_models = {"top_waiters", "waiter_revenue_by_day"}
+    selected_models_auto_upstream = {"order_items", "orders", "items"}
+    selected_snapshots = {
+        f'"memory"."sushi"."{model}"' for model in selected_models | selected_models_auto_upstream
+    }
+    selected_snapshots_auto_upstream = selected_snapshots - {
+        f'"memory"."sushi"."{model}"' for model in selected_models
+    }
+
+    scheduler = context.scheduler()
+    run_merged_intervals_mock = mocker.patch.object(
+        scheduler, "run_merged_intervals", return_value=([], [])
+    )
+
+    with time_machine.travel("2023-01-09 00:00:01 UTC"):
+        scheduler.run(
+            environment=c.PROD,
+            selected_snapshots=selected_snapshots,
+            selected_snapshots_auto_upstream=selected_snapshots_auto_upstream,
+            start="2023-01-01",
+            auto_restatement_enabled=True,
+        )
+
+    assert run_merged_intervals_mock.called
+
+    actual_triggers = run_merged_intervals_mock.call_args.kwargs["snapshot_evaluation_triggers"]
+
+    # validate ignore_cron not passed and all model crons ready
+    assert all(
+        not trigger.ignore_cron_flag and trigger.cron_ready for trigger in actual_triggers.values()
+    )
+
+    for id, trigger in actual_triggers.items():
+        # top_waiters is its own trigger, waiter_revenue_by_day is upstream of it, everyone else is upstream of both
+        select_triggers = [t.name for t in trigger.select_snapshot_triggers]
+        assert (
+            select_triggers == ['"memory"."sushi"."top_waiters"']
+            if id.name == '"memory"."sushi"."top_waiters"'
+            else ['"memory"."sushi"."waiter_revenue_by_day"', '"memory"."sushi"."top_waiters"']
+        )
+
+        # everyone other than items is downstream of orders
+        auto_restatement_triggers = [t.name for t in trigger.auto_restatement_triggers]
+        assert (
+            auto_restatement_triggers == []
+            if id.name == '"memory"."sushi"."items"'
+            else ['"memory"."sushi"."orders"']
+        )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
