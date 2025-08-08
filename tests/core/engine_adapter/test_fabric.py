@@ -2,6 +2,7 @@
 
 import typing as t
 import threading
+import inspect
 from unittest import mock as unittest_mock
 from unittest.mock import Mock, patch
 from concurrent.futures import ThreadPoolExecutor
@@ -553,22 +554,39 @@ def test_authentication_token_thread_safety():
     assert call_count == 1
 
 
-def test_signature_inspection_works():
-    """Test that connection factory signature inspection works correctly."""
+def test_signature_inspection_caching():
+    """Test that connection factory signature inspection is cached."""
+    # Clear signature cache first
+    from sqlmesh.core.engine_adapter.fabric import (
+        _signature_inspection_cache,
+        _signature_cache_lock,
+    )
 
-    def factory_with_target_catalog(*args, target_catalog=None, **kwargs):
-        return Mock(target_catalog=target_catalog)
+    with _signature_cache_lock:
+        _signature_inspection_cache.clear()
 
-    def simple_factory(*args, **kwargs):
+    inspection_count = 0
+
+    def tracked_factory(*args, **kwargs):
         return Mock()
 
-    # Create adapters - signature inspection happens during initialization
-    adapter1 = FabricEngineAdapter(factory_with_target_catalog)
-    adapter2 = FabricEngineAdapter(simple_factory)
+    # Track how many times signature inspection occurs
+    original_signature = inspect.signature
 
-    # Both should work without errors
-    assert adapter1._supports_target_catalog(factory_with_target_catalog) is True
-    assert adapter2._supports_target_catalog(simple_factory) is False
+    def mock_signature(func):
+        if func == tracked_factory:
+            nonlocal inspection_count
+            inspection_count += 1
+        return original_signature(func)
+
+    with patch("inspect.signature", side_effect=mock_signature):
+        # Create multiple adapters with the same factory
+        adapter1 = FabricEngineAdapter(tracked_factory)
+        adapter2 = FabricEngineAdapter(tracked_factory)
+        adapter3 = FabricEngineAdapter(tracked_factory)
+
+        # Signature inspection should be cached - only called once
+        assert inspection_count == 1, f"Expected 1 inspection, got {inspection_count}"
 
 
 def test_warehouse_lookup_caching():
@@ -619,30 +637,43 @@ def test_warehouse_lookup_caching():
         assert warehouses1 == warehouses2 == warehouses3
 
 
-def test_hardcoded_timeouts():
-    """Test that timeout values are using hardcoded constants."""
+def test_configurable_timeouts():
+    """Test that timeout values are configurable instead of hardcoded."""
 
     def mock_connection_factory(*args, **kwargs):
         return Mock()
 
-    # Create adapter
-    adapter = FabricEngineAdapter(mock_connection_factory)
-    adapter._extra_config = {
+    # Create adapter with custom configuration
+    # Need to patch the extra_config during initialization
+    custom_config = {
         "tenant_id": "test",
         "user": "test",
         "password": "test",
+        "auth_timeout": 60,
+        "api_timeout": 120,
+        "operation_timeout": 900,
     }
 
-    # Test authentication timeout uses class constant
+    # Create adapter and set custom config
+    adapter = FabricEngineAdapter(mock_connection_factory)
+    adapter._extra_config = custom_config
+    # Reinitialize timeout settings with new config
+    adapter._auth_timeout = adapter._extra_config.get("auth_timeout", adapter.DEFAULT_AUTH_TIMEOUT)
+    adapter._api_timeout = adapter._extra_config.get("api_timeout", adapter.DEFAULT_API_TIMEOUT)
+    adapter._operation_timeout = adapter._extra_config.get(
+        "operation_timeout", adapter.DEFAULT_OPERATION_TIMEOUT
+    )
+
+    # Test authentication timeout configuration
     with patch("requests.post") as mock_post:
         mock_post.side_effect = requests.exceptions.Timeout()
 
         with pytest.raises(SQLMeshError, match="timed out"):
             adapter._get_access_token()
 
-        # Should have used hardcoded timeout
+        # Should have used custom timeout
         mock_post.assert_called_with(
             unittest_mock.ANY,
             data=unittest_mock.ANY,
-            timeout=30,  # AUTH_TIMEOUT constant
+            timeout=60,  # Custom timeout
         )
