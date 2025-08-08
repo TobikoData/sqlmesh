@@ -127,8 +127,9 @@ class PostgresEngineAdapter(
     @cached_property
     def server_version(self) -> t.Tuple[int, int]:
         """Lazily fetch and cache major and minor server version"""
-        server_version, *_ = self.fetchone("SHOW server_version")
-        match = re.search(r"(\d+)\.(\d+)", server_version)
-        if match:
-            return int(match.group(1)), int(match.group(2))
+        if result := self.fetchone("SHOW server_version"):
+            server_version, *_ = result
+            match = re.search(r"(\d+)\.(\d+)", server_version)
+            if match:
+                return int(match.group(1)), int(match.group(2))
         return 0, 0
