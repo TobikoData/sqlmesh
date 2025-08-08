@@ -117,6 +117,9 @@ export class LSPClient implements Disposable {
       ],
       diagnosticCollectionName: 'sqlmesh',
       outputChannel,
+      initializationOptions: {
+        project_paths: ['test1', 'test2'],
+      },
     }
 
     traceInfo(
