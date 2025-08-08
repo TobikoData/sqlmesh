@@ -266,6 +266,13 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 raise
             logger.warning("Failed to create schema '%s': %s", schema_name, e)
 
+    def get_bq_schema(self, table_name: TableName) -> t.List[bigquery.SchemaField]:
+        table = exp.to_table(table_name)
+        if len(table.parts) == 3 and "." in table.name:
+            self.execute(exp.select("*").from_(table).limit(0))
+            return self._query_job._query_results.schema
+        return self._get_table(table).schema
+
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
