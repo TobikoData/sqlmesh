@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
     ManagedKind,
     create_sql_model,
 )
-from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange
+from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange, OnAdditiveChange
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
@@ -90,7 +90,7 @@ class ModelConfig(BaseModelConfig):
     unique_key: t.Optional[t.List[str]] = None
     partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
     full_refresh: t.Optional[bool] = None
-    on_schema_change: t.Optional[str] = None
+    on_schema_change: str = "ignore"
 
     # Snapshot (SCD Type 2) Fields
     updated_at: t.Optional[str] = None
@@ -226,16 +226,32 @@ class ModelConfig(BaseModelConfig):
 
         # args common to all sqlmesh incremental kinds, regardless of materialization
         incremental_kind_kwargs: t.Dict[str, t.Any] = {}
-        if self.on_schema_change:
-            on_schema_change = self.on_schema_change.lower()
+        on_schema_change = self.on_schema_change.lower()
 
-            on_destructive_change = OnDestructiveChange.WARN
-            if on_schema_change == "sync_all_columns":
-                on_destructive_change = OnDestructiveChange.ALLOW
-            elif on_schema_change in ("fail", "append_new_columns", "ignore"):
-                on_destructive_change = OnDestructiveChange.ERROR
+        if materialization == Materialization.SNAPSHOT:
+            # dbt snapshots default to `append_new_columns` behavior and can't be changed
+            on_schema_change = "append_new_columns"
 
-            incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
+        if on_schema_change == "ignore":
+            on_destructive_change = OnDestructiveChange.IGNORE
+            on_additive_change = OnAdditiveChange.IGNORE
+        elif on_schema_change == "fail":
+            on_destructive_change = OnDestructiveChange.ERROR
+            on_additive_change = OnAdditiveChange.ERROR
+        elif on_schema_change == "append_new_columns":
+            on_destructive_change = OnDestructiveChange.IGNORE
+            on_additive_change = OnAdditiveChange.ALLOW
+        elif on_schema_change == "sync_all_columns":
+            on_destructive_change = OnDestructiveChange.ALLOW
+            on_additive_change = OnAdditiveChange.ALLOW
+        else:
+            raise ConfigError(
+                f"{self.canonical_name(context)}: Invalid on_schema_change value '{on_schema_change}'. "
+                "Valid values are 'ignore', 'fail', 'append_new_columns', 'sync_all_columns'."
+            )
+
+        incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
+        incremental_kind_kwargs["on_additive_change"] = on_additive_change
 
         for field in ("forward_only", "auto_restatement_cron"):
             field_val = getattr(self, field, None)

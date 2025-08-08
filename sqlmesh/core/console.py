@@ -47,6 +47,7 @@ from sqlmesh.utils.errors import (
     PythonModelEvalError,
     NodeAuditsErrors,
     format_destructive_change_msg,
+    format_additive_change_msg,
 )
 from sqlmesh.utils.rich import strip_ansi_codes
 
@@ -333,6 +334,16 @@ class PlanBuilderConsole(BaseConsole, abc.ABC):
         error: bool = True,
     ) -> None:
         """Display a destructive change error or warning to the user."""
+
+    @abc.abstractmethod
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        additive_changes: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        """Display an additive change error or warning to the user."""
 
 
 class UnitTestConsole(abc.ABC):
@@ -759,6 +770,15 @@ class NoopConsole(Console):
         snapshot_name: str,
         dropped_column_names: t.List[str],
         alter_expressions: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        pass
+
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        additive_changes: t.List[exp.Alter],
         dialect: str,
         error: bool = True,
     ) -> None:
@@ -2215,6 +2235,20 @@ class TerminalConsole(Console):
                 format_destructive_change_msg(
                     snapshot_name, dropped_column_names, alter_expressions, dialect, error
                 )
+            )
+
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        additive_changes: t.List[exp.Alter],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        if error:
+            self._print(format_additive_change_msg(snapshot_name, additive_changes, dialect))
+        else:
+            self.log_warning(
+                format_additive_change_msg(snapshot_name, additive_changes, dialect, error)
             )
 
     def log_error(self, message: str) -> None:

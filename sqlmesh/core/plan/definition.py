@@ -44,6 +44,7 @@ class Plan(PydanticModel, frozen=True):
     no_gaps: bool
     forward_only: bool
     allow_destructive_models: t.Set[str]
+    allow_additive_models: t.Set[str]
     include_unmodified: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
@@ -256,6 +257,7 @@ class Plan(PydanticModel, frozen=True):
             restatements={s.name: i for s, i in self.restatements.items()},
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
+            allow_additive_models=self.allow_additive_models,
             forward_only=self.forward_only,
             end_bounded=self.end_bounded,
             ensure_finalized_snapshots=self.ensure_finalized_snapshots,
@@ -297,6 +299,7 @@ class EvaluatablePlan(PydanticModel):
     restatements: t.Dict[str, Interval]
     is_dev: bool
     allow_destructive_models: t.Set[str]
+    allow_additive_models: t.Set[str]
     forward_only: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool

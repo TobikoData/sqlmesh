@@ -24,11 +24,13 @@ from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
     OnDestructiveChange,
+    OnAdditiveChange,
     SCDType2ByColumnKind,
     SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
     _IncrementalBy,
+    _Incremental,
     model_kind_validator,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
@@ -418,6 +420,31 @@ class ModelMeta(_Node):
                 f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead."
             )
 
+        # Warn about unusual combinations of on_destructive_change and on_additive_change
+        if isinstance(kind, _Incremental):
+            destructive = kind.on_destructive_change
+            additive = kind.on_additive_change
+
+            # Unusual combination: ALLOW destructive but ERROR on additive
+            # (very restrictive on additions, permissive on removals)
+            if destructive.is_allow and additive.is_error:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Model {self.name} has unusual combination: on_destructive_change=ALLOW but on_additive_change=ERROR. "
+                    "This allows destructive changes (like dropping columns) but blocks additive changes (like adding columns)."
+                )
+
+            # Unusual combination: ERROR on destructive but IGNORE on additive
+            # (very permissive on additions, strict on removals - this is actually reasonable)
+            elif destructive.is_error and additive.is_ignore:
+                from sqlmesh.core.console import get_console
+
+                get_console().log_warning(
+                    f"Model {self.name} has on_destructive_change=ERROR and on_additive_change=IGNORE. "
+                    "This is an unusual combination and likely a mistake."
+                )
+
         return self
 
     @property
@@ -544,6 +571,11 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
+
+    @property
+    def on_additive_change(self) -> OnAdditiveChange:
+        """Return the model's additive change setting if it has one."""
+        return getattr(self.kind, "on_additive_change", OnAdditiveChange.ALLOW)
 
     @property
     def ignored_rules(self) -> t.Set[str]:

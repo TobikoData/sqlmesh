@@ -1814,7 +1814,8 @@ def test_render_definition():
                 partition_by_time_column TRUE,
                 forward_only FALSE,
                 disable_restatement FALSE,
-                on_destructive_change 'ERROR'
+                on_destructive_change 'ERROR',
+                on_additive_change 'ALLOW'
             ),
             storage_format iceberg,
             partitioned_by `a`,
@@ -5521,7 +5522,8 @@ def test_when_matched():
     batch_concurrency 1,
     forward_only FALSE,
     disable_restatement FALSE,
-    on_destructive_change 'ERROR'
+    on_destructive_change 'ERROR',
+    on_additive_change 'ALLOW'
   )
 );
 
@@ -5573,7 +5575,8 @@ FROM @{macro_val}.upstream"""
     batch_concurrency 1,
     forward_only FALSE,
     disable_restatement FALSE,
-    on_destructive_change 'ERROR'
+    on_destructive_change 'ERROR',
+    on_additive_change 'ALLOW'
   )
 );
 
@@ -7462,6 +7465,45 @@ def test_forward_only_on_destructive_change_config() -> None:
     assert context_model.on_destructive_change.is_allow
 
 
+def test_model_meta_on_additive_change_property() -> None:
+    """Test that ModelMeta has on_additive_change property that works like on_destructive_change."""
+    from sqlmesh.core.model.kind import IncrementalByTimeRangeKind, OnAdditiveChange
+    from sqlmesh.core.model.meta import ModelMeta
+
+    # Test incremental model with on_additive_change=ERROR
+    incremental_kind = IncrementalByTimeRangeKind(
+        time_column="c",
+        forward_only=True,
+        on_additive_change=OnAdditiveChange.ERROR,
+    )
+    model_meta = ModelMeta(name="test_model", kind=incremental_kind)
+    assert model_meta.on_additive_change == OnAdditiveChange.ERROR
+
+    # Test incremental model with on_additive_change=WARN
+    incremental_kind = IncrementalByTimeRangeKind(
+        time_column="c",
+        forward_only=True,
+        on_additive_change=OnAdditiveChange.WARN,
+    )
+    model_meta = ModelMeta(name="test_model", kind=incremental_kind)
+    assert model_meta.on_additive_change == OnAdditiveChange.WARN
+
+    # Test incremental model with default on_additive_change (should be ALLOW)
+    incremental_kind = IncrementalByTimeRangeKind(
+        time_column="c",
+        forward_only=True,
+    )
+    model_meta = ModelMeta(name="test_model", kind=incremental_kind)
+    assert model_meta.on_additive_change == OnAdditiveChange.ALLOW
+
+    # Test non-incremental model (should return None)
+    from sqlmesh.core.model.kind import FullKind
+
+    full_kind = FullKind()
+    model_meta = ModelMeta(name="test_model", kind=full_kind)
+    assert model_meta.on_additive_change == OnAdditiveChange.ALLOW
+
+
 def test_incremental_by_partition(sushi_context, assert_exp_eq):
     expressions = d.parse(
         """
@@ -7780,7 +7822,8 @@ time_column ("a", '%Y-%m-%d'),
 partition_by_time_column TRUE,
 forward_only FALSE,
 disable_restatement FALSE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7814,7 +7857,8 @@ batch_concurrency 2,
 lookback 3,
 forward_only TRUE,
 disable_restatement TRUE,
-on_destructive_change 'WARN'
+on_destructive_change 'WARN',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7839,7 +7883,8 @@ unique_key ("a"),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7866,7 +7911,8 @@ when_matched (WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7894,7 +7940,8 @@ when_matched (WHEN MATCHED AND "__MERGE_SOURCE__"."x" = 1 THEN UPDATE SET "__MER
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7916,7 +7963,8 @@ on_destructive_change 'ERROR'
         == """INCREMENTAL_BY_PARTITION (
 forward_only TRUE,
 disable_restatement FALSE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7968,7 +8016,8 @@ invalidate_hard_deletes FALSE,
 time_data_type TIMESTAMP,
 forward_only TRUE,
 disable_restatement TRUE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -7999,7 +8048,8 @@ invalidate_hard_deletes FALSE,
 time_data_type TIMESTAMP,
 forward_only TRUE,
 disable_restatement TRUE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -8030,7 +8080,8 @@ invalidate_hard_deletes FALSE,
 time_data_type TIMESTAMP,
 forward_only TRUE,
 disable_restatement TRUE,
-on_destructive_change 'ERROR'
+on_destructive_change 'ERROR',
+on_additive_change 'ALLOW'
 )"""
     )
 
@@ -8211,7 +8262,8 @@ def test_merge_filter():
     batch_concurrency 1,
     forward_only FALSE,
     disable_restatement FALSE,
-    on_destructive_change 'ERROR'
+    on_destructive_change 'ERROR',
+    on_additive_change 'ALLOW'
   )
 );
 
@@ -8938,6 +8990,7 @@ def test_auto_restatement():
   forward_only FALSE,
   disable_restatement FALSE,
   on_destructive_change 'ERROR',
+  on_additive_change 'ALLOW',
   auto_restatement_cron '@daily'
 )"""
     )
@@ -8967,6 +9020,7 @@ def test_auto_restatement():
   forward_only FALSE,
   disable_restatement FALSE,
   on_destructive_change 'ERROR',
+  on_additive_change 'ALLOW',
   auto_restatement_cron '@daily'
 )"""
     )

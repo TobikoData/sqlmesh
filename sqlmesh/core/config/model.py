@@ -8,8 +8,10 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import (
     ModelKind,
     OnDestructiveChange,
+    OnAdditiveChange,
     model_kind_validator,
     on_destructive_change_validator,
+    on_additive_change_validator,
 )
 from sqlmesh.core.model.meta import FunctionCall
 from sqlmesh.core.node import IntervalUnit
@@ -34,6 +36,7 @@ class ModelDefaultsConfig(BaseConfig):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet', 'orc')
         on_destructive_change: What should happen when a forward-only model requires a destructive schema change.
+        on_additive_change: What should happen when a forward-only model requires an additive schema change.
         physical_properties: A key-value mapping of arbitrary properties that are applied to the model table / view in the physical layer.
         virtual_properties: A key-value mapping of arbitrary properties that are applied to the model view in the virtual layer.
         session_properties: A key-value mapping of properties specific to the target engine that are applied to the engine session.
@@ -56,6 +59,7 @@ class ModelDefaultsConfig(BaseConfig):
     table_format: t.Optional[str] = None
     storage_format: t.Optional[str] = None
     on_destructive_change: t.Optional[OnDestructiveChange] = None
+    on_additive_change: t.Optional[OnAdditiveChange] = None
     physical_properties: t.Optional[t.Dict[str, t.Any]] = None
     virtual_properties: t.Optional[t.Dict[str, t.Any]] = None
     session_properties: t.Optional[t.Dict[str, t.Any]] = None
@@ -71,6 +75,7 @@ class ModelDefaultsConfig(BaseConfig):
 
     _model_kind_validator = model_kind_validator
     _on_destructive_change_validator = on_destructive_change_validator
+    _on_additive_change_validator = on_additive_change_validator
 
     @field_validator("audits", mode="before")
     def _audits_validator(cls, v: t.Any) -> t.Any:

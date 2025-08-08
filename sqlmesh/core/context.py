@@ -1276,6 +1276,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         empty_backfill: t.Optional[bool] = None,
         forward_only: t.Optional[bool] = None,
         allow_destructive_models: t.Optional[t.Collection[str]] = None,
+        allow_additive_models: t.Optional[t.Collection[str]] = None,
         no_prompts: t.Optional[bool] = None,
         auto_apply: t.Optional[bool] = None,
         no_auto_categorization: t.Optional[bool] = None,
@@ -1356,6 +1357,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             empty_backfill=empty_backfill,
             forward_only=forward_only,
             allow_destructive_models=allow_destructive_models,
+            allow_additive_models=allow_additive_models,
             no_auto_categorization=no_auto_categorization,
             effective_from=effective_from,
             include_unmodified=include_unmodified,
@@ -1406,6 +1408,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         empty_backfill: t.Optional[bool] = None,
         forward_only: t.Optional[bool] = None,
         allow_destructive_models: t.Optional[t.Collection[str]] = None,
+        allow_additive_models: t.Optional[t.Collection[str]] = None,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
@@ -1442,6 +1445,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             empty_backfill: Like skip_backfill, but also records processed intervals.
             forward_only: Whether the purpose of the plan is to make forward only changes.
             allow_destructive_models: Models whose forward-only changes are allowed to be destructive.
+            allow_additive_models: Models whose forward-only changes are allowed to be additive.
             no_auto_categorization: Indicates whether to disable automatic categorization of model
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
@@ -1526,6 +1530,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             )
         else:
             expanded_destructive_models = None
+
+        if allow_additive_models:
+            expanded_additive_models = model_selector.expand_model_selections(allow_additive_models)
+        else:
+            expanded_additive_models = None
 
         if backfill_models:
             backfill_models = model_selector.expand_model_selections(backfill_models)
@@ -1632,6 +1641,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 forward_only if forward_only is not None else self.config.plan.forward_only
             ),
             allow_destructive_models=expanded_destructive_models,
+            allow_additive_models=expanded_additive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
             environment_catalog_mapping=self.environment_catalog_mapping,

@@ -133,6 +133,7 @@ def test_json(snapshot: Snapshot):
                 "time_column": {"column": "`ds`"},
                 "batch_size": 30,
                 "forward_only": False,
+                "on_additive_change": "ALLOW",
                 "on_destructive_change": "ERROR",
                 "partition_by_time_column": True,
                 "disable_restatement": False,
@@ -909,7 +910,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1312415267",
-        metadata_hash="1125608408",
+        metadata_hash="3575333731",
     )
 
     assert fingerprint == original_fingerprint
@@ -1009,7 +1010,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="923305614",
-        metadata_hash="1125608408",
+        metadata_hash="3575333731",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
