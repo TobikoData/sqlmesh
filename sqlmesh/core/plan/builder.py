@@ -606,12 +606,15 @@ class PlanBuilder:
 
         if self._context_diff.directly_modified(s_id.name):
             new, old = self._context_diff.modified_snapshots[s_id.name]
-            if _is_breaking_kind_change(old, new):
-                snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
-            elif self._auto_categorization_enabled:
-                if snapshot.is_seed:
-                    # Seed changes can't be forward-only.
-                    forward_only = False
+            is_breaking_kind_change = _is_breaking_kind_change(old, new)
+            if is_breaking_kind_change or snapshot.is_seed:
+                # Breaking kind changes and seed changes can't be forward-only.
+                forward_only = False
+
+            if self._auto_categorization_enabled:
+                if is_breaking_kind_change:
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                    return
 
                 s_id_with_missing_columns: t.Optional[SnapshotId] = None
                 this_sid_with_downstream = indirectly_modified.get(s_id, set()) | {s_id}
