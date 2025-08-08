@@ -272,6 +272,9 @@ filterwarnings = [
 ]
 retry_delay = 10
 
+[tool.ruff]
+line-length = 100
+
 [tool.ruff.lint]
 select = [
     "F401",
