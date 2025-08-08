@@ -24,7 +24,6 @@ from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionCon
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.engine_adapter.mixins import RowDiffMixin, LogicalMergeMixin
 from sqlmesh.core.model.definition import create_sql_model
@@ -2816,19 +2815,28 @@ def test_janitor_drops_downstream_unexpired_hard_dependencies(
     - In dev, we modify A - triggers new version of A and a dev preview of B that both expire in 7 days
     - We advance time by 3 days
     - In dev, we modify B - triggers a new version of B that depends on A but expires 3 days after A
-    - We advance time by 5 days so that A has reached its expiry but B has not
+    - In dev, we create B(view) <- C(view) and B(view) <- D(table)
+    - We advance time by 5 days so that A has reached its expiry but B, C and D have not
     - We expire dev so that none of these snapshots are promoted and are thus targets for cleanup
     - We run the janitor
 
     Expected outcome:
         - All the dev versions of A and B should be dropped
+        - C should be dropped as well because it's a view that depends on B which was dropped
+        - D should not be dropped because while it depends on B which was dropped, it's a table so is still valid after B is dropped
         - We should not get a 'ERROR: cannot drop table x because other objects depend on it' on engines that do schema binding
     """
 
-    def _state_sync_engine_adapter(context: Context) -> EngineAdapter:
+    def _all_snapshot_ids(context: Context) -> t.List[SnapshotId]:
         assert isinstance(context.state_sync, CachingStateSync)
         assert isinstance(context.state_sync.state_sync, EngineAdapterStateSync)
-        return context.state_sync.state_sync.engine_adapter
+
+        return [
+            SnapshotId(name=name, identifier=identifier)
+            for name, identifier in context.state_sync.state_sync.engine_adapter.fetchall(
+                "select name, identifier from sqlmesh._snapshots"
+            )
+        ]
 
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -2898,10 +2906,10 @@ def test_janitor_drops_downstream_unexpired_hard_dependencies(
 
         # should now have 4 snapshots in state - 2x model a and 2x model b
         # the new model b is a dev preview because its upstream model changed
-        assert (
-            len(_state_sync_engine_adapter(sqlmesh).fetchall(f"select * from sqlmesh._snapshots"))
-            == 4
-        )
+        all_snapshot_ids = _all_snapshot_ids(sqlmesh)
+        assert len(all_snapshot_ids) == 4
+        assert len([s for s in all_snapshot_ids if "model_a" in s.name]) == 2
+        assert len([s for s in all_snapshot_ids if "model_b" in s.name]) == 2
 
         # context just has the two latest
         assert len(sqlmesh.snapshots) == 2
@@ -2930,19 +2938,39 @@ def test_janitor_drops_downstream_unexpired_hard_dependencies(
         SELECT a, 'b' as b from {schema}.model_a;
         """)
 
+        (models_dir / "model_c.sql").write_text(f"""
+        MODEL (
+            name {schema}.model_c,
+            kind VIEW
+        );
+
+        SELECT a, 'c' as c from {schema}.model_b;
+        """)
+
+        (models_dir / "model_d.sql").write_text(f"""
+        MODEL (
+            name {schema}.model_d,
+            kind FULL
+        );
+
+        SELECT a, 'd' as d from {schema}.model_b;
+        """)
+
         sqlmesh = ctx.create_context(
             path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
         )
         sqlmesh.plan(environment="dev", auto_apply=True)
 
-        # should now have 5 snapshots in state - 2x model a and 3x model b
-        assert (
-            len(_state_sync_engine_adapter(sqlmesh).fetchall(f"select * from sqlmesh._snapshots"))
-            == 5
-        )
+        # should now have 7 snapshots in state - 2x model a, 3x model b, 1x model c and 1x model d
+        all_snapshot_ids = _all_snapshot_ids(sqlmesh)
+        assert len(all_snapshot_ids) == 7
+        assert len([s for s in all_snapshot_ids if "model_a" in s.name]) == 2
+        assert len([s for s in all_snapshot_ids if "model_b" in s.name]) == 3
+        assert len([s for s in all_snapshot_ids if "model_c" in s.name]) == 1
+        assert len([s for s in all_snapshot_ids if "model_d" in s.name]) == 1
 
-        # context just has the two latest
-        assert len(sqlmesh.snapshots) == 2
+        # context just has the 4 latest
+        assert len(sqlmesh.snapshots) == 4
 
         # model a expiry should not have changed
         model_a_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_a" in n)
@@ -2956,26 +2984,41 @@ def test_janitor_drops_downstream_unexpired_hard_dependencies(
         assert to_ds(model_b_snapshot.updated_ts) == "2020-01-05"
         assert to_ds(model_b_snapshot.expiration_ts) == "2020-01-12"
 
+        # model c should expire at the same time as model b
+        model_c_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_c" in n)
+        assert to_ds(model_c_snapshot.updated_ts) == to_ds(model_b_snapshot.updated_ts)
+        assert to_ds(model_c_snapshot.expiration_ts) == to_ds(model_b_snapshot.expiration_ts)
+
+        # model d should expire at the same time as model b
+        model_d_snapshot = next(s for n, s in sqlmesh.snapshots.items() if "model_d" in n)
+        assert to_ds(model_d_snapshot.updated_ts) == to_ds(model_b_snapshot.updated_ts)
+        assert to_ds(model_d_snapshot.expiration_ts) == to_ds(model_b_snapshot.expiration_ts)
+
     # move forward to date where after model a has expired but before model b has expired
     # invalidate dev to trigger cleanups
-    # run janitor. model a is expired so will be cleaned up and this will cascade to model b.
+    # run janitor
+    # - table model a is expired so will be cleaned up and this will cascade to view model b
+    # - view model b is not expired, but because it got cascaded to, this will cascade again to view model c
+    # - table model d is a not a view, so even though its parent view model b got dropped, it doesnt need to be dropped
     with time_machine.travel("2020-01-10 00:00:00"):
         sqlmesh = ctx.create_context(
             path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
         )
 
-        before_snapshots = _state_sync_engine_adapter(sqlmesh).fetchall(
-            f"select name, identifier from sqlmesh._snapshots"
-        )
+        before_snapshot_ids = _all_snapshot_ids(sqlmesh)
+
         sqlmesh.invalidate_environment("dev")
         sqlmesh.run_janitor(ignore_ttl=False)
-        after_snapshots = _state_sync_engine_adapter(sqlmesh).fetchall(
-            f"select name, identifier from sqlmesh._snapshots"
+
+        after_snapshot_ids = _all_snapshot_ids(sqlmesh)
+
+        assert len(before_snapshot_ids) != len(after_snapshot_ids)
+
+        # all that's left should be the two original snapshots that were in prod and model d
+        assert set(after_snapshot_ids) == set(
+            [
+                model_a_prod_snapshot.snapshot_id,
+                model_b_prod_snapshot.snapshot_id,
+                model_d_snapshot.snapshot_id,
+            ]
         )
-
-        assert len(before_snapshots) != len(after_snapshots)
-
-        # all that's left should be the two snapshots that were in prod
-        assert set(
-            [SnapshotId(name=name, identifier=identifier) for name, identifier in after_snapshots]
-        ) == set([model_a_prod_snapshot.snapshot_id, model_b_prod_snapshot.snapshot_id])

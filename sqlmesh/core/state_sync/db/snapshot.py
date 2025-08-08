@@ -30,6 +30,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotFingerprint,
     SnapshotChangeCategory,
+    snapshots_to_dag,
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, now, to_timestamp
@@ -224,10 +225,19 @@ class SnapshotState:
 
         if not ignore_ttl:
             expired_query = expired_query.where(
-                ((exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts)
-                # we need to include views even if they havent expired in case one depends on a table that /has/ expired
-                .or_(exp.column("kind_name").eq(ModelKindName.VIEW))
+                (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
             )
+
+            # we need to include views even if they havent expired in case one depends on a table or view that /has/ expired
+            # but we only need to do this if there are expired objects to begin with
+
+            expired_record_count = fetchone(
+                self.engine_adapter, exp.select("count(*)").from_(expired_query.subquery())
+            )
+            if expired_record_count and expired_record_count[0]:
+                expired_query = t.cast(
+                    exp.Select, expired_query.or_(exp.column("kind_name").eq(ModelKindName.VIEW))
+                )
 
         candidates = {
             SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
@@ -247,29 +257,23 @@ class SnapshotState:
             # Fetch full snapshots because we need the dependency relationship
             full_candidates = self.get_snapshots(candidates.keys())
 
+            dag = snapshots_to_dag(full_candidates.values())
+
             # Include any non-expired views that depend on expired tables
-            for snapshot_id in full_candidates:
+            for snapshot_id in dag:
                 snapshot = full_candidates.get(snapshot_id, None)
+
                 if not snapshot:
                     continue
 
                 if snapshot.expiration_ts <= current_ts:
-                    # All expired snapshots should be included
+                    # All expired snapshots should be included regardless
                     expired_candidates[snapshot.snapshot_id] = snapshot.name_version
                 elif snapshot.model_kind_name == ModelKindName.VIEW:
-                    # With non-expired views, check if they point to an expired parent table
-                    immediate_parents = [
-                        full_candidates[parent_id]
-                        for parent_id in snapshot.parents
-                        if parent_id in full_candidates
-                    ]
-
-                    if any(
-                        parent.expiration_ts <= current_ts
-                        for parent in immediate_parents
-                        if parent.model_kind_name != ModelKindName.VIEW
-                    ):
-                        # an immediate upstream table has expired, therefore this view is no longer valid and needs to be cleaned up as well
+                    # Check if any of our parents are in the expired list
+                    # This works because we traverse the dag in topological order, so if our parent either directly
+                    # expired or indirectly expired because /its/ parent expired, it will still be in the expired_snapshots list
+                    if any(parent.snapshot_id in expired_candidates for parent in snapshot.parents):
                         expired_candidates[snapshot.snapshot_id] = snapshot.name_version
 
         promoted_snapshot_ids = {

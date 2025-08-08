@@ -1208,6 +1208,85 @@ def test_get_expired_snapshots_includes_downstream_view_snapshots(
     assert snapshot_b_cleanup
 
 
+def test_get_expired_snapshots_includes_downstream_transitive_view_snapshots(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
+):
+    now_ts = now_timestamp()
+
+    # model_a: table snapshot
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            kind="FULL",
+            query=parse_one("select a, ds"),
+        ),
+        ttl="in 10 seconds",
+    )
+    snapshot_a.updated_ts = now_ts - 15000  # now - 15 seconds = expired
+    assert not snapshot_a.parents
+
+    # model_b: view snapshot that depends on model_a table snapshot
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind="VIEW",
+            depends_on=["a"],
+            query=parse_one("select *, 'model_b' as m from a"),
+        ),
+        nodes={'"a"': snapshot_a.model},
+        ttl="in 10 seconds",
+    )
+    assert snapshot_b.parents == (snapshot_a.snapshot_id,)
+
+    # model_c: view snapshot that depends on model_b view snapshot (i.e no direct dependency on the model_a table ansphot).
+    # if the model_b view is dropped, model_c should also be dropped because it's a view that depends on a view being dropped
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            kind="VIEW",
+            depends_on=["b"],
+            query=parse_one("select *, 'model_c' as m from b"),
+        ),
+        nodes={'"a"': snapshot_a.model, '"b"': snapshot_b.model},
+        ttl="in 10 seconds",
+    )
+    assert snapshot_c.parents == (snapshot_b.snapshot_id,)
+
+    # model_d: table snapshot that depends on model_b view snapshot (i.e no direct dependency on the model_a table snapshot).
+    # if the model_b view is dropped, model_d should NOT be dropped because it can still be queried afterwards (and has not expired)
+    snapshot_d = make_snapshot(
+        SqlModel(
+            name="d",
+            kind="FULL",
+            depends_on=["b"],
+            query=parse_one("select *, 'model_d' as m from b"),
+        ),
+        nodes={'"a"': snapshot_a.model, '"b"': snapshot_b.model},
+        ttl="in 10 seconds",
+    )
+    assert snapshot_d.parents == (snapshot_b.snapshot_id,)
+
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c, snapshot_d])
+
+    cleanup_targets = state_sync.get_expired_snapshots(now_ts)
+
+    # snapshot_a should be cleaned up because it's expired
+    # snapshot_b is unexpired but should be cleaned up because snapshot_a is being cleaned up
+    # snapshot_c is unexpired and should be cleaned up because snapshot_b is being cleaned up
+    # snapshot_d is unexpired and should not be cleaned up. Although it depends on snapshot_b which is being cleaned up,
+    #  its a table and not a view so will not be invalid the second snapshot_b is cleaned up
+    assert len(cleanup_targets) == 3
+
+    assert set(t.snapshot.snapshot_id for t in cleanup_targets) == set(
+        [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+    )
+
+
 def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     now_ts = now_timestamp()
 
