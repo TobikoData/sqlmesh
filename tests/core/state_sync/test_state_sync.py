@@ -1129,6 +1129,8 @@ def test_get_expired_snapshots_includes_downstream_view_snapshots(
 ):
     now_ts = now_timestamp()
 
+    assert len(state_sync.get_expired_snapshots(now_ts)) == 0
+
     # model_a: table snapshot
     snapshot_a = make_snapshot(
         SqlModel(

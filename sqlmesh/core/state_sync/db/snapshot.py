@@ -241,6 +241,7 @@ class SnapshotState:
                     exp.Select, expired_query.or_(exp.column("kind_name").eq(ModelKindName.VIEW))
                 )
 
+        candidates = {}
         if ignore_ttl or expired_record_count > 0:
             candidates = {
                 SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
