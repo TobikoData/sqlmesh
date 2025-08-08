@@ -594,7 +594,6 @@ class SqlMeshLoader(Loader):
                 macros=macros,
                 jinja_macros=jinja_macros,
                 audit_definitions=audits,
-                default_audits=self.config.model_defaults.audits,
                 module_path=self.config_path,
                 dialect=self.config.model_defaults.dialect,
                 time_column_format=self.config.time_column_format,

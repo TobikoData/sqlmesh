@@ -1672,13 +1672,13 @@ def test_enable_audits_from_model_defaults():
     model = load_sql_based_model(
         expressions,
         path=Path("./examples/sushi/models/test_model.sql"),
-        default_audits=model_defaults.audits,
+        defaults=model_defaults.dict(),
     )
 
-    assert len(model.audits) == 0
+    assert len(model.audits) == 1
 
     config = Config(model_defaults=model_defaults)
-    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
+    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {}) == model.audits[0]
 
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 1
@@ -7253,23 +7253,26 @@ def test_macro_references_in_audits():
         "assert_max_value": load_audit(audit_expression, dialect="duckdb"),
         "assert_not_zero": load_audit(not_zero_audit, dialect="duckdb"),
     }
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
-    )
+    model_defaults = ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
+
     model = load_sql_based_model(
         model_expression,
-        audits=audits,
-        default_audits=config.model_defaults.audits,
+        defaults=model_defaults.dict(),
         audit_definitions=audits,
     )
 
-    assert len(model.audits) == 2
+    assert len(model.audits) == 3
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 3
     assert len(model.python_env) == 3
-    assert config.model_defaults.audits == [("assert_not_zero", {})]
-    assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
+    assert model.audits == [
+        ("assert_not_zero", {}),
+        ("assert_max_value", {}),
+        ("assert_positive_ids", {}),
+    ]
     assert isinstance(audits_with_args[0][0], ModelAudit)
+    assert isinstance(audits_with_args[1][0], ModelAudit)
+    assert isinstance(audits_with_args[2][0], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
     assert isinstance(model.python_env["zero_value"], Executable)

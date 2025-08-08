@@ -7242,3 +7242,265 @@ def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
         s.table_naming_convention == TableNamingConvention.HASH_MD5
         for s in prod_env_snapshots.values()
     )
+
+
+@pytest.mark.slow
+def test_default_audits_applied_in_plan(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    # Create a model with data that will pass the audits
+    create_temp_file(
+        tmp_path,
+        models_dir / "orders.sql",
+        dedent("""
+            MODEL (
+                name test.orders,
+                kind FULL
+            );
+
+            SELECT
+                1 AS order_id,
+                'customer_1' AS customer_id,
+                100.50 AS amount,
+                '2024-01-01'::DATE AS order_date
+            UNION ALL
+            SELECT
+                2 AS order_id,
+                'customer_2' AS customer_id,
+                200.75 AS amount,
+                '2024-01-02'::DATE AS order_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [order_id, customer_id])",
+                "unique_values(columns := [order_id])",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan, here audits should pass
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has the default audits
+    model = context.get_model("test.orders")
+    assert len(model.audits) == 2
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+
+    # Verify audit arguments are preserved
+    for audit_name, audit_args in model.audits:
+        if audit_name == "not_null":
+            assert "columns" in audit_args
+            columns = [col.name for col in audit_args["columns"].expressions]
+            assert "order_id" in columns
+            assert "customer_id" in columns
+        elif audit_name == "unique_values":
+            assert "columns" in audit_args
+            columns = [col.name for col in audit_args["columns"].expressions]
+            assert "order_id" in columns
+
+
+@pytest.mark.slow
+def test_default_audits_fail_on_bad_data(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    # Create a model with data that violates NOT NULL constraint
+    create_temp_file(
+        tmp_path,
+        models_dir / "bad_orders.sql",
+        dedent("""
+            MODEL (
+                name test.bad_orders,
+                kind FULL
+            );
+
+            SELECT
+                1 AS order_id,
+                NULL AS customer_id,  -- This violates NOT NULL
+                100.50 AS amount,
+                '2024-01-01'::DATE AS order_date
+            UNION ALL
+            SELECT
+                2 AS order_id,
+                'customer_2' AS customer_id,
+                200.75 AS amount,
+                '2024-01-02'::DATE AS order_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb", audits=["not_null(columns := [customer_id])"]
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Plan should fail due to audit failure
+    with pytest.raises(PlanError):
+        context.plan("prod", no_prompts=True, auto_apply=True)
+
+
+@pytest.mark.slow
+def test_default_audits_with_model_specific_audits(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+    audits_dir = tmp_path / "audits"
+    audits_dir.mkdir(exist_ok=True)
+
+    create_temp_file(
+        tmp_path,
+        audits_dir / "range_check.sql",
+        dedent("""
+            AUDIT (
+                name range_check
+            );
+
+            SELECT * FROM @this_model
+            WHERE @column < @min_value OR @column > @max_value
+        """),
+    )
+
+    # Create a model with its own audits in addition to defaults
+    create_temp_file(
+        tmp_path,
+        models_dir / "products.sql",
+        dedent("""
+            MODEL (
+                name test.products,
+                kind FULL,
+                audits (
+                    range_check(column := price, min_value := 0, max_value := 10000)
+                )
+            );
+
+            SELECT
+                1 AS product_id,
+                'Widget' AS product_name,
+                99.99 AS price
+            UNION ALL
+            SELECT
+                2 AS product_id,
+                'Gadget' AS product_name,
+                149.99 AS price
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [product_id, product_name])",
+                "unique_values(columns := [product_id])",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has both default and model-specific audits
+    model = context.get_model("test.products")
+    assert len(model.audits) == 3
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+    assert "range_check" in audit_names
+
+    # Verify audit execution order, default audits first then model-specific
+    assert model.audits[0][0] == "not_null"
+    assert model.audits[1][0] == "unique_values"
+    assert model.audits[2][0] == "range_check"
+
+
+@pytest.mark.slow
+def test_default_audits_with_custom_audit_definitions(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+    audits_dir = tmp_path / "audits"
+    audits_dir.mkdir(exist_ok=True)
+
+    # Create custom audit definition
+    create_temp_file(
+        tmp_path,
+        audits_dir / "positive_amount.sql",
+        dedent("""
+            AUDIT (
+                name positive_amount
+            );
+
+            SELECT * FROM @this_model
+            WHERE @column <= 0
+        """),
+    )
+
+    # Create a model
+    create_temp_file(
+        tmp_path,
+        models_dir / "transactions.sql",
+        dedent("""
+            MODEL (
+                name test.transactions,
+                kind FULL
+            );
+
+            SELECT
+                1 AS transaction_id,
+                'TXN001' AS transaction_code,
+                250.00 AS amount,
+                '2024-01-01'::DATE AS transaction_date
+            UNION ALL
+            SELECT
+                2 AS transaction_id,
+                'TXN002' AS transaction_code,
+                150.00 AS amount,
+                '2024-01-02'::DATE AS transaction_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [transaction_id, transaction_code])",
+                "unique_values(columns := [transaction_id])",
+                "positive_amount(column := amount)",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has all default audits including custom
+    model = context.get_model("test.transactions")
+    assert len(model.audits) == 3
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+    assert "positive_amount" in audit_names
+
+    # Verify custom audit arguments
+    for audit_name, audit_args in model.audits:
+        if audit_name == "positive_amount":
+            assert "column" in audit_args
+            assert audit_args["column"].name == "amount"

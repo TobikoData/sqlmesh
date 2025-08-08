@@ -1408,6 +1408,41 @@ def extract_func_call(
     return func.lower(), kwargs
 
 
+def extract_function_calls(func_calls: t.Any, allow_tuples: bool = False) -> t.Any:
+    """Used for extracting function calls for signals or audits."""
+
+    if isinstance(func_calls, (exp.Tuple, exp.Array)):
+        return [extract_func_call(i, allow_tuples=allow_tuples) for i in func_calls.expressions]
+    if isinstance(func_calls, exp.Paren):
+        return [extract_func_call(func_calls.this, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, exp.Expression):
+        return [extract_func_call(func_calls, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, list):
+        function_calls = []
+        for entry in func_calls:
+            if isinstance(entry, dict):
+                args = entry
+                name = "" if allow_tuples else entry.pop("name")
+            elif isinstance(entry, (tuple, list)):
+                name, args = entry
+            else:
+                raise ConfigError(f"Audit must be a dictionary or named tuple. Got {entry}.")
+
+            function_calls.append(
+                (
+                    name.lower(),
+                    {
+                        key: parse_one(value) if isinstance(value, str) else value
+                        for key, value in args.items()
+                    },
+                )
+            )
+
+        return function_calls
+
+    return func_calls or []
+
+
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 

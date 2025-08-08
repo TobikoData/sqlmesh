@@ -32,7 +32,7 @@ from sqlmesh.core.model.common import (
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
 )
-from sqlmesh.core.model.meta import ModelMeta, FunctionCall
+from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.kind import (
     ModelKindName,
     SeedKind,
@@ -2038,7 +2038,6 @@ def load_sql_based_model(
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     audits: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[FunctionCall]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -2211,7 +2210,6 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
         physical_schema_mapping=physical_schema_mapping,
         default_catalog=default_catalog,
         variables=variables,
-        default_audits=default_audits,
         inline_audits=inline_audits,
         blueprint_variables=blueprint_variables,
         **meta_fields,
@@ -2431,7 +2429,6 @@ def _create_model(
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[FunctionCall]] = None,
     inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     module_path: Path = Path(),
     macros: t.Optional[MacroRegistry] = None,
@@ -2541,6 +2538,10 @@ def _create_model(
         for jinja_macro in jinja_macros.root_macros.values():
             used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
+    # Merge model-specific audits with default audits
+    if default_audits := defaults.pop("audits", None):
+        kwargs["audits"] = default_audits + d.extract_function_calls(kwargs.pop("audits", []))
+
     model = klass(
         name=name,
         **{
@@ -2558,12 +2559,7 @@ def _create_model(
         **(inline_audits or {}),
     }
 
-    # TODO: default_audits needs to be merged with model.audits; the former's arguments
-    # are silently dropped today because we add them in audit_definitions. We also need
-    # to check for duplicates when we implement this merging logic.
-    used_audits: t.Set[str] = set()
-    used_audits.update(audit_name for audit_name, _ in default_audits or [])
-    used_audits.update(audit_name for audit_name, _ in model.audits)
+    used_audits: t.Set[str] = {audit_name for audit_name, _ in model.audits}
 
     audit_definitions = {
         audit_name: audit_definitions[audit_name]
