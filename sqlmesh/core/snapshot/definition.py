@@ -1408,6 +1408,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 or self.model.forward_only
                 or bool(self.model.physical_version)
                 or self.is_view
+                or not self.virtual_environment_mode.is_full
             )
         )
 

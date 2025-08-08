@@ -2505,76 +2505,22 @@ def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
     )[0]
     assert min_event_date == to_date("2023-01-07")
 
-    # Make sure the changed models are fully rebuilt when deploying to prod
+    # Make sure the changes are applied without backfill in prod
     plan_prod = context.plan_builder("prod").build()
-    assert plan_prod.requires_backfill
-    assert plan_prod.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-    ]
+    assert not plan_prod.requires_backfill
+    assert not plan_prod.missing_intervals
     context.apply(plan_prod)
     assert "one" in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
-    assert (
-        context.engine_adapter.fetchone(
-            "SELECT COUNT(*) FROM sushi.waiter_revenue_by_day WHERE one is NULL"
-        )[0]
-        == 0
-    )
 
     # Make sure the revert of a breaking changes results in a full rebuild
     context.upsert_model(original_model)
     assert context.get_snapshot(original_model.name).fingerprint == original_fingerprint
 
-    plan_prod = context.plan_builder("prod").build()
-    assert plan_prod.requires_backfill
-    assert plan_prod.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
-                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
-                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
-                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
-                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-    ]
+    plan_prod = context.plan_builder(
+        "prod", allow_destructive_models=["sushi.waiter_revenue_by_day"]
+    ).build()
+    assert not plan_prod.requires_backfill
+    assert not plan_prod.missing_intervals
     context.apply(plan_prod)
     assert "one" not in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
 

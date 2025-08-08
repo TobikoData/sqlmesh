@@ -609,13 +609,13 @@ class PlanBuilder:
 
         if self._context_diff.directly_modified(s_id.name):
             new, old = self._context_diff.modified_snapshots[s_id.name]
-            is_breaking_kind_change = _is_breaking_kind_change(old, new)
-            if is_breaking_kind_change or snapshot.is_seed:
+            should_force_rebuild = _should_force_rebuild(old, new)
+            if should_force_rebuild or snapshot.is_seed:
                 # Breaking kind changes and seed changes can't be forward-only.
                 forward_only = False
 
             if self._auto_categorization_enabled:
-                if is_breaking_kind_change:
+                if should_force_rebuild:
                     snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
                     return
 
@@ -773,7 +773,7 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and _should_force_breaking_change(old, snapshot):
+            if snapshot.is_model and _should_force_rebuild(old, snapshot):
                 return False
         return (
             snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
@@ -894,7 +894,7 @@ class PlanBuilder:
         ]
 
 
-def _should_force_breaking_change(old: Snapshot, new: Snapshot) -> bool:
+def _should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
     if old.virtual_environment_mode != new.virtual_environment_mode:
         # If the virtual environment mode has changed, then it's a breaking change
         return True
