@@ -230,7 +230,8 @@ class SnapshotState:
             )
 
             if result := fetchone(
-                self.engine_adapter, exp.select("count(*)").from_(expired_query.subquery())
+                self.engine_adapter,
+                exp.select("count(*)").from_(expired_query.subquery().as_("expired_snapshots")),
             ):
                 expired_record_count = result[0]
 
