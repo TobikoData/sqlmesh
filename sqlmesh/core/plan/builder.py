@@ -155,6 +155,7 @@ class PlanBuilder:
 
         self._backfill_models = backfill_models
         self._end = end or default_end
+        self._default_start = default_start
         self._apply = apply
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
@@ -801,6 +802,25 @@ class PlanBuilder:
                 raise PlanError(
                     f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
                 )
+
+        # Validate model-specific start/end dates
+        if (start := self.start or self._default_start) and (end := self.end):
+            start_ts = to_datetime(start)
+            end_ts = to_datetime(end)
+            if start_ts > end_ts:
+                models_to_check: t.Set[str] = (
+                    set(self._backfill_models or [])
+                    | set(self._context_diff.modified_snapshots.keys())
+                    | {s.name for s in self._context_diff.added}
+                    | set((self._end_override_per_model or {}).keys())
+                )
+                for model_name in models_to_check:
+                    if snapshot := self._model_fqn_to_snapshot.get(model_name):
+                        if snapshot.node.start is None or to_datetime(snapshot.node.start) > end_ts:
+                            raise PlanError(
+                                f"Model '{model_name}': Start date / time '({time_like_to_str(start_ts)})' can't be greater than end date / time '({time_like_to_str(end_ts)})'.\n"
+                                f"Set the `start` attribute in your project config model defaults to avoid this issue."
+                            )
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self._context_diff.snapshots.values():
