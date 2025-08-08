@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import typing as t
 from functools import partial
 from sqlglot import exp
@@ -112,11 +113,8 @@ class PostgresEngineAdapter(
         **kwargs: t.Any,
     ) -> None:
         # Merge isn't supported until Postgres 15
-        merge_impl = (
-            super().merge
-            if self._connection_pool.get().server_version >= 150000
-            else partial(logical_merge, self)
-        )
+        major, minor = self.get_server_version()
+        merge_impl = super().merge if major >= 15 else partial(logical_merge, self)
         merge_impl(  # type: ignore
             target_table,
             source_table,
@@ -125,3 +123,23 @@ class PostgresEngineAdapter(
             when_matched=when_matched,
             merge_filter=merge_filter,
         )
+
+    def get_server_version(self) -> t.Tuple[int, int]:
+        """Return major and minor server versions of the connection"""
+        connection = self._connection_pool.get()
+        connection_module = connection.__class__.__module__
+        if connection_module.startswith("pg8000"):
+            server_version = connection.parameter_statuses.get("server_version")
+            # pg8000 server version contains version as well as packaging and distribution information
+            # e.g. 15.13 (Debian 15.13-1.pgdg120+1)
+            match = re.search(r"(\d+)\.(\d+)", server_version)
+            if match:
+                return int(match.group(1)), int(match.group(2))
+        elif connection_module.startswith("psycopg"):
+            # This handles both psycopg and psycopg2 connection objects
+            server_version = connection.info.server_version
+            # Since major version 10, PostgreSQL represents the server version with an integer by
+            # multiplying the server's major version number by 10000 and adding the minor version number
+            # See https://www.postgresql.org/docs/current/libpq-status.html#LIBPQ-PQSERVERVERSION
+            return server_version // 10000, server_version % 100
+        return 0, 0
