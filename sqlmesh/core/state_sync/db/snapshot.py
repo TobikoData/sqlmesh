@@ -222,29 +222,32 @@ class SnapshotState:
         ignore_ttl: bool = False,
     ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]:
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
+        expired_record_count = 0
 
         if not ignore_ttl:
             expired_query = expired_query.where(
                 (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
             )
 
+            if result := fetchone(
+                self.engine_adapter, exp.select("count(*)").from_(expired_query.subquery())
+            ):
+                expired_record_count = result[0]
+
             # we need to include views even if they havent expired in case one depends on a table or view that /has/ expired
             # but we only need to do this if there are expired objects to begin with
-
-            expired_record_count = fetchone(
-                self.engine_adapter, exp.select("count(*)").from_(expired_query.subquery())
-            )
-            if expired_record_count and expired_record_count[0]:
+            if expired_record_count > 0:
                 expired_query = t.cast(
                     exp.Select, expired_query.or_(exp.column("kind_name").eq(ModelKindName.VIEW))
                 )
 
-        candidates = {
-            SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
-                name=name, version=version
-            )
-            for name, identifier, version in fetchall(self.engine_adapter, expired_query)
-        }
+        if ignore_ttl or expired_record_count > 0:
+            candidates = {
+                SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
+                    name=name, version=version
+                )
+                for name, identifier, version in fetchall(self.engine_adapter, expired_query)
+            }
 
         if not candidates:
             return set(), []
