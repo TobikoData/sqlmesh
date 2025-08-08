@@ -2539,21 +2539,8 @@ def _create_model(
             used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
 
     # Merge model-specific audits with default audits
-    model_audits = kwargs.pop("audits", [])
-    default_audits = defaults.pop("audits", [])
-
-    if isinstance(model_audits, (exp.Tuple, exp.Array)):
-        model_audits_list = [d.extract_func_call(i) for i in model_audits.expressions]
-    elif isinstance(model_audits, exp.Paren):
-        model_audits_list = [d.extract_func_call(model_audits.this)]
-    elif isinstance(model_audits, exp.Expression):
-        model_audits_list = [d.extract_func_call(model_audits)]
-    elif isinstance(model_audits, list):
-        model_audits_list = model_audits
-    else:
-        model_audits_list = []
-    merged_audits = default_audits + model_audits_list
-    kwargs["audits"] = merged_audits
+    if default_audits := defaults.pop("audits", None):
+        kwargs["audits"] = default_audits + d.extract_function_calls(kwargs.pop("audits", []))
 
     model = klass(
         name=name,
