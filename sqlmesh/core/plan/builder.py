@@ -162,7 +162,7 @@ class PlanBuilder:
 
         self._start = start
         if not self._start and (
-            self._forward_only_preview_needed or self._auto_restatement_preview_needed
+            self._forward_only_preview_needed or self._non_forward_only_preview_needed
         ):
             self._start = default_start or yesterday_ds()
 
@@ -609,13 +609,13 @@ class PlanBuilder:
 
         if self._context_diff.directly_modified(s_id.name):
             new, old = self._context_diff.modified_snapshots[s_id.name]
-            is_breaking_kind_change = _is_breaking_kind_change(old, new)
-            if is_breaking_kind_change or snapshot.is_seed:
+            should_force_rebuild = _should_force_rebuild(old, new)
+            if should_force_rebuild or snapshot.is_seed:
                 # Breaking kind changes and seed changes can't be forward-only.
                 forward_only = False
 
             if self._auto_categorization_enabled:
-                if is_breaking_kind_change:
+                if should_force_rebuild:
                     snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
                     return
 
@@ -773,7 +773,7 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and _is_breaking_kind_change(old, snapshot):
+            if snapshot.is_model and _should_force_rebuild(old, snapshot):
                 return False
         return (
             snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
@@ -871,12 +871,18 @@ class PlanBuilder:
         )
 
     @cached_property
-    def _auto_restatement_preview_needed(self) -> bool:
-        return self._is_dev and any(
-            snapshot.model.auto_restatement_cron is not None
-            for snapshot in self._modified_and_added_snapshots
-            if snapshot.is_model
-        )
+    def _non_forward_only_preview_needed(self) -> bool:
+        if not self._is_dev:
+            return False
+        for snapshot in self._modified_and_added_snapshots:
+            if not snapshot.is_model:
+                continue
+            if (
+                not snapshot.virtual_environment_mode.is_full
+                or snapshot.model.auto_restatement_cron is not None
+            ):
+                return True
+        return False
 
     @cached_property
     def _modified_and_added_snapshots(self) -> t.List[Snapshot]:
@@ -888,7 +894,10 @@ class PlanBuilder:
         ]
 
 
-def _is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
+def _should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
+    if old.virtual_environment_mode != new.virtual_environment_mode:
+        # If the virtual environment mode has changed, then it's a breaking change
+        return True
     if old.model.kind.name == new.model.kind.name:
         # If the kind hasn't changed, then it's not a breaking change
         return False

@@ -14,7 +14,11 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
-from sqlmesh.core.config import EnvironmentSuffixTarget, TableNamingConvention
+from sqlmesh.core.config.common import (
+    EnvironmentSuffixTarget,
+    TableNamingConvention,
+    VirtualEnvironmentMode,
+)
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
@@ -110,6 +114,7 @@ class Config(BaseConfig):
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         physical_table_naming_convention: Indicates how tables should be named at the physical layer
+        virtual_environment_mode: Indicates how environments should be handled.
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
         infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
@@ -148,12 +153,9 @@ class Config(BaseConfig):
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     physical_schema_mapping: RegexKeyDict = {}
-    environment_suffix_target: EnvironmentSuffixTarget = Field(
-        default=EnvironmentSuffixTarget.default
-    )
-    physical_table_naming_convention: TableNamingConvention = Field(
-        default=TableNamingConvention.default
-    )
+    environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default
+    physical_table_naming_convention: TableNamingConvention = TableNamingConvention.default
+    virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
     gateway_managed_virtual_layer: bool = False
     infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
@@ -258,6 +260,11 @@ class Config(BaseConfig):
             raise ConfigError(
                 f"'environment_suffix_target: catalog' is mutually exclusive with 'environment_catalog_mapping'.\n"
                 "Please specify one or the other"
+            )
+
+        if self.plan.use_finalized_state and not self.virtual_environment_mode.is_full:
+            raise ConfigError(
+                "Using the finalized state is only supported when `virtual_environment_mode` is set to `full`."
             )
 
         if self.environment_catalog_mapping:
