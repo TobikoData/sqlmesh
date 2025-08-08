@@ -291,11 +291,31 @@ class RuntimeAdapter(BaseAdapter):
         return relations
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-        from dbt.adapters.base.column import Column
-
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
+
+        if self.project_dialect == "bigquery":
+            # dbt.adapters.bigquery.column.BigQueryColumn has a different constructor signature
+            # We need to use BigQueryColumn.create_from_field() to create the column instead
+            if (
+                hasattr(self.column_type, "create_from_field")
+                and callable(getattr(self.column_type, "create_from_field"))
+                and hasattr(self.engine_adapter, "get_bq_schema")
+                and callable(getattr(self.engine_adapter, "get_bq_schema"))
+            ):
+                return [
+                    self.column_type.create_from_field(field)  # type: ignore
+                    for field in self.engine_adapter.get_bq_schema(mapped_table)  # type: ignore
+                ]
+            from dbt.adapters.base.column import Column
+
+            return [
+                Column.from_description(
+                    name=name, raw_data_type=dtype.sql(dialect=self.project_dialect)
+                )
+                for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
+            ]
         return [
-            Column.from_description(
+            self.column_type.from_description(
                 name=name, raw_data_type=dtype.sql(dialect=self.project_dialect)
             )
             for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
