@@ -3059,7 +3059,7 @@ def test_plan_no_start_configured():
 
     # This should raise an error because the model has no start configured and the end time is less than the start time which will be calculated from the intervals
     with pytest.raises(
-        SQLMeshError,
+        PlanError,
         match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
     ):
         context.plan("dev", execution_time="1999-01-05")

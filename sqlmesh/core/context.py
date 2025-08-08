@@ -1603,28 +1603,6 @@ class GenericContext(BaseContext, t.Generic[C]):
                 execution_time or now(),
             )
 
-            # Validate that the start is not greater than the end date / time
-            effective_start = start or default_start
-            effective_end = end or default_end
-            if effective_start is not None and effective_end is not None:
-                start_ts = to_timestamp(effective_start)
-                end_ts = to_timestamp(effective_end)
-                if start_ts > end_ts:
-                    for model_name in (
-                        set(backfill_models or {})
-                        | set(modified_model_names)
-                        | set(max_interval_end_per_model)
-                    ):
-                        if snapshot := snapshots.get(model_name):
-                            if (
-                                snapshot.node.start is None
-                                or to_timestamp(snapshot.node.start) > end_ts
-                            ):
-                                raise SQLMeshError(
-                                    f"Model '{model_name}': Start date / time ({to_datetime(start_ts)}) can't be greater than end date / time ({to_datetime(end_ts)}).\n"
-                                    f"Set the `start` attribute in your project config model defaults to avoid this issue."
-                                )
-
             # Refresh snapshot intervals to ensure that they are up to date with values reflected in the max_interval_end_per_model.
             self.state_sync.refresh_snapshot_intervals(context_diff.snapshots.values())
 
