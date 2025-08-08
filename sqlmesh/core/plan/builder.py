@@ -527,6 +527,9 @@ class PlanBuilder:
 
     def _check_destructive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
         for s_id in sorted(directly_modified):
+            if s_id.name not in self._context_diff.modified_snapshots:
+                continue
+
             snapshot = self._context_diff.snapshots[s_id]
             # should we raise/warn if this snapshot has/inherits a destructive change?
             should_raise_or_warn = (
