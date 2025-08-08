@@ -3007,3 +3007,59 @@ SELECT * FROM test_db.uppercase_gateway_table;
     assert len(uppercase_in_yaml_models) == 1, (
         f"External model with uppercase gateway in YAML should be found. Found {len(uppercase_in_yaml_models)} models"
     )
+
+
+def test_plan_no_start_configured():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.xvg,
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    prod_plan = context.plan(auto_apply=True)
+    assert len(prod_plan.new_snapshots) == 1
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.xvg,
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily',
+                    physical_properties ('some_prop' = 1),
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # This should raise an error because the model has no start configured and the end time is less than the start time which will be calculated from the intervals
+    with pytest.raises(
+        PlanError,
+        match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
+    ):
+        context.plan("dev", execution_time="1999-01-05")
