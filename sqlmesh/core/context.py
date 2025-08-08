@@ -2537,8 +2537,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         if self.cache_dir.exists():
             rmtree(self.cache_dir)
 
-        if isinstance(self.state_sync, CachingStateSync):
-            self.state_sync.clear_cache()
+        if isinstance(self._state_sync, CachingStateSync):
+            self._state_sync.clear_cache()
 
     def export_state(
         self,
