@@ -357,9 +357,15 @@ class ClusteredByMixin(EngineAdapter):
         return parsed_cluster_key.expressions or [parsed_cluster_key.this]
 
     def get_alter_expressions(
-        self, current_table_name: TableName, target_table_name: TableName
+        self,
+        current_table_name: TableName,
+        target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
-        expressions = super().get_alter_expressions(current_table_name, target_table_name)
+        expressions = super().get_alter_expressions(
+            current_table_name, target_table_name, ignore_destructive=ignore_destructive
+        )
 
         # check for a change in clustering
         current_table = exp.to_table(current_table_name)

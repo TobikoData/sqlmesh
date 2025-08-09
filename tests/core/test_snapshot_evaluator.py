@@ -1530,6 +1530,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     adapter_mock.get_alter_expressions.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev__schema_migration_source",
+        ignore_destructive=False,
     )
 
     adapter_mock.alter_table.assert_called_once_with([])
@@ -1630,6 +1631,7 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     adapter_mock.get_alter_expressions.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev__schema_migration_source",
+        ignore_destructive=False,
     )
 
     adapter_mock.alter_table.assert_called_once_with([])
@@ -2007,6 +2009,7 @@ def test_insert_into_scd_type_2_by_time(
         truncate=truncate,
         is_restatement=False,
         start="2020-01-01",
+        extra_columns_to_types=None,
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -2181,6 +2184,7 @@ def test_insert_into_scd_type_2_by_column(
         truncate=truncate,
         is_restatement=False,
         start="2020-01-01",
+        extra_columns_to_types=None,
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -3195,6 +3199,7 @@ def test_custom_materialization_strategy(adapter_mock, make_snapshot):
             query_or_df: QueryOrDF,
             model: Model,
             is_first_insert: bool,
+            render_kwargs: t.Dict[str, t.Any],
             **kwargs: t.Any,
         ) -> None:
             nonlocal custom_insert_kind
@@ -3269,6 +3274,7 @@ def test_custom_materialization_strategy_with_custom_properties(adapter_mock, ma
             query_or_df: QueryOrDF,
             model: Model,
             is_first_insert: bool,
+            render_kwargs: t.Dict[str, t.Any],
             **kwargs: t.Any,
         ) -> None:
             nonlocal custom_insert_kind
@@ -3750,6 +3756,7 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
     adapter_mock.get_alter_expressions.assert_called_once_with(
         snapshot.table_name(),
         new_snapshot.table_name(is_deployable=False),
+        ignore_destructive=False,
     )
 
 
@@ -4001,7 +4008,9 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
 
     # The second mock adapter has to be called only for the gateway-specific model
     adapter_mock.get_alter_expressions.assert_called_once_with(
-        snapshot_2.table_name(True), snapshot_2.table_name(False)
+        snapshot_2.table_name(True),
+        snapshot_2.table_name(False),
+        ignore_destructive=False,
     )
 
 

@@ -971,6 +971,8 @@ class EngineAdapter:
         self,
         current_table_name: TableName,
         target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
@@ -979,6 +981,7 @@ class EngineAdapter:
             current_table_name,
             self.columns(current_table_name),
             self.columns(target_table_name),
+            ignore_destructive=ignore_destructive,
         )
 
     def alter_table(
@@ -1463,6 +1466,7 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         is_restatement: bool = False,
+        extra_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1480,6 +1484,7 @@ class EngineAdapter:
             column_descriptions=column_descriptions,
             truncate=truncate,
             is_restatement=is_restatement,
+            extra_columns_to_types=extra_columns_to_types,
             **kwargs,
         )
 
@@ -1499,6 +1504,7 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         is_restatement: bool = False,
+        extra_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1516,6 +1522,7 @@ class EngineAdapter:
             column_descriptions=column_descriptions,
             truncate=truncate,
             is_restatement=is_restatement,
+            extra_columns_to_types=extra_columns_to_types,
             **kwargs,
         )
 
@@ -1538,6 +1545,7 @@ class EngineAdapter:
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         is_restatement: bool = False,
+        extra_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
@@ -1933,6 +1941,14 @@ class EngineAdapter:
                     .where(updated_row_filter),
                 )
             )
+
+            if extra_columns_to_types:
+                columns_to_types = columns_to_types.update(extra_columns_to_types)
+                select_columns = table_columns + [
+                    exp.cast(exp.Null(), dtype, copy=False).as_(col, copy=False, quoted=True)
+                    for col, dtype in extra_columns_to_types.items()
+                ]
+                query = query.select(*select_columns)
 
             self.replace_query(
                 target_table,

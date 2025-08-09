@@ -171,7 +171,12 @@ The check is performed at plan time based on the model definition. SQLMesh may n
 
 A model's `on_destructive_change` [configuration setting](../reference/model_configuration.md#incremental-models) determines what happens when SQLMesh detects a destructive change.
 
-By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `allow` in the model's `MODEL` block to allow destructive changes.
+By default, SQLMesh will error so no data is lost. You can set `on_destructive_change` to `warn` or `allow` in the model's `MODEL` block to allow destructive changes. 
+`ignore` can be used to not perform the schema change and allow the table's definition to diverge from the model definition.
+
+!!! warning "Ignore is Dangerous"
+
+    `ignore` is dangerous since it can result in error or data loss. It likely should never be used but could be useful as an "escape-hatch" or a way to workaround unexpected behavior.
 
 This example configures a model to silently `allow` destructive changes:
 
