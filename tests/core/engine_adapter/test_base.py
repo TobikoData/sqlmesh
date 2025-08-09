@@ -882,9 +882,11 @@ def test_alter_table(
     original_from_structs = adapter.SCHEMA_DIFFER._from_structs
 
     def _from_structs(
-        current_struct: exp.DataType, new_struct: exp.DataType
+        current_struct: exp.DataType, new_struct: exp.DataType, *, ignore_destructive: bool = False
     ) -> t.List[TableAlterOperation]:
-        operations = original_from_structs(current_struct, new_struct)
+        operations = original_from_structs(
+            current_struct, new_struct, ignore_destructive=ignore_destructive
+        )
         if not operations:
             return operations
         assert (

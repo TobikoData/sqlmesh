@@ -698,6 +698,7 @@ class SnapshotEvaluator:
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
                     is_restatement=is_restatement,
+                    render_kwargs=render_statements_kwargs,
                 )
             else:
                 logger.info(
@@ -720,6 +721,7 @@ class SnapshotEvaluator:
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
                     is_restatement=is_restatement,
+                    render_kwargs=render_statements_kwargs,
                 )
 
         with (
@@ -870,7 +872,9 @@ class SnapshotEvaluator:
                         rendered_physical_properties=rendered_physical_properties,
                     )
                     alter_expressions = adapter.get_alter_expressions(
-                        target_table_name, tmp_table_name
+                        target_table_name,
+                        tmp_table_name,
+                        ignore_destructive=snapshot.model.on_destructive_change.is_ignore,
                     )
                     _check_destructive_schema_change(
                         snapshot, alter_expressions, allow_destructive_snapshots
@@ -938,9 +942,9 @@ class SnapshotEvaluator:
                 evaluation_strategy = _evaluation_strategy(snapshot, adapter)
                 tmp_table_name = snapshot.table_name(is_deployable=False)
                 logger.info(
-                    "Migrating table schema from '%s' to '%s'",
-                    tmp_table_name,
+                    "Migrating table schema '%s' to match '%s'",
                     target_table_name,
+                    tmp_table_name,
                 )
                 evaluation_strategy.migrate(
                     target_table_name=target_table_name,
@@ -948,6 +952,7 @@ class SnapshotEvaluator:
                     snapshot=snapshot,
                     snapshots=parent_snapshots_by_name(snapshot, snapshots),
                     allow_destructive_snapshots=allow_destructive_snapshots,
+                    ignore_destructive=snapshot.model.on_destructive_change.is_ignore,
                 )
             else:
                 logger.info(
@@ -1278,6 +1283,7 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or a view.
@@ -1290,6 +1296,7 @@ class EvaluationStrategy(abc.ABC):
                 if no data has been previously inserted into the target table, or when the entire history of the target model has
                 been restated. Note that in the latter case, the table might contain data from previous executions, and it is the
                 responsibility of a specific evaluation strategy to handle the truncation of the table if necessary.
+            render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
 
     @abc.abstractmethod
@@ -1298,6 +1305,7 @@ class EvaluationStrategy(abc.ABC):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -1306,6 +1314,7 @@ class EvaluationStrategy(abc.ABC):
             table_name: The target table name.
             query_or_df: A query or a DataFrame to insert.
             model: The target model.
+            render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
 
     @abc.abstractmethod
@@ -1336,6 +1345,8 @@ class EvaluationStrategy(abc.ABC):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
         **kwargs: t.Any,
     ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
@@ -1344,6 +1355,8 @@ class EvaluationStrategy(abc.ABC):
             target_table_name: The target table name.
             source_table_name: The source table name.
             snapshot: The target snapshot.
+            ignore_destructive: If True, destructive changes are not created when migrating.
+                This is used for forward-only models that are being migrated to a new version.
         """
 
     @abc.abstractmethod
@@ -1418,6 +1431,7 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -1427,6 +1441,7 @@ class SymbolicStrategy(EvaluationStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -1446,6 +1461,8 @@ class SymbolicStrategy(EvaluationStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
         **kwarg: t.Any,
     ) -> None:
         pass
@@ -1520,6 +1537,7 @@ class MaterializableStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         self.adapter.insert_append(table_name, query_or_df, columns_to_types=model.columns_to_types)
@@ -1579,10 +1597,14 @@ class MaterializableStrategy(PromotableStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
         **kwargs: t.Any,
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
-        alter_expressions = self.adapter.get_alter_expressions(target_table_name, source_table_name)
+        alter_expressions = self.adapter.get_alter_expressions(
+            target_table_name, source_table_name, ignore_destructive=ignore_destructive
+        )
         _check_destructive_schema_change(
             snapshot, alter_expressions, kwargs["allow_destructive_snapshots"]
         )
@@ -1601,6 +1623,7 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
@@ -1621,6 +1644,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         assert model.time_column
@@ -1641,6 +1665,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
@@ -1665,6 +1690,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         self.adapter.merge(
@@ -1689,6 +1715,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         if is_first_insert:
@@ -1705,6 +1732,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
                 table_name,
                 query_or_df,
                 model,
+                render_kwargs=render_kwargs,
                 **kwargs,
             )
 
@@ -1716,6 +1744,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         self._replace_query_for_model(model, table_name, query_or_df, **kwargs)
@@ -1762,6 +1791,7 @@ class SeedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         # Data has already been inserted at the time of table creation.
@@ -1813,10 +1843,12 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
-        columns_to_types = self.adapter.columns(table_name)
+        columns_to_types, extra_columns_to_types = self._get_extra_columns(
+            model, table_name, render_kwargs=render_kwargs
+        )
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1835,6 +1867,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 truncate=is_first_insert,
                 start=kwargs["start"],
                 is_restatement=kwargs.get("is_restatement", False),
+                extra_columns_to_types=extra_columns_to_types,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1854,6 +1887,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 truncate=is_first_insert,
                 start=kwargs["start"],
                 is_restatement=kwargs.get("is_restatement", False),
+                extra_columns_to_types=extra_columns_to_types,
             )
         else:
             raise SQLMeshError(
@@ -1865,10 +1899,12 @@ class SCDType2Strategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
-        columns_to_types = self.adapter.columns(table_name)
+        columns_to_types, extra_columns_to_types = self._get_extra_columns(
+            model, table_name, render_kwargs=render_kwargs
+        )
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1906,6 +1942,32 @@ class SCDType2Strategy(MaterializableStrategy):
                 f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
             )
 
+    def _get_extra_columns(
+        self, model: Model, table_name: str, render_kwargs: t.Dict[str, t.Any]
+    ) -> t.Tuple[t.Dict[str, exp.DataType], t.Optional[t.Dict[str, exp.DataType]]]:
+        if model.on_destructive_change.is_ignore:
+            # We need to differentiate between columns that are from the user query that they are running and columns
+            # that are in the target table that could have changed but were ignored
+            # We order the columns to match the target table to make them consistent with the order the user would expect
+            target_table_columns_to_types = self.adapter.columns(table_name)
+            with self.adapter.temp_table(model.ctas_query(**render_kwargs)) as temp_table:
+                user_query_columns_to_types = self.adapter.columns(temp_table)
+            columns_to_types = {
+                k: v
+                for k, v in target_table_columns_to_types.items()
+                if k in user_query_columns_to_types
+            }
+            extra_columns_to_types = {
+                k: v
+                for k, v in target_table_columns_to_types.items()
+                if k not in user_query_columns_to_types
+            }
+        else:
+            # Source columns from the underlying table to prevent unintentional table schema changes during the insert.
+            columns_to_types = self.adapter.columns(table_name)
+            extra_columns_to_types = None
+        return columns_to_types, extra_columns_to_types
+
 
 class ViewStrategy(PromotableStrategy):
     def insert(
@@ -1914,6 +1976,7 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         deployability_index = (
@@ -1947,6 +2010,7 @@ class ViewStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
@@ -2002,6 +2066,8 @@ class ViewStrategy(PromotableStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
         **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
@@ -2048,6 +2114,7 @@ class CustomMaterialization(MaterializableStrategy, t.Generic[C]):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or a view.
@@ -2060,6 +2127,7 @@ class CustomMaterialization(MaterializableStrategy, t.Generic[C]):
                 if no data has been previously inserted into the target table, or when the entire history of the target model has
                 been restated. Note that in the latter case, the table might contain data from previous executions, and it is the
                 responsibility of a specific evaluation strategy to handle the truncation of the table if necessary.
+            render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
         raise NotImplementedError(
             "Custom materialization strategies must implement the 'insert' method."
@@ -2195,6 +2263,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         deployability_index: DeployabilityIndex = kwargs["deployability_index"]
@@ -2230,6 +2299,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         model: Model,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a managed table '{table_name}'.")
@@ -2239,10 +2309,12 @@ class EngineManagedStrategy(MaterializableStrategy):
         target_table_name: str,
         source_table_name: str,
         snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
         **kwargs: t.Any,
     ) -> None:
         potential_alter_expressions = self.adapter.get_alter_expressions(
-            target_table_name, source_table_name
+            target_table_name, source_table_name, ignore_destructive=ignore_destructive
         )
         if len(potential_alter_expressions) > 0:
             # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`

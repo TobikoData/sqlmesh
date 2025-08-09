@@ -556,6 +556,8 @@ class SchemaDiffer(PydanticModel):
         current_type: t.Union[str, exp.DataType],
         root_struct: exp.DataType,
         new_kwarg: exp.ColumnDef,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[TableAlterOperation]:
         # We don't copy on purpose here because current_type may need to be mutated inside
         # _get_operations (struct.expressions.pop and struct.expressions.insert)
@@ -570,6 +572,7 @@ class SchemaDiffer(PydanticModel):
                         current_type,
                         new_type,
                         root_struct,
+                        ignore_destructive=ignore_destructive,
                     )
 
             if new_type.this == current_type.this == exp.DataType.Type.ARRAY:
@@ -587,6 +590,7 @@ class SchemaDiffer(PydanticModel):
                             current_array_type,
                             new_array_type,
                             root_struct,
+                            ignore_destructive=ignore_destructive,
                         )
         if self._is_coerceable_type(current_type, new_type):
             return []
@@ -607,6 +611,8 @@ class SchemaDiffer(PydanticModel):
                     col_pos,
                 )
             ]
+        if ignore_destructive:
+            return []
         return self._drop_operation(columns, root_struct, pos, root_struct) + self._add_operation(
             columns, pos, new_kwarg, struct, root_struct
         )
@@ -617,11 +623,16 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[TableAlterOperation]:
         operations = []
         for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
             _, new_kwarg = self._get_matching_kwarg(current_kwarg, new_struct, current_pos)
-            assert new_kwarg
+            if new_kwarg is None:
+                if ignore_destructive:
+                    continue
+                raise ValueError("Cannot alter a column that is being dropped")
             _, new_type = _get_name_and_type(new_kwarg)
             _, current_type = _get_name_and_type(current_kwarg)
             columns = parent_columns + [TableAlterColumn.from_struct_kwarg(current_kwarg)]
@@ -636,6 +647,7 @@ class SchemaDiffer(PydanticModel):
                     current_type,
                     root_struct,
                     new_kwarg,
+                    ignore_destructive=ignore_destructive,
                 )
             )
         return operations
@@ -646,42 +658,54 @@ class SchemaDiffer(PydanticModel):
         current_struct: exp.DataType,
         new_struct: exp.DataType,
         root_struct: exp.DataType,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[TableAlterOperation]:
         root_struct = root_struct or current_struct
         parent_columns = parent_columns or []
         operations = []
-        operations.extend(
-            self._resolve_drop_operation(parent_columns, current_struct, new_struct, root_struct)
-        )
+        if not ignore_destructive:
+            operations.extend(
+                self._resolve_drop_operation(
+                    parent_columns, current_struct, new_struct, root_struct
+                )
+            )
         operations.extend(
             self._resolve_add_operations(parent_columns, current_struct, new_struct, root_struct)
         )
         operations.extend(
-            self._resolve_alter_operations(parent_columns, current_struct, new_struct, root_struct)
+            self._resolve_alter_operations(
+                parent_columns,
+                current_struct,
+                new_struct,
+                root_struct,
+                ignore_destructive=ignore_destructive,
+            )
         )
         return operations
 
     def _from_structs(
-        self, current_struct: exp.DataType, new_struct: exp.DataType
+        self,
+        current_struct: exp.DataType,
+        new_struct: exp.DataType,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[TableAlterOperation]:
-        return self._get_operations([], current_struct, new_struct, current_struct)
+        return self._get_operations(
+            [], current_struct, new_struct, current_struct, ignore_destructive=ignore_destructive
+        )
 
-    def compare_structs(
-        self, table_name: t.Union[str, exp.Table], current: exp.DataType, new: exp.DataType
+    def _compare_structs(
+        self,
+        table_name: t.Union[str, exp.Table],
+        current: exp.DataType,
+        new: exp.DataType,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
-        """
-        Compares two schemas represented as structs.
-
-        Args:
-            current: The current schema.
-            new: The new schema.
-
-        Returns:
-            The list of table alter operations.
-        """
         return [
             op.expression(table_name, self.array_element_selector)
-            for op in self._from_structs(current, new)
+            for op in self._from_structs(current, new, ignore_destructive=ignore_destructive)
         ]
 
     def compare_columns(
@@ -689,19 +713,14 @@ class SchemaDiffer(PydanticModel):
         table_name: TableName,
         current: t.Dict[str, exp.DataType],
         new: t.Dict[str, exp.DataType],
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
-        """
-        Compares two schemas represented as dictionaries of column names and types.
-
-        Args:
-            current: The current schema.
-            new: The new schema.
-
-        Returns:
-            The list of schema deltas.
-        """
-        return self.compare_structs(
-            table_name, columns_to_types_to_struct(current), columns_to_types_to_struct(new)
+        return self._compare_structs(
+            table_name,
+            columns_to_types_to_struct(current),
+            columns_to_types_to_struct(new),
+            ignore_destructive=ignore_destructive,
         )
 
 
