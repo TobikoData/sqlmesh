@@ -110,6 +110,7 @@ class PostgresEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         # Merge isn't supported until Postgres 15
@@ -122,6 +123,7 @@ class PostgresEngineAdapter(
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,
+            source_columns=source_columns,
         )
 
     @cached_property

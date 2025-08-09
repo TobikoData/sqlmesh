@@ -558,6 +558,7 @@ class PlanBuilder:
                     new.name,
                     old_columns_to_types,
                     new_columns_to_types,
+                    ignore_destructive=new.model.on_destructive_change.is_ignore,
                 )
 
                 if has_drop_alteration(schema_diff):

@@ -98,6 +98,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -120,6 +121,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 view_properties=view_properties,
+                source_columns=source_columns,
                 **create_kwargs,
             )
 

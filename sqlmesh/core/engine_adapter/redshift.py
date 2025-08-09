@@ -214,6 +214,7 @@ class RedshiftEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -240,6 +241,7 @@ class RedshiftEngineAdapter(
             column_descriptions=column_descriptions,
             no_schema_binding=no_schema_binding,
             view_properties=view_properties,
+            source_columns=source_columns,
             **create_kwargs,
         )
 
@@ -250,6 +252,7 @@ class RedshiftEngineAdapter(
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -274,10 +277,14 @@ class RedshiftEngineAdapter(
                 columns_to_types,
                 table_description,
                 column_descriptions,
+                source_columns=source_columns,
                 **kwargs,
             )
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+            query_or_df,
+            columns_to_types,
+            target_table=table_name,
+            source_columns=source_columns,
         )
         columns_to_types = columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
@@ -358,6 +365,7 @@ class RedshiftEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         if self.enable_merge:
@@ -369,6 +377,7 @@ class RedshiftEngineAdapter(
                 unique_key=unique_key,
                 when_matched=when_matched,
                 merge_filter=merge_filter,
+                source_columns=source_columns,
             )
         else:
             logical_merge(
@@ -379,6 +388,7 @@ class RedshiftEngineAdapter(
                 unique_key,
                 when_matched=when_matched,
                 merge_filter=merge_filter,
+                source_columns=source_columns,
             )
 
     def _merge(

@@ -240,24 +240,36 @@ class SparkEngineAdapter(
 
     @t.overload
     def _columns_to_types(
-        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Dict[str, exp.DataType]: ...
+        self,
+        query_or_df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]: ...
 
     @t.overload
     def _columns_to_types(
-        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
+        self,
+        query_or_df: Query,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
 
     def _columns_to_types(
-        self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        self,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
         if columns_to_types:
-            return columns_to_types
+            return columns_to_types, list(source_columns or columns_to_types)
         if self.is_pyspark_df(query_or_df):
             from pyspark.sql import DataFrame
 
-            return self.spark_to_sqlglot_types(t.cast(DataFrame, query_or_df).schema)
-        return super()._columns_to_types(query_or_df, columns_to_types)
+            columns_to_types = self.spark_to_sqlglot_types(t.cast(DataFrame, query_or_df).schema)
+            return columns_to_types, list(source_columns or columns_to_types)
+        return super()._columns_to_types(
+            query_or_df, columns_to_types, source_columns=source_columns
+        )
 
     def _df_to_source_queries(
         self,
@@ -265,36 +277,54 @@ class SparkEngineAdapter(
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
-        df = self._ensure_pyspark_df(df, columns_to_types)
+        df = self._ensure_pyspark_df(df, columns_to_types, source_columns=source_columns)
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
             df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
             temp_table.set("db", "global_temp")
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._select_columns(columns_to_types)).from_(temp_table)
 
         return [SourceQuery(query_factory=query_factory)]
 
     def _ensure_pyspark_df(
-        self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+        self,
+        generic_df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> PySparkDataFrame:
-        pyspark_df = self.try_get_pyspark_df(generic_df)
-        if pyspark_df:
+        def _get_pyspark_df() -> PySparkDataFrame:
+            pyspark_df = self.try_get_pyspark_df(generic_df)
+            if pyspark_df:
+                return pyspark_df
+            df = self.try_get_pandas_df(generic_df)
+            if df is None:
+                raise SQLMeshError(
+                    "Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame"
+                )
+
             if columns_to_types:
-                # ensure Spark dataframe column order matches columns_to_types
-                pyspark_df = pyspark_df.select(*columns_to_types)
-            return pyspark_df
-        df = self.try_get_pandas_df(generic_df)
-        if df is None:
-            raise SQLMeshError("Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame")
+                source_columns_to_types = self.get_source_columns_to_types(
+                    columns_to_types, source_columns
+                )
+                # ensure Pandas dataframe column order matches columns_to_types
+                df = df[list(source_columns_to_types)]
+            else:
+                source_columns_to_types = None
+            kwargs = (
+                dict(schema=self.sqlglot_to_spark_types(source_columns_to_types))
+                if source_columns_to_types
+                else {}
+            )
+            return self.spark.createDataFrame(df, **kwargs)  # type: ignore
+
+        df_result = _get_pyspark_df()
         if columns_to_types:
-            # ensure Pandas dataframe column order matches columns_to_types
-            df = df[list(columns_to_types)]
-        kwargs = (
-            dict(schema=self.sqlglot_to_spark_types(columns_to_types)) if columns_to_types else {}
-        )
-        return self.spark.createDataFrame(df, **kwargs)  # type: ignore
+            select_columns = self._casted_columns(columns_to_types, source_columns=source_columns)
+            df_result = df_result.selectExpr(*[x.sql(self.dialect) for x in select_columns])  # type: ignore
+        return df_result
 
     def _get_temp_table(
         self, table: TableName, table_only: bool = False, quoted: bool = True

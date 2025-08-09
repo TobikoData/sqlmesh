@@ -40,7 +40,12 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import CorrelationId, columns_to_types_all_known, random_id
+from sqlmesh.utils import (
+    CorrelationId,
+    columns_to_types_all_known,
+    random_id,
+    get_source_columns_to_types,
+)
 from sqlmesh.utils.connection_pool import ConnectionPool, create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
@@ -199,9 +204,22 @@ class EngineAdapter:
         return CatalogSupport.UNSUPPORTED
 
     @classmethod
-    def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
+    def _casted_columns(
+        cls,
+        columns_to_types: t.Dict[str, exp.DataType],
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.List[exp.Alias]:
+        source_columns = source_columns or list(columns_to_types)
         return [
-            exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
+            exp.alias_(
+                exp.cast(
+                    exp.column(column, quoted=True) if column in source_columns else exp.Null(),
+                    to=kind,
+                ),
+                column,
+                copy=False,
+                quoted=True,
+            )
             for column, kind in columns_to_types.items()
         ]
 
@@ -227,12 +245,31 @@ class EngineAdapter:
         target_table: TableName,
         *,
         batch_size: t.Optional[int] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         import pandas as pd
 
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
-        if isinstance(query_or_df, (exp.Query, exp.DerivedTable)):
-            return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
+        if isinstance(query_or_df, exp.Query):
+            query_factory = lambda: query_or_df
+            if source_columns:
+                if not columns_to_types:
+                    raise SQLMeshError("columns_to_types must be set if source_columns is set")
+                if not set(columns_to_types).issubset(set(source_columns)):
+                    select_columns = [
+                        exp.column(c, quoted=True)
+                        if c in source_columns
+                        else exp.cast(exp.Null(), columns_to_types[c], copy=False).as_(
+                            c, copy=False, quoted=True
+                        )
+                        for c in columns_to_types
+                    ]
+                    query_factory = (
+                        lambda: exp.Select()
+                        .select(*select_columns)
+                        .from_(query_or_df.subquery("select_source_columns"))
+                    )
+            return [SourceQuery(query_factory=query_factory)]  # type: ignore
 
         if not columns_to_types:
             raise SQLMeshError(
@@ -247,7 +284,11 @@ class EngineAdapter:
             )
 
         return self._df_to_source_queries(
-            query_or_df, columns_to_types, batch_size, target_table=target_table
+            query_or_df,
+            columns_to_types,
+            batch_size,
+            target_table=target_table,
+            source_columns=source_columns,
         )
 
     def _df_to_source_queries(
@@ -256,6 +297,7 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         import pandas as pd
 
@@ -265,7 +307,7 @@ class EngineAdapter:
 
         # we need to ensure that the order of the columns in columns_to_types columns matches the order of the values
         # they can differ if a user specifies columns() on a python model in a different order than what's in the DataFrame's emitted by that model
-        df = df[list(columns_to_types)]
+        df = df[list(source_columns or columns_to_types)]
         values = list(df.itertuples(index=False, name=None))
 
         return [
@@ -276,6 +318,7 @@ class EngineAdapter:
                     columns_to_types=columns_to_types,
                     batch_start=i,
                     batch_end=min(i + batch_size, num_rows),
+                    source_columns=source_columns,
                 ),
             )
             for i in range(0, num_rows, batch_size)
@@ -288,35 +331,49 @@ class EngineAdapter:
         target_table: TableName,
         *,
         batch_size: t.Optional[int] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.List[SourceQuery], t.Optional[t.Dict[str, exp.DataType]]]:
-        columns_to_types = self._columns_to_types(query_or_df, columns_to_types)
-        return (
-            self._get_source_queries(
-                query_or_df, columns_to_types, target_table=target_table, batch_size=batch_size
-            ),
-            columns_to_types,
+        columns_to_types, source_columns = self._columns_to_types(
+            query_or_df, columns_to_types, source_columns
         )
+        source_queries = self._get_source_queries(
+            query_or_df,
+            columns_to_types,
+            target_table=target_table,
+            batch_size=batch_size,
+            source_columns=source_columns,
+        )
+        return source_queries, columns_to_types
 
     @t.overload
     def _columns_to_types(
-        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Dict[str, exp.DataType]: ...
+        self,
+        query_or_df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]: ...
 
     @t.overload
     def _columns_to_types(
-        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]: ...
+        self,
+        query_or_df: Query,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
 
     def _columns_to_types(
-        self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        self,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
         import pandas as pd
 
-        if columns_to_types:
-            return columns_to_types
-        if isinstance(query_or_df, pd.DataFrame):
-            return columns_to_types_from_df(t.cast(pd.DataFrame, query_or_df))
-        return columns_to_types
+        if not columns_to_types and isinstance(query_or_df, pd.DataFrame):
+            columns_to_types = columns_to_types_from_df(t.cast(pd.DataFrame, query_or_df))
+        if not source_columns and columns_to_types:
+            source_columns = list(columns_to_types)
+        return columns_to_types, source_columns
 
     def recycle(self) -> None:
         """Closes all open connections and releases all allocated resources associated with any thread
@@ -356,6 +413,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Replaces an existing table with a query.
@@ -377,10 +435,13 @@ class EngineAdapter:
             table_exists = False
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=target_table
+            query_or_df,
+            columns_to_types,
+            target_table=target_table,
+            source_columns=source_columns,
         )
-        columns_to_types = columns_to_types or self.columns(target_table)
         query = source_queries[0].query_factory()
+        columns_to_types = columns_to_types or self.columns(target_table)
         self_referencing = any(
             quote_identifiers(table) == quote_identifiers(target_table)
             for table in query.find_all(exp.Table)
@@ -531,6 +592,7 @@ class EngineAdapter:
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Create a managed table using a query.
@@ -558,6 +620,7 @@ class EngineAdapter:
         exists: bool = True,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Create a table using a CTAS statement
@@ -572,7 +635,7 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+            query_or_df, columns_to_types, target_table=table_name, source_columns=source_columns
         )
         return self._create_table_from_source_queries(
             table_name,
@@ -1000,6 +1063,8 @@ class EngineAdapter:
         self,
         current_table_name: TableName,
         target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
@@ -1008,6 +1073,7 @@ class EngineAdapter:
             current_table_name,
             self.columns(current_table_name),
             self.columns(target_table_name),
+            ignore_destructive=ignore_destructive,
         )
 
     def alter_table(
@@ -1032,6 +1098,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -1062,18 +1129,25 @@ class EngineAdapter:
             values: t.List[t.Tuple[t.Any, ...]] = list(
                 query_or_df.itertuples(index=False, name=None)
             )
-            columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
+            columns_to_types, source_columns = self._columns_to_types(
+                query_or_df, columns_to_types, source_columns
+            )
             if not columns_to_types:
                 raise SQLMeshError("columns_to_types must be provided for dataframes")
+            source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
             query_or_df = self._values_to_sql(
                 values,
-                columns_to_types,
+                source_columns_to_types,
                 batch_start=0,
                 batch_end=len(values),
             )
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, batch_size=0, target_table=view_name
+            query_or_df,
+            columns_to_types,
+            batch_size=0,
+            target_table=view_name,
+            source_columns=source_columns,
         )
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating views")
@@ -1308,9 +1382,10 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+            query_or_df, columns_to_types, target_table=table_name, source_columns=source_columns
         )
         self._insert_append_source_queries(table_name, source_queries, columns_to_types)
 
@@ -1343,18 +1418,27 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         if self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite:
             target_table = exp.to_table(table_name)
             source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-                query_or_df, columns_to_types, target_table=target_table
+                query_or_df,
+                columns_to_types,
+                target_table=target_table,
+                source_columns=source_columns,
             )
             self._insert_overwrite_by_condition(
                 table_name, source_queries, columns_to_types=columns_to_types
             )
         else:
             self._replace_by_key(
-                table_name, query_or_df, columns_to_types, partitioned_by, is_unique_key=False
+                table_name,
+                query_or_df,
+                columns_to_types,
+                partitioned_by,
+                is_unique_key=False,
+                source_columns=source_columns,
             )
 
     def insert_overwrite_by_time_partition(
@@ -1368,10 +1452,11 @@ class EngineAdapter:
         ],
         time_column: TimeColumn | exp.Expression | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+            query_or_df, columns_to_types, target_table=table_name, source_columns=source_columns
         )
         if not columns_to_types or not columns_to_types_all_known(columns_to_types):
             columns_to_types = self.columns(table_name)
@@ -1408,6 +1493,7 @@ class EngineAdapter:
         batch_start: int,
         batch_end: int,
         alias: str = "t",
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> Query:
         return select_from_values_for_batch_range(
             values=values,
@@ -1415,6 +1501,7 @@ class EngineAdapter:
             batch_start=batch_start,
             batch_end=batch_end,
             alias=alias,
+            source_columns=source_columns,
         )
 
     def _insert_overwrite_by_condition(
@@ -1497,6 +1584,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1513,6 +1601,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            source_columns=source_columns,
             **kwargs,
         )
 
@@ -1531,6 +1620,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1547,6 +1637,7 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
+            source_columns=source_columns,
             **kwargs,
         )
 
@@ -1567,6 +1658,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
@@ -1578,20 +1670,24 @@ class EngineAdapter:
 
         valid_from_name = valid_from_col.name
         valid_to_name = valid_to_col.name
-        unmanaged_columns_to_types = (
-            remove_managed_columns(columns_to_types) if columns_to_types else None
-        )
-        source_queries, unmanaged_columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, unmanaged_columns_to_types, target_table=target_table, batch_size=0
-        )
         columns_to_types = columns_to_types or self.columns(target_table)
-        updated_at_name = updated_at_col.name if updated_at_col else None
         if (
             valid_from_name not in columns_to_types
             or valid_to_name not in columns_to_types
             or not columns_to_types_all_known(columns_to_types)
         ):
             columns_to_types = self.columns(target_table)
+        unmanaged_columns_to_types = (
+            remove_managed_columns(columns_to_types) if columns_to_types else None
+        )
+        source_queries, unmanaged_columns_to_types = self._get_source_queries_and_columns_to_types(
+            source_table,
+            unmanaged_columns_to_types,
+            target_table=target_table,
+            batch_size=0,
+            source_columns=source_columns,
+        )
+        updated_at_name = updated_at_col.name if updated_at_col else None
         if not columns_to_types:
             raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
         unmanaged_columns_to_types = unmanaged_columns_to_types or remove_managed_columns(
@@ -1943,10 +2039,11 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, columns_to_types, target_table=target_table
+            source_table, columns_to_types, target_table=target_table, source_columns=source_columns
         )
         columns_to_types = columns_to_types or self.columns(target_table)
         on = exp.and_(
@@ -2093,7 +2190,7 @@ class EngineAdapter:
         """
         import pandas as pd
 
-        if isinstance(query_or_df, (exp.Query, exp.DerivedTable, pd.DataFrame)):
+        if isinstance(query_or_df, (exp.Query, pd.DataFrame)):
             return query_or_df
 
         # EngineAdapter subclasses that have native DataFrame types should override this
@@ -2269,6 +2366,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         name: TableName = "diff",
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
@@ -2289,7 +2387,10 @@ class EngineAdapter:
             name.set("catalog", exp.parse_identifier(self.default_catalog))
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types=columns_to_types, target_table=name
+            query_or_df,
+            columns_to_types=columns_to_types,
+            target_table=name,
+            source_columns=source_columns,
         )
 
         with self.transaction():
@@ -2515,6 +2616,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         if columns_to_types is None:
             columns_to_types = self.columns(target_table)
@@ -2524,7 +2626,13 @@ class EngineAdapter:
         column_names = list(columns_to_types or [])
 
         with self.transaction():
-            self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
+            self.ctas(
+                temp_table,
+                source_table,
+                columns_to_types=columns_to_types,
+                exists=False,
+                source_columns=source_columns,
+            )
 
             try:
                 delete_query = exp.select(key_exp).from_(temp_table)
@@ -2626,8 +2734,17 @@ class EngineAdapter:
             self._connection_pool.close_cursor()
 
     @classmethod
-    def _select_columns(cls, columns: t.Iterable[str]) -> exp.Select:
-        return exp.select(*(exp.column(c, quoted=True) for c in columns))
+    def _select_columns(
+        cls, columns: t.Iterable[str], source_columns: t.Optional[t.List[str]] = None
+    ) -> exp.Select:
+        return exp.select(
+            *(
+                exp.column(c, quoted=True)
+                if c in (source_columns or columns)
+                else exp.alias_(exp.Null(), c, quoted=True)
+                for c in columns
+            )
+        )
 
     def _check_identifier_length(self, expression: exp.Expression) -> None:
         if self.MAX_IDENTIFIER_LENGTH is None or not isinstance(expression, exp.DDL):
@@ -2640,6 +2757,17 @@ class EngineAdapter:
                 raise SQLMeshError(
                     f"Identifier name '{name}' (length {name_length}) exceeds {self.dialect.capitalize()}'s max identifier limit of {self.MAX_IDENTIFIER_LENGTH} characters"
                 )
+
+    @classmethod
+    def get_source_columns_to_types(
+        cls,
+        columns_to_types: t.Dict[str, exp.DataType],
+        source_columns: t.Optional[t.List[str]],
+    ) -> t.Dict[str, exp.DataType]:
+        """Returns the source columns to types mapping."""
+        return {
+            k: v for k, v in columns_to_types.items() if not source_columns or k in source_columns
+        }
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):

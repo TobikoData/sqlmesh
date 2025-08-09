@@ -1331,6 +1331,201 @@ def test_schema_diff_alter_op_column():
     )
 
 
+@pytest.mark.parametrize(
+    "current_struct, new_struct, expected_diff_with_destructive, expected_diff_ignore_destructive, config",
+    [
+        # Simple DROP operation - should be ignored when ignore_destructive=True
+        (
+            "STRUCT<id INT, name STRING, age INT>",
+            "STRUCT<id INT, age INT>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("name"),
+                    "STRUCT<id INT, age INT>",
+                    "STRING",
+                )
+            ],
+            [],  # No operations when ignoring destructive
+            {},
+        ),
+        # DROP + ADD operation (incompatible type change) - should be ignored when ignore_destructive=True
+        (
+            "STRUCT<id INT, name STRING, age INT>",
+            "STRUCT<id INT, name BIGINT, age INT>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("name"),
+                    "STRUCT<id INT, age INT>",
+                    "STRING",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("name"),
+                    "BIGINT",
+                    "STRUCT<id INT, age INT, name BIGINT>",
+                ),
+            ],
+            [],  # No operations when ignoring destructive
+            {},
+        ),
+        # Pure ADD operation - should work same way regardless of ignore_destructive
+        (
+            "STRUCT<id INT, name STRING>",
+            "STRUCT<id INT, name STRING, new_col STRING>",
+            [
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("new_col"),
+                    "STRING",
+                    "STRUCT<id INT, name STRING, new_col STRING>",
+                ),
+            ],
+            [
+                # Same operation when ignoring destructive
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("new_col"),
+                    "STRING",
+                    "STRUCT<id INT, name STRING, new_col STRING>",
+                ),
+            ],
+            {},
+        ),
+        # Mix of destructive and non-destructive operations
+        (
+            "STRUCT<id INT, name STRING, age INT>",
+            "STRUCT<id STRING, age INT, address STRING>",
+            [
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("name"),
+                    "STRUCT<id INT, age INT>",
+                    "STRING",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "STRING",
+                    "STRUCT<id INT, age INT, address STRING>",
+                ),
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("id"),
+                    "STRING",
+                    current_type="INT",
+                    expected_table_struct="STRUCT<id STRING, age INT, address STRING>",
+                ),
+            ],
+            [
+                # Only non-destructive operations remain
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
+                    "STRING",
+                    "STRUCT<id INT, name STRING, age INT, address STRING>",
+                ),
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("id"),
+                    "STRING",
+                    current_type="INT",
+                    expected_table_struct="STRUCT<id STRING, name STRING, age INT, address STRING>",
+                ),
+            ],
+            dict(
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+                }
+            ),
+        ),
+    ],
+)
+def test_ignore_destructive_operations(
+    current_struct,
+    new_struct,
+    expected_diff_with_destructive: t.List[TableAlterOperation],
+    expected_diff_ignore_destructive: t.List[TableAlterOperation],
+    config: t.Dict[str, t.Any],
+):
+    resolver = SchemaDiffer(**config)
+
+    # Test with destructive operations allowed (default behavior)
+    operations_with_destructive = resolver._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+    )
+    assert operations_with_destructive == expected_diff_with_destructive
+
+    # Test with destructive operations ignored
+    operations_ignore_destructive = resolver._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+    )
+    assert operations_ignore_destructive == expected_diff_ignore_destructive
+
+
+def test_ignore_destructive_compare_columns():
+    """Test ignore_destructive behavior in compare_columns method."""
+    schema_differ = SchemaDiffer(
+        support_positional_add=True,
+        support_nested_operations=False,
+        compatible_types={
+            exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+        },
+    )
+
+    current = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        "to_drop": exp.DataType.build("DOUBLE"),
+        "age": exp.DataType.build("INT"),
+    }
+
+    new = {
+        "id": exp.DataType.build("STRING"),  # Compatible type change
+        "name": exp.DataType.build("STRING"),
+        "age": exp.DataType.build("INT"),
+        "new_col": exp.DataType.build("DOUBLE"),  # New column
+    }
+
+    # With destructive operations allowed
+    alter_expressions_with_destructive = schema_differ.compare_columns(
+        "test_table", current, new, ignore_destructive=False
+    )
+    assert len(alter_expressions_with_destructive) == 3  # DROP + ADD + ALTER
+
+    # With destructive operations ignored
+    alter_expressions_ignore_destructive = schema_differ.compare_columns(
+        "test_table", current, new, ignore_destructive=True
+    )
+    assert len(alter_expressions_ignore_destructive) == 2  # Only ADD + ALTER
+
+    # Verify the operations are correct
+    operations_sql = [expr.sql() for expr in alter_expressions_ignore_destructive]
+    add_column_found = any("ADD COLUMN new_col DOUBLE" in op for op in operations_sql)
+    alter_column_found = any("ALTER COLUMN id SET DATA TYPE" in op for op in operations_sql)
+    drop_column_found = any("DROP COLUMN to_drop" in op for op in operations_sql)
+
+    assert add_column_found, f"ADD COLUMN not found in: {operations_sql}"
+    assert alter_column_found, f"ALTER COLUMN not found in: {operations_sql}"
+    assert not drop_column_found, f"DROP COLUMN should not be present in: {operations_sql}"
+
+
+def test_ignore_destructive_nested_struct_without_support():
+    """Test ignore_destructive with nested structs when nested_drop is not supported."""
+    schema_differ = SchemaDiffer(
+        support_nested_operations=True,
+        support_nested_drop=False,  # This forces DROP+ADD for nested changes
+    )
+
+    current_struct = "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>"
+    new_struct = "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>"  # Removes col_b
+
+    # With destructive operations allowed - should do DROP+ADD of entire struct
+    operations_with_destructive = schema_differ._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+    )
+    assert len(operations_with_destructive) == 2  # DROP struct + ADD struct
+    assert operations_with_destructive[0].is_drop
+    assert operations_with_destructive[1].is_add
+
+    # With destructive operations ignored - should do nothing
+    operations_ignore_destructive = schema_differ._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+    )
+    assert len(operations_ignore_destructive) == 0
+
+
 def test_get_schema_differ():
     # Test that known dialects return SchemaDiffer instances
     for dialect in ["bigquery", "snowflake", "postgres", "databricks", "spark", "duckdb"]:
@@ -1376,3 +1571,43 @@ def test_get_schema_differ():
         schema_differ_upper.support_coercing_compatible_types
         == schema_differ_lower.support_coercing_compatible_types
     )
+
+
+def test_ignore_destructive_edge_cases():
+    """Test edge cases for ignore_destructive behavior."""
+    schema_differ = SchemaDiffer(support_positional_add=True)
+
+    # Test when all operations are destructive - should result in empty list
+    current_struct = "STRUCT<col_a INT, col_b STRING, col_c DOUBLE>"
+    new_struct = "STRUCT<>"  # Remove all columns
+
+    operations_ignore_destructive = schema_differ._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+    )
+    assert len(operations_ignore_destructive) == 0
+
+    # Test when no operations are needed - should result in empty list regardless of ignore_destructive
+    same_struct = "STRUCT<id INT, name STRING>"
+
+    operations_same_with_destructive = schema_differ._from_structs(
+        exp.DataType.build(same_struct), exp.DataType.build(same_struct), ignore_destructive=False
+    )
+    operations_same_ignore_destructive = schema_differ._from_structs(
+        exp.DataType.build(same_struct), exp.DataType.build(same_struct), ignore_destructive=True
+    )
+    assert len(operations_same_with_destructive) == 0
+    assert len(operations_same_ignore_destructive) == 0
+
+    # Test when only ADD operations are needed - should be same regardless of ignore_destructive
+    current_struct = "STRUCT<id INT>"
+    new_struct = "STRUCT<id INT, name STRING, age INT>"
+
+    operations_add_with_destructive = schema_differ._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+    )
+    operations_add_ignore_destructive = schema_differ._from_structs(
+        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+    )
+    assert len(operations_add_with_destructive) == 2  # ADD name, ADD age
+    assert len(operations_add_ignore_destructive) == 2  # Same operations
+    assert operations_add_with_destructive == operations_add_ignore_destructive

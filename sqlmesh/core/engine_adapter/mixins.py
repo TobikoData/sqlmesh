@@ -32,6 +32,7 @@ class LogicalMergeMixin(EngineAdapter):
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         logical_merge(
@@ -42,6 +43,7 @@ class LogicalMergeMixin(EngineAdapter):
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,
+            source_columns=source_columns,
         )
 
 
@@ -357,9 +359,15 @@ class ClusteredByMixin(EngineAdapter):
         return parsed_cluster_key.expressions or [parsed_cluster_key.this]
 
     def get_alter_expressions(
-        self, current_table_name: TableName, target_table_name: TableName
+        self,
+        current_table_name: TableName,
+        target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
-        expressions = super().get_alter_expressions(current_table_name, target_table_name)
+        expressions = super().get_alter_expressions(
+            current_table_name, target_table_name, ignore_destructive=ignore_destructive
+        )
 
         # check for a change in clustering
         current_table = exp.to_table(current_table_name)
@@ -416,6 +424,7 @@ def logical_merge(
     unique_key: t.Sequence[exp.Expression],
     when_matched: t.Optional[exp.Whens] = None,
     merge_filter: t.Optional[exp.Expression] = None,
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
@@ -434,7 +443,12 @@ def logical_merge(
         )
 
     engine_adapter._replace_by_key(
-        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        target_table,
+        source_table,
+        columns_to_types,
+        unique_key,
+        is_unique_key=True,
+        source_columns=source_columns,
     )
 
 

@@ -164,22 +164,21 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         if not self._use_spark_session:
             return super(SparkEngineAdapter, self)._df_to_source_queries(
-                df, columns_to_types, batch_size, target_table
+                df, columns_to_types, batch_size, target_table, source_columns=source_columns
             )
-        df = self._ensure_pyspark_df(df, columns_to_types)
+        pyspark_df = self._ensure_pyspark_df(df, columns_to_types, source_columns=source_columns)
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
+            pyspark_df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
             self._connection_pool.set_attribute("use_spark_engine_adapter", True)
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._select_columns(columns_to_types)).from_(temp_table)
 
-        if self._use_spark_session:
-            return [SourceQuery(query_factory=query_factory)]
-        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return [SourceQuery(query_factory=query_factory)]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

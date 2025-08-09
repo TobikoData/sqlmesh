@@ -263,6 +263,52 @@ def test_ctas(ctx_query_and_df: TestContext):
         ctx.engine_adapter.ctas(table, exp.select("1").limit(0))
 
 
+def test_ctas_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    table = ctx.table("test_table")
+
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.ctas(
+        table,
+        ctx.input_data(input_data),
+        table_description="test table description",
+        column_descriptions={"id": "test id column description"},
+        table_format=ctx.default_table_format,
+        columns_to_types=columns_to_types,
+        source_columns=["id", "ds"],
+    )
+
+    expected_data = input_data.copy()
+    expected_data["ignored_column"] = pd.Series()
+
+    results = ctx.get_metadata_results(schema=table.db)
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, expected_data)
+
+    if ctx.engine_adapter.COMMENT_CREATION_TABLE.is_supported:
+        table_description = ctx.get_table_comment(table.db, table.name)
+        column_comments = ctx.get_column_comments(table.db, table.name)
+
+        assert table_description == "test table description"
+        assert column_comments == {"id": "test id column description"}
+
+    # ensure we don't hit clickhouse INSERT with LIMIT 0 bug on CTAS
+    if ctx.dialect == "clickhouse":
+        ctx.engine_adapter.ctas(table, exp.select("1").limit(0))
+
+
 def test_create_view(ctx_query_and_df: TestContext):
     ctx = ctx_query_and_df
     input_data = pd.DataFrame(
@@ -304,6 +350,47 @@ def test_create_view(ctx_query_and_df: TestContext):
             )
             else {"id": "test id column description"}
         )
+
+
+def test_create_view_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    view = ctx.table("test_view")
+    ctx.engine_adapter.create_view(
+        view,
+        ctx.input_data(input_data),
+        table_description="test view description",
+        column_descriptions={"id": "test id column description"},
+        source_columns=["id", "ds"],
+        columns_to_types=columns_to_types,
+    )
+
+    expected_data = input_data.copy()
+    expected_data["ignored_column"] = pd.Series()
+
+    results = ctx.get_metadata_results()
+    assert len(results.tables) == 0
+    assert len(results.views) == 1
+    assert len(results.materialized_views) == 0
+    assert results.views[0] == view.name
+    ctx.compare_with_current(view, expected_data)
+
+    if ctx.engine_adapter.COMMENT_CREATION_VIEW.is_supported:
+        table_description = ctx.get_table_comment(view.db, "test_view", table_kind="VIEW")
+        column_comments = ctx.get_column_comments(view.db, "test_view", table_kind="VIEW")
+
+        assert table_description == "test view description"
+        assert column_comments == {"id": "test id column description"}
 
 
 def test_materialized_view(ctx_query_and_df: TestContext):
@@ -450,6 +537,67 @@ def test_replace_query(ctx_query_and_df: TestContext):
         ctx.compare_with_current(table, replace_data)
 
 
+def test_replace_query_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    table = ctx.table("test_table")
+
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        table_format=ctx.default_table_format,
+        source_columns=["id", "ds"],
+        columns_to_types=columns_to_types,
+    )
+    expected_data = input_data.copy()
+    expected_data["ignored_column"] = pd.Series()
+
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, expected_data)
+
+    # Replace that we only need to run once
+    if type == "df":
+        replace_data = pd.DataFrame(
+            [
+                {"id": 4, "ds": "2022-01-04"},
+                {"id": 5, "ds": "2022-01-05"},
+                {"id": 6, "ds": "2022-01-06"},
+            ]
+        )
+        ctx.engine_adapter.replace_query(
+            table,
+            ctx.input_data(replace_data),
+            table_format=ctx.default_table_format,
+            source_columns=["id", "ds"],
+            columns_to_types=columns_to_types,
+        )
+        expected_data = replace_data.copy()
+        expected_data["ignored_column"] = pd.Series()
+
+        results = ctx.get_metadata_results()
+        assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
+        assert len(results.tables) == len(results.non_temp_tables) == 1
+        assert results.non_temp_tables[0] == table.name
+        ctx.compare_with_current(table, expected_data)
+
+
 def test_replace_query_batched(ctx_query_and_df: TestContext):
     ctx = ctx_query_and_df
     ctx.engine_adapter.DEFAULT_BATCH_SIZE = 1
@@ -548,6 +696,61 @@ def test_insert_append(ctx_query_and_df: TestContext):
         ctx.compare_with_current(table, pd.concat([input_data, append_data]))
 
 
+def test_insert_append_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    table = ctx.table("test_table")
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+    ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.insert_append(
+        table,
+        ctx.input_data(input_data),
+        source_columns=["id", "ds"],
+        columns_to_types=columns_to_types,
+    )
+    expected_data = input_data.copy()
+    expected_data["ignored_column"] = pd.Series()
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, expected_data)
+
+    # Replace that we only need to run once
+    if ctx.test_type == "df":
+        append_data = pd.DataFrame(
+            [
+                {"id": 4, "ds": "2022-01-04"},
+                {"id": 5, "ds": "2022-01-05"},
+                {"id": 6, "ds": "2022-01-06"},
+            ]
+        )
+        ctx.engine_adapter.insert_append(
+            table,
+            ctx.input_data(append_data),
+            source_columns=["id", "ds"],
+            columns_to_types=columns_to_types,
+        )
+        append_expected_data = append_data.copy()
+        append_expected_data["ignored_column"] = pd.Series()
+        results = ctx.get_metadata_results()
+        assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
+        assert len(results.tables) in [1, 2, 3]
+        assert len(results.non_temp_tables) == 1
+        assert results.non_temp_tables[0] == table.name
+        ctx.compare_with_current(table, pd.concat([expected_data, append_expected_data]))
+
+
 def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     ctx = ctx_query_and_df
     ds_type = "string"
@@ -636,6 +839,105 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
         )
 
 
+def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    ds_type = "string"
+    if ctx.dialect == "bigquery":
+        ds_type = "datetime"
+    if ctx.dialect == "tsql":
+        ds_type = "varchar(max)"
+
+    ctx.columns_to_types = {"id": "int", "ds": ds_type}
+    columns_to_types = {
+        "id": exp.DataType.build("int"),
+        "ignored_column": exp.DataType.build("int"),
+        "ds": exp.DataType.build(ds_type),
+    }
+    table = ctx.table("test_table")
+    if ctx.dialect == "bigquery":
+        partitioned_by = ["DATE(ds)"]
+    else:
+        partitioned_by = ctx.partitioned_by  # type: ignore
+    ctx.engine_adapter.create_table(
+        table,
+        columns_to_types,
+        partitioned_by=partitioned_by,
+        partition_interval_unit="DAY",
+        table_format=ctx.default_table_format,
+    )
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, ctx.time_column: "2022-01-01"},
+            {"id": 2, ctx.time_column: "2022-01-02"},
+            {"id": 3, ctx.time_column: "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.insert_overwrite_by_time_partition(
+        table,
+        ctx.input_data(input_data),
+        start="2022-01-02",
+        end="2022-01-03",
+        time_formatter=ctx.time_formatter,
+        time_column=ctx.time_column,
+        columns_to_types=columns_to_types,
+        source_columns=["id", "ds"],
+    )
+
+    expected_data = input_data.copy()
+    expected_data.insert(len(expected_data.columns) - 1, "ignored_column", pd.Series())
+
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+
+    if ctx.dialect == "trino":
+        # trino has some lag between partitions being registered and data showing up
+        wait_until(lambda: len(ctx.get_current_data(table)) > 0)
+
+    ctx.compare_with_current(table, expected_data.iloc[1:])
+
+    if ctx.test_type == "df":
+        overwrite_data = pd.DataFrame(
+            [
+                {"id": 10, ctx.time_column: "2022-01-03"},
+                {"id": 4, ctx.time_column: "2022-01-04"},
+                {"id": 5, ctx.time_column: "2022-01-05"},
+            ]
+        )
+        ctx.engine_adapter.insert_overwrite_by_time_partition(
+            table,
+            ctx.input_data(overwrite_data),
+            start="2022-01-03",
+            end="2022-01-05",
+            time_formatter=ctx.time_formatter,
+            time_column=ctx.time_column,
+            columns_to_types=columns_to_types,
+            source_columns=["id", "ds"],
+        )
+        results = ctx.get_metadata_results()
+        assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
+        assert len(results.tables) == len(results.non_temp_tables) == 1
+        assert results.non_temp_tables[0] == table.name
+
+        if ctx.dialect == "trino":
+            wait_until(lambda: len(ctx.get_current_data(table)) > 2)
+
+        ctx.compare_with_current(
+            table,
+            pd.DataFrame(
+                [
+                    {"id": 2, "ignored_column": None, ctx.time_column: "2022-01-02"},
+                    {"id": 10, "ignored_column": None, ctx.time_column: "2022-01-03"},
+                    {"id": 4, "ignored_column": None, ctx.time_column: "2022-01-04"},
+                    {"id": 5, "ignored_column": None, ctx.time_column: "2022-01-05"},
+                ]
+            ),
+        )
+
+
 def test_merge(ctx_query_and_df: TestContext):
     ctx = ctx_query_and_df
     if not ctx.supports_merge:
@@ -697,6 +999,82 @@ def test_merge(ctx_query_and_df: TestContext):
                     {"id": 3, "ds": "2022-01-03"},
                     {"id": 4, "ds": "2022-01-04"},
                     {"id": 5, "ds": "2022-01-05"},
+                ]
+            ),
+        )
+
+
+def test_merge_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    if not ctx.supports_merge:
+        pytest.skip(f"{ctx.dialect} doesn't support merge")
+
+    table = ctx.table("test_table")
+
+    # Athena only supports MERGE on Iceberg tables
+    # And it cant fall back to a logical merge on Hive tables because it cant delete records
+    table_format = "iceberg" if ctx.dialect == "athena" else None
+
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    ctx.engine_adapter.create_table(table, columns_to_types, table_format=table_format)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.merge(
+        table,
+        ctx.input_data(input_data),
+        unique_key=[exp.to_identifier("id")],
+        columns_to_types=columns_to_types,
+        source_columns=["id", "ds"],
+    )
+
+    expected_data = input_data.copy()
+    expected_data["ignored_column"] = pd.Series()
+
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(table, expected_data)
+
+    if ctx.test_type == "df":
+        merge_data = pd.DataFrame(
+            [
+                {"id": 2, "ds": "2022-01-10"},
+                {"id": 4, "ds": "2022-01-04"},
+                {"id": 5, "ds": "2022-01-05"},
+            ]
+        )
+        ctx.engine_adapter.merge(
+            table,
+            ctx.input_data(merge_data),
+            unique_key=[exp.to_identifier("id")],
+            columns_to_types=columns_to_types,
+            source_columns=["id", "ds"],
+        )
+
+        results = ctx.get_metadata_results()
+        assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
+        assert len(results.tables) == len(results.non_temp_tables) == 1
+        assert results.non_temp_tables[0] == table.name
+        ctx.compare_with_current(
+            table,
+            pd.DataFrame(
+                [
+                    {"id": 1, "ds": "2022-01-01", "ignored_column": None},
+                    {"id": 2, "ds": "2022-01-10", "ignored_column": None},
+                    {"id": 3, "ds": "2022-01-03", "ignored_column": None},
+                    {"id": 4, "ds": "2022-01-04", "ignored_column": None},
+                    {"id": 5, "ds": "2022-01-05", "ignored_column": None},
                 ]
             ),
         )
@@ -851,6 +1229,174 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
                     "updated_at": "2022-01-04 00:00:00",
                     "valid_from": "1970-01-01 00:00:00",
                     "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+
+def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    # Athena only supports the operations required for SCD models on Iceberg tables
+    if ctx.mark == "athena_hive":
+        pytest.skip("SCD Type 2 is only supported on Athena / Iceberg")
+
+    time_type = exp.DataType.build("timestamp")
+
+    ctx.columns_to_types = {
+        "id": "int",
+        "name": "string",
+        "updated_at": time_type,
+        "valid_from": time_type,
+        "valid_to": time_type,
+    }
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    table = ctx.table("test_table")
+    input_schema = {
+        k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
+    }
+
+    ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "name": "a", "updated_at": "2022-01-01 00:00:00"},
+            {"id": 2, "name": "b", "updated_at": "2022-01-02 00:00:00"},
+            {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_time(
+        table,
+        ctx.input_data(input_data, input_schema),
+        unique_key=[parse_one("COALESCE(id, -1)")],
+        valid_from_col=exp.column("valid_from", quoted=True),
+        valid_to_col=exp.column("valid_to", quoted=True),
+        updated_at_col=exp.column("updated_at", quoted=True),
+        execution_time="2023-01-01 00:00:00",
+        updated_at_as_valid_from=False,
+        table_format=ctx.default_table_format,
+        truncate=True,
+        start="2022-01-01 00:00:00",
+        columns_to_types=columns_to_types,
+        source_columns=["id", "name", "updated_at"],
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "updated_at": "2022-01-01 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "updated_at": "2022-01-02 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "updated_at": "2022-01-03 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+            ]
+        ),
+    )
+
+    if ctx.test_type == "query":
+        return
+
+    current_data = pd.DataFrame(
+        [
+            # Change `a` to `x`
+            {"id": 1, "name": "x", "updated_at": "2022-01-04 00:00:00"},
+            # Delete
+            # {"id": 2, "name": "b", "updated_at": "2022-01-02 00:00:00"},
+            # No change
+            {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
+            # Add
+            {"id": 4, "name": "d", "updated_at": "2022-01-04 00:00:00"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_time(
+        table,
+        ctx.input_data(current_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        valid_from_col=exp.column("valid_from", quoted=True),
+        valid_to_col=exp.column("valid_to", quoted=True),
+        updated_at_col=exp.column("updated_at", quoted=True),
+        execution_time="2023-01-05 00:00:00",
+        updated_at_as_valid_from=False,
+        table_format=ctx.default_table_format,
+        truncate=False,
+        start="2022-01-01 00:00:00",
+        columns_to_types=columns_to_types,
+        source_columns=["id", "name", "updated_at"],
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "updated_at": "2022-01-01 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2022-01-04 00:00:00",
+                    "ignored_column": None,
+                },
+                {
+                    "id": 1,
+                    "name": "x",
+                    "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "2022-01-04 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "updated_at": "2022-01-02 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                    "ignored_column": None,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "updated_at": "2022-01-03 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
                 },
             ]
         ),
@@ -1028,6 +1574,199 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
                     "status": "inactive",
                     "valid_from": "2023-01-05 00:00:00",
                     "valid_to": pd.NaT,
+                },
+            ]
+        ),
+    )
+
+
+def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
+    ctx = ctx_query_and_df
+    # Athena only supports the operations required for SCD models on Iceberg tables
+    if ctx.mark == "athena_hive":
+        pytest.skip("SCD Type 2 is only supported on Athena / Iceberg")
+
+    time_type = exp.DataType.build("timestamp")
+
+    ctx.columns_to_types = {
+        "id": "int",
+        "name": "string",
+        "status": "string",
+        "valid_from": time_type,
+        "valid_to": time_type,
+    }
+    columns_to_types = ctx.columns_to_types.copy()
+    columns_to_types["ignored_column"] = exp.DataType.build("int")
+
+    table = ctx.table("test_table")
+    input_schema = {
+        k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
+    }
+
+    ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "name": "a", "status": "active"},
+            {"id": 2, "name": "b", "status": "inactive"},
+            {"id": 3, "name": "c", "status": "active"},
+            {"id": 4, "name": "d", "status": "active"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(input_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_col=exp.column("valid_from", quoted=True),
+        valid_to_col=exp.column("valid_to", quoted=True),
+        execution_time="2023-01-01",
+        execution_time_as_valid_from=False,
+        truncate=True,
+        start="2023-01-01",
+        columns_to_types=columns_to_types,
+        source_columns=["id", "name", "status"],
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+            ]
+        ),
+    )
+
+    if ctx.test_type == "query":
+        return
+
+    current_data = pd.DataFrame(
+        [
+            # Change `a` to `x`
+            {"id": 1, "name": "x", "status": "active"},
+            # Delete
+            # {"id": 2, "name": "b", status: "inactive"},
+            # No change
+            {"id": 3, "name": "c", "status": "active"},
+            # Change status to inactive
+            {"id": 4, "name": "d", "status": "inactive"},
+            # Add
+            {"id": 5, "name": "e", "status": "inactive"},
+        ]
+    )
+    ctx.engine_adapter.scd_type_2_by_column(
+        table,
+        ctx.input_data(current_data, input_schema),
+        unique_key=[exp.to_column("id")],
+        check_columns=[exp.to_column("name"), exp.to_column("status")],
+        valid_from_col=exp.column("valid_from", quoted=True),
+        valid_to_col=exp.column("valid_to", quoted=True),
+        execution_time="2023-01-05 00:00:00",
+        execution_time_as_valid_from=False,
+        truncate=False,
+        start="2023-01-01",
+        columns_to_types=columns_to_types,
+        source_columns=["id", "name", "status"],
+    )
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                    "ignored_column": None,
+                },
+                {
+                    "id": 1,
+                    "name": "x",
+                    "status": "active",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "status": "inactive",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                    "ignored_column": None,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "active",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                    "ignored_column": None,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "status": "inactive",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
+                },
+                {
+                    "id": 5,
+                    "name": "e",
+                    "status": "inactive",
+                    "valid_from": "2023-01-05 00:00:00",
+                    "valid_to": pd.NaT,
+                    "ignored_column": None,
                 },
             ]
         ),

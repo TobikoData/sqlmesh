@@ -16,6 +16,7 @@ from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
     import pandas as pd
@@ -92,9 +93,11 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(target_table, **kwargs)
+        source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
 
         def query_factory() -> Query:
             # It is possible for the factory to be called multiple times and if so then the temp table will already
@@ -102,12 +105,17 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             # as later calls.
             if not self.table_exists(temp_table):
                 self.create_table(
-                    temp_table, columns_to_types, storage_format=exp.var("MergeTree"), **kwargs
+                    temp_table,
+                    source_columns_to_types,
+                    storage_format=exp.var("MergeTree"),
+                    **kwargs,
                 )
 
                 self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
 
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._casted_columns(columns_to_types, source_columns)).from_(
+                temp_table
+            )
 
         return [
             SourceQuery(
@@ -403,9 +411,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, columns_to_types, target_table=target_table
+            source_table, columns_to_types, target_table=target_table, source_columns=source_columns
         )
 
         key_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *key) if len(key) > 1 else key[0]
@@ -425,9 +434,10 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         query_or_df: QueryOrDF,
         partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+            query_or_df, columns_to_types, target_table=table_name, source_columns=source_columns
         )
 
         self._insert_overwrite_by_condition(

@@ -205,7 +205,7 @@ def test_insert_overwrite_by_time_partition_pandas(
     assert load_temp_table.kwargs["job_config"].write_disposition is None
     assert (
         merge_sql.sql(dialect="bigquery")
-        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT `a`, `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
+        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`ds` AS STRING) AS `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
     )
     assert (
         drop_temp_table_sql.sql(dialect="bigquery")
@@ -295,7 +295,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
         "DROP TABLE IF EXISTS `project`.`dataset`.`temp_table`",
     ]
 
@@ -498,7 +498,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
 
     sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT `id`, `ts`, `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(`id` AS INT64) AS `id`, CAST(`ts` AS DATETIME) AS `ts`, CAST(`val` AS INT64) AS `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
         "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)",
         "DROP TABLE IF EXISTS project.dataset.temp_table",
