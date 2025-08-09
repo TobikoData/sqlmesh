@@ -2526,6 +2526,52 @@ def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    # Change to full kind
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.missing_intervals
+    assert prod_plan.requires_backfill
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+    context.state_sync.clear_cache()
+
+    # Change back to view
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": ViewKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "view"
+
+    # Change to incremental
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": IncrementalUnmanagedKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)

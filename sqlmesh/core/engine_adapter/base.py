@@ -32,6 +32,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
     CommentCreationView,
     DataObject,
+    DataObjectType,
     EngineRunMode,
     InsertOverwriteStrategy,
     SourceQuery,
@@ -369,6 +370,9 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         target_table = exp.to_table(table_name)
+
+        table_exists = self._drop_data_object_on_type_mismatch(target_table, DataObjectType.TABLE)
+
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=target_table
         )
@@ -390,7 +394,7 @@ class EngineAdapter:
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
-        if self.SUPPORTS_REPLACE_TABLE or not self.table_exists(target_table):
+        if self.SUPPORTS_REPLACE_TABLE or not table_exists:
             return self._create_table_from_source_queries(
                 target_table,
                 source_queries,
@@ -930,6 +934,28 @@ class EngineAdapter:
             )
         )
 
+    def drop_data_object(self, data_object: DataObject, ignore_if_not_exists: bool = True) -> None:
+        """Drops a data object of arbitrary type.
+
+        Args:
+            data_object: The data object to drop.
+            ignore_if_not_exists: If True, no error will be raised if the data object does not exist.
+        """
+        if data_object.type.is_view:
+            self.drop_view(data_object.to_table(), ignore_if_not_exists=ignore_if_not_exists)
+        elif data_object.type.is_materialized_view:
+            self.drop_view(
+                data_object.to_table(), ignore_if_not_exists=ignore_if_not_exists, materialized=True
+            )
+        elif data_object.type.is_table:
+            self.drop_table(data_object.to_table(), exists=ignore_if_not_exists)
+        elif data_object.type.is_managed_table:
+            self.drop_managed_table(data_object.to_table(), exists=ignore_if_not_exists)
+        else:
+            raise SQLMeshError(
+                f"Can't drop data object '{data_object.to_table().sql(dialect=self.dialect)}' of type '{data_object.type.value}'"
+            )
+
     def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.
 
@@ -1117,6 +1143,12 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
+
+        if replace:
+            self._drop_data_object_on_type_mismatch(
+                view_name,
+                DataObjectType.VIEW if not materialized else DataObjectType.MATERIALIZED_VIEW,
+            )
 
         with source_queries[0] as query:
             self.execute(
@@ -2482,6 +2514,35 @@ class EngineAdapter:
     def _truncate_table(self, table_name: TableName) -> None:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
+
+    def _drop_data_object_on_type_mismatch(
+        self, target_name: TableName, expected_type: DataObjectType
+    ) -> bool:
+        """Drops a data object if it exists and is not of the expected type.
+
+        Args:
+            target_name: The name of the data object to check.
+            expected_type: The expected type of the data object.
+
+        Returns:
+            True if the data object exists and is of the expected type, False otherwise.
+        """
+        target_table = exp.to_table(target_name)
+        existing_data_objects = self.get_data_objects(
+            schema_(target_table.db, target_table.catalog), {target_table.name}
+        )
+        if existing_data_objects:
+            if existing_data_objects[0].type == expected_type:
+                return True
+
+            logger.warning(
+                "Target data object '%s' is a %s and not a %s, dropping it",
+                target_table.sql(dialect=self.dialect),
+                existing_data_objects[0].type.value,
+                expected_type.value,
+            )
+            self.drop_data_object(existing_data_objects[0])
+        return False
 
     def _replace_by_key(
         self,
