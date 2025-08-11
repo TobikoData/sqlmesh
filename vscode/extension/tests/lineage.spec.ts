@@ -9,11 +9,7 @@ import {
   waitForLoadedSQLMesh,
 } from './utils'
 import { writeFileSync } from 'fs'
-import {
-  createPythonInterpreterSettingsSpecifier,
-  startCodeServer,
-  stopCodeServer,
-} from './utils_code_server'
+import { createPythonInterpreterSettingsSpecifier } from './utils_code_server'
 
 /**
  * Helper function to launch VS Code and test lineage with given project path config
@@ -134,7 +130,7 @@ test('Lineage panel renders correctly - absolute path project outside of workspa
 })
 
 // These work on local machine when debuggin but not on CI, so skipping for now
-test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
+test('Lineage panel renders correctly - multiworkspace setup', async ({
   page,
   sharedCodeServer,
 }) => {
@@ -177,13 +173,12 @@ test.skip('Lineage panel renders correctly - multiworkspace setup', async ({
     { spaces: 2 },
   )
 
-  await openServerPage(page, workspaceDir, sharedCodeServer)
-  await page.waitForSelector('text=Open workspace')
-  await page.click('text=Open workspace')
+  await openServerPage(page, workspaceFilePath, sharedCodeServer)
+  await page.reload()
   await testLineageWithProjectPath(page)
 })
 
-test.skip('Lineage panel renders correctly - multiworkspace setup reversed', async ({
+test('Lineage panel renders correctly - multiworkspace setup reversed', async ({
   page,
   sharedCodeServer,
 }) => {
@@ -216,12 +211,8 @@ test.skip('Lineage panel renders correctly - multiworkspace setup reversed', asy
     }),
   )
 
-  const context = await startCodeServer({
-    tempDir: workspaceDir,
-  })
-
   const settings = {
-    'python.defaultInterpreterPath': context.defaultPythonInterpreter,
+    'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(projectDir1, '.vscode'))
   await fs.writeJson(
@@ -236,12 +227,7 @@ test.skip('Lineage panel renders correctly - multiworkspace setup reversed', asy
     { spaces: 2 },
   )
 
-  try {
-    await openServerPage(page, workspaceDir, sharedCodeServer)
-    await page.waitForSelector('text=Open workspace')
-    await page.click('text=Open workspace')
-    await testLineageWithProjectPath(page)
-  } finally {
-    await stopCodeServer(context)
-  }
+  await openServerPage(page, workspaceFilePath, sharedCodeServer)
+  await page.reload()
+  await testLineageWithProjectPath(page)
 })
