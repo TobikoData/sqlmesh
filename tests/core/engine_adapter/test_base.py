@@ -14,7 +14,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObject
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.date import to_ds
@@ -39,6 +39,23 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
     assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
         'CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+        'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+    ]
+
+
+def test_create_view_existing_data_object_type_mismatch(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_view", type="table")],
+    )
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
+
+    assert to_sql_calls(adapter) == [
+        'DROP TABLE IF EXISTS "test_view"',
         'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
     ]
 
@@ -2710,6 +2727,27 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT "a" FROM "tbl") AS "_subquery"',
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"',
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"',
+    ]
+
+
+def test_replace_query_data_object_type_mismatch(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="view")],
+    )
+
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
+    )
+
+    # TODO: Shouldn't we enforce that `a` is casted to an int?
+    assert to_sql_calls(adapter) == [
+        'DROP VIEW IF EXISTS "test_table"',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT "a" FROM "tbl") AS "_subquery"',
     ]
 
 

@@ -2488,6 +2488,16 @@ def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
         ),
     ]
+    assert plan_dev.context_diff.snapshots[context.get_snapshot(model.name).snapshot_id].intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot("sushi.top_waiters").snapshot_id
+    ].intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].dev_intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot("sushi.top_waiters").snapshot_id
+    ].dev_intervals
     context.apply(plan_dev)
 
     # Make sure the waiter_revenue_by_day model is a table in prod and a view in dev
@@ -2539,6 +2549,9 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     prod_plan = context.plan_builder("prod", skip_tests=True).build()
     assert prod_plan.missing_intervals
     assert prod_plan.requires_backfill
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
     context.apply(prod_plan)
     data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
     assert len(data_objects) == 1
@@ -2553,6 +2566,9 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     prod_plan = context.plan_builder("prod", skip_tests=True).build()
     assert prod_plan.requires_backfill
     assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
     context.apply(prod_plan)
     data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
     assert len(data_objects) == 1
@@ -2565,6 +2581,24 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     prod_plan = context.plan_builder("prod", skip_tests=True).build()
     assert prod_plan.requires_backfill
     assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+    # Change back to full
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
     context.apply(prod_plan)
     data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
     assert len(data_objects) == 1
