@@ -9,6 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -262,6 +263,11 @@ def test_replace_query_with_df_table_exists(adapter: t.Callable, mocker: MockerF
 
     mock_temp_table = mocker.MagicMock(side_effect=mock_table)
     mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table", mock_temp_table)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
 
     adapter.replace_query(
         table_name="test_table",

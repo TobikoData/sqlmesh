@@ -10,6 +10,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 import sqlmesh.core.dialect as d
@@ -102,6 +103,11 @@ def test_replace_query_table_properties_exists(
         return_value=True,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -194,6 +200,11 @@ def test_replace_query_exists(mocker: MockerFixture, make_mocked_engine_adapter:
         return_value=True,
     )
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
@@ -239,6 +250,12 @@ def test_replace_query_self_ref_not_exists(
         side_effect=check_table_exists,
     )
 
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="table", type="table")],
+    )
+
     adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
 
     assert to_sql_calls(adapter) == [
@@ -268,6 +285,11 @@ def test_replace_query_self_ref_exists(
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="table", type="table")],
+    )
 
     table_name = "db.table"
     temp_table_id = "abcdefgh"
@@ -525,11 +547,6 @@ def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
 def test_scd_type_2_by_time(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
-        return_value=False,
-    )
-
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter._default_catalog = "spark_catalog"
     adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
@@ -549,6 +566,11 @@ def test_scd_type_2_by_time(
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         side_effect=check_table_exists,
+    )
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="db", name="target", type="table")],
     )
 
     adapter.scd_type_2_by_time(
@@ -981,6 +1003,11 @@ def test_replace_query_with_wap_self_reference(
     )
 
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="schema", name="table", type="table")],
+    )
 
     adapter.replace_query(
         "catalog.schema.table.branch_wap_12345",

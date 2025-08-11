@@ -1262,13 +1262,11 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
 def test_migrate_view(
     mocker: MockerFixture,
     make_snapshot,
+    make_mocked_engine_adapter,
     change_category: SnapshotChangeCategory,
     forward_only: bool,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1284,7 +1282,7 @@ def test_migrate_view(
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call(
                 'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'

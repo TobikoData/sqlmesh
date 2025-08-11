@@ -3453,8 +3453,9 @@ def test_merge_intervals_virtual_environment_mode_dev_only_no_rebuild(make_snaps
         data_hash="different", metadata_hash="different", parent_data_hash="different"
     )
     target_snapshot.categorize_as(
-        SnapshotChangeCategory.FORWARD_ONLY
-    )  # This is a no-rebuild category
+        SnapshotChangeCategory.BREAKING,
+        forward_only=True,
+    )  # This is a no-rebuild categorization
 
     # Ensure snapshot is paused
     target_snapshot.unpaused_ts = None
