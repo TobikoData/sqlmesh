@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "private": false,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TobikoData/sqlmesh"
+  },
   "files": [
     "/dist"
   ],
