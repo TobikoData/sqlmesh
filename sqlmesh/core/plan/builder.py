@@ -586,7 +586,12 @@ class PlanBuilder:
             if not snapshot or not self._is_new_snapshot(snapshot):
                 continue
 
-            forward_only = self._is_forward_only_change(s_id) or self._forward_only
+            forward_only = self._forward_only or self._is_forward_only_change(s_id)
+            if forward_only and s_id.name in self._context_diff.modified_snapshots:
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if _should_force_rebuild(old, new) or snapshot.is_seed:
+                    # Breaking kind changes and seed changes can't be forward-only.
+                    forward_only = False
 
             if s_id in self._choices:
                 snapshot.categorize_as(self._choices[s_id], forward_only)
@@ -607,15 +612,10 @@ class PlanBuilder:
         s_id = snapshot.snapshot_id
 
         if self._context_diff.directly_modified(s_id.name):
-            new, old = self._context_diff.modified_snapshots[s_id.name]
-            should_force_rebuild = _should_force_rebuild(old, new)
-            if should_force_rebuild or snapshot.is_seed:
-                # Breaking kind changes and seed changes can't be forward-only.
-                forward_only = False
-
             if self._auto_categorization_enabled:
-                if should_force_rebuild:
-                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if _should_force_rebuild(old, new):
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
                     return
 
                 s_id_with_missing_columns: t.Optional[SnapshotId] = None

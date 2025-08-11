@@ -2557,8 +2557,6 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     assert len(data_objects) == 1
     assert data_objects[0].type == "table"
 
-    context.state_sync.clear_cache()
-
     # Change back to view
     model = context.get_model("sushi.top_waiters")
     model = model.copy(update={"kind": ViewKind()})
@@ -2603,6 +2601,46 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
     assert len(data_objects) == 1
     assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change_manual_categorization(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    dev_plan_builder = context.plan_builder("dev", skip_tests=True, no_auto_categorization=True)
+    dev_plan_builder.set_choice(
+        dev_plan_builder._context_diff.snapshots[context.get_snapshot(model.name).snapshot_id],
+        SnapshotChangeCategory.NON_BREAKING,
+    )
+    dev_plan = dev_plan_builder.build()
+    assert dev_plan.requires_backfill
+    assert len(dev_plan.missing_intervals) == 1
+    context.apply(dev_plan)
+
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
