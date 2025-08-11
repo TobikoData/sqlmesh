@@ -33,6 +33,7 @@ from sqlmesh.utils.date import TimeLike
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.snapshot.definition import Snapshot
 
 
 @set_catalog()
@@ -267,7 +268,8 @@ class TrinoEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
+        snapshot: t.Optional["Snapshot"] = None,
+        end: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
@@ -290,7 +292,8 @@ class TrinoEngineAdapter(
             table_description,
             column_descriptions,
             truncate,
-            is_restatement,
+            snapshot,
+            end,
             **kwargs,
         )
 

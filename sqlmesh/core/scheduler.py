@@ -9,6 +9,7 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model.definition import AuditResult
+from sqlmesh.core.model import ModelKindName
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -31,6 +32,7 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
     expand_range,
     parent_snapshots_by_name,
+    SnapshotIntervals,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import CompletionStatus
@@ -161,7 +163,6 @@ class Scheduler:
         deployability_index: DeployabilityIndex,
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
-        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -193,7 +194,6 @@ class Scheduler:
             snapshots=snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
-            is_restatement=is_restatement,
             **kwargs,
         )
         audit_results = self._audit_snapshot(
@@ -385,11 +385,37 @@ class Scheduler:
             circuit_breaker: An optional handler which checks if the run should be aborted.
             start: The start of the run.
             end: The end of the run.
+            restatements: Dictionary of snapshot IDs to restatement intervals.
 
         Returns:
             A tuple of errors and skipped intervals.
         """
         execution_time = execution_time or now_timestamp()
+
+        # Mark SCD Type 2 restatement intervals as pending so they can be handled if the plan is interrupted and resumed
+        if restatements:
+            pending_restatement_updates = []
+            for s_id, interval in restatements.items():
+                snapshot = self.snapshots.get(s_id)
+                if snapshot and snapshot.model_kind_name in (
+                    ModelKindName.SCD_TYPE_2,
+                    ModelKindName.SCD_TYPE_2_BY_TIME,
+                    ModelKindName.SCD_TYPE_2_BY_COLUMN,
+                ):
+                    snapshot.pending_restatement_intervals = merge_intervals(
+                        snapshot.pending_restatement_intervals + [interval]
+                    )
+                    pending_restatement_updates.append(
+                        SnapshotIntervals(
+                            name=snapshot.name,
+                            identifier=snapshot.identifier,
+                            version=snapshot.version or "",
+                            dev_version=None,
+                            pending_restatement_intervals=snapshot.pending_restatement_intervals,
+                        )
+                    )
+            if pending_restatement_updates:
+                self.state_sync.add_snapshots_intervals(pending_restatement_updates)
 
         batched_intervals = self.batch_intervals(
             merged_intervals, deployability_index, environment_naming_info
@@ -450,10 +476,6 @@ class Scheduler:
                         execution_time=execution_time,
                     )
                 else:
-                    # Determine if this snapshot and interval is a restatement (for SCD type 2)
-                    is_restatement = (
-                        restatements is not None and snapshot.snapshot_id in restatements
-                    )
                     audit_results = self.evaluate(
                         snapshot=snapshot,
                         environment_naming_info=environment_naming_info,
@@ -462,7 +484,6 @@ class Scheduler:
                         execution_time=execution_time,
                         deployability_index=deployability_index,
                         batch_index=batch_idx,
-                        is_restatement=is_restatement,
                     )
 
                 evaluation_duration_ms = now_timestamp() - execution_start_ts

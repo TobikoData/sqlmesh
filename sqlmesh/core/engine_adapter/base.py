@@ -41,7 +41,7 @@ from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
 from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column, to_timestamp
 from sqlmesh.utils.errors import (
     SQLMeshError,
     UnsupportedCatalogOperationError,
@@ -63,6 +63,7 @@ if t.TYPE_CHECKING:
         SnowparkSession,
     )
     from sqlmesh.core.node import IntervalUnit
+    from sqlmesh.core.snapshot.definition import Snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -1447,6 +1448,21 @@ class EngineAdapter:
         )
         self.execute(exp.Merge(this=this, using=using, on=on, whens=whens))
 
+    def _should_cleanup_for_restatement(
+        self, snapshot: t.Optional["Snapshot"], start: TimeLike, end: TimeLike
+    ) -> bool:
+        if not snapshot or not snapshot.pending_restatement_intervals:
+            return False
+
+        start_ts = to_timestamp(start)
+        end_ts = to_timestamp(end)
+
+        # Check if current interval overlaps with any pending restatement interval
+        for rs_start, rs_end in snapshot.pending_restatement_intervals:
+            if start_ts < rs_end and end_ts > rs_start:
+                return True
+        return False
+
     def scd_type_2_by_time(
         self,
         target_table: TableName,
@@ -1462,7 +1478,8 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
+        snapshot: t.Optional["Snapshot"] = None,
+        end: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1479,7 +1496,8 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
-            is_restatement=is_restatement,
+            snapshot=snapshot,
+            end=end,
             **kwargs,
         )
 
@@ -1498,7 +1516,8 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
+        snapshot: t.Optional["Snapshot"] = None,
+        end: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1515,7 +1534,8 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
-            is_restatement=is_restatement,
+            snapshot=snapshot,
+            end=end,
             **kwargs,
         )
 
@@ -1537,7 +1557,8 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
+        snapshot: t.Optional["Snapshot"] = None,
+        end: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
@@ -1726,13 +1747,13 @@ class EngineAdapter:
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
 
-        # Only set cleanup_ts if is_restatement is True and truncate is False (this to enable full restatement)
+        # Only set cleanup_ts if this is a restatement and truncate is False (this to enable full restatement)
         cleanup_ts = (
             to_time_column(start, time_data_type, self.dialect, nullable=True)
-            if is_restatement and not truncate
+            if self._should_cleanup_for_restatement(snapshot, start, end or start) and not truncate
             else None
         )
-
+        # breakpoint()
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
             for column in columns_to_types:

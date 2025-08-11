@@ -1834,7 +1834,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
-                is_restatement=kwargs.get("is_restatement", False),
+                snapshot=kwargs["snapshot"],
+                end=kwargs.get("end"),
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -1853,7 +1854,8 @@ class SCDType2Strategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 start=kwargs["start"],
-                is_restatement=kwargs.get("is_restatement", False),
+                snapshot=kwargs["snapshot"],
+                end=kwargs.get("end"),
             )
         else:
             raise SQLMeshError(
@@ -1883,6 +1885,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                snapshot=kwargs["snapshot"],
                 **kwargs,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
@@ -1899,6 +1902,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
+                snapshot=kwargs["snapshot"],
                 **kwargs,
             )
         else:
