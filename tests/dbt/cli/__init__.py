@@ -1,0 +1,1 @@
+pytestmark = ["foo"]
