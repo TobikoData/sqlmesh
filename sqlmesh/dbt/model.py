@@ -565,7 +565,7 @@ class ModelConfig(BaseModelConfig):
             query,
             dialect=model_dialect,
             kind=kind,
-            start=self.start,
+            start=self.start or context.sqlmesh_config.model_defaults.start,
             audit_definitions=audit_definitions,
             path=model_kwargs.pop("path", self.path),
             # This ensures that we bypass query rendering that would otherwise be required to extract additional

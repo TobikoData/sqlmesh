@@ -65,21 +65,26 @@ def create(
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
+        from sqlmesh.core.config import ModelDefaultsConfig
 
         configure_logging(force_debug=debug)
         set_console(DbtCliConsole())
 
         progress.update(load_task_id, description="Loading project", total=None)
 
-        # inject default start date if one is not specified to prevent the user from having to do anything
-        _inject_default_start_date(project_dir)
+        cli_config = get_or_create_sqlmesh_config(project_dir)
+        # todo: we will need to build this out when we start storing more than model_defaults
+        model_defaults = (
+            ModelDefaultsConfig.model_validate(cli_config["model_defaults"])
+            if "model_defaults" in cli_config
+            else None
+        )
 
         config = sqlmesh_config(
             project_root=project_dir,
-            # do we want to use a local duckdb for state?
-            # warehouse state has a bunch of overhead to initialize, is slow for ongoing operations and will create tables that perhaps the user was not expecting
-            # on the other hand, local state is not portable
+            # This triggers warehouse state. Users will probably find this very slow
             state_connection=None,
+            model_defaults=model_defaults,
         )
 
         sqlmesh_context = Context(
@@ -109,25 +114,27 @@ def create(
         return DbtOperations(sqlmesh_context, dbt_project)
 
 
-def _inject_default_start_date(project_dir: t.Optional[Path] = None) -> None:
+def get_or_create_sqlmesh_config(project_dir: t.Optional[Path] = None) -> t.Dict[str, t.Any]:
     """
-    SQLMesh needs a start date to as the starting point for calculating intervals on incremental models
+    SQLMesh needs a start date to as the starting point for calculating intervals on incremental models, amongst other things
 
     Rather than forcing the user to update their config manually or having a default that is not saved between runs,
-    we can inject it automatically to the dbt_project.yml file
+    we can store sqlmesh-specific things in a `sqlmesh.yaml` file. This is preferable to trying to inject config into `dbt_project.yml`
+    because it means we have full control over the file and dont need to worry about accidentally reformatting it or accidentally
+    clobbering other config
     """
-    from sqlmesh.dbt.project import PROJECT_FILENAME, load_yaml
-    from sqlmesh.utils.yaml import dump
+    import sqlmesh.utils.yaml as yaml
     from sqlmesh.utils.date import yesterday_ds
+    from sqlmesh.core.config import ModelDefaultsConfig
 
-    project_yaml_path = (project_dir or Path.cwd()) / PROJECT_FILENAME
-    if project_yaml_path.exists():
-        loaded_project_file = load_yaml(project_yaml_path)
-        start_date_keys = ("start", "+start")
-        if "models" in loaded_project_file and all(
-            k not in loaded_project_file["models"] for k in start_date_keys
-        ):
-            loaded_project_file["models"]["+start"] = yesterday_ds()
-            # todo: this may format the file differently, is that acceptable?
-            with project_yaml_path.open("w") as f:
-                dump(loaded_project_file, f)
+    potential_filenames = [
+        (project_dir or Path.cwd()) / f"sqlmesh.{ext}" for ext in ("yaml", "yml")
+    ]
+
+    sqlmesh_yaml_file = next((f for f in potential_filenames if f.exists()), potential_filenames[0])
+
+    if not sqlmesh_yaml_file.exists():
+        with sqlmesh_yaml_file.open("w") as f:
+            yaml.dump({"model_defaults": ModelDefaultsConfig(start=yesterday_ds()).dict()}, f)
+
+    return yaml.load(sqlmesh_yaml_file, render_jinja=False)

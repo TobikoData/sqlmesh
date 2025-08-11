@@ -76,6 +76,7 @@ class Project:
             target=profile.target,
             variable_overrides=variable_overrides,
             cache_dir=context.sqlmesh_config.cache_dir,
+            model_defaults=context.sqlmesh_config.model_defaults,
         )
 
         extra_fields = profile.target.extra

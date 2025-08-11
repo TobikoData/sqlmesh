@@ -7,7 +7,7 @@ import time_machine
 pytestmark = pytest.mark.slow
 
 
-def test_create_injects_default_start_date(jaffle_shop_duckdb: Path):
+def test_create_sets_and_persists_default_start_date(jaffle_shop_duckdb: Path):
     with time_machine.travel("2020-01-02 00:00:00 UTC"):
         from sqlmesh.utils.date import yesterday_ds
 
@@ -38,14 +38,10 @@ def test_create_injects_default_start_date(jaffle_shop_duckdb: Path):
 
 
 def test_create_uses_configured_start_date_if_supplied(jaffle_shop_duckdb: Path):
-    dbt_project_yaml = jaffle_shop_duckdb / "dbt_project.yml"
+    sqlmesh_yaml = jaffle_shop_duckdb / "sqlmesh.yml"
 
-    contents = yaml.load(dbt_project_yaml, render_jinja=False)
-
-    contents["models"]["+start"] = "2023-12-12"
-
-    with dbt_project_yaml.open("w") as f:
-        yaml.dump(contents, f)
+    with sqlmesh_yaml.open("w") as f:
+        yaml.dump({"model_defaults": {"start": "2023-12-12"}}, f)
 
     operations = create()
 
