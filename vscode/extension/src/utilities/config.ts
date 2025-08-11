@@ -6,10 +6,12 @@ import { traceVerbose, traceInfo } from './common/log'
 import { parse } from 'shell-quote'
 import { z } from 'zod'
 
-export interface SqlmeshConfiguration {
-  projectPath: string
-  lspEntryPoint: string
-}
+const configSchema = z.object({
+  projectPath: z.string(),
+  lspEntryPoint: z.string(),
+})
+
+export type SqlmeshConfiguration = z.infer<typeof configSchema>
 
 /**
  * Get the SQLMesh configuration from VS Code settings.
@@ -20,10 +22,17 @@ function getSqlmeshConfiguration(): SqlmeshConfiguration {
   const config = workspace.getConfiguration('sqlmesh')
   const projectPath = config.get<string>('projectPath', '')
   const lspEntryPoint = config.get<string>('lspEntrypoint', '')
-  return {
+
+  const parsed = configSchema.safeParse({
     projectPath,
     lspEntryPoint,
+  })
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid sqlmesh configuration: ${JSON.stringify(parsed.error)}`,
+    )
   }
+  return parsed.data
 }
 
 const stringsArray = z.array(z.string())
