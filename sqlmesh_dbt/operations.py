@@ -34,10 +34,10 @@ class DbtOperations:
 
         self.context.plan(
             select_models=select_models,
-            forward_only=True,
             no_auto_categorization=True,  # everything is breaking / foward-only
-            effective_from=self.context.config.model_defaults.start,
             run=True,
+            no_diff=True,
+            no_prompts=True,
             auto_apply=True,
         )
 
