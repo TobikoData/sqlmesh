@@ -681,10 +681,10 @@ class _Model(ModelMeta, frozen=True):
             # in turn makes @this_model available in the evaluation context
             rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
 
-            # Warn instead of raising for cases where a property is conditionally assigned
+            # Inform instead of raising for cases where a property is conditionally assigned
             if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
-                logger.warning(
-                    f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
+                logger.info(
+                    f"Rendering '{expression.sql(dialect=self.dialect)}' did not return an expression"
                 )
                 return None
 
