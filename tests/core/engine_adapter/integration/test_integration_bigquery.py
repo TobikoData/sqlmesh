@@ -341,6 +341,39 @@ def test_compare_nested_values_in_table_diff(ctx: TestContext):
     ctx.engine_adapter.drop_table(target_table)
 
 
+def test_get_bq_schema(ctx: TestContext, engine_adapter: BigQueryEngineAdapter):
+    from google.cloud.bigquery import SchemaField
+
+    table = ctx.table("test")
+
+    engine_adapter.execute(f"""
+    CREATE TABLE {table.sql(dialect=ctx.dialect)} (
+      id STRING NOT NULL,
+      user_data STRUCT<id STRING NOT NULL, name STRING NOT NULL, address STRING>,
+      tags ARRAY<STRING>,
+      score NUMERIC,
+      created_at DATETIME
+    )
+    """)
+
+    bg_schema = engine_adapter.get_bq_schema(table)
+    assert len(bg_schema) == 5
+    assert bg_schema[0] == SchemaField(name="id", field_type="STRING", mode="REQUIRED")
+    assert bg_schema[1] == SchemaField(
+        name="user_data",
+        field_type="RECORD",
+        mode="NULLABLE",
+        fields=[
+            SchemaField(name="id", field_type="STRING", mode="REQUIRED"),
+            SchemaField(name="name", field_type="STRING", mode="REQUIRED"),
+            SchemaField(name="address", field_type="STRING", mode="NULLABLE"),
+        ],
+    )
+    assert bg_schema[2] == SchemaField(name="tags", field_type="STRING", mode="REPEATED")
+    assert bg_schema[3] == SchemaField(name="score", field_type="NUMERIC", mode="NULLABLE")
+    assert bg_schema[4] == SchemaField(name="created_at", field_type="DATETIME", mode="NULLABLE")
+
+
 def test_column_types(ctx: TestContext):
     model_name = ctx.table("test")
     sqlmesh = ctx.create_context()
