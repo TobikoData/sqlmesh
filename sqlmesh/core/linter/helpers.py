@@ -156,7 +156,8 @@ def get_range_of_model_block(
 
     splitlines = sql.splitlines()
     return Range(
-        start=start_position.to_range(splitlines).start, end=end_position.to_range(splitlines).end
+        start=start_position.to_range(splitlines).start,
+        end=end_position.to_range(splitlines).end,
     )
 
 
@@ -169,44 +170,84 @@ def get_range_of_a_key_in_model_block(
     Get the range of a specific key in the model block of an SQL file.
     """
     tokens = tokenize(sql, dialect=dialect)
-    if tokens is None:
+    if not tokens:
         return None
 
-    # Find the start of the model block
-    start_index = next(
-        (
+    # 1) Find the MODEL token
+    try:
+        model_idx = next(
             i
-            for i, t in enumerate(tokens)
-            if t.token_type is TokenType.VAR and t.text.upper() == "MODEL"
-        ),
-        None,
-    )
-    end_index = next(
-        (i for i, t in enumerate(tokens) if t.token_type is TokenType.SEMICOLON),
-        None,
-    )
-    if start_index is None or end_index is None:
-        return None
-    if start_index >= end_index:
+            for i, tok in enumerate(tokens)
+            if tok.token_type is TokenType.VAR and tok.text.upper() == "MODEL"
+        )
+    except StopIteration:
         return None
 
-    tokens_of_interest = tokens[start_index + 1 : end_index]
-    # Find the key token
-    key_token = next(
-        (
-            t
-            for t in tokens_of_interest
-            if t.token_type is TokenType.VAR and t.text.upper() == key.upper()
-        ),
-        None,
-    )
-    if key_token is None:
+    # 2) Find the opening parenthesis for the MODEL properties list
+    try:
+        lparen_idx = next(
+            i
+            for i in range(model_idx + 1, len(tokens))
+            if tokens[i].token_type is TokenType.L_PAREN
+        )
+    except StopIteration:
         return None
 
-    position = TokenPositionDetails(
-        line=key_token.line,
-        col=key_token.col,
-        start=key_token.start,
-        end=key_token.end,
-    )
-    return position.to_range(sql.splitlines())
+    # 3) Find the matching closing parenthesis for that list by tracking depth
+    depth = 0
+    rparen_idx: t.Optional[int] = None
+    for i in range(lparen_idx, len(tokens)):
+        tt = tokens[i].token_type
+        if tt is TokenType.L_PAREN:
+            depth += 1
+        elif tt is TokenType.R_PAREN:
+            depth -= 1
+            if depth == 0:
+                rparen_idx = i
+                break
+
+    if rparen_idx is None:
+        # Fallback: stop at the first semicolon after MODEL
+        try:
+            rparen_idx = next(
+                i
+                for i in range(lparen_idx + 1, len(tokens))
+                if tokens[i].token_type is TokenType.SEMICOLON
+            )
+        except StopIteration:
+            return None
+
+    # 4) Scan within the MODEL property list for the key at top-level (depth == 1)
+    # Initialize depth to 1 since we're inside the first parentheses
+    depth = 1
+    for i in range(lparen_idx + 1, rparen_idx):
+        tok = tokens[i]
+        tt = tok.token_type
+
+        if tt is TokenType.L_PAREN:
+            depth += 1
+            continue
+        if tt is TokenType.R_PAREN:
+            depth -= 1
+            # If we somehow exit before rparen_idx, stop early
+            if depth <= 0:
+                break
+            continue
+
+        if depth == 1 and tt is TokenType.VAR and tok.text.upper() == key.upper():
+            # Validate key position: it should immediately follow '(' or ',' at top level
+            prev_idx = i - 1
+            # Skip over non-significant tokens we don't want to gate on (e.g., comments)
+            while prev_idx >= 0 and tokens[prev_idx].token_type in (TokenType.COMMENT,):
+                prev_idx -= 1
+            prev_tt = tokens[prev_idx].token_type if prev_idx >= 0 else None
+            if prev_tt in (TokenType.L_PAREN, TokenType.COMMA):
+                position = TokenPositionDetails(
+                    line=tok.line,
+                    col=tok.col,
+                    start=tok.start,
+                    end=tok.end,
+                )
+                return position.to_range(sql.splitlines())
+
+    return None
