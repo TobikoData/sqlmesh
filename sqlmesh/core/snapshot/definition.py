@@ -901,7 +901,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
             for start, end in other.intervals:
                 # If the effective_from is set, then intervals that come after it must come from
-                # the current snapshost.
+                # the current snapshots.
                 if apply_effective_from and start < effective_from_ts:
                     end = min(end, effective_from_ts)
                 if not apply_effective_from or end <= effective_from_ts:
