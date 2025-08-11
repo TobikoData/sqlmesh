@@ -332,8 +332,6 @@ class SnapshotEvaluationTriggers(PydanticModel):
     cron_ready: t.Optional[bool] = None
     auto_restatement_triggers: t.List[SnapshotId] = []
     select_snapshot_triggers: t.List[SnapshotId] = []
-    directly_modified_triggers: t.List[SnapshotId] = []
-    restatement_triggers: t.List[SnapshotId] = []
 
 
 class SnapshotInfoMixin(ModelKindMixin):

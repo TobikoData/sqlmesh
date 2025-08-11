@@ -293,7 +293,7 @@ class PlanBuilder:
             else DeployabilityIndex.all_deployable()
         )
 
-        restatements, restatement_triggers = self._build_restatements(
+        restatements = self._build_restatements(
             dag,
             earliest_interval_start(self._context_diff.snapshots.values(), self.execution_time),
         )
@@ -330,7 +330,6 @@ class PlanBuilder:
             indirectly_modified=indirectly_modified,
             deployability_index=deployability_index,
             restatements=restatements,
-            restatement_triggers=restatement_triggers,
             start_override_per_model=self._start_override_per_model,
             end_override_per_model=end_override_per_model,
             selected_models_to_backfill=self._backfill_models,
@@ -353,14 +352,14 @@ class PlanBuilder:
 
     def _build_restatements(
         self, dag: DAG[SnapshotId], earliest_interval_start: TimeLike
-    ) -> t.Tuple[t.Dict[SnapshotId, Interval], t.Dict[SnapshotId, t.List[SnapshotId]]]:
+    ) -> t.Dict[SnapshotId, Interval]:
         restate_models = self._restate_models
         if restate_models == set():
             # This is a warning but we print this as error since the Console is lacking API for warnings.
             self._console.log_error(
                 "Provided restated models do not match any models. No models will be included in plan."
             )
-            return {}, {}
+            return {}
 
         restatements: t.Dict[SnapshotId, Interval] = {}
         forward_only_preview_needed = self._forward_only_preview_needed
@@ -384,7 +383,7 @@ class PlanBuilder:
             is_preview = True
 
         if not restate_models:
-            return {}, {}
+            return {}
 
         start = self._start or earliest_interval_start
         end = self._end or now()
@@ -394,7 +393,6 @@ class PlanBuilder:
             if model_fqn not in self._model_fqn_to_snapshot:
                 raise PlanError(f"Cannot restate model '{model_fqn}'. Model does not exist.")
 
-        restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
         # Get restatement intervals for all restated snapshots and make sure that if an incremental snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
@@ -430,13 +428,6 @@ class PlanBuilder:
                     logger.info("Skipping restatement for model '%s'", snapshot.name)
                     continue
 
-            if snapshot.name in restate_models:
-                restatement_triggers[s_id] = [s_id]
-            if restating_parents:
-                restatement_triggers[s_id] = restatement_triggers.get(s_id, []) + [
-                    s.snapshot_id for s in restating_parents
-                ]
-
             possible_intervals = {
                 restatements[p.snapshot_id] for p in restating_parents if p.is_incremental
             }
@@ -465,7 +456,7 @@ class PlanBuilder:
 
             restatements[s_id] = (snapshot_start, snapshot_end)
 
-        return restatements, restatement_triggers
+        return restatements
 
     def _build_directly_and_indirectly_modified(
         self, dag: DAG[SnapshotId]
