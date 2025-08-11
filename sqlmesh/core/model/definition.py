@@ -1914,11 +1914,11 @@ def _extract_blueprint_variables(blueprint: t.Any, path: Path) -> t.Dict[str, t.
         return {}
     if isinstance(blueprint, (exp.Paren, exp.PropertyEQ)):
         blueprint = blueprint.unnest()
-        return {blueprint.left.name: blueprint.right}
+        return {blueprint.left.name.lower(): blueprint.right}
     if isinstance(blueprint, (exp.Tuple, exp.Array)):
-        return {e.left.name: e.right for e in blueprint.expressions}
+        return {e.left.name.lower(): e.right for e in blueprint.expressions}
     if isinstance(blueprint, dict):
-        return blueprint
+        return {k.lower(): v for k, v in blueprint.items()}
 
     raise_config_error(
         f"Expected a key-value mapping for the blueprint value, got '{blueprint}' instead",
