@@ -1201,15 +1201,21 @@ def environments(obj: Context) -> None:
     multiple=True,
     help="A model to lint. Multiple models can be linted. If no models are specified, every model will be linted.",
 )
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Apply fixes for lint errors. Fails if errors remain after fixes are applied.",
+)
 @click.pass_obj
 @error_handler
 @cli_analytics
 def lint(
     obj: Context,
     models: t.Iterator[str],
+    fix: bool,
 ) -> None:
     """Run the linter for the target model(s)."""
-    obj.lint_models(models)
+    obj.lint_models(models, fix=fix)
 
 
 @cli.group(no_args_is_help=True)

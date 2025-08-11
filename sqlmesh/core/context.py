@@ -78,6 +78,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation, Linter
+from sqlmesh.core.linter.rule import TextEdit, Position
 from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
@@ -3099,6 +3100,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         models: t.Optional[t.Iterable[t.Union[str, Model]]] = None,
         raise_on_error: bool = True,
+        fix: bool = False,
     ) -> t.List[AnnotatedRuleViolation]:
         found_error = False
 
@@ -3116,12 +3118,44 @@ class GenericContext(BaseContext, t.Generic[C]):
                     found_error = True
                 all_violations.extend(violations)
 
+        if fix:
+            self._apply_fixes(all_violations)
+            self.refresh()
+            return self.lint_models(models, raise_on_error=raise_on_error, fix=False)
+
         if raise_on_error and found_error:
             raise LinterError(
                 "Linter detected errors in the code. Please fix them before proceeding."
             )
 
         return all_violations
+
+    def _apply_fixes(self, violations: t.List[AnnotatedRuleViolation]) -> None:
+        edits_by_file: t.Dict[Path, t.List[TextEdit]] = {}
+        for violation in violations:
+            for fix in violation.fixes:
+                for create in fix.create_files:
+                    create.path.parent.mkdir(parents=True, exist_ok=True)
+                    create.path.write_text(create.text, encoding="utf-8")
+                for edit in fix.edits:
+                    edits_by_file.setdefault(edit.path, []).append(edit)
+
+        for path, edits in edits_by_file.items():
+            content = path.read_text(encoding="utf-8")
+            lines = content.splitlines(keepends=True)
+
+            def _offset(pos: Position) -> int:
+                return sum(len(lines[i]) for i in range(pos.line)) + pos.character
+
+            for edit in sorted(
+                edits, key=lambda e: (e.range.start.line, e.range.start.character), reverse=True
+            ):
+                start = _offset(edit.range.start)
+                end = _offset(edit.range.end)
+                content = content[:start] + edit.new_text + content[end:]
+                lines = content.splitlines(keepends=True)
+
+            path.write_text(content, encoding="utf-8")
 
     def load_model_tests(
         self, tests: t.Optional[t.List[str]] = None, patterns: list[str] | None = None

@@ -675,6 +675,8 @@ This is a great way to catch SQL issues before wasting runtime in your data ware
 
     ```bash
     sqlmesh lint
+    # or apply fixes automatically
+    sqlmesh lint --fix
     ```
 
 === "Tobiko Cloud"

@@ -1328,6 +1328,61 @@ def test_lint(runner, tmp_path):
     assert result.exit_code == 1
 
 
+def test_lint_fix(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    with open(tmp_path / "config.yaml", "a", encoding="utf-8") as f:
+        f.write(
+            """linter:
+    enabled: True
+    rules: ["noselectstar"]
+"""
+        )
+
+    model_path = tmp_path / "models" / "incremental_model.sql"
+    with open(model_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace(
+        "SELECT\n  id,\n  item_id,\n  event_date,\nFROM",
+        "SELECT *\nFROM",
+    )
+    with open(model_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    result = runner.invoke(cli, ["--paths", tmp_path, "lint", "--fix"])
+    assert result.exit_code == 0
+    with open(model_path, "r", encoding="utf-8") as f:
+        assert "SELECT *" not in f.read()
+
+
+def test_lint_fix_unfixable_error(runner, tmp_path):
+    create_example_project(tmp_path)
+
+    with open(tmp_path / "config.yaml", "a", encoding="utf-8") as f:
+        f.write(
+            """linter:
+    enabled: True
+    rules: ["noselectstar", "nomissingaudits"]
+"""
+        )
+
+    model_path = tmp_path / "models" / "incremental_model.sql"
+    with open(model_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace(
+        "SELECT\n  id,\n  item_id,\n  event_date,\nFROM",
+        "SELECT *\nFROM",
+    )
+    with open(model_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    result = runner.invoke(cli, ["--paths", tmp_path, "lint", "--fix"])
+    assert result.exit_code == 1
+    assert "nomissingaudits" in result.output
+    with open(model_path, "r", encoding="utf-8") as f:
+        assert "SELECT *" not in f.read()
+
+
 def test_state_export(runner: CliRunner, tmp_path: Path) -> None:
     create_example_project(tmp_path)
 

@@ -100,7 +100,7 @@ Place a rule's code in the project's `linter/` directory. SQLMesh will load all 
 
 If the rule is specified in the project's [configuration file](#applying-linting-rules), SQLMesh will run it when:
 - A plan is created during `sqlmesh plan`
-- The command `sqlmesh lint` is ran
+- The command `sqlmesh lint` is ran. Add `--fix` to automatically apply available fixes and fail if errors remain.
 
 SQLMesh will error if a model violates the rule, informing you which model(s) violated the rule. In this example, `full_model.sql` violated the `NoMissingOwner` rule, essentially halting execution:
 

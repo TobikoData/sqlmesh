@@ -636,6 +636,7 @@ Usage: sqlmesh lint [OPTIONS]
 
 Options:
   --model TEXT           A model to lint. Multiple models can be linted.  If no models are specified, every model will be linted.
+  --fix                  Apply fixes for lint errors. Fails if errors remain after fixes are applied.
   --help                 Show this message and exit.
 
 ```
