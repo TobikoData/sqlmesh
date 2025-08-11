@@ -28,10 +28,11 @@ from sqlmesh.core.snapshot import (
     snapshots_to_dag,
     Intervals,
 )
-from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
     SnapshotEvaluationTriggers,
+    SnapshotIntervals,
+    check_ready_intervals,
     expand_range,
     parent_snapshots_by_name,
 )
@@ -147,7 +148,7 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
-    ) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
+    ) -> SnapshotToIntervals:
         """Find the largest contiguous date interval parameters based only on what is missing.
 
         For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -169,9 +170,9 @@ class Scheduler:
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
 
         Returns:
-            A tuple containing a dict containing all snapshots needing to be run with their associated interval params and a list of snapshots that are ready to run based on their naive cron schedule (ignoring plan/run context and other attributes).
+            A dict containing all snapshots needing to be run with their associated interval params.
         """
-        snapshots_to_intervals, snapshots_naive_cron_ready = merged_missing_intervals(
+        snapshots_to_intervals = merged_missing_intervals(
             snapshots=self.snapshot_per_version.values(),
             start=start,
             end=end,
@@ -189,7 +190,7 @@ class Scheduler:
             snapshots_to_intervals = {
                 s: i for s, i in snapshots_to_intervals.items() if s.name in selected_snapshots
             }
-        return snapshots_to_intervals, snapshots_naive_cron_ready
+        return snapshots_to_intervals
 
     def evaluate(
         self,
@@ -748,6 +749,7 @@ class Scheduler:
         for s_id, interval in (remove_intervals or {}).items():
             self.snapshots[s_id].remove_interval(interval)
 
+        auto_restated_intervals: t.List[SnapshotIntervals] = []
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
         if auto_restatement_enabled:
             auto_restated_intervals, auto_restatement_triggers = apply_auto_restatements(
@@ -757,8 +759,9 @@ class Scheduler:
             self.state_sync.update_auto_restatements(
                 {s.name_version: s.next_auto_restatement_ts for s in self.snapshots.values()}
             )
+        auto_restated_snapshots = {snapshot.snapshot_id for snapshot in auto_restated_intervals}
 
-        merged_intervals, snapshots_naive_cron_ready = self.merged_missing_intervals(
+        merged_intervals = self.merged_missing_intervals(
             start,
             end,
             execution_time,
@@ -801,7 +804,7 @@ class Scheduler:
         all_snapshot_triggers: t.Dict[SnapshotId, SnapshotEvaluationTriggers] = {
             s_id: SnapshotEvaluationTriggers(
                 ignore_cron_flag=ignore_cron,
-                cron_ready=s_id in snapshots_naive_cron_ready,
+                cron_ready=s_id not in auto_restated_snapshots,
                 auto_restatement_triggers=auto_restatement_triggers.get(s_id, []),
                 select_snapshot_triggers=select_snapshot_triggers.get(s_id, []),
             )
@@ -969,7 +972,7 @@ def merged_missing_intervals(
     end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
-) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
+) -> SnapshotToIntervals:
     """Find the largest contiguous date interval parameters based only on what is missing.
 
     For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -1019,7 +1022,7 @@ def compute_interval_params(
     end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
     ignore_cron: bool = False,
     end_bounded: bool = False,
-) -> t.Tuple[SnapshotToIntervals, t.List[SnapshotId]]:
+) -> SnapshotToIntervals:
     """Find the largest contiguous date interval parameters based only on what is missing.
 
     For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -1041,7 +1044,7 @@ def compute_interval_params(
             allow_partials, and other attributes that could cause the intervals to exceed the target end date.
 
     Returns:
-        A tuple containing a dict containing all snapshots needing to be run with their associated interval params and a list of snapshots that are ready to run based on their naive cron schedule (ignoring plan/run context and other attributes).
+        A dict containing all snapshots needing to be run with their associated interval params.
     """
     snapshot_merged_intervals = {}
 
@@ -1069,11 +1072,7 @@ def compute_interval_params(
             contiguous_batch.append((next_batch[0][0], next_batch[-1][-1]))
         snapshot_merged_intervals[snapshot] = contiguous_batch
 
-    snapshots_naive_cron_ready = [
-        snap.snapshot_id for snap in missing_intervals(snapshots, execution_time=execution_time)
-    ]
-
-    return snapshot_merged_intervals, snapshots_naive_cron_ready
+    return snapshot_merged_intervals
 
 
 def interval_diff(

@@ -553,7 +553,7 @@ class PlanStagesBuilder:
         snapshots_by_name: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
     ) -> SnapshotToIntervals:
-        missing_intervals, _ = merged_missing_intervals(
+        missing_intervals = merged_missing_intervals(
             snapshots=snapshots_by_name.values(),
             start=plan.start,
             end=plan.end,
