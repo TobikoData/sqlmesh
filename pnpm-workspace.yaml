@@ -3,3 +3,4 @@ packages:
   - vscode/extension
   - vscode/react
   - web/client
+  - web/shared_ui
