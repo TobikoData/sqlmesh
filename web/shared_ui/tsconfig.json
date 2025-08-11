@@ -1,5 +1,5 @@
 {
-  "include": ["**/*.ts", "**/*.tsx", "vitest.config.js"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",
