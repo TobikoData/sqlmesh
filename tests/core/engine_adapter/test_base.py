@@ -2744,7 +2744,6 @@ def test_replace_query_data_object_type_mismatch(
         "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("INT")}
     )
 
-    # TODO: Shouldn't we enforce that `a` is casted to an int?
     assert to_sql_calls(adapter) == [
         'DROP VIEW IF EXISTS "test_table"',
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a" FROM (SELECT "a" FROM "tbl") AS "_subquery"',
