@@ -337,7 +337,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
     base_table_name_override: t.Optional[str]
     dev_table_suffix: str
-    table_naming_convention: TableNamingConvention = Field(default=TableNamingConvention.default)
+    table_naming_convention: TableNamingConvention
     forward_only: bool
 
     @cached_property
