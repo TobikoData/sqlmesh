@@ -38,6 +38,9 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     engine_adapter.create_table(
         table_name="foo.another", columns_to_types={"col": exp.DataType.build("int")}
     )
+    engine_adapter.create_view(
+        view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar")
+    )
     engine_adapter.create_table(
         table_name="ignored.ignore", columns_to_types={"col": exp.DataType.build("int")}
     )
@@ -46,11 +49,24 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
         == '"memory"."foo"."bar"'
     )
+
+    assert (
+        renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar').type }}")
+        == "table"
+    )
+
+    assert (
+        renderer(
+            "{{ adapter.get_relation(database=None, schema='foo', identifier='bar_view').type }}"
+        )
+        == "view"
+    )
+
     assert renderer(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INT")])
 
-    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
+    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "3"
 
     assert renderer(
         """

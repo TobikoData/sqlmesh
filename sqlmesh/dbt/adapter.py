@@ -18,6 +18,7 @@ if t.TYPE_CHECKING:
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
+    from sqlmesh.core.engine_adapter.base import DataObject
     from sqlmesh.dbt.relation import Policy
 
 
@@ -256,10 +257,9 @@ class RuntimeAdapter(BaseAdapter):
 
     def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
         mapped_table = self._map_table_name(self._normalize(self._relation_to_table(relation)))
-        if not self.engine_adapter.table_exists(mapped_table):
-            return None
 
-        return self._table_to_relation(mapped_table)
+        data_object = self.engine_adapter.get_data_object(mapped_table)
+        return self._data_object_to_relation(data_object) if data_object is not None else None
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
         target_schema = schema_(schema, catalog=database)
@@ -269,24 +269,10 @@ class RuntimeAdapter(BaseAdapter):
         return self.list_relations_without_caching(self._table_to_relation(target_schema))
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        from sqlmesh.dbt.relation import RelationType
-
         schema = self._normalize(self._schema(schema_relation))
 
         relations = [
-            self.relation_type.create(
-                database=do.catalog,
-                schema=do.schema_name,
-                identifier=do.name,
-                quote_policy=self.quote_policy,
-                # DBT relation types aren't snake case and instead just one word without spaces so we remove underscores
-                type=(
-                    RelationType.External
-                    if do.type.is_unknown
-                    else RelationType(do.type.lower().replace("_", ""))
-                ),
-            )
-            for do in self.engine_adapter.get_data_objects(schema)
+            self._data_object_to_relation(do) for do in self.engine_adapter.get_data_objects(schema)
         ]
         return relations
 
@@ -400,6 +386,24 @@ class RuntimeAdapter(BaseAdapter):
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
         return exp.to_table(relation.render(), dialect=self.project_dialect)
+
+    def _data_object_to_relation(self, data_object: DataObject) -> BaseRelation:
+        from sqlmesh.dbt.relation import RelationType
+
+        if data_object.type.is_unknown:
+            dbt_relation_type = RelationType.External
+        elif data_object.type.is_managed_table:
+            dbt_relation_type = RelationType.Table
+        else:
+            dbt_relation_type = RelationType(data_object.type.lower())
+
+        return self.relation_type.create(
+            database=data_object.catalog,
+            schema=data_object.schema_name,
+            identifier=data_object.name,
+            quote_policy=self.quote_policy,
+            type=dbt_relation_type,
+        )
 
     def _table_to_relation(self, table: exp.Table) -> BaseRelation:
         return self.relation_type.create(
