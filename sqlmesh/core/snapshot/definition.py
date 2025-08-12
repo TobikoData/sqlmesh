@@ -21,7 +21,7 @@ from sqlmesh.core.macros import call_macro
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
-from sqlmesh.utils import sanitize_name
+from sqlmesh.utils import sanitize_name, unique
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -325,13 +325,6 @@ class QualifiedViewName(PydanticModel, frozen=True):
             table = f"{table}__{env_name}"
 
         return table
-
-
-class SnapshotEvaluationTriggers(PydanticModel):
-    ignore_cron_flag: t.Optional[bool] = None
-    cron_ready: t.Optional[bool] = None
-    auto_restatement_triggers: t.List[SnapshotId] = []
-    select_snapshot_triggers: t.List[SnapshotId] = []
 
 
 class SnapshotInfoMixin(ModelKindMixin):
@@ -2229,14 +2222,15 @@ def apply_auto_restatements(
 
             # auto-restated snapshot is its own trigger
             upstream_triggers = [s_id]
+        else:
+            # inherit each parent's auto-restatement triggers (if any)
+            for parent_s_id in snapshot.parents:
+                if parent_s_id in auto_restatement_triggers:
+                    upstream_triggers.extend(auto_restatement_triggers[parent_s_id])
 
-        for parent_s_id in snapshot.parents:
-            if parent_s_id in auto_restatement_triggers:
-                upstream_triggers.extend(auto_restatement_triggers[parent_s_id])
-
-        # remove duplicate triggers
+        # remove duplicate triggers, retaining order and keeping first seen of duplicates
         if upstream_triggers:
-            auto_restatement_triggers[s_id] = list(dict.fromkeys(upstream_triggers))
+            auto_restatement_triggers[s_id] = unique(upstream_triggers)
 
         if auto_restated_intervals:
             auto_restated_interval_start = sys.maxsize

@@ -28,11 +28,10 @@ from sqlmesh.core.snapshot import (
     snapshots_to_dag,
     Intervals,
 )
+from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
-    SnapshotEvaluationTriggers,
     SnapshotIntervals,
-    check_ready_intervals,
     expand_range,
     parent_snapshots_by_name,
 )
@@ -168,9 +167,6 @@ class Scheduler:
             end_bounded: If set to true, the returned intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
-
-        Returns:
-            A dict containing all snapshots needing to be run with their associated interval params.
         """
         snapshots_to_intervals = merged_missing_intervals(
             snapshots=self.snapshot_per_version.values(),
@@ -267,7 +263,6 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
-        selected_snapshots_auto_upstream: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
@@ -284,7 +279,6 @@ class Scheduler:
             ignore_cron=ignore_cron,
             end_bounded=end_bounded,
             selected_snapshots=selected_snapshots,
-            selected_snapshots_auto_upstream=selected_snapshots_auto_upstream,
             circuit_breaker=circuit_breaker,
             deployability_index=deployability_index,
             auto_restatement_enabled=auto_restatement_enabled,
@@ -422,6 +416,7 @@ class Scheduler:
         selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
+        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {},
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
@@ -539,9 +534,7 @@ class Scheduler:
                         evaluation_duration_ms,
                         num_audits - num_audits_failed,
                         num_audits_failed,
-                        snapshot_evaluation_triggers=snapshot_evaluation_triggers.get(
-                        snapshot.snapshot_id
-                    ),
+                        auto_restatement_triggers=auto_restatement_triggers.get(snapshot.snapshot_id),
                     )
             elif isinstance(node, CreateNode):
                 self.snapshot_evaluator.create_snapshot(
@@ -694,7 +687,6 @@ class Scheduler:
         ignore_cron: bool = False,
         end_bounded: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
-        selected_snapshots_auto_upstream: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         auto_restatement_enabled: bool = False,
@@ -718,7 +710,6 @@ class Scheduler:
             end_bounded: If set to true, the evaluated intervals will be bounded by the target end date, disregarding lookback,
                 allow_partials, and other attributes that could cause the intervals to exceed the target end date.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
-            selected_snapshots_auto_upstream: The set of selected_snapshots that were automatically added because they're upstream of a selected snapshot.
             circuit_breaker: An optional handler which checks if the run should be aborted.
             deployability_index: Determines snapshots that are deployable in the context of this render.
             auto_restatement_enabled: Whether to enable auto restatements.
@@ -777,38 +768,9 @@ class Scheduler:
             return CompletionStatus.NOTHING_TO_DO
 
         merged_intervals_snapshots = {snapshot.snapshot_id for snapshot in merged_intervals}
-        select_snapshot_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
-        if selected_snapshots and selected_snapshots_auto_upstream:
-            # actually selected snapshots are their own triggers
-            selected_snapshots_no_auto_upstream = (
-                selected_snapshots - selected_snapshots_auto_upstream
-            )
-            select_snapshot_triggers = {
-                s_id: [s_id]
-                for s_id in [
-                    snapshot_id
-                    for snapshot_id in merged_intervals_snapshots
-                    if snapshot_id.name in selected_snapshots_no_auto_upstream
-                ]
-            }
 
-            # trace upstream by walking downstream on reversed dag
-            reversed_dag = snapshots_to_dag(self.snapshots.values()).reversed
-            for s_id in reversed_dag:
-                if s_id in merged_intervals_snapshots:
-                    triggers = select_snapshot_triggers.get(s_id, [])
-                    for parent_s_id in reversed_dag.graph.get(s_id, set()):
-                        triggers.extend(select_snapshot_triggers.get(parent_s_id, []))
-                    select_snapshot_triggers[s_id] = list(dict.fromkeys(triggers))
-
-        all_snapshot_triggers: t.Dict[SnapshotId, SnapshotEvaluationTriggers] = {
-            s_id: SnapshotEvaluationTriggers(
-                ignore_cron_flag=ignore_cron,
-                cron_ready=s_id not in auto_restated_snapshots,
-                auto_restatement_triggers=auto_restatement_triggers.get(s_id, []),
-                select_snapshot_triggers=select_snapshot_triggers.get(s_id, []),
-            )
-            for s_id in merged_intervals_snapshots
+        auto_restatement_triggers_dict: t.Dict[SnapshotId, t.List[SnapshotId]] = {
+            s_id: auto_restatement_triggers.get(s_id, []) for s_id in merged_intervals_snapshots
         }
 
         errors, _ = self.run_merged_intervals(

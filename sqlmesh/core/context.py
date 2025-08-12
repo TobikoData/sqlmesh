@@ -2307,9 +2307,11 @@ class GenericContext(BaseContext, t.Generic[C]):
         }
 
         if select_models:
-            selected, _ = self._select_models_for_run(select_models, True, snapshots.values())
+            selected: t.Collection[str] = self._select_models_for_run(
+                select_models, True, snapshots.values()
+            )
         else:
-            selected = set(snapshots.keys())
+            selected = snapshots.keys()
 
         results = {}
         execution_context = self.execution_context(snapshots=snapshots)
@@ -2459,9 +2461,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         scheduler = self.scheduler(environment=environment)
         snapshots = scheduler.snapshots
 
-        select_models_auto_upstream = None
         if select_models is not None:
-            select_models, select_models_auto_upstream = self._select_models_for_run(
+            select_models = self._select_models_for_run(
                 select_models, no_auto_upstream, snapshots.values()
             )
 
@@ -2473,7 +2474,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             ignore_cron=ignore_cron,
             circuit_breaker=circuit_breaker,
             selected_snapshots=select_models,
-            selected_snapshots_auto_upstream=select_models_auto_upstream,
             auto_restatement_enabled=environment.lower() == c.PROD,
             run_environment_statements=True,
         )
@@ -2889,7 +2889,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         select_models: t.Collection[str],
         no_auto_upstream: bool,
         snapshots: t.Collection[Snapshot],
-    ) -> t.Tuple[t.Set[str], t.Set[str]]:
+    ) -> t.Set[str]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict(
             "models", **{s.name: s.model for s in snapshots if s.is_model}
         )
@@ -2898,10 +2898,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             dag.add(fqn, model.depends_on)
         model_selector = self._new_selector(models=models, dag=dag)
         result = set(model_selector.expand_model_selections(select_models))
-        if no_auto_upstream:
-            return result, set()
-        result_with_upstream = set(dag.subdag(*result))
-        return result_with_upstream, result_with_upstream - result
+        if not no_auto_upstream:
+            result = set(dag.subdag(*result))
+        return result
 
     @cached_property
     def _project_type(self) -> str:

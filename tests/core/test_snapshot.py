@@ -3280,6 +3280,12 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
 
 
 def test_auto_restatement_triggers(make_snapshot):
+    # Auto restatements:
+    #   a, c, d
+    # dag:
+    #   a -> b
+    #   a -> c
+    #   [b, c, d] -> e
     model_a = SqlModel(
         name="test_model_a",
         kind=IncrementalByTimeRangeKind(
@@ -3372,12 +3378,10 @@ def test_auto_restatement_triggers(make_snapshot):
     )
 
     assert auto_restatement_triggers[snapshot_a.snapshot_id] == [snapshot_a.snapshot_id]
+    assert auto_restatement_triggers[snapshot_c.snapshot_id] == [snapshot_c.snapshot_id]
     assert auto_restatement_triggers[snapshot_d.snapshot_id] == [snapshot_d.snapshot_id]
     assert auto_restatement_triggers[snapshot_b.snapshot_id] == [snapshot_a.snapshot_id]
-    assert auto_restatement_triggers[snapshot_c.snapshot_id] == [
-        snapshot_c.snapshot_id,
-        snapshot_a.snapshot_id,
-    ]
+    # a via b, c and d directly
     assert sorted(auto_restatement_triggers[snapshot_e.snapshot_id]) == [
         snapshot_a.snapshot_id,
         snapshot_c.snapshot_id,

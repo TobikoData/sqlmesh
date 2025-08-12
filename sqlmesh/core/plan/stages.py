@@ -553,7 +553,7 @@ class PlanStagesBuilder:
         snapshots_by_name: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
     ) -> SnapshotToIntervals:
-        missing_intervals = merged_missing_intervals(
+        return merged_missing_intervals(
             snapshots=snapshots_by_name.values(),
             start=plan.start,
             end=plan.end,
@@ -568,7 +568,6 @@ class PlanStagesBuilder:
             start_override_per_model=plan.start_override_per_model,
             end_override_per_model=plan.end_override_per_model,
         )
-        return missing_intervals
 
     def _get_audit_only_snapshots(
         self, new_snapshots: t.Dict[SnapshotId, Snapshot]

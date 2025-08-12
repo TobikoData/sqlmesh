@@ -1867,7 +1867,7 @@ def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixt
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
-    # add auto restatement to orders
+    # auto-restatement triggers
     orders = context.get_model("sushi.orders")
     orders_kind = {
         **orders.kind.dict(),
@@ -1879,57 +1879,63 @@ def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixt
     }
     context.upsert_model(PythonModel.parse_obj(orders_kwargs))
 
+    order_items = context.get_model("sushi.order_items")
+    order_items_kind = {
+        **order_items.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    order_items_kwargs = {
+        **order_items.dict(),
+        "kind": order_items_kind,
+    }
+    context.upsert_model(PythonModel.parse_obj(order_items_kwargs))
+
+    waiter_revenue_by_day = context.get_model("sushi.waiter_revenue_by_day")
+    waiter_revenue_by_day_kind = {
+        **waiter_revenue_by_day.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    waiter_revenue_by_day_kwargs = {
+        **waiter_revenue_by_day.dict(),
+        "kind": waiter_revenue_by_day_kind,
+    }
+    context.upsert_model(SqlModel.parse_obj(waiter_revenue_by_day_kwargs))
+
     context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
 
-    # User selects top_waiters and waiter_revenue_by_day, others added as auto-upstream
-    selected_models = {"top_waiters", "waiter_revenue_by_day"}
-    selected_models_auto_upstream = {"order_items", "orders", "items"}
-    selected_snapshots = {
-        f'"memory"."sushi"."{model}"' for model in selected_models | selected_models_auto_upstream
-    }
-    selected_snapshots_auto_upstream = selected_snapshots - {
-        f'"memory"."sushi"."{model}"' for model in selected_models
-    }
-
     scheduler = context.scheduler()
-    run_merged_intervals_mock = mocker.patch.object(
-        scheduler, "run_merged_intervals", return_value=([], [])
-    )
+
+    import sqlmesh
+
+    spy = mocker.spy(sqlmesh.core.scheduler.Scheduler, "run_merged_intervals")
 
     with time_machine.travel("2023-01-09 00:00:01 UTC"):
         scheduler.run(
             environment=c.PROD,
-            selected_snapshots=selected_snapshots,
-            selected_snapshots_auto_upstream=selected_snapshots_auto_upstream,
             start="2023-01-01",
             auto_restatement_enabled=True,
         )
 
-    assert run_merged_intervals_mock.called
+    assert spy.called
 
-    actual_triggers = run_merged_intervals_mock.call_args.kwargs["snapshot_evaluation_triggers"]
-
-    # validate ignore_cron not passed and all model crons ready
-    assert all(
-        not trigger.ignore_cron_flag and trigger.cron_ready for trigger in actual_triggers.values()
-    )
+    actual_triggers = spy.call_args.kwargs["auto_restatement_triggers"]
+    actual_triggers = {k: v for k, v in actual_triggers.items() if v}
+    assert len(actual_triggers) == 12
 
     for id, trigger in actual_triggers.items():
-        # top_waiters is its own trigger, waiter_revenue_by_day is upstream of it, everyone else is upstream of both
-        select_triggers = [t.name for t in trigger.select_snapshot_triggers]
-        assert (
-            select_triggers == ['"memory"."sushi"."top_waiters"']
-            if id.name == '"memory"."sushi"."top_waiters"'
-            else ['"memory"."sushi"."waiter_revenue_by_day"', '"memory"."sushi"."top_waiters"']
-        )
+        model_name = id.name.replace('"memory"."sushi".', "").replace('"', "")
+        auto_restatement_triggers = [
+            t.name.replace('"memory"."sushi".', "").replace('"', "") for t in trigger
+        ]
 
-        # everyone other than items is downstream of orders
-        auto_restatement_triggers = [t.name for t in trigger.auto_restatement_triggers]
-        assert (
-            auto_restatement_triggers == []
-            if id.name == '"memory"."sushi"."items"'
-            else ['"memory"."sushi"."orders"']
-        )
+        if model_name in ("orders", "order_items", "waiter_revenue_by_day"):
+            assert auto_restatement_triggers == [model_name]
+        elif model_name in ("customer_revenue_lifetime", "customer_revenue_by_day"):
+            assert sorted(auto_restatement_triggers) == sorted(["orders", "order_items"])
+        elif model_name == "top_waiters":
+            assert auto_restatement_triggers == ["waiter_revenue_by_day"]
+        else:
+            assert auto_restatement_triggers == ["orders"]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -7032,6 +7038,7 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "New environment `dev` will be created from `prod`" in output.stdout
     assert "Differences from the `prod` environment" in output.stdout
 
+    stdout_rstrip = "\n".join([line.rstrip() for line in output.stdout.split("\n")])
     assert (
         """MODEL (
    name test.a,
@@ -7041,7 +7048,7 @@ def test_plan_always_recreate_environment(tmp_path: Path):
  SELECT
 -  5 AS col
 +  10 AS col"""
-        in output.stdout
+        in stdout_rstrip
     )
 
     # Case 6: Ensure that target environment and create_from environment are not the same

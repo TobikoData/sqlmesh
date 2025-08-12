@@ -59,8 +59,7 @@ def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    interval_params = compute_interval_params([orders, waiter_revenue], start=start_ds, end=end_ds)
-    assert interval_params == {
+    assert compute_interval_params([orders, waiter_revenue], start=start_ds, end=end_ds) == {
         orders: [
             (to_timestamp(start_ds), to_timestamp("2022-02-06")),
         ],
@@ -92,8 +91,7 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
 
     orders.add_interval("2022-01-10", "2022-01-15")
 
-    interval_params = compute_interval_params([orders], start=start_ds, end=end_ds)
-    assert interval_params == {
+    assert compute_interval_params([orders], start=start_ds, end=end_ds) == {
         orders: [
             (to_timestamp(start_ds), to_timestamp("2022-01-10")),
             (to_timestamp("2022-01-16"), to_timestamp("2022-02-06")),
@@ -109,10 +107,9 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date:
 
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
-    interval_params = compute_interval_params(
+    assert compute_interval_params(
         sushi_context_fixed_date.snapshots.values(), start=start_ds, end=end_ds
-    )
-    assert interval_params[waiters] == [
+    )[waiters] == [
         (to_timestamp(start_ds), to_timestamp("2022-03-02")),
     ]
 
