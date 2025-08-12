@@ -2898,7 +2898,15 @@ def test_python_model_decorator_kind() -> None:
     # no warning with valid kind dict
     with patch.object(get_console(), "log_warning") as mock_logger:
 
-        @model("kind_valid_dict", kind=dict(name=ModelKindName.FULL), columns={'"COL"': "int"})
+        @model(
+            "kind_valid_dict",
+            kind=dict(
+                name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+                time_column="ds",
+                auto_restatement_cron="@hourly",
+            ),
+            columns={'"ds"': "date", '"COL"': "int"},
+        )
         def my_model(context):
             pass
 
@@ -2907,7 +2915,7 @@ def test_python_model_decorator_kind() -> None:
             path=Path("."),
         )
 
-        assert isinstance(python_model.kind, FullKind)
+        assert isinstance(python_model.kind, IncrementalByTimeRangeKind)
 
         assert not mock_logger.call_args
 
