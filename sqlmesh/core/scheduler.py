@@ -31,7 +31,6 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import check_ready_intervals
 from sqlmesh.core.snapshot.definition import (
     Interval,
-    SnapshotIntervals,
     expand_range,
     parent_snapshots_by_name,
 )
@@ -740,17 +739,15 @@ class Scheduler:
         for s_id, interval in (remove_intervals or {}).items():
             self.snapshots[s_id].remove_interval(interval)
 
-        auto_restated_intervals: t.List[SnapshotIntervals] = []
-        auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
+        all_auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
         if auto_restatement_enabled:
-            auto_restated_intervals, auto_restatement_triggers = apply_auto_restatements(
+            auto_restated_intervals, all_auto_restatement_triggers = apply_auto_restatements(
                 self.snapshots, execution_time
             )
             self.state_sync.add_snapshots_intervals(auto_restated_intervals)
             self.state_sync.update_auto_restatements(
                 {s.name_version: s.next_auto_restatement_ts for s in self.snapshots.values()}
             )
-        auto_restated_snapshots = {snapshot.snapshot_id for snapshot in auto_restated_intervals}
 
         merged_intervals = self.merged_missing_intervals(
             start,
@@ -767,11 +764,13 @@ class Scheduler:
         if not merged_intervals:
             return CompletionStatus.NOTHING_TO_DO
 
-        merged_intervals_snapshots = {snapshot.snapshot_id for snapshot in merged_intervals}
-
-        auto_restatement_triggers_dict: t.Dict[SnapshotId, t.List[SnapshotId]] = {
-            s_id: auto_restatement_triggers.get(s_id, []) for s_id in merged_intervals_snapshots
-        }
+        auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {}
+        if all_auto_restatement_triggers:
+            merged_intervals_snapshots = {snapshot.snapshot_id for snapshot in merged_intervals}
+            auto_restatement_triggers = {
+                s_id: all_auto_restatement_triggers.get(s_id, [])
+                for s_id in merged_intervals_snapshots
+            }
 
         errors, _ = self.run_merged_intervals(
             merged_intervals=merged_intervals,

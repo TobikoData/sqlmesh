@@ -3817,7 +3817,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         message = f"Evaluated {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
 
         if auto_restatement_triggers:
-            message += f" | Auto-restatement triggers {', '.join(trigger.name for trigger in auto_restatement_triggers)}"
+            message += f" | auto_restatement_triggers=[{', '.join(trigger.name for trigger in auto_restatement_triggers)}]"
 
         if audit_only:
             message = f"Audited {snapshot.name} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
