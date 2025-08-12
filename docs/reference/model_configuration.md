@@ -186,6 +186,7 @@ The SQLMesh project-level `model_defaults` key supports the following options, d
 - virtual_properties
 - session_properties (on per key basis)
 - on_destructive_change (described [below](#incremental-models))
+- on_additive_change (described [below](#incremental-models))
 - audits (described [here](../concepts/audits.md#generic-audits))
 - optimize_query
 - allow_partials
@@ -231,11 +232,12 @@ Python model kind `name` enum value: [ModelKindName.FULL](https://sqlmesh.readth
 
 Configuration options for all incremental models (in addition to [general model properties](#general-model-properties)).
 
-| Option                  | Description                                                                                                                                                                                                                                                                                                            | Type | Required |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `forward_only`          | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`)                                                                                                                                                                                | bool | N        |
-| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`. (Default: `error`) | str  | N        |
-| `disable_restatement`   | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                                                                                                                                                                                                    | bool | N        |
+| Option                  | Description                                                                                                                                                                                                                                                                                                                                              | Type | Required |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `forward_only`          | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`)                                                                                                                                                                                                                  | bool |    N     |
+| `on_destructive_change` | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes a destructive modification to the model schema. Valid values: `allow`, `warn`, `error`, `ignore`. (Default: `error`)                         | str  |    N     |
+| `on_additive_change`    | What should happen when a change to a [forward-only model](../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../concepts/plans.md#forward-only-plans) causes an additive modification to the model schema (like adding new columns). Valid values: `allow`, `warn`, `error`, `ignore`. (Default: `allow`) | str  |    N     |
+| `disable_restatement`   | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                                                                                                                                                                                                                                      | bool |    N     |
 
 #### Incremental by time range
 

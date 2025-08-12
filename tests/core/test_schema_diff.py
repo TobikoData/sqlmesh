@@ -10,7 +10,28 @@ from sqlmesh.core.schema_diff import (
     TableAlterColumnPosition,
     TableAlterOperation,
     get_schema_differ,
+    has_additive_changes,
+    filter_additive_changes,
+    has_drop_alteration,
+    filter_destructive_changes,
+    get_additive_changes,
 )
+
+
+def is_only_additive_changes(alter_expressions: t.List[exp.Alter]) -> bool:
+    """
+    Check if all changes in the list of alter expressions are additive.
+
+    Args:
+        alter_expressions: List of ALTER TABLE expressions
+
+    Returns:
+        True if all changes are additive (or no changes), False if there are any non-additive changes
+    """
+    if not alter_expressions:
+        return True  # No changes at all - this should be considered "only additive"
+
+    return len(get_additive_changes(alter_expressions)) == len(alter_expressions)
 
 
 def test_schema_diff_calculate():
@@ -521,6 +542,7 @@ def test_schema_diff_calculate_type_transitions():
                     ],
                     expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
                     column_type="STRUCT<col_a INT, col_b INT>",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -649,6 +671,7 @@ def test_schema_diff_calculate_type_transitions():
                     ],
                     expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
                     column_type="STRUCT<col_a INT, col_b TEXT, col_d INT>",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -835,6 +858,7 @@ def test_schema_diff_calculate_type_transitions():
                     ],
                     "ARRAY",
                     expected_table_struct="STRUCT<id INT, ids ARRAY>",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             {},
@@ -857,6 +881,7 @@ def test_schema_diff_calculate_type_transitions():
                     ],
                     "INT",
                     expected_table_struct="STRUCT<id INT, ids INT>",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             {},
@@ -915,6 +940,7 @@ def test_schema_diff_calculate_type_transitions():
                     TableAlterColumn.primitive("address"),
                     "VARCHAR(121)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -936,6 +962,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR(100)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(100)>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -959,6 +986,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR",
                     expected_table_struct="STRUCT<id INT, address VARCHAR>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -980,6 +1008,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR(120)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1019,6 +1048,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR",
                     expected_table_struct="STRUCT<id INT, address VARCHAR>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1079,6 +1109,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR(120)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1123,6 +1154,7 @@ def test_schema_diff_calculate_type_transitions():
                     "VARCHAR(120)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
                     position=TableAlterColumnPosition.last("id"),
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1376,3 +1408,454 @@ def test_get_schema_differ():
         schema_differ_upper.support_coercing_compatible_types
         == schema_differ_lower.support_coercing_compatible_types
     )
+
+
+def test_destructive_add_operation_metadata():
+    """Test that ADD operations part of destructive changes are properly marked with metadata."""
+    # Test scenario: Type change that requires DROP + ADD
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        "value": exp.DataType.build("INT"),
+    }
+    new_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        "value": exp.DataType.build("STRING"),  # Type change requiring DROP+ADD
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should generate DROP value + ADD value
+    assert len(alter_expressions) == 2
+
+    drop_expr = alter_expressions[0]
+    add_expr = alter_expressions[1]
+
+    # Verify we have the expected operations
+    assert "DROP COLUMN value" in drop_expr.sql()
+    assert "ADD COLUMN value" in add_expr.sql()  # SQLGlot might use TEXT instead of STRING
+
+    # The ADD operation should be marked as destructive support via metadata
+    add_actions = add_expr.args.get("actions", [])
+    assert len(add_actions) == 1
+    add_action = add_actions[0]
+
+    # Check that the ADD action has metadata marking it as destructive
+    assert add_action.meta.get("sqlmesh_destructive") is True
+
+
+def test_pure_additive_add_operation_no_metadata():
+    """Test that pure ADD operations (not part of destructive changes) have no destructive metadata."""
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+    }
+    new_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+        "email": exp.DataType.build("STRING"),  # Pure addition
+        "created_at": exp.DataType.build("TIMESTAMP"),  # Pure addition
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should generate ADD email + ADD created_at
+    assert len(alter_expressions) == 2
+
+    for add_expr in alter_expressions:
+        assert "ADD COLUMN" in add_expr.sql()
+
+        add_actions = add_expr.args.get("actions", [])
+        assert len(add_actions) == 1
+        add_action = add_actions[0]
+
+        # Pure ADD operations should NOT have destructive metadata
+        assert (
+            add_action.meta.get("sqlmesh_destructive") is None
+            or add_action.meta.get("sqlmesh_destructive") is False
+        )
+
+
+def test_filtering_with_destructive_metadata():
+    """Test that filtering functions respect destructive metadata on ADD operations."""
+    from sqlmesh.core.schema_diff import (
+        filter_additive_changes,
+        filter_destructive_changes,
+        has_additive_changes,
+        get_additive_changes,
+    )
+
+    # Scenario: Type change (destructive) + pure addition (additive)
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+    }
+    new_schema = {
+        "id": exp.DataType.build("BIGINT"),  # Type change -> DROP + ADD (both destructive)
+        "name": exp.DataType.build("STRING"),
+        "email": exp.DataType.build("STRING"),  # Pure addition (additive)
+    }
+
+    differ = SchemaDiffer()
+    all_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should have: DROP id + ADD id (with metadata) + ADD email (without metadata)
+    assert len(all_expressions) == 3
+
+    # Test filter_additive_changes - should remove the pure ADD operations
+    non_additive = filter_additive_changes(all_expressions)
+    # Should keep: DROP id + ADD id (marked destructive)
+    # Should remove: ADD email (pure additive)
+    assert len(non_additive) == 2
+    for expr in non_additive:
+        sql = expr.sql()
+        # Should not contain the pure additive change
+        assert "ADD COLUMN email" not in sql
+
+    # Test filter_destructive_changes - should remove DROP and marked ADD operations
+    non_destructive = filter_destructive_changes(all_expressions)
+    # Should keep: ADD email (pure additive)
+    # Should remove: DROP id + ADD id (destructive)
+    assert len(non_destructive) == 1
+    assert "ADD COLUMN email" in non_destructive[0].sql()
+
+    # Test has_additive_changes - should only count pure additive changes
+    assert has_additive_changes(all_expressions) is True  # Has pure ADD email
+
+    # Test get_additive_changes - should only return pure additive changes
+    additive_changes = get_additive_changes(all_expressions)
+    assert len(additive_changes) == 1
+    assert "ADD COLUMN email" in additive_changes[0].sql()
+
+    # Test is_only_additive_changes - should return False due to destructive changes
+    assert is_only_additive_changes(all_expressions) is False
+
+
+def test_complex_destructive_scenario_metadata():
+    """Test complex scenario with multiple destructive changes and metadata propagation."""
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "value": exp.DataType.build("STRING"),
+        "old_col": exp.DataType.build("DECIMAL(10,2)"),
+        "unchanged": exp.DataType.build("STRING"),
+    }
+    new_schema = {
+        "id": exp.DataType.build("BIGINT"),  # Type change requiring DROP+ADD
+        "value": exp.DataType.build("INT"),  # Type change requiring DROP+ADD
+        "old_col": exp.DataType.build("DECIMAL(5,1)"),  # Precision decrease requiring DROP+ADD
+        "unchanged": exp.DataType.build("STRING"),
+        "pure_new": exp.DataType.build("INT"),  # Pure addition
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Expected operations based on real behavior:
+    # 1. DROP id → ADD id BIGINT (destructive pair)
+    # 2. DROP value → ADD value INT (destructive pair)
+    # 3. DROP old_col → ADD old_col DECIMAL(5,1) (destructive pair)
+    # 4. ADD pure_new INT (additive)
+
+    # Count ADD operations with destructive metadata
+    destructive_add_count = 0
+    pure_add_count = 0
+
+    for expr in alter_expressions:
+        if "ADD" in expr.sql():
+            actions = expr.args.get("actions", [])
+            if actions and actions[0].meta.get("sqlmesh_destructive"):
+                destructive_add_count += 1
+            else:
+                pure_add_count += 1
+
+    # Should have 3 destructive ADD operations (id, value, old_col) and 1 pure ADD (pure_new)
+    assert destructive_add_count == 3
+    assert pure_add_count == 1
+
+
+def test_integration_destructive_add_filtering():
+    """Integration test demonstrating that the fix works in realistic scenarios."""
+    from sqlmesh.core.schema_diff import filter_destructive_changes, filter_additive_changes
+
+    # Scenario: User has a model with type changes + pure additions
+    # When using on_destructive_change=IGNORE, they should only see pure additions
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("STRING"),
+    }
+    new_schema = {
+        "id": exp.DataType.build(
+            "BIGINT"
+        ),  # Type change -> generates DROP id + ADD id (with destructive flag)
+        "name": exp.DataType.build("STRING"),
+        "email": exp.DataType.build(
+            "STRING"
+        ),  # Pure addition -> generates ADD email (no destructive flag)
+        "age": exp.DataType.build(
+            "INT"
+        ),  # Pure addition -> generates ADD age (no destructive flag)
+    }
+
+    differ = SchemaDiffer()
+    all_changes = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should have 4 operations: DROP id + ADD id (destructive) + ADD email + ADD age (additive)
+    assert len(all_changes) == 4
+
+    # When user sets on_destructive_change=IGNORE, they should filter out destructive changes
+    non_destructive_changes = filter_destructive_changes(all_changes)
+
+    # Should only have the 2 pure ADD operations (email, age)
+    assert len(non_destructive_changes) == 2
+    for expr in non_destructive_changes:
+        assert "ADD COLUMN" in expr.sql()
+        # Verify these are pure additions, not part of destructive changes
+        actions = expr.args.get("actions", [])
+        assert len(actions) == 1
+        add_action = actions[0]
+        assert not add_action.meta.get("sqlmesh_destructive", False)
+
+    # When user sets on_additive_change=IGNORE, they should filter out additive changes
+    non_additive_changes = filter_additive_changes(all_changes)
+
+    # Should only have the 2 destructive operations (DROP id + ADD id with metadata)
+    assert len(non_additive_changes) == 2
+    drop_found = False
+    add_found = False
+    for expr in non_additive_changes:
+        if "DROP COLUMN" in expr.sql():
+            drop_found = True
+        elif "ADD COLUMN" in expr.sql():
+            add_found = True
+            # Verify this ADD operation has destructive metadata
+            actions = expr.args.get("actions", [])
+            assert len(actions) == 1
+            add_action = actions[0]
+            assert add_action.meta.get("sqlmesh_destructive") is True
+
+    assert drop_found and add_found
+
+
+def test_filter_additive_changes_removes_only_additive_expressions():
+    """Test that filter_additive_changes removes only additive alter expressions."""
+    # Create mixed alter expressions (both additive and destructive)
+    current_schema = {"id": exp.DataType.build("INT"), "name": exp.DataType.build("STRING")}
+    new_schema = {
+        "id": exp.DataType.build("INT"),  # no change
+        "new_col": exp.DataType.build("STRING"),  # additive - should be removed
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should have additive changes initially
+    assert has_additive_changes(alter_expressions)
+
+    # After filtering, should have no additive changes
+    filtered_expressions = filter_additive_changes(alter_expressions)
+    assert not has_additive_changes(filtered_expressions)
+
+    # Original expressions should still have additive changes (not mutated)
+    assert has_additive_changes(alter_expressions)
+
+
+def test_filter_destructive_changes_removes_only_destructive_expressions():
+    """Test that filter_destructive_changes removes only destructive alter expressions."""
+    # Create mixed alter expressions (both additive and destructive)
+    current_schema = {"id": exp.DataType.build("INT"), "name": exp.DataType.build("STRING")}
+    new_schema = {
+        "id": exp.DataType.build("INT"),  # no change
+        "name": exp.DataType.build("STRING"),  # no change
+        "new_col": exp.DataType.build("STRING"),  # additive - should remain
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should have no destructive changes initially (only additive)
+    assert not has_drop_alteration(alter_expressions)
+
+    # After filtering destructive changes, should still have the same expressions
+    filtered_expressions = filter_destructive_changes(alter_expressions)
+    assert len(filtered_expressions) == len(alter_expressions)
+
+    # Now test with actual destructive changes
+    destructive_new_schema = {"id": exp.DataType.build("INT")}  # removes name column
+    destructive_expressions = differ.compare_columns(
+        "test_table", current_schema, destructive_new_schema
+    )
+
+    # Should have destructive changes
+    assert has_drop_alteration(destructive_expressions)
+
+    # After filtering, should have no destructive changes
+    filtered_destructive = filter_destructive_changes(destructive_expressions)
+    assert not has_drop_alteration(filtered_destructive)
+
+
+def test_filter_mixed_changes_correctly():
+    """Test filtering when there are both additive and destructive changes."""
+    # Schema change that both adds and removes columns
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "old_col": exp.DataType.build("STRING"),  # will be removed (destructive)
+    }
+    new_schema = {
+        "id": exp.DataType.build("INT"),  # unchanged
+        "new_col": exp.DataType.build("STRING"),  # will be added (additive)
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, new_schema)
+
+    # Should have both types of changes
+    assert has_additive_changes(alter_expressions)
+    assert has_drop_alteration(alter_expressions)
+
+    # Filter out additive changes - should only have destructive
+    no_additive = filter_additive_changes(alter_expressions)
+    assert not has_additive_changes(no_additive)
+    assert has_drop_alteration(no_additive)
+
+    # Filter out destructive changes - should only have additive
+    no_destructive = filter_destructive_changes(alter_expressions)
+    assert has_additive_changes(no_destructive)
+    assert not has_drop_alteration(no_destructive)
+
+    # Filter out both - should have no changes
+    no_changes = filter_destructive_changes(filter_additive_changes(alter_expressions))
+    assert not has_additive_changes(no_changes)
+    assert not has_drop_alteration(no_changes)
+    assert len(no_changes) == 0
+
+
+def test_alter_column_integration_with_schema_differ():
+    """Test that ALTER COLUMN operations work correctly with the SchemaDiffer."""
+    # Test additive ALTER COLUMN operations
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(50)"),
+        "value": exp.DataType.build("DECIMAL(10,2)"),
+    }
+    additive_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(100)"),  # Increase precision - additive
+        "value": exp.DataType.build("DECIMAL(15,5)"),  # Increase precision/scale - additive
+    }
+
+    # Use a SchemaDiffer that supports compatible type changes
+    differ = SchemaDiffer(
+        compatible_types={
+            exp.DataType.build("VARCHAR(50)"): {exp.DataType.build("VARCHAR(100)")},
+            exp.DataType.build("DECIMAL(10,2)"): {exp.DataType.build("DECIMAL(15,5)")},
+        }
+    )
+
+    alter_expressions = differ.compare_columns("test_table", current_schema, additive_schema)
+
+    # Should generate ALTER COLUMN operations
+    assert len(alter_expressions) == 2
+    for expr in alter_expressions:
+        assert "ALTER COLUMN" in expr.sql()
+
+    # These should be classified as additive
+    from sqlmesh.core.schema_diff import has_additive_changes
+
+    assert has_additive_changes(alter_expressions)
+    assert is_only_additive_changes(alter_expressions)
+
+
+def test_alter_column_destructive_integration():
+    """Test that destructive ALTER COLUMN operations are correctly handled."""
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(100)"),
+        "value": exp.DataType.build("DECIMAL(15,5)"),
+    }
+    destructive_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(50)"),  # Decrease precision - destructive
+        "value": exp.DataType.build("DECIMAL(10,2)"),  # Decrease precision/scale - destructive
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, destructive_schema)
+
+    # Should generate DROP + ADD operations (destructive changes)
+    # because the type changes are not compatible
+    assert len(alter_expressions) >= 2
+
+    from sqlmesh.core.schema_diff import has_additive_changes, has_drop_alteration
+
+    assert not has_additive_changes(alter_expressions)
+    assert has_drop_alteration(alter_expressions)
+
+
+def test_alter_column_mixed_additive_destructive():
+    """Test mixed scenario with both additive and destructive ALTER COLUMN operations."""
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(50)"),
+        "description": exp.DataType.build("VARCHAR(100)"),
+        "value": exp.DataType.build("DECIMAL(10,2)"),
+    }
+    mixed_schema = {
+        "id": exp.DataType.build("INT"),
+        "name": exp.DataType.build("VARCHAR(100)"),  # Increase precision - additive
+        "description": exp.DataType.build("VARCHAR(50)"),  # Decrease precision - destructive
+        "value": exp.DataType.build("DECIMAL(15,5)"),  # Increase precision - additive
+    }
+
+    differ = SchemaDiffer(
+        compatible_types={
+            # Only define compatible types for additive changes
+            exp.DataType.build("VARCHAR(50)"): {exp.DataType.build("VARCHAR(100)")},
+            exp.DataType.build("DECIMAL(10,2)"): {exp.DataType.build("DECIMAL(15,5)")},
+        }
+    )
+
+    alter_expressions = differ.compare_columns("test_table", current_schema, mixed_schema)
+
+    from sqlmesh.core.schema_diff import (
+        has_additive_changes,
+        has_drop_alteration,
+        filter_destructive_changes,
+        get_additive_changes,
+    )
+
+    # Should have both additive and destructive changes
+    assert has_additive_changes(alter_expressions)
+    assert has_drop_alteration(alter_expressions)  # From destructive description change
+
+    # Test filtering
+    additive_only = get_additive_changes(alter_expressions)
+    assert len(additive_only) >= 1  # Should have additive ALTER COLUMN operations
+
+    non_destructive = filter_destructive_changes(alter_expressions)
+    assert has_additive_changes(non_destructive)
+    assert not has_drop_alteration(non_destructive)
+
+
+def test_alter_column_with_default_values():
+    """Test ALTER COLUMN operations involving default values."""
+    # This test is more conceptual since current SQLMesh schema diff
+    # doesn't directly handle DEFAULT value changes, but the framework should support it
+    current_schema = {
+        "id": exp.DataType.build("INT"),
+        "status": exp.DataType.build("VARCHAR(50)"),
+    }
+    # In practice, default value changes would need to be detected at a higher level
+    # and passed down with appropriate metadata
+    schema_with_default = {
+        "id": exp.DataType.build("INT"),
+        "status": exp.DataType.build("VARCHAR(50)"),  # Same type, but with default (additive)
+    }
+
+    differ = SchemaDiffer()
+    alter_expressions = differ.compare_columns("test_table", current_schema, schema_with_default)
+
+    # No schema changes detected since types are the same
+    assert len(alter_expressions) == 0
