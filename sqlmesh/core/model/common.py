@@ -75,17 +75,22 @@ def make_python_env(
     ) -> t.Optional[bool]:
         is_metadata_so_far = used_variables.get(name, True)
         if is_metadata_so_far is False:
+            # We've concluded this variable is definitely not metadata-only
             return False
 
         appears_under_metadata_macro_func = expr_under_metadata_macro_func.get(id(expression))
         if is_metadata_so_far and (
             appears_in_metadata_expression or appears_under_metadata_macro_func
         ):
+            # The variable appears in a metadata expression, e.g., audits (...),
+            # or in the AST of metadata-only macro call, e.g., @FOO(@x)
             return True
 
+        # The variable appears in the AST of a macro call, but we don't know if it's metadata-only
         if appears_under_metadata_macro_func is False:
             return None
 
+        # The variable appears elsewhere, e.g., in the model's query: SELECT @x
         return False
 
     def _is_metadata_macro(name: str, appears_in_metadata_expression: bool) -> bool:
@@ -131,6 +136,14 @@ def make_python_env(
                         var_name, macro_func_or_var, is_metadata
                     )
                 elif id(macro_func_or_var) not in visited_macro_funcs:
+                    # We only care about the top-level macro function calls to determine the metadata
+                    # status of the variables referenced in their ASTs. For example, in @m1(@m2(@x)),
+                    # if m1 is metadata-only but m2 is not, we can still determine that @x only affects
+                    # the metadata hash, since m2's result feeds into a metadata-only macro function.
+                    #
+                    # Generally, if the top-level call is known to be metadata-only or appear in a
+                    # metadata expression, then we can avoid traversing nested macro function calls.
+
                     var_refs, _expr_under_metadata_macro_func, _visited_macro_funcs = (
                         _extract_macro_func_variable_references(macro_func_or_var, is_metadata)
                     )
@@ -192,7 +205,7 @@ def _extract_macro_func_variable_references(
     macro_func: exp.Expression,
     is_metadata: bool,
 ) -> t.Tuple[t.Set[str], t.Dict[int, bool], t.Set[int]]:
-    references = set()
+    var_references = set()
     visited_macro_funcs = set()
     expr_under_metadata_macro_func = {}
 
@@ -204,19 +217,19 @@ def _extract_macro_func_variable_references(
             args = this.expressions
 
             if this.name.lower() in (c.VAR, c.BLUEPRINT_VAR) and args and args[0].is_string:
-                references.add(args[0].this.lower())
+                var_references.add(args[0].this.lower())
                 expr_under_metadata_macro_func[id(n)] = is_metadata
         elif isinstance(n, d.MacroVar):
-            references.add(n.name.lower())
+            var_references.add(n.name.lower())
             expr_under_metadata_macro_func[id(n)] = is_metadata
         elif isinstance(n, (exp.Identifier, d.MacroStrReplace, d.MacroSQL)) and "@" in n.name:
-            references.update(
+            var_references.update(
                 (braced_identifier or identifier).lower()
                 for _, identifier, braced_identifier, _ in MacroStrTemplate.pattern.findall(n.name)
             )
             expr_under_metadata_macro_func[id(n)] = is_metadata
 
-    return (references, expr_under_metadata_macro_func, visited_macro_funcs)
+    return (var_references, expr_under_metadata_macro_func, visited_macro_funcs)
 
 
 def _add_variables_to_python_env(
@@ -238,9 +251,12 @@ def _add_variables_to_python_env(
     for var_name, is_metadata in python_used_variables.items():
         used_variables[var_name] = is_metadata and used_variables.get(var_name, True)
 
-    # Variables are treated as metadata when:
-    # - They are only referenced in metadata-only contexts, such as `audits (...)`, virtual statements, etc
-    # - They are only referenced in metadata-only macros, either as their arguments or within their definitions
+    # Variables are treated as metadata-only when all of their references either:
+    # - appear in metadata-only expressions, such as `audits (...)`, virtual statements, etc
+    # - appear in the ASTs or definitions of metadata-only macros
+    #
+    # See also: https://github.com/TobikoData/sqlmesh/pull/4936#issuecomment-3136339936,
+    # specifically the "Terminology" and "Observations" section.
     metadata_used_variables = {
         var_name for var_name, is_metadata in used_variables.items() if is_metadata
     }
@@ -248,6 +264,9 @@ def _add_variables_to_python_env(
         used_var_is_metadata = used_variables.get(used_var)
         if used_var_is_metadata is False:
             continue
+
+        # At this point we can decide whether a variable reference in a macro call's AST is
+        # metadata-only, because we've annotated the corresponding macro call in the python env.
         if outermost_macro_func in python_env and python_env[outermost_macro_func].is_metadata:
             metadata_used_variables.add(used_var)
 

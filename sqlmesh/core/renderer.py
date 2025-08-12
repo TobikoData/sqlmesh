@@ -234,7 +234,6 @@ class BaseExpressionRenderer:
 
         if variables:
             macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS_METADATA, {})
 
         for definition in self._macro_definitions:
             try:
