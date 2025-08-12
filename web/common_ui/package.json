@@ -10,13 +10,19 @@
   "files": [
     "/dist"
   ],
-  "main": "dist/sqlmesh-shared-ui.umd.js",
-  "module": "dist/sqlmesh-shared-ui.es.js",
+  "main": "dist/sqlmesh-common.umd.js",
+  "module": "dist/sqlmesh-common.es.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/sqlmesh-shared-ui.es.js",
-      "require": "./dist/sqlmesh-shared-ui.umd.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/sqlmesh-common.es.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/sqlmesh-common.umd.js"
+      }
     }
   },
   "scripts": {
