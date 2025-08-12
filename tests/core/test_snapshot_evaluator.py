@@ -370,7 +370,7 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.version = "test_version"
 
     evaluator.promote(
@@ -428,7 +428,7 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
         )
 
         snapshot = make_snapshot(model)
-        snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
         snapshot.version = "test_version"
 
         evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
@@ -810,42 +810,58 @@ def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make
 
 
 @pytest.mark.parametrize(
-    "deployability_index,  snapshot_category, deployability_flags",
+    "deployability_index,  snapshot_category, forward_only, deployability_flags",
     [
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.FORWARD_ONLY, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_BREAKING, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_NON_BREAKING, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, False, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, False, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, True, [True]),
+        (
+            DeployabilityIndex.all_deployable(),
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+            False,
+            [False],
+        ),
+        (
+            DeployabilityIndex.all_deployable(),
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            False,
+            [True],
+        ),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, False, [True]),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.BREAKING,
+            False,
             [True, False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.NON_BREAKING,
+            False,
             [True, False],
         ),
         (
             DeployabilityIndex.none_deployable(),
-            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.BREAKING,
+            True,
             [True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_BREAKING,
+            False,
             [True, False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            False,
             [True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.METADATA,
+            False,
             [True],
         ),
     ],
@@ -857,12 +873,13 @@ def test_create_tables_exist(
     deployability_index: DeployabilityIndex,
     deployability_flags: t.List[bool],
     snapshot_category: SnapshotChangeCategory,
+    forward_only: bool,
 ):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
 
     evaluator = SnapshotEvaluator(adapter_mock)
-    snapshot.categorize_as(category=snapshot_category)
+    snapshot.categorize_as(category=snapshot_category, forward_only=forward_only)
 
     adapter_mock.get_data_objects.return_value = [
         DataObject(
@@ -909,7 +926,7 @@ def test_create_prod_table_exists_forward_only(mocker: MockerFixture, adapter_mo
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     adapter_mock.get_data_objects.return_value = [
         DataObject(
@@ -1145,11 +1162,8 @@ def test_promote_deployable(mocker: MockerFixture, make_snapshot):
     )
 
 
-def test_migrate(mocker: MockerFixture, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+def test_migrate(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     session_spy = mocker.spy(adapter, "session")
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
@@ -1167,6 +1181,11 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     adapter.columns = columns  # type: ignore
     adapter.table_exists = lambda _: True  # type: ignore
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type="table"),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1179,12 +1198,13 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     snapshot.previous_versions = snapshot.all_versions
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
             call(
@@ -1196,13 +1216,10 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     session_spy.assert_called_once()
 
 
-def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
-
+def test_migrate_missing_table(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.table_exists = lambda _: False  # type: ignore
+    mocker.patch.object(adapter, "get_data_object", return_value=None)
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1217,12 +1234,13 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
         post_statements=[parse_one("DROP TABLE pre")],
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     snapshot.previous_versions = snapshot.all_versions
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE TABLE "pre" ("a" INT)'),
             call(
@@ -1234,16 +1252,25 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
 
 
 @pytest.mark.parametrize(
-    "change_category",
-    [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.INDIRECT_NON_BREAKING],
+    "change_category, forward_only",
+    [
+        (SnapshotChangeCategory.BREAKING, True),
+        (SnapshotChangeCategory.INDIRECT_NON_BREAKING, False),
+    ],
 )
 def test_migrate_view(
-    mocker: MockerFixture, make_snapshot, change_category: SnapshotChangeCategory
+    mocker: MockerFixture,
+    make_snapshot,
+    make_mocked_engine_adapter,
+    change_category: SnapshotChangeCategory,
+    forward_only: bool,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type="view"),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1255,14 +1282,54 @@ def test_migrate_view(
     )
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = change_category
+    snapshot.forward_only = forward_only
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call(
                 'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
             )
+        ]
+    )
+
+
+def test_migrate_snapshot_data_object_type_mismatch(
+    mocker: MockerFixture,
+    make_snapshot,
+    make_mocked_engine_adapter,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(
+            schema="sqlmesh__test_schema", name="test_schema__test_model__1", type="table"
+        ),
+    )
+    mocker.patch.object(adapter, "table_exists", return_value=False)
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(),
+        storage_format="parquet",
+        query=parse_one("SELECT c, a FROM tbl"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
+
+    evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call('DROP TABLE IF EXISTS "sqlmesh__test_schema"."test_schema__test_model__1"'),
+            call(
+                'CREATE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+            ),
         ]
     )
 
@@ -1316,7 +1383,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
 
     evaluator.create([new_snapshot], {})
@@ -1468,7 +1535,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
 
     adapter_mock.get_data_objects.return_value = [
@@ -1535,7 +1602,7 @@ def test_create_clone_in_dev_missing_table(mocker: MockerFixture, adapter_mock, 
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
 
     evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
@@ -1580,7 +1647,7 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
 
     adapter_mock.get_data_objects.return_value = [
@@ -1643,7 +1710,7 @@ def test_create_clone_in_dev_self_referencing(
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
 
     adapter_mock.get_data_objects.return_value = [
@@ -1685,11 +1752,9 @@ def test_create_clone_in_dev_self_referencing(
 def test_on_destructive_change_runtime_check(
     mocker: MockerFixture,
     make_snapshot,
+    make_mocked_engine_adapter,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -1705,6 +1770,11 @@ def test_on_destructive_change_runtime_check(
         }
 
     adapter.columns = columns  # type: ignore
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type=DataObjectType.TABLE),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1715,7 +1785,8 @@ def test_on_destructive_change_runtime_check(
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     snapshot.previous_versions = snapshot.all_versions
 
     with pytest.raises(NodeExecutionFailedError) as ex:
@@ -1737,7 +1808,8 @@ def test_on_destructive_change_runtime_check(
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     snapshot.previous_versions = snapshot.all_versions
 
     logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
@@ -1779,7 +1851,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     evaluator.create([snapshot], {})
 
@@ -3517,7 +3589,7 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
     )
 
     snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = (
         SnapshotDataVersion(
             fingerprint=SnapshotFingerprint(
@@ -3525,7 +3597,7 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
-            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            change_category=SnapshotChangeCategory.BREAKING,
             dev_table_suffix="dev",
         ),
     )
@@ -3551,46 +3623,58 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
 
 
 @pytest.mark.parametrize(
-    "deployability_index,  snapshot_category, deployability_flags",
+    "deployability_index,  snapshot_category, forward_only, deployability_flags",
     [
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, [True]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.FORWARD_ONLY, [False]),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.INDIRECT_BREAKING, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, False, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.NON_BREAKING, False, [True]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.BREAKING, True, [False]),
+        (
+            DeployabilityIndex.all_deployable(),
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+            False,
+            [True],
+        ),
         (
             DeployabilityIndex.all_deployable(),
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            False,
             [False],
         ),
-        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, [False]),
+        (DeployabilityIndex.all_deployable(), SnapshotChangeCategory.METADATA, False, [False]),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.BREAKING,
+            False,
             [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.NON_BREAKING,
+            False,
             [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
-            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.BREAKING,
+            True,
             [False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_BREAKING,
+            False,
             [False, True],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            False,
             [False],
         ),
         (
             DeployabilityIndex.none_deployable(),
             SnapshotChangeCategory.METADATA,
+            False,
             [False],
         ),
     ],
@@ -3602,12 +3686,13 @@ def test_create_snapshot(
     deployability_index: DeployabilityIndex,
     deployability_flags: t.List[bool],
     snapshot_category: SnapshotChangeCategory,
+    forward_only: bool,
 ):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
 
     evaluator = SnapshotEvaluator(adapter_mock)
-    snapshot.categorize_as(category=snapshot_category)
+    snapshot.categorize_as(category=snapshot_category, forward_only=forward_only)
     evaluator._create_snapshot(
         snapshot=snapshot,
         snapshots={},
@@ -3657,11 +3742,16 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.previous_versions = snapshot.all_versions
     new_snapshot.version = snapshot.version
 
     assert new_snapshot.table_name() == snapshot.table_name()
+
+    adapter_mock.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model", type=DataObjectType.TABLE
+    )
+    adapter_mock.drop_data_object_on_type_mismatch.return_value = False
 
     evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
@@ -3728,8 +3818,13 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
         )
     )
     snapshot: Snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
+
+    adapter_mock.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model", type=DataObjectType.MANAGED_TABLE
+    )
+    adapter_mock.drop_data_object_on_type_mismatch.return_value = False
 
     # no schema changes - no-op
     adapter_mock.get_alter_expressions.return_value = []
@@ -3897,12 +3992,12 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     )
 
 
-def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
-    engine_adapters = {"one": adapter, "two": adapter_mock}
+def test_multiple_engine_migration(
+    mocker: MockerFixture, adapter_mock, make_snapshot, make_mocked_engine_adapter
+):
+    adapter_one = make_mocked_engine_adapter(EngineAdapter)
+    adapter_two = adapter_mock
+    engine_adapters = {"one": adapter_one, "two": adapter_two}
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -3917,8 +4012,18 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
             "a": exp.DataType.build("int"),
         }
 
-    adapter.columns = columns  # type: ignore
-    adapter_mock.columns = columns  # type: ignore
+    adapter_two.columns.side_effect = columns
+    adapter_two.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model_2", type=DataObjectType.TABLE
+    )
+    adapter_two.drop_data_object_on_type_mismatch.return_value = False
+
+    mocker.patch.object(adapter_one, "columns", side_effect=columns)
+    mocker.patch.object(
+        adapter_one,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type=DataObjectType.TABLE),
+    )
 
     evaluator = SnapshotEvaluator(engine_adapters)
 
@@ -3930,7 +4035,8 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
         query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot_1 = make_snapshot(model, version="1")
-    snapshot_1.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot_1.change_category = SnapshotChangeCategory.BREAKING
+    snapshot_1.forward_only = True
     snapshot_1.previous_versions = snapshot_1.all_versions
     model_2 = SqlModel(
         name="test_schema.test_model_2",
@@ -3941,13 +4047,14 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
         query=parse_one("SELECT c FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot_2 = make_snapshot(model_2, version="1")
-    snapshot_2.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot_2.change_category = SnapshotChangeCategory.BREAKING
+    snapshot_2.forward_only = True
     snapshot_2.previous_versions = snapshot_2.all_versions
     evaluator.migrate(
         [snapshot_1, snapshot_2], {}, deployability_index=DeployabilityIndex.none_deployable()
     )
 
-    cursor_mock.execute.assert_has_calls(
+    adapter_one.cursor.execute.assert_has_calls(
         [
             call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
             call(

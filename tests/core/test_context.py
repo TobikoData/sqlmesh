@@ -647,6 +647,9 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
     assert models_dir.exists()
 
+    # Ensure that we don't initialize a CachingStateSync only to clear its (empty) caches
+    assert context._state_sync is None
+
     # Test clearing caches when cache directory doesn't exist
     # This should not raise an exception
     context.clear_caches()
@@ -1124,6 +1127,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         no_prompts=True,
         forward_only=True,
         allow_destructive_models=["memory.sushi.test_unrestorable"],
+        categorizer_config=CategorizerConfig.all_full(),
     )
 
     sushi_context.upsert_model(model_v1)
@@ -1132,6 +1136,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         no_prompts=True,
         forward_only=True,
         allow_destructive_models=["memory.sushi.test_unrestorable"],
+        categorizer_config=CategorizerConfig.all_full(),
     )
     model_v1_new_snapshot = sushi_context.get_snapshot(
         "memory.sushi.test_unrestorable", raise_if_missing=True

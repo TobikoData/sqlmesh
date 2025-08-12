@@ -171,6 +171,9 @@ class DataObject(PydanticModel):
     def is_clustered(self) -> bool:
         return bool(self.clustering_key)
 
+    def to_table(self) -> exp.Table:
+        return exp.table_(self.name, db=self.schema_name, catalog=self.catalog, quoted=True)
+
 
 class CatalogSupport(Enum):
     # The engine has no concept of catalogs

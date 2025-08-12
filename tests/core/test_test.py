@@ -2153,44 +2153,6 @@ def test_test_generation_with_timestamp(tmp_path: Path) -> None:
     }
 
 
-def test_test_generation_with_decimal(tmp_path: Path, mocker: MockerFixture) -> None:
-    from decimal import Decimal
-
-    init_example_project(tmp_path, engine_type="duckdb")
-
-    config = Config(
-        default_connection=DuckDBConnectionConfig(),
-        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-    )
-    foo_sql_file = tmp_path / "models" / "foo.sql"
-    foo_sql_file.write_text(
-        "MODEL (name sqlmesh_example.foo); SELECT dec_col FROM sqlmesh_example.bar;"
-    )
-    bar_sql_file = tmp_path / "models" / "bar.sql"
-    bar_sql_file.write_text("MODEL (name sqlmesh_example.bar); SELECT dec_col FROM external_table;")
-
-    context = Context(paths=tmp_path, config=config)
-    input_queries = {
-        '"memory"."sqlmesh_example"."bar"': "SELECT CAST(1.23 AS DECIMAL(10,2)) AS dec_col"
-    }
-
-    # DuckDB actually returns a numpy.float64, even though the value is cast into a DECIMAL,
-    # but other engines don't behave the same. E.g. BigQuery returns a proper Decimal value.
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.base.EngineAdapter.fetchdf",
-        return_value=pd.DataFrame({"dec_col": [Decimal("1.23")]}),
-    )
-
-    context.create_test("sqlmesh_example.foo", input_queries=input_queries, overwrite=True)
-
-    test = load_yaml(context.path / c.TESTS / "test_foo.yaml")
-
-    assert len(test) == 1
-    assert "test_foo" in test
-    assert test["test_foo"]["inputs"] == {'"memory"."sqlmesh_example"."bar"': [{"dec_col": "1.23"}]}
-    assert test["test_foo"]["outputs"] == {"query": [{"dec_col": "1.23"}]}
-
-
 def test_test_generation_with_recursive_ctes(tmp_path: Path) -> None:
     init_example_project(tmp_path, engine_type="duckdb")
 
@@ -2247,10 +2209,6 @@ def test_test_with_gateway_specific_model(tmp_path: Path, mocker: MockerFixture)
 
     context = Context(paths=tmp_path, config=config)
     input_queries = {'"memory"."sqlmesh_example"."input_model"': "SELECT 5 AS c"}
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.base.EngineAdapter.fetchdf",
-        return_value=pd.DataFrame({"c": [5]}),
-    )
 
     assert context.engine_adapter == context.engine_adapters["main"]
     with pytest.raises(

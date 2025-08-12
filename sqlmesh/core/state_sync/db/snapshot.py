@@ -173,10 +173,9 @@ class SnapshotState:
                     snapshot.set_unpaused_ts(None)
                     paused_snapshots.append(snapshot.snapshot_id)
 
-                if (
-                    not snapshot.is_forward_only
-                    and target_snapshot.is_forward_only
-                    and not snapshot.unrestorable
+                if not snapshot.unrestorable and (
+                    (target_snapshot.is_forward_only and not snapshot.is_forward_only)
+                    or (snapshot.is_forward_only and not target_snapshot.is_forward_only)
                 ):
                     logger.info("Marking snapshot %s as unrestorable", snapshot.snapshot_id)
                     snapshot.unrestorable = True
@@ -373,31 +372,25 @@ class SnapshotState:
         Args:
             next_auto_restatement_ts: A dictionary of snapshot name version to the next auto restatement timestamp.
         """
-        next_auto_restatement_ts_deleted = []
-        next_auto_restatement_ts_filtered = {}
-        for k, v in next_auto_restatement_ts.items():
-            if v is None:
-                next_auto_restatement_ts_deleted.append(k)
-            else:
-                next_auto_restatement_ts_filtered[k] = v
-
         for where in snapshot_name_version_filter(
             self.engine_adapter,
-            next_auto_restatement_ts_deleted,
+            next_auto_restatement_ts,
             column_prefix="snapshot",
             alias=None,
             batch_size=self.SNAPSHOT_BATCH_SIZE,
         ):
             self.engine_adapter.delete_from(self.auto_restatements_table, where=where)
 
+        next_auto_restatement_ts_filtered = {
+            k: v for k, v in next_auto_restatement_ts.items() if v is not None
+        }
         if not next_auto_restatement_ts_filtered:
             return
 
-        self.engine_adapter.merge(
+        self.engine_adapter.insert_append(
             self.auto_restatements_table,
             _auto_restatements_to_df(next_auto_restatement_ts_filtered),
             columns_to_types=self._auto_restatement_columns_to_types,
-            unique_key=(exp.column("snapshot_name"), exp.column("snapshot_version")),
         )
 
     def count(self) -> int:
@@ -733,6 +726,7 @@ class SharedVersionSnapshot(PydanticModel):
     disable_restatement: bool
     effective_from: t.Optional[TimeLike]
     raw_snapshot: t.Dict[str, t.Any]
+    forward_only: bool
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -740,7 +734,7 @@ class SharedVersionSnapshot(PydanticModel):
 
     @property
     def is_forward_only(self) -> bool:
-        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+        return self.forward_only or self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
@@ -803,4 +797,5 @@ class SharedVersionSnapshot(PydanticModel):
             disable_restatement=raw_node.get("kind", {}).get("disable_restatement", False),
             effective_from=raw_snapshot.get("effective_from"),
             raw_snapshot=raw_snapshot,
+            forward_only=raw_snapshot.get("forward_only", False),
         )

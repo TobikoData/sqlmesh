@@ -1672,13 +1672,13 @@ def test_enable_audits_from_model_defaults():
     model = load_sql_based_model(
         expressions,
         path=Path("./examples/sushi/models/test_model.sql"),
-        default_audits=model_defaults.audits,
+        defaults=model_defaults.dict(),
     )
 
-    assert len(model.audits) == 0
+    assert len(model.audits) == 1
 
     config = Config(model_defaults=model_defaults)
-    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
+    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {}) == model.audits[0]
 
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 1
@@ -1908,7 +1908,8 @@ def test_render_definition_with_defaults():
             dialect spark,
             kind VIEW (
                 materialized FALSE
-            )
+            ),
+            virtual_environment_mode 'full'
         );
 
         {query}
@@ -5731,7 +5732,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "516937963"
+    HASH_WITH_CATALOG = "1269513823"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -5897,7 +5898,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "770057346"
+    HASH_WITH_CATALOG = "2728996410"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -5989,7 +5990,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "3614876346"
+    EXPECTED_HASH = "763256265"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -7253,23 +7254,26 @@ def test_macro_references_in_audits():
         "assert_max_value": load_audit(audit_expression, dialect="duckdb"),
         "assert_not_zero": load_audit(not_zero_audit, dialect="duckdb"),
     }
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
-    )
+    model_defaults = ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
+
     model = load_sql_based_model(
         model_expression,
-        audits=audits,
-        default_audits=config.model_defaults.audits,
+        defaults=model_defaults.dict(),
         audit_definitions=audits,
     )
 
-    assert len(model.audits) == 2
+    assert len(model.audits) == 3
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 3
     assert len(model.python_env) == 3
-    assert config.model_defaults.audits == [("assert_not_zero", {})]
-    assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
+    assert model.audits == [
+        ("assert_not_zero", {}),
+        ("assert_max_value", {}),
+        ("assert_positive_ids", {}),
+    ]
     assert isinstance(audits_with_args[0][0], ModelAudit)
+    assert isinstance(audits_with_args[1][0], ModelAudit)
+    assert isinstance(audits_with_args[2][0], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
     assert isinstance(model.python_env["zero_value"], Executable)
@@ -9380,13 +9384,15 @@ def entrypoint(evaluator):
             assert "blueprints" not in model.all_fields()
 
             python_env = model.python_env
-            serialized_blueprint = (
-                SqlValue(sql=blueprint_value) if model_name == "test_model_sql" else blueprint_value
-            )
+
             assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
-            assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-                {"blueprint": serialized_blueprint}
-            )
+
+            if model_name == "test_model_sql":
+                assert c.SQLMESH_BLUEPRINT_VARS not in python_env
+            else:
+                assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+                    {"blueprint": blueprint_value}
+                )
 
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
@@ -10048,6 +10054,185 @@ def metadata_macro(evaluator):
 
     new_snapshot, _ = ctx_diff.modified_snapshots['"test_model"']
     assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
+
+
+def test_vars_are_taken_into_account_when_propagating_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL, blueprints ((v4 := 4, v5 := 5)));"
+        "@m1_metadata_references_v1();"  # metadata macro, references v1 internally => v1 metadata
+        "@m2_metadata_does_not_reference_var(@v2, @v3);"  # metadata macro => v2 metadata, v3 metadata
+        "@m3_non_metadata_references_v4(@v3);"  # non-metadata macro, references v4 => v3, v4 are not metadata
+        "SELECT 1 AS c;"
+        "@m2_metadata_does_not_reference_var(@v6);"  # metadata macro => v6 is metadata
+        "@m4_non_metadata_references_v6();"  # non-metadata macro, references v6 => v6 is not metadata
+        "ON_VIRTUAL_UPDATE_BEGIN;"
+        "@m3_non_metadata_references_v4(@v5);"  # non-metadata macro, metadata expression => v5 metadata
+        "ON_VIRTUAL_UPDATE_END;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_metadata_references_v1(evaluator):
+    evaluator.var("v1")
+    return None
+
+@macro(metadata_only=True)
+def m2_metadata_does_not_reference_var(evaluator, *args):
+    return None
+
+@macro()
+def m3_non_metadata_references_v4(evaluator, *args):
+    evaluator.var("v4")
+    return None
+
+@macro()
+def m4_non_metadata_references_v6(evaluator):
+    evaluator.var("v6")
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"v1": 1, "v2": 2, "v3": 3, "v6": 6},
+        ),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 8
+    assert "m1_metadata_references_v1" in python_env
+    assert "m2_metadata_does_not_reference_var" in python_env
+    assert "m3_non_metadata_references_v4" in python_env
+    assert "m4_non_metadata_references_v6" in python_env
+
+    variables = python_env.get(c.SQLMESH_VARS)
+    metadata_variables = python_env.get(c.SQLMESH_VARS_METADATA)
+
+    assert variables == Executable.value({"v3": 3, "v6": 6})
+    assert metadata_variables == Executable.value({"v1": 1, "v2": 2}, is_metadata=True)
+
+    blueprint_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS)
+    blueprint_metadata_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
+
+    assert blueprint_variables == Executable.value({"v4": SqlValue(sql="4")})
+    assert blueprint_metadata_variables == Executable.value(
+        {"v5": SqlValue(sql="5")}, is_metadata=True
+    )
+
+    macro_evaluator = MacroEvaluator(python_env=python_env)
+
+    assert macro_evaluator.locals == {
+        "runtime_stage": "loading",
+        "default_catalog": None,
+        c.SQLMESH_VARS: {"v3": 3, "v6": 6},
+        c.SQLMESH_VARS_METADATA: {"v1": 1, "v2": 2},
+        c.SQLMESH_BLUEPRINT_VARS: {"v4": exp.Literal.number("4")},
+        c.SQLMESH_BLUEPRINT_VARS_METADATA: {"v5": exp.Literal.number("5")},
+    }
+    assert macro_evaluator.var("v1") == 1
+    assert macro_evaluator.var("v2") == 2
+    assert macro_evaluator.var("v3") == 3
+    assert macro_evaluator.var("v6") == 6
+    assert macro_evaluator.blueprint_var("v4") == exp.Literal.number("4")
+    assert macro_evaluator.blueprint_var("v5") == exp.Literal.number("5")
+
+    query_with_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @VAR('v{var}')" for var in [1, 2, 3, 6]))
+    )
+    assert t.cast(exp.Expression, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3, 6, 6"
+
+    query_with_blueprint_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @BLUEPRINT_VAR('v{var}')" for var in [4, 5]))
+    )
+    assert t.cast(exp.Expression, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
+
+
+def test_variable_mentioned_in_both_metadata_and_non_metadata_macro(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL); @m1_references_v_metadata(); SELECT @m2_references_v_non_metadata() AS c;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_references_v_metadata(evaluator):
+    evaluator.var("v")
+    return None
+
+@macro()
+def m2_references_v_non_metadata(evaluator):
+    evaluator.var("v")
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), variables={"v": 1}),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 3
+    assert set(python_env) > {"m1_references_v_metadata", "m2_references_v_non_metadata"}
+    assert python_env.get(c.SQLMESH_VARS) == Executable.value({"v": 1})
+
+
+def test_only_top_level_macro_func_impacts_var_descendant_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL); @m1_metadata(@m2_non_metadata(@v)); SELECT 1 AS c;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_metadata(evaluator, *args):
+    return None
+
+@macro()
+def m2_non_metadata(evaluator, *args):
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), variables={"v": 1}),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 3
+    assert set(python_env) > {"m1_metadata", "m2_non_metadata"}
+    assert python_env.get(c.SQLMESH_VARS_METADATA) == Executable.value({"v": 1}, is_metadata=True)
 
 
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
@@ -10955,7 +11140,7 @@ def entrypoint(
     assert customer1_model.enabled
     assert "blueprints" not in customer1_model.all_fields()
     assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5}
+        {"customer": "customer1", "field_a": "x", "field_b": "y"}
     )
 
     # Test second blueprint
@@ -10963,7 +11148,7 @@ def entrypoint(
     assert customer2_model is not None
     assert customer2_model.cron == "*/10 * * * *"
     assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10}
+        {"customer": "customer2", "field_a": "z", "field_b": "w"}
     )
 
     # Test that the models can be planned and applied
@@ -11155,3 +11340,22 @@ def test_each_macro_with_paren_expression_arg(assert_exp_eq):
           'value' AS "property1"
         """,
     )
+
+
+@pytest.mark.parametrize(
+    "macro_func, variables",
+    [
+        ("@M(@v1)", {"v1"}),
+        ("@M(@{v1})", {"v1"}),
+        ("@M(@SQL('@v1'))", {"v1"}),
+        ("@M(@'@{v1}_foo')", {"v1"}),
+        ("@M1(@VAR('v1'))", {"v1"}),
+        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v2", "v3"}),
+        ("@M1(@BLUEPRINT_VAR(@VAR('v1')))", {"v1"}),
+    ],
+)
+def test_extract_macro_func_variable_references(macro_func: str, variables: t.Set[str]) -> None:
+    from sqlmesh.core.model.common import _extract_macro_func_variable_references
+
+    macro_func_ast = parse_one(macro_func)
+    assert _extract_macro_func_variable_references(macro_func_ast, True)[0] == variables

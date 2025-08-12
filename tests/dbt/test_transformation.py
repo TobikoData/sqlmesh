@@ -177,12 +177,12 @@ def test_model_kind():
     expected_sqlmesh_predicate = parse_one(
         "__MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
     )
-    ModelConfig(
+    assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         unique_key=["bar"],
         incremental_strategy="merge",
         dialect="postgres",
-        merge_filter=[dbt_incremental_predicate],
+        incremental_predicates=[dbt_incremental_predicate],
     ).model_kind(context) == IncrementalByUniqueKeyKind(
         unique_key=["bar"],
         dialect="postgres",

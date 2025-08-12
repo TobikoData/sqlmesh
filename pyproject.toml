@@ -143,6 +143,7 @@ risingwave = ["psycopg2"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
+sqlmesh_dbt = "sqlmesh_dbt.cli:dbt"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
 sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
@@ -165,7 +166,7 @@ fallback_version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include = ["sqlmesh", "sqlmesh.*", "web*"]
+include = ["sqlmesh", "sqlmesh.*", "sqlmesh_dbt", "sqlmesh_dbt.*", "web*"]
 
 [tool.setuptools.package-data]
 web = ["client/dist/**"]

@@ -7,6 +7,7 @@ import pandas as pd  # noqa: TID253
 from sqlglot import exp, parse_one
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import AthenaEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.utils.errors import SQLMeshError
@@ -288,6 +289,11 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
         "sqlmesh.core.engine_adapter.athena.AthenaEngineAdapter._query_table_type",
         return_value="iceberg",
     )
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test", type="table")],
+    )
 
     adapter.replace_query(
         table_name="test",
@@ -304,6 +310,7 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     mocker.patch(
         "sqlmesh.core.engine_adapter.athena.AthenaEngineAdapter.table_exists", return_value=False
     )
+    mocker.patch.object(adapter, "_get_data_objects", return_value=[])
     adapter.cursor.execute.reset_mock()
 
     adapter.s3_warehouse_location = "s3://foo"

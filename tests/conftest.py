@@ -438,7 +438,7 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                     metadata_hash="test_metadata_hash",
                 ),
                 version="test_version",
-                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                change_category=SnapshotChangeCategory.NON_BREAKING,
                 dev_table_suffix="dev",
             ),
         )
@@ -470,6 +470,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         dialect: t.Optional[str] = None,
         register_comments: bool = True,
         default_catalog: t.Optional[str] = None,
+        patch_get_data_objects: bool = True,
         **kwargs: t.Any,
     ) -> T:
         connection_mock = mocker.NonCallableMock()
@@ -493,6 +494,8 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
                 "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
                 new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
             )
+        if patch_get_data_objects:
+            mocker.patch.object(adapter, "_get_data_objects", return_value=[])
         return adapter
 
     return _make_function

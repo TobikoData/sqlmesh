@@ -16,6 +16,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import (
     Plan,
     SnapshotMapping,
@@ -162,7 +163,7 @@ class PlanBuilder:
 
         self._start = start
         if not self._start and (
-            self._forward_only_preview_needed or self._auto_restatement_preview_needed
+            self._forward_only_preview_needed or self._non_forward_only_preview_needed
         ):
             self._start = default_start or yesterday_ds()
 
@@ -239,8 +240,6 @@ class PlanBuilder:
             snapshot: The target snapshot.
             choice: The user decision on how to version the target snapshot and its children.
         """
-        if self._forward_only:
-            raise PlanError("Choice setting is not supported by a forward-only plan.")
         if not self._is_new_snapshot(snapshot):
             raise PlanError(
                 f"A choice can't be changed for the existing version of {snapshot.name}."
@@ -250,8 +249,6 @@ class PlanBuilder:
             and snapshot.snapshot_id not in self._context_diff.added
         ):
             raise PlanError(f"Only directly modified models can be categorized ({snapshot.name}).")
-        if snapshot.is_model and snapshot.model.forward_only:
-            raise PlanError(f"Forward-only model {snapshot.name} cannot be categorized manually.")
 
         self._choices[snapshot.snapshot_id] = choice
         self._latest_plan = None
@@ -271,7 +268,6 @@ class PlanBuilder:
         self._ensure_no_new_snapshots_with_restatements()
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range()
-        self._ensure_no_forward_only_revert()
         self._ensure_no_broken_references()
 
         self._apply_effective_from()
@@ -281,7 +277,7 @@ class PlanBuilder:
 
         self._check_destructive_changes(directly_modified)
         self._categorize_snapshots(dag, indirectly_modified)
-        self._adjust_new_snapshot_intervals()
+        self._adjust_snapshot_intervals()
 
         deployability_index = (
             DeployabilityIndex.create(
@@ -369,8 +365,10 @@ class PlanBuilder:
             restate_models = {
                 s.name
                 for s in self._context_diff.new_snapshots.values()
-                if s.is_materialized
-                and (self._forward_only or s.model.forward_only)
+                if s.is_model
+                and not s.is_symbolic
+                and (s.is_forward_only or s.model.forward_only)
+                and not s.is_no_preview
                 and (
                     # Metadata changes should not be previewed.
                     self._context_diff.directly_modified(s.name)
@@ -394,6 +392,9 @@ class PlanBuilder:
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for s_id in dag:
             snapshot = self._context_diff.snapshots[s_id]
+
+            if is_preview and snapshot.is_no_preview:
+                continue
 
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
@@ -508,24 +509,28 @@ class PlanBuilder:
             ).sorted
         }
 
-    def _adjust_new_snapshot_intervals(self) -> None:
-        old_snapshots = {
-            (old.name, old.version_get_or_generate()): old
-            for _, old in self._context_diff.modified_snapshots.values()
-        }
-
-        for new in self._context_diff.new_snapshots.values():
-            new.intervals = []
-            new.dev_intervals = []
-            old = old_snapshots.get((new.name, new.version_get_or_generate()))
-            if not old:
+    def _adjust_snapshot_intervals(self) -> None:
+        for new, old in self._context_diff.modified_snapshots.values():
+            if not new.is_model or not old.is_model:
                 continue
-            new.merge_intervals(old)
-            if new.is_forward_only:
-                new.dev_intervals = new.intervals.copy()
+            is_same_version = old.version_get_or_generate() == new.version_get_or_generate()
+            if is_same_version and should_force_rebuild(old, new):
+                # If the difference between 2 snapshots requires a full rebuild,
+                # then clear the intervals for the new snapshot.
+                self._context_diff.snapshots[new.snapshot_id].intervals = []
+            elif new.snapshot_id in self._context_diff.new_snapshots:
+                new.intervals = []
+                new.dev_intervals = []
+                if is_same_version:
+                    new.merge_intervals(old)
+                    if new.is_forward_only:
+                        new.dev_intervals = new.intervals.copy()
 
     def _check_destructive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
         for s_id in sorted(directly_modified):
+            if s_id.name not in self._context_diff.modified_snapshots:
+                continue
+
             snapshot = self._context_diff.snapshots[s_id]
             # should we raise/warn if this snapshot has/inherits a destructive change?
             should_raise_or_warn = (
@@ -583,38 +588,38 @@ class PlanBuilder:
             if not snapshot or not self._is_new_snapshot(snapshot):
                 continue
 
+            forward_only = self._forward_only or self._is_forward_only_change(s_id)
+            if forward_only and s_id.name in self._context_diff.modified_snapshots:
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if should_force_rebuild(old, new) or snapshot.is_seed:
+                    # Breaking kind changes and seed changes can't be forward-only.
+                    forward_only = False
+
             if s_id in self._choices:
-                snapshot.categorize_as(self._choices[s_id])
+                snapshot.categorize_as(self._choices[s_id], forward_only)
                 continue
 
             if s_id in self._context_diff.added:
-                snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-            elif self._is_forward_only_change(s_id) or self._forward_only:
-                # In case of the forward only plan any modifications result in reuse of the
-                # previous version for non-seed models.
-                # New snapshots of seed models are considered non-breaking ones.
-                category = (
-                    SnapshotChangeCategory.NON_BREAKING
-                    if snapshot.is_seed
-                    else SnapshotChangeCategory.FORWARD_ONLY
-                )
-                # If the model kind changes mark as breaking
-                if snapshot.is_model and snapshot.name in self._context_diff.modified_snapshots:
-                    _, old = self._context_diff.modified_snapshots[snapshot.name]
-                    if _is_breaking_kind_change(old, snapshot):
-                        category = SnapshotChangeCategory.BREAKING
-
-                snapshot.categorize_as(category)
+                snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
             elif s_id.name in self._context_diff.modified_snapshots:
-                self._categorize_snapshot(snapshot, dag, indirectly_modified)
+                self._categorize_snapshot(snapshot, forward_only, dag, indirectly_modified)
 
     def _categorize_snapshot(
-        self, snapshot: Snapshot, dag: DAG[SnapshotId], indirectly_modified: SnapshotMapping
+        self,
+        snapshot: Snapshot,
+        forward_only: bool,
+        dag: DAG[SnapshotId],
+        indirectly_modified: SnapshotMapping,
     ) -> None:
         s_id = snapshot.snapshot_id
 
         if self._context_diff.directly_modified(s_id.name):
             if self._auto_categorization_enabled:
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if should_force_rebuild(old, new):
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
+                    return
+
                 s_id_with_missing_columns: t.Optional[SnapshotId] = None
                 this_sid_with_downstream = indirectly_modified.get(s_id, set()) | {s_id}
                 for downstream_s_id in this_sid_with_downstream:
@@ -626,18 +631,18 @@ class PlanBuilder:
                         s_id_with_missing_columns = downstream_s_id
                         break
 
-                new, old = self._context_diff.modified_snapshots[s_id.name]
                 if s_id_with_missing_columns is None:
                     change_category = categorize_change(new, old, config=self._categorizer_config)
                     if change_category is not None:
-                        snapshot.categorize_as(change_category)
+                        snapshot.categorize_as(change_category, forward_only)
                 else:
                     mode = self._categorizer_config.dict().get(
                         new.model.source_type, AutoCategorizationMode.OFF
                     )
                     if mode == AutoCategorizationMode.FULL:
-                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+                        snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
         elif self._context_diff.indirectly_modified(snapshot.name):
+            all_upstream_forward_only = set()
             all_upstream_categories = set()
             direct_parent_categories = set()
 
@@ -646,27 +651,30 @@ class PlanBuilder:
 
                 if parent and self._is_new_snapshot(parent):
                     all_upstream_categories.add(parent.change_category)
+                    all_upstream_forward_only.add(parent.is_forward_only)
                     if p_id in snapshot.parents:
                         direct_parent_categories.add(parent.change_category)
 
-            if snapshot.is_model and snapshot.model.forward_only:
-                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-            elif direct_parent_categories.intersection(
+            if all_upstream_forward_only == {True} or (
+                snapshot.is_model and snapshot.model.forward_only
+            ):
+                forward_only = True
+
+            if direct_parent_categories.intersection(
                 {SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.INDIRECT_BREAKING}
             ):
-                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING, forward_only)
             elif not direct_parent_categories:
-                snapshot.categorize_as(self._get_orphaned_indirect_change_category(snapshot))
-            elif SnapshotChangeCategory.FORWARD_ONLY in all_upstream_categories:
-                # FORWARD_ONLY must take precedence over INDIRECT_NON_BREAKING
-                snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+                snapshot.categorize_as(
+                    self._get_orphaned_indirect_change_category(snapshot), forward_only
+                )
             elif all_upstream_categories == {SnapshotChangeCategory.METADATA}:
-                snapshot.categorize_as(SnapshotChangeCategory.METADATA)
+                snapshot.categorize_as(SnapshotChangeCategory.METADATA, forward_only)
             else:
-                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only)
         else:
             # Metadata updated.
-            snapshot.categorize_as(SnapshotChangeCategory.METADATA)
+            snapshot.categorize_as(SnapshotChangeCategory.METADATA, forward_only)
 
     def _get_orphaned_indirect_change_category(
         self, indirect_snapshot: Snapshot
@@ -766,13 +774,10 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and _is_breaking_kind_change(old, snapshot):
+            if snapshot.is_model and should_force_rebuild(old, snapshot):
                 return False
         return (
-            snapshot.is_model
-            and snapshot.model.forward_only
-            and not snapshot.change_category
-            and bool(snapshot.previous_versions)
+            snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
         )
 
     def _is_new_snapshot(self, snapshot: Snapshot) -> bool:
@@ -795,27 +800,6 @@ class PlanBuilder:
             if to_datetime(end) > to_datetime(self.execution_time):
                 raise PlanError(
                     f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
-                )
-
-    def _ensure_no_forward_only_revert(self) -> None:
-        """Ensures that a previously superseded breaking / non-breaking snapshot is not being
-        used again to replace an existing forward-only snapshot with the same version.
-
-        In other words there is no going back to the original non-forward-only snapshot with
-        the same version once a forward-only change for that version has been introduced.
-        """
-        for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
-            if (
-                candidate.snapshot_id not in self._context_diff.new_snapshots
-                and candidate.is_model
-                and not candidate.model.forward_only
-                and promoted.is_forward_only
-                and not promoted.is_paused
-                and not candidate.reuses_previous_version
-                and promoted.version == candidate.version
-            ):
-                raise PlanError(
-                    f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
     def _ensure_no_broken_references(self) -> None:
@@ -867,12 +851,18 @@ class PlanBuilder:
         )
 
     @cached_property
-    def _auto_restatement_preview_needed(self) -> bool:
-        return self._is_dev and any(
-            snapshot.model.auto_restatement_cron is not None
-            for snapshot in self._modified_and_added_snapshots
-            if snapshot.is_model
-        )
+    def _non_forward_only_preview_needed(self) -> bool:
+        if not self._is_dev:
+            return False
+        for snapshot in self._modified_and_added_snapshots:
+            if not snapshot.is_model:
+                continue
+            if (
+                not snapshot.virtual_environment_mode.is_full
+                or snapshot.model.auto_restatement_cron is not None
+            ):
+                return True
+        return False
 
     @cached_property
     def _modified_and_added_snapshots(self) -> t.List[Snapshot]:
@@ -882,16 +872,3 @@ class PlanBuilder:
             if snapshot.name in self._context_diff.modified_snapshots
             or snapshot.snapshot_id in self._context_diff.added
         ]
-
-
-def _is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
-    if old.model.kind.name == new.model.kind.name:
-        # If the kind hasn't changed, then it's not a breaking change
-        return False
-    if not old.is_incremental or not new.is_incremental:
-        # If either is not incremental, then it's a breaking change
-        return True
-    if old.model.partitioned_by == new.model.partitioned_by:
-        # If the partitioning hasn't changed, then it's not a breaking change
-        return False
-    return True

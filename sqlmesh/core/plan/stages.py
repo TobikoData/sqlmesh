@@ -1,7 +1,8 @@
 import typing as t
 
 from dataclasses import dataclass
-from sqlmesh.core.environment import EnvironmentStatements, EnvironmentNamingInfo
+from sqlmesh.core.environment import EnvironmentStatements, EnvironmentNamingInfo, Environment
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.scheduler import merged_missing_intervals, SnapshotToIntervals
@@ -230,8 +231,9 @@ class PlanStagesBuilder:
         all_selected_for_backfill_snapshots = {
             s.snapshot_id for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
         }
+        existing_environment = self.state_reader.get_environment(plan.environment.name)
 
-        self._adjust_intervals(snapshots_by_name, plan)
+        self._adjust_intervals(snapshots_by_name, plan, existing_environment)
 
         deployability_index = DeployabilityIndex.create(snapshots, start=plan.start)
         deployability_index_for_creation = deployability_index
@@ -269,7 +271,7 @@ class PlanStagesBuilder:
                     missing_intervals_after_promote[snapshot] = intervals
 
         promoted_snapshots, demoted_snapshots, demoted_environment_naming_info = (
-            self._get_promoted_demoted_snapshots(plan)
+            self._get_promoted_demoted_snapshots(plan, existing_environment)
         )
 
         stages: t.List[PlanStage] = []
@@ -358,6 +360,7 @@ class PlanStagesBuilder:
             demoted_environment_naming_info,
             snapshots | full_demoted_snapshots,
             deployability_index,
+            plan.is_dev,
         )
         if virtual_layer_update_stage:
             stages.append(virtual_layer_update_stage)
@@ -437,11 +440,18 @@ class PlanStagesBuilder:
         demoted_environment_naming_info: t.Optional[EnvironmentNamingInfo],
         all_snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: DeployabilityIndex,
+        is_dev: bool,
     ) -> t.Optional[VirtualLayerUpdateStage]:
-        promoted_snapshots = {s for s in promoted_snapshots if s.is_model and not s.is_symbolic}
-        demoted_snapshots = {s for s in demoted_snapshots if s.is_model and not s.is_symbolic}
+        def _should_update_virtual_layer(snapshot: SnapshotTableInfo) -> bool:
+            # Skip virtual layer update for snapshots with virtual environment support disabled
+            virtual_environment_enabled = is_dev or snapshot.virtual_environment_mode.is_full
+            return snapshot.is_model and not snapshot.is_symbolic and virtual_environment_enabled
+
+        promoted_snapshots = {s for s in promoted_snapshots if _should_update_virtual_layer(s)}
+        demoted_snapshots = {s for s in demoted_snapshots if _should_update_virtual_layer(s)}
         if not promoted_snapshots and not demoted_snapshots:
             return None
+
         return VirtualLayerUpdateStage(
             promoted_snapshots=promoted_snapshots,
             demoted_snapshots=demoted_snapshots,
@@ -451,11 +461,10 @@ class PlanStagesBuilder:
         )
 
     def _get_promoted_demoted_snapshots(
-        self, plan: EvaluatablePlan
+        self, plan: EvaluatablePlan, existing_environment: t.Optional[Environment]
     ) -> t.Tuple[
         t.Set[SnapshotTableInfo], t.Set[SnapshotTableInfo], t.Optional[EnvironmentNamingInfo]
     ]:
-        existing_environment = self.state_reader.get_environment(plan.environment.name)
         if existing_environment:
             new_table_infos = {
                 table_info.name: table_info for table_info in plan.environment.promoted_snapshots
@@ -571,10 +580,40 @@ class PlanStagesBuilder:
         return [s for s in snapshots.values() if _should_create(s)]
 
     def _adjust_intervals(
-        self, snapshots_by_name: t.Dict[str, Snapshot], plan: EvaluatablePlan
+        self,
+        snapshots_by_name: t.Dict[str, Snapshot],
+        plan: EvaluatablePlan,
+        existing_environment: t.Optional[Environment],
     ) -> None:
         # Make sure the intervals are up to date and restatements are reflected
         self.state_reader.refresh_snapshot_intervals(snapshots_by_name.values())
+
+        if existing_environment:
+            new_snapshot_ids = set()
+            new_snapshot_versions = set()
+            for s in snapshots_by_name.values():
+                if s.is_model:
+                    new_snapshot_ids.add(s.snapshot_id)
+                    new_snapshot_versions.add(s.name_version)
+            # Only compare to old snapshots that share the same version as the new snapshots
+            old_snapshot_ids = {
+                s.snapshot_id
+                for s in existing_environment.snapshots
+                if s.is_model
+                and s.name_version in new_snapshot_versions
+                and s.snapshot_id not in new_snapshot_ids
+            }
+            if old_snapshot_ids:
+                old_snapshots = self.state_reader.get_snapshots(old_snapshot_ids)
+                for old in old_snapshots.values():
+                    new = snapshots_by_name.get(old.name)
+                    if not new or old.version != new.version:
+                        continue
+                    if should_force_rebuild(old, new):
+                        # If the difference between 2 snapshots requires a full rebuild,
+                        # then clear the intervals for the new snapshot.
+                        new.intervals = []
+
         for new_snapshot in plan.new_snapshots:
             if new_snapshot.is_forward_only:
                 # Forward-only snapshots inherit intervals in dev because of cloning

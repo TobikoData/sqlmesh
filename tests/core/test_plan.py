@@ -37,7 +37,6 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     now,
-    now_timestamp,
     to_date,
     to_datetime,
     to_timestamp,
@@ -63,7 +62,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
-            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            change_category=SnapshotChangeCategory.NON_BREAKING,
             dev_table_suffix="dev",
         ),
     )
@@ -96,10 +95,6 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
     plan_builder.build()
     assert snapshot_b.version == "test_version"
-
-    # Make sure that the choice can't be set manually.
-    with pytest.raises(PlanError, match="Choice setting is not supported by a forward-only plan."):
-        plan_builder.set_choice(snapshot_b, SnapshotChangeCategory.BREAKING).build()
 
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
@@ -258,8 +253,10 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
     )
 
     PlanBuilder(context_diff, forward_only=True).build()
-    assert snapshot_a.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_a.change_category == SnapshotChangeCategory.METADATA
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+    assert snapshot_a.is_forward_only
+    assert snapshot_b.is_forward_only
 
 
 def test_forward_only_plan_categorizes_change_model_kind_as_breaking(
@@ -307,6 +304,7 @@ def test_forward_only_plan_categorizes_change_model_kind_as_breaking(
     PlanBuilder(context_diff, forward_only=True).build()
 
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+    assert not updated_snapshot.is_forward_only
 
 
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
@@ -322,10 +320,10 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
             dev_table_suffix="dev",
         ),
     )
-    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     snapshot_b_old = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds from a")))
-    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 3, ds from a")))
     assert not snapshot_b.version
@@ -1098,53 +1096,6 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     assert restatement_prod_plan_builder.build().end == "2022-01-04"
 
 
-def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    assert not snapshot.is_forward_only
-
-    forward_only_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
-    forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    forward_only_snapshot.version = snapshot.version
-    forward_only_snapshot.unpaused_ts = now_timestamp()
-    assert forward_only_snapshot.is_forward_only
-
-    context_diff = ContextDiff(
-        environment="test_environment",
-        is_new_environment=True,
-        is_unfinalized_environment=False,
-        normalize_environment_name=True,
-        create_from="prod",
-        create_from_env_exists=True,
-        added=set(),
-        removed_snapshots={},
-        modified_snapshots={snapshot.name: (snapshot, forward_only_snapshot)},
-        snapshots={snapshot.snapshot_id: snapshot},
-        new_snapshots={},
-        previous_plan_id=None,
-        previously_promoted_snapshot_ids=set(),
-        previous_finalized_snapshots=None,
-        previous_gateway_managed_virtual_layer=False,
-        gateway_managed_virtual_layer=False,
-        environment_statements=[],
-    )
-
-    with pytest.raises(
-        PlanError,
-        match=r"Attempted to revert to an unrevertable version of model.*",
-    ):
-        PlanBuilder(context_diff, forward_only=True).build()
-
-    # Make sure the plan can be created if a new snapshot version was enforced.
-    new_version_snapshot = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    context_diff.modified_snapshots = {snapshot.name: (new_version_snapshot, forward_only_snapshot)}
-    context_diff.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
-    PlanBuilder(context_diff, forward_only=True).build()
-
-
 def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SeedModel(
@@ -1191,7 +1142,8 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
 
     PlanBuilder(context_diff, forward_only=True).build()
     assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
-    assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
+    assert snapshot_a_updated.change_category == SnapshotChangeCategory.BREAKING
+    assert not snapshot_a_updated.is_forward_only
 
 
 def test_start_inference(make_snapshot, mocker: MockerFixture):
@@ -1443,7 +1395,9 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         forward_only=True,
         start="2023-01-01",
         end="2023-03-01",
+        execution_time="2023-03-02 00:01:00",
         is_dev=True,
+        end_bounded=True,
     )
     updated_snapshot.add_interval("2023-01-01", "2023-03-01")
 
@@ -1455,9 +1409,9 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
 
     assert plan_builder.set_effective_from(None).build().effective_from is None
     assert updated_snapshot.effective_from is None
-    assert not plan_builder.build().missing_intervals
 
     plan_builder.set_effective_from("2023-02-01")
+    plan_builder.set_start("2023-02-01")
     assert plan_builder.build().effective_from == "2023-02-01"
     assert updated_snapshot.effective_from == "2023-02-01"
 
@@ -1677,17 +1631,20 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
-    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+    assert updated_snapshot.is_forward_only
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
     PlanBuilder(context_diff, is_dev=True, forward_only=True).build()
-    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+    assert updated_snapshot.is_forward_only
 
     updated_snapshot.change_category = None
     updated_snapshot.version = None
     PlanBuilder(context_diff, forward_only=True).build()
-    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+    assert updated_snapshot.is_forward_only
 
 
 def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFixture):
@@ -1727,16 +1684,16 @@ def test_forward_only_models_model_kind_changed(make_snapshot, mocker: MockerFix
 
 
 @pytest.mark.parametrize(
-    "partitioned_by, expected_change_category",
+    "partitioned_by, expected_forward_only",
     [
-        ([], SnapshotChangeCategory.BREAKING),
-        ([d.parse_one("ds")], SnapshotChangeCategory.FORWARD_ONLY),
+        ([], False),
+        ([d.parse_one("ds")], True),
     ],
 )
 def test_forward_only_models_model_kind_changed_to_incremental_by_time_range(
     make_snapshot,
     partitioned_by: t.List[exp.Expression],
-    expected_change_category: SnapshotChangeCategory,
+    expected_forward_only: bool,
 ):
     snapshot = make_snapshot(
         SqlModel(
@@ -1777,7 +1734,8 @@ def test_forward_only_models_model_kind_changed_to_incremental_by_time_range(
     )
 
     PlanBuilder(context_diff, is_dev=True).build()
-    assert updated_snapshot.change_category == expected_change_category
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+    assert updated_snapshot.is_forward_only == expected_forward_only
 
 
 def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFixture):
@@ -1795,7 +1753,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         ),
         nodes={'"a"': snapshot_a.model},
     )
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     updated_snapshot_b = make_snapshot(snapshot_b.model, nodes={'"a"': updated_snapshot_a.model})
     updated_snapshot_b.previous_versions = snapshot_b.all_versions
 
@@ -1868,9 +1826,14 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     assert plan.directly_modified == {updated_snapshot_a.snapshot_id}
 
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
-    assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
-    assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot_b.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+    assert updated_snapshot_c.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
     assert updated_snapshot_d.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+
+    assert not updated_snapshot_a.is_forward_only
+    assert updated_snapshot_b.is_forward_only
+    assert not updated_snapshot_c.is_forward_only
+    assert not updated_snapshot_d.is_forward_only
 
     deployability_index = DeployabilityIndex.create(
         {
@@ -1886,7 +1849,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
 
 def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
-    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select a, ds from a")))
 
@@ -1915,6 +1878,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
 
     PlanBuilder(context_diff, is_dev=True).build()
     assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+    assert not snapshot_b.is_forward_only
 
 
 def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
@@ -2027,7 +1991,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(
         SqlModel(name="b", query=parse_one("select 1, ds FROM a"), depends_on={"a"})
     )
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.add_interval("2022-01-01", now())
 
     context_diff = ContextDiff(
@@ -2060,7 +2024,8 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     plan_builder.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
     plan_builder.build()
     # Make sure it does not get assigned INDIRECT_BREAKING
-    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
+    assert snapshot_b.is_forward_only
 
 
 test_add_restatement_fixtures = [
@@ -2407,7 +2372,7 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
             name="a_child",
             query=parse_one("select 1, ds FROM a"),
             start="2023-01-01",
-            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
         ),
         nodes={'"a"': updated_snapshot.model},
     )
@@ -2457,7 +2422,7 @@ def test_dev_plan_depends_past_non_deployable(make_snapshot, mocker: MockerFixtu
 
     def new_builder(start, end):
         builder = PlanBuilder(context_diff, start=start, end=end, is_dev=True)
-        builder.set_choice(updated_snapshot, SnapshotChangeCategory.FORWARD_ONLY)
+        builder.set_choice(updated_snapshot, SnapshotChangeCategory.BREAKING)
         builder.set_choice(snapshot_child, SnapshotChangeCategory.BREAKING)
         builder.set_choice(unrelated_snapshot, SnapshotChangeCategory.BREAKING)
         return builder
@@ -3146,15 +3111,14 @@ def test_set_choice_for_forward_only_model(make_snapshot):
     )
 
     plan_builder = PlanBuilder(context_diff, is_dev=True)
-
-    with pytest.raises(PlanError, match='Forward-only model "a" cannot be categorized manually.'):
-        plan_builder.set_choice(updated_snapshot, SnapshotChangeCategory.BREAKING)
+    plan_builder.set_choice(updated_snapshot, SnapshotChangeCategory.BREAKING)
 
     plan = plan_builder.build()
     assert (
         plan.snapshots[updated_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.BREAKING
     )
+    assert plan.snapshots[updated_snapshot.snapshot_id].is_forward_only
 
 
 def test_user_provided_flags(sushi_context: Context):

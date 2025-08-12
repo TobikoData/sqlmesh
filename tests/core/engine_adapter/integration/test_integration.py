@@ -2088,7 +2088,9 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     plan_1 = _run_plan(context)
 
     assert plan_1.snapshot_for(model_a).change_category == SnapshotChangeCategory.BREAKING
+    assert not plan_1.snapshot_for(model_a).is_forward_only
     assert plan_1.snapshot_for(model_b).change_category == SnapshotChangeCategory.BREAKING
+    assert not plan_1.snapshot_for(model_b).is_forward_only
 
     # so far so good, model_a should exist as a normal table, model b should be a managed table and the prod views should exist
     assert len(plan_1.schema_metadata.views) == 2
@@ -2135,8 +2137,10 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
 
     assert plan_2.plan.has_changes
     assert len(plan_2.plan.modified_snapshots) == 2
-    assert plan_2.snapshot_for(new_model_a).change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert plan_2.snapshot_for(new_model_a).change_category == SnapshotChangeCategory.NON_BREAKING
+    assert plan_2.snapshot_for(new_model_a).is_forward_only
     assert plan_2.snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
+    assert not plan_2.snapshot_for(model_b).is_forward_only
 
     # verify that the new snapshots were created correctly
     # the forward-only change to model A should be in a new table separate from the one created in the first plan
@@ -2208,8 +2212,10 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     plan_4 = _run_plan(context)
 
     assert plan_4.plan.has_changes
-    assert plan_4.snapshot_for(model_a).change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert plan_4.snapshot_for(model_a).change_category == SnapshotChangeCategory.NON_BREAKING
+    assert plan_4.snapshot_for(model_a).is_forward_only
     assert plan_4.snapshot_for(model_b).change_category == SnapshotChangeCategory.NON_BREAKING
+    assert not plan_4.snapshot_for(model_b).is_forward_only
 
     # verify the Model B table is created as a managed table in prod
     assert plan_4.table_name_for(model_b) == plan_3.table_name_for(

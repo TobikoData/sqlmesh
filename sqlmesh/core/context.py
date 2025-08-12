@@ -1616,6 +1616,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             max_interval_end_per_model,
         )
 
+        if not self.config.virtual_environment_mode.is_full:
+            forward_only = True
+        elif forward_only is None:
+            forward_only = self.config.plan.forward_only
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
@@ -1628,9 +1633,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             skip_backfill=skip_backfill,
             empty_backfill=empty_backfill,
             is_dev=is_dev,
-            forward_only=(
-                forward_only if forward_only is not None else self.config.plan.forward_only
-            ),
+            forward_only=forward_only,
             allow_destructive_models=expanded_destructive_models,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
@@ -2537,8 +2540,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         if self.cache_dir.exists():
             rmtree(self.cache_dir)
 
-        if isinstance(self.state_sync, CachingStateSync):
-            self.state_sync.clear_cache()
+        if isinstance(self._state_sync, CachingStateSync):
+            self._state_sync.clear_cache()
 
     def export_state(
         self,
@@ -2936,7 +2939,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _plan_preview_enabled(self) -> bool:
         if self.config.plan.enable_preview is not None:
             return self.config.plan.enable_preview
-        # It is dangerous to enable preview by default for dbt projects that rely on engines that don’t support cloning.
+        # It is dangerous to enable preview by default for dbt projects that rely on engines that don't support cloning.
         # Enabling previews in such cases can result in unintended full refreshes because dbt incremental models rely on
         # the maximum timestamp value in the target table.
         return self._project_type == c.NATIVE or self.engine_adapter.SUPPORTS_CLONING

@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.node import IntervalUnit
 from tests.core.engine_adapter import to_sql_calls
 
@@ -41,6 +42,11 @@ def test_replace_query_exists(mocker: MockFixture, make_mocked_engine_adapter: t
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
@@ -78,6 +84,11 @@ def test_replace_query_pandas_exists(mocker: MockFixture, make_mocked_engine_ada
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}

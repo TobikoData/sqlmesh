@@ -8,6 +8,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.console import get_console
 from sqlmesh.core.model import (
     EmbeddedKind,
@@ -421,7 +422,10 @@ class ModelConfig(BaseModelConfig):
         }
 
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
@@ -573,6 +577,7 @@ class ModelConfig(BaseModelConfig):
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
             extract_dependencies_from_query=False,
             allow_partials=allow_partials,
+            virtual_environment_mode=virtual_environment_mode,
             **optional_kwargs,
             **model_kwargs,
         )
