@@ -1162,11 +1162,8 @@ def test_promote_deployable(mocker: MockerFixture, make_snapshot):
     )
 
 
-def test_migrate(mocker: MockerFixture, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+def test_migrate(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     session_spy = mocker.spy(adapter, "session")
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
@@ -1184,6 +1181,11 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     adapter.columns = columns  # type: ignore
     adapter.table_exists = lambda _: True  # type: ignore
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type="table"),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1202,7 +1204,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
             call(
@@ -1214,13 +1216,10 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     session_spy.assert_called_once()
 
 
-def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
-
+def test_migrate_missing_table(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.table_exists = lambda _: False  # type: ignore
+    mocker.patch.object(adapter, "get_data_object", return_value=None)
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1241,7 +1240,7 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot):
 
     evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE TABLE "pre" ("a" INT)'),
             call(
@@ -1267,6 +1266,11 @@ def test_migrate_view(
     forward_only: bool,
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type="view"),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -1287,6 +1291,45 @@ def test_migrate_view(
             call(
                 'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
             )
+        ]
+    )
+
+
+def test_migrate_snapshot_data_object_type_mismatch(
+    mocker: MockerFixture,
+    make_snapshot,
+    make_mocked_engine_adapter,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(
+            schema="sqlmesh__test_schema", name="test_schema__test_model__1", type="table"
+        ),
+    )
+    mocker.patch.object(adapter, "table_exists", return_value=False)
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(),
+        storage_format="parquet",
+        query=parse_one("SELECT c, a FROM tbl"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
+
+    evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call('DROP TABLE IF EXISTS "sqlmesh__test_schema"."test_schema__test_model__1"'),
+            call(
+                'CREATE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+            ),
         ]
     )
 
@@ -1709,11 +1752,9 @@ def test_create_clone_in_dev_self_referencing(
 def test_on_destructive_change_runtime_check(
     mocker: MockerFixture,
     make_snapshot,
+    make_mocked_engine_adapter,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -1729,6 +1770,11 @@ def test_on_destructive_change_runtime_check(
         }
 
     adapter.columns = columns  # type: ignore
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type=DataObjectType.TABLE),
+    )
 
     evaluator = SnapshotEvaluator(adapter)
 
@@ -3702,6 +3748,11 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
 
     assert new_snapshot.table_name() == snapshot.table_name()
 
+    adapter_mock.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model", type=DataObjectType.TABLE
+    )
+    adapter_mock.drop_data_object_on_type_mismatch.return_value = False
+
     evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
@@ -3769,6 +3820,11 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     snapshot: Snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.previous_versions = snapshot.all_versions
+
+    adapter_mock.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model", type=DataObjectType.MANAGED_TABLE
+    )
+    adapter_mock.drop_data_object_on_type_mismatch.return_value = False
 
     # no schema changes - no-op
     adapter_mock.get_alter_expressions.return_value = []
@@ -3936,12 +3992,12 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     )
 
 
-def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_snapshot):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = EngineAdapter(lambda: connection_mock, "")
-    engine_adapters = {"one": adapter, "two": adapter_mock}
+def test_multiple_engine_migration(
+    mocker: MockerFixture, adapter_mock, make_snapshot, make_mocked_engine_adapter
+):
+    adapter_one = make_mocked_engine_adapter(EngineAdapter)
+    adapter_two = adapter_mock
+    engine_adapters = {"one": adapter_one, "two": adapter_two}
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
@@ -3956,8 +4012,18 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
             "a": exp.DataType.build("int"),
         }
 
-    adapter.columns = columns  # type: ignore
-    adapter_mock.columns = columns  # type: ignore
+    adapter_two.columns.side_effect = columns
+    adapter_two.get_data_object.return_value = DataObject(
+        schema="test_schema", name="test_model_2", type=DataObjectType.TABLE
+    )
+    adapter_two.drop_data_object_on_type_mismatch.return_value = False
+
+    mocker.patch.object(adapter_one, "columns", side_effect=columns)
+    mocker.patch.object(
+        adapter_one,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type=DataObjectType.TABLE),
+    )
 
     evaluator = SnapshotEvaluator(engine_adapters)
 
@@ -3988,7 +4054,7 @@ def test_multiple_engine_migration(mocker: MockerFixture, adapter_mock, make_sna
         [snapshot_1, snapshot_2], {}, deployability_index=DeployabilityIndex.none_deployable()
     )
 
-    cursor_mock.execute.assert_has_calls(
+    adapter_one.cursor.execute.assert_has_calls(
         [
             call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
             call(
