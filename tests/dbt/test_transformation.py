@@ -847,7 +847,7 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable, capsys):
+def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
@@ -855,29 +855,39 @@ def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable, caps
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
 
-    # Test log with info=False (default) which should only log with debug
-    with patch.object(logger, "debug") as mock_debug, patch.object(logger, "info") as mock_info:
+    # Test log with info=False (default), should only log to file with debug and not to console
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
         assert renderer('{{ log("foo") }}') == ""
         mock_debug.assert_called_once()
         assert "foo" in mock_debug.call_args[0][0]
         mock_info.assert_not_called()
+        mock_console.assert_not_called()
 
-    captured = capsys.readouterr()
-    assert "foo" not in captured.out
-
-    # Test log with info=True, now should log with info and also print to stdout
-    with patch.object(logger, "debug") as mock_debug, patch.object(logger, "info") as mock_info:
+    # Test log with info=True, should log to info and also call log_status_update
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
         assert renderer('{{ log("output to be logged with info", info=true) }}') == ""
         mock_info.assert_called_once()
         assert "output to be logged with info" in mock_info.call_args[0][0]
         mock_debug.assert_not_called()
+        mock_console.assert_called_once()
+        assert "output to be logged with info" in mock_console.call_args[0][0]
 
-    captured = capsys.readouterr()
-    assert "output to be logged with info" in captured.out
-
-    with patch.object(logger, "debug") as mock_logger:
+    # Test print function as well, should use debug
+    with (
+        patch.object(logger, "debug") as mock_logger,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
         assert renderer('{{ print("bar") }}') == ""
-    assert "bar" in mock_logger.call_args[0][0]
+        assert "bar" in mock_logger.call_args[0][0]
+        mock_console.assert_not_called()
 
 
 @pytest.mark.xdist_group("dbt_manifest")
