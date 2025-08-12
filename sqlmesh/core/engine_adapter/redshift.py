@@ -262,7 +262,9 @@ class RedshiftEngineAdapter(
         """
         import pandas as pd
 
-        table_exists = self._drop_data_object_on_type_mismatch(table_name, DataObjectType.TABLE)
+        target_data_object = self._get_data_object(table_name)
+        table_exists = target_data_object is not None
+        self._drop_data_object_on_type_mismatch(target_data_object, DataObjectType.TABLE)
 
         if not isinstance(query_or_df, pd.DataFrame) or not table_exists:
             return super().replace_query(

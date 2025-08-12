@@ -40,13 +40,13 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
-from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
+from sqlmesh.utils import CorrelationId, columns_to_types_all_known, random_id
+from sqlmesh.utils.connection_pool import ConnectionPool, create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
+    MissingDefaultCatalogError,
     SQLMeshError,
     UnsupportedCatalogOperationError,
-    MissingDefaultCatalogError,
 )
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -55,8 +55,8 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
-        BigframeSession,
         DF,
+        BigframeSession,
         PySparkDataFrame,
         PySparkSession,
         Query,
@@ -371,7 +371,9 @@ class EngineAdapter:
         """
         target_table = exp.to_table(table_name)
 
-        table_exists = self._drop_data_object_on_type_mismatch(target_table, DataObjectType.TABLE)
+        target_data_object = self._get_data_object(target_table)
+        table_exists = target_data_object is not None
+        self._drop_data_object_on_type_mismatch(target_data_object, DataObjectType.TABLE)
 
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=target_table
@@ -1146,7 +1148,7 @@ class EngineAdapter:
 
         if replace:
             self._drop_data_object_on_type_mismatch(
-                view_name,
+                self._get_data_object(view_name),
                 DataObjectType.VIEW if not materialized else DataObjectType.MATERIALIZED_VIEW,
             )
 
@@ -2515,34 +2517,34 @@ class EngineAdapter:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
 
-    def _drop_data_object_on_type_mismatch(
-        self, target_name: TableName, expected_type: DataObjectType
-    ) -> bool:
-        """Drops a data object if it exists and is not of the expected type.
-
-        Args:
-            target_name: The name of the data object to check.
-            expected_type: The expected type of the data object.
-
-        Returns:
-            True if the data object exists and is of the expected type, False otherwise.
-        """
+    def _get_data_object(self, target_name: TableName) -> t.Optional[DataObject]:
         target_table = exp.to_table(target_name)
         existing_data_objects = self.get_data_objects(
             schema_(target_table.db, target_table.catalog), {target_table.name}
         )
         if existing_data_objects:
-            if existing_data_objects[0].type == expected_type:
-                return True
+            return existing_data_objects[0]
+        return None
 
-            logger.warning(
-                "Target data object '%s' is a %s and not a %s, dropping it",
-                target_table.sql(dialect=self.dialect),
-                existing_data_objects[0].type.value,
-                expected_type.value,
-            )
-            self.drop_data_object(existing_data_objects[0])
-        return False
+    def _drop_data_object_on_type_mismatch(
+        self, data_object: t.Optional[DataObject], expected_type: DataObjectType
+    ) -> None:
+        """Drops a data object if it exists and is not of the expected type.
+
+        Args:
+            data_object: The data object to check.
+            expected_type: The expected type of the data object.
+        """
+        if data_object is None or data_object.type == expected_type:
+            return
+
+        logger.warning(
+            "Target data object '%s' is a %s and not a %s, dropping it",
+            data_object.to_table().sql(dialect=self.dialect),
+            data_object.type.value,
+            expected_type.value,
+        )
+        self.drop_data_object(data_object)
 
     def _replace_by_key(
         self,
