@@ -893,19 +893,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             other: The target snapshot to inherit intervals from.
         """
-        if self.is_no_rebuild or self.virtual_environment_mode.is_full or not self.is_paused:
-            # If the virtual environment mode is not full we can only merge prod intervals if this snapshot
-            # is currently promoted in production or if it's forward-only / metadata / indirect non-breaking.
-            # Otherwise, we want to ignore any existing intervals and backfill this snapshot from scratch.
-            effective_from_ts = self.normalized_effective_from_ts or 0
-            apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
-            for start, end in other.intervals:
-                # If the effective_from is set, then intervals that come after it must come from
-                # the current snapshots.
-                if apply_effective_from and start < effective_from_ts:
-                    end = min(end, effective_from_ts)
-                if not apply_effective_from or end <= effective_from_ts:
-                    self.add_interval(start, end)
+        effective_from_ts = self.normalized_effective_from_ts or 0
+        apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
+        for start, end in other.intervals:
+            # If the effective_from is set, then intervals that come after it must come from
+            # the current snapshots.
+            if apply_effective_from and start < effective_from_ts:
+                end = min(end, effective_from_ts)
+            if not apply_effective_from or end <= effective_from_ts:
+                self.add_interval(start, end)
 
         if self.dev_version == other.dev_version:
             # Merge dev intervals if the dev versions match which would mean

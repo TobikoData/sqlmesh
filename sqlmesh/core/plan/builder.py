@@ -16,6 +16,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import (
     Plan,
     SnapshotMapping,
@@ -276,7 +277,7 @@ class PlanBuilder:
 
         self._check_destructive_changes(directly_modified)
         self._categorize_snapshots(dag, indirectly_modified)
-        self._adjust_new_snapshot_intervals()
+        self._adjust_snapshot_intervals()
 
         deployability_index = (
             DeployabilityIndex.create(
@@ -508,21 +509,22 @@ class PlanBuilder:
             ).sorted
         }
 
-    def _adjust_new_snapshot_intervals(self) -> None:
-        old_snapshots = {
-            (old.name, old.version_get_or_generate()): old
-            for _, old in self._context_diff.modified_snapshots.values()
-        }
-
-        for new in self._context_diff.new_snapshots.values():
-            new.intervals = []
-            new.dev_intervals = []
-            old = old_snapshots.get((new.name, new.version_get_or_generate()))
-            if not old:
+    def _adjust_snapshot_intervals(self) -> None:
+        for new, old in self._context_diff.modified_snapshots.values():
+            if not new.is_model or not old.is_model:
                 continue
-            new.merge_intervals(old)
-            if new.is_forward_only:
-                new.dev_intervals = new.intervals.copy()
+            is_same_version = old.version_get_or_generate() == new.version_get_or_generate()
+            if is_same_version and should_force_rebuild(old, new):
+                # If the difference between 2 snapshots requires a full rebuild,
+                # then clear the intervals for the new snapshot.
+                self._context_diff.snapshots[new.snapshot_id].intervals = []
+            elif new.snapshot_id in self._context_diff.new_snapshots:
+                new.intervals = []
+                new.dev_intervals = []
+                if is_same_version:
+                    new.merge_intervals(old)
+                    if new.is_forward_only:
+                        new.dev_intervals = new.intervals.copy()
 
     def _check_destructive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
         for s_id in sorted(directly_modified):
@@ -589,7 +591,7 @@ class PlanBuilder:
             forward_only = self._forward_only or self._is_forward_only_change(s_id)
             if forward_only and s_id.name in self._context_diff.modified_snapshots:
                 new, old = self._context_diff.modified_snapshots[s_id.name]
-                if _should_force_rebuild(old, new) or snapshot.is_seed:
+                if should_force_rebuild(old, new) or snapshot.is_seed:
                     # Breaking kind changes and seed changes can't be forward-only.
                     forward_only = False
 
@@ -614,7 +616,7 @@ class PlanBuilder:
         if self._context_diff.directly_modified(s_id.name):
             if self._auto_categorization_enabled:
                 new, old = self._context_diff.modified_snapshots[s_id.name]
-                if _should_force_rebuild(old, new):
+                if should_force_rebuild(old, new):
                     snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
                     return
 
@@ -772,7 +774,7 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and _should_force_rebuild(old, snapshot):
+            if snapshot.is_model and should_force_rebuild(old, snapshot):
                 return False
         return (
             snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
@@ -870,19 +872,3 @@ class PlanBuilder:
             if snapshot.name in self._context_diff.modified_snapshots
             or snapshot.snapshot_id in self._context_diff.added
         ]
-
-
-def _should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
-    if old.virtual_environment_mode != new.virtual_environment_mode:
-        # If the virtual environment mode has changed, then we need to rebuild
-        return True
-    if old.model.kind.name == new.model.kind.name:
-        # If the kind hasn't changed, then we don't need to rebuild
-        return False
-    if not old.is_incremental or not new.is_incremental:
-        # If either is not incremental, then we need to rebuild
-        return True
-    if old.model.partitioned_by == new.model.partitioned_by:
-        # If the partitioning hasn't changed, then we don't need to rebuild
-        return False
-    return True

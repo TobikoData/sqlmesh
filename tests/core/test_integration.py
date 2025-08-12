@@ -2694,7 +2694,11 @@ def test_restatement_plan_across_environments_snapshot_with_shared_version(
     assert isinstance(previous_kind, IncrementalByTimeRangeKind)
 
     model = model.copy(
-        update={"kind": IncrementalUnmanagedKind(), "physical_version": "pinned_version_12345"}
+        update={
+            "kind": IncrementalUnmanagedKind(),
+            "physical_version": "pinned_version_12345",
+            "partitioned_by_": [exp.column("event_date")],
+        }
     )
     context.upsert_model(model)
     context.plan("prod", auto_apply=True, no_prompts=True)

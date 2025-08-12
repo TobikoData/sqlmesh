@@ -1558,3 +1558,228 @@ def test_build_plan_stages_virtual_environment_mode_no_updates(
     # No VirtualLayerUpdateStage should be created since all snapshots are filtered out
     virtual_stages = [stage for stage in stages if isinstance(stage, VirtualLayerUpdateStage)]
     assert len(virtual_stages) == 0
+
+
+def test_adjust_intervals_new_forward_only_dev_intervals(
+    make_snapshot, mocker: MockerFixture
+) -> None:
+    forward_only_snapshot = make_snapshot(
+        SqlModel(
+            name="forward_only_model",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    forward_only_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+    forward_only_snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+    forward_only_snapshot.dev_intervals = []
+
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.refresh_snapshot_intervals = mocker.Mock()
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    environment = Environment(
+        snapshots=[forward_only_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[forward_only_snapshot.snapshot_id],
+    )
+
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[forward_only_snapshot],  # This snapshot should have dev_intervals set
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=True,  # Dev environment
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    assert forward_only_snapshot.dev_intervals == []
+
+    build_plan_stages(plan, state_reader, None)
+
+    assert forward_only_snapshot.dev_intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
+    ]
+    assert forward_only_snapshot.dev_intervals is not forward_only_snapshot.intervals
+
+    state_reader.refresh_snapshot_intervals.assert_called_once()
+
+
+def test_adjust_intervals_restatement_removal(
+    snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
+) -> None:
+    snapshot_a.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-04"))]
+    snapshot_b.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+    original_a_intervals = snapshot_a.intervals.copy()
+    original_b_intervals = snapshot_b.intervals.copy()
+
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.refresh_snapshot_intervals = mocker.Mock()
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    environment = Environment(
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+    )
+
+    restatements = {
+        snapshot_a.name: (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        snapshot_b.name: (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+    }
+
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_a, snapshot_b],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements=restatements,
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages = build_plan_stages(plan, state_reader, None)
+
+    assert snapshot_a.intervals != original_a_intervals
+    assert snapshot_b.intervals != original_b_intervals
+
+    state_reader.refresh_snapshot_intervals.assert_called_once()
+
+    restatement_stages = [stage for stage in stages if isinstance(stage, RestatementStage)]
+    assert len(restatement_stages) == 1
+    restatement_stage = restatement_stages[0]
+    assert len(restatement_stage.snapshot_intervals) == 2
+
+    backfill_stages = [stage for stage in stages if isinstance(stage, BackfillStage)]
+    assert len(backfill_stages) == 1
+    (snapshot, intervals) = next(iter(backfill_stages[0].snapshot_to_intervals.items()))
+    assert snapshot.intervals == [(to_timestamp("2023-01-02"), to_timestamp("2023-01-04"))]
+    assert intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+
+def test_adjust_intervals_should_force_rebuild(make_snapshot, mocker: MockerFixture) -> None:
+    old_snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    old_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    old_snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            query=parse_one("select 1, ds"),
+            kind=dict(name=ModelKindName.FULL),
+        )
+    )
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    new_snapshot.version = old_snapshot.version
+    new_snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.refresh_snapshot_intervals = mocker.Mock()
+    state_reader.get_snapshots.side_effect = [{}, {old_snapshot.snapshot_id: old_snapshot}, {}, {}]
+
+    existing_environment = Environment(
+        name="prod",
+        snapshots=[old_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_plan",
+        promoted_snapshot_ids=[old_snapshot.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+    state_reader.get_environment.return_value = existing_environment
+
+    environment = Environment(
+        snapshots=[new_snapshot.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id="previous_plan",
+        promoted_snapshot_ids=[new_snapshot.snapshot_id],
+    )
+
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[new_snapshot],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        directly_modified_snapshots=[new_snapshot.snapshot_id],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages = build_plan_stages(plan, state_reader, None)
+
+    state_reader.refresh_snapshot_intervals.assert_called_once()
+    state_reader.get_environment.assert_called()
+
+    assert not new_snapshot.intervals
+    backfill_stages = [stage for stage in stages if isinstance(stage, BackfillStage)]
+    assert len(backfill_stages) == 1
+    (snapshot, intervals) = next(iter(backfill_stages[0].snapshot_to_intervals.items()))
+    assert not snapshot.intervals
+    assert intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
