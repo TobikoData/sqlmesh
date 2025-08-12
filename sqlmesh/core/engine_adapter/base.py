@@ -32,6 +32,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationTable,
     CommentCreationView,
     DataObject,
+    DataObjectType,
     EngineRunMode,
     InsertOverwriteStrategy,
     SourceQuery,
@@ -39,13 +40,13 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import columns_to_types_all_known, random_id, CorrelationId
-from sqlmesh.utils.connection_pool import create_connection_pool, ConnectionPool
+from sqlmesh.utils import CorrelationId, columns_to_types_all_known, random_id
+from sqlmesh.utils.connection_pool import ConnectionPool, create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_time_column
 from sqlmesh.utils.errors import (
+    MissingDefaultCatalogError,
     SQLMeshError,
     UnsupportedCatalogOperationError,
-    MissingDefaultCatalogError,
 )
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -54,8 +55,8 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
-        BigframeSession,
         DF,
+        BigframeSession,
         PySparkDataFrame,
         PySparkSession,
         Query,
@@ -369,6 +370,12 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         target_table = exp.to_table(table_name)
+
+        target_data_object = self.get_data_object(target_table)
+        table_exists = target_data_object is not None
+        if self.drop_data_object_on_type_mismatch(target_data_object, DataObjectType.TABLE):
+            table_exists = False
+
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=target_table
         )
@@ -390,7 +397,7 @@ class EngineAdapter:
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
-        if self.SUPPORTS_REPLACE_TABLE or not self.table_exists(target_table):
+        if self.SUPPORTS_REPLACE_TABLE or not table_exists:
             return self._create_table_from_source_queries(
                 target_table,
                 source_queries,
@@ -930,6 +937,28 @@ class EngineAdapter:
             )
         )
 
+    def drop_data_object(self, data_object: DataObject, ignore_if_not_exists: bool = True) -> None:
+        """Drops a data object of arbitrary type.
+
+        Args:
+            data_object: The data object to drop.
+            ignore_if_not_exists: If True, no error will be raised if the data object does not exist.
+        """
+        if data_object.type.is_view:
+            self.drop_view(data_object.to_table(), ignore_if_not_exists=ignore_if_not_exists)
+        elif data_object.type.is_materialized_view:
+            self.drop_view(
+                data_object.to_table(), ignore_if_not_exists=ignore_if_not_exists, materialized=True
+            )
+        elif data_object.type.is_table:
+            self.drop_table(data_object.to_table(), exists=ignore_if_not_exists)
+        elif data_object.type.is_managed_table:
+            self.drop_managed_table(data_object.to_table(), exists=ignore_if_not_exists)
+        else:
+            raise SQLMeshError(
+                f"Can't drop data object '{data_object.to_table().sql(dialect=self.dialect)}' of type '{data_object.type.value}'"
+            )
+
     def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.
 
@@ -1117,6 +1146,12 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
+
+        if replace:
+            self.drop_data_object_on_type_mismatch(
+                self.get_data_object(view_name),
+                DataObjectType.VIEW if not materialized else DataObjectType.MATERIALIZED_VIEW,
+            )
 
         with source_queries[0] as query:
             self.execute(
@@ -2022,6 +2057,15 @@ class EngineAdapter:
                 )
         self._rename_table(old_table_name, new_table_name)
 
+    def get_data_object(self, target_name: TableName) -> t.Optional[DataObject]:
+        target_table = exp.to_table(target_name)
+        existing_data_objects = self.get_data_objects(
+            schema_(target_table.db, target_table.catalog), {target_table.name}
+        )
+        if existing_data_objects:
+            return existing_data_objects[0]
+        return None
+
     def get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
@@ -2482,6 +2526,30 @@ class EngineAdapter:
     def _truncate_table(self, table_name: TableName) -> None:
         table = exp.to_table(table_name)
         self.execute(f"TRUNCATE TABLE {table.sql(dialect=self.dialect, identify=True)}")
+
+    def drop_data_object_on_type_mismatch(
+        self, data_object: t.Optional[DataObject], expected_type: DataObjectType
+    ) -> bool:
+        """Drops a data object if it exists and is not of the expected type.
+
+        Args:
+            data_object: The data object to check.
+            expected_type: The expected type of the data object.
+
+        Returns:
+            True if the data object was dropped, False otherwise.
+        """
+        if data_object is None or data_object.type == expected_type:
+            return False
+
+        logger.warning(
+            "Target data object '%s' is a %s and not a %s, dropping it",
+            data_object.to_table().sql(dialect=self.dialect),
+            data_object.type.value,
+            expected_type.value,
+        )
+        self.drop_data_object(data_object)
+        return True
 
     def _replace_by_key(
         self,

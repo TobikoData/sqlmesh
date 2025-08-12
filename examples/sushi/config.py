@@ -1,5 +1,6 @@
 import os
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     BigQueryConnectionConfig,
@@ -74,6 +75,16 @@ test_config = Config(
         )
     ),
     model_defaults=model_defaults,
+)
+
+# A configuration used for SQLMesh tests with virtual environment mode set to DEV_ONLY.
+test_config_virtual_environment_mode_dev_only = test_config.copy(
+    update={
+        "virtual_environment_mode": VirtualEnvironmentMode.DEV_ONLY,
+        "plan": PlanConfig(
+            auto_categorize_changes=CategorizerConfig.all_full(),
+        ),
+    }
 )
 
 # A DuckDB config with a physical schema map.

@@ -2,7 +2,7 @@ import pytest
 from sqlmesh.core.engine_adapter import ClickhouseEngineAdapter
 from sqlmesh.core.model.definition import load_sql_based_model
 from sqlmesh.core.model.kind import ModelKindName
-from sqlmesh.core.engine_adapter.shared import EngineRunMode
+from sqlmesh.core.engine_adapter.shared import EngineRunMode, DataObject
 from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.dialect import parse
 from sqlglot import exp, parse_one
@@ -573,6 +573,12 @@ def test_scd_type_2_by_time(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[DataObject(schema="", name=table_name, type="table")],
+    )
+
     fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
     fetchone_mock.return_value = None
 
@@ -610,7 +616,7 @@ def test_scd_type_2_by_time(
         truncate=True,
     )
 
-    assert to_sql_calls(adapter)[4] == parse_one(
+    assert to_sql_calls(adapter)[3] == parse_one(
         """
 INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_UPDATED_at", "test_valid_from", "test_valid_to")
 WITH "source" AS (
@@ -787,6 +793,12 @@ def test_scd_type_2_by_column(
         make_temp_table_name(table_name, "abcd"),
     ]
 
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[DataObject(schema="", name=table_name, type="table")],
+    )
+
     fetchone_mock = mocker.patch("sqlmesh.core.engine_adapter.ClickhouseEngineAdapter.fetchone")
     fetchone_mock.return_value = None
 
@@ -817,7 +829,7 @@ def test_scd_type_2_by_column(
         truncate=True,
     )
 
-    assert to_sql_calls(adapter)[4] == parse_one(
+    assert to_sql_calls(adapter)[3] == parse_one(
         """
 INSERT INTO "__temp_target_abcd" ("id", "name", "price", "test_VALID_from", "test_valid_to")
 WITH "source" AS (

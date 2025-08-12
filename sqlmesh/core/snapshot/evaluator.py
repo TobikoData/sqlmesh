@@ -38,7 +38,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -934,7 +934,14 @@ class SnapshotEvaluator:
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
         ):
-            if adapter.table_exists(target_table_name):
+            target_data_object = adapter.get_data_object(target_table_name)
+            table_exists = target_data_object is not None
+            if adapter.drop_data_object_on_type_mismatch(
+                target_data_object, _snapshot_to_data_object_type(snapshot)
+            ):
+                table_exists = False
+
+            if table_exists:
                 evaluation_strategy = _evaluation_strategy(snapshot, adapter)
                 tmp_table_name = snapshot.table_name(is_deployable=False)
                 logger.info(
@@ -2274,8 +2281,10 @@ def _check_destructive_schema_change(
     alter_expressions: t.List[exp.Alter],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
-    if snapshot.needs_destructive_check(allow_destructive_snapshots) and has_drop_alteration(
-        alter_expressions
+    if (
+        snapshot.is_no_rebuild
+        and snapshot.needs_destructive_check(allow_destructive_snapshots)
+        and has_drop_alteration(alter_expressions)
     ):
         snapshot_name = snapshot.name
         dropped_column_names = get_dropped_column_names(alter_expressions)
@@ -2305,3 +2314,15 @@ def _check_table_db_is_physical_schema(table_name: str, physical_schema: str) ->
         raise SQLMeshError(
             f"Table '{table_name}' is not a part of the physical schema '{physical_schema}' and so can't be dropped."
         )
+
+
+def _snapshot_to_data_object_type(snapshot: Snapshot) -> DataObjectType:
+    if snapshot.is_managed:
+        return DataObjectType.MANAGED_TABLE
+    if snapshot.is_materialized_view:
+        return DataObjectType.MATERIALIZED_VIEW
+    if snapshot.is_view:
+        return DataObjectType.VIEW
+    if snapshot.is_materialized:
+        return DataObjectType.TABLE
+    return DataObjectType.UNKNOWN

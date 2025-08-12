@@ -8,6 +8,7 @@ import re
 from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.signal import SignalRegistry
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -154,6 +155,7 @@ class model(registry_decorator):
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         infer_names: t.Optional[bool] = False,
         blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Tuple[t.Any, t.Optional[bool]]] = {}
@@ -228,6 +230,7 @@ class model(registry_decorator):
             "audit_definitions": audit_definitions,
             "signal_definitions": signal_definitions,
             "blueprint_variables": blueprint_variables,
+            "virtual_environment_mode": virtual_environment_mode,
             **rendered_fields,
         }
 

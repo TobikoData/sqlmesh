@@ -1996,6 +1996,47 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     assert not actual_snapshots[new_forward_only_snapshot.snapshot_id].unrestorable
 
 
+def test_unrestorable_snapshot_target_not_forward_only(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@daily",
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+    snapshot.version = "a"
+
+    assert not snapshot.unpaused_ts
+    state_sync.push_snapshots([snapshot])
+
+    unpaused_dt = "2022-01-01"
+    state_sync.unpause_snapshots([snapshot], unpaused_dt)
+
+    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert actual_snapshot.unpaused_ts
+    assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
+    )
+    updated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
+    updated_snapshot.version = "a"
+
+    assert not updated_snapshot.unpaused_ts
+    state_sync.push_snapshots([updated_snapshot])
+    state_sync.unpause_snapshots([updated_snapshot], unpaused_dt)
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, updated_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[updated_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
+
+    assert actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[updated_snapshot.snapshot_id].unrestorable
+
+
 def test_unpause_snapshots_remove_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):

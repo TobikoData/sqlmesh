@@ -64,6 +64,7 @@ from sqlmesh.core.snapshot.definition import (
     table_name,
     TableNamingConvention,
 )
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import DatetimeRanges, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError, SignalEvalError
@@ -162,6 +163,7 @@ def test_json(snapshot: Snapshot):
             "signals": [],
             "enabled": True,
             "extract_dependencies_from_query": True,
+            "virtual_environment_mode": "full",
         },
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
@@ -910,7 +912,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1312415267",
+        data_hash="3301649319",
         metadata_hash="1125608408",
     )
 
@@ -971,7 +973,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1909791099",
+        data_hash="1586624913",
         metadata_hash="2315134974",
     )
 
@@ -1010,7 +1012,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="923305614",
+        data_hash="2908339239",
         metadata_hash="1125608408",
     )
 
@@ -1312,7 +1314,7 @@ def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
     original_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     assert original_snapshot.table_naming_convention == TableNamingConvention.SCHEMA_AND_TABLE
-    assert original_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+    assert original_snapshot.table_name() == f"sqlmesh__default.a__{original_snapshot.version}"
 
     changed_snapshot: Snapshot = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, 'forward_only' as a, ds")),
@@ -1330,7 +1332,7 @@ def test_table_naming_convention_change_reuse_previous_version(make_snapshot):
         changed_snapshot.previous_version.table_naming_convention
         == TableNamingConvention.SCHEMA_AND_TABLE
     )
-    assert changed_snapshot.table_name() == "sqlmesh__default.a__4145234055"
+    assert changed_snapshot.table_name() == f"sqlmesh__default.a__{changed_snapshot.version}"
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -3340,3 +3342,42 @@ def test_partitioned_by_roundtrip(make_snapshot: t.Callable):
 
     assert isinstance(deserialized.node, SqlModel)
     assert deserialized.node.partitioned_by == snapshot.node.partitioned_by
+
+
+@pytest.mark.parametrize(
+    "virtual_env_mode,is_deployable,expected_uses_name_as_is",
+    [
+        (VirtualEnvironmentMode.DEV_ONLY, True, True),
+        (VirtualEnvironmentMode.DEV_ONLY, False, False),
+        (VirtualEnvironmentMode.FULL, True, False),
+        (VirtualEnvironmentMode.FULL, False, False),
+    ],
+)
+def test_table_name_virtual_environment_mode(
+    make_snapshot,
+    virtual_env_mode: VirtualEnvironmentMode,
+    is_deployable: bool,
+    expected_uses_name_as_is: bool,
+):
+    model = SqlModel(
+        name="my_schema.my_model",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        query=parse_one("SELECT 1, ds"),
+        virtual_environment_mode=virtual_env_mode,
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    table_name_result = snapshot.table_name(is_deployable=is_deployable)
+
+    if expected_uses_name_as_is:
+        assert table_name_result == '"my_schema"."my_model"'
+    else:
+        # Should contain the versioned table name with schema prefix
+        assert "sqlmesh__my_schema" in table_name_result
+        assert "my_schema__my_model" in table_name_result
+        if is_deployable:
+            assert table_name_result.endswith(snapshot.version)
+        else:
+            assert table_name_result.endswith(f"{snapshot.dev_version}__dev")

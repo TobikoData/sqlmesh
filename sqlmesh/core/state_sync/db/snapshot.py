@@ -173,10 +173,9 @@ class SnapshotState:
                     snapshot.set_unpaused_ts(None)
                     paused_snapshots.append(snapshot.snapshot_id)
 
-                if (
-                    not snapshot.is_forward_only
-                    and target_snapshot.is_forward_only
-                    and not snapshot.unrestorable
+                if not snapshot.unrestorable and (
+                    (target_snapshot.is_forward_only and not snapshot.is_forward_only)
+                    or (snapshot.is_forward_only and not target_snapshot.is_forward_only)
                 ):
                     logger.info("Marking snapshot %s as unrestorable", snapshot.snapshot_id)
                     snapshot.unrestorable = True

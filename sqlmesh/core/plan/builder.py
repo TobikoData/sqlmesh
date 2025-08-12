@@ -16,6 +16,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import (
     Plan,
     SnapshotMapping,
@@ -162,7 +163,7 @@ class PlanBuilder:
 
         self._start = start
         if not self._start and (
-            self._forward_only_preview_needed or self._auto_restatement_preview_needed
+            self._forward_only_preview_needed or self._non_forward_only_preview_needed
         ):
             self._start = default_start or yesterday_ds()
 
@@ -267,7 +268,6 @@ class PlanBuilder:
         self._ensure_no_new_snapshots_with_restatements()
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range()
-        self._ensure_no_forward_only_revert()
         self._ensure_no_broken_references()
 
         self._apply_effective_from()
@@ -277,7 +277,7 @@ class PlanBuilder:
 
         self._check_destructive_changes(directly_modified)
         self._categorize_snapshots(dag, indirectly_modified)
-        self._adjust_new_snapshot_intervals()
+        self._adjust_snapshot_intervals()
 
         deployability_index = (
             DeployabilityIndex.create(
@@ -509,21 +509,22 @@ class PlanBuilder:
             ).sorted
         }
 
-    def _adjust_new_snapshot_intervals(self) -> None:
-        old_snapshots = {
-            (old.name, old.version_get_or_generate()): old
-            for _, old in self._context_diff.modified_snapshots.values()
-        }
-
-        for new in self._context_diff.new_snapshots.values():
-            new.intervals = []
-            new.dev_intervals = []
-            old = old_snapshots.get((new.name, new.version_get_or_generate()))
-            if not old:
+    def _adjust_snapshot_intervals(self) -> None:
+        for new, old in self._context_diff.modified_snapshots.values():
+            if not new.is_model or not old.is_model:
                 continue
-            new.merge_intervals(old)
-            if new.is_forward_only:
-                new.dev_intervals = new.intervals.copy()
+            is_same_version = old.version_get_or_generate() == new.version_get_or_generate()
+            if is_same_version and should_force_rebuild(old, new):
+                # If the difference between 2 snapshots requires a full rebuild,
+                # then clear the intervals for the new snapshot.
+                self._context_diff.snapshots[new.snapshot_id].intervals = []
+            elif new.snapshot_id in self._context_diff.new_snapshots:
+                new.intervals = []
+                new.dev_intervals = []
+                if is_same_version:
+                    new.merge_intervals(old)
+                    if new.is_forward_only:
+                        new.dev_intervals = new.intervals.copy()
 
     def _check_destructive_changes(self, directly_modified: t.Set[SnapshotId]) -> None:
         for s_id in sorted(directly_modified):
@@ -587,7 +588,12 @@ class PlanBuilder:
             if not snapshot or not self._is_new_snapshot(snapshot):
                 continue
 
-            forward_only = self._is_forward_only_change(s_id) or self._forward_only
+            forward_only = self._forward_only or self._is_forward_only_change(s_id)
+            if forward_only and s_id.name in self._context_diff.modified_snapshots:
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if should_force_rebuild(old, new) or snapshot.is_seed:
+                    # Breaking kind changes and seed changes can't be forward-only.
+                    forward_only = False
 
             if s_id in self._choices:
                 snapshot.categorize_as(self._choices[s_id], forward_only)
@@ -608,15 +614,10 @@ class PlanBuilder:
         s_id = snapshot.snapshot_id
 
         if self._context_diff.directly_modified(s_id.name):
-            new, old = self._context_diff.modified_snapshots[s_id.name]
-            is_breaking_kind_change = _is_breaking_kind_change(old, new)
-            if is_breaking_kind_change or snapshot.is_seed:
-                # Breaking kind changes and seed changes can't be forward-only.
-                forward_only = False
-
             if self._auto_categorization_enabled:
-                if is_breaking_kind_change:
-                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                new, old = self._context_diff.modified_snapshots[s_id.name]
+                if should_force_rebuild(old, new):
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
                     return
 
                 s_id_with_missing_columns: t.Optional[SnapshotId] = None
@@ -773,7 +774,7 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and _is_breaking_kind_change(old, snapshot):
+            if snapshot.is_model and should_force_rebuild(old, snapshot):
                 return False
         return (
             snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)
@@ -799,27 +800,6 @@ class PlanBuilder:
             if to_datetime(end) > to_datetime(self.execution_time):
                 raise PlanError(
                     f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
-                )
-
-    def _ensure_no_forward_only_revert(self) -> None:
-        """Ensures that a previously superseded breaking / non-breaking snapshot is not being
-        used again to replace an existing forward-only snapshot with the same version.
-
-        In other words there is no going back to the original non-forward-only snapshot with
-        the same version once a forward-only change for that version has been introduced.
-        """
-        for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
-            if (
-                candidate.snapshot_id not in self._context_diff.new_snapshots
-                and candidate.is_model
-                and not candidate.model.forward_only
-                and promoted.is_forward_only
-                and not promoted.is_paused
-                and not candidate.is_no_rebuild
-                and promoted.version == candidate.version
-            ):
-                raise PlanError(
-                    f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
     def _ensure_no_broken_references(self) -> None:
@@ -871,12 +851,18 @@ class PlanBuilder:
         )
 
     @cached_property
-    def _auto_restatement_preview_needed(self) -> bool:
-        return self._is_dev and any(
-            snapshot.model.auto_restatement_cron is not None
-            for snapshot in self._modified_and_added_snapshots
-            if snapshot.is_model
-        )
+    def _non_forward_only_preview_needed(self) -> bool:
+        if not self._is_dev:
+            return False
+        for snapshot in self._modified_and_added_snapshots:
+            if not snapshot.is_model:
+                continue
+            if (
+                not snapshot.virtual_environment_mode.is_full
+                or snapshot.model.auto_restatement_cron is not None
+            ):
+                return True
+        return False
 
     @cached_property
     def _modified_and_added_snapshots(self) -> t.List[Snapshot]:
@@ -886,16 +872,3 @@ class PlanBuilder:
             if snapshot.name in self._context_diff.modified_snapshots
             or snapshot.snapshot_id in self._context_diff.added
         ]
-
-
-def _is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
-    if old.model.kind.name == new.model.kind.name:
-        # If the kind hasn't changed, then it's not a breaking change
-        return False
-    if not old.is_incremental or not new.is_incremental:
-        # If either is not incremental, then it's a breaking change
-        return True
-    if old.model.partitioned_by == new.model.partitioned_by:
-        # If the partitioning hasn't changed, then it's not a breaking change
-        return False
-    return True

@@ -117,7 +117,11 @@ class DbtLoader(Loader):
 
         def _to_sqlmesh(config: BMC, context: DbtContext) -> Model:
             logger.debug("Converting '%s' to sqlmesh format", config.canonical_name(context))
-            return config.to_sqlmesh(context, audit_definitions=audits)
+            return config.to_sqlmesh(
+                context,
+                audit_definitions=audits,
+                virtual_environment_mode=self.config.virtual_environment_mode,
+            )
 
         for project in self._load_projects():
             context = project.context.copy()

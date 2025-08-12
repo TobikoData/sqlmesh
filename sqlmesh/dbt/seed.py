@@ -15,6 +15,7 @@ except ImportError:
     SUPPORTS_DELIMITER = False
 from sqlglot import exp
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.column import ColumnConfig
@@ -38,7 +39,10 @@ class SeedConfig(BaseModelConfig):
     quote_columns: t.Optional[bool] = False
 
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
@@ -83,6 +87,7 @@ class SeedConfig(BaseModelConfig):
             SeedKind(path=seed_path),
             dialect=self.dialect(context),
             audit_definitions=audit_definitions,
+            virtual_environment_mode=virtual_environment_mode,
             **kwargs,
         )
 

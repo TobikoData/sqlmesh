@@ -37,7 +37,6 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     now,
-    now_timestamp,
     to_date,
     to_datetime,
     to_timestamp,
@@ -1095,53 +1094,6 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     assert restatement_prod_plan_builder.build().end == "2022-01-03"
     restatement_prod_plan_builder.set_end("2022-01-04")
     assert restatement_prod_plan_builder.build().end == "2022-01-04"
-
-
-def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    assert not snapshot.is_forward_only
-
-    forward_only_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
-    forward_only_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
-    forward_only_snapshot.version = snapshot.version
-    forward_only_snapshot.unpaused_ts = now_timestamp()
-    assert forward_only_snapshot.is_forward_only
-
-    context_diff = ContextDiff(
-        environment="test_environment",
-        is_new_environment=True,
-        is_unfinalized_environment=False,
-        normalize_environment_name=True,
-        create_from="prod",
-        create_from_env_exists=True,
-        added=set(),
-        removed_snapshots={},
-        modified_snapshots={snapshot.name: (snapshot, forward_only_snapshot)},
-        snapshots={snapshot.snapshot_id: snapshot},
-        new_snapshots={},
-        previous_plan_id=None,
-        previously_promoted_snapshot_ids=set(),
-        previous_finalized_snapshots=None,
-        previous_gateway_managed_virtual_layer=False,
-        gateway_managed_virtual_layer=False,
-        environment_statements=[],
-    )
-
-    with pytest.raises(
-        PlanError,
-        match=r"Attempted to revert to an unrevertable version of model.*",
-    ):
-        PlanBuilder(context_diff, forward_only=True).build()
-
-    # Make sure the plan can be created if a new snapshot version was enforced.
-    new_version_snapshot = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    context_diff.modified_snapshots = {snapshot.name: (new_version_snapshot, forward_only_snapshot)}
-    context_diff.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
-    PlanBuilder(context_diff, forward_only=True).build()
 
 
 def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):

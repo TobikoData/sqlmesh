@@ -582,13 +582,16 @@ def test_merge_exists(
     ]
 
 
-def test_replace_query(make_mocked_engine_adapter: t.Callable):
+def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
-    adapter.cursor.fetchone.return_value = (1,)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_NAME] = 'test_table';""",
         "TRUNCATE TABLE [test_table];",
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]
@@ -605,6 +608,11 @@ def test_replace_query_pandas(
     )
 
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
     adapter.cursor.fetchone.return_value = (1,)
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
@@ -682,7 +690,7 @@ def test_drop_schema_with_catalog(make_mocked_engine_adapter: t.Callable, mocker
 
 
 def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
-    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter, patch_get_data_objects=False)
     original_set_current_catalog = adapter.set_current_catalog
     local_state = {}
 
@@ -911,6 +919,12 @@ def test_replace_query_strategy(adapter: MSSQLEngineAdapter, mocker: MockerFixtu
     # subsequent - table exists
     exists_mock.return_value = True
     assert adapter.table_exists("test_table")
+
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
 
     adapter.replace_query(
         "test_table",

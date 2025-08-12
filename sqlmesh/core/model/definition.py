@@ -1062,6 +1062,7 @@ class _Model(ModelMeta, frozen=True):
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
             str(self.optimize_query) if self.optimize_query is not None else None,
+            self.virtual_environment_mode.value,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -2957,6 +2958,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         )
     ),
     "formatting": str,
+    "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 
 
