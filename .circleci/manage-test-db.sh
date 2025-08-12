@@ -114,7 +114,7 @@ gcp-postgres_init() {
     # Download and start Cloud SQL Proxy
     curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.18.0/cloud-sql-proxy.linux.amd64
     chmod +x cloud-sql-proxy
-    echo $GCP_POSTGRES_KEYFILE_JSON > /tmp/keyfile.json
+    echo "$GCP_POSTGRES_KEYFILE_JSON" > /tmp/keyfile.json
     ./cloud-sql-proxy --credentials-file /tmp/keyfile.json $GCP_POSTGRES_INSTANCE_CONNECTION_STRING &
 
     # Wait for proxy to start
