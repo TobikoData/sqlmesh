@@ -847,16 +847,33 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
+def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable, capsys):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
-    with patch.object(logger, "debug") as mock_logger:
+
+    # Test log with info=False (default) which should only log with debug
+    with patch.object(logger, "debug") as mock_debug, patch.object(logger, "info") as mock_info:
         assert renderer('{{ log("foo") }}') == ""
-    assert "foo" in mock_logger.call_args[0][0]
+        mock_debug.assert_called_once()
+        assert "foo" in mock_debug.call_args[0][0]
+        mock_info.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert "foo" not in captured.out
+
+    # Test log with info=True, now should log with info and also print to stdout
+    with patch.object(logger, "debug") as mock_debug, patch.object(logger, "info") as mock_info:
+        assert renderer('{{ log("output to be logged with info", info=true) }}') == ""
+        mock_info.assert_called_once()
+        assert "output to be logged with info" in mock_info.call_args[0][0]
+        mock_debug.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert "output to be logged with info" in captured.out
 
     with patch.object(logger, "debug") as mock_logger:
         assert renderer('{{ print("bar") }}') == ""

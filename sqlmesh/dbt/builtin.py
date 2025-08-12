@@ -170,7 +170,13 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    logger.debug(msg)
+    if info:
+        # Write to both log file and stdout
+        logger.info(msg)
+        print(msg)
+    else:
+        logger.debug(msg)
+
     return ""
 
 
