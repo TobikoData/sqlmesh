@@ -236,20 +236,19 @@ def _add_variables_to_python_env(
         blueprint_variables=blueprint_variables,
     )
     for var_name, is_metadata in python_used_variables.items():
-        used_variables[var_name] = is_metadata and used_variables.get(var_name)
+        used_variables[var_name] = is_metadata and used_variables.get(var_name, True)
 
     # Variables are treated as metadata when:
     # - They are only referenced in metadata-only contexts, such as `audits (...)`, virtual statements, etc
     # - They are only referenced in metadata-only macros, either as their arguments or within their definitions
-    metadata_used_variables = set()
+    metadata_used_variables = {
+        var_name for var_name, is_metadata in used_variables.items() if is_metadata
+    }
     for used_var, outermost_macro_func in (outermost_macro_func_ancestor_by_var or {}).items():
         used_var_is_metadata = used_variables.get(used_var)
         if used_var_is_metadata is False:
             continue
-
-        if used_var_is_metadata or (
-            outermost_macro_func in python_env and python_env[outermost_macro_func].is_metadata
-        ):
+        if outermost_macro_func in python_env and python_env[outermost_macro_func].is_metadata:
             metadata_used_variables.add(used_var)
 
     non_metadata_used_variables = set(used_variables) - metadata_used_variables

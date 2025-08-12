@@ -10119,8 +10119,8 @@ def m4_non_metadata_references_v6(evaluator):
     variables = python_env.get(c.SQLMESH_VARS)
     metadata_variables = python_env.get(c.SQLMESH_VARS_METADATA)
 
-    assert variables == Executable.value({"v1": 1, "v3": 3, "v6": 6})
-    assert metadata_variables == Executable.value({"v2": 2}, is_metadata=True)
+    assert variables == Executable.value({"v3": 3, "v6": 6})
+    assert metadata_variables == Executable.value({"v1": 1, "v2": 2}, is_metadata=True)
 
     blueprint_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS)
     blueprint_metadata_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
@@ -10135,8 +10135,8 @@ def m4_non_metadata_references_v6(evaluator):
     assert macro_evaluator.locals == {
         "runtime_stage": "loading",
         "default_catalog": None,
-        c.SQLMESH_VARS: {"v1": 1, "v3": 3, "v6": 6},
-        c.SQLMESH_VARS_METADATA: {"v2": 2},
+        c.SQLMESH_VARS: {"v3": 3, "v6": 6},
+        c.SQLMESH_VARS_METADATA: {"v1": 1, "v2": 2},
         c.SQLMESH_BLUEPRINT_VARS: {"v4": exp.Literal.number("4")},
         c.SQLMESH_BLUEPRINT_VARS_METADATA: {"v5": exp.Literal.number("5")},
     }
