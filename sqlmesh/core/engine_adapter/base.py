@@ -1037,14 +1037,14 @@ class EngineAdapter:
                 f"Can't drop data object '{data_object.to_table().sql(dialect=self.dialect)}' of type '{data_object.type.value}'"
             )
 
-    def drop_table(self, table_name: TableName, exists: bool = True) -> None:
+    def drop_table(self, table_name: TableName, exists: bool = True, **kwargs: t.Any) -> None:
         """Drops a table.
 
         Args:
             table_name: The name of the table to drop.
             exists: If exists, defaults to True.
         """
-        self._drop_object(name=table_name, exists=exists)
+        self._drop_object(name=table_name, exists=exists, **kwargs)
 
     def drop_managed_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a managed table.

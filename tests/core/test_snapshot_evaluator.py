@@ -434,7 +434,8 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = create_and_cleanup("catalog.test_schema.test_model", True)
     adapter_mock.get_data_object.assert_not_called()
     adapter_mock.drop_table.assert_called_once_with(
-        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
+        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+        cascade=True,
     )
     adapter_mock.reset_mock()
 
@@ -443,9 +444,10 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.drop_table.assert_has_calls(
         [
             call(
-                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+                cascade=True,
             ),
-            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"),
+            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}", cascade=True),
         ]
     )
     adapter_mock.reset_mock()
@@ -454,8 +456,11 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.get_data_object.assert_not_called()
     adapter_mock.drop_table.assert_has_calls(
         [
-            call(f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__dev"),
-            call(f"sqlmesh__default.test_model__{snapshot.version}"),
+            call(
+                f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__dev",
+                cascade=True,
+            ),
+            call(f"sqlmesh__default.test_model__{snapshot.version}", cascade=True),
         ]
     )
 
@@ -4013,10 +4018,10 @@ def test_multiple_engine_cleanup(snapshot: Snapshot, adapters, make_snapshot):
 
     # The clean up will happen using the specific gateway the model was created with
     engine_adapters["default"].drop_table.assert_called_once_with(
-        f"sqlmesh__db.db__model__{snapshot.version}__dev"
+        f"sqlmesh__db.db__model__{snapshot.version}__dev", cascade=True
     )
     engine_adapters["secondary"].drop_table.assert_called_once_with(
-        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}__dev"
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot_2.version}__dev", cascade=True
     )
 
 
