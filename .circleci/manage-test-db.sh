@@ -109,6 +109,32 @@ clickhouse-cloud_init() {
     echo "Clickhouse Cloud instance $CLICKHOUSE_CLOUD_HOST is up and running"
 }
 
+# GCP Postgres
+gcp-postgres_init() {
+    # Download and start Cloud SQL Proxy
+    curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.18.0/cloud-sql-proxy.linux.amd64
+    chmod +x cloud-sql-proxy
+    echo $GCP_POSTGRES_KEYFILE_JSON > /tmp/keyfile.json
+    ./cloud-sql-proxy --credentials-file /tmp/keyfile.json $GCP_POSTGRES_INSTANCE_CONNECTION_STRING &
+
+    # Wait for proxy to start
+    sleep 5
+}
+
+gcp-postgres_exec() {
+    PGPASSWORD=$GCP_POSTGRES_PASSWORD psql -h 127.0.0.1 -U $GCP_POSTGRES_USER -c "$1" postgres
+}
+
+gcp-postgres_up() {
+    gcp-postgres_exec "create database $1"
+}
+
+gcp-postgres_down() {
+    gcp-postgres_exec "drop database $1"
+}
+
+
+
 INIT_FUNC="${ENGINE}_init"
 UP_FUNC="${ENGINE}_up"
 DOWN_FUNC="${ENGINE}_down"

@@ -1587,7 +1587,11 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    init_example_project(tmp_path, ctx.mark.split("_")[0], schema_name=schema_name)
+    if ctx.mark.startswith("gcp_postgres"):
+        engine_type = "gcp_postgres"
+    else:
+        engine_type = ctx.mark.split("_")[0]
+    init_example_project(tmp_path, engine_type, schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,
