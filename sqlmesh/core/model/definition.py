@@ -1782,12 +1782,17 @@ class PythonModel(_Model):
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH, self.dialect)
         execution_time = to_datetime(execution_time or c.EPOCH)
 
-        variables = env.get(c.SQLMESH_VARS, {})
-        variables.update(kwargs.pop("variables", {}))
-
+        variables = {
+            **env.get(c.SQLMESH_VARS, {}),
+            **env.get(c.SQLMESH_VARS_METADATA, {}),
+            **kwargs.pop("variables", {}),
+        }
         blueprint_variables = {
             k: d.parse_one(v.sql, dialect=self.dialect) if isinstance(v, SqlValue) else v
-            for k, v in env.get(c.SQLMESH_BLUEPRINT_VARS, {}).items()
+            for k, v in {
+                **env.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+                **env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
+            }.items()
         }
         try:
             kwargs = {
@@ -1909,11 +1914,11 @@ def _extract_blueprint_variables(blueprint: t.Any, path: Path) -> t.Dict[str, t.
         return {}
     if isinstance(blueprint, (exp.Paren, exp.PropertyEQ)):
         blueprint = blueprint.unnest()
-        return {blueprint.left.name: blueprint.right}
+        return {blueprint.left.name.lower(): blueprint.right}
     if isinstance(blueprint, (exp.Tuple, exp.Array)):
-        return {e.left.name: e.right for e in blueprint.expressions}
+        return {e.left.name.lower(): e.right for e in blueprint.expressions}
     if isinstance(blueprint, dict):
-        return blueprint
+        return {k.lower(): v for k, v in blueprint.items()}
 
     raise_config_error(
         f"Expected a key-value mapping for the blueprint value, got '{blueprint}' instead",
@@ -2509,7 +2514,7 @@ def _create_model(
     if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
         statements.append(kwargs["kind"].merge_filter)
 
-    jinja_macro_references, used_variables = extract_macro_references_and_variables(
+    jinja_macro_references, referenced_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
@@ -2532,11 +2537,13 @@ def _create_model(
             _extract_migrated_dbt_variable_references(jinja_macros, variables)
         )
 
-        used_variables.update(nested_macro_used_variables)
+        referenced_variables.update(nested_macro_used_variables)
         variables.update(flattened_package_variables)
     else:
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            referenced_variables.update(
+                extract_macro_references_and_variables(jinja_macro.definition)[1]
+            )
 
     # Merge model-specific audits with default audits
     if default_audits := defaults.pop("audits", None):
@@ -2598,7 +2605,7 @@ def _create_model(
         module_path,
         macros or macro.get_registry(),
         variables=variables,
-        used_variables=used_variables,
+        referenced_variables=referenced_variables,
         path=path,
         python_env=python_env,
         strict_resolution=depends_on is None,
