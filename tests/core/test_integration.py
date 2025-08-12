@@ -6859,169 +6859,6 @@ def test_plan_always_recreate_environment(tmp_path: Path):
         assert context_diff.environment == environment
 
 
-@time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_scd_type_2_restatement(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
-
-    raw_employee_status = d.parse("""
-    MODEL (
-        name memory.hr_system.raw_employee_status,
-        kind FULL
-    );
-
-    SELECT
-        1001 AS employee_id,
-        'engineering' AS department,
-        'EMEA' AS region,
-        '2023-01-08 15:00:00 UTC' AS last_modified;
-    """)
-
-    # Create SCD Type 2 model for employee history tracking
-    employee_history = d.parse("""
-    MODEL (
-        name memory.hr_system.employee_history,
-        kind SCD_TYPE_2_BY_TIME (
-            unique_key employee_id,
-            updated_at_name last_modified,
-            disable_restatement false
-        ),
-        owner hr_analytics,
-        cron '*/5 * * * *',
-        grain employee_id,
-        description 'Historical tracking of employee status changes'
-    );
-
-    SELECT
-        employee_id::INT AS employee_id,
-        department::TEXT AS department,
-        region::TEXT AS region,
-        last_modified AS last_modified
-    FROM
-        memory.hr_system.raw_employee_status;
-    """)
-
-    raw_employee_status_model = load_sql_based_model(raw_employee_status)
-    employee_history_model = load_sql_based_model(employee_history)
-    context.upsert_model(raw_employee_status_model)
-    context.upsert_model(employee_history_model)
-
-    # Initial plan and apply
-    plan = context.plan_builder("prod", skip_tests=True).build()
-    context.apply(plan)
-
-    query = "SELECT employee_id, department, region, valid_from, valid_to FROM memory.hr_system.employee_history ORDER BY employee_id, valid_from"
-    initial_data = context.engine_adapter.fetchdf(query)
-
-    assert len(initial_data) == 1
-    assert initial_data["valid_to"].isna().all()
-    assert initial_data["department"].tolist() == ["engineering"]
-    assert initial_data["region"].tolist() == ["EMEA"]
-
-    # Apply a future plan with source changes
-    with time_machine.travel("2023-01-08 15:10:00 UTC"):
-        # Update source model, employee 1001 changed region
-        raw_employee_status_v2 = d.parse("""
-        MODEL (
-            name memory.hr_system.raw_employee_status,
-            kind FULL
-        );
-
-        SELECT
-            1001 AS employee_id,
-            'engineering' AS department,
-            'AMER' AS region,
-            '2023-01-08 15:10:00 UTC' AS last_modified;
-        """)
-        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
-        context.upsert_model(raw_employee_status_v2_model)
-        context.plan(
-            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
-        )
-
-    with time_machine.travel("2023-01-08 15:20:00 UTC"):
-        context.run()
-        data_after_change = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history for employee 1001
-        assert len(data_after_change) == 2
-        assert data_after_change.iloc[0]["employee_id"] == 1001
-        assert data_after_change.iloc[0]["department"] == "engineering"
-        assert data_after_change.iloc[0]["region"] == "EMEA"
-        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
-        assert data_after_change.iloc[1]["employee_id"] == 1001
-        assert data_after_change.iloc[1]["department"] == "engineering"
-        assert data_after_change.iloc[1]["region"] == "AMER"
-        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
-        assert pd.isna(data_after_change.iloc[1]["valid_to"])
-
-        # Update source model, employee 1001 changed region again and department
-        raw_employee_status_v2 = d.parse("""
-        MODEL (
-            name memory.hr_system.raw_employee_status,
-            kind FULL
-        );
-
-        SELECT
-            1001 AS employee_id,
-            'sales' AS department,
-            'ANZ' AS region,
-            '2023-01-08 15:26:00 UTC' AS last_modified;
-        """)
-        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
-        context.upsert_model(raw_employee_status_v2_model)
-        context.plan(
-            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
-        )
-
-    with time_machine.travel("2023-01-08 15:35:00 UTC"):
-        context.run()
-        data_after_change = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history for employee 1001 after second change
-        assert len(data_after_change) == 3
-        assert data_after_change.iloc[0]["employee_id"] == 1001
-        assert data_after_change.iloc[0]["department"] == "engineering"
-        assert data_after_change.iloc[0]["region"] == "EMEA"
-        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
-        assert data_after_change.iloc[1]["employee_id"] == 1001
-        assert data_after_change.iloc[1]["department"] == "engineering"
-        assert data_after_change.iloc[1]["region"] == "AMER"
-        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
-        assert str(data_after_change.iloc[1]["valid_to"]) == "2023-01-08 15:26:00"
-        assert data_after_change.iloc[2]["employee_id"] == 1001
-        assert data_after_change.iloc[2]["department"] == "sales"
-        assert data_after_change.iloc[2]["region"] == "ANZ"
-        assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-08 15:26:00"
-        assert pd.isna(data_after_change.iloc[2]["valid_to"])
-
-    # Now test restatement cleanup by restating from 15:10 (first change)
-    with time_machine.travel("2023-01-08 15:38:00 UTC"):
-        plan = context.plan_builder(
-            "prod",
-            skip_tests=True,
-            restate_models=["memory.hr_system.employee_history"],
-            start="2023-01-08 15:09:00",
-        ).build()
-        context.apply(plan)
-        restated_data = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history after restatement
-        assert len(restated_data) == 2
-        assert restated_data.iloc[0]["employee_id"] == 1001
-        assert restated_data.iloc[0]["department"] == "engineering"
-        assert restated_data.iloc[0]["region"] == "EMEA"
-        assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-08 15:26:00"
-        assert restated_data.iloc[1]["employee_id"] == 1001
-        assert restated_data.iloc[1]["department"] == "sales"
-        assert restated_data.iloc[1]["region"] == "ANZ"
-        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-08 15:26:00"
-        assert pd.isna(restated_data.iloc[1]["valid_to"])
-
-
 @time_machine.travel("2020-01-01 00:00:00 UTC")
 def test_scd_type_2_full_restatement_no_start_date(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
@@ -7348,7 +7185,7 @@ def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
         assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-09 07:26:00"
         assert pd.isna(data_after_change.iloc[2]["valid_to"])
 
-    # Now test restatement still works as expected by restating from 2023-01-09 00:10:00 (first change)
+    # Now test restatement works (full restatement support currently)
     with time_machine.travel("2023-01-10 07:38:00 UTC"):
         plan = context.plan_builder(
             "prod",
@@ -7359,18 +7196,13 @@ def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
         context.apply(plan)
         restated_data = context.engine_adapter.fetchdf(query)
 
-        # Validate the SCD2 history after restatement
-        assert len(restated_data) == 2
+        # Validate the SCD2 history after restatement has been wiped bar one
+        assert len(restated_data) == 1
         assert restated_data.iloc[0]["employee_id"] == 1001
-        assert restated_data.iloc[0]["department"] == "engineering"
-        assert restated_data.iloc[0]["region"] == "EMEA"
+        assert restated_data.iloc[0]["department"] == "sales"
+        assert restated_data.iloc[0]["region"] == "ANZ"
         assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-09 07:26:00"
-        assert restated_data.iloc[1]["employee_id"] == 1001
-        assert restated_data.iloc[1]["department"] == "sales"
-        assert restated_data.iloc[1]["region"] == "ANZ"
-        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-09 07:26:00"
-        assert pd.isna(restated_data.iloc[1]["valid_to"])
+        assert pd.isna(restated_data.iloc[0]["valid_to"])
 
 
 def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
