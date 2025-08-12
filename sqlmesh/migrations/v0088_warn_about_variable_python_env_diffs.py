@@ -63,9 +63,12 @@ def migrate(state_sync, **kwargs):  # type: ignore
 
         python_env = node.get("python_env") or {}
 
-        if (SQLMESH_VARS in python_env or SQLMESH_BLUEPRINT_VARS in python_env) and (
-            any(v.get("is_metadata") for v in python_env.values())
-            or any(node.get(k) for k in METADATA_HASH_EXPRESSIONS)
+        if SQLMESH_BLUEPRINT_VARS in python_env or (
+            SQLMESH_VARS in python_env
+            and (
+                any(v.get("is_metadata") for v in python_env.values())
+                or any(node.get(k) for k in METADATA_HASH_EXPRESSIONS)
+            )
         ):
             get_console().log_warning(warning)
             return
