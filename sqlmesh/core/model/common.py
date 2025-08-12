@@ -128,7 +128,7 @@ def make_python_env(
 
                     var_name = args[0].this.lower()
                     used_variables[var_name] = _is_metadata_var(
-                        name, macro_func_or_var, is_metadata
+                        var_name, macro_func_or_var, is_metadata
                     )
                 elif id(macro_func_or_var) not in visited_macro_funcs:
                     var_refs, _expr_under_metadata_macro_func, _visited_macro_funcs = (
@@ -138,11 +138,16 @@ def make_python_env(
                     visited_macro_funcs.update(_visited_macro_funcs)
                     outermost_macro_func_ancestor_by_var |= {var_ref: name for var_ref in var_refs}
             elif macro_func_or_var.__class__ is d.MacroVar:
-                name = macro_func_or_var.name.lower()
-                if name in macros:
-                    used_macros[name] = (macros[name], _is_metadata_macro(name, is_metadata))
-                elif name in variables or name in blueprint_variables:
-                    used_variables[name] = _is_metadata_var(name, macro_func_or_var, is_metadata)
+                var_name = macro_func_or_var.name.lower()
+                if var_name in macros:
+                    used_macros[var_name] = (
+                        macros[var_name],
+                        _is_metadata_macro(var_name, is_metadata),
+                    )
+                elif var_name in variables or var_name in blueprint_variables:
+                    used_variables[var_name] = _is_metadata_var(
+                        var_name, macro_func_or_var, is_metadata
+                    )
             elif (
                 isinstance(macro_func_or_var, (exp.Identifier, d.MacroStrReplace, d.MacroSQL))
             ) and "@" in macro_func_or_var.name:
@@ -248,6 +253,12 @@ def _add_variables_to_python_env(
             metadata_used_variables.add(used_var)
 
     non_metadata_used_variables = set(used_variables) - metadata_used_variables
+
+    if overlapping_variables := (non_metadata_used_variables & metadata_used_variables):
+        raise ConfigError(
+            f"Variables {', '.join(overlapping_variables)} are both metadata and non-metadata, "
+            "which is unexpected. Please file an issue at https://github.com/TobikoData/sqlmesh/issues/new."
+        )
 
     metadata_variables = {
         k: v for k, v in (variables or {}).items() if k in metadata_used_variables

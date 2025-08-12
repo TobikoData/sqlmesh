@@ -9385,6 +9385,14 @@ def entrypoint(evaluator):
             python_env = model.python_env
 
             assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
+
+            if model_name == "test_model_sql":
+                assert c.SQLMESH_BLUEPRINT_VARS not in python_env
+            else:
+                assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+                    {"blueprint": blueprint_value}
+                )
+
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
     multi_variable_blueprint_example = tmp_path / "models" / "multi_variable_blueprint_example.sql"
