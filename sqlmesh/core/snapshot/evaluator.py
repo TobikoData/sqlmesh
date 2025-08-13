@@ -1083,6 +1083,10 @@ class SnapshotEvaluator:
                     is_table_deployable=is_table_deployable,
                     physical_schema=snapshot.physical_schema,
                 )
+            else:
+                logger.warning(
+                    "Skipping cleanup of table '%s' because it does not exist", table_name
+                )
 
             if on_complete is not None:
                 on_complete(table_name)
