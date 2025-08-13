@@ -303,7 +303,8 @@ workflows:
                 - bigquery
                 - clickhouse-cloud
                 - athena
-                - fabric
+                # todo: enable fabric when cicd catalog create/drop implemented in manage-test-db.sh
+                #- fabric
           filters:
             branches:
               only:

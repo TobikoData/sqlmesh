@@ -3,10 +3,12 @@
 import typing as t
 
 import pytest
+from pytest_mock import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import FabricEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
+from sqlmesh.core.engine_adapter.shared import DataObject
 
 pytestmark = [pytest.mark.engine, pytest.mark.fabric]
 
@@ -71,13 +73,18 @@ def test_insert_overwrite_by_time_partition(adapter: FabricEngineAdapter):
     ]
 
 
-def test_replace_query(adapter: FabricEngineAdapter):
-    adapter.cursor.fetchone.return_value = (1,)
-    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("int")}
+    )
 
     # This behavior is inherited from MSSQLEngineAdapter and should be TRUNCATE + INSERT
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_NAME] = 'test_table';""",
         "TRUNCATE TABLE [test_table];",
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]

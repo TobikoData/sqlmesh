@@ -1735,7 +1735,9 @@ class FabricConnectionConfig(MSSQLConnectionConfig):
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {
             "database": self.database,
-            "catalog_support": CatalogSupport.FULL_SUPPORT,
+            # more operations than not require a specific catalog to be already active
+            # in particular, create/drop view, create/drop schema and querying information_schema
+            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
             "workspace_id": self.workspace_id,
             "tenant_id": self.tenant_id,
             "user": self.user,
