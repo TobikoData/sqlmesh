@@ -256,7 +256,7 @@ class EngineAdapterStateSync(StateSync):
     def unpause_snapshots(
         self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
-        self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt, self.interval_state)
+        self.snapshot_state.unpause_snapshots(snapshots, unpaused_dt)
 
     def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:
         self.environment_state.invalidate_environment(name, protect_prod)
