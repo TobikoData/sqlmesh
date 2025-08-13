@@ -10,7 +10,6 @@ from pydantic import Field
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
-    snapshot_name_filter,
     snapshot_name_version_filter,
     snapshot_id_filter,
     fetchone,
@@ -33,12 +32,14 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
-from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
+from sqlmesh.utils.date import now_timestamp, TimeLike, now, to_timestamp
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
 if t.TYPE_CHECKING:
     import pandas as pd
+
+    from sqlmesh.core.state_sync.db.interval import IntervalState
 
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,6 @@ class SnapshotState:
             "unpaused_ts": exp.DataType.build("bigint"),
             "ttl_ms": exp.DataType.build("bigint"),
             "unrestorable": exp.DataType.build("boolean"),
-            "forward_only": exp.DataType.build("boolean"),
         }
 
         self._auto_restatement_columns_to_types = {
@@ -112,48 +112,84 @@ class SnapshotState:
         self,
         snapshots: t.Collection[SnapshotInfoLike],
         unpaused_dt: TimeLike,
+        interval_state: IntervalState,
     ) -> None:
-        unrestorable_snapshots_by_forward_only: t.Dict[bool, t.List[str]] = defaultdict(list)
+        """Unpauses given snapshots while pausing all other snapshots that share the same version.
 
-        for snapshot in snapshots:
-            # We need to mark all other snapshots that have opposite forward only status as unrestorable
-            unrestorable_snapshots_by_forward_only[not snapshot.is_forward_only].append(
-                snapshot.name
-            )
+        Args:
+            snapshots: The snapshots to unpause.
+            unpaused_dt: The timestamp to unpause the snapshots at.
+            interval_state: The interval state to use to remove intervals when needed.
+        """
+        current_ts = now()
 
-        updated_ts = now_timestamp()
-        unpaused_ts = to_timestamp(unpaused_dt)
-
-        # Pause all snapshots with target names first
-        for where in snapshot_name_filter(
-            [s.name for s in snapshots],
-            batch_size=self.SNAPSHOT_BATCH_SIZE,
-        ):
-            self.engine_adapter.update_table(
-                self.snapshots_table,
-                {"unpaused_ts": None, "updated_ts": updated_ts},
-                where=where,
-            )
-
-        # Now unpause the target snapshots
-        self._update_snapshots(
-            [s.snapshot_id for s in snapshots],
-            unpaused_ts=unpaused_ts,
-            updated_ts=updated_ts,
+        target_snapshot_ids = {s.snapshot_id for s in snapshots}
+        same_version_snapshots = self._get_snapshots_with_same_version(
+            snapshots, lock_for_update=True
         )
+        target_snapshots_by_version = {
+            (s.name, s.version): s
+            for s in same_version_snapshots
+            if s.snapshot_id in target_snapshot_ids
+        }
 
-        # Mark unrestorable snapshots
-        for forward_only, snapshot_names in unrestorable_snapshots_by_forward_only.items():
-            forward_only_exp = exp.column("forward_only").is_(exp.convert(forward_only))
-            for where in snapshot_name_filter(
-                snapshot_names,
-                batch_size=self.SNAPSHOT_BATCH_SIZE,
-            ):
-                self.engine_adapter.update_table(
-                    self.snapshots_table,
-                    {"unrestorable": True, "updated_ts": updated_ts},
-                    where=forward_only_exp.and_(where),
-                )
+        unpaused_snapshots: t.Dict[int, t.List[SnapshotId]] = defaultdict(list)
+        paused_snapshots: t.List[SnapshotId] = []
+        unrestorable_snapshots: t.List[SnapshotId] = []
+
+        for snapshot in same_version_snapshots:
+            is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
+            if is_target_snapshot and not snapshot.unpaused_ts:
+                logger.info("Unpausing snapshot %s", snapshot.snapshot_id)
+                snapshot.set_unpaused_ts(unpaused_dt)
+                assert snapshot.unpaused_ts is not None
+                unpaused_snapshots[snapshot.unpaused_ts].append(snapshot.snapshot_id)
+            elif not is_target_snapshot:
+                target_snapshot = target_snapshots_by_version[(snapshot.name, snapshot.version)]
+                if (
+                    target_snapshot.normalized_effective_from_ts
+                    and not target_snapshot.disable_restatement
+                ):
+                    # Making sure that there are no overlapping intervals.
+                    effective_from_ts = target_snapshot.normalized_effective_from_ts
+                    logger.info(
+                        "Removing all intervals after '%s' for snapshot %s, superseded by snapshot %s",
+                        target_snapshot.effective_from,
+                        snapshot.snapshot_id,
+                        target_snapshot.snapshot_id,
+                    )
+                    full_snapshot = snapshot.full_snapshot
+                    interval_state.remove_intervals(
+                        [
+                            (
+                                full_snapshot,
+                                full_snapshot.get_removal_interval(effective_from_ts, current_ts),
+                            )
+                        ]
+                    )
+
+                if snapshot.unpaused_ts:
+                    logger.info("Pausing snapshot %s", snapshot.snapshot_id)
+                    snapshot.set_unpaused_ts(None)
+                    paused_snapshots.append(snapshot.snapshot_id)
+
+                if not snapshot.unrestorable and (
+                    (target_snapshot.is_forward_only and not snapshot.is_forward_only)
+                    or (snapshot.is_forward_only and not target_snapshot.is_forward_only)
+                ):
+                    logger.info("Marking snapshot %s as unrestorable", snapshot.snapshot_id)
+                    snapshot.unrestorable = True
+                    unrestorable_snapshots.append(snapshot.snapshot_id)
+
+        if unpaused_snapshots:
+            for unpaused_ts, snapshot_ids in unpaused_snapshots.items():
+                self._update_snapshots(snapshot_ids, unpaused_ts=unpaused_ts)
+
+        if paused_snapshots:
+            self._update_snapshots(paused_snapshots, unpaused_ts=None)
+
+        if unrestorable_snapshots:
+            self._update_snapshots(unrestorable_snapshots, unrestorable=True)
 
     def get_expired_snapshots(
         self,
@@ -378,8 +414,7 @@ class SnapshotState:
         **kwargs: t.Any,
     ) -> None:
         properties = kwargs
-        if "updated_ts" not in properties:
-            properties["updated_ts"] = now_timestamp()
+        properties["updated_ts"] = now_timestamp()
 
         for where in snapshot_id_filter(
             self.engine_adapter, snapshots, batch_size=self.SNAPSHOT_BATCH_SIZE
@@ -431,7 +466,6 @@ class SnapshotState:
                     updated_ts,
                     unpaused_ts,
                     unrestorable,
-                    forward_only,
                     next_auto_restatement_ts,
                 ) in fetchall(self.engine_adapter, query):
                     snapshot = parse_snapshot(
@@ -439,7 +473,6 @@ class SnapshotState:
                         updated_ts=updated_ts,
                         unpaused_ts=unpaused_ts,
                         unrestorable=unrestorable,
-                        forward_only=forward_only,
                         next_auto_restatement_ts=next_auto_restatement_ts,
                     )
                     snapshot_id = snapshot.snapshot_id
@@ -469,7 +502,6 @@ class SnapshotState:
                         "updated_ts",
                         "unpaused_ts",
                         "unrestorable",
-                        "forward_only",
                         "next_auto_restatement_ts",
                     )
                     .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
@@ -496,7 +528,6 @@ class SnapshotState:
                     updated_ts,
                     unpaused_ts,
                     unrestorable,
-                    forward_only,
                     next_auto_restatement_ts,
                 ) in fetchall(self.engine_adapter, query):
                     snapshot_id = SnapshotId(name=name, identifier=identifier)
@@ -504,7 +535,6 @@ class SnapshotState:
                     snapshot.updated_ts = updated_ts
                     snapshot.unpaused_ts = unpaused_ts
                     snapshot.unrestorable = unrestorable
-                    snapshot.forward_only = forward_only
                     snapshot.next_auto_restatement_ts = next_auto_restatement_ts
                     cached_snapshots_in_state.add(snapshot_id)
 
@@ -538,7 +568,6 @@ class SnapshotState:
                     "snapshots.updated_ts",
                     "snapshots.unpaused_ts",
                     "snapshots.unrestorable",
-                    "snapshots.forward_only",
                     "auto_restatements.next_auto_restatement_ts",
                 )
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
@@ -594,7 +623,6 @@ class SnapshotState:
                     "updated_ts",
                     "unpaused_ts",
                     "unrestorable",
-                    "forward_only",
                 )
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
@@ -612,10 +640,9 @@ class SnapshotState:
                 updated_ts=updated_ts,
                 unpaused_ts=unpaused_ts,
                 unrestorable=unrestorable,
-                forward_only=forward_only,
                 snapshot=snapshot,
             )
-            for snapshot, name, identifier, version, updated_ts, unpaused_ts, unrestorable, forward_only in snapshot_rows
+            for snapshot, name, identifier, version, updated_ts, unpaused_ts, unrestorable in snapshot_rows
         ]
 
 
@@ -624,7 +651,6 @@ def parse_snapshot(
     updated_ts: int,
     unpaused_ts: t.Optional[int],
     unrestorable: bool,
-    forward_only: bool,
     next_auto_restatement_ts: t.Optional[int],
 ) -> Snapshot:
     return Snapshot(
@@ -633,7 +659,6 @@ def parse_snapshot(
             "updated_ts": updated_ts,
             "unpaused_ts": unpaused_ts,
             "unrestorable": unrestorable,
-            "forward_only": forward_only,
             "next_auto_restatement_ts": next_auto_restatement_ts,
         }
     )
@@ -648,7 +673,6 @@ def _snapshot_to_json(snapshot: Snapshot) -> str:
             "updated_ts",
             "unpaused_ts",
             "unrestorable",
-            "forward_only",
             "next_auto_restatement_ts",
         }
     )
@@ -669,7 +693,6 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "unpaused_ts": snapshot.unpaused_ts,
                 "ttl_ms": snapshot.ttl_ms,
                 "unrestorable": snapshot.unrestorable,
-                "forward_only": snapshot.forward_only,
             }
             for snapshot in snapshots
         ]
@@ -739,8 +762,17 @@ class SharedVersionSnapshot(PydanticModel):
                 "updated_ts": self.updated_ts,
                 "unpaused_ts": self.unpaused_ts,
                 "unrestorable": self.unrestorable,
-                "forward_only": self.forward_only,
             }
+        )
+
+    def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
+        """Sets the timestamp for when this snapshot was unpaused.
+
+        Args:
+            unpaused_dt: The datetime object of when this snapshot was unpaused.
+        """
+        self.unpaused_ts = (
+            to_timestamp(self.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
     @classmethod
@@ -753,7 +785,6 @@ class SharedVersionSnapshot(PydanticModel):
         updated_ts: int,
         unpaused_ts: t.Optional[int],
         unrestorable: bool,
-        forward_only: bool,
         snapshot: str,
     ) -> SharedVersionSnapshot:
         raw_snapshot = json.loads(snapshot)
@@ -772,5 +803,5 @@ class SharedVersionSnapshot(PydanticModel):
             disable_restatement=raw_node.get("kind", {}).get("disable_restatement", False),
             effective_from=raw_snapshot.get("effective_from"),
             raw_snapshot=raw_snapshot,
-            forward_only=forward_only,
+            forward_only=raw_snapshot.get("forward_only", False),
         )

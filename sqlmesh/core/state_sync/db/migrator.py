@@ -396,7 +396,7 @@ class StateMigrator:
         if updated_prod_environment:
             try:
                 self.snapshot_state.unpause_snapshots(
-                    updated_prod_environment.snapshots, now_timestamp()
+                    updated_prod_environment.snapshots, now_timestamp(), self.interval_state
                 )
             except Exception:
                 logger.warning("Failed to unpause migrated snapshots", exc_info=True)
