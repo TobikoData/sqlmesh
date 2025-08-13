@@ -118,7 +118,7 @@ class SnapshotState:
         )
 
         for snapshot in snapshots:
-            # We need to mark all other snapshots that have opposite forward only status as unrestorable
+            # We need to mark all other snapshots that have forward-only opposite to the target snapshot as unrestorable
             unrestorable_snapshots_by_forward_only[not snapshot.is_forward_only].append(
                 snapshot.name_version
             )
