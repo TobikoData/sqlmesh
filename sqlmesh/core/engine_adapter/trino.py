@@ -256,7 +256,6 @@ class TrinoEngineAdapter(
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        start: TimeLike,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
@@ -267,7 +266,6 @@ class TrinoEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         if columns_to_types and self.current_catalog_type == "delta_lake":
@@ -279,7 +277,6 @@ class TrinoEngineAdapter(
             unique_key,
             valid_from_col,
             valid_to_col,
-            start,
             execution_time,
             invalidate_hard_deletes,
             updated_at_col,
@@ -290,7 +287,6 @@ class TrinoEngineAdapter(
             table_description,
             column_descriptions,
             truncate,
-            is_restatement,
             **kwargs,
         )
 

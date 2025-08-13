@@ -10441,9 +10441,9 @@ def test_signal_always_true(batch, arg1, arg2):
 
 
 def test_scd_type_2_full_history_restatement():
-    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is False
-    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is False
-    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
     assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
 
 
