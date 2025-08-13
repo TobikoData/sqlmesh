@@ -17,7 +17,7 @@ from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.adapter import ParsetimeAdapter
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
-from sqlmesh.dbt.target import SnowflakeConfig
+from sqlmesh.dbt.target import BigQueryConfig, SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
@@ -66,6 +66,44 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         )
         == "[]"
     )
+
+
+def test_bigquery_get_columns_in_relation(
+    sushi_test_project: Project,
+    runtime_renderer: t.Callable,
+    mocker: MockerFixture,
+):
+    from dbt.adapters.bigquery import BigQueryColumn
+    from google.cloud.bigquery import SchemaField
+
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(name="test", schema="test", database="test")
+
+    adapter_mock = mocker.MagicMock()
+    adapter_mock.default_catalog = "test"
+    adapter_mock.dialect = "bigquery"
+    table_schema = [
+        SchemaField(name="id", field_type="STRING", mode="REQUIRED"),
+        SchemaField(
+            name="user_data",
+            field_type="RECORD",
+            mode="NULLABLE",
+            fields=[
+                SchemaField(name="id", field_type="STRING", mode="REQUIRED"),
+                SchemaField(name="name", field_type="STRING", mode="REQUIRED"),
+                SchemaField(name="address", field_type="STRING", mode="NULLABLE"),
+            ],
+        ),
+        SchemaField(name="tags", field_type="STRING", mode="REPEATED"),
+        SchemaField(name="score", field_type="NUMERIC", mode="NULLABLE"),
+        SchemaField(name="created_at", field_type="TIMESTAMP", mode="NULLABLE"),
+    ]
+    adapter_mock.get_bq_schema.return_value = table_schema
+    renderer = runtime_renderer(context, engine_adapter=adapter_mock, dialect="bigquery")
+    assert renderer(
+        "{%- set relation = api.Relation.create(database='test', schema='test', identifier='test_table') -%}"
+        "{{ adapter.get_columns_in_relation(relation) }}"
+    ) == str([BigQueryColumn.create_from_field(field) for field in table_schema])
 
 
 @pytest.mark.cicdonly
