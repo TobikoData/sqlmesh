@@ -415,7 +415,6 @@ class Scheduler:
         selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
-        restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {},
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
@@ -782,7 +781,6 @@ class Scheduler:
             end=end,
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
-            restatements=remove_intervals,
             auto_restatement_triggers=auto_restatement_triggers,
         )
 
