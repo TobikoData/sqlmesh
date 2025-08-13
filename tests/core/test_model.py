@@ -11359,3 +11359,52 @@ def test_extract_macro_func_variable_references(macro_func: str, variables: t.Se
 
     macro_func_ast = parse_one(macro_func)
     assert _extract_macro_func_variable_references(macro_func_ast, True)[0] == variables
+
+
+def test_text_diff_column_descriptions():
+    """Test that column_descriptions changes are visible in text_diff."""
+    # Create model without column descriptions
+    model1 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+    )
+
+    # Create model with column descriptions
+    model2 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+        column_descriptions={"id": "User identifier", "name": "User name"},
+    )
+
+    # Verify the diff shows the column_descriptions
+    diff = model1.text_diff(model2)
+    assert diff, "Expected diff to show column_descriptions change"
+    assert "+    id = 'User identifier'," in diff
+    assert "+    name = 'User name'" in diff
+
+    # Verify reverse diff also works
+    diff = model2.text_diff(model1)
+    assert diff, "Expected reverse diff to show column_descriptions removal"
+    assert "-    id = 'User identifier'," in diff
+    assert "-    name = 'User name'" in diff
+
+
+def test_text_diff_optimize_query():
+    """Test that optimize_query changes are visible in text_diff."""
+    # Create model without optimize_query
+    model1 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+    )
+
+    # Create model with optimize_query enabled
+    model2 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+        optimize_query=True,
+    )
+
+    # Verify the diff shows the optimize_query change
+    diff = model1.text_diff(model2)
+    assert diff, "Expected diff to show optimize_query change"
+    assert "+  optimize_query" in diff.lower()
