@@ -1077,6 +1077,10 @@ class SnapshotEvaluator:
                 table_name,
                 is_table_deployable=is_table_deployable,
                 physical_schema=snapshot.physical_schema,
+                # we need to set cascade=true or we will get a 'cant drop because other objects depend on it'-style
+                # error on engines that enforce referential integrity, such as Postgres
+                # this situation can happen when a snapshot expires but downstream view snapshots that reference it have not yet expired
+                cascade=True,
             )
 
             if on_complete is not None:
@@ -1592,7 +1596,7 @@ class MaterializableStrategy(PromotableStrategy):
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
-        self.adapter.drop_table(name)
+        self.adapter.drop_table(name, cascade=kwargs.pop("cascade", False))
         logger.info("Dropped table '%s'", name)
 
 
@@ -2019,15 +2023,16 @@ class ViewStrategy(PromotableStrategy):
         )
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
+        cascade = kwargs.pop("cascade", False)
         try:
-            self.adapter.drop_view(name)
+            self.adapter.drop_view(name, cascade=cascade)
         except Exception:
             logger.debug(
                 "Failed to drop view '%s'. Trying to drop the materialized view instead",
                 name,
                 exc_info=True,
             )
-            self.adapter.drop_view(name, materialized=True)
+            self.adapter.drop_view(name, materialized=True, cascade=cascade)
         logger.info("Dropped view '%s'", name)
 
     def _is_materialized_view(self, model: Model) -> bool:
