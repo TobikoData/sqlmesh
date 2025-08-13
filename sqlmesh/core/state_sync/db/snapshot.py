@@ -113,12 +113,14 @@ class SnapshotState:
         snapshots: t.Collection[SnapshotInfoLike],
         unpaused_dt: TimeLike,
     ) -> None:
-        unrestorable_snapshots_by_forward_only: t.Dict[bool, t.List[str]] = defaultdict(list)
+        unrestorable_snapshots_by_forward_only: t.Dict[bool, t.List[SnapshotNameVersion]] = (
+            defaultdict(list)
+        )
 
         for snapshot in snapshots:
             # We need to mark all other snapshots that have opposite forward only status as unrestorable
             unrestorable_snapshots_by_forward_only[not snapshot.is_forward_only].append(
-                snapshot.name
+                snapshot.name_version
             )
 
         updated_ts = now_timestamp()
@@ -143,11 +145,13 @@ class SnapshotState:
         )
 
         # Mark unrestorable snapshots
-        for forward_only, snapshot_names in unrestorable_snapshots_by_forward_only.items():
+        for forward_only, snapshot_name_versions in unrestorable_snapshots_by_forward_only.items():
             forward_only_exp = exp.column("forward_only").is_(exp.convert(forward_only))
-            for where in snapshot_name_filter(
-                snapshot_names,
+            for where in snapshot_name_version_filter(
+                self.engine_adapter,
+                snapshot_name_versions,
                 batch_size=self.SNAPSHOT_BATCH_SIZE,
+                alias=None,
             ):
                 self.engine_adapter.update_table(
                     self.snapshots_table,
