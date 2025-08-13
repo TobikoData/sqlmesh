@@ -48,6 +48,7 @@ class Plan(PydanticModel, frozen=True):
     end_bounded: bool
     ensure_finalized_snapshots: bool
     explain: bool
+    ignore_cron: bool = False
 
     environment_ttl: t.Optional[str] = None
     environment_naming_info: EnvironmentNamingInfo
@@ -181,6 +182,7 @@ class Plan(PydanticModel, frozen=True):
                 start_override_per_model=self.start_override_per_model,
                 end_override_per_model=self.end_override_per_model,
                 end_bounded=self.end_bounded,
+                ignore_cron=self.ignore_cron,
             ).items()
             if snapshot.is_model and missing
         ]
@@ -259,6 +261,7 @@ class Plan(PydanticModel, frozen=True):
             forward_only=self.forward_only,
             end_bounded=self.end_bounded,
             ensure_finalized_snapshots=self.ensure_finalized_snapshots,
+            ignore_cron=self.ignore_cron,
             directly_modified_snapshots=sorted(self.directly_modified),
             indirectly_modified_snapshots={
                 s.name: sorted(snapshot_ids) for s, snapshot_ids in self.indirectly_modified.items()
@@ -300,6 +303,7 @@ class EvaluatablePlan(PydanticModel):
     forward_only: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
+    ignore_cron: bool
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
     metadata_updated_snapshots: t.List[SnapshotId]

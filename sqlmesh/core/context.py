@@ -1290,6 +1290,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        ignore_cron: t.Optional[bool] = None,
         min_intervals: t.Optional[int] = None,
     ) -> Plan:
         """Interactively creates a plan.
@@ -1367,6 +1368,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered=diff_rendered,
             skip_linter=skip_linter,
             explain=explain,
+            ignore_cron=ignore_cron,
             min_intervals=min_intervals,
         )
 
@@ -1417,6 +1419,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         diff_rendered: t.Optional[bool] = None,
         skip_linter: t.Optional[bool] = None,
         explain: t.Optional[bool] = None,
+        ignore_cron: t.Optional[bool] = None,
         min_intervals: t.Optional[int] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
@@ -1590,6 +1593,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         max_interval_end_per_model = None
         default_start, default_end = None, None
         if not run:
+            ignore_cron = False
             max_interval_end_per_model = self._get_max_interval_end_per_model(
                 snapshots, backfill_models
             )
@@ -1654,6 +1658,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             console=self.console,
             user_provided_flags=user_provided_flags,
             explain=explain or False,
+            ignore_cron=ignore_cron or False,
         )
 
     def apply(

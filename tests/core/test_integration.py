@@ -1610,6 +1610,60 @@ def test_plan_with_run(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_ignore_cron(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_allow_partials,
+            kind INCREMENTAL_UNMANAGED,
+            allow_partials true,
+            start '2023-01-01',
+        );
+
+        SELECT @end_ts AS end_ts
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    context.upsert_model(model)
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT MAX(end_ts) FROM memory.sushi.test_allow_partials")[
+            0
+        ]
+        == "2023-01-07 23:59:59.999999"
+    )
+
+    plan_no_ignore_cron = context.plan_builder(
+        "prod", run=True, ignore_cron=False, skip_tests=True
+    ).build()
+    assert not plan_no_ignore_cron.missing_intervals
+
+    plan = context.plan_builder("prod", run=True, ignore_cron=True, skip_tests=True).build()
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(model, raise_if_missing=True).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-08"), to_timestamp("2023-01-08 15:00:00")),
+            ],
+        )
+    ]
+    context.apply(plan)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT MAX(end_ts) FROM memory.sushi.test_allow_partials")[
+            0
+        ]
+        == "2023-01-08 14:59:59.999999"
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models_no_auto_upstream(
     init_and_plan_context: t.Callable,
 ):
