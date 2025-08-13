@@ -438,23 +438,14 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
         return snapshot
 
     snapshot = create_and_cleanup("catalog.test_schema.test_model", True)
-    adapter_mock.get_data_object.assert_called_once_with(
-        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
-    )
+    adapter_mock.get_data_object.assert_not_called()
     adapter_mock.drop_table.assert_called_once_with(
         f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
     )
     adapter_mock.reset_mock()
 
     snapshot = create_and_cleanup("test_schema.test_model", False)
-    adapter_mock.get_data_object.assert_has_calls(
-        [
-            call(
-                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
-            ),
-            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"),
-        ]
-    )
+    adapter_mock.get_data_object.assert_not_called()
     adapter_mock.drop_table.assert_has_calls(
         [
             call(
@@ -466,12 +457,7 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.reset_mock()
 
     snapshot = create_and_cleanup("test_model", False)
-    adapter_mock.get_data_object.assert_has_calls(
-        [
-            call(f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__dev"),
-            call(f"sqlmesh__default.test_model__{snapshot.version}"),
-        ]
-    )
+    adapter_mock.get_data_object.assert_not_called()
     adapter_mock.drop_table.assert_has_calls(
         [
             call(f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__dev"),
@@ -480,8 +466,34 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_cleanup_fails(adapter_mock, make_snapshot):
+    adapter_mock.drop_table.side_effect = RuntimeError("test_error")
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="catalog.test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        storage_format="parquet",
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+    snapshot.version = "test_version"
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    with pytest.raises(NodeExecutionFailedError) as exc_info:
+        evaluator.cleanup(
+            [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)]
+        )
+
+    assert str(exc_info.value.__cause__) == "test_error"
+
+
 def test_cleanup_skip_missing_table(adapter_mock, make_snapshot):
     adapter_mock.get_data_object.return_value = None
+    adapter_mock.drop_table.side_effect = RuntimeError("fail")
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -502,7 +514,9 @@ def test_cleanup_skip_missing_table(adapter_mock, make_snapshot):
     adapter_mock.get_data_object.assert_called_once_with(
         f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
     )
-    adapter_mock.drop_table.assert_not_called()
+    adapter_mock.drop_table.assert_called_once_with(
+        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
+    )
 
 
 def test_cleanup_external_model(mocker: MockerFixture, adapter_mock, make_snapshot):
