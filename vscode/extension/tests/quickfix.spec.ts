@@ -70,13 +70,22 @@ test('noselectstar quickfix', async ({ page, sharedCodeServer, tempDir }) => {
   await openProblemsView(page)
 
   await page.getByRole('button', { name: 'Show fixes' }).click()
-  await page
-    .getByRole('menuitem', { name: 'Replace SELECT * with' })
-    .first()
-    .click()
+  // Wait for the quick fix menu to appear and click the specific action within it.
+  const quickFixMenu = page.getByRole('menu')
+  await quickFixMenu.waitFor({ state: 'visible' })
+  const replaceSelectStar = quickFixMenu.getByRole('menuitem', {
+    name: /Replace SELECT \* with/i,
+  })
+  await replaceSelectStar.first().waitFor({ state: 'visible' })
+  await replaceSelectStar.first().click()
 
-  // Wait for the quick fix to be applied
-  await page.waitForTimeout(2_000)
+  // Wait for the quick fix to be applied by polling the file content
+  await expect
+    .poll(async () => {
+      const content = (await fs.readFile(modelPath)).toString('utf8')
+      return content.includes('SELECT *')
+    })
+    .toBeFalsy()
 
   // Assert that the model no longer contains SELECT * but SELECT id, customer_id, waiter_id, start_ts, end_ts, event_date
   const readUpdatedFile = (await fs.readFile(modelPath)).toString('utf8')
