@@ -1497,7 +1497,6 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1514,7 +1513,6 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
-            is_restatement=is_restatement,
             **kwargs,
         )
 
@@ -1533,7 +1531,6 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         self._scd_type_2(
@@ -1550,7 +1547,6 @@ class EngineAdapter:
             table_description=table_description,
             column_descriptions=column_descriptions,
             truncate=truncate,
-            is_restatement=is_restatement,
             **kwargs,
         )
 
@@ -1561,7 +1557,6 @@ class EngineAdapter:
         unique_key: t.Sequence[exp.Expression],
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
-        start: TimeLike,
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
@@ -1572,7 +1567,6 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
-        is_restatement: bool = False,
         **kwargs: t.Any,
     ) -> None:
         def remove_managed_columns(
@@ -1757,16 +1751,8 @@ class EngineAdapter:
         existing_rows_query = exp.select(*table_columns, exp.true().as_("_exists")).from_(
             target_table
         )
-
         if truncate:
             existing_rows_query = existing_rows_query.limit(0)
-
-        # Only set cleanup_ts if is_restatement is True and truncate is False (this to enable full restatement)
-        cleanup_ts = (
-            to_time_column(start, time_data_type, self.dialect, nullable=True)
-            if is_restatement and not truncate
-            else None
-        )
 
         with source_queries[0] as source_query:
             prefixed_columns_to_types = []
@@ -1804,41 +1790,12 @@ class EngineAdapter:
                 # Historical Records that Do Not Change
                 .with_(
                     "static",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_())
-                    if cleanup_ts is None
-                    else existing_rows_query.where(
-                        exp.and_(
-                            valid_to_col.is_(exp.Null().not_()),
-                            valid_to_col < cleanup_ts,
-                        ),
-                    ),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null()).not_()),
                 )
                 # Latest Records that can be updated
                 .with_(
                     "latest",
-                    existing_rows_query.where(valid_to_col.is_(exp.Null()))
-                    if cleanup_ts is None
-                    else exp.select(
-                        *(
-                            to_time_column(
-                                exp.null(), time_data_type, self.dialect, nullable=True
-                            ).as_(col)
-                            if col == valid_to_col.name
-                            else exp.column(col)
-                            for col in columns_to_types
-                        ),
-                        exp.true().as_("_exists"),
-                    )
-                    .from_(target_table)
-                    .where(
-                        exp.and_(
-                            valid_from_col <= cleanup_ts,
-                            exp.or_(
-                                valid_to_col.is_(exp.null()),
-                                valid_to_col >= cleanup_ts,
-                            ),
-                        )
-                    ),
+                    existing_rows_query.where(valid_to_col.is_(exp.Null())),
                 )
                 # Deleted records which can be used to determine `valid_from` for undeleted source records
                 .with_(

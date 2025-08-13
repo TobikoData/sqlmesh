@@ -33,6 +33,7 @@ if t.TYPE_CHECKING:
     from google.cloud import bigquery
     from google.cloud.bigquery import StandardSqlDataType
     from google.cloud.bigquery.client import Client as BigQueryClient
+    from google.cloud.bigquery.job import QueryJob
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
@@ -186,6 +187,31 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             )
         ]
 
+    def close(self) -> t.Any:
+        # Cancel all pending query jobs across all threads
+        all_query_jobs = self._connection_pool.get_all_attributes("query_job")
+        for query_job in all_query_jobs:
+            if query_job:
+                try:
+                    if not self._db_call(query_job.done):
+                        self._db_call(query_job.cancel)
+                        logger.debug(
+                            "Cancelled BigQuery job: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
+                            query_job.project,
+                            query_job.location,
+                            query_job.job_id,
+                        )
+                except Exception as ex:
+                    logger.debug(
+                        "Failed to cancel BigQuery job: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s. %s",
+                        query_job.project,
+                        query_job.location,
+                        query_job.job_id,
+                        str(ex),
+                    )
+
+        return super().close()
+
     def _begin_session(self, properties: SessionProperties) -> None:
         from google.cloud.bigquery import QueryJobConfig
 
@@ -318,7 +344,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         if len(table.parts) == 3 and "." in table.name:
             # The client's `get_table` method can't handle paths with >3 identifiers
             self.execute(exp.select("*").from_(table).limit(0))
-            query_results = self._query_job._query_results
+            query_job = self._query_job
+            assert query_job is not None
+
+            query_results = query_job._query_results
             columns = create_mapping_schema(query_results.schema)
         else:
             bq_table = self._get_table(table)
@@ -717,7 +746,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         self.execute(query, quote_identifiers=quote_identifiers)
-        return self._query_job.to_dataframe()
+        query_job = self._query_job
+        assert query_job is not None
+        return query_job.to_dataframe()
 
     def _create_column_comments(
         self,
@@ -1021,20 +1052,23 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             job_config=job_config,
             timeout=self._extra_config.get("job_creation_timeout_seconds"),
         )
+        query_job = self._query_job
+        assert query_job is not None
 
         logger.debug(
             "BigQuery job created: https://console.cloud.google.com/bigquery?project=%s&j=bq:%s:%s",
-            self._query_job.project,
-            self._query_job.location,
-            self._query_job.job_id,
+            query_job.project,
+            query_job.location,
+            query_job.job_id,
         )
 
         results = self._db_call(
-            self._query_job.result,
+            query_job.result,
             timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
         )
+
         self._query_data = iter(results) if results.total_rows else iter([])
-        query_results = self._query_job._query_results
+        query_results = query_job._query_results
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
 
@@ -1198,15 +1232,15 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
     @_query_data.setter
     def _query_data(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("query_data", value)
+        self._connection_pool.set_attribute("query_data", value)
 
     @property
-    def _query_job(self) -> t.Any:
+    def _query_job(self) -> t.Optional[QueryJob]:
         return self._connection_pool.get_attribute("query_job")
 
     @_query_job.setter
     def _query_job(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("query_job", value)
+        self._connection_pool.set_attribute("query_job", value)
 
     @property
     def _session_id(self) -> t.Any:
@@ -1214,7 +1248,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
     @_session_id.setter
     def _session_id(self, value: t.Any) -> None:
-        return self._connection_pool.set_attribute("session_id", value)
+        self._connection_pool.set_attribute("session_id", value)
 
 
 class _ErrorCounter:

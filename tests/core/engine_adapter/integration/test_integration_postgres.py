@@ -2,7 +2,6 @@ import typing as t
 import pytest
 from pytest import FixtureRequest
 from sqlmesh.core.engine_adapter import PostgresEngineAdapter
-from tests.core.engine_adapter.integration import TestContext
 
 from tests.core.engine_adapter.integration import (
     TestContext,
@@ -29,3 +28,8 @@ def engine_adapter(ctx: TestContext) -> PostgresEngineAdapter:
 def test_engine_adapter(ctx: TestContext):
     assert isinstance(ctx.engine_adapter, PostgresEngineAdapter)
     assert ctx.engine_adapter.fetchone("select 1") == (1,)
+
+
+def test_server_version_psycopg(ctx: TestContext):
+    assert isinstance(ctx.engine_adapter, PostgresEngineAdapter)
+    assert ctx.engine_adapter.server_version != (0, 0)

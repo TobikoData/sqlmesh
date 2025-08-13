@@ -201,5 +201,17 @@ gateways:
     state_connection:
       type: duckdb
 
+  inttest_gcp_postgres:
+    connection:
+      type: gcp_postgres
+      instance_connection_string: {{ env_var("GCP_POSTGRES_INSTANCE_CONNECTION_STRING") }}
+      user: {{ env_var("GCP_POSTGRES_USER") }}
+      password: {{ env_var("GCP_POSTGRES_PASSWORD") }}
+      keyfile_json: {{ env_var("GCP_POSTGRES_KEYFILE_JSON", "") }}
+      db: {{ env_var("GCP_POSTGRES_DATABASE") }}
+      enable_iam_auth: true
+      check_import: false
+
+
 model_defaults:
     dialect: duckdb

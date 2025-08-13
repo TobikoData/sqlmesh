@@ -744,7 +744,6 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=True,
-        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -808,7 +807,6 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=False,
-        start="2022-01-01 00:00:00",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -901,7 +899,6 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=True,
-        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -973,7 +970,6 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         columns_to_types=ctx.columns_to_types,
         truncate=False,
-        start="2023-01-01",
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1587,7 +1583,11 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    init_example_project(tmp_path, ctx.mark.split("_")[0], schema_name=schema_name)
+    if ctx.mark.startswith("gcp_postgres"):
+        engine_type = "gcp_postgres"
+    else:
+        engine_type = ctx.mark.split("_")[0]
+    init_example_project(tmp_path, engine_type, schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,

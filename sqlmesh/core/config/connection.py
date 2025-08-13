@@ -1216,12 +1216,6 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
         password = data.get("password")
         enable_iam_auth = data.get("enable_iam_auth")
 
-        if password and enable_iam_auth:
-            raise ConfigError(
-                "Invalid GCP Postgres connection configuration - both password and"
-                " enable_iam_auth set. Use password when connecting to a postgres"
-                " user and enable_iam_auth 'True' when connecting to an IAM user."
-            )
         if not password and not enable_iam_auth:
             raise ConfigError(
                 "GCP Postgres connection configuration requires either password set"

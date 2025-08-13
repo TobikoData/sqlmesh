@@ -246,6 +246,7 @@ jobs:
             echo "export SNOWFLAKE_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export DATABRICKS_CATALOG='$TEST_DB_NAME'" >> "$BASH_ENV"
             echo "export REDSHIFT_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
+            echo "export GCP_POSTGRES_DATABASE='$TEST_DB_NAME'" >> "$BASH_ENV"
       - run:
           name: Create test database
           command: ./.circleci/manage-test-db.sh << parameters.engine >> "$TEST_DB_NAME" up
@@ -305,6 +306,7 @@ workflows:
                 - athena
                 # todo: enable fabric when cicd catalog create/drop implemented in manage-test-db.sh
                 #- fabric
+                - gcp-postgres
           filters:
             branches:
               only:
