@@ -49,6 +49,17 @@ class ConnectionPool(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_all_attributes(self, key: str) -> t.List[t.Any]:
+        """Returns all attributes with the given key across all connections/threads.
+
+        Args:
+            key: Attribute key.
+
+        Returns:
+            List of attribute values from all connections/threads.
+        """
+
+    @abc.abstractmethod
     def begin(self) -> None:
         """Starts a new transaction."""
 
@@ -141,6 +152,14 @@ class _ThreadLocalBase(_TransactionManagementMixin):
     def set_attribute(self, key: str, value: t.Any) -> None:
         thread_id = get_ident()
         self._thread_attributes[thread_id][key] = value
+
+    def get_all_attributes(self, key: str) -> t.List[t.Any]:
+        """Returns all attributes with the given key across all threads."""
+        return [
+            thread_attrs[key]
+            for thread_attrs in self._thread_attributes.values()
+            if key in thread_attrs
+        ]
 
     def begin(self) -> None:
         self._do_begin()
@@ -281,6 +300,11 @@ class SingletonConnectionPool(_TransactionManagementMixin):
 
     def set_attribute(self, key: str, value: t.Any) -> None:
         self._attributes[key] = value
+
+    def get_all_attributes(self, key: str) -> t.List[t.Any]:
+        """Returns all attributes with the given key (single-threaded pool has at most one)."""
+        value = self._attributes.get(key)
+        return [value] if value is not None else []
 
     def begin(self) -> None:
         self._do_begin()
