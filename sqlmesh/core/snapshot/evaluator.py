@@ -1073,11 +1073,16 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
         for is_table_deployable, table_name in table_names:
-            evaluation_strategy.delete(
-                table_name,
-                is_table_deployable=is_table_deployable,
-                physical_schema=snapshot.physical_schema,
-            )
+            # Use `get_data_object` to check if the table exists instead of `table_exists` since the former
+            # is based on `INFORMATION_SCHEMA` and avoids touching the table directly.
+            # This is important when the table name is malformed for some reason and running any statement
+            # that touches the table would result in an error.
+            if adapter.get_data_object(table_name) is not None:
+                evaluation_strategy.delete(
+                    table_name,
+                    is_table_deployable=is_table_deployable,
+                    physical_schema=snapshot.physical_schema,
+                )
 
             if on_complete is not None:
                 on_complete(table_name)
