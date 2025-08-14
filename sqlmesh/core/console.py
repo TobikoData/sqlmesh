@@ -439,6 +439,7 @@ class Console(
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Updates the snapshot evaluation progress."""
@@ -587,6 +588,7 @@ class NoopConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         pass
@@ -1032,7 +1034,9 @@ class TerminalConsole(Console):
 
             # determine column widths
             self.evaluation_column_widths["annotation"] = (
-                _calculate_annotation_str_len(batched_intervals, self.AUDIT_PADDING)
+                _calculate_annotation_str_len(
+                    batched_intervals, self.AUDIT_PADDING, len(" (XXXXXX rows processed)")
+                )
                 + 3  # brackets and opening escape backslash
             )
             self.evaluation_column_widths["name"] = max(
@@ -1077,6 +1081,7 @@ class TerminalConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Update the snapshot evaluation progress."""
@@ -1097,7 +1102,7 @@ class TerminalConsole(Console):
                 ).ljust(self.evaluation_column_widths["name"])
 
                 annotation = _create_evaluation_model_annotation(
-                    snapshot, _format_evaluation_model_interval(snapshot, interval)
+                    snapshot, _format_evaluation_model_interval(snapshot, interval), rows_processed
                 )
                 audits_str = ""
                 if num_audits_passed:
@@ -3668,6 +3673,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
@@ -3838,6 +3844,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         message = f"Evaluated {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
@@ -4022,7 +4029,8 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(f"Join On: {keys}")
 
 
-_CONSOLE: Console = NoopConsole()
+# _CONSOLE: Console = NoopConsole()
+_CONSOLE: Console = TerminalConsole()
 
 
 def set_console(console: Console) -> None:
@@ -4169,33 +4177,49 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
     return ""
 
 
-def _create_evaluation_model_annotation(snapshot: Snapshot, interval_info: t.Optional[str]) -> str:
+def _create_evaluation_model_annotation(
+    snapshot: Snapshot, interval_info: t.Optional[str], rows_processed: t.Optional[int]
+) -> str:
+    annotation = None
+    num_rows_processed = str(rows_processed) if rows_processed else ""
+    rows_processed_str = f" ({num_rows_processed} rows processed)" if num_rows_processed else ""
+
     if snapshot.is_audit:
-        return "run standalone audit"
-    if snapshot.is_model and snapshot.model.kind.is_external:
-        return "run external audits"
-    if snapshot.model.kind.is_seed:
-        return "insert seed file"
-    if snapshot.model.kind.is_full:
-        return "full refresh"
-    if snapshot.model.kind.is_view:
-        return "recreate view"
-    if snapshot.model.kind.is_incremental_by_unique_key:
-        return "insert/update rows"
-    if snapshot.model.kind.is_incremental_by_partition:
-        return "insert partitions"
+        annotation = "run standalone audit"
+    if snapshot.is_model:
+        if snapshot.model.kind.is_external:
+            annotation = "run external audits"
+        if snapshot.model.kind.is_view:
+            annotation = "recreate view"
+        if snapshot.model.kind.is_seed:
+            # no "processed" for seeds
+            seed_num_rows_inserted = (
+                f" ({num_rows_processed} rows inserted)" if num_rows_processed else ""
+            )
+            annotation = f"insert seed file{seed_num_rows_inserted}"
+        if snapshot.model.kind.is_full:
+            annotation = f"full refresh{rows_processed_str}"
+        if snapshot.model.kind.is_incremental_by_unique_key:
+            annotation = f"insert/update rows{rows_processed_str}"
+        if snapshot.model.kind.is_incremental_by_partition:
+            annotation = f"insert partitions{rows_processed_str}"
 
-    return interval_info if interval_info else ""
+    if annotation:
+        return annotation
+
+    return f"{interval_info}{rows_processed_str}" if interval_info else ""
 
 
-def _calculate_interval_str_len(snapshot: Snapshot, intervals: t.List[Interval]) -> int:
+def _calculate_interval_str_len(
+    snapshot: Snapshot, intervals: t.List[Interval], rows_processed: t.Optional[int] = None
+) -> int:
     interval_str_len = 0
     for interval in intervals:
         interval_str_len = max(
             interval_str_len,
             len(
                 _create_evaluation_model_annotation(
-                    snapshot, _format_evaluation_model_interval(snapshot, interval)
+                    snapshot, _format_evaluation_model_interval(snapshot, interval), rows_processed
                 )
             ),
         )
@@ -4248,13 +4272,16 @@ def _calculate_audit_str_len(snapshot: Snapshot, audit_padding: int = 0) -> int:
 
 
 def _calculate_annotation_str_len(
-    batched_intervals: t.Dict[Snapshot, t.List[Interval]], audit_padding: int = 0
+    batched_intervals: t.Dict[Snapshot, t.List[Interval]],
+    audit_padding: int = 0,
+    rows_processed_len: int = 0,
 ) -> int:
     annotation_str_len = 0
     for snapshot, intervals in batched_intervals.items():
         annotation_str_len = max(
             annotation_str_len,
             _calculate_interval_str_len(snapshot, intervals)
-            + _calculate_audit_str_len(snapshot, audit_padding),
+            + _calculate_audit_str_len(snapshot, audit_padding)
+            + rows_processed_len,
         )
     return annotation_str_len

@@ -142,6 +142,7 @@ class ApiConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        rows_processed: t.Optional[int] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         if audit_only:
