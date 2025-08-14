@@ -36,6 +36,9 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     engine_adapter.create_table(
         table_name="foo.another", columns_to_types={"col": exp.DataType.build("int")}
     )
+    engine_adapter.create_view(
+        view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar")
+    )
     engine_adapter.create_table(
         table_name="ignored.ignore", columns_to_types={"col": exp.DataType.build("int")}
     )
@@ -44,11 +47,24 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
         == '"memory"."foo"."bar"'
     )
+
+    assert (
+        renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar').type }}")
+        == "table"
+    )
+
+    assert (
+        renderer(
+            "{{ adapter.get_relation(database=None, schema='foo', identifier='bar_view').type }}"
+        )
+        == "view"
+    )
+
     assert renderer(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INT")])
 
-    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
+    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "3"
 
     assert renderer(
         """
@@ -108,26 +124,30 @@ def test_bigquery_get_columns_in_relation(
 def test_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
+    from sqlmesh.core.engine_adapter.base import DataObject, DataObjectType
+
     context = sushi_test_project.context
     assert context.target
+    data_object = DataObject(catalog="test", schema="bla", name="bob", type=DataObjectType.TABLE)
 
     # bla and bob will be normalized to lowercase since the target is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "duckdb"
-
+    adapter_mock.get_data_object.return_value = data_object
     duckdb_renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     schema_bla = schema_("bla", "test", quoted=True)
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     duckdb_renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     # bla and bob will be normalized to uppercase since the target is Snowflake, even though the default dialect is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "snowflake"
+    adapter_mock.get_data_object.return_value = data_object
     context.target = SnowflakeConfig(
         account="test",
         user="test",
@@ -142,10 +162,10 @@ def test_normalization(
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     renderer("{{ adapter.get_relation(database='custom_db', schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls(
+    adapter_mock.get_data_object.assert_has_calls(
         [call(exp.table_("bob", db="bla", catalog="custom_db", quoted=True))]
     )
 
