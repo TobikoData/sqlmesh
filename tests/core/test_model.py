@@ -4375,6 +4375,7 @@ def test_model_defaults_macros(make_snapshot):
         cron="@cron_macro",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
+        run_original_sql="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
         allow_partials="@IF(@gateway = 'local', True, False)",
         interval_unit="@IF(@gateway = 'local', 'quarter_hour', 'day')",
@@ -4416,6 +4417,7 @@ def test_model_defaults_macros(make_snapshot):
 
     # Validate rendering of model defaults
     assert model.optimize_query
+    assert model.run_original_sql
     assert model.enabled
     assert model.start == "1 month ago"
     assert not model.allow_partials
