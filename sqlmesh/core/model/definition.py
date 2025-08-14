@@ -244,14 +244,7 @@ class _Model(ModelMeta, frozen=True):
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )
-                elif field_name not in (
-                    "column_descriptions_",
-                    "default_catalog",
-                    "enabled",
-                    "inline_audits",
-                    "optimize_query",
-                    "ignored_rules_",
-                ):
+                elif field_name not in ("default_catalog", "enabled", "ignored_rules_"):
                     expressions.append(
                         exp.Property(
                             this=field_info.alias or field_name,
@@ -2940,6 +2933,9 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
+    "column_descriptions_": lambda value: exp.Schema(
+        expressions=[exp.to_column(c).eq(d) for c, d in value.items()]
+    ),
     "tags": single_value_or_tuple,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
@@ -2958,6 +2954,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         )
     ),
     "formatting": str,
+    "optimize_query": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 

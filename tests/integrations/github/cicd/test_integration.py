@@ -1789,7 +1789,7 @@ def test_overlapping_changes_models(
   
   +++ 
   
-  @@ -29,7 +29,8 @@
+  @@ -32,7 +32,8 @@
   
    SELECT DISTINCT
      CAST(o.customer_id AS INT) AS customer_id,
