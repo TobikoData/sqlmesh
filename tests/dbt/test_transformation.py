@@ -238,6 +238,16 @@ def test_model_kind():
         auto_restatement_cron="0 0 * * *",
     )
 
+    # Test incompatibile incremental strategies
+    for incremental_strategy in ("delete+insert", "insert_overwrite", "append"):
+        assert ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy=incremental_strategy,
+        ).model_kind(context) == IncrementalByUniqueKeyKind(
+            unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+        )
+
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(context) == IncrementalByTimeRangeKind(
@@ -371,25 +381,6 @@ def test_model_kind():
         )
         == ManagedKind()
     )
-
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="delete+insert",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="insert_overwrite",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="append",
-        ).model_kind(context)
 
 
 def test_model_kind_snapshot_bigquery():
