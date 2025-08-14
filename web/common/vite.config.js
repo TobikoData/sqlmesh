@@ -18,8 +18,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/index.ts'),
-      name: 'sqlmesh-shared-ui',
-      fileName: format => `sqlmesh-shared-ui.${format}.js`,
+      name: 'sqlmesh-common',
+      fileName: format => `sqlmesh-common.${format}.js`,
     },
     rollupOptions: {
       external: ['react', 'react-dom'],
