@@ -19,7 +19,6 @@ from sqlmesh.core.signal import signal
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
@@ -139,16 +138,6 @@ class DbtLoader(Loader):
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
                 for model in package_models.values():
-                    if (
-                        not context.sqlmesh_config.feature_flags.dbt.scd_type_2_support
-                        and isinstance(model, ModelConfig)
-                        and model.model_kind(context).is_scd_type_2
-                    ):
-                        logger.info(
-                            "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-                        )
-                        continue
-
                     sqlmesh_model = cache.get_or_load_models(
                         model.path, loader=lambda: [_to_sqlmesh(model, context)]
                     )[0]

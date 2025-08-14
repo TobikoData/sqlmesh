@@ -21,7 +21,6 @@ from sqlmesh.core.config import (
     TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
-from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -299,12 +298,10 @@ def test_load_config_from_env():
         {
             "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
             "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
-            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
         },
     ):
         assert Config.parse_obj(load_config_from_env()) == Config(
             gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
-            feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
 
@@ -503,35 +500,6 @@ def test_physical_schema_mapping_mutually_exclusive_with_physical_schema_overrid
         ConfigError, match=r"Only one.*physical_schema_override.*physical_schema_mapping"
     ):
         Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})  # type: ignore
-
-
-def test_load_feature_flag(tmp_path_factory):
-    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """
-gateways:
-    duckdb_gateway:
-        connection:
-            type: duckdb
-model_defaults:
-    dialect: bigquery
-feature_flags:
-    dbt:
-        scd_type_2_support: false
-        """
-        )
-
-    assert load_config_from_paths(
-        Config,
-        project_paths=[config_path],
-    ) == Config(
-        gateways={
-            "duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig()),
-        },
-        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
-        feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
-    )
 
 
 def test_load_alternative_config_type(yaml_config_path: Path, python_config_path: Path):
@@ -1435,7 +1403,7 @@ def test_physical_table_naming_convention(
 gateways:
   test_gateway:
     connection:
-      type: duckdb      
+      type: duckdb
 model_defaults:
   dialect: duckdb
 {config_part}
@@ -1504,7 +1472,7 @@ jaffle_shop:
   outputs:
     dev:
       type: duckdb
-      path: 'jaffle_shop.duckdb'      
+      path: 'jaffle_shop.duckdb'
     """)
 
     (tmp_path / "sqlmesh.yaml").write_text("""
@@ -1513,7 +1481,7 @@ gateways:
     state_connection:
       type: duckdb
       database: state.db
-model_defaults:  
+model_defaults:
   start: '2020-01-01'
 """)
 
