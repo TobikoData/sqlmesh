@@ -31,7 +31,6 @@ import { selector, completionProvider } from './completion/completion'
 import { LineagePanel } from './webviews/lineagePanel'
 import { RenderedModelProvider } from './providers/renderedModelProvider'
 import { showTableDiff } from './commands/tableDiff'
-import { sleep } from './utilities/sleep'
 
 import {
   controller as testController,
