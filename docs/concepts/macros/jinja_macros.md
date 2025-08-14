@@ -321,6 +321,6 @@ Some SQL dialects interpret double and single quotes differently. We could repla
 
 ## Mixing macro systems
 
-SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways.
+SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems.
 
-[Predefined SQLMesh macro variables](./macro_variables.md) can be used in a query containing user-defined Jinja variables and functions. However, predefined variables passed as arguments to a user-defined Jinja macro function must use the Jinja curly brace syntax `{{ start_ds }}` instead of the SQLMesh macro `@` prefix syntax `@start_ds`. Note that curly brace syntax may require quoting to generate the equivalent of the `@` syntax.
+Mixing the two systems is not supported, i.e., a SQL model may either use Jinja syntax, or SQLMesh macro syntax, but not both.

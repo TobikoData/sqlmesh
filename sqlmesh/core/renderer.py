@@ -188,32 +188,38 @@ class BaseExpressionRenderer:
             **kwargs,
         }
 
+        jinja_env_kwargs = render_kwargs.copy()
         variables = kwargs.pop("variables", {})
-        jinja_env_kwargs = {
-            **{
-                **render_kwargs,
-                **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
-                **variables,
-            },
-            "snapshots": snapshots or {},
-            "table_mapping": table_mapping,
-            "deployability_index": deployability_index,
-            "default_catalog": self._default_catalog,
-            "runtime_stage": runtime_stage.value,
-            "resolve_table": _resolve_table,
-        }
+
         if this_model:
             render_kwargs["this_model"] = this_model
             jinja_env_kwargs["this_model"] = this_model.sql(
                 dialect=self._dialect, identify=True, comments=False
             )
 
-        jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
-
         expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
+            # Mixing Jinja and SQLMesh macros is not supported
+            render_sqlmesh_macros = False
+
+            jinja_env_kwargs.update(
+                {
+                    **{
+                        **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
+                        **variables,
+                    },
+                    "snapshots": snapshots or {},
+                    "table_mapping": table_mapping,
+                    "deployability_index": deployability_index,
+                    "default_catalog": self._default_catalog,
+                    "runtime_stage": runtime_stage.value,
+                    "resolve_table": _resolve_table,
+                }
+            )
             try:
                 expressions = []
+
+                jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
                 logger.debug(
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
@@ -229,30 +235,34 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+        else:
+            render_sqlmesh_macros = True
+            macro_evaluator.locals.update(render_kwargs)
 
-        macro_evaluator.locals.update(render_kwargs)
+            if variables:
+                macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
 
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
-
-        for definition in self._macro_definitions:
-            try:
-                macro_evaluator.evaluate(definition)
-            except Exception as ex:
-                raise_config_error(
-                    f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
-                )
+            for definition in self._macro_definitions:
+                try:
+                    macro_evaluator.evaluate(definition)
+                except Exception as ex:
+                    raise_config_error(
+                        f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
+                    )
 
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
         for expression in expressions:
-            try:
-                transformed_expressions = ensure_list(macro_evaluator.transform(expression))
-            except Exception as ex:
-                raise_config_error(
-                    f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
-                    self._path,
-                )
+            if render_sqlmesh_macros:
+                try:
+                    transformed_expressions = ensure_list(macro_evaluator.transform(expression))
+                except Exception as ex:
+                    raise_config_error(
+                        f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
+                        self._path,
+                    )
+            else:
+                transformed_expressions = [expression]
 
             for expression in t.cast(t.List[exp.Expression], transformed_expressions):
                 with self._normalize_and_quote(expression) as expression:

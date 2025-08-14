@@ -2119,4 +2119,6 @@ Typed macros in SQLMesh not only enhance the development experience by making ma
 
 ## Mixing macro systems
 
-SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.
+SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems.
+
+Mixing the two systems is not supported, i.e., a SQL model may either use Jinja syntax, or SQLMesh macro syntax, but not both.
