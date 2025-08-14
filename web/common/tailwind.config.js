@@ -46,9 +46,6 @@ module.exports = {
     },
   },
   plugins: [
-    require('@tailwindcss/container-queries'),
     require("@tailwindcss/typography"),
-    require("tailwindcss-animate"),
-    require("tailwind-scrollbar")({ nocompatible: true }),
   ],
 }

@@ -3,7 +3,7 @@ import { cva } from "class-variance-authority";
 import { EnumShape, EnumSize } from "@/types/enums";
 
 export const badgeVariants = cva(
-  "bg-badge-background text-badge-foreground border border-current font-mono inline-flex align-middle items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold",
+  "bg-badge-background text-badge-foreground font-mono inline-flex align-middle items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold",
   {
     variants: {
       size: {
