@@ -2,12 +2,21 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import dts from 'vite-plugin-dts'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig({
   plugins: [
     react(),
     dts({
       insertTypesEntry: true,
+    }),
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'src/styles/design',
+          dest: 'styles',
+        },
+      ],
     }),
   ],
   resolve: {
