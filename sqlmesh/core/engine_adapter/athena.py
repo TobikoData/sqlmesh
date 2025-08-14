@@ -129,13 +129,16 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
                 .where(exp.column("table_schema", table="t").eq(schema))
                 .with_(
                     "object_names",
-                    exp.select(exp.Literal("name")).from_(
+                    exp.select(exp.column("name")).from_(
                         exp.Values(
                             expressions=[
                                 exp.Tuple(expressions=[exp.Literal.string(name)])
                                 for name in object_names
                             ],
-                        ).as_("t(name)"),
+                            alias=exp.TableAlias(
+                                this="t", columns=[exp.column("name")],
+                            )
+                        )
                     ),
                 )
             )
