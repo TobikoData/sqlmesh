@@ -1,0 +1,3 @@
+[submodule "dbt-core"]
+	path = dbt-core
+	url = https://github.com/benfdking/dbt-core.git
