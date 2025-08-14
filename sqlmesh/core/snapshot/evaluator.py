@@ -1523,13 +1523,9 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        columns_to_types = kwargs.pop("columns_to_types", model.columns_to_types)
-        source_columns = kwargs.pop("source_columns", None)
         self.adapter.insert_append(
             table_name,
             query_or_df,
-            target_columns_to_types=columns_to_types,
-            source_columns=source_columns,
         )
 
     def create(
@@ -1649,16 +1645,13 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         model: Model,
         table_name: str,
         render_kwargs: t.Dict[str, t.Any],
-        target_column_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         force_get_columns_from_target: bool = False,
     ) -> t.Tuple[t.Dict[str, exp.DataType], t.Optional[t.List[str]]]:
         if force_get_columns_from_target:
             target_column_to_types = self.adapter.columns(table_name)
-        elif target_column_to_types:
-            target_column_to_types = target_column_to_types
         else:
             target_column_to_types = (
-                model.columns_to_types
+                model.columns_to_types  # type: ignore
                 if model.annotated and not model.on_destructive_change.is_ignore
                 else self.adapter.columns(table_name)
             )
@@ -1784,6 +1777,24 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
 
 
 class IncrementalUnmanagedStrategy(MaterializableStrategy):
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        columns_to_types, source_columns = self._get_target_and_source_columns(
+            model, table_name, render_kwargs=render_kwargs
+        )
+        self.adapter.insert_append(
+            table_name,
+            query_or_df,
+            target_columns_to_types=columns_to_types,
+            source_columns=source_columns,
+        )
+
     def insert(
         self,
         table_name: str,
@@ -1797,13 +1808,13 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
             return self._replace_query_for_model(
                 model, table_name, query_or_df, render_kwargs, **kwargs
             )
-        columns_to_types, source_columns = self._get_target_and_source_columns(
-            model,
-            table_name,
-            render_kwargs=render_kwargs,
-            target_column_to_types=kwargs.pop("columns_to_types", None),
-        )
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
+            columns_to_types, source_columns = self._get_target_and_source_columns(
+                model,
+                table_name,
+                render_kwargs=render_kwargs,
+            )
+
             return self.adapter.insert_overwrite_by_partition(
                 table_name,
                 query_or_df,
@@ -1816,8 +1827,6 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
             query_or_df,
             model,
             render_kwargs=render_kwargs,
-            columns_to_types=columns_to_types,
-            source_columns=source_columns,
             **kwargs,
         )
 
