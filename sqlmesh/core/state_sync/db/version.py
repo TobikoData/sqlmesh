@@ -55,6 +55,7 @@ class VersionState:
                 ]
             ),
             target_columns_to_types=self._version_columns_to_types,
+            track_row_count=False,
         )
 
     def get_versions(self) -> Versions:

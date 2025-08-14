@@ -9,6 +9,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
+from sqlmesh.core.execution_tracker import QueryExecutionTracker, SeedExecutionTracker
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
@@ -490,65 +491,84 @@ class Scheduler:
             if isinstance(node, DummyNode):
                 return
 
-            snapshot = self.snapshots_by_name[node.snapshot_name]
+            with QueryExecutionTracker.track_execution(
+                f"{snapshot.name}_{batch_idx}"
+            ) as execution_context:
+                snapshot = self.snapshots_by_name[node.snapshot_name]
 
-            if isinstance(node, EvaluateNode):
-                self.console.start_snapshot_evaluation_progress(snapshot)
-                execution_start_ts = now_timestamp()
-                evaluation_duration_ms: t.Optional[int] = None
-                start, end = node.interval
+                if isinstance(node, EvaluateNode):
+                    self.console.start_snapshot_evaluation_progress(snapshot)
+                    execution_start_ts = now_timestamp()
+                    evaluation_duration_ms: t.Optional[int] = None
+                    start, end = node.interval
 
-                audit_results: t.List[AuditResult] = []
-                try:
-                    assert execution_time  # mypy
-                    assert deployability_index  # mypy
+                    audit_results: t.List[AuditResult] = []
+                    try:
+                        assert execution_time  # mypy
+                        assert deployability_index  # mypy
 
-                    if audit_only:
-                        audit_results = self._audit_snapshot(
-                            snapshot=snapshot,
-                            environment_naming_info=environment_naming_info,
-                            deployability_index=deployability_index,
-                            snapshots=self.snapshots_by_name,
-                            start=start,
-                            end=end,
-                            execution_time=execution_time,
-                        )
-                    else:
-                        audit_results = self.evaluate(
-                            snapshot=snapshot,
-                            environment_naming_info=environment_naming_info,
-                            start=start,
-                            end=end,
-                            execution_time=execution_time,
-                            deployability_index=deployability_index,
-                            batch_index=node.batch_index,
-                            allow_destructive_snapshots=allow_destructive_snapshots,
-                            allow_additive_snapshots=allow_additive_snapshots,
+                        if audit_only:
+                            audit_results = self._audit_snapshot(
+                                snapshot=snapshot,
+                                environment_naming_info=environment_naming_info,
+                                deployability_index=deployability_index,
+                                snapshots=self.snapshots_by_name,
+                                start=start,
+                                end=end,
+                                execution_time=execution_time,
+                            )
+                        else:
+                            audit_results = self.evaluate(
+                                snapshot=snapshot,
+                                environment_naming_info=environment_naming_info,
+                                start=start,
+                                end=end,
+                                execution_time=execution_time,
+                                deployability_index=deployability_index,
+                                batch_index=node.batch_index,
+                                allow_destructive_snapshots=allow_destructive_snapshots,
+                                allow_additive_snapshots=allow_additive_snapshots,
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
-                        )
+                            )
 
-                    evaluation_duration_ms = now_timestamp() - execution_start_ts
-                finally:
-                    num_audits = len(audit_results)
-                    num_audits_failed = sum(1 for result in audit_results if result.count)
-                    self.console.update_snapshot_evaluation_progress(
-                        snapshot,
-                        batched_intervals[snapshot][node.batch_index],
-                        node.batch_index,
-                        evaluation_duration_ms,
-                        num_audits - num_audits_failed,
-                        num_audits_failed,
-                        auto_restatement_triggers=auto_restatement_triggers.get(
+                        evaluation_duration_ms = now_timestamp() - execution_start_ts
+                    finally:
+                        num_audits = len(audit_results)
+                        num_audits_failed = sum(1 for result in audit_results if result.count)
+
+                        rows_processed = None
+                        if snapshot.is_seed:
+                            # seed stats are tracked in SeedStrategy.create by model name, not snapshot name
+                            seed_stats = SeedExecutionTracker.get_and_clear_seed_stats(
+                                snapshot.model.name
+                            )
+                            rows_processed = (
+                                seed_stats.get("total_rows_processed") if seed_stats else None
+                            )
+                        else:
+                            rows_processed = (
+                                execution_context.total_rows_processed if execution_context else None
+                            )
+
+                        self.console.update_snapshot_evaluation_progress(
+                                snapshot,
+                                batched_intervals[snapshot][node.batch_index],
+                                node.batch_index,
+                                evaluation_duration_ms,
+                                num_audits - num_audits_failed,
+                                num_audits_failed,
+                            auto_restatement_triggers=auto_restatement_triggers.get(
                             snapshot.snapshot_id
                         ),
                     )
-            elif isinstance(node, CreateNode):
-                self.snapshot_evaluator.create_snapshot(
-                    snapshot=snapshot,
-                    snapshots=self.snapshots_by_name,
-                    deployability_index=deployability_index,
-                    allow_destructive_snapshots=allow_destructive_snapshots or set(),
-                    allow_additive_snapshots=allow_additive_snapshots or set(),
+                elif isinstance(node, CreateNode):
+                    self.snapshot_evaluator.create_snapshot(
+                        snapshot=snapshot,
+                        snapshots=self.snapshots_by_name,
+                        deployability_index=deployability_index,
+                        allow_destructive_snapshots=allow_destructive_snapshots or set(),
+                        rows_processed=rows_processed,
+                        allow_additive_snapshots=allow_additive_snapshots or set(),
                 )
 
         try:

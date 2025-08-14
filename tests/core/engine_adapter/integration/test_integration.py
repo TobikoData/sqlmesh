@@ -7,7 +7,7 @@ import sys
 import typing as t
 import shutil
 from datetime import datetime, timedelta
-
+from unittest.mock import patch
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
@@ -2382,8 +2382,25 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
                 )
         context._models.update(replacement_models)
 
+    # capture row counts for each evaluated snapshot
+    row_counts = {}
+
+    def capture_row_counts(
+        snapshot,
+        interval,
+        batch_idx,
+        duration_ms,
+        num_audits_passed,
+        num_audits_failed,
+        audit_only=False,
+        rows_processed=None,
+    ):
+        if rows_processed is not None:
+            row_counts[snapshot.model.name.replace(f"{schema_name}.", "")] = rows_processed
+
     # apply prod plan
-    context.plan(auto_apply=True, no_prompts=True)
+    with patch.object(context.console, "update_snapshot_evaluation_progress", capture_row_counts):
+        context.plan(auto_apply=True, no_prompts=True)
 
     prod_schema_results = ctx.get_metadata_results(object_names["view_schema"][0])
     assert sorted(prod_schema_results.views) == object_names["views"]
@@ -2394,6 +2411,11 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.views) == 0
     assert len(physical_layer_results.materialized_views) == 0
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
+
+    assert len(row_counts) == 3
+    assert row_counts["seed_model"] == 7
+    assert row_counts["incremental_model"] == 7
+    assert row_counts["full_model"] == 3
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(
