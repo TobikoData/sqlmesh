@@ -8,6 +8,7 @@ from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
 
+from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 from sqlmesh.core.config.connection import (
     CONNECTION_CONFIG_TO_TYPE,
     DIALECT_TO_TYPE,
@@ -113,11 +114,10 @@ linter:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
 """,
-        ProjectTemplate.DBT: """from pathlib import Path
-
-from sqlmesh.dbt.loader import sqlmesh_config
-
-config = sqlmesh_config(Path(__file__).parent)
+        ProjectTemplate.DBT: f"""# --- Model Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
+model_defaults:
+  start: {start or yesterday_ds()}
 """,
     }
 
@@ -285,8 +285,13 @@ def init_example_project(
     cli_mode: InitCliMode = InitCliMode.DEFAULT,
 ) -> Path:
     root_path = Path(path)
-    config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
-    config_path = root_path / f"config.{config_extension}"
+
+    config_path = root_path / "config.yaml"
+    if template == ProjectTemplate.DBT:
+        # name the config file `sqlmesh.yaml` to make it clear that within the context of all
+        # the existing yaml files DBT project, this one specifically relates to configuring the sqlmesh engine
+        config_path = root_path / "sqlmesh.yaml"
+
     audits_path = root_path / "audits"
     macros_path = root_path / "macros"
     models_path = root_path / "models"
@@ -298,7 +303,7 @@ def init_example_project(
             f"Found an existing config file '{config_path}'.\n\nPlease change to another directory or remove the existing file."
         )
 
-    if template == ProjectTemplate.DBT and not Path(root_path, "dbt_project.yml").exists():
+    if template == ProjectTemplate.DBT and not Path(root_path, DBT_PROJECT_FILENAME).exists():
         raise SQLMeshError(
             "Required dbt project file 'dbt_project.yml' not found in the current directory.\n\nPlease add it or change directories before running `sqlmesh init` to set up your project."
         )

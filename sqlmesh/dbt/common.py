@@ -14,10 +14,11 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 from sqlmesh.utils.yaml import load
+from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
-PROJECT_FILENAME = "dbt_project.yml"
+PROJECT_FILENAME = DBT_PROJECT_FILENAME
 
 JINJA_ONLY = {
     "adapter",
