@@ -53,6 +53,7 @@ class BaseExpressionRenderer:
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
+        skip_sqlmesh_macros: t.Optional[bool] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -68,6 +69,7 @@ class BaseExpressionRenderer:
         self._cache: t.List[t.Optional[exp.Expression]] = []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
+        self._skip_sqlmesh_macros_flag = skip_sqlmesh_macros
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -229,30 +231,36 @@ class BaseExpressionRenderer:
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
 
-        macro_evaluator.locals.update(render_kwargs)
-
-        if variables:
-            macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
-
-        for definition in self._macro_definitions:
-            try:
-                macro_evaluator.evaluate(definition)
-            except Exception as ex:
-                raise_config_error(
-                    f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
-                )
-
         resolved_expressions: t.List[t.Optional[exp.Expression]] = []
 
-        for expression in expressions:
-            try:
-                transformed_expressions = ensure_list(macro_evaluator.transform(expression))
-            except Exception as ex:
-                raise_config_error(
-                    f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
-                    self._path,
-                )
+        if self._skip_sqlmesh_macros_flag:
+            transformed_expressions_list = [expressions]
+        else:
+            macro_evaluator.locals.update(render_kwargs)
 
+            if variables:
+                macro_evaluator.locals.setdefault(c.SQLMESH_VARS, {}).update(variables)
+
+            for definition in self._macro_definitions:
+                try:
+                    macro_evaluator.evaluate(definition)
+                except Exception as ex:
+                    raise_config_error(
+                        f"Failed to evaluate macro '{definition}'.\n\n{ex}\n", self._path
+                    )
+
+            transformed_expressions_list = []
+            for expression in expressions:
+                try:
+                    transformed_expressions = ensure_list(macro_evaluator.transform(expression))
+                except Exception as ex:
+                    raise_config_error(
+                        f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
+                        self._path,
+                    )
+                transformed_expressions_list.append(transformed_expressions)
+
+        for transformed_expressions in transformed_expressions_list:
             for expression in t.cast(t.List[exp.Expression], transformed_expressions):
                 with self._normalize_and_quote(expression) as expression:
                     if hasattr(expression, "selects"):
@@ -277,6 +285,7 @@ class BaseExpressionRenderer:
         # MacroEvaluator can resolve columns_to_types calls and provide true schemas.
         if should_cache and (not self.schema.empty or not macro_evaluator.columns_to_types_called):
             self._cache = resolved_expressions
+
         return resolved_expressions
 
     def update_cache(self, expression: t.Optional[exp.Expression]) -> None:

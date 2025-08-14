@@ -4375,6 +4375,7 @@ def test_model_defaults_macros(make_snapshot):
         cron="@cron_macro",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
+        skip_sqlmesh_macros="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
         allow_partials="@IF(@gateway = 'local', True, False)",
         interval_unit="@IF(@gateway = 'local', 'quarter_hour', 'day')",
@@ -4416,6 +4417,7 @@ def test_model_defaults_macros(make_snapshot):
 
     # Validate rendering of model defaults
     assert model.optimize_query
+    assert model.skip_sqlmesh_macros
     assert model.enabled
     assert model.start == "1 month ago"
     assert not model.allow_partials
@@ -4466,6 +4468,112 @@ def test_model_defaults_macros(make_snapshot):
     assert model.render_virtual_properties(snapshots={model.fqn: snapshot}) == {
         "creatable_type": exp.convert("SECURE"),
     }
+
+
+def test_skip_sqlmesh_macros():
+    """Test that skip_sqlmesh_macros flag prevents SQLMesh macro rendering."""
+
+    # Test with skip_sqlmesh_macros=True
+    model_with_skip = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                skip_sqlmesh_macros TRUE
+            );
+            SELECT @start_dt, @end_dt, @x FROM tbl WHERE dt = @execution_dt;
+            """,
+            default_dialect="duckdb",
+        ),
+    )
+
+    # Render query with dates
+    rendered = model_with_skip.render_query(
+        start="2024-01-01", end="2024-01-31", execution_time="2024-01-15"
+    )
+
+    # Macros should NOT be replaced when skip_sqlmesh_macros is True
+    rendered_sql = rendered.sql(dialect="duckdb")
+    assert "@start_dt" in rendered_sql
+    assert "@end_dt" in rendered_sql
+    assert "@x" in rendered_sql
+    assert "@execution_dt" in rendered_sql
+
+    # Test with skip_sqlmesh_macros=False (default behavior)
+    model_without_skip = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                skip_sqlmesh_macros FALSE
+            );
+            SELECT @start_dt, @end_dt, @x FROM tbl WHERE dt = @execution_dt;
+            """,
+            default_dialect="duckdb",
+        ),
+        variables={"x": "test_value"},
+    )
+
+    # Render query with dates
+    rendered = model_without_skip.render_query(
+        start="2024-01-01", end="2024-01-31", execution_time="2024-01-15"
+    )
+
+    # Macros SHOULD be replaced when skip_sqlmesh_macros is False
+    rendered_sql = rendered.sql(dialect="duckdb")
+    assert "@start_dt" not in rendered_sql
+    assert "@end_dt" not in rendered_sql
+    assert "@x" not in rendered_sql
+    assert "@execution_dt" not in rendered_sql
+    assert "2024-01-01" in rendered_sql
+    assert "2024-01-31" in rendered_sql
+    assert "test_value" in rendered_sql
+    assert "2024-01-15" in rendered_sql
+
+    # Test that skip_sqlmesh_macros affects the data hash
+    model_with_none = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model
+            );
+            SELECT * FROM tbl;
+            """,
+            default_dialect="duckdb",
+        ),
+    )
+
+    model_with_true = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                skip_sqlmesh_macros TRUE
+            );
+            SELECT * FROM tbl;
+            """,
+            default_dialect="duckdb",
+        ),
+    )
+
+    model_with_false = load_sql_based_model(
+        d.parse(
+            """
+            MODEL (
+                name test_schema.test_model,
+                skip_sqlmesh_macros FALSE
+            );
+            SELECT * FROM tbl;
+            """,
+            default_dialect="duckdb",
+        ),
+    )
+
+    # Models with different skip_sqlmesh_macros values should have different hashes
+    assert model_with_true.data_hash != model_with_false.data_hash
+    assert model_with_true.data_hash != model_with_none.data_hash
+    # Models with None and False should have the same hash (False is default)
+    assert model_with_none.data_hash == model_with_false.data_hash
 
 
 def test_model_defaults_macros_python_model(make_snapshot):

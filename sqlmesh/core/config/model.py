@@ -44,6 +44,7 @@ class ModelDefaultsConfig(BaseConfig):
         optimize_query: Whether the SQL models should be optimized.
         allow_partials: Whether the models can process partial (incomplete) data intervals.
         enabled: Whether the models are enabled.
+        skip_sqlmesh_macros: Whether to skip rendering SQLMesh built-in macros like @x and @foo().
         interval_unit: The temporal granularity of the models data intervals. By default computed from cron.
         pre_statements: The list of SQL statements that get executed before a model runs.
         post_statements: The list of SQL statements that get executed before a model runs.
@@ -69,6 +70,7 @@ class ModelDefaultsConfig(BaseConfig):
     interval_unit: t.Optional[t.Union[str, IntervalUnit]] = None
     enabled: t.Optional[t.Union[str, bool]] = None
     formatting: t.Optional[t.Union[str, bool]] = None
+    skip_sqlmesh_macros: t.Optional[t.Union[str, bool]] = None
     pre_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
     post_statements: t.Optional[t.List[t.Union[str, exp.Expression]]] = None
     on_virtual_update: t.Optional[t.List[t.Union[str, exp.Expression]]] = None

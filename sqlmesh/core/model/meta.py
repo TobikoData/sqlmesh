@@ -81,6 +81,7 @@ class ModelMeta(_Node):
     physical_version: t.Optional[str] = None
     gateway: t.Optional[str] = None
     optimize_query: t.Optional[bool] = None
+    skip_sqlmesh_macros: t.Optional[bool] = None
     ignored_rules_: t.Optional[t.Set[str]] = Field(
         default=None, exclude=True, alias="ignored_rules"
     )
