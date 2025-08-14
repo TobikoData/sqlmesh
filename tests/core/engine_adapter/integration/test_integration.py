@@ -2412,10 +2412,11 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.materialized_views) == 0
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
-    assert len(row_counts) == 3
-    assert row_counts["seed_model"] == 7
-    assert row_counts["incremental_model"] == 7
-    assert row_counts["full_model"] == 3
+    if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+        assert len(row_counts) == 3
+        assert row_counts["seed_model"] == 7
+        assert row_counts["incremental_model"] == 7
+        assert row_counts["full_model"] == 3
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(

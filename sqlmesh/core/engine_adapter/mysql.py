@@ -39,6 +39,7 @@ class MySQLEngineAdapter(
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_REPLACE_TABLE = False
     MAX_IDENTIFIER_LENGTH = 64
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
             exp.DataType.build("BIT", dialect=DIALECT).this: [(1,)],

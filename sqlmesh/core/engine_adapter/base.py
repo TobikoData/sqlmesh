@@ -118,6 +118,8 @@ class EngineAdapter:
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
     ATTACH_CORRELATION_ID = True
+    # TODO: change to False
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
 
     def __init__(
         self,
@@ -2442,7 +2444,7 @@ class EngineAdapter:
     def _execute(self, sql: str, track_row_count: bool = False, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)
 
-        if track_row_count:
+        if track_row_count and self.SUPPORTS_QUERY_EXECUTION_TRACKING:
             rowcount_raw = getattr(self.cursor, "rowcount", None)
             rowcount = None
             if rowcount_raw is not None:

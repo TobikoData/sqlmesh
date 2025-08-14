@@ -55,6 +55,7 @@ class TrinoEngineAdapter(
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
             # default decimal precision varies across backends
