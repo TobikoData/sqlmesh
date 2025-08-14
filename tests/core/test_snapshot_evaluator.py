@@ -1383,9 +1383,6 @@ def test_migrate_snapshot_data_object_type_mismatch(
     adapter.cursor.execute.assert_has_calls(
         [
             call('DROP TABLE IF EXISTS "sqlmesh__test_schema"."test_schema__test_model__1"'),
-            call(
-                'CREATE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
-            ),
         ]
     )
 

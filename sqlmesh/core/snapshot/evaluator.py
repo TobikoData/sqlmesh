@@ -916,7 +916,6 @@ class SnapshotEvaluator:
         if not snapshot.requires_schema_migration_in_prod:
             return
 
-        deployability_index = DeployabilityIndex.all_deployable()
         render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
             snapshots=parent_snapshots_by_name(snapshot, snapshots),
