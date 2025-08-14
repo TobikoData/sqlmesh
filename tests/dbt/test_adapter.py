@@ -126,26 +126,30 @@ def test_bigquery_get_columns_in_relation(
 def test_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
+    from sqlmesh.core.engine_adapter.base import DataObject, DataObjectType
+
     context = sushi_test_project.context
     assert context.target
+    data_object = DataObject(catalog="test", schema="bla", name="bob", type=DataObjectType.TABLE)
 
     # bla and bob will be normalized to lowercase since the target is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "duckdb"
-
+    adapter_mock.get_data_object.return_value = data_object
     duckdb_renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     schema_bla = schema_("bla", "test", quoted=True)
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     duckdb_renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     # bla and bob will be normalized to uppercase since the target is Snowflake, even though the default dialect is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "snowflake"
+    adapter_mock.get_data_object.return_value = data_object
     context.target = SnowflakeConfig(
         account="test",
         user="test",
@@ -160,10 +164,10 @@ def test_normalization(
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     renderer("{{ adapter.get_relation(database='custom_db', schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls(
+    adapter_mock.get_data_object.assert_has_calls(
         [call(exp.table_("bob", db="bla", catalog="custom_db", quoted=True))]
     )
 
