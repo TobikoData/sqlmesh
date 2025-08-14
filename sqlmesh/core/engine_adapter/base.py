@@ -118,8 +118,7 @@ class EngineAdapter:
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
     ATTACH_CORRELATION_ID = True
-    # TODO: change to False
-    SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    SUPPORTS_QUERY_EXECUTION_TRACKING = False
 
     def __init__(
         self,
