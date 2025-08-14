@@ -392,13 +392,24 @@ class SchemaDiff(PydanticModel):
         v: t.Union[
             t.Dict[str, exp.DataType],
             t.List[t.Tuple[str, exp.DataType]],
+            t.Dict[str, t.Tuple[exp.DataType, exp.DataType]],
             t.Dict[str, str],
         ],
+        info: ValidationInfo,
     ) -> t.Dict[str, str]:
         if isinstance(v, dict):
-            return {k: str(v) for k, v in v.items()}
+            # Handle modified field which has tuples of (source_type, target_type)
+            if info.field_name == "modified" and any(isinstance(val, tuple) for val in v.values()):
+                return {
+                    k: f"{str(val[0])} → {str(val[1])}"
+                    for k, val in v.items()
+                    if isinstance(val, tuple)
+                    and isinstance(val[0], exp.DataType)
+                    and isinstance(val[1], exp.DataType)
+                }
+            return {k: str(val) for k, val in v.items()}
         if isinstance(v, list):
-            return {k: str(v) for k, v in v}
+            return {k: str(val) for k, val in v}
         return v
 
 
