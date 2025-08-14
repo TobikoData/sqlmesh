@@ -45,6 +45,9 @@ jobs:
           version: 10
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Install web/common dependencies
+        working-directory: web/common
+        run: pnpm install --frozen-lockfile
       - name: Update package.json version
         working-directory: web/common
         run: |
