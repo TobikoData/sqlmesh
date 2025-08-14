@@ -1,4 +1,4 @@
-name: Release shared js code
+name: Release web common code
 on:
   workflow_dispatch:
     inputs:
@@ -46,13 +46,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Update package.json version
-        working-directory: web/shared_ui
+        working-directory: web/common
         run: |
           npm version ${{ github.event.inputs.version }} --no-git-tag-version
       - name: Build package
-        working-directory: web/shared_ui
+        working-directory: web/common
         run: pnpm run build
       - name: Publish to npm
-        working-directory: web/shared_ui
+        working-directory: web/common
         run: |
           npm publish
