@@ -136,8 +136,9 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
                                 for name in object_names
                             ],
                             alias=exp.TableAlias(
-                                this="t", columns=[exp.column("name")],
-                            )
+                                this="t",
+                                columns=[exp.column("name")],
+                            ),
                         )
                     ),
                 )
