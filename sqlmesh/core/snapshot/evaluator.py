@@ -1528,7 +1528,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         self.adapter.insert_append(
             table_name,
             query_or_df,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             source_columns=source_columns,
         )
 
@@ -1547,7 +1547,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         if model.annotated:
             self.adapter.create_table(
                 table_name,
-                columns_to_types=model.columns_to_types_or_raise,
+                target_columns_to_types=model.columns_to_types_or_raise,
                 table_format=model.table_format,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -1626,7 +1626,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         else:
             # Source columns from the underlying table to prevent unintentional table schema changes during restatement of incremental models.
             columns_to_types, source_columns = self._get_target_and_source_columns(
-                model, name, render_kwargs, columns_to_types=self.adapter.columns(name)
+                model, name, render_kwargs, force_get_columns_from_target=True
             )
 
         self.adapter.replace_query(
@@ -1640,7 +1640,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             table_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             source_columns=source_columns,
         )
 
@@ -1649,13 +1649,20 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         model: Model,
         table_name: str,
         render_kwargs: t.Dict[str, t.Any],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_column_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        force_get_columns_from_target: bool = False,
     ) -> t.Tuple[t.Dict[str, exp.DataType], t.Optional[t.List[str]]]:
-        if not columns_to_types:
-            columns_to_types = (
-                model.columns_to_types if model.annotated else self.adapter.columns(table_name)
+        if force_get_columns_from_target:
+            target_column_to_types = self.adapter.columns(table_name)
+        elif target_column_to_types:
+            target_column_to_types = target_column_to_types
+        else:
+            target_column_to_types = (
+                model.columns_to_types
+                if model.annotated and not model.on_destructive_change.is_ignore
+                else self.adapter.columns(table_name)
             )
-            assert columns_to_types is not None
+        assert target_column_to_types is not None
         if model.on_destructive_change.is_ignore:
             # We need to identify the columns that are only in the source so we create an empty table with
             # the user query to determine that
@@ -1663,7 +1670,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
                 source_columns = list(self.adapter.columns(temp_table))
         else:
             source_columns = None
-        return columns_to_types, source_columns
+        return target_column_to_types, source_columns
 
 
 class IncrementalByPartitionStrategy(MaterializableStrategy):
@@ -1686,7 +1693,7 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
                 table_name,
                 query_or_df,
                 partitioned_by=model.partitioned_by,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 source_columns=source_columns,
             )
 
@@ -1710,7 +1717,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
             query_or_df,
             time_formatter=model.convert_to_time_column,
             time_column=model.time_column,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             source_columns=source_columns,
             **kwargs,
         )
@@ -1737,7 +1744,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             self.adapter.merge(
                 table_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 unique_key=model.unique_key,
                 when_matched=model.when_matched,
                 merge_filter=model.render_merge_filter(
@@ -1763,7 +1770,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         self.adapter.merge(
             table_name,
             query_or_df,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             unique_key=model.unique_key,
             when_matched=model.when_matched,
             merge_filter=model.render_merge_filter(
@@ -1794,14 +1801,14 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
             model,
             table_name,
             render_kwargs=render_kwargs,
-            columns_to_types=kwargs.pop("columns_to_types", None),
+            target_column_to_types=kwargs.pop("columns_to_types", None),
         )
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             return self.adapter.insert_overwrite_by_partition(
                 table_name,
                 query_or_df,
                 model.partitioned_by,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 source_columns=source_columns,
             )
         return self.append(
@@ -1859,7 +1866,7 @@ class SeedStrategy(MaterializableStrategy):
                         )
                     else:
                         self.adapter.insert_append(
-                            table_name, df, columns_to_types=model.columns_to_types
+                            table_name, df, target_columns_to_types=model.columns_to_types
                         )
             except Exception:
                 self.adapter.drop_table(table_name)
@@ -1895,7 +1902,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 columns_to_types[model.kind.updated_at_name.name] = model.kind.time_data_type
             self.adapter.create_table(
                 table_name,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 table_format=model.table_format,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -1931,7 +1938,7 @@ class SCDType2Strategy(MaterializableStrategy):
             model,
             table_name,
             render_kwargs=render_kwargs,
-            columns_to_types=self.adapter.columns(table_name),
+            force_get_columns_from_target=True,
         )
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
@@ -1944,7 +1951,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
@@ -1962,7 +1969,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 check_columns=model.kind.columns,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
@@ -1987,7 +1994,7 @@ class SCDType2Strategy(MaterializableStrategy):
             model,
             table_name,
             render_kwargs=render_kwargs,
-            columns_to_types=self.adapter.columns(table_name),
+            force_get_columns_from_target=True,
         )
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
@@ -1999,7 +2006,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 updated_at_col=model.kind.updated_at_name,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 table_format=model.table_format,
                 table_description=model.description,
                 column_descriptions=model.column_descriptions,
@@ -2014,7 +2021,7 @@ class SCDType2Strategy(MaterializableStrategy):
                 valid_from_col=model.kind.valid_from_name,
                 valid_to_col=model.kind.valid_to_name,
                 check_columns=model.kind.columns,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
                 table_format=model.table_format,
                 invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
                 execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
@@ -2296,7 +2303,7 @@ class EngineManagedStrategy(MaterializableStrategy):
             self.adapter.create_managed_table(
                 table_name=table_name,
                 query=model.render_query_or_raise(**render_kwargs),
-                columns_to_types=model.columns_to_types,
+                target_columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
                 table_properties=kwargs.get("physical_properties", model.physical_properties),
@@ -2334,7 +2341,7 @@ class EngineManagedStrategy(MaterializableStrategy):
             self.adapter.create_managed_table(
                 table_name=table_name,
                 query=query_or_df,  # type: ignore
-                columns_to_types=model.columns_to_types,
+                target_columns_to_types=model.columns_to_types,
                 partitioned_by=model.partitioned_by,
                 clustered_by=model.clustered_by,
                 table_properties=kwargs.get("physical_properties", model.physical_properties),

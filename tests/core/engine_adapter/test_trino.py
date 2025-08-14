@@ -183,7 +183,7 @@ def test_partitioned_by_iceberg_transforms(
 
     adapter.create_table(
         table_name=model.view_name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
     )
 
@@ -426,7 +426,7 @@ def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: M
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )
@@ -434,7 +434,7 @@ def test_table_format(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: M
     adapter.ctas(
         table_name=model.name,
         query_or_df=t.cast(exp.Query, model.query),
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )
@@ -472,14 +472,14 @@ def test_table_location(trino_mocked_engine_adapter: TrinoEngineAdapter, mocker:
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
     adapter.ctas(
         table_name=model.name,
         query_or_df=t.cast(exp.Query, model.query),
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 

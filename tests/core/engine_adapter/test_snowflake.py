@@ -254,14 +254,14 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
         adapter.create_managed_table(
             table_name="test_table",
             query=query,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
         )
 
     # warehouse not specified, should default to current_warehouse()
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={"target_lag": exp.Literal.string("20 minutes")},
     )
 
@@ -269,7 +269,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "warehouse": exp.to_identifier("foo"),
@@ -280,7 +280,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
         },
@@ -292,7 +292,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "refresh_mode": exp.Literal.string("auto"),
@@ -304,7 +304,7 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter.create_managed_table(
         table_name="test_table",
         query=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "target_lag": exp.Literal.string("20 minutes"),
             "catalog": exp.Literal.string("snowflake"),
@@ -343,7 +343,7 @@ def test_ctas_skips_dynamic_table_properties(make_mocked_engine_adapter: t.Calla
     adapter.ctas(
         table_name="test_table",
         query_or_df=query,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         table_properties={
             "warehouse": exp.to_identifier("foo"),
             "target_lag": exp.Literal.string("20 minutes"),
@@ -463,7 +463,10 @@ def test_replace_query_snowpark_dataframe(
     adapter.replace_query(
         table_name="foo",
         query_or_df=df,
-        columns_to_types={"ID": exp.DataType.build("INT"), "NAME": exp.DataType.build("VARCHAR")},
+        target_columns_to_types={
+            "ID": exp.DataType.build("INT"),
+            "NAME": exp.DataType.build("VARCHAR"),
+        },
     )
 
     # verify that DROP VIEW is called instead of DROP TABLE
@@ -622,7 +625,7 @@ SELECT a::INT;
     )
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -657,7 +660,7 @@ SELECT a::INT;
     )
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -733,7 +736,7 @@ def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAd
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         table_properties=model.physical_properties,
     )
@@ -741,7 +744,7 @@ def test_table_format_iceberg(snowflake_mocked_engine_adapter: SnowflakeEngineAd
     adapter.ctas(
         table_name=model.name,
         query_or_df=model.render_query_or_raise(),
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         table_properties=model.physical_properties,
     )

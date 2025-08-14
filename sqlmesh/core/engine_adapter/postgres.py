@@ -106,7 +106,7 @@ class PostgresEngineAdapter(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
@@ -119,7 +119,7 @@ class PostgresEngineAdapter(
         merge_impl(  # type: ignore
             target_table,
             source_table,
-            columns_to_types,
+            target_columns_to_types,
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,

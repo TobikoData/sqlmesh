@@ -77,7 +77,7 @@ class EnvironmentState:
         self.engine_adapter.insert_append(
             self.environments_table,
             _environment_to_df(environment),
-            columns_to_types=self._environment_columns_to_types,
+            target_columns_to_types=self._environment_columns_to_types,
         )
 
     def update_environment_statements(
@@ -107,7 +107,7 @@ class EnvironmentState:
             self.engine_adapter.insert_append(
                 self.environment_statements_table,
                 _environment_statements_to_df(environment_name, plan_id, environment_statements),
-                columns_to_types=self._environment_statements_columns_to_types,
+                target_columns_to_types=self._environment_statements_columns_to_types,
             )
 
     def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:

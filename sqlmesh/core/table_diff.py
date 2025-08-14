@@ -512,7 +512,7 @@ class TableDiff:
                     )
 
             with self.adapter.temp_table(
-                query, name=temp_table, columns_to_types=None, **temp_table_kwargs
+                query, name=temp_table, target_columns_to_types=None, **temp_table_kwargs
             ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),

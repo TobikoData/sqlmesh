@@ -148,14 +148,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         import pandas as pd
 
-        source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
 
         temp_bq_table = self.__get_temp_bq_table(
             self._get_temp_table(target_table or "pandas"), source_columns_to_types
@@ -182,7 +184,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 if result.errors:
                     raise SQLMeshError(result.errors)
             return exp.select(
-                *self._casted_columns(columns_to_types, source_columns=source_columns)
+                *self._casted_columns(target_columns_to_types, source_columns=source_columns)
             ).from_(temp_table)
 
         return [
@@ -678,7 +680,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         table_name: TableName,
         query_or_df: QueryOrDF,
         partitioned_by: t.List[exp.Expression],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         if len(partitioned_by) != 1:
@@ -707,12 +709,14 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 source_columns=source_columns,
             ) as temp_table_name,
         ):
-            if columns_to_types is None or columns_to_types[
+            if target_columns_to_types is None or target_columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
-                columns_to_types = self.columns(table_name)
+                target_columns_to_types = self.columns(table_name)
 
-            partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
+            partition_type_sql = target_columns_to_types[partition_column.name].sql(
+                dialect=self.dialect
+            )
 
             select_array_agg_partitions = select_partitions_expr(
                 temp_table_name.db,
@@ -732,7 +736,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             self._insert_overwrite_by_condition(
                 table_name,
                 [SourceQuery(query_factory=lambda: exp.select("*").from_(temp_table_name))],
-                columns_to_types,
+                target_columns_to_types,
                 where=where,
             )
 
@@ -824,7 +828,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         partitioned_by: t.List[exp.Expression],
         *,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.PartitionedByProperty]:
         if len(partitioned_by) > 1:
@@ -836,7 +840,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             and partition_interval_unit is not None
             and not partition_interval_unit.is_minute
         ):
-            column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
+            column_type: t.Optional[exp.DataType] = (target_columns_to_types or {}).get(this.name)
 
             if column_type == exp.DataType.build(
                 "date", dialect=self.dialect
@@ -871,7 +875,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -882,7 +886,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             partitioned_by_prop := self._build_partitioned_by_exp(
                 partitioned_by,
                 partition_interval_unit=partition_interval_unit,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
             )
         ):
             properties.append(partitioned_by_prop)
@@ -1027,12 +1031,12 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def create_state_table(
         self,
         table_name: str,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
     ) -> None:
         self.create_table(
             table_name,
-            columns_to_types,
+            target_columns_to_types,
         )
 
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
@@ -1215,7 +1219,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _columns_to_types(
         self,
         query_or_df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]: ...
 
@@ -1223,28 +1227,28 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _columns_to_types(
         self,
         query_or_df: Query,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
 
     def _columns_to_types(
         self,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
         if (
-            not columns_to_types
+            not target_columns_to_types
             and bigframes
             and isinstance(query_or_df, bigframes.dataframe.DataFrame)
         ):
             # using dry_run=True attempts to prevent the DataFrame from being materialized just to read the column types from it
             dtypes = query_or_df.to_pandas(dry_run=True).columnDtypes
-            columns_to_types = columns_to_types_from_dtypes(dtypes.items())
-            return columns_to_types, list(source_columns or columns_to_types)
+            target_columns_to_types = columns_to_types_from_dtypes(dtypes.items())
+            return target_columns_to_types, list(source_columns or target_columns_to_types)
 
         return super()._columns_to_types(
-            query_or_df, columns_to_types, source_columns=source_columns
+            query_or_df, target_columns_to_types, source_columns=source_columns
         )
 
     def _native_df_to_pandas_df(

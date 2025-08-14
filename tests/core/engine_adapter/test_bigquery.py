@@ -38,7 +38,7 @@ def test_insert_overwrite_by_time_partition_query(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -68,7 +68,7 @@ def test_insert_overwrite_by_partition_query(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
         },
@@ -111,7 +111,7 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("unknown"),
             "ds": exp.DataType.build("UNKNOWN"),
         },
@@ -176,7 +176,7 @@ def test_insert_overwrite_by_time_partition_pandas(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -431,7 +431,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
@@ -488,7 +488,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("INT"),
@@ -733,14 +733,14 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     adapter.create_table(
         "test_table",
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 
     adapter.ctas(
         "test_table",
         parse_one("SELECT * FROM source_table"),
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 

@@ -284,10 +284,10 @@ def test_hive_drop_table_removes_data(ctx: TestContext, engine_adapter: AthenaEn
     columns_to_types = columns_to_types_from_df(data)
 
     engine_adapter.create_table(
-        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+        table_name=seed_table, target_columns_to_types=columns_to_types, exists=False
     )
     engine_adapter.insert_append(
-        table_name=seed_table, query_or_df=data, columns_to_types=columns_to_types
+        table_name=seed_table, query_or_df=data, target_columns_to_types=columns_to_types
     )
     assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 1  # type: ignore
 
@@ -295,7 +295,7 @@ def test_hive_drop_table_removes_data(ctx: TestContext, engine_adapter: AthenaEn
     # This ensures that our drop table logic to delete the data from S3 is working
     engine_adapter.drop_table(seed_table, exists=False)
     engine_adapter.create_table(
-        table_name=seed_table, columns_to_types=columns_to_types, exists=False
+        table_name=seed_table, target_columns_to_types=columns_to_types, exists=False
     )
     assert engine_adapter.fetchone(f"select count(*) from {seed_table}")[0] == 0  # type: ignore
 
@@ -382,12 +382,14 @@ def test_insert_overwrite_by_time_partition_date_type(
         return exp.cast(exp.Literal.string(to_ds(time)), "date")
 
     engine_adapter.create_table(
-        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("date")]
+        table_name=table,
+        target_columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("date")],
     )
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("date"),
         start="2023-01-01",
         end="2023-01-03",
@@ -406,7 +408,7 @@ def test_insert_overwrite_by_time_partition_date_type(
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=new_data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("date"),
         start="2023-01-03",
         end="2023-01-04",
@@ -442,12 +444,14 @@ def test_insert_overwrite_by_time_partition_datetime_type(
         return exp.cast(exp.Literal.string(to_ts(time)), "datetime")
 
     engine_adapter.create_table(
-        table_name=table, columns_to_types=columns_to_types, partitioned_by=[exp.to_column("ts")]
+        table_name=table,
+        target_columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("ts")],
     )
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("ts"),
         start="2023-01-01 00:00:00",
         end="2023-01-01 04:00:00",
@@ -469,7 +473,7 @@ def test_insert_overwrite_by_time_partition_datetime_type(
     engine_adapter.insert_overwrite_by_time_partition(
         table_name=table,
         query_or_df=new_data,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         time_column=exp.to_identifier("ts"),
         start="2023-01-01 03:00:00",
         end="2023-01-01 05:00:00",

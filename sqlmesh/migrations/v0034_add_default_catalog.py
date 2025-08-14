@@ -161,7 +161,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
-            columns_to_types={
+            target_columns_to_types={
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
@@ -241,7 +241,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
-            columns_to_types={
+            target_columns_to_types={
                 "name": exp.DataType.build(index_type),
                 "snapshots": exp.DataType.build(blob_type),
                 "start_at": exp.DataType.build("text"),
@@ -316,7 +316,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         engine_adapter.insert_append(
             intervals_table,
             pd.DataFrame(new_intervals),
-            columns_to_types={
+            target_columns_to_types={
                 "id": exp.DataType.build(index_type),
                 "created_ts": exp.DataType.build("bigint"),
                 "name": exp.DataType.build(index_type),
@@ -359,7 +359,7 @@ def migrate(state_sync, default_catalog: t.Optional[str], **kwargs):  # type: ig
         engine_adapter.insert_append(
             seeds_table,
             pd.DataFrame(new_seeds),
-            columns_to_types={
+            target_columns_to_types={
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "content": exp.DataType.build("text"),

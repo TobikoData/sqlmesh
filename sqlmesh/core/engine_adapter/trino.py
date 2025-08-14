@@ -118,7 +118,7 @@ class TrinoEngineAdapter(
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
@@ -131,14 +131,14 @@ class TrinoEngineAdapter(
             # "Session property 'catalog.insert_existing_partitions_behavior' does not exist"
             self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='OVERWRITE'")
             super()._insert_overwrite_by_condition(
-                table_name, source_queries, columns_to_types, where
+                table_name, source_queries, target_columns_to_types, where
             )
             self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='APPEND'")
         else:
             super()._insert_overwrite_by_condition(
                 table_name,
                 source_queries,
-                columns_to_types,
+                target_columns_to_types,
                 where,
                 insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
             )
@@ -216,7 +216,7 @@ class TrinoEngineAdapter(
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
         source_columns: t.Optional[t.List[str]] = None,
@@ -225,7 +225,9 @@ class TrinoEngineAdapter(
         from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 
         assert isinstance(df, pd.DataFrame)
-        source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
 
         # Trino does not accept timestamps in ISOFORMAT that include the "T". `execution_time` is stored in
         # Pandas with that format, so we convert the column to a string with the proper format and CAST to
@@ -236,22 +238,22 @@ class TrinoEngineAdapter(
                 df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))
 
         return super()._df_to_source_queries(
-            df, columns_to_types, batch_size, target_table, source_columns=source_columns
+            df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
         )
 
     def _build_schema_exp(
         self,
         table: exp.Table,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
         is_view: bool = False,
     ) -> exp.Schema:
         if self.current_catalog_type == "delta_lake":
-            columns_to_types = self._to_delta_ts(columns_to_types)
+            target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._build_schema_exp(
-            table, columns_to_types, column_descriptions, expressions, is_view
+            table, target_columns_to_types, column_descriptions, expressions, is_view
         )
 
     def _scd_type_2(
@@ -267,15 +269,15 @@ class TrinoEngineAdapter(
         check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         truncate: bool = False,
         source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
-        if columns_to_types and self.current_catalog_type == "delta_lake":
-            columns_to_types = self._to_delta_ts(columns_to_types)
+        if target_columns_to_types and self.current_catalog_type == "delta_lake":
+            target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._scd_type_2(
             target_table,
@@ -289,7 +291,7 @@ class TrinoEngineAdapter(
             check_columns,
             updated_at_as_valid_from,
             execution_time_as_valid_from,
-            columns_to_types,
+            target_columns_to_types,
             table_description,
             column_descriptions,
             truncate,
@@ -351,7 +353,7 @@ class TrinoEngineAdapter(
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
@@ -362,7 +364,7 @@ class TrinoEngineAdapter(
             expression=expression,
             exists=exists,
             replace=replace,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,

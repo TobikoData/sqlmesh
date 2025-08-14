@@ -204,7 +204,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
     common_kwargs = dict(
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_format=None,
         storage_format="parquet",
         partitioned_by=[exp.to_column("a", quoted=True)],
@@ -693,14 +693,14 @@ def test_evaluate_incremental_unmanaged_with_intervals(
             snapshot.table_name(),
             model.render_query(),
             [exp.to_column("ds", quoted=True)],
-            columns_to_types=model.columns_to_types,
+            target_columns_to_types=model.columns_to_types,
             source_columns=None,
         )
     else:
         adapter_mock.insert_append.assert_called_once_with(
             snapshot.table_name(),
             model.render_query(),
-            columns_to_types=model.columns_to_types,
+            target_columns_to_types=model.columns_to_types,
             source_columns=None,
         )
 
@@ -735,7 +735,7 @@ def test_evaluate_incremental_unmanaged_no_intervals(
         model.render_query(),
         clustered_by=[],
         column_descriptions={},
-        columns_to_types=table_columns,
+        target_columns_to_types=table_columns,
         partition_interval_unit=model.partition_interval_unit,
         partitioned_by=model.partitioned_by,
         table_format=None,
@@ -851,7 +851,10 @@ def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make
     # Only non-deployable table should be created
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
-        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("varchar")},
+        target_columns_to_types={
+            "a": exp.DataType.build("int"),
+            "ds": exp.DataType.build("varchar"),
+        },
         table_format=None,
         storage_format=None,
         partitioned_by=model.partitioned_by,
@@ -1010,7 +1013,7 @@ def test_create_prod_table_exists_forward_only(mocker: MockerFixture, adapter_mo
     adapter_mock.create_schema.assert_called_once_with(to_schema("sqlmesh__test_schema"))
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_format=None,
         storage_format=None,
         partitioned_by=[],
@@ -1611,7 +1614,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
 
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev__schema_migration_source",
-        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
@@ -1671,7 +1674,7 @@ def test_create_clone_in_dev_missing_table(mocker: MockerFixture, adapter_mock, 
 
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
-        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
@@ -1788,7 +1791,7 @@ def test_create_clone_in_dev_self_referencing(
 
     adapter_mock.create_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev__schema_migration_source",
-        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
@@ -1919,7 +1922,7 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
     evaluator.create([snapshot], {})
 
     common_create_args = dict(
-        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
         table_format=None,
         storage_format=None,
         partitioned_by=[exp.to_column("ds", quoted=True)],
@@ -1963,7 +1966,7 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
     evaluator.create([snapshot], {})
 
     common_kwargs = dict(
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
             "updated_at": exp.DataType.build("TIMESTAMPTZ"),
@@ -2100,7 +2103,7 @@ def test_insert_into_scd_type_2_by_time(
     adapter_mock.scd_type_2_by_time.assert_called_once_with(
         target_table=snapshot.table_name(),
         source_table=model.render_query(),
-        columns_to_types=table_columns,
+        target_columns_to_types=table_columns,
         table_format=None,
         unique_key=[exp.to_column("id", quoted=True)],
         valid_from_col=exp.column("valid_from", quoted=True),
@@ -2142,7 +2145,7 @@ def test_create_scd_type_2_by_column(adapter_mock, make_snapshot):
     evaluator.create([snapshot], {})
 
     common_kwargs = dict(
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
             # Make sure that the call includes these extra columns
@@ -2273,7 +2276,7 @@ def test_insert_into_scd_type_2_by_column(
     adapter_mock.scd_type_2_by_column.assert_called_once_with(
         target_table=snapshot.table_name(),
         source_table=model.render_query(),
-        columns_to_types=table_columns,
+        target_columns_to_types=table_columns,
         table_format=None,
         unique_key=[exp.to_column("id", quoted=True)],
         check_columns=exp.Star(),
@@ -2323,7 +2326,7 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
     adapter_mock.merge.assert_called_once_with(
         snapshot.table_name(),
         model.render_query(),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
             "updated_at": exp.DataType.build("TIMESTAMP"),
@@ -2392,7 +2395,7 @@ def test_create_incremental_by_unique_key_multiple_updated_at_exp(adapter_mock, 
     adapter_mock.merge.assert_called_once_with(
         snapshot.table_name(),
         model.render_query(),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
             "updated_at": exp.DataType.build("TIMESTAMP"),
@@ -2488,7 +2491,7 @@ def test_create_incremental_by_unique_no_intervals(adapter_mock, make_snapshot):
         model.render_query(),
         clustered_by=[],
         column_descriptions={},
-        columns_to_types=table_columns,
+        target_columns_to_types=table_columns,
         partition_interval_unit=model.partition_interval_unit,
         partitioned_by=model.partitioned_by,
         table_format=None,
@@ -2553,7 +2556,7 @@ def test_create_incremental_by_unique_key_merge_filter(adapter_mock, make_snapsh
     adapter_mock.merge.assert_called_once_with(
         snapshot.table_name(),
         model.render_query(),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "updated_at": exp.DataType.build("TIMESTAMP"),
         },
@@ -2620,7 +2623,10 @@ def test_create_seed(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator.create([snapshot], {})
 
     common_create_kwargs: t.Dict[str, t.Any] = dict(
-        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        target_columns_to_types={
+            "id": exp.DataType.build("bigint"),
+            "name": exp.DataType.build("text"),
+        },
         table_format=None,
         storage_format=None,
         partitioned_by=[],
@@ -2698,7 +2704,10 @@ def test_create_seed_on_error(mocker: MockerFixture, adapter_mock, make_snapshot
         f"sqlmesh__db.db__seed__{snapshot.version}",
         mocker.ANY,
         column_descriptions={},
-        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        target_columns_to_types={
+            "id": exp.DataType.build("bigint"),
+            "name": exp.DataType.build("text"),
+        },
         table_format=None,
         storage_format=None,
         partitioned_by=[],
@@ -2755,7 +2764,10 @@ def test_create_seed_no_intervals(mocker: MockerFixture, adapter_mock, make_snap
         f"sqlmesh__db.db__seed__{snapshot.version}",
         mocker.ANY,
         column_descriptions={},
-        columns_to_types={"id": exp.DataType.build("bigint"), "name": exp.DataType.build("text")},
+        target_columns_to_types={
+            "id": exp.DataType.build("bigint"),
+            "name": exp.DataType.build("text"),
+        },
         table_format=None,
         storage_format=None,
         partitioned_by=[],
@@ -3261,7 +3273,7 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
             exp.to_column("ds", quoted=True),
             exp.to_column("b", quoted=True),
         ],
-        columns_to_types=model.columns_to_types,
+        target_columns_to_types=model.columns_to_types,
         clustered_by=[],
         table_properties={},
         column_descriptions={},
@@ -3291,7 +3303,7 @@ def test_evaluate_incremental_by_partition(mocker: MockerFixture, make_snapshot,
             exp.to_column("ds", quoted=True),
             exp.to_column("b", quoted=True),
         ],
-        columns_to_types=model.columns_to_types,
+        target_columns_to_types=model.columns_to_types,
         source_columns=None,
     )
 
@@ -3522,7 +3534,7 @@ def test_create_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.create_managed_table.assert_called_with(
         table_name=snapshot.table_name(),
         query=mocker.ANY,
-        columns_to_types=model.columns_to_types,
+        target_columns_to_types=model.columns_to_types,
         partitioned_by=model.partitioned_by,
         clustered_by=model.clustered_by,
         table_properties=model.physical_properties,
@@ -3594,7 +3606,7 @@ def test_evaluate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.replace_query.assert_called_with(
         snapshot.table_name(is_deployable=False),
         mocker.ANY,
-        columns_to_types=table_colmns,
+        target_columns_to_types=table_colmns,
         table_format=model.table_format,
         storage_format=model.storage_format,
         partitioned_by=model.partitioned_by,
@@ -3776,7 +3788,7 @@ def test_create_snapshot(
     )
 
     common_kwargs: t.Dict[str, t.Any] = dict(
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_format=None,
         storage_format=None,
         partitioned_by=[],
@@ -3843,13 +3855,16 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
         [
             call(
                 new_snapshot.table_name(),
-                columns_to_types={"a": exp.DataType.build("int")},
+                target_columns_to_types={"a": exp.DataType.build("int")},
                 column_descriptions={},
                 **common_kwargs,
             ),
             call(
                 new_snapshot.table_name(is_deployable=False),
-                columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
+                target_columns_to_types={
+                    "a": exp.DataType.build("int"),
+                    "b": exp.DataType.build("int"),
+                },
                 column_descriptions=None,
                 **common_kwargs,
             ),

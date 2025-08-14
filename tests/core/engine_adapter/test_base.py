@@ -82,7 +82,7 @@ def test_create_view_pandas_source_columns(make_mocked_engine_adapter: t.Callabl
     adapter.create_view(
         "test_view",
         pd.DataFrame({"a": [1, 2, 3]}),
-        columns_to_types={"a": bigint_dtype, "b": bigint_dtype},
+        target_columns_to_types={"a": bigint_dtype, "b": bigint_dtype},
         replace=False,
         source_columns=["a"],
     )
@@ -97,7 +97,10 @@ def test_create_view_query_source_columns(make_mocked_engine_adapter: t.Callable
     adapter.create_view(
         "test_view",
         parse_one("SELECT a FROM tbl"),
-        columns_to_types={"a": exp.DataType.build("BIGINT"), "b": exp.DataType.build("BIGINT")},
+        target_columns_to_types={
+            "a": exp.DataType.build("BIGINT"),
+            "b": exp.DataType.build("BIGINT"),
+        },
         replace=False,
         source_columns=["a"],
     )
@@ -113,14 +116,14 @@ def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
         "test_view",
         parse_one("SELECT a FROM tbl"),
         materialized=True,
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
     )
     adapter.create_view(
         "test_view",
         parse_one("SELECT a FROM tbl"),
         replace=False,
         materialized=True,
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     adapter.cursor.execute.assert_has_calls(
@@ -136,7 +139,7 @@ def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
         parse_one("SELECT a, b FROM tbl"),
         replace=False,
         materialized=True,
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
     )
     adapter.create_view(
         "test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True
@@ -220,7 +223,7 @@ def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callab
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
     adapter.cursor.begin.assert_called_once()
@@ -247,7 +250,10 @@ def test_insert_overwrite_by_time_partition_missing_time_column_type(
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("UNKNOWN")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("UNKNOWN"),
+        },
     )
 
     columns_mock.assert_called_once_with("test_table")
@@ -274,7 +280,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
     adapter.cursor.execute.assert_called_once_with(
@@ -296,7 +302,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
     )
 
     assert to_sql_calls(adapter) == [
@@ -317,7 +326,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_sou
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
         source_columns=["a"],
     )
     assert to_sql_calls(adapter) == [
@@ -337,7 +349,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_query_sour
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
         source_columns=["a"],
     )
     assert to_sql_calls(adapter) == [
@@ -356,7 +371,7 @@ def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_ada
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
     assert to_sql_calls(adapter) == [
@@ -379,7 +394,10 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
     )
 
     assert to_sql_calls(adapter) == [
@@ -400,7 +418,10 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas_source_columns(
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
         source_columns=["a"],
     )
     assert to_sql_calls(adapter) == [
@@ -420,7 +441,10 @@ def test_insert_overwrite_by_time_partition_replace_where_query_source_columns(
         end="2022-01-02",
         time_column="ds",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
         source_columns=["a"],
     )
     assert to_sql_calls(adapter) == [
@@ -440,7 +464,7 @@ def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
     adapter._insert_overwrite_by_condition(
         "test_table",
         source_queries,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
     )
 
     adapter.cursor.begin.assert_called_once()
@@ -467,7 +491,7 @@ def test_insert_overwrite_by_condition_column_contains_unsafe_characters(
     adapter._insert_overwrite_by_condition(
         "test_table",
         source_queries,
-        columns_to_types=None,
+        target_columns_to_types=None,
     )
 
     # The goal here is to assert that we don't parse `foo.bar.baz` into a qualified column
@@ -482,7 +506,7 @@ def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
     adapter.insert_append(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     assert to_sql_calls(adapter) == [
@@ -496,7 +520,7 @@ def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable)
     adapter.insert_append(
         "test_table",
         parse_one("SELECT 1 AS a, * FROM tbl"),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
     )
 
     assert to_sql_calls(adapter) == [
@@ -511,7 +535,7 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.insert_append(
         "test_table",
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -530,7 +554,7 @@ def test_insert_append_pandas_batches(make_mocked_engine_adapter: t.Callable):
     adapter.insert_append(
         "test_table",
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -552,7 +576,7 @@ def test_insert_append_pandas_source_columns(make_mocked_engine_adapter: t.Calla
     adapter.insert_append(
         "test_table",
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -568,7 +592,7 @@ def test_insert_append_query_source_columns(make_mocked_engine_adapter: t.Callab
     adapter.insert_append(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -1082,7 +1106,7 @@ def test_merge_upsert(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1113,7 +1137,7 @@ MERGE INTO "target" AS "__MERGE_TARGET__" USING (
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1134,7 +1158,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1151,7 +1175,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1171,7 +1195,7 @@ def test_merge_upsert_pandas_source_columns(make_mocked_engine_adapter: t.Callab
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1191,7 +1215,7 @@ def test_merge_upsert_query_source_columns(make_mocked_engine_adapter: t.Callabl
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts FROM source"),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1212,7 +1236,7 @@ def test_merge_when_matched(make_mocked_engine_adapter: t.Callable, assert_exp_e
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1265,7 +1289,7 @@ def test_merge_when_matched_multiple(make_mocked_engine_adapter: t.Callable, ass
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1336,7 +1360,7 @@ def test_merge_filter(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -1418,7 +1442,7 @@ def test_scd_type_2_by_time(make_mocked_engine_adapter: t.Callable):
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_UPDATED_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -1624,7 +1648,7 @@ def test_scd_type_2_by_time_source_columns(make_mocked_engine_adapter: t.Callabl
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_UPDATED_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -1830,7 +1854,7 @@ def test_scd_type_2_by_time_no_invalidate_hard_deletes(make_mocked_engine_adapte
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_updated_at", quoted=True),
         invalidate_hard_deletes=False,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -2017,7 +2041,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_updated_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id1": exp.DataType.build("INT"),
             "id2": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
@@ -2200,7 +2224,7 @@ def test_scd_type_2_by_column(make_mocked_engine_adapter: t.Callable):
         valid_from_col=exp.column("test_VALID_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -2381,7 +2405,7 @@ def test_scd_type_2_by_column_composite_key(make_mocked_engine_adapter: t.Callab
         valid_from_col=exp.column("test_VALID_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id_a": exp.DataType.build("VARCHAR"),
             "id_b": exp.DataType.build("VARCHAR"),
             "name": exp.DataType.build("VARCHAR"),
@@ -2573,7 +2597,7 @@ def test_scd_type_2_truncate(make_mocked_engine_adapter: t.Callable):
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -2756,7 +2780,7 @@ def test_scd_type_2_by_column_star_check(make_mocked_engine_adapter: t.Callable)
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=exp.Star(),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -2951,7 +2975,7 @@ def test_scd_type_2_by_column_no_invalidate_hard_deletes(make_mocked_engine_adap
         valid_to_col=exp.column("test_valid_to", quoted=True),
         invalidate_hard_deletes=False,
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -3181,7 +3205,7 @@ def test_replace_query_pandas_source_columns(make_mocked_engine_adapter: t.Calla
     adapter.replace_query(
         "test_table",
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -3197,7 +3221,7 @@ def test_replace_query_query_source_columns(make_mocked_engine_adapter: t.Callab
     adapter.replace_query(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -3225,7 +3249,7 @@ def test_replace_query_self_referencing_not_exists_unknown(
         adapter.replace_query(
             "test",
             parse_one("SELECT a FROM test"),
-            columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+            target_columns_to_types={"a": exp.DataType.build("UNKNOWN")},
         )
 
 
@@ -3242,7 +3266,7 @@ def test_replace_query_self_referencing_exists(
     adapter.replace_query(
         "test",
         parse_one("SELECT a FROM test"),
-        columns_to_types={"a": exp.DataType.build("UNKNOWN")},
+        target_columns_to_types={"a": exp.DataType.build("UNKNOWN")},
     )
 
     assert to_sql_calls(adapter) == [
@@ -3263,7 +3287,7 @@ def test_replace_query_self_referencing_not_exists_known(
     adapter.replace_query(
         "test",
         parse_one("SELECT a FROM test"),
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     assert to_sql_calls(adapter) == [
@@ -3362,7 +3386,7 @@ def test_ctas_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter.ctas(
         "test_table",
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -3378,7 +3402,7 @@ def test_ctas_query_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter.ctas(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -3528,7 +3552,7 @@ def test_insert_overwrite_by_partition_query(
         table_name,
         parse_one("SELECT a, ds, b FROM tbl"),
         partitioned_by=[d.parse_one(k) for k in partitioned_by],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
             "b": exp.DataType.build("boolean"),
@@ -3568,7 +3592,7 @@ def test_insert_overwrite_by_partition_query_insert_overwrite_strategy(
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
             d.parse_one("b"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
             "b": exp.DataType.build("boolean"),

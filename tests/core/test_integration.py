@@ -2886,9 +2886,9 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply
@@ -2939,7 +2939,7 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
         }
     )
     engine_adapter.replace_query(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # Restate A across a day boundary with the expectation that two day intervals in B are affected
@@ -3018,9 +3018,9 @@ def test_restatement_plan_respects_disable_restatements(tmp_path: Path):
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply
@@ -3124,9 +3124,9 @@ def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path:
         "date": exp.DataType.build("date"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # first, create the prod models
@@ -3319,9 +3319,9 @@ def test_prod_restatement_plan_clears_correct_intervals_in_derived_dev_tables(tm
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A, B, C in prod
@@ -3469,9 +3469,9 @@ def test_prod_restatement_plan_clears_unaligned_intervals_in_derived_dev_tables(
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in prod
@@ -3611,9 +3611,9 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in prod
@@ -3746,9 +3746,9 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_widened_on_full_restat
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[daily] in prod
@@ -3881,9 +3881,9 @@ def test_prod_restatement_plan_missing_model_in_dev(
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in dev

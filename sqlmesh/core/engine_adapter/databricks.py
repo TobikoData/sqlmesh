@@ -161,22 +161,24 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         if not self._use_spark_session:
             return super(SparkEngineAdapter, self)._df_to_source_queries(
-                df, columns_to_types, batch_size, target_table, source_columns=source_columns
+                df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
             )
-        pyspark_df = self._ensure_pyspark_df(df, columns_to_types, source_columns=source_columns)
+        pyspark_df = self._ensure_pyspark_df(
+            df, target_columns_to_types, source_columns=source_columns
+        )
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
             pyspark_df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
             self._connection_pool.set_attribute("use_spark_engine_adapter", True)
-            return exp.select(*self._select_columns(columns_to_types)).from_(temp_table)
+            return exp.select(*self._select_columns(target_columns_to_types)).from_(temp_table)
 
         return [SourceQuery(query_factory=query_factory)]
 
@@ -336,7 +338,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -349,7 +351,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             partition_interval_unit=partition_interval_unit,
             clustered_by=clustered_by,
             table_properties=table_properties,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             table_kind=table_kind,
         )

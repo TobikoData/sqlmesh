@@ -1122,7 +1122,7 @@ def select_from_values(
     for i in range(0, num_rows, batch_size):
         yield select_from_values_for_batch_range(
             values=values,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             batch_start=i,
             batch_end=min(i + batch_size, num_rows),
             alias=alias,
@@ -1131,14 +1131,14 @@ def select_from_values(
 
 def select_from_values_for_batch_range(
     values: t.List[t.Tuple[t.Any, ...]],
-    columns_to_types: t.Dict[str, exp.DataType],
+    target_columns_to_types: t.Dict[str, exp.DataType],
     batch_start: int,
     batch_end: int,
     alias: str = "t",
     source_columns: t.Optional[t.List[str]] = None,
 ) -> exp.Select:
-    source_columns = source_columns or list(columns_to_types)
-    source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
+    source_columns = source_columns or list(target_columns_to_types)
+    source_columns_to_types = get_source_columns_to_types(target_columns_to_types, source_columns)
 
     if not values:
         # Ensures we don't generate an empty VALUES clause & forces a zero-row output
@@ -1166,11 +1166,13 @@ def select_from_values_for_batch_range(
 
     casted_columns = [
         exp.alias_(
-            exp.cast(exp.column(column) if column in source_columns else exp.Null(), to=kind),
+            exp.cast(
+                exp.column(column) if column in source_columns_to_types else exp.Null(), to=kind
+            ),
             column,
             copy=False,
         )
-        for column, kind in columns_to_types.items()
+        for column, kind in target_columns_to_types.items()
     ]
     return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 

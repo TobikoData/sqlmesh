@@ -91,7 +91,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self,
         view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
@@ -114,7 +114,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
             super().create_view(
                 view_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
                 replace=False,
                 materialized=materialized,
                 materialized_properties=materialized_properties,

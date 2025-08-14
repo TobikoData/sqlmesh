@@ -162,7 +162,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
@@ -181,7 +181,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             expression=expression,
             exists=exists,
             replace=replace,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
@@ -192,7 +192,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         self,
         table_name: TableName,
         query: Query,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
@@ -218,14 +218,14 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 "`target_lag` must be specified in the model physical_properties for a Snowflake Dynamic Table"
             )
 
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query, columns_to_types, target_table=target_table, source_columns=source_columns
+        source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
+            query, target_columns_to_types, target_table=target_table, source_columns=source_columns
         )
 
         self._create_table_from_source_queries(
             target_table,
             source_queries,
-            columns_to_types,
+            target_columns_to_types,
             replace=self.SUPPORTS_REPLACE_TABLE,
             partitioned_by=partitioned_by,
             clustered_by=clustered_by,
@@ -240,7 +240,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         self,
         view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
@@ -259,7 +259,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         super().create_view(
             view_name=view_name,
             query_or_df=query_or_df,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             replace=replace,
             materialized=materialized,
             materialized_properties=materialized_properties,
@@ -283,7 +283,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -324,7 +324,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
         source_columns: t.Optional[t.List[str]] = None,
@@ -332,7 +332,9 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         import pandas as pd
         from pandas.api.types import is_datetime64_any_dtype
 
-        source_columns_to_types = get_source_columns_to_types(columns_to_types, source_columns)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
 
         temp_table = self._get_temp_table(
             target_table or "pandas", quoted=False
@@ -416,7 +418,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 )
 
             return exp.select(
-                *self._casted_columns(columns_to_types, source_columns=source_columns)
+                *self._casted_columns(target_columns_to_types, source_columns=source_columns)
             ).from_(temp_table)
 
         def cleanup() -> None:
@@ -626,7 +628,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def _columns_to_types(
         self,
         query_or_df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Dict[str, exp.DataType], t.List[str]]: ...
 
@@ -634,24 +636,24 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     def _columns_to_types(
         self,
         query_or_df: Query,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
 
     def _columns_to_types(
         self,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
-        if not columns_to_types and snowpark and isinstance(query_or_df, snowpark.DataFrame):
-            columns_to_types = columns_to_types_from_dtypes(
+        if not target_columns_to_types and snowpark and isinstance(query_or_df, snowpark.DataFrame):
+            target_columns_to_types = columns_to_types_from_dtypes(
                 query_or_df.sample(n=1).to_pandas().dtypes.items()
             )
-            return columns_to_types, list(source_columns or columns_to_types)
+            return target_columns_to_types, list(source_columns or target_columns_to_types)
 
         return super()._columns_to_types(
-            query_or_df, columns_to_types, source_columns=source_columns
+            query_or_df, target_columns_to_types, source_columns=source_columns
         )
 
     def close(self) -> t.Any:

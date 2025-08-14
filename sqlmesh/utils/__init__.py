@@ -409,4 +409,9 @@ def get_source_columns_to_types(
     columns_to_types: t.Dict[str, exp.DataType],
     source_columns: t.Optional[t.List[str]],
 ) -> t.Dict[str, exp.DataType]:
-    return {k: v for k, v in columns_to_types.items() if not source_columns or k in source_columns}
+    source_column_lookup = set(source_columns) if source_columns else None
+    return {
+        k: v
+        for k, v in columns_to_types.items()
+        if not source_column_lookup or k in source_column_lookup
+    }

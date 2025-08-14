@@ -102,7 +102,7 @@ class SnapshotState:
         self.engine_adapter.insert_append(
             self.snapshots_table,
             _snapshots_to_df(snapshots_to_store),
-            columns_to_types=self._snapshot_columns_to_types,
+            target_columns_to_types=self._snapshot_columns_to_types,
         )
 
         for snapshot in snapshots:
@@ -363,7 +363,7 @@ class SnapshotState:
         self.engine_adapter.merge(
             self.auto_restatements_table,
             _auto_restatements_to_df(next_auto_restatement_ts_filtered),
-            columns_to_types=self._auto_restatement_columns_to_types,
+            target_columns_to_types=self._auto_restatement_columns_to_types,
             unique_key=(exp.column("snapshot_name"), exp.column("snapshot_version")),
         )
 
@@ -405,7 +405,7 @@ class SnapshotState:
         self.engine_adapter.insert_append(
             self.snapshots_table,
             _snapshots_to_df(snapshots_to_store),
-            columns_to_types=self._snapshot_columns_to_types,
+            target_columns_to_types=self._snapshot_columns_to_types,
         )
 
     def _get_snapshots(

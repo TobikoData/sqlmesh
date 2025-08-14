@@ -283,7 +283,7 @@ def test_ctas_source_columns(ctx_query_and_df: TestContext):
         table_description="test table description",
         column_descriptions={"id": "test id column description"},
         table_format=ctx.default_table_format,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "ds"],
     )
 
@@ -372,7 +372,7 @@ def test_create_view_source_columns(ctx_query_and_df: TestContext):
         table_description="test view description",
         column_descriptions={"id": "test id column description"},
         source_columns=["id", "ds"],
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
     )
 
     expected_data = input_data.copy()
@@ -470,7 +470,7 @@ def test_nan_roundtrip(ctx_df: TestContext):
     ctx.engine_adapter.replace_query(
         table,
         ctx.input_data(input_data),
-        columns_to_types=ctx.columns_to_types,
+        target_columns_to_types=ctx.columns_to_types,
     )
     results = ctx.get_metadata_results()
     assert not results.views
@@ -502,7 +502,9 @@ def test_replace_query(ctx_query_and_df: TestContext):
         # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
         # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
         # columns_to_types for these two engines so we can still test inference on the other ones
-        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
+        target_columns_to_types=ctx.columns_to_types
+        if ctx.dialect in ["spark", "databricks"]
+        else None,
         table_format=ctx.default_table_format,
     )
     results = ctx.get_metadata_results()
@@ -524,7 +526,7 @@ def test_replace_query(ctx_query_and_df: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=(
+            target_columns_to_types=(
                 ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
             ),
             table_format=ctx.default_table_format,
@@ -559,7 +561,7 @@ def test_replace_query_source_columns(ctx_query_and_df: TestContext):
         ctx.input_data(input_data),
         table_format=ctx.default_table_format,
         source_columns=["id", "ds"],
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
     )
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
@@ -585,7 +587,7 @@ def test_replace_query_source_columns(ctx_query_and_df: TestContext):
             ctx.input_data(replace_data),
             table_format=ctx.default_table_format,
             source_columns=["id", "ds"],
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
         )
         expected_data = replace_data.copy()
         expected_data["ignored_column"] = pd.Series()
@@ -620,7 +622,9 @@ def test_replace_query_batched(ctx_query_and_df: TestContext):
         # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
         # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
         # columns_to_types for these two engines so we can still test inference on the other ones
-        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
+        target_columns_to_types=ctx.columns_to_types
+        if ctx.dialect in ["spark", "databricks"]
+        else None,
         table_format=ctx.default_table_format,
     )
     results = ctx.get_metadata_results()
@@ -642,7 +646,7 @@ def test_replace_query_batched(ctx_query_and_df: TestContext):
         ctx.engine_adapter.replace_query(
             table,
             ctx.input_data(replace_data),
-            columns_to_types=(
+            target_columns_to_types=(
                 ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None
             ),
             table_format=ctx.default_table_format,
@@ -714,7 +718,7 @@ def test_insert_append_source_columns(ctx_query_and_df: TestContext):
         table,
         ctx.input_data(input_data),
         source_columns=["id", "ds"],
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
     )
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
@@ -738,7 +742,7 @@ def test_insert_append_source_columns(ctx_query_and_df: TestContext):
             table,
             ctx.input_data(append_data),
             source_columns=["id", "ds"],
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
         )
         append_expected_data = append_data.copy()
         append_expected_data["ignored_column"] = pd.Series()
@@ -786,7 +790,7 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
         end="2022-01-03",
         time_formatter=ctx.time_formatter,
         time_column=ctx.time_column,
-        columns_to_types=ctx.columns_to_types,
+        target_columns_to_types=ctx.columns_to_types,
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -815,7 +819,7 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
             end="2022-01-05",
             time_formatter=ctx.time_formatter,
             time_column=ctx.time_column,
-            columns_to_types=ctx.columns_to_types,
+            target_columns_to_types=ctx.columns_to_types,
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -879,7 +883,7 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
         end="2022-01-03",
         time_formatter=ctx.time_formatter,
         time_column=ctx.time_column,
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "ds"],
     )
 
@@ -913,7 +917,7 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
             end="2022-01-05",
             time_formatter=ctx.time_formatter,
             time_column=ctx.time_column,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             source_columns=["id", "ds"],
         )
         results = ctx.get_metadata_results()
@@ -960,7 +964,7 @@ def test_merge(ctx_query_and_df: TestContext):
     ctx.engine_adapter.merge(
         table,
         ctx.input_data(input_data),
-        columns_to_types=None,
+        target_columns_to_types=None,
         unique_key=[exp.to_identifier("id")],
     )
     results = ctx.get_metadata_results()
@@ -982,7 +986,7 @@ def test_merge(ctx_query_and_df: TestContext):
         ctx.engine_adapter.merge(
             table,
             ctx.input_data(merge_data),
-            columns_to_types=None,
+            target_columns_to_types=None,
             unique_key=[exp.to_identifier("id")],
         )
         results = ctx.get_metadata_results()
@@ -1030,7 +1034,7 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
         table,
         ctx.input_data(input_data),
         unique_key=[exp.to_identifier("id")],
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "ds"],
     )
 
@@ -1057,7 +1061,7 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
             table,
             ctx.input_data(merge_data),
             unique_key=[exp.to_identifier("id")],
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             source_columns=["id", "ds"],
         )
 
@@ -1119,7 +1123,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         updated_at_col=exp.column("updated_at", quoted=True),
         execution_time="2023-01-01 00:00:00",
         updated_at_as_valid_from=False,
-        columns_to_types=input_schema,
+        target_columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=True,
     )
@@ -1182,7 +1186,7 @@ def test_scd_type_2_by_time(ctx_query_and_df: TestContext):
         updated_at_col=exp.column("updated_at", quoted=True),
         execution_time="2023-01-05 00:00:00",
         updated_at_as_valid_from=False,
-        columns_to_types=input_schema,
+        target_columns_to_types=input_schema,
         table_format=ctx.default_table_format,
         truncate=False,
     )
@@ -1278,7 +1282,7 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
         table_format=ctx.default_table_format,
         truncate=True,
         start="2022-01-01 00:00:00",
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "name", "updated_at"],
     )
     results = ctx.get_metadata_results()
@@ -1346,7 +1350,7 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
         table_format=ctx.default_table_format,
         truncate=False,
         start="2022-01-01 00:00:00",
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "name", "updated_at"],
     )
     results = ctx.get_metadata_results()
@@ -1443,7 +1447,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         valid_to_col=exp.column("valid_to", quoted=True),
         execution_time="2023-01-01",
         execution_time_as_valid_from=False,
-        columns_to_types=ctx.columns_to_types,
+        target_columns_to_types=ctx.columns_to_types,
         truncate=True,
     )
     results = ctx.get_metadata_results()
@@ -1514,7 +1518,7 @@ def test_scd_type_2_by_column(ctx_query_and_df: TestContext):
         valid_to_col=exp.column("valid_to", quoted=True),
         execution_time="2023-01-05 00:00:00",
         execution_time_as_valid_from=False,
-        columns_to_types=ctx.columns_to_types,
+        target_columns_to_types=ctx.columns_to_types,
         truncate=False,
     )
     results = ctx.get_metadata_results()
@@ -1623,7 +1627,7 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         truncate=True,
         start="2023-01-01",
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "name", "status"],
     )
     results = ctx.get_metadata_results()
@@ -1700,7 +1704,7 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
         execution_time_as_valid_from=False,
         truncate=False,
         start="2023-01-01",
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         source_columns=["id", "name", "status"],
     )
     results = ctx.get_metadata_results()
@@ -3077,13 +3081,13 @@ def test_value_normalization(
     }
 
     ctx.engine_adapter.create_table(
-        table_name=test_table, columns_to_types=columns_to_types_normalized
+        table_name=test_table, target_columns_to_types=columns_to_types_normalized
     )
     data_query = next(select_from_values(input_data_with_idx, columns_to_types_normalized))
     ctx.engine_adapter.insert_append(
         table_name=test_table,
         query_or_df=data_query,
-        columns_to_types=columns_to_types_normalized,
+        target_columns_to_types=columns_to_types_normalized,
     )
 
     query = (
