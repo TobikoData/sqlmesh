@@ -517,6 +517,7 @@ class _Model(ModelMeta, frozen=True):
             python_env=self.python_env,
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
+            run_original_sql=self.run_original_sql,
         )
 
         rendered_query = query_renderer.render(
@@ -587,6 +588,7 @@ class _Model(ModelMeta, frozen=True):
                 only_execution_time=False,
                 default_catalog=self.default_catalog,
                 model_fqn=self.fqn,
+                run_original_sql=self.run_original_sql,
             )
         return self._statement_renderer_cache[expression_key]
 
@@ -713,6 +715,7 @@ class _Model(ModelMeta, frozen=True):
             python_env=self.python_env,
             only_execution_time=False,
             quote_identifiers=False,
+            run_original_sql=self.run_original_sql,
         )
 
     def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
@@ -1006,6 +1009,8 @@ class _Model(ModelMeta, frozen=True):
                     "SQLMesh query optimizer can only be enabled for SQL models",
                     self._path,
                 )
+            if self.run_original_sql:
+                raise_config_error("SQL can only be preserved for SQL models", self._path)
 
         if isinstance(self.kind, CustomKind):
             from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type_or_raise
@@ -1055,6 +1060,7 @@ class _Model(ModelMeta, frozen=True):
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
             str(self.optimize_query) if self.optimize_query is not None else None,
+            str(self.run_original_sql) if self.run_original_sql is not None else None,
             self.virtual_environment_mode.value,
         ]
 
@@ -1516,6 +1522,7 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
+            run_original_sql=self.run_original_sql,
         )
 
     @property
@@ -2479,6 +2486,7 @@ def _create_model(
     defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
+        defaults.pop("run_original_sql", None)
 
     statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
@@ -2858,7 +2866,7 @@ def render_model_defaults(
     )
 
     # Validate defaults that have macros are rendered to boolean
-    for boolean in {"optimize_query", "allow_partials", "enabled"}:
+    for boolean in {"optimize_query", "allow_partials", "enabled", "run_original_sql"}:
         var = rendered_defaults.get(boolean)
         if var is not None and not isinstance(var, (exp.Boolean, bool)):
             raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
@@ -2954,6 +2962,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "formatting": str,
     "optimize_query": str,
+    "run_original_sql": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 
