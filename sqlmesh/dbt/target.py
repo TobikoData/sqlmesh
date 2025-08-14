@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
-from pydantic import Field
+from pydantic import Field, AliasChoices
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.config.connection import (
@@ -329,7 +329,7 @@ class PostgresConfig(TargetConfig):
     type: t.Literal["postgres"] = "postgres"
     host: str
     user: str
-    password: str
+    password: str = Field(validation_alias=AliasChoices("pass", "password"))
     port: int
     dbname: str
     keepalives_idle: t.Optional[int] = None
@@ -417,7 +417,7 @@ class RedshiftConfig(TargetConfig):
     type: t.Literal["redshift"] = "redshift"
     host: str
     user: str
-    password: str
+    password: str = Field(validation_alias=AliasChoices("pass", "password"))
     port: int
     dbname: str
     connect_timeout: t.Optional[int] = None
