@@ -149,13 +149,17 @@ class FormatProjectResponse(CustomMethodResponseBaseClass):
 
 LIST_WORKSPACE_TESTS_FEATURE = "sqlmesh/list_workspace_tests"
 
+
 class ListWorkspaceTestsRequest(CustomMethodRequestBaseClass):
     """
     Request to list all tests in the current project.
     """
+
     pass
 
+
 GET_ENVIRONMENTS_FEATURE = "sqlmesh/get_environments"
+
 
 class GetEnvironmentsRequest(CustomMethodRequestBaseClass):
     """
@@ -201,6 +205,7 @@ class RunTestRequest(CustomMethodRequestBaseClass):
 class RunTestResponse(CustomMethodResponseBaseClass):
     success: bool
     error_message: t.Optional[str] = None
+
 
 class EnvironmentInfo(PydanticModel):
     """

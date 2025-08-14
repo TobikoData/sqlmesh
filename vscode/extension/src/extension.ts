@@ -153,7 +153,6 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   )
 
-
   // Register the table diff command
   context.subscriptions.push(
     vscode.commands.registerCommand(
