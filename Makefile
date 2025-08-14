@@ -238,4 +238,7 @@ vscode-generate-openapi:
 benchmark-ci:
 	python benchmarks/lsp_render_model_bench.py --debug-single-value
 
-dag:
+.PHONY: update-dbt
+update-dbt:
+	cd dbt-core/rust_extensions/dbt_rust_ext && maturin develop --release
+	pip install --force-reinstall ./dbt-core/core
