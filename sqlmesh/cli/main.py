@@ -523,6 +523,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     default=None,
 )
 @click.option(
+    "--ignore-cron",
+    is_flag=True,
+    help="Run all missing intervals, ignoring individual cron schedules. Only applies if --run is set.",
+    default=None,
+)
+@click.option(
     "--min-intervals",
     default=0,
     help="For every model, ensure at least this many intervals are covered by a missing intervals check regardless of the plan start date",
@@ -543,6 +549,7 @@ def plan(
     select_models = kwargs.pop("select_model") or None
     allow_destructive_models = kwargs.pop("allow_destructive_model") or None
     backfill_models = kwargs.pop("backfill_model") or None
+    ignore_cron = kwargs.pop("ignore_cron") or None
     setattr(get_console(), "verbosity", Verbosity(verbose))
 
     context.plan(
@@ -551,6 +558,7 @@ def plan(
         select_models=select_models,
         allow_destructive_models=allow_destructive_models,
         backfill_models=backfill_models,
+        ignore_cron=ignore_cron,
         **kwargs,
     )
 
