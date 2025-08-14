@@ -150,33 +150,21 @@ def get_start_and_end_of_model_block(
     except StopIteration:
         return None
 
-    # 3) Find the matching closing parenthesis for that list by tracking depth
-    depth = 0
-    rparen_idx: t.Optional[int] = None
-    for i in range(lparen_idx, len(tokens)):
-        tt = tokens[i].token_type
-        if tt is TokenType.L_PAREN:
-            depth += 1
-        elif tt is TokenType.R_PAREN:
-            depth -= 1
-            if depth == 0:
-                rparen_idx = i
-                break
-
-    if rparen_idx is None:
-        # Fallback: stop at the first semicolon after MODEL
-        try:
-            rparen_idx = next(
-                i
-                for i in range(lparen_idx + 1, len(tokens))
-                if tokens[i].token_type is TokenType.SEMICOLON
-            )
-        except StopIteration:
-            return None
-    return (
-        lparen_idx,
-        rparen_idx,
-    )
+    # 3) Find the matching closing parenthesis by looking for the first semicolon after
+    # the opening parenthesis and assuming the MODEL block ends there.
+    try:
+        closing_semicolon = next(
+            i
+            for i in range(lparen_idx + 1, len(tokens))
+            if tokens[i].token_type is TokenType.SEMICOLON
+        )
+        # If we find a semicolon, we can assume the MODEL block ends there
+        rparen_idx = closing_semicolon - 1
+        if tokens[rparen_idx].token_type is TokenType.R_PAREN:
+            return (lparen_idx, rparen_idx)
+        return None
+    except StopIteration:
+        return None
 
 
 def get_range_of_model_block(
@@ -187,11 +175,9 @@ def get_range_of_model_block(
     Get the range of the model block in an SQL file,
     """
     tokens = tokenize(sql, dialect=dialect)
-
     block = get_start_and_end_of_model_block(tokens)
     if not block:
         return None
-
     (start_idx, end_idx) = block
     start = tokens[start_idx - 1]
     end = tokens[end_idx + 1]
