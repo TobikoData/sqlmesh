@@ -77,7 +77,7 @@ jobs:
           unset TWINE_USERNAME TWINE_PASSWORD && make publish-tests
       - name: Get GitHub App token
         id: get_token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           private-key: ${{ secrets.TOBIKO_RENOVATE_BOT_PRIVATE_KEY }}
           app-id: ${{ secrets.TOBIKO_RENOVATE_BOT_APP_ID }}
