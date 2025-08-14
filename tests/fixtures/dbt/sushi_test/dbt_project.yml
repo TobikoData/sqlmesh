@@ -71,3 +71,4 @@ on-run-start:
 on-run-end:
   - '{{ create_tables(schemas) }}'
   - 'DROP TABLE to_be_executed_last;'
+  - '{{ graph_usage() }}'
