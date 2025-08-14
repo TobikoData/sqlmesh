@@ -58,7 +58,7 @@ dev = [
     "cryptography",
     "databricks-sql-connector",
     "dbt-bigquery",
-    "dbt-core",
+    "dbt-core @ file:./dbt-core/core",
     "dbt-duckdb>=1.7.1",
     "dbt-snowflake",
     "dbt-athena-community",
@@ -100,7 +100,7 @@ dev = [
     "types-requests==2.28.8",
     "typing-extensions",
 ]
-dbt = ["dbt-core<2"]
+dbt = ["dbt-core @ file:./dbt-core/core"]
 dlt = ["dlt"]
 duckdb = []
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
