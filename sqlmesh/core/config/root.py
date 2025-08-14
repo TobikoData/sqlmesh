@@ -27,7 +27,6 @@ from sqlmesh.core.config.connection import (
     SerializableConnectionConfig,
     connection_config_validator,
 )
-from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.janitor import JanitorConfig
@@ -122,7 +121,6 @@ class Config(BaseConfig):
         log_limit: The default number of logs to keep.
         format: The formatting options for SQL code.
         ui: The UI configuration for SQLMesh.
-        feature_flags: Feature flags to enable/disable certain features.
         plan: The plan configuration.
         migration: The migration configuration.
         variables: A dictionary of variables that can be used in models / macros.
@@ -165,7 +163,6 @@ class Config(BaseConfig):
     run: RunConfig = RunConfig()
     format: FormatConfig = FormatConfig()
     ui: UIConfig = UIConfig()
-    feature_flags: FeatureFlag = FeatureFlag()
     plan: PlanConfig = PlanConfig()
     migration: MigrationConfig = MigrationConfig()
     model_naming: NameInferenceConfig = NameInferenceConfig()

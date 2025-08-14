@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import typing as t
 from unittest import mock
 from unittest.mock import call
@@ -11,7 +10,6 @@ from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
-from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.adapter import ParsetimeAdapter
@@ -275,28 +273,6 @@ def test_adapter_map_snapshot_tables(
 
     assert renderer("{{ adapter.resolve_schema(foo_bar) }}") == "foo"
     assert renderer("{{ adapter.resolve_identifier(foo_bar) }}") == "bar"
-
-
-def test_feature_flag_scd_type_2(copy_to_temp_path, caplog):
-    project_root = "tests/fixtures/dbt/sushi_test"
-    sushi_context = Context(paths=copy_to_temp_path(project_root))
-    assert '"memory"."snapshots"."items_snapshot"' in sushi_context.models
-    assert (
-        "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-        not in caplog.text
-    )
-    with mock.patch.dict(
-        os.environ,
-        {
-            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
-        },
-    ):
-        sushi_context = Context(paths=copy_to_temp_path(project_root))
-        assert '"memory"."snapshots"."items_snapshot"' not in sushi_context.models
-        assert (
-            "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-            in caplog.text
-        )
 
 
 def test_quote_as_configured():
