@@ -11,6 +11,7 @@ from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.conversions import serializable
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import (
     JinjaGlobalAttribute,
@@ -196,6 +197,49 @@ class DbtContext:
         return self._refs
 
     @property
+    def flat_graph(self) -> t.Dict[str, t.Any]:
+        if self._manifest is None:
+            return {
+                "exposures": {},
+                "groups": {},
+                "metrics": {},
+                "nodes": {},
+                "sources": {},
+                "semantic_models": {},
+                "saved_queries": {},
+            }
+
+        manifest = self._manifest._manifest
+        return {
+            "exposures": {
+                k: serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(manifest, "exposures", {}).items()
+            },
+            "groups": {
+                k: serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(manifest, "groups", {}).items()
+            },
+            "metrics": {
+                k: serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(manifest, "metrics", {}).items()
+            },
+            "nodes": {
+                k: serializable(v.to_dict(omit_none=False)) for k, v in manifest.nodes.items()
+            },
+            "sources": {
+                k: serializable(v.to_dict(omit_none=False)) for k, v in manifest.sources.items()
+            },
+            "semantic_models": {
+                k: serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(manifest, "semantic_models", {}).items()
+            },
+            "saved_queries": {
+                k: serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(manifest, "saved_queries", {}).items()
+            },
+        }
+
+    @property
     def target(self) -> TargetConfig:
         if not self._target:
             raise SQLMeshError("Target has not been set in the context.")
@@ -242,6 +286,9 @@ class DbtContext:
         # pass user-specified default dialect if we have already loaded the config
         if self.sqlmesh_config.dialect:
             output["dialect"] = self.sqlmesh_config.dialect
+        # Pass flat graph structure like dbt
+        if self._manifest is not None:
+            output["flat_graph"] = AttributeDict(self.flat_graph)
         return output
 
     def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:
