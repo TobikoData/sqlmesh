@@ -293,9 +293,15 @@ class DbtLoader(Loader):
             )
         ]
 
-    def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
-        if not root.is_dir():
+    def _compute_yaml_max_mtime_per_subfolder(
+        self, root: Path, visited: t.Optional[t.Set[Path]] = None
+    ) -> t.Dict[Path, float]:
+        root = root.resolve()
+        visited = visited or set()
+        if not root.is_dir() or root in visited:
             return {}
+
+        visited.add(root)
 
         result = {}
         max_mtime: t.Optional[float] = None
@@ -303,7 +309,9 @@ class DbtLoader(Loader):
         for nested in root.iterdir():
             try:
                 if nested.is_dir():
-                    result.update(self._compute_yaml_max_mtime_per_subfolder(nested))
+                    result.update(
+                        self._compute_yaml_max_mtime_per_subfolder(nested, visited=visited)
+                    )
                 elif nested.suffix.lower() in (".yaml", ".yml"):
                     yaml_mtime = self._path_mtimes.get(nested)
                     if yaml_mtime:
