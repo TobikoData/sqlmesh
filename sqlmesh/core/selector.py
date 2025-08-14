@@ -178,10 +178,10 @@ class Selector:
 
         node = parse(" | ".join(f"({s})" for s in model_selections))
 
-        models = models or self._models
+        all_models = models or self._models
         models_by_tags: t.Dict[str, t.Set[str]] = {}
 
-        for fqn, model in models.items():
+        for fqn, model in all_models.items():
             for tag in model.tags:
                 tag = tag.lower()
                 models_by_tags.setdefault(tag, set())
@@ -193,11 +193,11 @@ class Selector:
                 if "*" in pattern:
                     return {
                         fqn
-                        for fqn, model in models.items()
+                        for fqn, model in all_models.items()
                         if fnmatch.fnmatchcase(model.name, node.this)
                     }
                 fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
-                return {fqn} if fqn in models else set()
+                return {fqn} if fqn in all_models else set()
             if isinstance(node, exp.And):
                 return evaluate(node.left) & evaluate(node.right)
             if isinstance(node, exp.Or):
@@ -205,7 +205,7 @@ class Selector:
             if isinstance(node, exp.Paren):
                 return evaluate(node.this)
             if isinstance(node, exp.Not):
-                return set(models) - evaluate(node.this)
+                return set(all_models) - evaluate(node.this)
             if isinstance(node, Git):
                 target_branch = node.name
                 git_modified_files = {
@@ -213,7 +213,7 @@ class Selector:
                     *self._git_client.list_uncommitted_changed_files(),
                     *self._git_client.list_committed_changed_files(target_branch=target_branch),
                 }
-                return {m.fqn for m in self._models.values() if m._path in git_modified_files}
+                return {m.fqn for m in all_models.values() if m._path in git_modified_files}
             if isinstance(node, Tag):
                 pattern = node.name.lower()
 
@@ -232,7 +232,7 @@ class Selector:
                     selected.add(model_name)
                     if node.args.get("up"):
                         for u in self._dag.upstream(model_name):
-                            if u in models:
+                            if u in all_models:
                                 selected.add(u)
                     if node.args.get("down"):
                         selected.update(self._dag.downstream(model_name))
