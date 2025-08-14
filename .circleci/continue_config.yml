@@ -297,8 +297,9 @@ workflows:
           name: cloud_engine_<< matrix.engine >>
           context:
             - sqlmesh_cloud_database_integration
-          requires:
-            - engine_tests_docker
+          # TODO: uncomment this
+          # requires:
+          #   - engine_tests_docker
           matrix:
             parameters:
               engine:
