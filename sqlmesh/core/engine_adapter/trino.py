@@ -55,6 +55,7 @@ class TrinoEngineAdapter(
     SUPPORTS_REPLACE_TABLE = False
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             # default decimal precision varies across backends

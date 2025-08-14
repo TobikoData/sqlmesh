@@ -31,6 +31,7 @@ class QueryExecutionContext:
         if row_count is not None and row_count >= 0:
             self.total_rows_processed += row_count
         self.query_count += 1
+        # TODO: remove this
         # for debugging
         self.queries_executed.append((sql[:300], row_count, time.time()))
 
