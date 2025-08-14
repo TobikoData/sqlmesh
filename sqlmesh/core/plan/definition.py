@@ -303,7 +303,7 @@ class EvaluatablePlan(PydanticModel):
     forward_only: bool
     end_bounded: bool
     ensure_finalized_snapshots: bool
-    ignore_cron: bool
+    ignore_cron: bool = False
     directly_modified_snapshots: t.List[SnapshotId]
     indirectly_modified_snapshots: t.Dict[str, t.List[SnapshotId]]
     metadata_updated_snapshots: t.List[SnapshotId]

@@ -3362,9 +3362,6 @@ def test_environment_statements_change_allows_dev_environment_creation(make_snap
 
 
 def test_plan_ignore_cron_flag(make_snapshot):
-    """Test that ignore_cron flag is properly stored and propagated through plan objects."""
-
-    # Create a snapshot with a daily cron schedule
     snapshot_a = make_snapshot(
         SqlModel(
             name="test_model",
@@ -3375,8 +3372,8 @@ def test_plan_ignore_cron_flag(make_snapshot):
             allow_partials=True,
         )
     )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
 
-    # Mock the context diff
     context_diff = ContextDiff(
         environment="dev",
         is_new_environment=True,
