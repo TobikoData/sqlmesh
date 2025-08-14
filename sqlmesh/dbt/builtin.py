@@ -21,7 +21,7 @@ from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
-from sqlmesh.utils import AttributeDict, yaml
+from sqlmesh.utils import AttributeDict, debug_mode_enabled, yaml
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
@@ -316,6 +316,15 @@ def _try_literal_eval(value: str) -> t.Any:
         return value
 
 
+def debug() -> str:
+    import sys
+    import ipdb  # type: ignore
+
+    frame = sys._getframe(3)
+    ipdb.set_trace(frame)
+    return ""
+
+
 BUILTIN_GLOBALS = {
     "dbt_version": version.__version__,
     "env_var": env_var,
@@ -335,6 +344,10 @@ BUILTIN_GLOBALS = {
     "zip": do_zip,
     "zip_strict": lambda *args: list(zip(*args)),
 }
+
+# Add debug function conditionally both with dbt or sqlmesh equivalent flag
+if os.environ.get("DBT_MACRO_DEBUGGING") or debug_mode_enabled():
+    BUILTIN_GLOBALS["debug"] = debug
 
 BUILTIN_FILTERS = {
     "as_bool": as_bool,
