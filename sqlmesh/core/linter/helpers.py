@@ -250,7 +250,6 @@ def get_range_of_a_key_in_model_block(
             )
             key_range = key_start.to_range(lines)
 
-            # Find value start: the next non-comment token after the key
             value_start_idx = i + 1
             if value_start_idx >= rparen_idx:
                 return None
