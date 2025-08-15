@@ -1,8 +1,8 @@
-@import url("./fonts.css");
-@import url("./palette.css");
-@import url("./semantic-colors.css");
-@import url("./typography.css");
-@import url("./space.css");
+@import url('./fonts.css');
+@import url('./palette.css');
+@import url('./semantic-colors.css');
+@import url('./typography.css');
+@import url('./space.css');
 
 :root {
   /* Radius */
