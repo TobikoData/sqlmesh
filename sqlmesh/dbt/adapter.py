@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils import AttributeDict
 
 if t.TYPE_CHECKING:
     import agate
@@ -158,6 +159,20 @@ class BaseAdapter(abc.ABC):
         # Always return -1 to fallback to Spark macro implementations.
         return -1
 
+    @property
+    def graph(self) -> t.Any:
+        return AttributeDict(
+            {
+                "exposures": {},
+                "groups": {},
+                "metrics": {},
+                "nodes": {},
+                "sources": {},
+                "semantic_models": {},
+                "saved_queries": {},
+            }
+        )
+
 
 class ParsetimeAdapter(BaseAdapter):
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -245,6 +260,10 @@ class RuntimeAdapter(BaseAdapter):
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
         }
+
+    @property
+    def graph(self) -> t.Any:
+        return self.jinja_globals.get("flat_graph", super().graph)
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
