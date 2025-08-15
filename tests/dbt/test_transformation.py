@@ -1641,10 +1641,32 @@ def test_on_run_start_end():
         "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
         "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
         "DROP TABLE to_be_executed_last",
-        "CREATE OR REPLACE TABLE graph_table AS SELECT 'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized UNION ALL SELECT 'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized UNION ALL SELECT 'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized UNION ALL SELECT 'model.sushi.waiter_as_customer_by_day' AS unique_id, 'incremental' AS materialized UNION ALL SELECT 'model.sushi.top_waiters' AS unique_id, 'view' AS materialized UNION ALL SELECT 'model.customers.customers' AS unique_id, 'view' AS materialized UNION ALL SELECT 'model.customers.customer_revenue_by_day' AS unique_id, 'incremental' AS materialized UNION ALL SELECT 'model.sushi.waiter_revenue_by_day.v1' AS unique_id, 'incremental' AS materialized UNION ALL SELECT 'model.sushi.waiter_revenue_by_day.v2' AS unique_id, 'incremental' AS materialized",
     ]
+    assert sorted(rendered_after_all[:-1]) == sorted(expected_statements)
 
-    assert sorted(rendered_after_all) == sorted(expected_statements)
+    # Assert the models with their materialisations are present in the rendered graph_table statement
+    graph_table_stmt = rendered_after_all[-1]
+    assert "'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert "'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized" in graph_table_stmt
+    assert "'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert (
+        "'model.sushi.waiter_as_customer_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert "'model.sushi.top_waiters' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert "'model.customers.customers' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert (
+        "'model.customers.customer_revenue_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v1' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v2' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
 
     # Nested dbt_packages on run start / on run end
     packaged_environment_statements = sushi_context._environment_statements[1]
