@@ -220,6 +220,15 @@ class BaseExpressionRenderer:
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
                 )
                 if rendered_expression.strip():
+                    if self._run_original_sql_flag and runtime_stage != RuntimeStage.LOADING:
+                        raw_sql = d.RawSql(this=rendered_expression)
+                        wrapped_raw_sql: t.List[t.Optional[exp.Expression]] = [raw_sql]
+
+                        if should_cache:
+                            self._cache = wrapped_raw_sql
+
+                        return wrapped_raw_sql
+
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 
                     if not expressions:
@@ -319,7 +328,9 @@ class BaseExpressionRenderer:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
     ) -> E:
-        if not snapshots and not table_mapping and not expand:
+        if isinstance(expression, (d.RawSql, exp.Command)) or (
+            not snapshots and not table_mapping and not expand
+        ):
             return expression
 
         expression = expression.copy()
@@ -497,7 +508,7 @@ class QueryRenderer(BaseExpressionRenderer):
         needs_optimization: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query]:
+    ) -> t.Optional[exp.Query | d.RawSql]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -551,8 +562,9 @@ class QueryRenderer(BaseExpressionRenderer):
 
             query = expressions[0]  # type: ignore
 
-            if not query:
-                return None
+            if not query or isinstance(query, d.RawSql):
+                return query
+
             if not isinstance(query, exp.Query):
                 raise_config_error(
                     f"Model query needs to be a SELECT or a UNION, got {query}.", self._path

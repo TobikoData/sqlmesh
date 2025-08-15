@@ -26,6 +26,7 @@ from sqlmesh.core.dialect import (
     schema_,
     select_from_values_for_batch_range,
     to_schema,
+    RawSql,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -272,6 +273,7 @@ class EngineAdapter:
         import pandas as pd
 
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
+
         if isinstance(query_or_df, exp.Query):
             query_factory = lambda: query_or_df
             if source_columns:
