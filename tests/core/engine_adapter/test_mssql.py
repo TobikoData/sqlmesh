@@ -290,7 +290,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_not
         end="2022-01-02",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         time_column="ds",
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f"__temp_test_table_{temp_table_id}", [(1, "2022-01-01"), (2, "2022-01-02")]
@@ -327,7 +330,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_exi
         end="2022-01-02",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         time_column="ds",
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
     )
     assert to_sql_calls(adapter) == [
         f"""MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], CAST([ds] AS VARCHAR(MAX)) AS [ds] FROM [__temp_test_table_{temp_table_id}]) AS [_subquery] WHERE [ds] BETWEEN '2022-01-01' AND '2022-01-02') AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND [ds] BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [ds]) VALUES ([a], [ds]);""",
@@ -359,7 +365,10 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         end="2022-01-02",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         time_column="ds",
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        target_columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f"__temp_test_table_{temp_table_id}", [(1, "2022-01-01"), (2, "2022-01-02")]
@@ -391,7 +400,7 @@ def test_insert_append_pandas(
     adapter.insert_append(
         table_name,
         df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
@@ -461,7 +470,7 @@ def test_merge_pandas(
     adapter.merge(
         target_table=table_name,
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
@@ -485,7 +494,7 @@ def test_merge_pandas(
     adapter.merge(
         target_table=table_name,
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
@@ -524,7 +533,7 @@ def test_merge_exists(
     adapter.merge(
         target_table=table_name,
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
@@ -545,7 +554,7 @@ def test_merge_exists(
     adapter.merge(
         target_table=table_name,
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
@@ -567,7 +576,7 @@ def test_merge_exists(
     adapter.merge(
         target_table=table_name,
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("TIMESTAMP"),
         },
@@ -913,7 +922,7 @@ def test_replace_query_strategy(adapter: MSSQLEngineAdapter, mocker: MockerFixtu
         table_properties=model.physical_properties,
         table_description=model.description,
         column_descriptions=model.column_descriptions,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
     )
 
     # subsequent - table exists
@@ -937,7 +946,7 @@ def test_replace_query_strategy(adapter: MSSQLEngineAdapter, mocker: MockerFixtu
         table_properties=model.physical_properties,
         table_description=model.description,
         column_descriptions=model.column_descriptions,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
     )
 
     assert to_sql_calls(adapter) == [

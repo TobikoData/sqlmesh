@@ -64,6 +64,7 @@ class CustomFullMaterialization(CustomMaterialization):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         self.adapter.replace_query(table_name, query_or_df)
@@ -78,6 +79,7 @@ Let's unpack this materialization:
     * `query_or_df` - a query (of SQLGlot expression type) or DataFrame (Pandas, PySpark, or Snowpark) instance to be inserted
     * `model` - the model definition object used to access model parameters and user-specified materialization arguments
     * `is_first_insert` - whether this is the first insert for the current version of the model (used with batched or multi-step inserts)
+    * `render_kwargs` - a dictionary of arguments used to render the model query
     * `kwargs` - additional and future arguments
 * The `self.adapter` instance is used to interact with the target engine. It comes with a set of useful high-level APIs like `replace_query`, `columns`, and `table_exists`, but also supports executing arbitrary SQL expressions with its `execute` method.
 
@@ -150,6 +152,7 @@ class CustomFullMaterialization(CustomMaterialization):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         config_value = model.custom_materialization_properties["config_key"]
@@ -232,6 +235,7 @@ class CustomFullMaterialization(CustomMaterialization[MyCustomKind]):
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         assert isinstance(model.kind, MyCustomKind)

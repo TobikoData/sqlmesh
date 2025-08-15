@@ -28,20 +28,22 @@ class LogicalMergeMixin(EngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         logical_merge(
             self,
             target_table,
             source_table,
-            columns_to_types,
+            target_columns_to_types,
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,
+            source_columns=source_columns,
         )
 
 
@@ -75,7 +77,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
@@ -85,11 +87,13 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         doing an "INSERT OVERWRITE" using a Merge expression but with the
         predicate being `False`.
         """
-        columns_to_types = columns_to_types or self.columns(table_name)
+        target_columns_to_types = target_columns_to_types or self.columns(table_name)
         for source_query in source_queries:
             with source_query as query:
-                query = self._order_projections_and_filter(query, columns_to_types, where=where)
-                columns = [exp.column(col) for col in columns_to_types]
+                query = self._order_projections_and_filter(
+                    query, target_columns_to_types, where=where
+                )
+                columns = [exp.column(col) for col in target_columns_to_types]
                 when_not_matched_by_source = exp.When(
                     matched=False,
                     source=True,
@@ -157,7 +161,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -276,7 +280,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         **kwargs: t.Any,
@@ -286,7 +290,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
             expression=expression,
             exists=exists,
             replace=replace,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             table_kind=table_kind,
             **kwargs,
@@ -326,7 +330,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
                     None,
                     exists=exists,
                     replace=replace,
-                    columns_to_types=columns_to_types_from_view,
+                    target_columns_to_types=columns_to_types_from_view,
                     table_description=table_description,
                     **kwargs,
                 )
@@ -357,9 +361,15 @@ class ClusteredByMixin(EngineAdapter):
         return parsed_cluster_key.expressions or [parsed_cluster_key.this]
 
     def get_alter_expressions(
-        self, current_table_name: TableName, target_table_name: TableName
+        self,
+        current_table_name: TableName,
+        target_table_name: TableName,
+        *,
+        ignore_destructive: bool = False,
     ) -> t.List[exp.Alter]:
-        expressions = super().get_alter_expressions(current_table_name, target_table_name)
+        expressions = super().get_alter_expressions(
+            current_table_name, target_table_name, ignore_destructive=ignore_destructive
+        )
 
         # check for a change in clustering
         current_table = exp.to_table(current_table_name)
@@ -412,10 +422,11 @@ def logical_merge(
     engine_adapter: EngineAdapter,
     target_table: TableName,
     source_table: QueryOrDF,
-    columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
     when_matched: t.Optional[exp.Whens] = None,
     merge_filter: t.Optional[exp.Expression] = None,
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> None:
     """
     Merge implementation for engine adapters that do not support merge natively.
@@ -434,7 +445,12 @@ def logical_merge(
         )
 
     engine_adapter._replace_by_key(
-        target_table, source_table, columns_to_types, unique_key, is_unique_key=True
+        target_table,
+        source_table,
+        target_columns_to_types,
+        unique_key,
+        is_unique_key=True,
+        source_columns=source_columns,
     )
 
 

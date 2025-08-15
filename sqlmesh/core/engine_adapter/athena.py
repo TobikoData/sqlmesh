@@ -84,12 +84,12 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     def create_state_table(
         self,
         table_name: str,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
     ) -> None:
         self.create_table(
             table_name,
-            columns_to_types,
+            target_columns_to_types,
             primary_key=primary_key,
             # it's painfully slow, but it works
             table_format="iceberg",
@@ -178,7 +178,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
@@ -198,7 +198,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         properties = self._build_table_properties_exp(
             table=table,
             expression=expression,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             partitioned_by=partitioned_by,
             table_properties=table_properties,
             table_description=table_description,
@@ -237,7 +237,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[exp.Expression]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         table_kind: t.Optional[str] = None,
         table: t.Optional[exp.Table] = None,
@@ -265,12 +265,12 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
 
         if partitioned_by:
             schema_expressions: t.List[exp.Expression] = []
-            if is_hive and columns_to_types:
+            if is_hive and target_columns_to_types:
                 # For Hive-style tables, you cannot include the partitioned by columns in the main set of columns
                 # In the PARTITIONED BY expression, you also cant just include the column names, you need to include the data type as well
                 # ref: https://docs.aws.amazon.com/athena/latest/ug/partitions.html
                 for match_name, match_dtype in self._find_matching_columns(
-                    partitioned_by, columns_to_types
+                    partitioned_by, target_columns_to_types
                 ):
                     column_def = exp.ColumnDef(this=exp.to_identifier(match_name), kind=match_dtype)
                     schema_expressions.append(column_def)
@@ -431,9 +431,10 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         self,
         table_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
@@ -444,9 +445,10 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         return super().replace_query(
             table_name=table,
             query_or_df=query_or_df,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
+            source_columns=source_columns,
             **kwargs,
         )
 
@@ -454,7 +456,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         where: exp.Condition,
         **kwargs: t.Any,
     ) -> None:
@@ -465,7 +467,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         if table_type == "iceberg":
             # Iceberg tables work as expected, we can use the default behaviour
             return super()._insert_overwrite_by_time_partition(
-                table, source_queries, columns_to_types, where, **kwargs
+                table, source_queries, target_columns_to_types, where, **kwargs
             )
 
         # For Hive tables, we need to drop all the partitions covered by the query and delete the data from S3
@@ -475,7 +477,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
         return super()._insert_overwrite_by_time_partition(
             table,
             source_queries,
-            columns_to_types,
+            target_columns_to_types,
             where,
             insert_overwrite_strategy_override=InsertOverwriteStrategy.INTO_IS_OVERWRITE,  # since we already cleared the data
             **kwargs,

@@ -603,7 +603,7 @@ def test_scd_type_2_by_time(
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_UPDATED_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -815,7 +815,7 @@ def test_scd_type_2_by_column(
         valid_from_col=exp.column("test_VALID_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         check_columns=[exp.column("name"), exp.column("price")],
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),

@@ -86,7 +86,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
-            columns_to_types={
+            target_columns_to_types={
                 "name": exp.DataType.build(index_type),
                 "snapshots": exp.DataType.build("text"),
                 "start_at": exp.DataType.build("text"),

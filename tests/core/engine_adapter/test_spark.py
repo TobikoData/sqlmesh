@@ -83,7 +83,7 @@ def test_replace_query_table_properties_not_exists(
     adapter.replace_query(
         "test_table",
         parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
         table_properties={"a": exp.convert(1)},
@@ -117,7 +117,7 @@ def test_replace_query_table_properties_exists(
     adapter.replace_query(
         "test_table",
         parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
-        columns_to_types=columns_to_types,
+        target_columns_to_types=columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
         table_properties={"a": exp.convert(1)},
@@ -582,7 +582,7 @@ def test_scd_type_2_by_time(
         valid_from_col=exp.column("test_valid_from", quoted=True),
         valid_to_col=exp.column("test_valid_to", quoted=True),
         updated_at_col=exp.column("test_updated_at", quoted=True),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("VARCHAR"),
             "price": exp.DataType.build("DOUBLE"),
@@ -1010,7 +1010,7 @@ def test_replace_query_with_wap_self_reference(
     adapter.replace_query(
         "catalog.schema.table.branch_wap_12345",
         parse_one("SELECT 1 as a FROM catalog.schema.table.branch_wap_12345"),
-        columns_to_types={"a": exp.DataType.build("INT")},
+        target_columns_to_types={"a": exp.DataType.build("INT")},
         storage_format="ICEBERG",
     )
 
@@ -1047,7 +1047,7 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
     # both table_format and storage_format
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )
@@ -1055,21 +1055,21 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
     # just table_format
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
     )
 
     # just storage_format set to a table format (test for backwards compatibility)
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         storage_format=model.table_format,
     )
 
     adapter.ctas(
         table_name=model.name,
         query_or_df=model.query,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_format=model.table_format,
         storage_format=model.storage_format,
     )

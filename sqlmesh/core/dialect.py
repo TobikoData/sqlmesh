@@ -23,6 +23,7 @@ from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
+from sqlmesh.utils import get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -1121,7 +1122,7 @@ def select_from_values(
     for i in range(0, num_rows, batch_size):
         yield select_from_values_for_batch_range(
             values=values,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             batch_start=i,
             batch_end=min(i + batch_size, num_rows),
             alias=alias,
@@ -1130,35 +1131,49 @@ def select_from_values(
 
 def select_from_values_for_batch_range(
     values: t.List[t.Tuple[t.Any, ...]],
-    columns_to_types: t.Dict[str, exp.DataType],
+    target_columns_to_types: t.Dict[str, exp.DataType],
     batch_start: int,
     batch_end: int,
     alias: str = "t",
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> exp.Select:
-    casted_columns = [
-        exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
-        for column, kind in columns_to_types.items()
-    ]
+    source_columns = source_columns or list(target_columns_to_types)
+    source_columns_to_types = get_source_columns_to_types(target_columns_to_types, source_columns)
 
     if not values:
         # Ensures we don't generate an empty VALUES clause & forces a zero-row output
         where = exp.false()
-        expressions = [tuple(exp.cast(exp.null(), to=kind) for kind in columns_to_types.values())]
+        expressions = [
+            tuple(exp.cast(exp.null(), to=kind) for kind in source_columns_to_types.values())
+        ]
     else:
         where = None
         expressions = [
-            tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]
+            tuple(transform_values(v, source_columns_to_types))
+            for v in values[batch_start:batch_end]
         ]
 
-    values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
+    values_exp = exp.values(expressions, alias=alias, columns=source_columns_to_types)
     if values:
         # BigQuery crashes on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([NULL]) AS x`, but not
         # on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([CAST(NULL AS TIMESTAMP)]) AS x`. This
         # ensures nulls under the `Values` expression are cast to avoid similar issues.
-        for value, kind in zip(values_exp.expressions[0].expressions, columns_to_types.values()):
+        for value, kind in zip(
+            values_exp.expressions[0].expressions, source_columns_to_types.values()
+        ):
             if isinstance(value, exp.Null):
                 value.replace(exp.cast(value, to=kind))
 
+    casted_columns = [
+        exp.alias_(
+            exp.cast(
+                exp.column(column) if column in source_columns_to_types else exp.Null(), to=kind
+            ),
+            column,
+            copy=False,
+        )
+        for column, kind in target_columns_to_types.items()
+    ]
     return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 
 

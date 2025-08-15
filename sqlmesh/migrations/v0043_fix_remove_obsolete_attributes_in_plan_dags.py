@@ -53,7 +53,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             plan_dags_table,
             pd.DataFrame(new_dag_specs),
-            columns_to_types={
+            target_columns_to_types={
                 "request_id": exp.DataType.build(index_type),
                 "dag_id": exp.DataType.build(index_type),
                 "dag_spec": exp.DataType.build(blob_type),

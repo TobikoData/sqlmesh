@@ -133,7 +133,7 @@ def test_create_table_hive(adapter: AthenaEngineAdapter) -> None:
 
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
         partitioned_by=model.partitioned_by,
         storage_format=model.storage_format,
@@ -165,7 +165,7 @@ def test_create_table_iceberg(adapter: AthenaEngineAdapter) -> None:
 
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
         partitioned_by=model.partitioned_by,
         table_format=model.table_format,
@@ -193,14 +193,14 @@ def test_create_table_no_location(adapter: AthenaEngineAdapter) -> None:
     with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
         adapter.create_table(
             model.name,
-            columns_to_types=model.columns_to_types_or_raise,
+            target_columns_to_types=model.columns_to_types_or_raise,
             table_properties=model.physical_properties,
         )
 
     adapter.s3_warehouse_location = "s3://bucket/prefix"
     adapter.create_table(
         model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         table_properties=model.physical_properties,
     )
 
@@ -214,7 +214,7 @@ def test_ctas_hive(adapter: AthenaEngineAdapter):
 
     adapter.ctas(
         table_name="foo.bar",
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         query_or_df=parse_one("select 1", into=exp.Select),
     )
 
@@ -228,7 +228,7 @@ def test_ctas_iceberg(adapter: AthenaEngineAdapter):
 
     adapter.ctas(
         table_name="foo.bar",
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         query_or_df=parse_one("select 1", into=exp.Select),
         table_format="iceberg",
     )
@@ -242,7 +242,7 @@ def test_ctas_iceberg_no_specific_location(adapter: AthenaEngineAdapter):
     with pytest.raises(SQLMeshError, match=r"Cannot figure out location.*"):
         adapter.ctas(
             table_name="foo.bar",
-            columns_to_types={"a": exp.DataType.build("int")},
+            target_columns_to_types={"a": exp.DataType.build("int")},
             query_or_df=parse_one("select 1", into=exp.Select),
             table_properties={"table_type": exp.Literal.string("iceberg")},
         )
@@ -270,7 +270,7 @@ def test_ctas_iceberg_partitioned(adapter: AthenaEngineAdapter):
     adapter.s3_warehouse_location = "s3://bucket/prefix/"
     adapter.ctas(
         table_name=model.name,
-        columns_to_types=model.columns_to_types,
+        target_columns_to_types=model.columns_to_types,
         partitioned_by=model.partitioned_by,
         query_or_df=model.ctas_query(),
         table_format=model.table_format,
@@ -298,7 +298,7 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     adapter.replace_query(
         table_name="test",
         query_or_df=parse_one("select 1 as a", into=exp.Select),
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_properties={},
     )
 
@@ -317,7 +317,7 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     adapter.replace_query(
         table_name="test",
         query_or_df=parse_one("select 1 as a", into=exp.Select),
-        columns_to_types={"a": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int")},
         table_properties={},
     )
 
@@ -482,14 +482,14 @@ def test_iceberg_partition_transforms(adapter: AthenaEngineAdapter):
 
     adapter.create_table(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
         table_format=model.table_format,
     )
 
     adapter.ctas(
         table_name=model.name,
-        columns_to_types=model.columns_to_types_or_raise,
+        target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
         query_or_df=model.ctas_query(),
         table_format=model.table_format,

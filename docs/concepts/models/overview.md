@@ -507,11 +507,15 @@ Some properties are only available in specific model kinds - see the [model conf
 :   Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
 
 ### on_destructive_change
-:   What should happen when a change to a [forward-only model](../../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../plans.md#forward-only-plans) causes a destructive modification to the table schema (i.e., requires dropping an existing column).
+:   What should happen when a change to a [forward-only model](../../guides/incremental_time.md#forward-only-models) or incremental model in a [forward-only plan](../plans.md#forward-only-plans) causes a destructive modification to the table schema (i.e., requires dropping an existing column or modifying column constraints in ways that could cause data loss).
 
     SQLMesh checks for destructive changes at plan time based on the model definition and run time based on the model's underlying physical tables.
 
-    Must be one of the following values: `allow`, `warn`, or `error` (default).
+    Must be one of the following values: `allow`, `warn`, `error` (default), or `ignore`.
+
+!!! warning "Ignore is Dangerous"
+
+    `ignore` is dangerous since it can result in error or data loss. It likely should never be used but could be useful as an "escape-hatch" or a way to workaround unexpected behavior.
 
 ### disable_restatement
 :   Set this to true to indicate that [data restatement](../plans.md#restatement-plans) is disabled for this model.

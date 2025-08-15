@@ -13,7 +13,7 @@ if t.TYPE_CHECKING:
 
     snowpark = optional_import("snowflake.snowpark")
 
-    Query = t.Union[exp.Query, exp.DerivedTable]
+    Query = exp.Query
     PySparkSession = t.Union[pyspark.sql.SparkSession, pyspark.sql.connect.dataframe.SparkSession]
     PySparkDataFrame = t.Union[pyspark.sql.DataFrame, pyspark.sql.connect.dataframe.DataFrame]
 

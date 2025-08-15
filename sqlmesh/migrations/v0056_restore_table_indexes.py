@@ -79,7 +79,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter.insert_append(
         new_snapshots_table,
         exp.select("*").from_(snapshots_table),
-        columns_to_types=snapshots_columns_to_types,
+        target_columns_to_types=snapshots_columns_to_types,
     )
 
     # Recreate the environments table and its indexes.
@@ -89,7 +89,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter.insert_append(
         new_environments_table,
         exp.select("*").from_(environments_table),
-        columns_to_types=environments_columns_to_types,
+        target_columns_to_types=environments_columns_to_types,
     )
 
     # Recreate the intervals table and its indexes.
@@ -105,7 +105,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter.insert_append(
         new_intervals_table,
         exp.select("*").from_(intervals_table),
-        columns_to_types=intervals_columns_to_types,
+        target_columns_to_types=intervals_columns_to_types,
     )
 
     # Drop old tables.
