@@ -54,6 +54,7 @@ class MSSQLEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 0), (0,)],

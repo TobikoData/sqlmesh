@@ -174,6 +174,7 @@ class RedshiftEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_row_count: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -427,7 +428,8 @@ class RedshiftEngineAdapter(
                 using=using,
                 on=on.transform(resolve_target_table),
                 whens=whens.transform(resolve_target_table),
-            )
+            ),
+            track_row_count=True,
         )
 
     def _normalize_decimal_value(self, expr: exp.Expression, precision: int) -> exp.Expression:

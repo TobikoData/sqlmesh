@@ -166,6 +166,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_row_count: bool = True,
         **kwargs: t.Any,
     ) -> None:
         table_format = kwargs.get("table_format")
@@ -185,6 +186,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
+            track_row_count=track_row_count,
             **kwargs,
         )
 

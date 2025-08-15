@@ -55,6 +55,7 @@ class TrinoEngineAdapter(
     SUPPORTS_REPLACE_TABLE = False
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             # default decimal precision varies across backends
@@ -357,6 +358,7 @@ class TrinoEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_row_count: bool = True,
         **kwargs: t.Any,
     ) -> None:
         super()._create_table(
@@ -368,6 +370,7 @@ class TrinoEngineAdapter(
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
+            track_row_count=track_row_count,
             **kwargs,
         )
 
