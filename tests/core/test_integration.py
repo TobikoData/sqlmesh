@@ -7948,7 +7948,6 @@ def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     data_filepath = data_dir / "test.duckdb"
-    set_console(TerminalConsole())
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -8058,7 +8057,6 @@ def test_scd_type_2_by_time_ignore_destructive_change(tmp_path: Path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     data_filepath = data_dir / "test.duckdb"
-    set_console(TerminalConsole())
 
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),

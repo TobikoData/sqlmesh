@@ -1515,19 +1515,6 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
 
 
 class MaterializableStrategy(PromotableStrategy, abc.ABC):
-    def append(
-        self,
-        table_name: str,
-        query_or_df: QueryOrDF,
-        model: Model,
-        render_kwargs: t.Dict[str, t.Any],
-        **kwargs: t.Any,
-    ) -> None:
-        self.adapter.insert_append(
-            table_name,
-            query_or_df,
-        )
-
     def create(
         self,
         table_name: str,
@@ -1666,7 +1653,27 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         return target_column_to_types, source_columns
 
 
-class IncrementalByPartitionStrategy(MaterializableStrategy):
+class IncrementalStrategy(MaterializableStrategy, abc.ABC):
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        columns_to_types, source_columns = self._get_target_and_source_columns(
+            model, table_name, render_kwargs=render_kwargs
+        )
+        self.adapter.insert_append(
+            table_name,
+            query_or_df,
+            target_columns_to_types=columns_to_types,
+            source_columns=source_columns,
+        )
+
+
+class IncrementalByPartitionStrategy(IncrementalStrategy):
     def insert(
         self,
         table_name: str,
@@ -1691,7 +1698,7 @@ class IncrementalByPartitionStrategy(MaterializableStrategy):
             )
 
 
-class IncrementalByTimeRangeStrategy(MaterializableStrategy):
+class IncrementalByTimeRangeStrategy(IncrementalStrategy):
     def insert(
         self,
         table_name: str,
@@ -1716,7 +1723,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         )
 
 
-class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
+class IncrementalByUniqueKeyStrategy(IncrementalStrategy):
     def insert(
         self,
         table_name: str,
@@ -1776,7 +1783,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         )
 
 
-class IncrementalUnmanagedStrategy(MaterializableStrategy):
+class IncrementalUnmanagedStrategy(IncrementalStrategy):
     def append(
         self,
         table_name: str,
@@ -1832,6 +1839,20 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
 
 
 class FullRefreshStrategy(MaterializableStrategy):
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        self.adapter.insert_append(
+            table_name,
+            query_or_df,
+            target_columns_to_types=model.columns_to_types,
+        )
+
     def insert(
         self,
         table_name: str,
@@ -1893,8 +1914,19 @@ class SeedStrategy(MaterializableStrategy):
         # Data has already been inserted at the time of table creation.
         pass
 
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        # Data has already been inserted at the time of table creation.
+        pass
 
-class SCDType2Strategy(MaterializableStrategy):
+
+class SCDType2Strategy(IncrementalStrategy):
     def create(
         self,
         table_name: str,
@@ -2181,7 +2213,7 @@ class ViewStrategy(PromotableStrategy):
 C = t.TypeVar("C", bound=CustomKind)
 
 
-class CustomMaterialization(MaterializableStrategy, t.Generic[C]):
+class CustomMaterialization(IncrementalStrategy, t.Generic[C]):
     """Base class for custom materializations."""
 
     def insert(
