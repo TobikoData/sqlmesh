@@ -52,6 +52,10 @@ class Metric(exp.Expression):
     arg_types = {"expressions": True}
 
 
+class RawSql(exp.Expression):
+    pass
+
+
 class Jinja(exp.Func):
     arg_types = {"this": True}
 
@@ -1061,6 +1065,7 @@ def extend_sqlglot() -> None:
                     Model: lambda self, e: _sqlmesh_ddl_sql(self, e, "MODEL"),
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
+                    RawSql: lambda self, e: self.sql(e, "this"),
                     StagedFilePath: lambda self, e: self.table_sql(e),
                     exp.Whens: _whens_sql,
                 }

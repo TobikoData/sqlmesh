@@ -284,7 +284,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query]:
+    ) -> t.Optional[exp.Query | d.RawSql]:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -322,7 +322,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Query:
+    ) -> exp.Query | d.RawSql:
         """Same as `render_query()` but raises an exception if the query can't be rendered.
 
         Args:
@@ -526,6 +526,7 @@ class _Model(ModelMeta, frozen=True):
             execution_time=execution_time,
             snapshots=snapshots,
             deployability_index=deployability_index,
+            run_original_sql=False,
             **{
                 **audit.defaults,
                 "this_model": exp.select("*").from_(quoted_model_name).where(where).subquery()
@@ -1316,7 +1317,7 @@ class SqlModel(_Model):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query]:
+    ) -> t.Optional[exp.Query | d.RawSql]:
         query = self._query_renderer.render(
             start=start,
             end=end,
