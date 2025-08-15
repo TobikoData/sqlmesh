@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import typing as t
 from contextlib import contextmanager
-from threading import get_ident, Lock
+from threading import local
 from dataclasses import dataclass, field
 
 
@@ -50,14 +50,11 @@ class QueryExecutionTracker:
     rows processed.
     """
 
-    _thread_contexts: t.Dict[int, QueryExecutionContext] = {}
-    _contexts_lock = Lock()
+    _thread_local = local()
 
     @classmethod
     def get_execution_context(cls) -> t.Optional[QueryExecutionContext]:
-        thread_id = get_ident()
-        with cls._contexts_lock:
-            return cls._thread_contexts.get(thread_id)
+        return getattr(cls._thread_local, "context", None)
 
     @classmethod
     def is_tracking(cls) -> bool:
@@ -70,23 +67,18 @@ class QueryExecutionTracker:
         Context manager for tracking snapshot evaluation execution statistics.
         """
         context = QueryExecutionContext(id=snapshot_name_batch)
-        thread_id = get_ident()
-
-        with cls._contexts_lock:
-            cls._thread_contexts[thread_id] = context
+        cls._thread_local.context = context
         try:
             yield context
         finally:
-            with cls._contexts_lock:
-                cls._thread_contexts.pop(thread_id, None)
+            if hasattr(cls._thread_local, "context"):
+                delattr(cls._thread_local, "context")
 
     @classmethod
     def record_execution(cls, sql: str, row_count: t.Optional[int]) -> None:
-        thread_id = get_ident()
-        with cls._contexts_lock:
-            context = cls._thread_contexts.get(thread_id)
-            if context is not None:
-                context.add_execution(sql, row_count)
+        context = cls.get_execution_context()
+        if context is not None:
+            context.add_execution(sql, row_count)
 
     @classmethod
     def get_execution_stats(cls) -> t.Optional[t.Dict[str, t.Any]]:
@@ -96,9 +88,7 @@ class QueryExecutionTracker:
 
 class SeedExecutionTracker:
     _seed_contexts: t.Dict[str, QueryExecutionContext] = {}
-    _active_threads: t.Set[int] = set()
-    _thread_to_seed_id: t.Dict[int, str] = {}
-    _seed_contexts_lock = Lock()
+    _thread_local = local()
 
     @classmethod
     @contextmanager
@@ -106,47 +96,34 @@ class SeedExecutionTracker:
         """
         Context manager for tracking seed creation execution statistics.
         """
-
         context = QueryExecutionContext(id=model_name)
-        thread_id = get_ident()
-
-        with cls._seed_contexts_lock:
-            cls._seed_contexts[model_name] = context
-            cls._active_threads.add(thread_id)
-            cls._thread_to_seed_id[thread_id] = model_name
+        cls._seed_contexts[model_name] = context
+        cls._thread_local.seed_id = model_name
 
         try:
             yield context
         finally:
-            with cls._seed_contexts_lock:
-                cls._active_threads.discard(thread_id)
-                cls._thread_to_seed_id.pop(thread_id, None)
+            if hasattr(cls._thread_local, "seed_id"):
+                delattr(cls._thread_local, "seed_id")
 
     @classmethod
     def get_and_clear_seed_stats(cls, model_name: str) -> t.Optional[t.Dict[str, t.Any]]:
-        with cls._seed_contexts_lock:
-            context = cls._seed_contexts.pop(model_name, None)
-            return context.get_execution_stats() if context else None
+        context = cls._seed_contexts.pop(model_name, None)
+        return context.get_execution_stats() if context else None
 
     @classmethod
     def clear_all_seed_stats(cls) -> None:
         """Clear all remaining seed stats. Used for cleanup after evaluation completes."""
-        with cls._seed_contexts_lock:
-            cls._seed_contexts.clear()
+        cls._seed_contexts.clear()
 
     @classmethod
     def is_tracking(cls) -> bool:
-        thread_id = get_ident()
-        with cls._seed_contexts_lock:
-            return thread_id in cls._active_threads
+        return hasattr(cls._thread_local, "seed_id")
 
     @classmethod
     def record_execution(cls, sql: str, row_count: t.Optional[int]) -> None:
-        thread_id = get_ident()
-        with cls._seed_contexts_lock:
-            seed_id = cls._thread_to_seed_id.get(thread_id)
-            if not seed_id:
-                return
+        seed_id = getattr(cls._thread_local, "seed_id", None)
+        if seed_id:
             context = cls._seed_contexts.get(seed_id)
             if context is not None:
                 context.add_execution(sql, row_count)
