@@ -37,7 +37,6 @@ module.exports = {
         '4xl': 'var(--text-4xl)',
       },
       fontFamily: {
-        accent: ['var(--font-accent)'],
         mono: ['var(--font-mono)'],
       },
     },
