@@ -205,6 +205,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     success=completion_status is not None and completion_status.is_success
                 )
 
+    def visit_physical_layer_schema_creation_stage(
+        self, stage: stages.PhysicalLayerSchemaCreationStage, plan: EvaluatablePlan
+    ) -> None:
+        try:
+            self.snapshot_evaluator.create_physical_schemas(
+                stage.snapshots, stage.deployability_index
+            )
+        except Exception as ex:
+            raise PlanError("Plan application failed.") from ex
+
     def visit_backfill_stage(self, stage: stages.BackfillStage, plan: EvaluatablePlan) -> None:
         if plan.empty_backfill:
             intervals_to_add = []

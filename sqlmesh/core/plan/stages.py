@@ -72,6 +72,19 @@ class PhysicalLayerUpdateStage:
 
 
 @dataclass
+class PhysicalLayerSchemaCreationStage:
+    """Create the physical schemas for the given snapshots.
+
+    Args:
+        snapshots: Snapshots to create physical schemas for.
+        deployability_index: Deployability index for this stage.
+    """
+
+    snapshots: t.List[Snapshot]
+    deployability_index: DeployabilityIndex
+
+
+@dataclass
 class AuditOnlyRunStage:
     """Run audits only for given snapshots.
 
@@ -185,6 +198,7 @@ PlanStage = t.Union[
     AfterAllStage,
     CreateSnapshotRecordsStage,
     PhysicalLayerUpdateStage,
+    PhysicalLayerSchemaCreationStage,
     AuditOnlyRunStage,
     RestatementStage,
     BackfillStage,
@@ -283,11 +297,19 @@ class PlanStagesBuilder:
         if plan.new_snapshots:
             stages.append(CreateSnapshotRecordsStage(snapshots=plan.new_snapshots))
 
-        stages.append(
-            self._get_physical_layer_update_stage(
-                plan, snapshots, snapshots_to_intervals, deployability_index_for_creation
+        if plan.skip_backfill or plan.empty_backfill:
+            stages.append(
+                self._get_physical_layer_update_stage(
+                    plan, snapshots, snapshots_to_intervals, deployability_index_for_creation
+                )
             )
-        )
+        else:
+            stages.append(
+                PhysicalLayerSchemaCreationStage(
+                    snapshots=self._get_snapshots_to_create(plan, snapshots),
+                    deployability_index=deployability_index,
+                )
+            )
 
         audit_only_snapshots = self._get_audit_only_snapshots(new_snapshots)
         if audit_only_snapshots:

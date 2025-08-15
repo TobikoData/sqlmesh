@@ -53,7 +53,9 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
-            raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
+            raise SQLMeshError(
+                f"Could not get columns for table '{table.sql(dialect=self.dialect)}'. Table not found."
+            )
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
