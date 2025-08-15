@@ -39,7 +39,7 @@ from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
-from sqlmesh.core.execution_tracker import SeedExecutionTracker
+from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -158,16 +158,19 @@ class SnapshotEvaluator:
         Returns:
             The WAP ID of this evaluation if supported, None otherwise.
         """
-        result = self._evaluate_snapshot(
-            snapshot,
-            start,
-            end,
-            execution_time,
-            snapshots,
-            deployability_index=deployability_index,
-            batch_index=batch_index,
-            **kwargs,
-        )
+        with QueryExecutionTracker.track_execution(
+            f"{snapshot.snapshot_id}_{batch_index}", condition=not snapshot.is_seed
+        ):
+            result = self._evaluate_snapshot(
+                snapshot,
+                start,
+                end,
+                execution_time,
+                snapshots,
+                deployability_index=deployability_index,
+                batch_index=batch_index,
+                **kwargs,
+            )
         if result is None or isinstance(result, str):
             return result
         raise SQLMeshError(
@@ -201,16 +204,19 @@ class SnapshotEvaluator:
         Returns:
             The result of the evaluation as a dataframe.
         """
-        result = self._evaluate_snapshot(
-            snapshot,
-            start,
-            end,
-            execution_time,
-            snapshots,
-            limit=limit,
-            deployability_index=deployability_index,
-            **kwargs,
-        )
+        with QueryExecutionTracker.track_execution(
+            f"{snapshot.snapshot_id}_0", condition=not snapshot.is_seed
+        ):
+            result = self._evaluate_snapshot(
+                snapshot,
+                start,
+                end,
+                execution_time,
+                snapshots,
+                limit=limit,
+                deployability_index=deployability_index,
+                **kwargs,
+            )
         if result is None or isinstance(result, str):
             raise SQLMeshError(
                 f"Unexpected result {result} when evaluating snapshot {snapshot.snapshot_id}."
@@ -897,15 +903,18 @@ class SnapshotEvaluator:
                         )
                         continue
 
-                    self._execute_create(
-                        snapshot=snapshot,
-                        table_name=snapshot.table_name(is_deployable=is_table_deployable),
-                        is_table_deployable=is_table_deployable,
-                        deployability_index=deployability_index,
-                        create_render_kwargs=create_render_kwargs,
-                        rendered_physical_properties=rendered_physical_properties,
-                        dry_run=dry_run,
-                    )
+                    with QueryExecutionTracker.track_execution(
+                        f"{snapshot.snapshot_id}_0", condition=snapshot.is_seed
+                    ):
+                        self._execute_create(
+                            snapshot=snapshot,
+                            table_name=snapshot.table_name(is_deployable=is_table_deployable),
+                            is_table_deployable=is_table_deployable,
+                            deployability_index=deployability_index,
+                            create_render_kwargs=create_render_kwargs,
+                            rendered_physical_properties=rendered_physical_properties,
+                            dry_run=dry_run,
+                        )
 
         if on_complete is not None:
             on_complete(snapshot)
