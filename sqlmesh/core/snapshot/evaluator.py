@@ -39,7 +39,7 @@ from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
-from sqlmesh.core.execution_tracker import SeedExecutionTracker
+from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -170,19 +170,22 @@ class SnapshotEvaluator:
         Returns:
             The WAP ID of this evaluation if supported, None otherwise.
         """
-        result = self._evaluate_snapshot(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshot=snapshot,
-            snapshots=snapshots,
-            allow_destructive_snapshots=allow_destructive_snapshots or set(),
-            allow_additive_snapshots=allow_additive_snapshots or set(),
-            deployability_index=deployability_index,
-            batch_index=batch_index,
-            target_table_exists=target_table_exists,
-            **kwargs,
-        )
+        with QueryExecutionTracker.track_execution(
+            f"{snapshot.snapshot_id}_{batch_index}", condition=not snapshot.is_seed
+        ):
+            result = self._evaluate_snapshot(
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                snapshot=snapshot,
+                snapshots=snapshots,
+                allow_destructive_snapshots=allow_destructive_snapshots or set(),
+                allow_additive_snapshots=allow_additive_snapshots or set(),
+                deployability_index=deployability_index,
+                batch_index=batch_index,
+                target_table_exists=target_table_exists,
+                **kwargs,
+            )
         if result is None or isinstance(result, str):
             return result
         raise SQLMeshError(
