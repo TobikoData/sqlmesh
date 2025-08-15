@@ -1,0 +1,40 @@
+:root {
+  --font-size: 16px;
+  --leading: 1.5;
+  --font-weight: 500;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --text-2xs: 10px;
+  --text-xs: calc(var(--font-size) * 0.75);
+  --text-s: calc(var(--font-size) * 0.875);
+  --text-m: var(--font-size);
+  --text-l: calc(var(--font-size) * 1.125);
+  --text-xl: calc(var(--font-size) * 1.25);
+  --text-2xl: calc(var(--font-size) * 1.5);
+  --text-3xl: calc(var(--font-size) * 2);
+  --text-4xl: calc(var(--font-size) * 2.5);
+
+  --text-headline: calc(var(--font-size) * 4);
+  --text-display: 45px;
+  --text-header: calc(var(--font-size) * 2);
+  --text-tagline: 23px;
+  --text-title: var(--font-size);
+  --text-subtitle: calc(var(--font-size) * 0.75);
+
+  --text-leading-xs: 1;
+  --text-leading-s: 1.25;
+  --text-leading-m: var(--leading);
+  --text-leading-l: 1.75;
+  --text-leading-xl: 2;
+
+  --text-thin: 100;
+  --text-extra-light: 200;
+  --text-light: 300;
+  --text-normal: 400;
+  --text-medium: var(--font-weight);
+  --text-semibold: 600;
+  --text-bold: 700;
+  --text-extra-bold: 800;
+  --text-black: 900;
+}
