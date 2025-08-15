@@ -112,41 +112,112 @@ export interface TypographyTokens {
 }
 
 // Combined Design Tokens
-export interface DesignTokens extends ColorTokens, SpacingTokens, TypographyTokens {}
+export interface DesignTokens
+  extends ColorTokens,
+    SpacingTokens,
+    TypographyTokens {}
 
 // Utility type for accessing CSS custom properties
 export type CSSCustomProperty<T extends string> = T
 
 // Type-safe color scale definitions
-export type ColorScale = 
-  | '5' | '10' | '15' | '20' | '25' | '50' | '60' | '75'
-  | '100' | '125' | '150' | '200' | '300' | '400' | '500' 
-  | '525' | '550' | '600' | '700' | '725' | '750' | '800' | '900'
+export type ColorScale =
+  | '5'
+  | '10'
+  | '15'
+  | '20'
+  | '25'
+  | '50'
+  | '60'
+  | '75'
+  | '100'
+  | '125'
+  | '150'
+  | '200'
+  | '300'
+  | '400'
+  | '500'
+  | '525'
+  | '550'
+  | '600'
+  | '700'
+  | '725'
+  | '750'
+  | '800'
+  | '900'
 
-export type ColorVariant = 
-  | 'cyan' | 'deep-blue' | 'pacific' | 'purple' | 'emerald' 
-  | 'mandarin' | 'scarlet' | 'gray' | 'uni' | 'salmon' 
-  | 'turquoise' | 'fuchsia'
+export type ColorVariant =
+  | 'cyan'
+  | 'deep-blue'
+  | 'pacific'
+  | 'purple'
+  | 'emerald'
+  | 'mandarin'
+  | 'scarlet'
+  | 'gray'
+  | 'uni'
+  | 'salmon'
+  | 'turquoise'
+  | 'fuchsia'
 
 // Helper function to build color custom property strings
-export function colorToken(variant: ColorVariant, scale?: ColorScale): CSSCustomProperty<string> {
+export function colorToken(
+  variant: ColorVariant,
+  scale?: ColorScale,
+): CSSCustomProperty<string> {
   return scale ? `--color-${variant}-${scale}` : `--color-${variant}`
 }
 
 // Step scale for spacing
-export type StepScale = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 15 | 16 | 20 | 24 | 30 | 32
+export type StepScale =
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 15
+  | 16
+  | 20
+  | 24
+  | 30
+  | 32
 
 // Helper function to build spacing custom property strings
-export function spacingToken(step?: StepScale | 'half'): CSSCustomProperty<string> {
+export function spacingToken(
+  step?: StepScale | 'half',
+): CSSCustomProperty<string> {
   if (step === 'half') return '--half'
   return step ? `--step-${step}` : '--step'
 }
 
 // Text size variants
-export type TextSize = '2xs' | 'xs' | 's' | 'm' | 'l' | 'xl' | '2xl' | '3xl' | '4xl'
-export type TextRole = 'headline' | 'display' | 'header' | 'tagline' | 'title' | 'subtitle'
+export type TextSize =
+  | '2xs'
+  | 'xs'
+  | 's'
+  | 'm'
+  | 'l'
+  | 'xl'
+  | '2xl'
+  | '3xl'
+  | '4xl'
+export type TextRole =
+  | 'headline'
+  | 'display'
+  | 'header'
+  | 'tagline'
+  | 'title'
+  | 'subtitle'
 
 // Helper function to build text size custom property strings
-export function textSizeToken(size: TextSize | TextRole): CSSCustomProperty<string> {
+export function textSizeToken(
+  size: TextSize | TextRole,
+): CSSCustomProperty<string> {
   return `--text-${size}`
 }

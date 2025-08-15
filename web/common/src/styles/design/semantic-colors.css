@@ -1,4 +1,4 @@
-@import url("./palette.css");
+@import url('./palette.css');
 
 :root {
   --color-light: hsl(30, 12%, 100%);

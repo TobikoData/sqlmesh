@@ -1,39 +1,43 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from '@storybook/react-vite'
 
-import { EnumShape, EnumSize } from "@/types/enums";
-import { Badge } from "./Badge";
+import { EnumShape, EnumSize } from '@/types/enums'
+import { Badge } from './Badge'
 
 const meta: Meta<typeof Badge> = {
-  title: "Components/Badge",
+  title: 'Components/Badge',
   component: Badge,
-  tags: ["autodocs"],
+  tags: ['autodocs'],
   argTypes: {
     size: {
-      control: { type: "select" },
+      control: { type: 'select' },
       options: Object.values(EnumSize),
     },
     shape: {
-      control: { type: "select" },
+      control: { type: 'select' },
       options: Object.values(EnumShape),
     },
-    children: { control: "text" },
+    children: { control: 'text' },
   },
-};
+}
 
-export default meta;
-type Story = StoryObj<typeof Badge>;
+export default meta
+type Story = StoryObj<typeof Badge>
 
 export const Default: Story = {
   args: {
-    children: "Default Badge",
+    children: 'Default Badge',
   },
-};
+}
 
 export const Sizes: Story = {
-  render: (args) => (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {Object.values(EnumSize).map((size) => (
-        <Badge key={size} size={size} {...args}>
+  render: args => (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {Object.values(EnumSize).map(size => (
+        <Badge
+          key={size}
+          size={size}
+          {...args}
+        >
           {size} Badge
         </Badge>
       ))}
@@ -42,13 +46,17 @@ export const Sizes: Story = {
   args: {
     children: undefined,
   },
-};
+}
 
 export const Shapes: Story = {
-  render: (args) => (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {Object.values(EnumShape).map((shape) => (
-        <Badge key={shape} shape={shape} {...args}>
+  render: args => (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {Object.values(EnumShape).map(shape => (
+        <Badge
+          key={shape}
+          shape={shape}
+          {...args}
+        >
           {shape} Badge
         </Badge>
       ))}
@@ -57,11 +65,18 @@ export const Shapes: Story = {
   args: {
     children: undefined,
   },
-};
+}
 
 export const Colors: Story = {
-  render: (args) => (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+  render: args => (
+    <div
+      style={{
+        display: 'flex',
+        gap: 8,
+        flexWrap: 'wrap',
+        alignItems: 'center',
+      }}
+    >
       <Badge
         size={EnumSize.S}
         shape={EnumShape.Pill}
@@ -99,5 +114,4 @@ export const Colors: Story = {
   args: {
     children: undefined,
   },
-};
-
+}
