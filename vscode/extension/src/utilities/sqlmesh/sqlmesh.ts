@@ -69,8 +69,8 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   if (isErr(resolvedPath)) {
     return err(resolvedPath.error)
   }
-  const tcloudYamlPath = path.join(resolvedPath.value, 'tcloud.yaml')
-  const tcloudYmlPath = path.join(resolvedPath.value, 'tcloud.yml')
+  const tcloudYamlPath = path.join(resolvedPath.value.workspaceFolder, 'tcloud.yaml')
+  const tcloudYmlPath = path.join(resolvedPath.value.workspaceFolder, 'tcloud.yml')
   const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
   const isTcloudYmlFilePresent = fs.existsSync(tcloudYmlPath)
   if (isTcloudYamlFilePresent || isTcloudYmlFilePresent) {
@@ -144,7 +144,7 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
     })
   }
   const called = await execAsync(tcloudBin.value.bin, ['is_sqlmesh_installed'], {
-    cwd: resolvedPath.value,
+    cwd: resolvedPath.value.workspaceFolder,
     env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
@@ -185,7 +185,7 @@ export const installSqlmeshEnterprise = async (
   }
   const called = await execAsync(tcloudBin.value.bin, ['install_sqlmesh'], {
     signal: abortController.signal,
-    cwd: resolvedPath.value,
+    cwd: resolvedPath.value.workspaceFolder,
     env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
@@ -318,14 +318,14 @@ export const sqlmeshLspExec = async (): Promise<
       message: resolvedPath.error,
     })
   }
-  const workspacePath = resolvedPath.value
+  const workspacePath = resolvedPath.value.workspaceFolder
 
   const configuredLSPExec = getSqlmeshLspEntryPoint()
   if (configuredLSPExec) {
     traceLog(`Using configured SQLMesh LSP entry point: ${configuredLSPExec.entrypoint} ${configuredLSPExec.args.join(' ')}`)
     return ok({
       bin: configuredLSPExec.entrypoint,
-      workspacePath,
+      workspacePath: workspacePath,
       env: process.env,
       args: configuredLSPExec.args,
     })
@@ -381,7 +381,7 @@ export const sqlmeshLspExec = async (): Promise<
       if (isSemVerGreaterThanOrEqual(tcloudBinVersion.value, [2, 10, 1])) {
         return ok ({
           bin: tcloudBin.value.bin,
-          workspacePath,
+          workspacePath: workspacePath,
           env: tcloudBin.value.env,
           args: ['sqlmesh_lsp'],
         })
@@ -407,7 +407,7 @@ export const sqlmeshLspExec = async (): Promise<
     }
     return ok({
       bin: binPath,
-      workspacePath,
+      workspacePath: workspacePath,
       env: env.value,
       args: [],
     })
@@ -427,7 +427,7 @@ export const sqlmeshLspExec = async (): Promise<
     }
     return ok({
       bin: sqlmeshLSP,
-      workspacePath,
+      workspacePath: workspacePath,
       env: env.value,
       args: [],
     })
