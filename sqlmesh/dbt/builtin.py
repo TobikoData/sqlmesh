@@ -14,6 +14,7 @@ from dbt.adapters.base import BaseRelation, Column
 from ruamel.yaml import YAMLError
 from sqlglot import Dialect
 
+from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
@@ -170,7 +171,13 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    logger.debug(msg)
+    if info:
+        # Write to both log file and stdout
+        logger.info(msg)
+        get_console().log_status_update(msg)
+    else:
+        logger.debug(msg)
+
     return ""
 
 
