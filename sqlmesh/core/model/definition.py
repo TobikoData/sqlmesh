@@ -2795,7 +2795,7 @@ def render_meta_fields(
 
         # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
         if (
-            field == "cron"
+            field in ("cron", "auto_restatement_cron")
             and isinstance(field_value, str)
             and field_value.lower() in CRON_SHORTCUTS
         ) or field_value is None:
@@ -2810,9 +2810,6 @@ def render_meta_fields(
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
                     rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
-                elif key == "auto_restatement_cron":
-                    # Don't parse auto_restatement_cron="@..." kwarg (e.g. @daily) into MacroVar
-                    rendered_dict[key] = value
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered
 
