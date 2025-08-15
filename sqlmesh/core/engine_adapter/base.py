@@ -40,7 +40,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
-from sqlmesh.core.execution_tracker import record_execution as track_execution_record
+from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import (
     CorrelationId,
     columns_to_types_all_known,
@@ -2443,7 +2443,11 @@ class EngineAdapter:
     def _execute(self, sql: str, track_row_count: bool = False, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)
 
-        if track_row_count and self.SUPPORTS_QUERY_EXECUTION_TRACKING:
+        if (
+            self.SUPPORTS_QUERY_EXECUTION_TRACKING
+            and track_row_count
+            and QueryExecutionTracker.is_tracking()
+        ):
             rowcount_raw = getattr(self.cursor, "rowcount", None)
             rowcount = None
             if rowcount_raw is not None:
@@ -2452,7 +2456,7 @@ class EngineAdapter:
                 except (TypeError, ValueError):
                     pass
 
-            track_execution_record(sql, rowcount)
+            QueryExecutionTracker.record_execution(sql, rowcount)
 
     @contextlib.contextmanager
     def temp_table(

@@ -21,7 +21,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.execution_tracker import record_execution as track_execution_record
+from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
 from sqlmesh.utils import optional_import, get_source_columns_to_types
@@ -1104,7 +1104,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             elif query_job.statement_type in ["INSERT", "DELETE", "MERGE", "UPDATE"]:
                 num_rows = query_job.num_dml_affected_rows
 
-            track_execution_record(sql, num_rows)
+            QueryExecutionTracker.record_execution(sql, num_rows)
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
