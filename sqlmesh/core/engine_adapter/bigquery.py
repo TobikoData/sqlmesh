@@ -296,7 +296,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         table = exp.to_table(table_name)
         if len(table.parts) == 3 and "." in table.name:
             self.execute(exp.select("*").from_(table).limit(0))
-            return self._query_job._query_results.schema
+            query_job = self._query_job
+            assert query_job is not None
+            return query_job._query_results.schema
         return self._get_table(table).schema
 
     def columns(

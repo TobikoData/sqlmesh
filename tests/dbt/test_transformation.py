@@ -238,6 +238,16 @@ def test_model_kind():
         auto_restatement_cron="0 0 * * *",
     )
 
+    # Test incompatibile incremental strategies
+    for incremental_strategy in ("delete+insert", "insert_overwrite", "append"):
+        assert ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy=incremental_strategy,
+        ).model_kind(context) == IncrementalByUniqueKeyKind(
+            unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+        )
+
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(context) == IncrementalByTimeRangeKind(
@@ -371,25 +381,6 @@ def test_model_kind():
         )
         == ManagedKind()
     )
-
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="delete+insert",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="insert_overwrite",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="append",
-        ).model_kind(context)
 
 
 def test_model_kind_snapshot_bigquery():
@@ -863,13 +854,40 @@ def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
-    with patch.object(logger, "debug") as mock_logger:
-        assert renderer('{{ log("foo") }}') == ""
-    assert "foo" in mock_logger.call_args[0][0]
 
-    with patch.object(logger, "debug") as mock_logger:
+    # Test log with info=False (default), should only log to file with debug and not to console
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
+        assert renderer('{{ log("foo") }}') == ""
+        mock_debug.assert_called_once()
+        assert "foo" in mock_debug.call_args[0][0]
+        mock_info.assert_not_called()
+        mock_console.assert_not_called()
+
+    # Test log with info=True, should log to info and also call log_status_update
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
+        assert renderer('{{ log("output to be logged with info", info=true) }}') == ""
+        mock_info.assert_called_once()
+        assert "output to be logged with info" in mock_info.call_args[0][0]
+        mock_debug.assert_not_called()
+        mock_console.assert_called_once()
+        assert "output to be logged with info" in mock_console.call_args[0][0]
+
+    # Test print function as well, should use debug
+    with (
+        patch.object(logger, "debug") as mock_logger,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
         assert renderer('{{ print("bar") }}') == ""
-    assert "bar" in mock_logger.call_args[0][0]
+        assert "bar" in mock_logger.call_args[0][0]
+        mock_console.assert_not_called()
 
 
 @pytest.mark.xdist_group("dbt_manifest")

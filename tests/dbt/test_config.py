@@ -650,6 +650,28 @@ def test_postgres_config():
         "outputs",
         "dev",
     )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-postgres:
+          target: dev
+          outputs:
+            dev:
+              type: postgres
+              host: postgres
+              user: postgres
+              pass: postgres
+              port: 5432
+              dbname: postgres
+              schema: demo
+              threads: 3
+              keepalives_idle: 0
+        """,
+        PostgresConfig,
+        "dbt-postgres",
+        "outputs",
+        "dev",
+    )
 
 
 def test_redshift_config():
@@ -663,6 +685,28 @@ def test_redshift_config():
               host: hostname.region.redshift.amazonaws.com
               user: username
               password: password1
+              port: 5439
+              dbname: analytics
+              schema: analytics
+              threads: 4
+              ra3_node: false
+        """,
+        RedshiftConfig,
+        "dbt-redshift",
+        "outputs",
+        "dev",
+    )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-redshift:
+          target: dev
+          outputs:
+            dev:
+              type: redshift
+              host: hostname.region.redshift.amazonaws.com
+              user: username
+              pass: password1
               port: 5439
               dbname: analytics
               schema: analytics

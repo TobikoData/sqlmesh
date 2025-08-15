@@ -293,10 +293,11 @@ class ModelConfig(BaseModelConfig):
                     self.incremental_strategy
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
-                    raise ConfigError(
-                        f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
-                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
+                    get_console().log_warning(
+                        f"Unique key is not compatible with '{strategy}' incremental strategy in model '{self.canonical_name(context)}'. "
+                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}. Falling back to 'merge' strategy."
                     )
+                    strategy = "merge"
 
                 if self.incremental_predicates:
                     dialect = self.dialect(context)
@@ -569,7 +570,7 @@ class ModelConfig(BaseModelConfig):
             query,
             dialect=model_dialect,
             kind=kind,
-            start=self.start,
+            start=self.start or context.sqlmesh_config.model_defaults.start,
             audit_definitions=audit_definitions,
             path=model_kwargs.pop("path", self.path),
             # This ensures that we bypass query rendering that would otherwise be required to extract additional

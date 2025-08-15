@@ -61,7 +61,7 @@ def create(
 
         from sqlmesh import configure_logging
         from sqlmesh.core.context import Context
-        from sqlmesh.dbt.loader import sqlmesh_config, DbtLoader
+        from sqlmesh.dbt.loader import DbtLoader
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
@@ -71,33 +71,13 @@ def create(
 
         progress.update(load_task_id, description="Loading project", total=None)
 
-        # inject default start date if one is not specified to prevent the user from having to do anything
-        _inject_default_start_date(project_dir)
-
-        config = sqlmesh_config(
-            project_root=project_dir,
-            # do we want to use a local duckdb for state?
-            # warehouse state has a bunch of overhead to initialize, is slow for ongoing operations and will create tables that perhaps the user was not expecting
-            # on the other hand, local state is not portable
-            state_connection=None,
-        )
+        project_dir = project_dir or Path.cwd()
+        init_project_if_required(project_dir)
 
         sqlmesh_context = Context(
-            config=config,
+            paths=[project_dir],
             load=True,
         )
-
-        # this helps things which want a default project-level start date, like the "effective from date" for forward-only plans
-        if not sqlmesh_context.config.model_defaults.start:
-            min_start_date = min(
-                (
-                    model.start
-                    for model in sqlmesh_context.models.values()
-                    if model.start is not None
-                ),
-                default=None,
-            )
-            sqlmesh_context.config.model_defaults.start = min_start_date
 
         dbt_loader = sqlmesh_context._loaders[0]
         if not isinstance(dbt_loader, DbtLoader):
@@ -109,25 +89,20 @@ def create(
         return DbtOperations(sqlmesh_context, dbt_project)
 
 
-def _inject_default_start_date(project_dir: t.Optional[Path] = None) -> None:
+def init_project_if_required(project_dir: Path) -> None:
     """
-    SQLMesh needs a start date to as the starting point for calculating intervals on incremental models
+    SQLMesh needs a start date to as the starting point for calculating intervals on incremental models, amongst other things
 
     Rather than forcing the user to update their config manually or having a default that is not saved between runs,
-    we can inject it automatically to the dbt_project.yml file
-    """
-    from sqlmesh.dbt.project import PROJECT_FILENAME, load_yaml
-    from sqlmesh.utils.yaml import dump
-    from sqlmesh.utils.date import yesterday_ds
+    we can generate a basic SQLMesh config if it doesnt exist.
 
-    project_yaml_path = (project_dir or Path.cwd()) / PROJECT_FILENAME
-    if project_yaml_path.exists():
-        loaded_project_file = load_yaml(project_yaml_path)
-        start_date_keys = ("start", "+start")
-        if "models" in loaded_project_file and all(
-            k not in loaded_project_file["models"] for k in start_date_keys
-        ):
-            loaded_project_file["models"]["+start"] = yesterday_ds()
-            # todo: this may format the file differently, is that acceptable?
-            with project_yaml_path.open("w") as f:
-                dump(loaded_project_file, f)
+    This is preferable to trying to inject config into `dbt_project.yml` because it means we have full control over the file
+    and dont need to worry about accidentally reformatting it or accidentally clobbering other config
+    """
+    from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
+    from sqlmesh.core.config.common import ALL_CONFIG_FILENAMES
+    from sqlmesh.core.console import get_console
+
+    if not any(f.exists() for f in [project_dir / file for file in ALL_CONFIG_FILENAMES]):
+        get_console().log_warning("No existing SQLMesh config detected; creating one")
+        init_example_project(path=project_dir, engine_type=None, template=ProjectTemplate.DBT)

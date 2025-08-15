@@ -303,3 +303,4 @@ banned-module-level-imports = [
 "sqlmesh/lsp/**/*.py" = ["TID251"]
 "tests/lsp/**/*.py" = ["TID251"]
 "benchmarks/lsp*.py" = ["TID251"]
+"sqlmesh/dbt/builtin.py" = ["T100"]

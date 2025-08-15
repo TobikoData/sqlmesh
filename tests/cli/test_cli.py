@@ -1954,21 +1954,13 @@ def test_init_dbt_template(runner: CliRunner, tmp_path: Path):
     )
     assert result.exit_code == 0
 
-    config_path = tmp_path / "config.py"
+    config_path = tmp_path / "sqlmesh.yaml"
     assert config_path.exists()
 
-    with open(config_path) as file:
-        config = file.read()
+    config = config_path.read_text()
 
-    assert (
-        config
-        == """from pathlib import Path
-
-from sqlmesh.dbt.loader import sqlmesh_config
-
-config = sqlmesh_config(Path(__file__).parent)
-"""
-    )
+    assert "model_defaults" in config
+    assert "start:" in config
 
 
 @time_machine.travel(FREEZE_TIME)

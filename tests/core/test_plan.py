@@ -3359,3 +3359,64 @@ def test_environment_statements_change_allows_dev_environment_creation(make_snap
     assert plan is not None
     assert plan.context_diff.has_environment_statements_changes
     assert plan.context_diff.environment_statements == environment_statements
+
+
+def test_plan_ignore_cron_flag(make_snapshot):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="@daily",  # Daily cron schedule
+            start="2023-01-01",
+            query=parse_one("SELECT 1 as id, ds FROM VALUES ('2023-01-01') t(ds)"),
+            allow_partials=True,
+        )
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
+
+    context_diff = ContextDiff(
+        environment="dev",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={},
+        snapshots={snapshot_a.snapshot_id: snapshot_a},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    plan_builder_ignore_cron = PlanBuilder(
+        context_diff,
+        start="2023-01-01",
+        execution_time="2023-01-05 12:00:00",
+        is_dev=True,
+        include_unmodified=True,
+        ignore_cron=True,
+        end_bounded=False,
+    )
+
+    plan = plan_builder_ignore_cron.build()
+    assert plan.ignore_cron is True
+    assert plan.to_evaluatable().ignore_cron is True
+
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=snapshot_a.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-05 12:00:00")),
+            ],
+        )
+    ]

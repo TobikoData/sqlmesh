@@ -21,7 +21,6 @@ from sqlmesh.core.config import (
     TableNamingConvention,
 )
 from sqlmesh.core.config.connection import DuckDBAttachOptions, RedshiftConnectionConfig
-from sqlmesh.core.config.feature_flag import DbtFeatureFlag, FeatureFlag
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -36,6 +35,8 @@ from sqlmesh.core.loader import MigratedDbtProjectLoader
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils import yaml
+from sqlmesh.dbt.loader import DbtLoader
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -297,12 +298,10 @@ def test_load_config_from_env():
         {
             "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
             "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
-            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
         },
     ):
         assert Config.parse_obj(load_config_from_env()) == Config(
             gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
-            feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
         )
 
 
@@ -501,35 +500,6 @@ def test_physical_schema_mapping_mutually_exclusive_with_physical_schema_overrid
         ConfigError, match=r"Only one.*physical_schema_override.*physical_schema_mapping"
     ):
         Config(physical_schema_override={"foo": "bar"}, physical_schema_mapping={"^foo$": "bar"})  # type: ignore
-
-
-def test_load_feature_flag(tmp_path_factory):
-    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
-    with open(config_path, "w", encoding="utf-8") as fd:
-        fd.write(
-            """
-gateways:
-    duckdb_gateway:
-        connection:
-            type: duckdb
-model_defaults:
-    dialect: bigquery
-feature_flags:
-    dbt:
-        scd_type_2_support: false
-        """
-        )
-
-    assert load_config_from_paths(
-        Config,
-        project_paths=[config_path],
-    ) == Config(
-        gateways={
-            "duckdb_gateway": GatewayConfig(connection=DuckDBConnectionConfig()),
-        },
-        model_defaults=ModelDefaultsConfig(dialect="bigquery"),
-        feature_flags=FeatureFlag(dbt=DbtFeatureFlag(scd_type_2_support=False)),
-    )
 
 
 def test_load_alternative_config_type(yaml_config_path: Path, python_config_path: Path):
@@ -1433,7 +1403,7 @@ def test_physical_table_naming_convention(
 gateways:
   test_gateway:
     connection:
-      type: duckdb      
+      type: duckdb
 model_defaults:
   dialect: duckdb
 {config_part}
@@ -1441,3 +1411,100 @@ model_defaults:
 
     config = load_config_from_paths(Config, project_paths=[tmp_path / "config.yaml"])
     assert config.physical_table_naming_convention == expected
+
+
+def test_load_configs_includes_sqlmesh_yaml(tmp_path: Path):
+    for extension in ("yaml", "yml"):
+        config_file = tmp_path / f"sqlmesh.{extension}"
+        config_file.write_text("""
+model_defaults:
+  start: '2023-04-05'
+  dialect: bigquery""")
+
+        configs = load_configs(config=None, config_type=Config, paths=[tmp_path])
+        assert len(configs) == 1
+
+        config: Config = list(configs.values())[0]
+
+        assert config.model_defaults.start == "2023-04-05"
+        assert config.model_defaults.dialect == "bigquery"
+
+        config_file.unlink()
+
+
+def test_load_configs_without_main_connection(tmp_path: Path):
+    # this is for DBT projects where the main connection is defined in profiles.yml
+    # but we also need to be able to specify the sqlmesh state connection without editing any DBT files
+    # and without also duplicating the main connection
+    config_file = tmp_path / "sqlmesh.yaml"
+    with config_file.open("w") as f:
+        yaml.dump(
+            {
+                "gateways": {"": {"state_connection": {"type": "duckdb", "database": "state.db"}}},
+                "model_defaults": {"dialect": "duckdb", "start": "2020-01-01"},
+            },
+            f,
+        )
+
+    configs = list(load_configs(config=None, config_type=Config, paths=[tmp_path]).values())
+    assert len(configs) == 1
+
+    config = configs[0]
+    state_connection_config = config.get_state_connection()
+    assert isinstance(state_connection_config, DuckDBConnectionConfig)
+    assert state_connection_config.database == "state.db"
+
+
+def test_load_configs_in_dbt_project_without_config_py(tmp_path: Path):
+    # this is when someone either:
+    # - inits a dbt project for sqlmesh, which creates a sqlmesh.yaml file
+    # - uses the sqlmesh_dbt cli for the first time, which runs init if the config doesnt exist, which creates a config
+    # when in pure yaml mode, sqlmesh should be able to auto-detect the presence of DBT and select the DbtLoader instead
+    # of the main loader
+    (tmp_path / "dbt_project.yml").write_text("""
+name: jaffle_shop
+    """)
+
+    (tmp_path / "profiles.yml").write_text("""
+jaffle_shop:
+
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'jaffle_shop.duckdb'
+    """)
+
+    (tmp_path / "sqlmesh.yaml").write_text("""
+gateways:
+  dev:
+    state_connection:
+      type: duckdb
+      database: state.db
+model_defaults:
+  start: '2020-01-01'
+""")
+
+    configs = list(load_configs(config=None, config_type=Config, paths=[tmp_path]).values())
+    assert len(configs) == 1
+
+    config = configs[0]
+    assert config.loader == DbtLoader
+
+    assert list(config.gateways) == ["dev"]
+
+    # main connection
+    connection_config = config.get_connection()
+    assert connection_config
+    assert isinstance(connection_config, DuckDBConnectionConfig)
+    assert connection_config.database == "jaffle_shop.duckdb"  # from dbt profiles.yml
+
+    # state connection
+    state_connection_config = config.get_state_connection()
+    assert state_connection_config
+    assert isinstance(state_connection_config, DuckDBConnectionConfig)
+    assert state_connection_config.database == "state.db"  # from sqlmesh.yaml
+
+    # model_defaults
+    assert config.model_defaults.dialect == "duckdb"  # from dbt profiles.yml
+    assert config.model_defaults.start == "2020-01-01"  # from sqlmesh.yaml

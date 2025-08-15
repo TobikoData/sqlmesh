@@ -8,6 +8,16 @@ from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
+# Config files that can be present in the project dir
+ALL_CONFIG_FILENAMES = ("config.py", "config.yml", "config.yaml", "sqlmesh.yml", "sqlmesh.yaml")
+
+# For personal paths (~/.sqlmesh/) where python config is not supported
+YAML_CONFIG_FILENAMES = tuple(n for n in ALL_CONFIG_FILENAMES if not n.endswith(".py"))
+
+# Note: is here to prevent having to import from sqlmesh.dbt.loader which introduces a dependency
+# on dbt-core in a native project
+DBT_PROJECT_FILENAME = "dbt_project.yml"
+
 
 class EnvironmentSuffixTarget(str, Enum):
     # Intended to create virtual environments in their own schemas, with names like "<model_schema_name>__<env name>". The view name is untouched.

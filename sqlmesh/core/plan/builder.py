@@ -89,6 +89,7 @@ class PlanBuilder:
             the environment is not finalized.
         start_override_per_model: A mapping of model FQNs to target start dates.
         end_override_per_model: A mapping of model FQNs to target end dates.
+        ignore_cron: Whether to ignore the node's cron schedule when computing missing intervals.
         explain: Whether to explain the plan instead of applying it.
     """
 
@@ -120,6 +121,7 @@ class PlanBuilder:
         end_bounded: bool = False,
         ensure_finalized_snapshots: bool = False,
         explain: bool = False,
+        ignore_cron: bool = False,
         start_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
@@ -137,6 +139,7 @@ class PlanBuilder:
         self._enable_preview = enable_preview
         self._end_bounded = end_bounded
         self._ensure_finalized_snapshots = ensure_finalized_snapshots
+        self._ignore_cron = ignore_cron
         self._start_override_per_model = start_override_per_model
         self._end_override_per_model = end_override_per_model
         self._environment_ttl = environment_ttl
@@ -335,6 +338,7 @@ class PlanBuilder:
             execution_time=plan_execution_time,
             end_bounded=self._end_bounded,
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
+            ignore_cron=self._ignore_cron,
             user_provided_flags=self._user_provided_flags,
         )
         self._latest_plan = plan

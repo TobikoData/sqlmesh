@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import typing as t
 from unittest import mock
 from unittest.mock import call
@@ -11,7 +10,6 @@ from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
-from sqlmesh import Context
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.adapter import ParsetimeAdapter
@@ -38,6 +36,9 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     engine_adapter.create_table(
         table_name="foo.another", columns_to_types={"col": exp.DataType.build("int")}
     )
+    engine_adapter.create_view(
+        view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar")
+    )
     engine_adapter.create_table(
         table_name="ignored.ignore", columns_to_types={"col": exp.DataType.build("int")}
     )
@@ -46,11 +47,24 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
         == '"memory"."foo"."bar"'
     )
+
+    assert (
+        renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar').type }}")
+        == "table"
+    )
+
+    assert (
+        renderer(
+            "{{ adapter.get_relation(database=None, schema='foo', identifier='bar_view').type }}"
+        )
+        == "view"
+    )
+
     assert renderer(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INT")])
 
-    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
+    assert renderer("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "3"
 
     assert renderer(
         """
@@ -110,26 +124,30 @@ def test_bigquery_get_columns_in_relation(
 def test_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
+    from sqlmesh.core.engine_adapter.base import DataObject, DataObjectType
+
     context = sushi_test_project.context
     assert context.target
+    data_object = DataObject(catalog="test", schema="bla", name="bob", type=DataObjectType.TABLE)
 
     # bla and bob will be normalized to lowercase since the target is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "duckdb"
-
+    adapter_mock.get_data_object.return_value = data_object
     duckdb_renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     schema_bla = schema_("bla", "test", quoted=True)
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     duckdb_renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     # bla and bob will be normalized to uppercase since the target is Snowflake, even though the default dialect is duckdb
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
     adapter_mock.dialect = "snowflake"
+    adapter_mock.get_data_object.return_value = data_object
     context.target = SnowflakeConfig(
         account="test",
         user="test",
@@ -144,10 +162,10 @@ def test_normalization(
     relation_bla_bob = exp.table_("bob", db="bla", catalog="test", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
+    adapter_mock.get_data_object.assert_has_calls([call(relation_bla_bob)])
 
     renderer("{{ adapter.get_relation(database='custom_db', schema='bla', identifier='bob') }}")
-    adapter_mock.table_exists.assert_has_calls(
+    adapter_mock.get_data_object.assert_has_calls(
         [call(exp.table_("bob", db="bla", catalog="custom_db", quoted=True))]
     )
 
@@ -275,28 +293,6 @@ def test_adapter_map_snapshot_tables(
 
     assert renderer("{{ adapter.resolve_schema(foo_bar) }}") == "foo"
     assert renderer("{{ adapter.resolve_identifier(foo_bar) }}") == "bar"
-
-
-def test_feature_flag_scd_type_2(copy_to_temp_path, caplog):
-    project_root = "tests/fixtures/dbt/sushi_test"
-    sushi_context = Context(paths=copy_to_temp_path(project_root))
-    assert '"memory"."snapshots"."items_snapshot"' in sushi_context.models
-    assert (
-        "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-        not in caplog.text
-    )
-    with mock.patch.dict(
-        os.environ,
-        {
-            "SQLMESH__FEATURE_FLAGS__DBT__SCD_TYPE_2_SUPPORT": "false",
-        },
-    ):
-        sushi_context = Context(paths=copy_to_temp_path(project_root))
-        assert '"memory"."snapshots"."items_snapshot"' not in sushi_context.models
-        assert (
-            "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-            in caplog.text
-        )
 
 
 def test_quote_as_configured():

@@ -14,13 +14,14 @@ from dbt.adapters.base import BaseRelation, Column
 from ruamel.yaml import YAMLError
 from sqlglot import Dialect
 
+from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
-from sqlmesh.utils import AttributeDict, yaml
+from sqlmesh.utils import AttributeDict, debug_mode_enabled, yaml
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
@@ -170,7 +171,13 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    logger.debug(msg)
+    if info:
+        # Write to both log file and stdout
+        logger.info(msg)
+        get_console().log_status_update(msg)
+    else:
+        logger.debug(msg)
+
     return ""
 
 
@@ -309,6 +316,15 @@ def _try_literal_eval(value: str) -> t.Any:
         return value
 
 
+def debug() -> str:
+    import sys
+    import ipdb  # type: ignore
+
+    frame = sys._getframe(3)
+    ipdb.set_trace(frame)
+    return ""
+
+
 BUILTIN_GLOBALS = {
     "dbt_version": version.__version__,
     "env_var": env_var,
@@ -328,6 +344,10 @@ BUILTIN_GLOBALS = {
     "zip": do_zip,
     "zip_strict": lambda *args: list(zip(*args)),
 }
+
+# Add debug function conditionally both with dbt or sqlmesh equivalent flag
+if os.environ.get("DBT_MACRO_DEBUGGING") or debug_mode_enabled():
+    BUILTIN_GLOBALS["debug"] = debug
 
 BUILTIN_FILTERS = {
     "as_bool": as_bool,
