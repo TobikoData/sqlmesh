@@ -397,7 +397,7 @@ importers:
         specifier: ^1.13.2
         version: 1.13.2
 
-  web/shared_ui:
+  web/common:
     dependencies:
       react:
         specifier: ^18.3.1
