@@ -498,6 +498,13 @@ class Console(
         """Stop the environment migration progress."""
 
     @abc.abstractmethod
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
+        """
+        Log warnings emitted by pre-checks and ask user whether they'd like to
+        proceed with the migration (true) or not (false).
+        """
+
+    @abc.abstractmethod
     def plan(
         self,
         plan_builder: PlanBuilder,
@@ -661,6 +668,9 @@ class NoopConsole(Console):
 
     def stop_env_migration_progress(self, success: bool = True) -> None:
         pass
+
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
+        return True
 
     def start_state_export(
         self,
@@ -1471,6 +1481,28 @@ class TerminalConsole(Console):
             self.env_migration_progress = None
             if success:
                 self.log_success("Environments migrated successfully")
+
+    def log_pre_check_warnings(self, pre_check_warnings: t.List[str], pre_check_only: bool) -> bool:
+        if pre_check_warnings:
+            tree = Tree(f"[bold]Pre-migration warnings[/bold]")
+            for warning in pre_check_warnings:
+                tree.add(f"[yellow]{warning}[/yellow]")
+
+                self._print(tree)
+
+            if pre_check_only:
+                return False
+
+            should_continue = self._confirm("\nDo you want to proceed with the migration?")
+            if not should_continue:
+                self.log_status_update("Migration cancelled.")
+
+            return should_continue
+        if pre_check_only:
+            self.log_status_update("No pre-migration warnings detected.")
+            return False
+
+        return True
 
     def start_state_export(
         self,

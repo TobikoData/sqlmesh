@@ -25,9 +25,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import (
     _parents_from_node,
 )
-from sqlmesh.core.state_sync.base import (
-    MIGRATIONS,
-)
+from sqlmesh.core.state_sync.base import MIGRATIONS
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.interval import IntervalState
@@ -90,8 +88,22 @@ class StateMigrator:
         default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
+        pre_check_only: bool = False,
     ) -> None:
-        """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
+        """Migrate the state sync to the latest SQLMesh / SQLGlot version.
+
+        Args:
+            state_sync: The state sync instance.
+            default_catalog: The default catalog.
+            skip_backup: Whether to skip backing up state tables.
+            promoted_snapshots_only: Whether to migrate only promoted snapshots.
+            pre_check_only: If True, only run pre-checks without performing migration.
+        """
+        pre_check_warnings = self._run_pre_checks(state_sync)
+        should_migrate = self.console.log_pre_check_warnings(pre_check_warnings, pre_check_only)
+        if not should_migrate:
+            return
+
         versions = self.version_state.get_versions()
         migration_start_ts = time.perf_counter()
 
@@ -152,6 +164,30 @@ class StateMigrator:
                     self._restore_table(optional_table, _backup_table_name(optional_table))
 
         logger.info("Migration rollback successful.")
+
+    def _run_pre_checks(self, state_sync: StateSync) -> t.List[str]:
+        """Run pre-checks for migrations between specified versions.
+
+        Args:
+            state_sync: The state sync instance.
+
+        Returns:
+            A list of pairs comprising the migration name containing the executed pre-checks
+            and the corresponding warnings.
+        """
+        versions = self.version_state.get_versions()
+        migrations = MIGRATIONS[versions.schema_version :]
+
+        pre_check_warnings = []
+        for migration in migrations:
+            if callable(pre_check := getattr(migration, "pre_check", None)):
+                migration_name = migration.__name__.split(".")[-1]
+                logger.info(f"Running pre-check for {migration_name}")
+                warnings = pre_check(state_sync)
+                if warnings:
+                    pre_check_warnings.extend(warnings)
+
+        return pre_check_warnings
 
     def _apply_migrations(
         self,
