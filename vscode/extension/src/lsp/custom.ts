@@ -35,6 +35,8 @@ export type CustomLSPMethods =
   | ListWorkspaceTests
   | ListDocumentTests
   | RunTest
+  | GetEnvironmentsMethod
+  | GetTableDiffModelsMethod
 
 interface AllModelsRequest {
   textDocument: {
@@ -175,4 +177,45 @@ export interface RunTestRequest {
 export interface RunTestResponse extends BaseResponse {
   success: boolean
   error_message?: string
+}
+
+export interface GetEnvironmentsMethod {
+  method: 'sqlmesh/get_environments'
+  request: GetEnvironmentsRequest
+  response: GetEnvironmentsResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface GetEnvironmentsRequest {}
+
+interface GetEnvironmentsResponse extends BaseResponse {
+  environments: Record<string, EnvironmentInfo>
+  pinned_environments: string[]
+  default_target_environment: string
+}
+
+interface EnvironmentInfo {
+  name: string
+  snapshots: string[]
+  start_at: string
+  plan_id: string
+}
+
+export interface GetTableDiffModelsMethod {
+  method: 'sqlmesh/get_models'
+  request: GetModelsRequest
+  response: GetModelsResponse
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface GetModelsRequest {}
+
+interface GetModelsResponse extends BaseResponse {
+  models: ModelInfo[]
+}
+
+interface ModelInfo {
+  name: string
+  fqn: string
+  description: string | null | undefined
 }

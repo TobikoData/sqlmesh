@@ -158,6 +158,17 @@ class ListWorkspaceTestsRequest(CustomMethodRequestBaseClass):
     pass
 
 
+GET_ENVIRONMENTS_FEATURE = "sqlmesh/get_environments"
+
+
+class GetEnvironmentsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to get all environments in the current project.
+    """
+
+    pass
+
+
 class TestEntry(PydanticModel):
     """
     An entry representing a test in the workspace.
@@ -194,3 +205,53 @@ class RunTestRequest(CustomMethodRequestBaseClass):
 class RunTestResponse(CustomMethodResponseBaseClass):
     success: bool
     error_message: t.Optional[str] = None
+
+
+class EnvironmentInfo(PydanticModel):
+    """
+    Information about an environment.
+    """
+
+    name: str
+    snapshots: t.List[str]
+    start_at: str
+    plan_id: str
+
+
+class GetEnvironmentsResponse(CustomMethodResponseBaseClass):
+    """
+    Response containing all environments in the current project.
+    """
+
+    environments: t.Dict[str, EnvironmentInfo]
+    pinned_environments: t.Set[str]
+    default_target_environment: str
+
+
+GET_MODELS_FEATURE = "sqlmesh/get_models"
+
+
+class GetModelsRequest(CustomMethodRequestBaseClass):
+    """
+    Request to get all models available for table diff.
+    """
+
+    pass
+
+
+class ModelInfo(PydanticModel):
+    """
+    Information about a model for table diff.
+    """
+
+    name: str
+    fqn: str
+    description: t.Optional[str] = None
+
+
+class GetModelsResponse(CustomMethodResponseBaseClass):
+    """
+    Response containing all models available for table diff.
+    """
+
+    models: t.List[ModelInfo]

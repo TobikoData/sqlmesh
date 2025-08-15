@@ -14,14 +14,17 @@ from lsprotocol.types import (
     WorkspaceInlayHintRefreshRequest,
 )
 from pygls.server import LanguageServer
+from sqlglot import exp
 from sqlmesh._version import __version__
 from sqlmesh.core.context import Context
+from sqlmesh.utils.date import to_timestamp
 from sqlmesh.lsp.api import (
     API_FEATURE,
     ApiRequest,
     ApiResponseGetColumnLineage,
     ApiResponseGetLineage,
     ApiResponseGetModels,
+    ApiResponseGetTableDiff,
 )
 
 from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
@@ -36,6 +39,8 @@ from sqlmesh.lsp.custom import (
     RENDER_MODEL_FEATURE,
     SUPPORTED_METHODS_FEATURE,
     FORMAT_PROJECT_FEATURE,
+    GET_ENVIRONMENTS_FEATURE,
+    GET_MODELS_FEATURE,
     AllModelsRequest,
     AllModelsResponse,
     AllModelsForRenderRequest,
@@ -57,6 +62,12 @@ from sqlmesh.lsp.custom import (
     RUN_TEST_FEATURE,
     RunTestRequest,
     RunTestResponse,
+    GetEnvironmentsRequest,
+    GetEnvironmentsResponse,
+    EnvironmentInfo,
+    GetModelsRequest,
+    GetModelsResponse,
+    ModelInfo,
 )
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
@@ -74,8 +85,11 @@ from sqlmesh.utils.lineage import ExternalModelReference
 from sqlmesh.utils.pydantic import PydanticModel
 from web.server.api.endpoints.lineage import column_lineage, model_lineage
 from web.server.api.endpoints.models import get_models
+from web.server.api.endpoints.table_diff import _process_sample_data
 from typing import Union
 from dataclasses import dataclass, field
+
+from web.server.models import RowDiff, SchemaDiff, TableDiff
 
 
 class InitializationOptions(PydanticModel):
@@ -154,6 +168,8 @@ class SQLMeshLanguageServer:
             LIST_WORKSPACE_TESTS_FEATURE: self._list_workspace_tests,
             LIST_DOCUMENT_TESTS_FEATURE: self._list_document_tests,
             RUN_TEST_FEATURE: self._run_test,
+            GET_ENVIRONMENTS_FEATURE: self._custom_get_environments,
+            GET_MODELS_FEATURE: self._custom_get_models,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
@@ -246,13 +262,71 @@ class SQLMeshLanguageServer:
             ls.log_trace(f"Error formatting project: {e}")
             return FormatProjectResponse()
 
+    def _custom_get_environments(
+        self, ls: LanguageServer, params: GetEnvironmentsRequest
+    ) -> GetEnvironmentsResponse:
+        """Get all environments in the current project."""
+        try:
+            context = self._context_get_or_load()
+            environments = {}
+
+            # Get environments from state
+            for env in context.context.state_reader.get_environments():
+                environments[env.name] = EnvironmentInfo(
+                    name=env.name,
+                    snapshots=[s.fingerprint.to_identifier() for s in env.snapshots],
+                    start_at=str(to_timestamp(env.start_at)),
+                    plan_id=env.plan_id or "",
+                )
+
+            return GetEnvironmentsResponse(
+                environments=environments,
+                pinned_environments=context.context.config.pinned_environments,
+                default_target_environment=context.context.config.default_target_environment,
+            )
+        except Exception as e:
+            ls.log_trace(f"Error getting environments: {e}")
+            return GetEnvironmentsResponse(
+                response_error=str(e),
+                environments={},
+                pinned_environments=set(),
+                default_target_environment="",
+            )
+
+    def _custom_get_models(self, ls: LanguageServer, params: GetModelsRequest) -> GetModelsResponse:
+        """Get all models available for table diff."""
+        try:
+            context = self._context_get_or_load()
+            models = [
+                ModelInfo(
+                    name=model.name,
+                    fqn=model.fqn,
+                    description=model.description,
+                )
+                for model in context.context.models.values()
+                # Filter for models that are suitable for table diff
+                if model._path is not None  # Has a file path
+            ]
+            return GetModelsResponse(models=models)
+        except Exception as e:
+            ls.log_trace(f"Error getting table diff models: {e}")
+            return GetModelsResponse(
+                response_error=str(e),
+                models=[],
+            )
+
     def _custom_api(
         self, ls: LanguageServer, request: ApiRequest
-    ) -> t.Union[ApiResponseGetModels, ApiResponseGetColumnLineage, ApiResponseGetLineage]:
+    ) -> t.Union[
+        ApiResponseGetModels,
+        ApiResponseGetColumnLineage,
+        ApiResponseGetLineage,
+        ApiResponseGetTableDiff,
+    ]:
         ls.log_trace(f"API request: {request}")
         context = self._context_get_or_load()
 
-        parsed_url = urllib.parse.urlparse(request.url)
+        parsed_url = urllib.parse.urlparse(request.endpoint)
         path_parts = parsed_url.path.strip("/").split("/")
 
         if request.method == "GET":
@@ -280,7 +354,76 @@ class SQLMeshLanguageServer:
                     )
                     return ApiResponseGetColumnLineage(data=column_lineage_response)
 
-        raise NotImplementedError(f"API request not implemented: {request.url}")
+            if path_parts[:2] == ["api", "table_diff"]:
+                import numpy as np
+
+                # /api/table_diff
+                params = request.params
+                table_diff_result: t.Optional[TableDiff] = None
+                if params := request.params:
+                    source = getattr(params, "source", "") if params else ""
+                    target = getattr(params, "target", "") if params else ""
+                    on = getattr(params, "on", None) if params else None
+                    model_or_snapshot = (
+                        getattr(params, "model_or_snapshot", None) if params else None
+                    )
+                    where = getattr(params, "where", None) if params else None
+                    temp_schema = getattr(params, "temp_schema", None) if params else None
+                    limit = getattr(params, "limit", 20) if params else 20
+
+                    table_diffs = context.context.table_diff(
+                        source=source,
+                        target=target,
+                        on=exp.condition(on) if on else None,
+                        select_models={model_or_snapshot} if model_or_snapshot else None,
+                        where=where,
+                        limit=limit,
+                        show=False,
+                    )
+
+                    if table_diffs:
+                        diff = table_diffs[0] if isinstance(table_diffs, list) else table_diffs
+
+                        _schema_diff = diff.schema_diff()
+                        _row_diff = diff.row_diff(temp_schema=temp_schema)
+                        schema_diff = SchemaDiff(
+                            source=_schema_diff.source,
+                            target=_schema_diff.target,
+                            source_schema=_schema_diff.source_schema,
+                            target_schema=_schema_diff.target_schema,
+                            added=_schema_diff.added,
+                            removed=_schema_diff.removed,
+                            modified=_schema_diff.modified,
+                        )
+
+                        # create a readable column-centric sample data structure
+                        processed_sample_data = _process_sample_data(_row_diff, source, target)
+
+                        row_diff = RowDiff(
+                            source=_row_diff.source,
+                            target=_row_diff.target,
+                            stats=_row_diff.stats,
+                            sample=_row_diff.sample.replace({np.nan: None}).to_dict(),
+                            joined_sample=_row_diff.joined_sample.replace({np.nan: None}).to_dict(),
+                            s_sample=_row_diff.s_sample.replace({np.nan: None}).to_dict(),
+                            t_sample=_row_diff.t_sample.replace({np.nan: None}).to_dict(),
+                            column_stats=_row_diff.column_stats.replace({np.nan: None}).to_dict(),
+                            source_count=_row_diff.source_count,
+                            target_count=_row_diff.target_count,
+                            count_pct_change=_row_diff.count_pct_change,
+                            decimals=getattr(_row_diff, "decimals", 3),
+                            processed_sample_data=processed_sample_data,
+                        )
+
+                        s_index, t_index, _ = diff.key_columns
+                        table_diff_result = TableDiff(
+                            schema_diff=schema_diff,
+                            row_diff=row_diff,
+                            on=[(s.name, t.name) for s, t in zip(s_index, t_index)],
+                        )
+                return ApiResponseGetTableDiff(data=table_diff_result)
+
+        raise NotImplementedError(f"API request not implemented: {request.endpoint}")
 
     def _custom_supported_methods(
         self, ls: LanguageServer, params: SupportedMethodsRequest

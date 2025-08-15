@@ -61,7 +61,8 @@
         {
           "id": "sqlmesh.lineage",
           "name": "",
-          "type": "webview"
+          "type": "webview",
+          "icon": "./assets/images/dag.svg"
         }
       ]
     },
@@ -112,12 +113,23 @@
         "command": "sqlmesh.stop",
         "title": "SQLMesh: Stop Server",
         "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.showTableDiff",
+        "title": "SQLMesh: Show Table Diff",
+        "description": "SQLMesh",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "sqlmesh.renderModel",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
+        },
+        {
+          "command": "sqlmesh.showTableDiff",
           "when": "resourceExtname == .sql",
           "group": "navigation"
         }
