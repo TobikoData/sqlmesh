@@ -2795,7 +2795,7 @@ def render_meta_fields(
 
         # We don't want to parse python model cron="@..." kwargs (e.g. @daily) into MacroVar
         if (
-            field == "cron"
+            field in ("cron", "auto_restatement_cron")
             and isinstance(field_value, str)
             and field_value.lower() in CRON_SHORTCUTS
         ) or field_value is None:
