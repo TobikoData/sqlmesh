@@ -44,16 +44,36 @@ Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh i
 $ sqlmesh init -t dbt
 ```
 
-SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
+This will create a file called `sqlmesh.yaml` containing the [default model start date](../reference/model_configuration.md#model-defaults). This configuration file is a minimum starting point for enabling SQLMesh to work with your DBT project.
+
+As you become more comfortable with running your project under SQLMesh, you may specify additional SQLMesh [configuration](../reference/configuration.md) as required to unlock more features.
+
+!!! note "profiles.yml"
+
+    SQLMesh will use the existing data warehouse connection target from your dbt project's `profiles.yml` file so the connection configuration does not need to be duplicated in `sqlmesh.yaml`. You may change the target at any time in the dbt config and SQLMesh will pick up the new target.
 
 ### Setting model backfill start dates
 
-Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model in its `config` block or globally in the `dbt_project.yml` file as follows:
+Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model in its `config` block or globally in the `sqlmesh.yaml` file as follows:
 
-```
-> models:
->   +start: Jan 1 2000
-```
+=== "sqlmesh.yaml"
+
+    ```yaml
+    model_defaults:
+      start: '2000-01-01'
+    ```
+
+=== "dbt Model"
+
+    ```jinja
+    {{
+      config(
+        materialized='incremental',
+        start='2000-01-01',
+        ...
+      )
+    }}
+    ```
 
 ### Configuration
 
@@ -63,47 +83,89 @@ SQLMesh derives a project's configuration from its dbt configuration files. This
 
 [Certain engines](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/?h=unsupported#state-connection), like Trino, cannot be used to store SQLMesh's state.
 
-As a workaround, we recommend specifying a supported state engine using the `state_connection` argument instead.
+In addition, even if your warehouse is supported for state, you may find that you get better performance by using a [traditional database](../concepts/state.md) to store state as these are a better fit for the state workload than a warehouse optimized for analytics workloads.
 
-Learn more about how to configure state connections in Python [here](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection).
+In these cases, we recommend specifying a [supported production state engine](../concepts/state.md#state) using the `state_connection` configuration.
+
+This involves updating `sqlmesh.yaml` to add a gateway configuration for the state connection:
+
+```yaml
+gateways:
+  "": # "" (empty string) is the default gateway
+    state_connection:
+      type: postgres
+      ...
+
+model_defaults:
+  start: '2000-01-01'
+```
+
+Or, for a specific dbt profile defined in `profiles.yml`, eg `dev`:
+
+```yaml
+gateways:
+  dev: # must match the target dbt profile name
+    state_connection:
+      type: postgres
+      ...
+
+model_defaults:
+  start: '2000-01-01'
+```
+
+Learn more about how to configure state connections [here](https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#state-connection).
 
 #### Runtime vars
 
 dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
 
-In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory.
+In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `sqlmesh.yaml` is created in your project directory.
 
-The file creates a SQLMesh `config` object pointing to the project directory:
-
-```python
-config = sqlmesh_config(Path(__file__).parent)
-```
-
-Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
+You may define global variables in the same way as a native project by adding a `variables` section to the config.
 
 For example, we could specify the runtime variable `is_marketing` and its value `no` as:
 
-```python
-config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "no"}
-    )
+```yaml
+variables:
+  is_marketing: no
+
+model_defaults:
+  start: '2000-01-01'
 ```
 
+Variables can also be set at the gateway/profile level which override variables set at the project level. See the [variables documentation](../concepts/macros/sqlmesh_macros.md#gateway-variables) to learn more about how to specify them at different levels.
+
+#### Combinations
+
 Some projects use combinations of runtime variables to control project behavior. Different combinations can be specified in different `sqlmesh_config` objects, with the relevant configuration passed to the SQLMesh CLI command.
+
+!!! info "Python config"
+
+    Switching between different config objects requires the use of [Python config](../guides/configuration.md#python) instead of the default YAML config.
+
+    You will need to create a file called `config.py` in the root of your project with the following contents:
+
+    ```py
+    from pathlib import Path
+    from sqlmesh.dbt.loader import sqlmesh_config
+
+    config = sqlmesh_config(Path(__file__).parent)
+    ```
+
+    Note that any config from `sqlmesh.yaml` will be overlayed on top of the active Python config so you dont need to remove the `sqlmesh.yaml` file
 
 For example, consider a project with a special configuration for the `marketing` department. We could create separate configurations to pass at runtime like this:
 
 ```python
 config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "no", "include_pii": "no"}
-    )
+  Path(__file__).parent,
+  variables={"is_marketing": "no", "include_pii": "no"}
+)
 
 marketing_config = sqlmesh_config(
-    Path(__file__).parent,
-    variables={"is_marketing": "yes", "include_pii": "yes"}
-    )
+  Path(__file__).parent,
+  variables={"is_marketing": "yes", "include_pii": "yes"}
+)
 ```
 
 By default, SQLMesh will use the configuration object named `config`. Use a different configuration by passing the object name to SQLMesh CLI commands with the `--config` option. For example, we could run a `plan` with the marketing configuration like this:
