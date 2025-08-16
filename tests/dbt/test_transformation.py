@@ -471,22 +471,18 @@ def test_seed_columns():
         package="package",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         columns={
-            "address": ColumnConfig(
-                name="address", data_type="text", description="Business address"
-            ),
-            "zipcode": ColumnConfig(
-                name="zipcode", data_type="text", description="Business zipcode"
-            ),
+            "id": ColumnConfig(name="id", data_type="text", description="The ID"),
+            "name": ColumnConfig(name="name", data_type="text", description="The name"),
         },
     )
 
     expected_column_types = {
-        "address": exp.DataType.build("text"),
-        "zipcode": exp.DataType.build("text"),
+        "id": exp.DataType.build("text"),
+        "name": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
-        "address": "Business address",
-        "zipcode": "Business zipcode",
+        "id": "The ID",
+        "name": "The name",
     }
 
     context = DbtContext()
@@ -503,21 +499,21 @@ def test_seed_column_types():
         package="package",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         column_types={
-            "address": "text",
-            "zipcode": "text",
+            "id": "text",
+            "name": "text",
         },
         columns={
-            "zipcode": ColumnConfig(name="zipcode", description="Business zipcode"),
+            "name": ColumnConfig(name="name", description="The name"),
         },
         quote_columns=True,
     )
 
     expected_column_types = {
-        "address": exp.DataType.build("text"),
-        "zipcode": exp.DataType.build("text"),
+        "id": exp.DataType.build("text"),
+        "name": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
-        "zipcode": "Business zipcode",
+        "name": "The name",
     }
 
     context = DbtContext()
