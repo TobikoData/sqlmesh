@@ -478,7 +478,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
         adapter = klass(
-            lambda: connection_mock,
+            lambda *args, **kwargs: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
             default_catalog=default_catalog,

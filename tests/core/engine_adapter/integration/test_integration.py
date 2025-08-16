@@ -2499,6 +2499,7 @@ def test_dialects(ctx: TestContext):
             {
                 "default": pd.Timestamp("2020-01-01 00:00:00+00:00"),
                 "clickhouse": pd.Timestamp("2020-01-01 00:00:00"),
+                "fabric": pd.Timestamp("2020-01-01 00:00:00"),
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
                 "databricks": pd.Timestamp("2020-01-01 00:00:00"),
@@ -3033,14 +3034,12 @@ def test_value_normalization(
     input_data: t.Tuple[t.Any, ...],
     expected_results: t.Tuple[str, ...],
 ) -> None:
-    if (
-        ctx.dialect == "trino"
-        and ctx.engine_adapter.current_catalog_type == "hive"
-        and column_type == exp.DataType.Type.TIMESTAMPTZ
-    ):
-        pytest.skip(
-            "Trino on Hive doesnt support creating tables with TIMESTAMP WITH TIME ZONE fields"
-        )
+    # Skip TIMESTAMPTZ tests for engines that don't support it
+    if column_type == exp.DataType.Type.TIMESTAMPTZ:
+        if ctx.dialect == "trino" and ctx.engine_adapter.current_catalog_type == "hive":
+            pytest.skip("Trino on Hive doesn't support TIMESTAMP WITH TIME ZONE fields")
+        if ctx.dialect == "fabric":
+            pytest.skip("Fabric doesn't support TIMESTAMP WITH TIME ZONE fields")
 
     if not isinstance(ctx.engine_adapter, RowDiffMixin):
         pytest.skip(
@@ -3130,7 +3129,10 @@ def test_table_diff_grain_check_single_key(ctx: TestContext):
     src_table = ctx.table("source")
     target_table = ctx.table("target")
 
-    columns_to_types = {"key1": exp.DataType.build("int"), "value": exp.DataType.build("varchar")}
+    columns_to_types = {
+        "key1": exp.DataType.build("int"),
+        "value": exp.DataType.build("varchar"),
+    }
 
     ctx.engine_adapter.create_table(src_table, columns_to_types)
     ctx.engine_adapter.create_table(target_table, columns_to_types)
