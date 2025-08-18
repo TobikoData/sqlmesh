@@ -351,26 +351,19 @@ class SnapshotEvaluator:
         )
         table_deployability: t.Dict[str, bool] = {}
         allow_destructive_snapshots = allow_destructive_snapshots or set()
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            deployability_flags = [True]
-            if (
-                snapshot.is_no_rebuild
-                or snapshot.is_managed
-                or (snapshot.is_model and snapshot.model.forward_only)
-                or (deployability_index and not deployability_index.is_deployable(snapshot))
-            ):
-                deployability_flags.append(False)
-            for is_deployable in deployability_flags:
-                table = exp.to_table(
-                    snapshot.table_name(is_deployable), dialect=snapshot.model.dialect
-                )
-                snapshots_with_table_names[snapshot].add(table.name)
-                table_deployability[table.name] = is_deployable
-                table_schema = d.schema_(table.db, catalog=table.catalog)
-                tables_by_gateway_and_schema[snapshot.model_gateway][table_schema].add(table.name)
+            is_representative = deployability_index.is_representative(snapshot)
+            table = exp.to_table(
+                snapshot.table_name(is_representative), dialect=snapshot.model.dialect
+            )
+            snapshots_with_table_names[snapshot].add(table.name)
+            table_deployability[table.name] = is_representative
+            table_schema = d.schema_(table.db, catalog=table.catalog)
+            tables_by_gateway_and_schema[snapshot.model_gateway][table_schema].add(table.name)
 
         def _get_data_objects(
             schema: exp.Table,
