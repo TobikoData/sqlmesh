@@ -10,6 +10,7 @@ from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.dialect import JinjaQuery
 from sqlmesh.core.model.definition import ExternalModel, Model, SqlModel, _Model
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
@@ -56,18 +57,15 @@ class ModelCache:
             return cache_entry
 
         models = loader()
-        if isinstance(models, list) and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
-            # make sure we preload full_depends_on
-            for model in models:
-                model.full_depends_on
-
-            self._file_cache.put(name, entry_id, value=models)
+        self.put(models, name, entry_id)
         return models
 
     def put(self, models: t.List[Model], name: str, entry_id: str = "") -> bool:
         if models and isinstance(seq_get(models, 0), (SqlModel, ExternalModel)):
             # make sure we preload full_depends_on
             for model in models:
+                if isinstance(model, SqlModel) and isinstance(model.query, JinjaQuery):
+                    model._parsed_jinja_query = model.render_query()
                 model.full_depends_on
 
             self._file_cache.put(name, entry_id, value=models)

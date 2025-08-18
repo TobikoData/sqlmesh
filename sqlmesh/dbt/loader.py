@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+import math
 import sys
 import typing as t
 import sqlmesh.core.dialect as d
 from pathlib import Path
+from sqlmesh.core import constants as c
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -16,7 +19,7 @@ from sqlmesh.core.loader import CacheBase, LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, ModelCache
 from sqlmesh.core.signal import signal
-from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
+from sqlmesh.dbt.basemodel import BMC
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.profile import Profile
@@ -28,6 +31,7 @@ from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
     make_jinja_registry,
 )
+from sqlmesh.utils.process import create_process_pool_executor
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -82,6 +86,51 @@ def sqlmesh_config(
     )
 
 
+_context: t.Optional[DbtContext] = None
+_cache: t.Optional[DbtLoader._Cache] = None
+_virtual_environment_mode: t.Optional[VirtualEnvironmentMode] = None
+_audits: t.Optional[UniqueKeyDict[str, ModelAudit]] = None
+
+
+def _init_model_defaults(
+    context: DbtContext,
+    cache: DbtLoader._Cache,
+    virtual_environment_mode: VirtualEnvironmentMode,
+    audits: UniqueKeyDict[str, ModelAudit],
+    package_name: str,
+    variables: t.Dict,
+) -> None:
+    context.set_and_render_variables(variables, package_name)
+
+    global _context, _cache, _virtual_environment_mode, _audits
+    _context, _cache, _virtual_environment_mode, _audits = (
+        context,
+        cache,
+        virtual_environment_mode,
+        audits,
+    )
+
+
+def _convert_dbt_model(dbt_model: BMC) -> Model:
+    assert _context
+    assert _cache
+    assert _virtual_environment_mode
+    assert _audits is not None
+
+    sqlmesh_model = _cache.get_or_load_models(
+        dbt_model.path,
+        loader=lambda: [
+            dbt_model.to_sqlmesh(
+                _context,
+                audit_definitions=_audits,
+                virtual_environment_mode=_virtual_environment_mode,
+            )
+        ],
+    )[0]
+
+    return sqlmesh_model
+
+
 class DbtLoader(Loader):
     def __init__(self, context: GenericContext, path: Path) -> None:
         self._projects: t.List[Project] = []
@@ -114,14 +163,6 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
-        def _to_sqlmesh(config: BMC, context: DbtContext) -> Model:
-            logger.debug("Converting '%s' to sqlmesh format", config.canonical_name(context))
-            return config.to_sqlmesh(
-                context,
-                audit_definitions=audits,
-                virtual_environment_mode=self.config.virtual_environment_mode,
-            )
-
         for project in self._load_projects():
             macros_max_mtime = self._macros_max_mtime
             yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(
@@ -130,20 +171,42 @@ class DbtLoader(Loader):
             cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
 
             logger.debug("Converting models to sqlmesh")
-            # Now that config is rendered, create the sqlmesh models
+
             for package in project.packages.values():
-                package_context = project.context.copy()
-                package_context.set_and_render_variables(package.variables, package.name)
-                package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
+                dbt_models = (*package.models.values(), *package.seeds.values())
 
-                for model in package_models.values():
-                    sqlmesh_model = cache.get_or_load_models(
-                        model.path, loader=lambda: [_to_sqlmesh(model, package_context)]
-                    )[0]
+                loaded = []
+                unloaded = []
 
-                    models[sqlmesh_model.fqn] = sqlmesh_model
+                for dbt_model in dbt_models:
+                    sqlmesh_models = cache.get(dbt_model.path)
 
-            models.update(self._load_external_models(audits, cache))
+                    if sqlmesh_models:
+                        loaded.extend(sqlmesh_models)
+                    else:
+                        unloaded.append(dbt_model)
+
+                if unloaded:
+                    chunksize = math.ceil(len(unloaded) / (c.MAX_FORK_WORKERS or 1))
+
+                    with create_process_pool_executor(
+                        initializer=_init_model_defaults,
+                        initargs=(
+                            project.context,
+                            cache,
+                            self.config.virtual_environment_mode,
+                            audits,
+                            package.name,
+                            package.variables,
+                        ),
+                        max_workers=c.MAX_FORK_WORKERS if chunksize > 1 else 1,
+                    ) as pool:
+                        loaded.extend(pool.map(_convert_dbt_model, unloaded, chunksize=chunksize))
+
+                for model in loaded:
+                    models[model.fqn] = model
+
+        models.update(self._load_external_models(audits, cache))
 
         return models
 
@@ -363,10 +426,15 @@ class DbtLoader(Loader):
             )
 
         def get(self, path: Path) -> t.List[Model]:
-            return self._model_cache.get(
+            models = []
+            for model in self._model_cache.get(
                 self._cache_entry_name(path),
                 self._cache_entry_id(path),
-            )
+            ):
+                models.append(model)
+                model._path = path
+
+            return models
 
         def _cache_entry_name(self, target_path: Path) -> str:
             try:

@@ -53,6 +53,8 @@ class BaseExpressionRenderer:
         model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
+        cache: t.Optional[exp.Expression] = None,
+        jinja_only: bool = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -65,9 +67,10 @@ class BaseExpressionRenderer:
         self._normalize_identifiers = normalize_identifiers
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
-        self._cache: t.List[t.Optional[exp.Expression]] = []
+        self._cache: t.List[t.Optional[exp.Expression]] = [cache] if cache else []
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
+        self._jinja_only = jinja_only
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -228,6 +231,12 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+
+        if self._jinja_only:
+            if should_cache:
+                self._cache = expressions  # type: ignore
+
+            return expressions  # type: ignore
 
         macro_evaluator.locals.update(render_kwargs)
 
@@ -549,8 +558,9 @@ class QueryRenderer(BaseExpressionRenderer):
 
             query = expressions[0]  # type: ignore
 
-            if not query:
-                return None
+            if self._jinja_only:
+                return query
+
             if not isinstance(query, exp.Query):
                 raise_config_error(
                     f"Model query needs to be a SELECT or a UNION, got {query}.", self._path

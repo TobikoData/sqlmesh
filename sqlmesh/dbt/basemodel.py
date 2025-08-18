@@ -343,6 +343,7 @@ class BaseModelConfig(GeneralConfig):
             "physical_schema_mapping": context.sqlmesh_config.physical_schema_mapping,
             "default_catalog": context.target.database,
             "grain": [d.parse_one(g, dialect=model_dialect) for g in ensure_list(self.grain)],
+            "jinja_only": True,
             **self.sqlmesh_config_kwargs,
         }
 

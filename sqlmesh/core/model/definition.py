@@ -1055,6 +1055,7 @@ class _Model(ModelMeta, frozen=True):
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
             str(self.optimize_query) if self.optimize_query is not None else None,
+            str(self.jinja_only) if self.jinja_only is not None else None,
             self.virtual_environment_mode.value,
         ]
 
@@ -1277,6 +1278,7 @@ class SqlModel(_Model):
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
     source_type: t.Literal["sql"] = "sql"
 
+    _parsed_jinja_query: t.Optional[exp.Expression] = None
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
@@ -1410,6 +1412,8 @@ class SqlModel(_Model):
         self._query_renderer.update_schema(self.mapping_schema)
 
     def validate_definition(self) -> None:
+        if self.jinja_only:
+            return
         query = self._query_renderer.render()
         if query is None:
             if self.depends_on_ is None:
@@ -1516,6 +1520,8 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
+            cache=self._parsed_jinja_query,
+            jinja_only=self.jinja_only,
         )
 
     @property
@@ -2954,6 +2960,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "formatting": str,
     "optimize_query": str,
+    "jinja_only": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 

@@ -636,6 +636,7 @@ bool_validator: t.Callable = field_validator(
     "allow_partials",
     "enabled",
     "optimize_query",
+    "jinja_only",
     "formatting",
     mode="before",
     check_fields=False,

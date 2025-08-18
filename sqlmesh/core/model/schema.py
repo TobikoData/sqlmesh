@@ -68,6 +68,9 @@ def _update_model_schemas(
             if not deps:
                 del graph[name]
                 model = models[name]
+                if model.jinja_only:
+                    deps.discard(model.fqn)
+                    continue
                 futures.add(
                     executor.submit(
                         load_optimized_query_and_mapping,
