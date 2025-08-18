@@ -1334,10 +1334,12 @@ class SnapshotEvaluator:
         else:
             raise SQLMeshError("Expected model or standalone audit. {snapshot}: {audit}")
 
-        count, *_ = adapter.fetchone(
-            select("COUNT(*)").from_(query.subquery("audit")),
-            quote_identifiers=True,
-        )  # type: ignore
+        if isinstance(query, d.RawSql):
+            sql_payload: exp.Expression | str = f"SELECT COUNT(*) FROM ({query.name}) AS audit"
+        else:
+            sql_payload = select("COUNT(*)").from_(query.subquery("audit"))
+
+        count, *_ = adapter.fetchone(sql_payload, quote_identifiers=True)  # type: ignore
 
         return AuditResult(
             audit=audit,

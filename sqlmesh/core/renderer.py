@@ -220,7 +220,10 @@ class BaseExpressionRenderer:
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
                 )
                 if rendered_expression.strip():
-                    if self._run_original_sql_flag and runtime_stage != RuntimeStage.LOADING:
+                    if self._run_original_sql_flag and runtime_stage not in (
+                        RuntimeStage.LOADING,
+                        RuntimeStage.TESTING,
+                    ):
                         raw_sql = d.RawSql(this=rendered_expression)
                         wrapped_raw_sql: t.List[t.Optional[exp.Expression]] = [raw_sql]
 

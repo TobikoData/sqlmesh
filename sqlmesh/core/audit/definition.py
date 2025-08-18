@@ -187,7 +187,7 @@ class StandaloneAudit(_Node, AuditMixin):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> exp.Query:
+    ) -> exp.Query | d.RawSql:
         """Renders the audit's query.
 
         Args:
