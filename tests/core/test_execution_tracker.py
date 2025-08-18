@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import typing as t
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlmesh.core.execution_tracker import QueryExecutionTracker
+from sqlmesh.core.execution_tracker import QueryExecutionStats, QueryExecutionTracker
 
 
 def test_execution_tracker_thread_isolation() -> None:
-    def worker(id: str, row_counts: list[int]) -> t.Dict[str, t.Any]:
+    def worker(id: str, row_counts: list[int]) -> QueryExecutionStats:
         with QueryExecutionTracker.track_execution(id) as ctx:
             assert QueryExecutionTracker.is_tracking()
 
             for count in row_counts:
-                QueryExecutionTracker.record_execution("SELECT 1", count)
+                QueryExecutionTracker.record_execution("SELECT 1", count, None)
 
             assert ctx is not None
             return ctx.get_execution_stats()
@@ -26,13 +25,13 @@ def test_execution_tracker_thread_isolation() -> None:
 
     # Main thread has no active tracking context
     assert not QueryExecutionTracker.is_tracking()
-    QueryExecutionTracker.record_execution("q", 10)
+    QueryExecutionTracker.record_execution("q", 10, None)
     assert QueryExecutionTracker.get_execution_stats("q") is None
 
     # Order of results is not deterministic, so look up by id
-    by_batch = {s["id"]: s for s in results}
+    by_batch = {s.snapshot_batch_id: s for s in results}
 
-    assert by_batch["batch_A"]["total_rows_processed"] == 15
-    assert by_batch["batch_A"]["query_count"] == 2
-    assert by_batch["batch_B"]["total_rows_processed"] == 10
-    assert by_batch["batch_B"]["query_count"] == 2
+    assert by_batch["batch_A"].total_rows_processed == 15
+    assert by_batch["batch_A"].query_count == 2
+    assert by_batch["batch_B"].total_rows_processed == 10
+    assert by_batch["batch_B"].query_count == 2

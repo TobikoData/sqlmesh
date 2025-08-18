@@ -103,7 +103,7 @@ class SnapshotState:
             self.snapshots_table,
             _snapshots_to_df(snapshots_to_store),
             target_columns_to_types=self._snapshot_columns_to_types,
-            track_row_count=False,
+            track_execution_stats=False,
         )
 
         for snapshot in snapshots:
@@ -407,7 +407,7 @@ class SnapshotState:
             self.snapshots_table,
             _snapshots_to_df(snapshots_to_store),
             target_columns_to_types=self._snapshot_columns_to_types,
-            track_row_count=False,
+            track_execution_stats=False,
         )
 
     def _get_snapshots(

@@ -8,6 +8,7 @@ from sse_starlette.sse import ServerSentEvent
 from sqlmesh.core.snapshot.definition import Interval, Intervals
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.execution_tracker import QueryExecutionStats
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike, SnapshotTableInfo, SnapshotId
 from sqlmesh.core.test import ModelTest
@@ -142,7 +143,7 @@ class ApiConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         if audit_only:

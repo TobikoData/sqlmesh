@@ -115,7 +115,7 @@ class IntervalState:
             self.intervals_table,
             _intervals_to_df(intervals_to_remove, is_dev=False, is_removed=True),
             target_columns_to_types=self._interval_columns_to_types,
-            track_row_count=False,
+            track_execution_stats=False,
         )
 
     def get_snapshot_intervals(
@@ -244,7 +244,7 @@ class IntervalState:
                 self.intervals_table,
                 pd.DataFrame(new_intervals),
                 target_columns_to_types=self._interval_columns_to_types,
-                track_row_count=False,
+                track_execution_stats=False,
             )
 
     def _get_snapshot_intervals(
