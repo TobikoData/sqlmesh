@@ -12,7 +12,7 @@ from pathlib import Path
 
 from dbt import constants as dbt_constants, flags
 
-from sqlmesh.utils.conversions import serializable
+from sqlmesh.utils.conversions import make_serializable
 
 # Override the file name to prevent dbt commands from invalidating the cache.
 dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
@@ -161,30 +161,31 @@ class ManifestHelper:
     def flat_graph(self) -> t.Dict[str, t.Any]:
         return {
             "exposures": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in getattr(self._manifest, "exposures", {}).items()
             },
             "groups": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in getattr(self._manifest, "groups", {}).items()
             },
             "metrics": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in getattr(self._manifest, "metrics", {}).items()
             },
             "nodes": {
-                k: serializable(v.to_dict(omit_none=False)) for k, v in self._manifest.nodes.items()
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in self._manifest.nodes.items()
             },
             "sources": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in self._manifest.sources.items()
             },
             "semantic_models": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in getattr(self._manifest, "semantic_models", {}).items()
             },
             "saved_queries": {
-                k: serializable(v.to_dict(omit_none=False))
+                k: make_serializable(v.to_dict(omit_none=False))
                 for k, v in getattr(self._manifest, "saved_queries", {}).items()
             },
         }

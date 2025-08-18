@@ -22,11 +22,11 @@ def try_str_to_bool(val: str) -> t.Union[str, bool]:
     return val
 
 
-def serializable(obj: t.Any) -> t.Any:
+def make_serializable(obj: t.Any) -> t.Any:
     if isinstance(obj, (date, datetime)):
         return obj.isoformat()
     if isinstance(obj, dict):
-        return {k: serializable(v) for k, v in obj.items()}
+        return {k: make_serializable(v) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [serializable(item) for item in obj]
+        return [make_serializable(item) for item in obj]
     return obj
