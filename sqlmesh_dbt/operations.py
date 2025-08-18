@@ -53,7 +53,10 @@ class DbtOperations:
 
 
 def create(
-    project_dir: t.Optional[Path] = None, profiles_dir: t.Optional[Path] = None, debug: bool = False
+    project_dir: t.Optional[Path] = None,
+    profile: t.Optional[str] = None,
+    target: t.Optional[str] = None,
+    debug: bool = False,
 ) -> DbtOperations:
     with Progress(transient=True) as progress:
         # Indeterminate progress bar before SQLMesh import to provide feedback to the user that something is indeed happening
@@ -76,6 +79,7 @@ def create(
 
         sqlmesh_context = Context(
             paths=[project_dir],
+            config_loader_kwargs=dict(profile=profile, target=target),
             load=True,
         )
 

@@ -32,6 +32,7 @@ def load_configs(
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
     dotenv_path: t.Optional[Path] = None,
+    **kwargs: t.Any,
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
@@ -70,6 +71,7 @@ def load_configs(
                 project_paths=[path / name for name in ALL_CONFIG_FILENAMES],
                 personal_paths=personal_paths,
                 config_name=config,
+                **kwargs,
             )
             for path in absolute_paths
         }
@@ -81,6 +83,7 @@ def load_config_from_paths(
     personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
+    **kwargs: t.Any,
 ) -> C:
     project_paths = project_paths or []
     personal_paths = personal_paths or []
@@ -168,7 +171,11 @@ def load_config_from_paths(
         if dbt_project_file:
             from sqlmesh.dbt.loader import sqlmesh_config
 
-            dbt_python_config = sqlmesh_config(project_root=dbt_project_file.parent)
+            dbt_python_config = sqlmesh_config(
+                project_root=dbt_project_file.parent,
+                dbt_profile_name=kwargs.pop("profile", None),
+                dbt_target_name=kwargs.pop("target", None),
+            )
             if type(dbt_python_config) != config_type:
                 dbt_python_config = convert_config_type(dbt_python_config, config_type)
 
