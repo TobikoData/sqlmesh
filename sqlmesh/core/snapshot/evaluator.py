@@ -731,7 +731,7 @@ class SnapshotEvaluator:
         ):
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
-            if not target_table_exists:
+            if not target_table_exists or (model.is_seed and not snapshot.intervals):
                 if (
                     not is_snapshot_deployable
                     and snapshot.is_forward_only

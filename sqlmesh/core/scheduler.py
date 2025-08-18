@@ -627,16 +627,18 @@ class Scheduler:
                 # Add a separate node for table creation in case when there multiple concurrent
                 # evaluation nodes.
                 create_node = CreateNode(snapshot_name=snapshot.name)
+                dag.add(create_node, upstream_dependencies)
 
             for i, interval in enumerate(intervals):
                 node = EvaluateNode(snapshot_name=snapshot.name, interval=interval, batch_index=i)
-                dag.add(node, upstream_dependencies)
-
-                if len(intervals) > 1:
-                    dag.add(DummyNode(snapshot_name=snapshot.name), [node])
 
                 if create_node:
                     dag.add(node, [create_node])
+                else:
+                    dag.add(node, upstream_dependencies)
+
+                if len(intervals) > 1:
+                    dag.add(DummyNode(snapshot_name=snapshot.name), [node])
 
                 if batch_concurrency and i >= batch_concurrency:
                     batch_idx_to_wait_for = i - batch_concurrency

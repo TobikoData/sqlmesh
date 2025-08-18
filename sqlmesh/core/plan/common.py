@@ -4,6 +4,9 @@ from sqlmesh.core.snapshot import Snapshot
 
 
 def should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
+    if new.is_view:
+        # View models always need to be rebuilt to reflect updated upstream dependencies.
+        return True
     if old.virtual_environment_mode != new.virtual_environment_mode:
         # If the virtual environment mode has changed, then we need to rebuild
         return True

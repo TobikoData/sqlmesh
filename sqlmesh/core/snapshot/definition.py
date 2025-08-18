@@ -1383,12 +1383,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return (
             self.is_paused
             and self.is_model
-            and not self.is_symbolic
+            and self.is_materialized
             and (
                 (self.previous_version and self.previous_version.version == self.version)
                 or self.model.forward_only
                 or bool(self.model.physical_version)
-                or self.is_view
                 or not self.virtual_environment_mode.is_full
             )
         )
@@ -1588,7 +1587,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     # Similarly, if the model depends on past and the start date is not aligned with the
                     # model's start, we should consider this snapshot non-deployable.
                     this_deployable = False
-                    if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
+                    if not snapshot.is_paused or (
+                        snapshot.is_indirect_non_breaking and snapshot.intervals
+                    ):
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
 

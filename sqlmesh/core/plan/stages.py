@@ -304,12 +304,30 @@ class PlanStagesBuilder:
                 )
             )
         else:
+            snapshots_to_create = self._get_snapshots_to_create(plan, snapshots)
             stages.append(
                 PhysicalLayerSchemaCreationStage(
-                    snapshots=self._get_snapshots_to_create(plan, snapshots),
-                    deployability_index=deployability_index,
+                    snapshots=snapshots_to_create, deployability_index=deployability_index
                 )
             )
+            forward_only_snapshots_to_create = []
+            if plan.is_dev:
+                for snapshot in snapshots_to_create:
+                    if snapshot.is_forward_only:
+                        forward_only_snapshots_to_create.append(snapshot)
+            if forward_only_snapshots_to_create:
+                stages.append(
+                    PhysicalLayerUpdateStage(
+                        snapshots=forward_only_snapshots_to_create,
+                        all_snapshots=snapshots,
+                        snapshots_with_missing_intervals={
+                            s.snapshot_id
+                            for s in snapshots_to_intervals
+                            if plan.is_selected_for_backfill(s.name)
+                        },
+                        deployability_index=deployability_index,
+                    )
+                )
 
         audit_only_snapshots = self._get_audit_only_snapshots(new_snapshots)
         if audit_only_snapshots:

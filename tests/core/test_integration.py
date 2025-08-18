@@ -488,12 +488,6 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     waiter_as_customer_snapshot = context.get_snapshot(
         "sushi.waiter_as_customer_by_day", raise_if_missing=True
     )
-    count_customers_active_snapshot = context.get_snapshot(
-        "sushi.count_customers_active", raise_if_missing=True
-    )
-    count_customers_inactive_snapshot = context.get_snapshot(
-        "sushi.count_customers_inactive", raise_if_missing=True
-    )
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
 
@@ -1462,6 +1456,18 @@ def test_indirect_non_breaking_downstream_of_forward_only(init_and_plan_context:
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
+            snapshot_id=top_waiter_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
@@ -1485,8 +1491,9 @@ def test_indirect_non_breaking_downstream_of_forward_only(init_and_plan_context:
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_breaking_only_impacts_immediate_children(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    context.upsert_model(context.get_model("sushi.top_waiters").copy(update={"kind": FullKind()}))
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
 
     breaking_model = context.get_model("sushi.orders")
     breaking_model = breaking_model.copy(update={"stamp": "force new version"})
@@ -2206,9 +2213,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
     forward_only_model_snapshot_id = context.get_snapshot(forward_only_model_name).snapshot_id
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan("dev", auto_apply=True, no_prompts=True, enable_preview=False)
     assert (
         dev_plan.snapshots[forward_only_model_snapshot_id].change_category
@@ -2219,7 +2224,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert not dev_plan.missing_intervals
@@ -2238,9 +2243,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     new_full_downstream_model = load_sql_based_model(new_full_downstream_model_expressions)
     context.upsert_model(new_full_downstream_model)
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan(
         "dev",
         categorizer_config=CategorizerConfig.all_full(),
@@ -2253,12 +2256,12 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         == SnapshotChangeCategory.BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_BREAKING
     )
     assert len(dev_plan.missing_intervals) == 2
     assert dev_plan.missing_intervals[0].snapshot_id == full_downstream_model_snapshot_id
-    assert dev_plan.missing_intervals[1].snapshot_id == full_downstream_model_2_snapshot_id
+    assert dev_plan.missing_intervals[1].snapshot_id == view_downstream_model_snapshot_id
 
     # Check that the representative view hasn't been created yet.
     assert not context.engine_adapter.table_exists(
@@ -2272,9 +2275,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     # Finally, make a non-breaking change to the full model in the same dev environment.
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, new_full_downstream_model)))
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan(
         "dev",
         categorizer_config=CategorizerConfig.all_full(),
@@ -2287,9 +2288,12 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+
+    # Deploy changes to prod
+    context.plan("prod", auto_apply=True, no_prompts=True)
 
     # Check that the representative view has been created.
     assert context.engine_adapter.table_exists(
