@@ -31,7 +31,12 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import SCDType2ByColumnKind, SCDType2ByTimeKind
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
-from sqlmesh.dbt.builtin import _relation_info_to_relation
+from sqlmesh.dbt.builtin import (
+    _relation_info_to_relation,
+    dbt_model_id,
+    clear_selected_resources,
+    get_selected_resources,
+)
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -1694,3 +1699,68 @@ def test_on_run_start_end():
             "CREATE OR REPLACE TABLE schema_table_sushi__dev_nested_package AS SELECT 'sushi__dev' AS schema",
         ]
     )
+
+
+def test_selected_resources_with_selectors():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+
+    # A plan with a specific model selection
+    clear_selected_resources()
+    sushi_context.plan_builder(select_models=["sushi.customers"])
+
+    selected = get_selected_resources()
+    assert "model.memory.customers" in selected
+    assert len(selected) == 1
+
+    # Plan without model selections
+    clear_selected_resources()
+    sushi_context.plan_builder()
+    selected = get_selected_resources()
+    assert sorted(
+        [
+            "model.memory.customer_revenue_by_day",
+            "model.memory.customers",
+            "model.memory.items",
+            "model.memory.items_check_snapshot",
+            "model.memory.items_no_hard_delete_snapshot",
+            "model.memory.items_snapshot",
+            "model.memory.order_items",
+            "model.memory.orders",
+            "model.memory.simple_model_a",
+            "model.memory.simple_model_b",
+            "model.memory.top_waiters",
+            "model.memory.waiter_as_customer_by_day",
+            "model.memory.waiter_names",
+            "model.memory.waiter_revenue_by_day_v1",
+            "model.memory.waiter_revenue_by_day_v2",
+            "model.memory.waiters",
+        ]
+    ) == sorted(selected)
+
+    # Test with downstream models as well
+    clear_selected_resources()
+    sushi_context.plan_builder(select_models=["sushi.customers+"])
+    selected = get_selected_resources()
+    assert sorted(["model.memory.customers", "model.memory.waiter_as_customer_by_day"]) == sorted(
+        selected
+    )
+
+    # Test wildcard selection
+    clear_selected_resources()
+    sushi_context.plan_builder(select_models=["sushi.waiter_*"])
+    selected = get_selected_resources()
+    assert sorted(
+        [
+            "model.memory.waiter_as_customer_by_day",
+            "model.memory.waiter_names",
+            "model.memory.waiter_revenue_by_day_v1",
+            "model.memory.waiter_revenue_by_day_v2",
+        ]
+    ) == sorted(selected)
+    clear_selected_resources()
+
+
+def test_dbt_model_id_conversion():
+    assert dbt_model_id("jaffle_shop.main.customers") == "model.jaffle_shop.customers"
+    assert dbt_model_id("jaffle_shop.main.orders") == "model.jaffle_shop.orders"
+    assert dbt_model_id('"jaffle_shop"."customers"') == "model.jaffle_shop.customers"
