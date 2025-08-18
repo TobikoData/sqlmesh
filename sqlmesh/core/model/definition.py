@@ -185,7 +185,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Iterator[QueryOrDF]:
+    ) -> t.Iterator[QueryOrDF | d.RawSql]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
         be fetched, or a dataframe object which contains the data itself.
 
@@ -508,6 +508,7 @@ class _Model(ModelMeta, frozen=True):
             exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
         )
 
+        # TODO: pass run_original_sql setting here when we add support for it in SQLMesh projects
         query_renderer = QueryRenderer(
             audit.query,
             audit.dialect or self.dialect,
@@ -517,7 +518,6 @@ class _Model(ModelMeta, frozen=True):
             python_env=self.python_env,
             only_execution_time=self.kind.only_execution_time,
             default_catalog=self.default_catalog,
-            run_original_sql=self.run_original_sql,
         )
 
         rendered_query = query_renderer.render(
@@ -526,7 +526,6 @@ class _Model(ModelMeta, frozen=True):
             execution_time=execution_time,
             snapshots=snapshots,
             deployability_index=deployability_index,
-            run_original_sql=False,
             **{
                 **audit.defaults,
                 "this_model": exp.select("*").from_(quoted_model_name).where(where).subquery()
@@ -731,22 +730,38 @@ class _Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self.render_query_or_raise(**render_kwarg).limit(0)
+        query = self.render_query_or_raise(**render_kwarg)
 
-        for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
-            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
-                select_or_set_op.where(exp.false(), copy=False)
+        if isinstance(query, d.RawSql):
+            columns = ["*"]
 
-        if self.managed_columns:
-            query.select(
-                *[
-                    exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+            if self.managed_columns:
+                columns.extend(
+                    f"CAST(NULL AS {col_type.sql(dialect=self.dialect)}) AS {col}"
                     for col, col_type in self.managed_columns.items()
-                    if col not in query.named_selects
-                ],
-                append=True,
-                copy=False,
+                )
+
+            query = d.RawSql(
+                this=f"SELECT {', '.join(columns)} FROM ({query.name}) AS _subquery WHERE FALSE LIMIT 0"
             )
+        else:
+            query = query.limit(0)
+
+            for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
+                if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
+                    select_or_set_op.where(exp.false(), copy=False)
+
+            if self.managed_columns:
+                query.select(
+                    *[
+                        exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+                        for col, col_type in self.managed_columns.items()
+                        if col not in query.named_selects
+                    ],
+                    append=True,
+                    copy=False,
+                )
+
         return query
 
     def text_diff(self, other: Node, rendered: bool = False) -> str:
