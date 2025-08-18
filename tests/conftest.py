@@ -271,7 +271,7 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.default_catalog,
     )
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
-    evaluatable_plan = plan.to_evaluatable()
+    evaluatable_plan = plan.to_evaluatable().copy(update={"skip_backfill": True})
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, context.state_sync, context.default_catalog
     )

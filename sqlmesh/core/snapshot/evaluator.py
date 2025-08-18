@@ -2213,11 +2213,7 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        deployability_index = (
-            kwargs.get("deployability_index") or DeployabilityIndex.all_deployable()
-        )
         snapshot = kwargs["snapshot"]
-        snapshots = kwargs["snapshots"]
 
         if (
             not snapshot.is_materialized_view

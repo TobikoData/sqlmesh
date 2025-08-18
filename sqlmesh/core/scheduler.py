@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import logging
 import typing as t
 import time
@@ -39,7 +40,6 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     now_timestamp,
-    to_timestamp,
     validate_date_range,
 )
 from sqlmesh.utils.errors import (
@@ -55,9 +55,46 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
-# we store snapshot name instead of snapshots/snapshotids because pydantic
-# is extremely slow to hash. snapshot names should be unique within a dag run
-SchedulingUnit = t.Tuple[str, t.Tuple[Interval, int]]
+
+
+class BaseNode:
+    snapshot_name: str
+
+    def __lt__(self, other: BaseNode) -> bool:
+        return (self.__class__.__name__, self.snapshot_name) < (
+            other.__class__.__name__,
+            other.snapshot_name,
+        )
+
+
+@dataclass(frozen=True)
+class EvaluateNode(BaseNode):
+    snapshot_name: str
+    interval: Interval
+    batch_index: int
+
+    def __lt__(self, other: BaseNode) -> bool:
+        if not isinstance(other, EvaluateNode):
+            return super().__lt__(other)
+        return (self.__class__.__name__, self.snapshot_name, self.interval, self.batch_index) < (
+            other.__class__.__name__,
+            other.snapshot_name,
+            other.interval,
+            other.batch_index,
+        )
+
+
+@dataclass(frozen=True)
+class CreateNode(BaseNode):
+    snapshot_name: str
+
+
+@dataclass(frozen=True)
+class DummyNode(BaseNode):
+    snapshot_name: str
+
+
+SchedulingUnit = t.Union[EvaluateNode, CreateNode, DummyNode]
 
 
 class Scheduler:
@@ -162,6 +199,7 @@ class Scheduler:
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        target_table_exists: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -175,6 +213,7 @@ class Scheduler:
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             auto_restatement_enabled: Whether to enable auto restatements.
+            target_table_exists: Whether the target table exists. If None, the table will be checked for existence.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -195,6 +234,7 @@ class Scheduler:
             allow_destructive_snapshots=allow_destructive_snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
+            target_table_exists=target_table_exists,
             **kwargs,
         )
         audit_results = self._audit_snapshot(
@@ -404,7 +444,14 @@ class Scheduler:
             audit_only=audit_only,
         )
 
-        dag = self._dag(batched_intervals)
+        snapshots_to_create = {
+            s.snapshot_id
+            for s in self.snapshot_evaluator.get_snapshots_to_create(
+                merged_intervals.keys(), deployability_index
+            )
+        }
+
+        dag = self._dag(batched_intervals, snapshots_to_create=snapshots_to_create)
 
         if run_environment_statements:
             environment_statements = self.state_sync.get_environment_statements(
@@ -425,55 +472,63 @@ class Scheduler:
         def evaluate_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
                 raise CircuitBreakerError()
-
-            snapshot_name, ((start, end), batch_idx) = node
-            if batch_idx == -1:
+            if isinstance(node, DummyNode):
                 return
-            snapshot = self.snapshots_by_name[snapshot_name]
 
-            self.console.start_snapshot_evaluation_progress(snapshot)
+            snapshot = self.snapshots_by_name[node.snapshot_name]
 
-            execution_start_ts = now_timestamp()
-            evaluation_duration_ms: t.Optional[int] = None
+            if isinstance(node, EvaluateNode):
+                self.console.start_snapshot_evaluation_progress(snapshot)
+                execution_start_ts = now_timestamp()
+                evaluation_duration_ms: t.Optional[int] = None
+                start, end = node.interval
 
-            audit_results: t.List[AuditResult] = []
-            try:
-                assert execution_time  # mypy
-                assert deployability_index  # mypy
+                audit_results: t.List[AuditResult] = []
+                try:
+                    assert execution_time  # mypy
+                    assert deployability_index  # mypy
 
-                if audit_only:
-                    audit_results = self._audit_snapshot(
-                        snapshot=snapshot,
-                        environment_naming_info=environment_naming_info,
-                        deployability_index=deployability_index,
-                        snapshots=self.snapshots_by_name,
-                        start=start,
-                        end=end,
-                        execution_time=execution_time,
+                    if audit_only:
+                        audit_results = self._audit_snapshot(
+                            snapshot=snapshot,
+                            environment_naming_info=environment_naming_info,
+                            deployability_index=deployability_index,
+                            snapshots=self.snapshots_by_name,
+                            start=start,
+                            end=end,
+                            execution_time=execution_time,
+                        )
+                    else:
+                        audit_results = self.evaluate(
+                            snapshot=snapshot,
+                            environment_naming_info=environment_naming_info,
+                            start=start,
+                            end=end,
+                            execution_time=execution_time,
+                            deployability_index=deployability_index,
+                            batch_index=node.batch_index,
+                            allow_destructive_snapshots=allow_destructive_snapshots,
+                            target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
+                        )
+
+                    evaluation_duration_ms = now_timestamp() - execution_start_ts
+                finally:
+                    num_audits = len(audit_results)
+                    num_audits_failed = sum(1 for result in audit_results if result.count)
+                    self.console.update_snapshot_evaluation_progress(
+                        snapshot,
+                        batched_intervals[snapshot][node.batch_index],
+                        node.batch_index,
+                        evaluation_duration_ms,
+                        num_audits - num_audits_failed,
+                        num_audits_failed,
                     )
-                else:
-                    audit_results = self.evaluate(
-                        snapshot=snapshot,
-                        environment_naming_info=environment_naming_info,
-                        start=start,
-                        end=end,
-                        execution_time=execution_time,
-                        deployability_index=deployability_index,
-                        batch_index=batch_idx,
-                        allow_destructive_snapshots=allow_destructive_snapshots,
-                    )
-
-                evaluation_duration_ms = now_timestamp() - execution_start_ts
-            finally:
-                num_audits = len(audit_results)
-                num_audits_failed = sum(1 for result in audit_results if result.count)
-                self.console.update_snapshot_evaluation_progress(
-                    snapshot,
-                    batched_intervals[snapshot][batch_idx],
-                    batch_idx,
-                    evaluation_duration_ms,
-                    num_audits - num_audits_failed,
-                    num_audits_failed,
+            elif isinstance(node, CreateNode):
+                self.snapshot_evaluator.create_snapshot(
+                    snapshot=snapshot,
+                    snapshots=self.snapshots_by_name,
+                    deployability_index=deployability_index,
+                    allow_destructive_snapshots=allow_destructive_snapshots or set(),
                 )
 
         try:
@@ -486,7 +541,9 @@ class Scheduler:
                 )
                 self.console.stop_evaluation_progress(success=not errors)
 
-                skipped_snapshots = {i[0] for i in skipped_intervals}
+                skipped_snapshots = {
+                    i.snapshot_name for i in skipped_intervals if isinstance(i, EvaluateNode)
+                }
                 self.console.log_skipped_models(skipped_snapshots)
                 for skipped in skipped_snapshots:
                     logger.info(f"SKIPPED snapshot {skipped}\n")
@@ -515,11 +572,16 @@ class Scheduler:
 
             self.state_sync.recycle()
 
-    def _dag(self, batches: SnapshotToIntervals) -> DAG[SchedulingUnit]:
+    def _dag(
+        self,
+        batches: SnapshotToIntervals,
+        snapshots_to_create: t.Optional[t.Set[SnapshotId]] = None,
+    ) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
             batches: The batches of snapshots and intervals to evaluate.
+            snapshots_to_create: The snapshots with missing physical tables.
 
         Returns:
             A DAG of snapshot intervals to be evaluated.
@@ -528,46 +590,64 @@ class Scheduler:
         intervals_per_snapshot = {
             snapshot.name: intervals for snapshot, intervals in batches.items()
         }
+        snapshots_to_create = snapshots_to_create or set()
 
         dag = DAG[SchedulingUnit]()
-        terminal_node = ((to_timestamp(0), to_timestamp(0)), -1)
 
         for snapshot, intervals in batches.items():
             if not intervals:
                 continue
 
-            upstream_dependencies = []
+            upstream_dependencies: t.List[SchedulingUnit] = []
 
             for p_sid in snapshot.parents:
                 if p_sid in self.snapshots:
                     p_intervals = intervals_per_snapshot.get(p_sid.name, [])
 
                     if len(p_intervals) > 1:
-                        upstream_dependencies.append((p_sid.name, terminal_node))
+                        upstream_dependencies.append(DummyNode(snapshot_name=p_sid.name))
                     else:
                         for i, interval in enumerate(p_intervals):
-                            upstream_dependencies.append((p_sid.name, (interval, i)))
+                            upstream_dependencies.append(
+                                EvaluateNode(
+                                    snapshot_name=p_sid.name, interval=interval, batch_index=i
+                                )
+                            )
 
             batch_concurrency = snapshot.node.batch_concurrency
             if snapshot.depends_on_past:
                 batch_concurrency = 1
 
+            create_node: t.Optional[CreateNode] = None
+            if (
+                batch_concurrency
+                and batch_concurrency > 1
+                and snapshot.snapshot_id in snapshots_to_create
+            ):
+                # Add a separate node for table creation in case when there multiple concurrent
+                # evaluation nodes.
+                create_node = CreateNode(snapshot_name=snapshot.name)
+
             for i, interval in enumerate(intervals):
-                node = (snapshot.name, (interval, i))
+                node = EvaluateNode(snapshot_name=snapshot.name, interval=interval, batch_index=i)
                 dag.add(node, upstream_dependencies)
 
                 if len(intervals) > 1:
-                    dag.add((snapshot.name, terminal_node), [node])
+                    dag.add(DummyNode(snapshot_name=snapshot.name), [node])
+
+                if create_node:
+                    dag.add(node, [create_node])
 
                 if batch_concurrency and i >= batch_concurrency:
                     batch_idx_to_wait_for = i - batch_concurrency
                     dag.add(
                         node,
                         [
-                            (
-                                snapshot.name,
-                                (intervals[batch_idx_to_wait_for], batch_idx_to_wait_for),
-                            )
+                            EvaluateNode(
+                                snapshot_name=snapshot.name,
+                                interval=intervals[batch_idx_to_wait_for],
+                                batch_index=batch_idx_to_wait_for,
+                            ),
                         ],
                     )
         return dag
