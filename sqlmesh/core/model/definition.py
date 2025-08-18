@@ -1277,6 +1277,7 @@ class SqlModel(_Model):
     query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
     source_type: t.Literal["sql"] = "sql"
 
+    _parsed_jinja_query: t.Optional[exp.Expression] = None
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:

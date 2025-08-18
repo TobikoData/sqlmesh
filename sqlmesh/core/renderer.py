@@ -81,6 +81,7 @@ class BaseExpressionRenderer:
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        parse_only: bool = False,
         **kwargs: t.Any,
     ) -> t.List[t.Optional[exp.Expression]]:
         """Renders a expression, expanding macros with provided kwargs
@@ -229,6 +230,9 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+
+        if parse_only:
+            return expressions
 
         macro_evaluator.locals.update(render_kwargs)
 
@@ -495,6 +499,7 @@ class QueryRenderer(BaseExpressionRenderer):
         expand: t.Iterable[str] = tuple(),
         needs_optimization: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        parse_only: bool = False,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Query]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -535,6 +540,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     table_mapping=table_mapping,
                     deployability_index=deployability_index,
                     runtime_stage=runtime_stage,
+                    parse_only=parse_only,
                     **kwargs,
                 )
             except ParsetimeAdapterCallError:
@@ -550,8 +556,8 @@ class QueryRenderer(BaseExpressionRenderer):
 
             query = expressions[0]  # type: ignore
 
-            if not query:
-                return None
+            if not query or parse_only:
+                return query
             if not isinstance(query, exp.Query):
                 raise_config_error(
                     f"Model query needs to be a SELECT or a UNION, got {query}.", self._path
