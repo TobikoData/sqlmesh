@@ -514,7 +514,8 @@ def test_cleanup_skip_missing_table(adapter_mock, make_snapshot):
         f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
     )
     adapter_mock.drop_table.assert_called_once_with(
-        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev"
+        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+        cascade=True,
     )
 
 
