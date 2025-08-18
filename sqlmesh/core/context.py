@@ -117,6 +117,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
+from sqlmesh.dbt.builtin import set_selected_resources
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
 from sqlmesh.utils.dag import DAG
@@ -1583,6 +1584,11 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "Selector did not return any models. Please check your model selection and try again."
             )
 
+        if self._project_type != c.NATIVE:
+            set_selected_resources(
+                models=model_selector.expand_model_selections(select_models or "*")
+            )
+
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
             environment or c.PROD,
@@ -2481,6 +2487,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             select_models = self._select_models_for_run(
                 select_models, no_auto_upstream, snapshots.values()
             )
+
+        if self._project_type != c.NATIVE:
+            set_selected_resources(models=select_models or set([s.name for s in snapshots.keys()]))
 
         completion_status = scheduler.run(
             environment,
