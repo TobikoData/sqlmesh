@@ -37,7 +37,7 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         table_name="foo.another", target_columns_to_types={"col": exp.DataType.build("int")}
     )
     engine_adapter.create_view(
-        view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar", into=exp.Query)
+        view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar")
     )
     engine_adapter.create_table(
         table_name="ignored.ignore", target_columns_to_types={"col": exp.DataType.build("int")}
