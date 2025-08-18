@@ -7,14 +7,16 @@ from sqlmesh.core.execution_tracker import QueryExecutionStats, QueryExecutionTr
 
 def test_execution_tracker_thread_isolation() -> None:
     def worker(id: str, row_counts: list[int]) -> QueryExecutionStats:
-        with QueryExecutionTracker.track_execution(id) as ctx:
-            assert QueryExecutionTracker.is_tracking()
+        with execution_tracker.track_execution(id) as ctx:
+            assert execution_tracker.is_tracking()
 
             for count in row_counts:
-                QueryExecutionTracker.record_execution("SELECT 1", count, None)
+                execution_tracker.record_execution("SELECT 1", count, None)
 
             assert ctx is not None
             return ctx.get_execution_stats()
+
+    execution_tracker = QueryExecutionTracker()
 
     with ThreadPoolExecutor() as executor:
         futures = [
@@ -24,9 +26,9 @@ def test_execution_tracker_thread_isolation() -> None:
         results = [f.result() for f in futures]
 
     # Main thread has no active tracking context
-    assert not QueryExecutionTracker.is_tracking()
-    QueryExecutionTracker.record_execution("q", 10, None)
-    assert QueryExecutionTracker.get_execution_stats("q") is None
+    assert not execution_tracker.is_tracking()
+    execution_tracker.record_execution("q", 10, None)
+    assert execution_tracker.get_execution_stats("q") is None
 
     # Order of results is not deterministic, so look up by id
     by_batch = {s.snapshot_batch_id: s for s in results}

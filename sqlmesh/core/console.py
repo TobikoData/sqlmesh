@@ -4308,7 +4308,7 @@ def _calculate_annotation_str_len(
 def _format_bytes(num_bytes: t.Optional[int]) -> str:
     if num_bytes and num_bytes > 0:
         if num_bytes < 1024:
-            return f"{num_bytes} Bytes"
+            return f"{num_bytes} bytes"
 
         num_bytes_float = float(num_bytes) / 1024.0
         for unit in ["KiB", "MiB", "GiB", "TiB", "PiB"]:

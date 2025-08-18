@@ -9,7 +9,6 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
-from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model.definition import AuditResult
 from sqlmesh.core.node import IntervalUnit
@@ -536,7 +535,7 @@ class Scheduler:
                         num_audits = len(audit_results)
                         num_audits_failed = sum(1 for result in audit_results if result.count)
 
-                        execution_stats = QueryExecutionTracker.get_execution_stats(
+                        execution_stats = self.snapshot_evaluator.execution_tracker.get_execution_stats(
                             f"{snapshot.snapshot_id}_{batch_idx}"
                         )
 

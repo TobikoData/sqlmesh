@@ -136,6 +136,7 @@ class SnapshotEvaluator:
         )
         self.selected_gateway = selected_gateway
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
+        self.execution_tracker = QueryExecutionTracker()
 
     def evaluate(
         self,
@@ -170,9 +171,7 @@ class SnapshotEvaluator:
         Returns:
             The WAP ID of this evaluation if supported, None otherwise.
         """
-        with QueryExecutionTracker.track_execution(
-            f"{snapshot.snapshot_id}_{batch_index}", condition=not snapshot.is_seed
-        ):
+        with self.execution_tracker.track_execution(f"{snapshot.snapshot_id}_{batch_index}"):
             result = self._evaluate_snapshot(
                 start=start,
                 end=end,

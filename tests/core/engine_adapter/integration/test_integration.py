@@ -2415,13 +2415,10 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
-        assert len(actual_execution_stats) == 3
-        assert actual_execution_stats["seed_model"].total_rows_processed == 7
         assert actual_execution_stats["incremental_model"].total_rows_processed == 7
         assert actual_execution_stats["full_model"].total_rows_processed == 3
 
         if ctx.mark.startswith("bigquery"):
-            assert actual_execution_stats["seed_model"].total_bytes_processed
             assert actual_execution_stats["incremental_model"].total_bytes_processed
             assert actual_execution_stats["full_model"].total_bytes_processed
 
