@@ -39,7 +39,6 @@ from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
-from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -66,6 +65,8 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.core.snapshot.definition import parent_snapshots_by_name
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import random_id, CorrelationId
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
