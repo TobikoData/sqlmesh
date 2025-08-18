@@ -278,6 +278,9 @@ def push_plan(context: Context, plan: Plan) -> None:
     for stage in stages:
         if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
             plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.PhysicalLayerSchemaCreationStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_physical_layer_schema_creation_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
             stage.deployability_index = deployability_index
             plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)

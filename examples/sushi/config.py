@@ -192,3 +192,7 @@ environment_catalog_mapping_config = Config(
     },
     before_all=before_all,
 )
+
+hash_md5_naming_config = config.copy(update={"physical_table_naming_convention": "hash_md5"})
+
+table_only_naming_config = config.copy(update={"physical_table_naming_convention": "table_only"})

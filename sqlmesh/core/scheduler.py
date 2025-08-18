@@ -615,14 +615,14 @@ class Scheduler:
                             )
 
             batch_concurrency = snapshot.node.batch_concurrency
+            batch_size = snapshot.node.batch_size
             if snapshot.depends_on_past:
                 batch_concurrency = 1
 
             create_node: t.Optional[CreateNode] = None
-            if (
-                batch_concurrency
-                and batch_concurrency > 1
-                and snapshot.snapshot_id in snapshots_to_create
+            if snapshot.snapshot_id in snapshots_to_create and (
+                snapshot.is_incremental_by_time_range
+                or ((not batch_concurrency or batch_concurrency > 1) and batch_size)
             ):
                 # Add a separate node for table creation in case when there multiple concurrent
                 # evaluation nodes.

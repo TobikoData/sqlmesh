@@ -356,7 +356,6 @@ class SnapshotEvaluator:
         if on_start:
             on_start(snapshots_to_create)
 
-        self.create_physical_schemas(snapshots_to_create, deployability_index)
         self._create_snapshots(
             snapshots_to_create=snapshots_to_create,
             snapshots={s.name: s for s in snapshots.values()},
@@ -377,7 +376,7 @@ class SnapshotEvaluator:
         """
         tables_by_gateway: t.Dict[t.Optional[str], t.List[str]] = defaultdict(list)
         for snapshot in snapshots:
-            if snapshot.is_model and snapshot.is_materialized:
+            if snapshot.is_model and not snapshot.is_symbolic:
                 tables_by_gateway[snapshot.model_gateway].append(
                     snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
                 )

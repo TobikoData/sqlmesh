@@ -953,8 +953,9 @@ def test_new_forward_only_model(init_and_plan_context: t.Callable):
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    context.upsert_model(context.get_model("sushi.top_waiters").copy(update={"kind": FullKind()}))
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
 
     model_name = "sushi.waiter_revenue_by_day"
 
@@ -3949,11 +3950,12 @@ def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context:
         "UPDATE sqlmesh._environments SET finalized_ts = NULL WHERE name = 'dev'"
     )
 
-    model = context.get_model("sushi.customers")
-    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
-
     context.plan(
-        "dev", select_models=["sushi.customers"], auto_apply=True, no_prompts=True, skip_tests=True
+        "prod",
+        restate_models=["sushi.top_waiters"],
+        auto_apply=True,
+        no_prompts=True,
+        skip_tests=True,
     )
     assert context.engine_adapter.table_exists(top_waiters_snapshot.table_name())
 
@@ -4530,7 +4532,7 @@ def test_plan_repairs_unrenderable_snapshot_state(
     plan = plan_builder.build()
     assert plan.directly_modified == {target_snapshot.snapshot_id}
     if not forward_only:
-        assert {i.snapshot_id for i in plan.missing_intervals} == {target_snapshot.snapshot_id}
+        assert target_snapshot.snapshot_id in {i.snapshot_id for i in plan.missing_intervals}
         plan_builder.set_choice(target_snapshot, SnapshotChangeCategory.NON_BREAKING)
         plan = plan_builder.build()
 
@@ -5269,11 +5271,14 @@ def test_multi(mocker):
     assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
     assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
 
+    old_context = context
     context = Context(
         paths=["examples/multi/repo_1"],
-        state_sync=context.state_sync,
+        state_sync=old_context.state_sync,
         gateway="memory",
     )
+    context._engine_adapter = old_context.engine_adapter
+    del context.engine_adapters
 
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
@@ -5866,7 +5871,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 15
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -5885,7 +5890,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 15
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5905,7 +5910,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 32
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 15
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5926,7 +5931,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 15
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -6078,13 +6083,13 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_should_not_override_environment_statements(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
-    context.config.before_all = ["SELECT 'test_before_all';"]
+    context.config.before_all = ["SELECT 'test_before_all';", *context.config.before_all]
     context.load()
 
     context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
 
     prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+    assert prod_env_statements[0].before_all[0] == "SELECT 'test_before_all';"
 
     context.plan(
         restate_models=["sushi.waiter_revenue_by_day"],
@@ -6094,7 +6099,7 @@ def test_restatement_should_not_override_environment_statements(init_and_plan_co
     )
 
     prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+    assert prod_env_statements[0].before_all[0] == "SELECT 'test_before_all';"
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -6142,7 +6147,7 @@ def test_plan_production_environment_statements(tmp_path: Path):
     );
 
     @IF(
-        @runtime_stage = 'creating',
+        @runtime_stage = 'evaluating',
         INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
     );
 
@@ -7303,11 +7308,7 @@ def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
 def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
     sushi_context = Context(
         paths=copy_to_temp_path("examples/sushi"),
-        config=Config(
-            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-            default_connection=DuckDBConnectionConfig(),
-            physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
-        ),
+        config="table_only_naming_config",
     )
 
     assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.TABLE_ONLY
@@ -7338,11 +7339,7 @@ def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable
 def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
     sushi_context = Context(
         paths=copy_to_temp_path("examples/sushi"),
-        config=Config(
-            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-            default_connection=DuckDBConnectionConfig(),
-            physical_table_naming_convention=TableNamingConvention.HASH_MD5,
-        ),
+        config="hash_md5_naming_config",
     )
 
     assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.HASH_MD5
