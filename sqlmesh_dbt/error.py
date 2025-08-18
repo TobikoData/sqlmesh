@@ -16,7 +16,7 @@ def cli_global_error_handler(
             return func(*args, **kwargs)
         except Exception as ex:
             # these imports are deliberately deferred to avoid the penalty of importing the `sqlmesh`
-            # package for every CLI command
+            # package up front for every CLI command
             from sqlmesh.utils.errors import SQLMeshError
             from sqlglot.errors import SqlglotError
 
@@ -26,13 +26,16 @@ def cli_global_error_handler(
             else:
                 raise
         finally:
-            from sqlmesh import Context
-
             context_or_obj = args[0]
             sqlmesh_context = (
                 context_or_obj.obj if isinstance(context_or_obj, click.Context) else context_or_obj
             )
-            if isinstance(sqlmesh_context, Context):
-                sqlmesh_context.close()
+            if sqlmesh_context is not None:
+                # important to import this only if a context was created
+                # otherwise something like `sqlmesh_dbt run --help` will trigger this import because it's in the finally: block
+                from sqlmesh import Context
+
+                if isinstance(sqlmesh_context, Context):
+                    sqlmesh_context.close()
 
     return wrapper
