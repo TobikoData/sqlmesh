@@ -4183,7 +4183,7 @@ def _create_evaluation_model_annotation(
 ) -> str:
     annotation = None
     num_rows_processed = str(rows_processed) if rows_processed else ""
-    rows_processed_str = f" ({num_rows_processed} rows processed)" if num_rows_processed else ""
+    rows_processed_str = f" ({num_rows_processed} rows)" if num_rows_processed else ""
 
     if snapshot.is_audit:
         annotation = "run standalone audit"
@@ -4193,11 +4193,7 @@ def _create_evaluation_model_annotation(
         if snapshot.model.kind.is_view:
             annotation = "recreate view"
         if snapshot.model.kind.is_seed:
-            # no "processed" for seeds
-            seed_num_rows_inserted = (
-                f" ({num_rows_processed} rows inserted)" if num_rows_processed else ""
-            )
-            annotation = f"insert seed file{seed_num_rows_inserted}"
+            annotation = f"insert seed file{rows_processed_str}"
         if snapshot.model.kind.is_full:
             annotation = f"full refresh{rows_processed_str}"
         if snapshot.model.kind.is_incremental_by_unique_key:
