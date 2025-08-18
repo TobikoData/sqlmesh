@@ -414,7 +414,7 @@ class StateMigrator:
                     self.engine_adapter.drop_table(backup_name)
                     self.engine_adapter.create_table_like(backup_name, table)
                     self.engine_adapter.insert_append(
-                        backup_name, exp.select("*").from_(table), track_row_count=False
+                        backup_name, exp.select("*").from_(table), track_execution_stats=False
                     )
 
     def _restore_table(

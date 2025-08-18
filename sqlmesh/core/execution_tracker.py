@@ -8,6 +8,17 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class QueryExecutionStats:
+    snapshot_batch_id: str
+    total_rows_processed: int = 0
+    total_bytes_processed: int = 0
+    query_count: int = 0
+    queries_executed: t.List[t.Tuple[str, t.Optional[int], t.Optional[int], float]] = field(
+        default_factory=list
+    )
+
+
+@dataclass
 class QueryExecutionContext:
     """
     Container for tracking rows processed or other execution information during snapshot evaluation.
@@ -21,26 +32,30 @@ class QueryExecutionContext:
         queries_executed: List of (sql_snippet, row_count, timestamp) tuples for debugging
     """
 
-    id: str
-    total_rows_processed: int = 0
-    query_count: int = 0
-    queries_executed: t.List[t.Tuple[str, t.Optional[int], float]] = field(default_factory=list)
+    snapshot_batch_id: str
+    stats: QueryExecutionStats = field(init=False)
 
-    def add_execution(self, sql: str, row_count: t.Optional[int]) -> None:
+    def __post_init__(self) -> None:
+        self.stats = QueryExecutionStats(snapshot_batch_id=self.snapshot_batch_id)
+
+    def add_execution(
+        self, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
+    ) -> None:
         if row_count is not None and row_count >= 0:
-            self.total_rows_processed += row_count
-        self.query_count += 1
+            self.stats.total_rows_processed += row_count
+
+            # conditional on row_count because we should only count bytes corresponding to
+            # DML actions whose rows were captured
+            if bytes_processed is not None and bytes_processed >= 0:
+                self.stats.total_bytes_processed += bytes_processed
+
+        self.stats.query_count += 1
         # TODO: remove this
         # for debugging
-        self.queries_executed.append((sql[:300], row_count, time.time()))
+        self.stats.queries_executed.append((sql[:300], row_count, bytes_processed, time.time()))
 
-    def get_execution_stats(self) -> t.Dict[str, t.Any]:
-        return {
-            "id": self.id,
-            "total_rows_processed": self.total_rows_processed,
-            "query_count": self.query_count,
-            "queries": self.queries_executed,
-        }
+    def get_execution_stats(self) -> QueryExecutionStats:
+        return self.stats
 
 
 class QueryExecutionTracker:
@@ -72,7 +87,7 @@ class QueryExecutionTracker:
             yield None
             return
 
-        context = QueryExecutionContext(id=snapshot_id_batch)
+        context = QueryExecutionContext(snapshot_batch_id=snapshot_id_batch)
         cls._thread_local.context = context
         cls._contexts[snapshot_id_batch] = context
         try:
@@ -81,13 +96,15 @@ class QueryExecutionTracker:
             cls._thread_local.context = None
 
     @classmethod
-    def record_execution(cls, sql: str, row_count: t.Optional[int]) -> None:
+    def record_execution(
+        cls, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
+    ) -> None:
         context = getattr(cls._thread_local, "context", None)
         if context is not None:
-            context.add_execution(sql, row_count)
+            context.add_execution(sql, row_count, bytes_processed)
 
     @classmethod
-    def get_execution_stats(cls, snapshot_id_batch: str) -> t.Optional[t.Dict[str, t.Any]]:
+    def get_execution_stats(cls, snapshot_id_batch: str) -> t.Optional[QueryExecutionStats]:
         context = cls.get_execution_context(snapshot_id_batch)
         cls._contexts.pop(snapshot_id_batch, None)
         return context.get_execution_stats() if context else None

@@ -536,19 +536,9 @@ class Scheduler:
                         num_audits = len(audit_results)
                         num_audits_failed = sum(1 for result in audit_results if result.count)
 
-                        rows_processed = None
-                        if snapshot.is_seed:
-                            # seed stats are tracked in SeedStrategy.create by model name, not snapshot name
-                            seed_stats = SeedExecutionTracker.get_and_clear_seed_stats(
-                                snapshot.model.name
-                            )
-                            rows_processed = (
-                                seed_stats.get("total_rows_processed") if seed_stats else None
-                            )
-                        else:
-                            rows_processed = (
-                                execution_context.total_rows_processed if execution_context else None
-                            )
+                        execution_stats = QueryExecutionTracker.get_execution_stats(
+                            f"{snapshot.snapshot_id}_{batch_idx}"
+                        )
 
                         self.console.update_snapshot_evaluation_progress(
                                 snapshot,
@@ -557,6 +547,7 @@ class Scheduler:
                                 evaluation_duration_ms,
                                 num_audits - num_audits_failed,
                                 num_audits_failed,
+                                execution_stats=execution_stats,
                             auto_restatement_triggers=auto_restatement_triggers.get(
                             snapshot.snapshot_id
                         ),
@@ -567,9 +558,9 @@ class Scheduler:
                         snapshots=self.snapshots_by_name,
                         deployability_index=deployability_index,
                         allow_destructive_snapshots=allow_destructive_snapshots or set(),
-                        rows_processed=rows_processed,
                         allow_additive_snapshots=allow_additive_snapshots or set(),
-                )
+                        rows_processed=rows_processed,
+                    )
 
         try:
             with self.snapshot_evaluator.concurrent_context():

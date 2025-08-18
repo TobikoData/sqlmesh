@@ -170,7 +170,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        track_row_count: bool = True,
+        track_execution_stats: bool = True,
         **kwargs: t.Any,
     ) -> None:
         catalog = self.get_current_catalog()
@@ -194,7 +194,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             table_description,
             column_descriptions,
             table_kind,
-            track_row_count=track_row_count,
+            track_execution_stats=track_execution_stats,
             **kwargs,
         )
 

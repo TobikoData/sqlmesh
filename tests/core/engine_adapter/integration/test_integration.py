@@ -2383,7 +2383,7 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         context._models.update(replacement_models)
 
     # capture row counts for each evaluated snapshot
-    row_counts = {}
+    actual_execution_stats = {}
 
     def capture_row_counts(
         snapshot,
@@ -2393,10 +2393,12 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         num_audits_passed,
         num_audits_failed,
         audit_only=False,
-        rows_processed=None,
+        execution_stats=None,
     ):
-        if rows_processed is not None:
-            row_counts[snapshot.model.name.replace(f"{schema_name}.", "")] = rows_processed
+        if execution_stats is not None:
+            actual_execution_stats[snapshot.model.name.replace(f"{schema_name}.", "")] = (
+                execution_stats
+            )
 
     # apply prod plan
     with patch.object(context.console, "update_snapshot_evaluation_progress", capture_row_counts):
@@ -2413,10 +2415,15 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
-        assert len(row_counts) == 3
-        assert row_counts["seed_model"] == 7
-        assert row_counts["incremental_model"] == 7
-        assert row_counts["full_model"] == 3
+        assert len(actual_execution_stats) == 3
+        assert actual_execution_stats["seed_model"].total_rows_processed == 7
+        assert actual_execution_stats["incremental_model"].total_rows_processed == 7
+        assert actual_execution_stats["full_model"].total_rows_processed == 3
+
+        if ctx.mark.startswith("bigquery"):
+            assert actual_execution_stats["seed_model"].total_bytes_processed
+            assert actual_execution_stats["incremental_model"].total_bytes_processed
+            assert actual_execution_stats["full_model"].total_bytes_processed
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(

@@ -32,6 +32,7 @@ from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
+from sqlmesh.core.execution_tracker import QueryExecutionStats
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -439,7 +440,7 @@ class Console(
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Updates the snapshot evaluation progress."""
@@ -588,7 +589,7 @@ class NoopConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         pass
@@ -1035,7 +1036,7 @@ class TerminalConsole(Console):
             # determine column widths
             self.evaluation_column_widths["annotation"] = (
                 _calculate_annotation_str_len(
-                    batched_intervals, self.AUDIT_PADDING, len(" (XXXXXX rows processed)")
+                    batched_intervals, self.AUDIT_PADDING, len(" (123.4m rows, 123.4 KiB)")
                 )
                 + 3  # brackets and opening escape backslash
             )
@@ -1081,7 +1082,7 @@ class TerminalConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Update the snapshot evaluation progress."""
@@ -1102,7 +1103,7 @@ class TerminalConsole(Console):
                 ).ljust(self.evaluation_column_widths["name"])
 
                 annotation = _create_evaluation_model_annotation(
-                    snapshot, _format_evaluation_model_interval(snapshot, interval), rows_processed
+                    snapshot, _format_evaluation_model_interval(snapshot, interval), execution_stats
                 )
                 audits_str = ""
                 if num_audits_passed:
@@ -3673,7 +3674,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
@@ -3844,7 +3845,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
-        rows_processed: t.Optional[int] = None,
+        execution_stats: t.Optional[QueryExecutionStats] = None,
         auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         message = f"Evaluated {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
@@ -4179,11 +4180,27 @@ def _format_evaluation_model_interval(snapshot: Snapshot, interval: Interval) ->
 
 
 def _create_evaluation_model_annotation(
-    snapshot: Snapshot, interval_info: t.Optional[str], rows_processed: t.Optional[int]
+    snapshot: Snapshot,
+    interval_info: t.Optional[str],
+    execution_stats: t.Optional[QueryExecutionStats],
 ) -> str:
     annotation = None
-    num_rows_processed = str(rows_processed) if rows_processed else ""
-    rows_processed_str = f" ({num_rows_processed} rows)" if num_rows_processed else ""
+    execution_stats_str = ""
+    if execution_stats:
+        rows_processed = execution_stats.total_rows_processed
+        execution_stats_str += (
+            f"{_abbreviate_integer_count(rows_processed)} row{'s' if rows_processed > 1 else ''}"
+            if rows_processed
+            else ""
+        )
+
+        bytes_processed = execution_stats.total_bytes_processed
+        execution_stats_str += (
+            f"{', ' if execution_stats_str else ''}{_format_bytes(bytes_processed)}"
+            if bytes_processed
+            else ""
+        )
+    execution_stats_str = f" ({execution_stats_str})" if execution_stats_str else ""
 
     if snapshot.is_audit:
         annotation = "run standalone audit"
@@ -4193,22 +4210,24 @@ def _create_evaluation_model_annotation(
         if snapshot.model.kind.is_view:
             annotation = "recreate view"
         if snapshot.model.kind.is_seed:
-            annotation = f"insert seed file{rows_processed_str}"
+            annotation = f"insert seed file{execution_stats_str}"
         if snapshot.model.kind.is_full:
-            annotation = f"full refresh{rows_processed_str}"
+            annotation = f"full refresh{execution_stats_str}"
         if snapshot.model.kind.is_incremental_by_unique_key:
-            annotation = f"insert/update rows{rows_processed_str}"
+            annotation = f"insert/update rows{execution_stats_str}"
         if snapshot.model.kind.is_incremental_by_partition:
-            annotation = f"insert partitions{rows_processed_str}"
+            annotation = f"insert partitions{execution_stats_str}"
 
     if annotation:
         return annotation
 
-    return f"{interval_info}{rows_processed_str}" if interval_info else ""
+    return f"{interval_info}{execution_stats_str}" if interval_info else ""
 
 
 def _calculate_interval_str_len(
-    snapshot: Snapshot, intervals: t.List[Interval], rows_processed: t.Optional[int] = None
+    snapshot: Snapshot,
+    intervals: t.List[Interval],
+    execution_stats: t.Optional[QueryExecutionStats] = None,
 ) -> int:
     interval_str_len = 0
     for interval in intervals:
@@ -4216,7 +4235,7 @@ def _calculate_interval_str_len(
             interval_str_len,
             len(
                 _create_evaluation_model_annotation(
-                    snapshot, _format_evaluation_model_interval(snapshot, interval), rows_processed
+                    snapshot, _format_evaluation_model_interval(snapshot, interval), execution_stats
                 )
             ),
         )
@@ -4271,7 +4290,7 @@ def _calculate_audit_str_len(snapshot: Snapshot, audit_padding: int = 0) -> int:
 def _calculate_annotation_str_len(
     batched_intervals: t.Dict[Snapshot, t.List[Interval]],
     audit_padding: int = 0,
-    rows_processed_len: int = 0,
+    execution_stats_len: int = 0,
 ) -> int:
     annotation_str_len = 0
     for snapshot, intervals in batched_intervals.items():
@@ -4279,6 +4298,42 @@ def _calculate_annotation_str_len(
             annotation_str_len,
             _calculate_interval_str_len(snapshot, intervals)
             + _calculate_audit_str_len(snapshot, audit_padding)
-            + rows_processed_len,
+            + execution_stats_len,
         )
     return annotation_str_len
+
+
+# Convert number of bytes to a human-readable string
+# https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L165
+def _format_bytes(num_bytes: t.Optional[int]) -> str:
+    if num_bytes and num_bytes > 0:
+        if num_bytes < 1024:
+            return f"{num_bytes} Bytes"
+
+        num_bytes_float = float(num_bytes) / 1024.0
+        for unit in ["KiB", "MiB", "GiB", "TiB", "PiB"]:
+            if num_bytes_float < 1024.0:
+                return f"{num_bytes_float:3.1f} {unit}"
+            num_bytes_float /= 1024.0
+
+        num_bytes_float *= 1024.0  # undo last division in loop
+        return f"{num_bytes_float:3.1f} {unit}"
+    return ""
+
+
+# Abbreviate integer count. Example: 1,000,000,000 -> 1b
+# https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L178
+def _abbreviate_integer_count(count: t.Optional[int]) -> str:
+    if count and count > 0:
+        if count < 1000:
+            return str(count)
+
+        count_float = float(count) / 1000.0
+        for unit in ["k", "m", "b", "t"]:
+            if count_float < 1000.0:
+                return f"{count_float:3.1f}{unit}".strip()
+            count_float /= 1000.0
+
+        count_float *= 1000.0  # undo last division in loop
+        return f"{count_float:3.1f}{unit}".strip()
+    return ""
