@@ -44,13 +44,14 @@ logger = logging.getLogger(__name__)
 def sqlmesh_config(
     project_root: t.Optional[Path] = None,
     state_connection: t.Optional[ConnectionConfig] = None,
+    dbt_profile_name: t.Optional[str] = None,
     dbt_target_name: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     register_comments: t.Optional[bool] = None,
     **kwargs: t.Any,
 ) -> Config:
     project_root = project_root or Path()
-    context = DbtContext(project_root=project_root)
+    context = DbtContext(project_root=project_root, profile_name=dbt_profile_name)
     profile = Profile.load(context, target_name=dbt_target_name)
     model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
     if model_defaults.dialect is None:

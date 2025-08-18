@@ -2,6 +2,7 @@ from pathlib import Path
 import pytest
 from sqlmesh_dbt.operations import create
 from sqlmesh.utils import yaml
+from sqlmesh.utils.errors import SQLMeshError
 import time_machine
 
 pytestmark = pytest.mark.slow
@@ -53,3 +54,18 @@ def test_create_uses_configured_start_date_if_supplied(jaffle_shop_duckdb: Path)
         for model in operations.context.models.values()
         if not model.kind.is_seed
     )
+
+
+def test_create_can_specify_profile_and_target(jaffle_shop_duckdb: Path):
+    with pytest.raises(SQLMeshError, match=r"Profile 'foo' not found"):
+        create(profile="foo")
+
+    with pytest.raises(
+        SQLMeshError, match=r"Target 'prod' not specified in profiles for 'jaffle_shop'"
+    ):
+        create(profile="jaffle_shop", target="prod")
+
+    dbt_project = create(profile="jaffle_shop", target="dev").project
+
+    assert dbt_project.context.profile_name == "jaffle_shop"
+    assert dbt_project.context.target_name == "dev"
