@@ -2385,7 +2385,7 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     # capture row counts for each evaluated snapshot
     actual_execution_stats = {}
 
-    def capture_row_counts(
+    def capture_execution_stats(
         snapshot,
         interval,
         batch_idx,
@@ -2401,7 +2401,9 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
             )
 
     # apply prod plan
-    with patch.object(context.console, "update_snapshot_evaluation_progress", capture_row_counts):
+    with patch.object(
+        context.console, "update_snapshot_evaluation_progress", capture_execution_stats
+    ):
         context.plan(auto_apply=True, no_prompts=True)
 
     prod_schema_results = ctx.get_metadata_results(object_names["view_schema"][0])

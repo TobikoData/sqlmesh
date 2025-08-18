@@ -37,7 +37,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
@@ -90,6 +89,7 @@ else:
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter.base import EngineAdapter
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 logger = logging.getLogger(__name__)
