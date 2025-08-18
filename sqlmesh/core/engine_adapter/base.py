@@ -2556,14 +2556,21 @@ class EngineAdapter:
         raise NotImplementedError()
 
     def _get_temp_table(
-        self, table: TableName, table_only: bool = False, quoted: bool = True
+        self,
+        table: TableName,
+        table_only: bool = False,
+        quoted: bool = True,
+        start_with: str = "__",
     ) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set(
-            "this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}", quoted=quoted)
+            "this",
+            exp.to_identifier(
+                f"{start_with}temp_{table.name}_{random_id(short=True)}", quoted=quoted
+            ),
         )
 
         if table_only:

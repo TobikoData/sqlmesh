@@ -1525,6 +1525,19 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
         physical_properties = kwargs.get("physical_properties", model.physical_properties)
+        # If Doris and incremental-by-unique-key, ensure unique_key is present for creation
+        if (
+            model.dialect == "doris"
+            and getattr(model.kind, "is_incremental_by_unique_key", False)
+            and model.unique_key
+            and "unique_key" not in physical_properties
+        ):
+            physical_properties = dict(physical_properties)
+            physical_properties["unique_key"] = (
+                model.unique_key[0]
+                if len(model.unique_key) == 1
+                else exp.Tuple(expressions=model.unique_key)
+            )
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -1612,6 +1625,21 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
                 model, name, render_kwargs, force_get_columns_from_target=True
             )
 
+        # Ensure Doris receives unique_key during first replace/create as needed
+        table_properties = kwargs.get("physical_properties", model.physical_properties)
+        if (
+            model.dialect == "doris"
+            and getattr(model.kind, "is_incremental_by_unique_key", False)
+            and model.unique_key
+            and "unique_key" not in table_properties
+        ):
+            table_properties = dict(table_properties)
+            table_properties["unique_key"] = (
+                model.unique_key[0]
+                if len(model.unique_key) == 1
+                else exp.Tuple(expressions=model.unique_key)
+            )
+
         self.adapter.replace_query(
             name,
             query_or_df,
@@ -1620,7 +1648,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.partition_interval_unit,
             clustered_by=model.clustered_by,
-            table_properties=kwargs.get("physical_properties", model.physical_properties),
+            table_properties=table_properties,
             table_description=model.description,
             column_descriptions=model.column_descriptions,
             target_columns_to_types=columns_to_types,
@@ -1981,6 +2009,12 @@ class SCDType2Strategy(IncrementalStrategy):
             render_kwargs=render_kwargs,
             force_get_columns_from_target=True,
         )
+        if kwargs.get("physical_properties", model.physical_properties):
+            call_kwargs = {
+                "table_properties": kwargs.get("physical_properties", model.physical_properties)
+            }
+        else:
+            call_kwargs = {}
         if isinstance(model.kind, SCDType2ByTimeKind):
             self.adapter.scd_type_2_by_time(
                 target_table=table_name,
@@ -1998,6 +2032,7 @@ class SCDType2Strategy(IncrementalStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 source_columns=source_columns,
+                **call_kwargs,
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -2016,6 +2051,7 @@ class SCDType2Strategy(IncrementalStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 source_columns=source_columns,
+                **call_kwargs,
             )
         else:
             raise SQLMeshError(
@@ -2157,6 +2193,10 @@ class ViewStrategy(PromotableStrategy):
                 "clustered_by": model.clustered_by,
                 "partition_interval_unit": model.partition_interval_unit,
             }
+            # Include physical properties in materialized_properties for materialized views
+            physical_properties = kwargs.get("physical_properties", model.physical_properties)
+            if physical_properties:
+                materialized_properties.update(physical_properties)
         self.adapter.create_view(
             table_name,
             model.render_query_or_raise(**render_kwargs),
