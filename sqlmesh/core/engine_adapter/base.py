@@ -2555,12 +2555,15 @@ class EngineAdapter:
         """
         raise NotImplementedError()
 
+    def _get_temp_table_name(self, table: TableName) -> str:
+        table_obj = exp.to_table(table)
+        return f"__temp_{table_obj.name}_{random_id(short=True)}"
+
     def _get_temp_table(
         self,
         table: TableName,
         table_only: bool = False,
         quoted: bool = True,
-        start_with: str = "__",
     ) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name.
@@ -2568,9 +2571,7 @@ class EngineAdapter:
         table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set(
             "this",
-            exp.to_identifier(
-                f"{start_with}temp_{table.name}_{random_id(short=True)}", quoted=quoted
-            ),
+            exp.to_identifier(self._get_temp_table_name(table), quoted=quoted),
         )
 
         if table_only:

@@ -281,7 +281,11 @@ def test_create_table_with_partitioned_by(
         "test_table",
         target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
         partitioned_by=[exp.Literal.string("RANGE(b)")],
-        table_properties={"partitions": exp.Literal.string("FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR")},
+        table_properties={
+            "partitions": exp.Literal.string(
+                "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"
+            )
+        },
     )
 
     assert to_sql_calls(adapter) == [
@@ -297,7 +301,9 @@ def test_create_table_with_partitioned_by(
         table_properties={
             "partitions": exp.Tuple(
                 expressions=[
-                    exp.Literal.string('PARTITION `p_cn` VALUES IN ("Beijing", "Shanghai", "Hong Kong")'),
+                    exp.Literal.string(
+                        'PARTITION `p_cn` VALUES IN ("Beijing", "Shanghai", "Hong Kong")'
+                    ),
                     exp.Literal.string('PARTITION `p_usa` VALUES IN ("New York", "San Francisco")'),
                     exp.Literal.string('PARTITION `p_other` VALUES IN ("Other")'),
                 ]
