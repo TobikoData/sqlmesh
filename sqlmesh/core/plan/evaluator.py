@@ -253,6 +253,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             circuit_breaker=self._circuit_breaker,
             start=plan.start,
             end=plan.end,
+            allow_destructive_snapshots=plan.allow_destructive_models,
         )
         if errors:
             raise PlanError("Plan application failed.")

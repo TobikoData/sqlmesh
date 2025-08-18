@@ -161,6 +161,7 @@ class Scheduler:
         deployability_index: DeployabilityIndex,
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -170,6 +171,7 @@ class Scheduler:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
+            allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             auto_restatement_enabled: Whether to enable auto restatements.
@@ -190,6 +192,7 @@ class Scheduler:
             end=end,
             execution_time=execution_time,
             snapshots=snapshots,
+            allow_destructive_snapshots=allow_destructive_snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
             **kwargs,
@@ -369,6 +372,7 @@ class Scheduler:
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
@@ -382,6 +386,7 @@ class Scheduler:
             circuit_breaker: An optional handler which checks if the run should be aborted.
             start: The start of the run.
             end: The end of the run.
+            allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
 
         Returns:
             A tuple of errors and skipped intervals.
@@ -455,6 +460,7 @@ class Scheduler:
                         execution_time=execution_time,
                         deployability_index=deployability_index,
                         batch_index=batch_idx,
+                        allow_destructive_snapshots=allow_destructive_snapshots,
                     )
 
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
