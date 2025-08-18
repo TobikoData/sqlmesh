@@ -21,9 +21,9 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.execution_tracker import QueryExecutionTracker
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError

@@ -40,7 +40,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
-from sqlmesh.core.execution_tracker import QueryExecutionTracker
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import (
     CorrelationId,
     columns_to_types_all_known,

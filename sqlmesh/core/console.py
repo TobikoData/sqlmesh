@@ -32,7 +32,6 @@ from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.core.model import Model
-from sqlmesh.core.execution_tracker import QueryExecutionStats
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -40,6 +39,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
 )
 from sqlmesh.core.snapshot.definition import Interval, Intervals, SnapshotTableInfo
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionStats
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils import Verbosity

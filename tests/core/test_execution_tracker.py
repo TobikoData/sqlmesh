@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlmesh.core.execution_tracker import QueryExecutionStats, QueryExecutionTracker
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionStats, QueryExecutionTracker
 
 
 def test_execution_tracker_thread_isolation() -> None:
