@@ -198,6 +198,7 @@ gateways:
       workspace_id: {{ env_var("FABRIC_WORKSPACE_ID") }}
       odbc_properties:
         Authentication: ActiveDirectoryServicePrincipal
+      check_import: false
     state_connection:
       type: duckdb
 

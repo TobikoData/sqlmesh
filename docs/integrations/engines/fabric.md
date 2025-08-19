@@ -1,5 +1,8 @@
 # Fabric
 
+!!! info
+    The Fabric engine adapter is a community contribution. Due to this, only limited community support is available.
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `fabric`
 
