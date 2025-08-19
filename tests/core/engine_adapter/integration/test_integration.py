@@ -6,12 +6,13 @@ import re
 import sys
 import typing as t
 import shutil
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
+import time_machine
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -2424,6 +2425,24 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         )
         # seed rows aren't tracked
         assert actual_execution_stats["seed_model"].total_rows_processed is None
+
+        if ctx.mark.startswith("bigquery"):
+            assert actual_execution_stats["incremental_model"].total_bytes_processed
+            assert actual_execution_stats["full_model"].total_bytes_processed
+
+    # run that loads 0 rows in incremental model
+    with patch.object(
+        context.console, "update_snapshot_evaluation_progress", capture_execution_stats
+    ):
+        with time_machine.travel(date.today() + timedelta(days=1)):
+            context.run()
+
+    if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+        assert actual_execution_stats["incremental_model"].total_rows_processed == 0
+        # snowflake doesn't track rows for CTAS
+        assert actual_execution_stats["full_model"].total_rows_processed == (
+            None if ctx.mark.startswith("snowflake") else 3
+        )
 
         if ctx.mark.startswith("bigquery"):
             assert actual_execution_stats["incremental_model"].total_bytes_processed
