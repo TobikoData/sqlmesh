@@ -249,6 +249,7 @@ def test_incremental_by_time_datetimeoffset_precision(
         end="2020-01-02",
         execution_time="2020-01-02",
         snapshots={},
+        target_table_exists=True,
     )
 
     assert adapter.cursor.execute.call_args_list[0][0][0] == (
