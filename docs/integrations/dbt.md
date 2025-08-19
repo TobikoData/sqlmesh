@@ -355,7 +355,7 @@ SQLMesh supports running dbt projects using the majority of dbt jinja methods, i
 | builtins    | modules        | source       |         |
 | config      | print          | statement    |         |
 
-\* `adapter.rename_relation` and `adapter.expand_target_column_types` are not currently supported.
+\* `adapter.expand_target_column_types` is not currently supported.
 
 ## Unsupported dbt jinja methods
 
@@ -364,7 +364,6 @@ The dbt jinja methods that are not currently supported are:
 * debug
 * selected_sources
 * adapter.expand_target_column_types
-* adapter.rename_relation
 * graph.nodes.values
 * graph.metrics.values
 
