@@ -689,9 +689,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
         config_content = f.read()
 
     # Add cache_dir to the test_config definition
-    config_content = config_content.replace(
-        'test_config = Config(\n    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},\n    default_gateway="in_memory",\n    plan=PlanConfig(\n        auto_categorize_changes=CategorizerConfig(\n            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF\n        )\n    ),\n    model_defaults=model_defaults,\n)',
-        f"""test_config = Config(
+    config_content += f"""test_config_cache_dir = Config(
     gateways={{"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())}},
     default_gateway="in_memory",
     plan=PlanConfig(
@@ -701,14 +699,14 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
     ),
     model_defaults=model_defaults,
     cache_dir="{custom_cache_dir.as_posix()}",
-)""",
-    )
+    before_all=before_all,
+)"""
 
     with open(config_py_path, "w") as f:
         f.write(config_content)
 
     # Create context with the test config
-    context = Context(paths=sushi_path, config="test_config")
+    context = Context(paths=sushi_path, config="test_config_cache_dir")
     custom_cache_dir = context.cache_dir
     assert "custom_cache" in str(custom_cache_dir)
     assert (custom_cache_dir / "optimized_query").exists()
@@ -733,7 +731,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
 
     # New context should load same models and create the cache for optimized_query and model_definition
     initial_model_count = len(context.models)
-    context2 = Context(paths=context.path, config="test_config")
+    context2 = Context(paths=context.path, config="test_config_cache_dir")
     cached_model_count = len(context2.models)
 
     assert initial_model_count == cached_model_count > 0

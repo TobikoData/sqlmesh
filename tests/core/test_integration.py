@@ -3211,7 +3211,7 @@ def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path:
         cron '@daily'
     );
 
-    select account_id, name, date from test.external_table;
+    select 1 as account_id, date from test.external_table;
     """
     with open(models_dir / "model1.sql", "w") as f:
         f.write(model1)
