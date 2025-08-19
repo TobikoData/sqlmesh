@@ -15,7 +15,6 @@ from sqlmesh.utils import AttributeDict
 
 if t.TYPE_CHECKING:
     import agate
-    import pandas as pd
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
@@ -85,6 +84,10 @@ class BaseAdapter(abc.ABC):
     @abc.abstractmethod
     def drop_relation(self, relation: BaseRelation) -> None:
         """Drops a relation (table) in the target database."""
+
+    @abc.abstractmethod
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        """Renames a relation (table) in the target database."""
 
     @abc.abstractmethod
     def execute(
@@ -209,6 +212,9 @@ class ParsetimeAdapter(BaseAdapter):
 
     def drop_relation(self, relation: BaseRelation) -> None:
         self._raise_parsetime_adapter_call_error("drop relation")
+
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        self._raise_parsetime_adapter_call_error("rename relation")
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -348,6 +354,18 @@ class RuntimeAdapter(BaseAdapter):
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
             self.engine_adapter.drop_table(self._normalize(self._relation_to_table(relation)))
+
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        old_table_name = None
+        if from_relation.schema is not None and from_relation.identifier is not None:
+            old_table_name = self._normalize(self._relation_to_table(from_relation))
+
+        new_table_name = None
+        if to_relation.schema is not None and to_relation.identifier is not None:
+            new_table_name = self._normalize(self._relation_to_table(to_relation))
+
+        if old_table_name and new_table_name:
+            self.engine_adapter.rename_table(old_table_name, new_table_name)
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False

@@ -81,6 +81,19 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
         == "[]"
     )
 
+    renderer("""
+        {%- set old_relation = adapter.get_relation(
+              database=None,
+              schema='foo',
+              identifier='bar') -%}
+
+        {%- set backup_relation = api.Relation.create(schema='foo', identifier='bar__backup') -%}
+
+        {% do adapter.rename_relation(old_relation, backup_relation) %}
+    """)
+    assert not engine_adapter.table_exists("foo.bar")
+    assert engine_adapter.table_exists("foo.bar__backup")
+
 
 def test_bigquery_get_columns_in_relation(
     sushi_test_project: Project,
