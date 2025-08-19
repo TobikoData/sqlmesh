@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import abc
 import logging
 import typing as t
 import time
@@ -57,10 +58,10 @@ logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
 
 
-class BaseNode:
+class SchedulingUnit(abc.ABC):
     snapshot_name: str
 
-    def __lt__(self, other: BaseNode) -> bool:
+    def __lt__(self, other: SchedulingUnit) -> bool:
         return (self.__class__.__name__, self.snapshot_name) < (
             other.__class__.__name__,
             other.snapshot_name,
@@ -68,12 +69,12 @@ class BaseNode:
 
 
 @dataclass(frozen=True)
-class EvaluateNode(BaseNode):
+class EvaluateNode(SchedulingUnit):
     snapshot_name: str
     interval: Interval
     batch_index: int
 
-    def __lt__(self, other: BaseNode) -> bool:
+    def __lt__(self, other: SchedulingUnit) -> bool:
         if not isinstance(other, EvaluateNode):
             return super().__lt__(other)
         return (self.__class__.__name__, self.snapshot_name, self.interval, self.batch_index) < (
@@ -85,16 +86,13 @@ class EvaluateNode(BaseNode):
 
 
 @dataclass(frozen=True)
-class CreateNode(BaseNode):
+class CreateNode(SchedulingUnit):
     snapshot_name: str
 
 
 @dataclass(frozen=True)
-class DummyNode(BaseNode):
+class DummyNode(SchedulingUnit):
     snapshot_name: str
-
-
-SchedulingUnit = t.Union[EvaluateNode, CreateNode, DummyNode]
 
 
 class Scheduler:
