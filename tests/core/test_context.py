@@ -1776,14 +1776,14 @@ MODEL(
 );
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   SET VARIABLE stats_model_start = now()
 );
 
 SELECT 1 AS cola;
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time)
   VALUES (@resolve_template('@{schema_name}.@{table_name}'), getvariable('stats_model_start'), now(), now() - getvariable('stats_model_start'))
 );
@@ -1849,11 +1849,11 @@ def access_adapter(evaluator):
 
     assert (
         model.pre_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = NOW())"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), SET VARIABLE stats_model_start = NOW())"
     )
     assert (
         model.post_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
     )
 
     stats_table = context.fetchdf("select * from memory.analytic_stats").to_dict()

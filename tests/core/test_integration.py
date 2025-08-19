@@ -6207,7 +6207,7 @@ def test_plan_production_environment_statements(tmp_path: Path):
     );
 
     @IF(
-        @runtime_stage = 'evaluating',
+        @runtime_stage IN ('evaluating', 'creating'),
         INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
     );
 

@@ -707,12 +707,15 @@ class SnapshotEvaluator:
             not _intervals(snapshot, deployability_index) or not target_table_exists
         ) and batch_index == 0
 
+        # Use the 'creating' stage if the table doesn't exist yet to preserve backwards compatibility with existing projects
+        # that depend on a separate physical table creation stage.
+        runtime_stage = RuntimeStage.EVALUATING if target_table_exists else RuntimeStage.CREATING
         common_render_kwargs = dict(
             start=start,
             end=end,
             execution_time=execution_time,
             snapshot=snapshot,
-            runtime_stage=RuntimeStage.EVALUATING,
+            runtime_stage=runtime_stage,
             **kwargs,
         )
         create_render_kwargs = dict(
