@@ -695,9 +695,11 @@ class SnapshotEvaluator:
         target_table_name = snapshot.table_name(is_deployable=is_snapshot_deployable)
         # https://github.com/TobikoData/sqlmesh/issues/2609
         # If there are no existing intervals yet; only consider this a first insert for the first snapshot in the batch
-        is_first_insert = not _intervals(snapshot, deployability_index) and batch_index == 0
         if target_table_exists is None:
             target_table_exists = adapter.table_exists(target_table_name)
+        is_first_insert = (
+            not _intervals(snapshot, deployability_index) or not target_table_exists
+        ) and batch_index == 0
 
         common_render_kwargs = dict(
             start=start,
@@ -749,7 +751,6 @@ class SnapshotEvaluator:
                         allow_destructive_snapshots=allow_destructive_snapshots,
                     )
                 else:
-                    is_first_insert = True
                     if model.annotated or model.is_seed or model.kind.is_scd_type_2:
                         self._execute_create(
                             snapshot=snapshot,

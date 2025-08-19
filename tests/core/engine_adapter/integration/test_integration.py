@@ -1914,6 +1914,11 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
+    config.before_all = [
+        f"CREATE SCHEMA IF NOT EXISTS {raw_test_schema}",
+        f"DROP VIEW IF EXISTS {raw_test_schema}.demographics",
+        f"CREATE VIEW {raw_test_schema}.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+    ]
 
     # To enable parallelism in integration tests
     config.gateways = {ctx.gateway: config.gateways[ctx.gateway]}
@@ -2132,6 +2137,8 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
             }
 
             for model_name, comment in comments.items():
+                if not model_name in layer_models:
+                    continue
                 layer_table_name = layer_models[model_name]["table_name"]
                 table_kind = "VIEW" if layer_models[model_name]["is_view"] else "BASE TABLE"
 

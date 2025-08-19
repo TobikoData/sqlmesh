@@ -5890,7 +5890,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 15
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5910,7 +5910,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 32
-    assert len(user_default_tables) == 15
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5931,7 +5931,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 15
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -6902,17 +6902,7 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "New environment `dev` will be created from `prod`" in output.stdout
     assert "Differences from the `prod` environment" in output.stdout
 
-    assert (
-        """MODEL (                                                                        
-   name test.a,                                                                 
-+  owner test,                                                                  
-   kind FULL                                                                    
- )                                                                              
- SELECT                                                                         
--  5 AS col                                                                     
-+  10 AS col"""
-        in output.stdout
-    )
+    assert "Directly Modified: test__dev.a" in output.stdout
 
     # Case 6: Ensure that target environment and create_from environment are not the same
     output = plan_with_output(ctx, "prod")

@@ -254,6 +254,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             allow_destructive_snapshots=plan.allow_destructive_models,
+            selected_snapshot_ids=stage.selected_snapshot_ids,
         )
         if errors:
             raise PlanError("Plan application failed.")

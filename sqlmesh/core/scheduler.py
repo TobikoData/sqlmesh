@@ -332,8 +332,9 @@ class Scheduler:
         merged_intervals: SnapshotToIntervals,
         deployability_index: t.Optional[DeployabilityIndex],
         environment_naming_info: EnvironmentNamingInfo,
+        dag: t.Optional[DAG[SnapshotId]] = None,
     ) -> t.Dict[Snapshot, Intervals]:
-        dag = snapshots_to_dag(merged_intervals)
+        dag = dag or snapshots_to_dag(merged_intervals)
 
         snapshot_intervals: t.Dict[SnapshotId, t.Tuple[Snapshot, t.List[Interval]]] = {
             snapshot.snapshot_id: (
@@ -413,6 +414,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
@@ -427,14 +429,21 @@ class Scheduler:
             start: The start of the run.
             end: The end of the run.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            selected_snapshot_ids: The snapshots to include in the run DAG. If None, all snapshots with missing intervals will be included.
 
         Returns:
             A tuple of errors and skipped intervals.
         """
         execution_time = execution_time or now_timestamp()
 
+        selected_snapshots = [self.snapshots[sid] for sid in (selected_snapshot_ids or set())]
+        if not selected_snapshots:
+            selected_snapshots = list(merged_intervals)
+
+        snapshot_dag = snapshots_to_dag(selected_snapshots)
+
         batched_intervals = self.batch_intervals(
-            merged_intervals, deployability_index, environment_naming_info
+            merged_intervals, deployability_index, environment_naming_info, dag=snapshot_dag
         )
 
         self.console.start_evaluation_progress(
@@ -447,11 +456,13 @@ class Scheduler:
         snapshots_to_create = {
             s.snapshot_id
             for s in self.snapshot_evaluator.get_snapshots_to_create(
-                merged_intervals.keys(), deployability_index
+                selected_snapshots, deployability_index
             )
         }
 
-        dag = self._dag(batched_intervals, snapshots_to_create=snapshots_to_create)
+        dag = self._dag(
+            batched_intervals, snapshot_dag=snapshot_dag, snapshots_to_create=snapshots_to_create
+        )
 
         if run_environment_statements:
             environment_statements = self.state_sync.get_environment_statements(
@@ -575,12 +586,14 @@ class Scheduler:
     def _dag(
         self,
         batches: SnapshotToIntervals,
+        snapshot_dag: t.Optional[DAG[SnapshotId]] = None,
         snapshots_to_create: t.Optional[t.Set[SnapshotId]] = None,
     ) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
             batches: The batches of snapshots and intervals to evaluate.
+            snapshot_dag: The DAG of all snapshots.
             snapshots_to_create: The snapshots with missing physical tables.
 
         Returns:
@@ -591,12 +604,14 @@ class Scheduler:
             snapshot.name: intervals for snapshot, intervals in batches.items()
         }
         snapshots_to_create = snapshots_to_create or set()
+        original_snapshots_to_create = snapshots_to_create.copy()
 
+        snapshot_dag = snapshot_dag or snapshots_to_dag(batches)
         dag = DAG[SchedulingUnit]()
 
-        for snapshot, intervals in batches.items():
-            if not intervals:
-                continue
+        for snapshot_id in snapshot_dag:
+            snapshot = self.snapshots_by_name[snapshot_id.name]
+            intervals = intervals_per_snapshot.get(snapshot.name, [])
 
             upstream_dependencies: t.List[SchedulingUnit] = []
 
@@ -604,7 +619,9 @@ class Scheduler:
                 if p_sid in self.snapshots:
                     p_intervals = intervals_per_snapshot.get(p_sid.name, [])
 
-                    if len(p_intervals) > 1:
+                    if not p_intervals and p_sid in original_snapshots_to_create:
+                        upstream_dependencies.append(CreateNode(snapshot_name=p_sid.name))
+                    elif len(p_intervals) > 1:
                         upstream_dependencies.append(DummyNode(snapshot_name=p_sid.name))
                     else:
                         for i, interval in enumerate(p_intervals):
@@ -620,14 +637,16 @@ class Scheduler:
                 batch_concurrency = 1
 
             create_node: t.Optional[CreateNode] = None
-            if snapshot.snapshot_id in snapshots_to_create and (
+            if snapshot.snapshot_id in original_snapshots_to_create and (
                 snapshot.is_incremental_by_time_range
                 or ((not batch_concurrency or batch_concurrency > 1) and batch_size)
+                or not intervals
             ):
                 # Add a separate node for table creation in case when there multiple concurrent
-                # evaluation nodes.
+                # evaluation nodes or when there are no intervals to evaluate.
                 create_node = CreateNode(snapshot_name=snapshot.name)
                 dag.add(create_node, upstream_dependencies)
+                snapshots_to_create.remove(snapshot.snapshot_id)
 
             for i, interval in enumerate(intervals):
                 node = EvaluateNode(snapshot_name=snapshot.name, interval=interval, batch_index=i)

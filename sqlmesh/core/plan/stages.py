@@ -116,12 +116,14 @@ class BackfillStage:
     Args:
         snapshot_to_intervals: Intervals to backfill. This collection can be empty in which case no backfill is needed.
             This can be useful to report the lack of backfills back to the user.
+        selected_snapshot_ids: The snapshots to include in the run DAG.
         all_snapshots: All snapshots in the plan by name.
         deployability_index: Deployability index for this stage.
         before_promote: Whether this stage is before the promotion stage.
     """
 
     snapshot_to_intervals: SnapshotToIntervals
+    selected_snapshot_ids: t.Set[SnapshotId]
     all_snapshots: t.Dict[str, Snapshot]
     deployability_index: DeployabilityIndex
     before_promote: bool = True
@@ -298,26 +300,13 @@ class PlanStagesBuilder:
             stages.append(CreateSnapshotRecordsStage(snapshots=plan.new_snapshots))
 
         snapshots_to_create = self._get_snapshots_to_create(plan, snapshots)
-        stages.append(
-            PhysicalLayerSchemaCreationStage(
-                snapshots=snapshots_to_create, deployability_index=deployability_index
-            )
-        )
-        if not plan.skip_backfill and not plan.empty_backfill:
-            # If the snapshot is selected for backfill and is not representative, then we assume
-            # this is a paused forward-only snapshot and we need to make sure a clone has been
-            # created for it in dev.
-            filtered_snapshots_to_create = []
-            for snapshot in snapshots_to_create:
-                if (
-                    plan.is_selected_for_backfill(snapshot.name)
-                    and snapshot not in snapshots_to_intervals
-                    and snapshot.is_materialized
-                    and not deployability_index.is_representative(snapshot)
-                ):
-                    filtered_snapshots_to_create.append(snapshot)
-            snapshots_to_create = filtered_snapshots_to_create
         if snapshots_to_create:
+            stages.append(
+                PhysicalLayerSchemaCreationStage(
+                    snapshots=snapshots_to_create, deployability_index=deployability_index
+                )
+            )
+        if not needs_backfill:
             stages.append(
                 self._get_physical_layer_update_stage(
                     plan,
@@ -340,6 +329,11 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals=missing_intervals_before_promote,
+                    selected_snapshot_ids={
+                        s_id
+                        for s_id in before_promote_snapshots
+                        if plan.is_selected_for_backfill(s_id.name)
+                    },
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
@@ -349,6 +343,7 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals={},
+                    selected_snapshot_ids=set(),
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
@@ -379,6 +374,11 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals=missing_intervals_after_promote,
+                    selected_snapshot_ids={
+                        s_id
+                        for s_id in after_promote_snapshots
+                        if plan.is_selected_for_backfill(s_id.name)
+                    },
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
