@@ -130,7 +130,7 @@ SQLMesh provides additional predefined variables used to modify model behavior b
 
 * @runtime_stage - A string value denoting the current stage of the SQLMesh runtime. Typically used in models to conditionally execute pre/post-statements (learn more [here](../models/sql_models.md#optional-prepost-statements)). It returns one of these values:
     * 'loading' - The project is being loaded into SQLMesh's runtime context.
-    * 'creating' - The model tables are being created.
+    * 'creating' - The model tables are being created without inserting data.
     * 'evaluating' - The model query logic is being evaluated.
     * 'promoting' - The model is being promoted in the target environment (view created during virtual layer update).
     * 'demoting' - The model is being demoted in the target environment (view dropped during virtual layer update).

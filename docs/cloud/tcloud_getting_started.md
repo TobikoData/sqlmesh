@@ -268,9 +268,6 @@ Models needing backfill (missing dates):
 ├── sqlmesh_example.incremental_model: 2020-01-01 - 2024-11-24
 └── sqlmesh_example.seed_model: 2024-11-24 - 2024-11-24
 Apply - Backfill Tables [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 3/3 • 0:00:00
-
-All model versions have been created successfully
 
 [1/1] sqlmesh_example.seed_model evaluated in 0.00s
 [1/1] sqlmesh_example.incremental_model evaluated in 0.01s
