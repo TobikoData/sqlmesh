@@ -89,10 +89,17 @@ def test_linter(
     mock_pull_request.merged = False
     mock_pull_request.merge = mocker.MagicMock()
 
+    before_all = [
+        "CREATE SCHEMA IF NOT EXISTS raw",
+        "DROP VIEW IF EXISTS raw.demographics",
+        "CREATE VIEW raw.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+    ]
+
     # Case 1: Test for linter errors
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         linter=LinterConfig(enabled=True, rules="ALL"),
+        before_all=before_all,
     )
 
     controller = make_controller(
@@ -142,6 +149,7 @@ def test_linter(
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
         linter=LinterConfig(enabled=True, warn_rules="ALL"),
+        before_all=before_all,
     )
 
     controller = make_controller(
