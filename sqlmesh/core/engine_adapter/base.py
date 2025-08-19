@@ -856,7 +856,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
@@ -902,7 +902,7 @@ class EngineAdapter:
                             replace=replace,
                             table_description=table_description,
                             table_kind=table_kind,
-                            track_execution_stats=track_execution_stats,
+                            track_rows_processed=track_rows_processed,
                             **kwargs,
                         )
                     else:
@@ -910,7 +910,7 @@ class EngineAdapter:
                             table_name,
                             query,
                             target_columns_to_types or self.columns(table),
-                            track_execution_stats=track_execution_stats,
+                            track_rows_processed=track_rows_processed,
                         )
 
         # Register comments with commands if the engine supports comments and we weren't able to
@@ -934,7 +934,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         self.execute(
@@ -952,7 +952,7 @@ class EngineAdapter:
                 table_kind=table_kind,
                 **kwargs,
             ),
-            track_execution_stats=track_execution_stats,
+            track_rows_processed=track_rows_processed,
         )
 
     def _build_create_table_exp(
@@ -1440,7 +1440,7 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> None:
         source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
@@ -1450,7 +1450,7 @@ class EngineAdapter:
             source_columns=source_columns,
         )
         self._insert_append_source_queries(
-            table_name, source_queries, target_columns_to_types, track_execution_stats
+            table_name, source_queries, target_columns_to_types, track_rows_processed
         )
 
     def _insert_append_source_queries(
@@ -1458,7 +1458,7 @@ class EngineAdapter:
         table_name: TableName,
         source_queries: t.List[SourceQuery],
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
     ) -> None:
         with self.transaction(condition=len(source_queries) > 0):
             target_columns_to_types = target_columns_to_types or self.columns(table_name)
@@ -1468,7 +1468,7 @@ class EngineAdapter:
                         table_name,
                         query,
                         target_columns_to_types,
-                        track_execution_stats=track_execution_stats,
+                        track_rows_processed=track_rows_processed,
                     )
 
     def _insert_append_query(
@@ -1477,13 +1477,13 @@ class EngineAdapter:
         query: Query,
         target_columns_to_types: t.Dict[str, exp.DataType],
         order_projections: bool = True,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
     ) -> None:
         if order_projections:
             query = self._order_projections_and_filter(query, target_columns_to_types)
         self.execute(
             exp.insert(query, table_name, columns=list(target_columns_to_types)),
-            track_execution_stats=track_execution_stats,
+            track_rows_processed=track_rows_processed,
         )
 
     def insert_overwrite_by_partition(
@@ -1626,7 +1626,7 @@ class EngineAdapter:
                         )
                         if insert_overwrite_strategy.is_replace_where:
                             insert_exp.set("where", where or exp.true())
-                        self.execute(insert_exp, track_execution_stats=True)
+                        self.execute(insert_exp, track_rows_processed=True)
 
     def update_table(
         self,
@@ -1648,7 +1648,7 @@ class EngineAdapter:
             exp.Subquery(this=query), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
         )
         self.execute(
-            exp.Merge(this=this, using=using, on=on, whens=whens), track_execution_stats=True
+            exp.Merge(this=this, using=using, on=on, whens=whens), track_rows_processed=True
         )
 
     def scd_type_2_by_time(
@@ -2398,7 +2398,7 @@ class EngineAdapter:
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = True,
-        track_execution_stats: bool = False,
+        track_rows_processed: bool = False,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -2420,7 +2420,7 @@ class EngineAdapter:
                     expression=e if isinstance(e, exp.Expression) else None,
                     quote_identifiers=quote_identifiers,
                 )
-                self._execute(sql, track_execution_stats, **kwargs)
+                self._execute(sql, track_rows_processed, **kwargs)
 
     def _attach_correlation_id(self, sql: str) -> str:
         if self.ATTACH_CORRELATION_ID and self.correlation_id:
@@ -2450,12 +2450,12 @@ class EngineAdapter:
     ) -> None:
         QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
 
-    def _execute(self, sql: str, track_execution_stats: bool = False, **kwargs: t.Any) -> None:
+    def _execute(self, sql: str, track_rows_processed: bool = False, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)
 
         if (
             self.SUPPORTS_QUERY_EXECUTION_TRACKING
-            and track_execution_stats
+            and track_rows_processed
             and QueryExecutionTracker.is_tracking()
         ):
             rowcount_raw = getattr(self.cursor, "rowcount", None)
@@ -2512,7 +2512,7 @@ class EngineAdapter:
                 exists=True,
                 table_description=None,
                 column_descriptions=None,
-                track_execution_stats=False,
+                track_rows_processed=False,
                 **kwargs,
             )
 
@@ -2764,7 +2764,7 @@ class EngineAdapter:
                     insert_statement.set("where", delete_filter)
                     insert_statement.set("this", exp.to_table(target_table))
 
-                self.execute(insert_statement, track_execution_stats=True)
+                self.execute(insert_statement, track_rows_processed=True)
             finally:
                 self.drop_table(temp_table)
 

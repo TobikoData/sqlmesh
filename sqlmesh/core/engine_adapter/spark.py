@@ -433,7 +433,7 @@ class SparkEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
-        track_execution_stats: bool = True,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         table_name = (
@@ -462,7 +462,7 @@ class SparkEngineAdapter(
             target_columns_to_types=target_columns_to_types,
             table_description=table_description,
             column_descriptions=column_descriptions,
-            track_execution_stats=track_execution_stats,
+            track_rows_processed=track_rows_processed,
             **kwargs,
         )
         table_name = (

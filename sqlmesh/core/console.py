@@ -4306,7 +4306,7 @@ def _calculate_annotation_str_len(
 # Convert number of bytes to a human-readable string
 # https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L165
 def _format_bytes(num_bytes: t.Optional[int]) -> str:
-    if num_bytes and num_bytes > 0:
+    if num_bytes and num_bytes >= 0:
         if num_bytes < 1024:
             return f"{num_bytes} bytes"
 
@@ -4324,7 +4324,7 @@ def _format_bytes(num_bytes: t.Optional[int]) -> str:
 # Abbreviate integer count. Example: 1,000,000,000 -> 1b
 # https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L178
 def _abbreviate_integer_count(count: t.Optional[int]) -> str:
-    if count and count > 0:
+    if count and count >= 0:
         if count < 1000:
             return str(count)
 

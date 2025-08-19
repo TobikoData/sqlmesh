@@ -1051,7 +1051,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _execute(
         self,
         sql: str,
-        track_execution_stats: bool = False,
+        track_rows_processed: bool = False,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -1097,7 +1097,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
 
-        if track_execution_stats and QueryExecutionTracker.is_tracking():
+        if track_rows_processed and QueryExecutionTracker.is_tracking():
             num_rows = None
             if query_job.statement_type == "CREATE_TABLE_AS_SELECT":
                 # since table was just created, number rows in table == number rows processed
