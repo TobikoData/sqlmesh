@@ -22,7 +22,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-router": "^1.129.8",
-    "@tanstack/react-router-devtools": "^1.129.8",
+    "@tanstack/react-router-devtools": "^1.131.26",
     "@tanstack/react-virtual": "^3.13.12",
     "@tanstack/router-plugin": "^1.129.8",
     "apache-arrow": "^19.0.1",
