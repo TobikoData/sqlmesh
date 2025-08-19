@@ -800,11 +800,19 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     # Get current year and create dates for testing. Doris cannot have more than 500 history partitions.
     current_year = datetime.now().year
     current_date = datetime(current_year, 1, 1)
-    date_1 = current_date.strftime("%Y-%m-%d")
-    date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
-    date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
-    date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
-    date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    if ctx.dialect == "doris":
+        # For Doris with DATE type, use pandas date objects
+        date_1 = current_date.date()
+        date_2 = (current_date + timedelta(days=1)).date()
+        date_3 = (current_date + timedelta(days=2)).date()
+        date_4 = (current_date + timedelta(days=3)).date()
+        date_5 = (current_date + timedelta(days=4)).date()
+    else:
+        date_1 = current_date.strftime("%Y-%m-%d")
+        date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
+        date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
+        date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
 
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     table = ctx.table("test_table")
@@ -901,11 +909,19 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     # Get current year and create dates for testing. Doris cannot have more than 500 history partitions.
     current_year = datetime.now().year
     current_date = datetime(current_year, 1, 1)
-    date_1 = current_date.strftime("%Y-%m-%d")
-    date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
-    date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
-    date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
-    date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    if ctx.dialect == "doris":
+        # For Doris with DATE type, use pandas date objects
+        date_1 = current_date.date()
+        date_2 = (current_date + timedelta(days=1)).date()
+        date_3 = (current_date + timedelta(days=2)).date()
+        date_4 = (current_date + timedelta(days=3)).date()
+        date_5 = (current_date + timedelta(days=4)).date()
+    else:
+        date_1 = current_date.strftime("%Y-%m-%d")
+        date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
+        date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
+        date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
 
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     columns_to_types = {

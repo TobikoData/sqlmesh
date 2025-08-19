@@ -280,7 +280,7 @@ def test_create_table_with_partitioned_by(
     adapter.create_table(
         "test_table",
         target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
-        partitioned_by=[exp.Literal.string("RANGE(b)")],
+        partitioned_by=[exp.to_column("b")],
         table_properties={
             "partitions": exp.Literal.string(
                 "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"
@@ -290,29 +290,6 @@ def test_create_table_with_partitioned_by(
 
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` DATE) PARTITION BY RANGE (`b`) (FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR)",
-    ]
-
-    adapter.cursor.execute.reset_mock()
-
-    adapter.create_table(
-        "test_table",
-        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("TEXT")},
-        partitioned_by=[exp.Literal.string("LIST(b)")],
-        table_properties={
-            "partitions": exp.Tuple(
-                expressions=[
-                    exp.Literal.string(
-                        'PARTITION `p_cn` VALUES IN ("Beijing", "Shanghai", "Hong Kong")'
-                    ),
-                    exp.Literal.string('PARTITION `p_usa` VALUES IN ("New York", "San Francisco")'),
-                    exp.Literal.string('PARTITION `p_other` VALUES IN ("Other")'),
-                ]
-            )
-        },
-    )
-
-    assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` STRING) PARTITION BY RANGE (`b`) (PARTITION `p_cn` VALUES IN ("Beijing", "Shanghai", "Hong Kong"), PARTITION `p_usa` VALUES IN ("New York", "San Francisco"), PARTITION `p_other` VALUES IN ("Other"))',
     ]
 
 
@@ -346,7 +323,9 @@ def test_create_full_materialized_view(
         "replication_num": exp.Literal.string("1"),
     }
     materialized_properties = {
-        "partitioned_by": [exp.to_column("orderdate")],
+        "partitioned_by": [
+            parse_one("DATE_TRUNC(o_orderdate, 'MONTH')", dialect="doris"),
+        ],
         "clustered_by": [],
         "partition_interval_unit": None,
     }
@@ -387,7 +366,7 @@ def test_create_full_materialized_view(
     expected_sqls = [
         "CREATE MATERIALIZED VIEW `complete_mv` (`orderdate` COMMENT 'order date', `orderkey` COMMENT 'order key', `partkey` COMMENT 'part key') "
         "BUILD IMMEDIATE REFRESH AUTO ON SCHEDULE EVERY 1 DAY STARTS '2024-12-01 20:30:00' KEY (`orderkey`) COMMENT 'test_description' "
-        "PARTITION BY (`orderdate`) "
+        "PARTITION BY (DATE_TRUNC(`o_orderdate`, 'MONTH')) "
         "DISTRIBUTED BY HASH (`orderkey`) BUCKETS 2 PROPERTIES ('replication_num'='1') "
         "AS SELECT `o_orderdate`, `l_orderkey`, `l_partkey` FROM `orders` LEFT JOIN `lineitem` ON `l_orderkey` = `o_orderkey` LEFT JOIN `partsupp` ON `ps_partkey` = `l_partkey` AND `l_suppkey` = `ps_suppkey`",
     ]

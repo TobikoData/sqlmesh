@@ -6,7 +6,7 @@ import re
 
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import to_schema, transform_values
 
 from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
@@ -21,14 +21,14 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import random_id
+from sqlmesh.utils import random_id, get_source_columns_to_types
 from sqlmesh.utils.errors import (
     SQLMeshError,
 )
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF, Query
     from sqlmesh.core.node import IntervalUnit
 
 logger = logging.getLogger(__name__)
@@ -136,10 +136,20 @@ class DorisEngineAdapter(
             .where(exp.column("table_schema").eq(to_schema(schema_name).db))
         )
         if object_names:
-            query = query.where(exp.column("table_name").isin(*object_names))
+            # Doris may treat information_schema table_name comparisons as case-sensitive depending on settings.
+            # Use LOWER(table_name) to match case-insensitively.
+            lowered_names = [name.lower() for name in object_names]
+            query = query.where(exp.func("LOWER", exp.column("table_name")).isin(*lowered_names))
 
         result = []
-        for schema_val, name_val, type_val in self.fetchall(query):
+        rows = self.fetchall(query)
+        logger.debug(
+            "[Doris] _get_data_objects schema=%s object_names=%s -> %d rows",
+            schema_name,
+            list(object_names) if object_names else None,
+            len(rows),
+        )
+        for schema_val, name_val, type_val in rows:
             try:
                 schema = str(schema_val) if schema_val is not None else str(schema_name)
                 name = str(name_val) if name_val is not None else "unknown"
@@ -396,6 +406,7 @@ class DorisEngineAdapter(
                         insert_pos = 0
                 create_sql = f"{create_sql[:insert_pos]} {insert_text}{create_sql[insert_pos:]}"
 
+            logger.debug("[Doris] CREATE MATERIALIZED VIEW SQL: %s", create_sql)
             self.execute(create_sql)
 
     def drop_view(
@@ -558,6 +569,115 @@ class DorisEngineAdapter(
         t1_col = exp.column(column.name, table="_t1")
         t2_col = exp.column(column.name, table="_t2")
         return t1_col.neq(t2_col) if is_not_in else t1_col.eq(t2_col)
+
+    def replace_query(
+        self,
+        table_name: "TableName",
+        query_or_df: "QueryOrDF",
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Doris does not support REPLACE TABLE. Avoid CTAS on replace and always perform a
+        delete+insert (or engine strategy) to ensure data is written even if the table exists.
+        """
+        logger.debug(
+            "[Doris] replace_query target=%s source_columns=%s",
+            table_name,
+            source_columns,
+        )
+        target_table = exp.to_table(table_name)
+        source_queries, inferred_columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df,
+            target_columns_to_types,
+            target_table=target_table,
+            source_columns=source_columns,
+        )
+        target_columns_to_types = inferred_columns_to_types or self.columns(target_table)
+        logger.debug(
+            "[Doris] replace_query using %d source queries; columns=%s",
+            len(source_queries),
+            list(target_columns_to_types.keys()),
+        )
+        # Use the standard insert-overwrite-by-condition path (DELETE/INSERT for Doris by default)
+        return self._insert_overwrite_by_condition(
+            target_table,
+            source_queries,
+            target_columns_to_types,
+        )
+
+    def _values_to_sql(
+        self,
+        values: t.List[t.Tuple[t.Any, ...]],
+        target_columns_to_types: t.Dict[str, exp.DataType],
+        batch_start: int,
+        batch_end: int,
+        alias: str = "t",
+        source_columns: t.Optional[t.List[str]] = None,
+    ) -> "Query":
+        """
+        Build a SELECT/UNION ALL subquery for a batch of literal rows.
+
+        Doris (MySQL-compatible) doesn't reliably render SQLGlot's VALUES in FROM when using the
+        'doris' dialect, which led to an empty `(SELECT)` subquery. To avoid that, construct a
+        dialect-agnostic union of SELECT literals and then cast/order in an outer SELECT.
+        """
+        source_columns = source_columns or list(target_columns_to_types)
+        source_columns_to_types = get_source_columns_to_types(
+            target_columns_to_types, source_columns
+        )
+
+        row_values = values[batch_start:batch_end]
+
+        inner: exp.Query
+        if not row_values:
+            # Produce a zero-row subquery with the correct schema
+            zero_row_select = exp.select(
+                *[
+                    exp.cast(exp.null(), to=col_type).as_(col, quoted=True)
+                    for col, col_type in source_columns_to_types.items()
+                ]
+            ).where(exp.false())
+            inner = zero_row_select
+        else:
+            # Build UNION ALL of SELECT <literals AS columns>
+            selects: t.List[exp.Select] = []
+            for row in row_values:
+                converted_vals = list(transform_values(row, source_columns_to_types))
+                select_exprs = [
+                    exp.alias_(val, col, quoted=True)
+                    for val, col in zip(converted_vals, source_columns_to_types.keys())
+                ]
+                selects.append(exp.select(*select_exprs))
+
+            inner = selects[0]
+            for s in selects[1:]:
+                inner = exp.union(inner, s, distinct=False)
+
+        # Outer select to coerce/order target columns
+        casted_columns = [
+            exp.alias_(
+                exp.cast(
+                    exp.column(column, table=alias, quoted=True)
+                    if column in source_columns_to_types
+                    else exp.Null(),
+                    to=kind,
+                ),
+                column,
+                quoted=True,
+            )
+            for column, kind in target_columns_to_types.items()
+        ]
+
+        final_query = exp.select(*casted_columns).from_(
+            exp.alias_(exp.Subquery(this=inner), alias, table=True),
+            copy=False,
+        )
+
+        return final_query
 
     def _create_table_from_columns(
         self,
