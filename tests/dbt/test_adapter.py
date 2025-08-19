@@ -18,6 +18,7 @@ from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import BigQueryConfig, SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterChangeColumnTypeOperation
 
 pytestmark = pytest.mark.dbt
 
@@ -349,3 +350,70 @@ def test_adapter_get_relation_normalization(
             renderer("{{ adapter.list_relations(database=None, schema='foo') }}")
             == '[<SnowflakeRelation "memory"."FOO"."BAR">]'
         )
+
+
+def test_adapter_expand_target_column_types(
+    sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
+):
+    from sqlmesh.core.engine_adapter.base import DataObject, DataObjectType
+
+    data_object_from = DataObject(
+        catalog="test", schema="foo", name="from_table", type=DataObjectType.TABLE
+    )
+    data_object_to = DataObject(
+        catalog="test", schema="foo", name="to_table", type=DataObjectType.TABLE
+    )
+    from_columns = {
+        "int_col": exp.DataType.build("int"),
+        "same_text_col": exp.DataType.build("varchar(1)"),  # varchar(1) -> varchar(1)
+        "unexpandable_text_col": exp.DataType.build("varchar(2)"),  # varchar(4) -> varchar(2)
+        "expandable_text_col": exp.DataType.build("varchar(16)"),  # varchar(8) -> varchar(16)
+    }
+    to_columns = {
+        "int_col": exp.DataType.build("int"),
+        "same_text_col": exp.DataType.build("varchar(1)"),
+        "unexpandable_text_col": exp.DataType.build("varchar(4)"),
+        "expandable_text_col": exp.DataType.build("varchar(8)"),
+    }
+    adapter_mock = mocker.MagicMock()
+    adapter_mock.default_catalog = "test"
+    adapter_mock.get_data_object.side_effect = [data_object_from, data_object_to]
+    # columns() is called 4 times, twice by adapter.get_columns_in_relation() and twice by the engine_adapter
+    adapter_mock.columns.side_effect = [
+        from_columns,
+        to_columns,
+    ] * 2
+    adapter_mock.SCHEMA_DIFFER = SchemaDiffer()
+
+    context = sushi_test_project.context
+    renderer = runtime_renderer(context, engine_adapter=adapter_mock)
+
+    renderer("""
+        {%- set from_relation = adapter.get_relation(
+              database=None,
+              schema='foo',
+              identifier='from_table') -%}
+
+        {% set to_relation = adapter.get_relation(
+              database=None,
+              schema='foo',
+              identifier='to_table') -%}
+
+        {% do adapter.expand_target_column_types(from_relation, to_relation) %}
+    """)
+    adapter_mock.get_data_object.assert_has_calls(
+        [
+            call(exp.to_table('"test"."foo"."from_table"')),
+            call(exp.to_table('"test"."foo"."to_table"')),
+        ]
+    )
+    assert len(adapter_mock.alter_table.call_args.args) == 1
+    alter_expressions = adapter_mock.alter_table.call_args.args[0]
+    assert len(alter_expressions) == 1
+    alter_operation = alter_expressions[0]
+    assert isinstance(alter_operation, TableAlterChangeColumnTypeOperation)
+    assert alter_operation.expression == parse_one(
+        """ALTER TABLE "test"."foo"."to_table"
+           ALTER COLUMN expandable_text_col
+           SET DATA TYPE VARCHAR(16)"""
+    )
