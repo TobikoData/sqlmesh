@@ -2426,11 +2426,12 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
         # seed rows aren't tracked
         assert actual_execution_stats["seed_model"].total_rows_processed is None
 
-        if ctx.mark.startswith("bigquery"):
-            assert actual_execution_stats["incremental_model"].total_bytes_processed
-            assert actual_execution_stats["full_model"].total_bytes_processed
+        if ctx.mark.startswith("bigquery") or ctx.mark.startswith("databricks"):
+            assert actual_execution_stats["incremental_model"].total_bytes_processed is not None
+            assert actual_execution_stats["full_model"].total_bytes_processed is not None
 
     # run that loads 0 rows in incremental model
+    actual_execution_stats = {}
     with patch.object(
         context.console, "update_snapshot_evaluation_progress", capture_execution_stats
     ):
@@ -2444,9 +2445,9 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
             None if ctx.mark.startswith("snowflake") else 3
         )
 
-        if ctx.mark.startswith("bigquery"):
-            assert actual_execution_stats["incremental_model"].total_bytes_processed
-            assert actual_execution_stats["full_model"].total_bytes_processed
+        if ctx.mark.startswith("bigquery") or ctx.mark.startswith("databricks"):
+            assert actual_execution_stats["incremental_model"].total_bytes_processed is not None
+            assert actual_execution_stats["full_model"].total_bytes_processed is not None
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(
