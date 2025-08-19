@@ -363,6 +363,9 @@ class JinjaMacroRegistry(PydanticModel):
         Args:
             globals: The global objects that should be added.
         """
+        # Keep the registry lightweight when the graph is not needed
+        if not "graph" in self.packages:
+            globals.pop("flat_graph", None)
         self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:

@@ -1606,6 +1606,7 @@ def test_on_run_start_end():
     assert root_environment_statements.after_all == [
         "JINJA_STATEMENT_BEGIN;\n{{ create_tables(schemas) }}\nJINJA_END;",
         "JINJA_STATEMENT_BEGIN;\nDROP TABLE to_be_executed_last;\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\n{{ graph_usage() }}\nJINJA_END;",
     ]
 
     assert root_environment_statements.jinja_macros.root_package_name == "sushi"
@@ -1626,6 +1627,7 @@ def test_on_run_start_end():
         snapshots=sushi_context.snapshots,
         runtime_stage=RuntimeStage.AFTER_ALL,
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
+        engine_adapter=sushi_context.engine_adapter,
     )
 
     assert rendered_before_all == [
@@ -1635,12 +1637,35 @@ def test_on_run_start_end():
     ]
 
     # The jinja macro should have resolved the schemas for this environment and generated corresponding statements
-    assert sorted(rendered_after_all) == sorted(
-        [
-            "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
-            "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
-            "DROP TABLE to_be_executed_last",
-        ]
+    expected_statements = [
+        "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
+        "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
+        "DROP TABLE to_be_executed_last",
+    ]
+    assert sorted(rendered_after_all[:-1]) == sorted(expected_statements)
+
+    # Assert the models with their materialisations are present in the rendered graph_table statement
+    graph_table_stmt = rendered_after_all[-1]
+    assert "'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert "'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized" in graph_table_stmt
+    assert "'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert (
+        "'model.sushi.waiter_as_customer_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert "'model.sushi.top_waiters' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert "'model.customers.customers' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert (
+        "'model.customers.customer_revenue_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v1' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v2' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
     )
 
     # Nested dbt_packages on run start / on run end
@@ -1675,6 +1700,7 @@ def test_on_run_start_end():
         snapshots=sushi_context.snapshots,
         runtime_stage=RuntimeStage.AFTER_ALL,
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
+        engine_adapter=sushi_context.engine_adapter,
     )
 
     # Validate order of execution to match dbt's
