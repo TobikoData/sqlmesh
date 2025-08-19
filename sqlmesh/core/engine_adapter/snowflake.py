@@ -55,6 +55,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     SUPPORTS_MANAGED_MODELS = True
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SUPPORTS_CREATE_DROP_CATALOG = True
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA", "TABLE"]
     SCHEMA_DIFFER = SchemaDiffer(
         parameterized_type_defaults={
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(8388608,)],

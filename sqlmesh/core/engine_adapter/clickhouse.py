@@ -614,6 +614,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         name: TableName | SchemaName,
         exists: bool = True,
         kind: str = "TABLE",
+        cascade: bool = False,
         **drop_args: t.Any,
     ) -> None:
         """Drops an object.
@@ -626,7 +627,6 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             kind: What kind of object to drop. Defaults to TABLE
             **drop_args: Any extra arguments to set on the Drop expression
         """
-        drop_args.pop("cascade", None)
         self.execute(
             exp.Drop(
                 this=exp.to_table(name),

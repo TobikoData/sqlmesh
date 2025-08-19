@@ -108,6 +108,7 @@ class EngineAdapter:
     SUPPORTS_CLONING = False
     SUPPORTS_MANAGED_MODELS = False
     SUPPORTS_CREATE_DROP_CATALOG = False
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS: t.List[str] = []
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     HAS_VIEW_BINDING = False
@@ -1060,6 +1061,7 @@ class EngineAdapter:
         name: TableName | SchemaName,
         exists: bool = True,
         kind: str = "TABLE",
+        cascade: bool = False,
         **drop_args: t.Any,
     ) -> None:
         """Drops an object.
@@ -1070,8 +1072,13 @@ class EngineAdapter:
             name: The name of the table to drop.
             exists: If exists, defaults to True.
             kind: What kind of object to drop. Defaults to TABLE
+            cascade: Whether or not to DROP ... CASCADE.
+                Note that this is ignored for :kind's that are not present in self.SUPPORTED_DROP_CASCADE_OBJECT_KINDS
             **drop_args: Any extra arguments to set on the Drop expression
         """
+        if cascade and kind.upper() in self.SUPPORTED_DROP_CASCADE_OBJECT_KINDS:
+            drop_args["cascade"] = cascade
+
         self.execute(exp.Drop(this=exp.to_table(name), kind=kind, exists=exists, **drop_args))
 
     def get_alter_expressions(

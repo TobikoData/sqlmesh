@@ -45,6 +45,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     # >>> self._execute('/* test */ DESCRIBE foo')
     #     pyathena.error.OperationalError: FAILED: ParseException line 1:0 cannot recognize input near '/' '*' 'test'
     ATTACH_CORRELATION_ID = False
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA"]
 
     def __init__(
         self, *args: t.Any, s3_warehouse_location: t.Optional[str] = None, **kwargs: t.Any
