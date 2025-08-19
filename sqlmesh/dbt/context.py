@@ -242,6 +242,9 @@ class DbtContext:
         # pass user-specified default dialect if we have already loaded the config
         if self.sqlmesh_config.dialect:
             output["dialect"] = self.sqlmesh_config.dialect
+        # Pass flat graph structure like dbt
+        if self._manifest is not None:
+            output["flat_graph"] = AttributeDict(self.manifest.flat_graph)
         return output
 
     def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:

@@ -59,7 +59,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
-            columns_to_types={
+            target_columns_to_types={
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),

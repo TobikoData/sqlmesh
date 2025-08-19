@@ -14,6 +14,14 @@ export const SUSHI_SOURCE_PATH = path.join(
   'examples',
   'sushi',
 )
+export const MULTI_SOURCE_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'examples',
+  'multi',
+)
 export const REPO_ROOT = path.join(__dirname, '..', '..', '..')
 
 /**

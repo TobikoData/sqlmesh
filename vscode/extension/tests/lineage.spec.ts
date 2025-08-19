@@ -40,7 +40,7 @@ test('Lineage panel renders correctly - relative project path', async ({
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
 
   const settings = {
-    'sqlmesh.projectPath': './projects/sushi',
+    'sqlmesh.projectPaths': ['./projects/sushi'],
     'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(tempDir, '.vscode'))
@@ -67,7 +67,7 @@ test('Lineage panel renders correctly - absolute project path', async ({
   await fs.copy(SUSHI_SOURCE_PATH, projectDir)
 
   const settings = {
-    'sqlmesh.projectPath': projectDir,
+    'sqlmesh.projectPaths': [projectDir],
     'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.writeJson(path.join(tempDir, '.vscode', 'settings.json'), settings, {
@@ -90,7 +90,7 @@ test('Lineage panel renders correctly - relative project outside of workspace', 
   await fs.ensureDir(workspaceDir)
 
   const settings = {
-    'sqlmesh.projectPath': './../projects/sushi',
+    'sqlmesh.projectPaths': ['./../projects/sushi'],
     'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(workspaceDir, '.vscode'))
@@ -115,7 +115,7 @@ test('Lineage panel renders correctly - absolute path project outside of workspa
   await fs.ensureDir(workspaceDir)
 
   const settings = {
-    'sqlmesh.projectPath': projectDir,
+    'sqlmesh.projectPaths': [projectDir],
     'python.defaultInterpreterPath': sharedCodeServer.defaultPythonInterpreter,
   }
   await fs.ensureDir(path.join(workspaceDir, '.vscode'))

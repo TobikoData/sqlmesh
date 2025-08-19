@@ -24,8 +24,9 @@ class CustomFullWithCustomKindMaterialization(CustomMaterialization[ExtendedCust
         query_or_df: QueryOrDF,
         model: Model,
         is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
         assert type(model.kind).__name__ == "ExtendedCustomKind"
 
-        self._replace_query_for_model(model, table_name, query_or_df)
+        self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)

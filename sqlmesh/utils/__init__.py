@@ -403,3 +403,15 @@ class CorrelationId:
     @classmethod
     def from_plan_id(cls, plan_id: str) -> CorrelationId:
         return CorrelationId(JobType.PLAN, plan_id)
+
+
+def get_source_columns_to_types(
+    columns_to_types: t.Dict[str, exp.DataType],
+    source_columns: t.Optional[t.List[str]],
+) -> t.Dict[str, exp.DataType]:
+    source_column_lookup = set(source_columns) if source_columns else None
+    return {
+        k: v
+        for k, v in columns_to_types.items()
+        if not source_column_lookup or k in source_column_lookup
+    }

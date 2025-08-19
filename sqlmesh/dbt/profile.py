@@ -101,8 +101,10 @@ class Profile:
             target_name = context.render(project_data.get("target"))
 
         if target_name not in outputs:
+            target_names = "\n".join(f"- {name}" for name in outputs)
             raise ConfigError(
-                f"Target '{target_name}' not specified in profiles for '{context.profile_name}'."
+                f"Target '{target_name}' not specified in profiles for '{context.profile_name}'. "
+                f"The valid target names for this profile are:\n{target_names}"
             )
 
         target_fields = load_yaml(context.render(yaml.dump(outputs[target_name])))

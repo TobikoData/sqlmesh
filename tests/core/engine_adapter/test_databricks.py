@@ -159,7 +159,7 @@ def test_insert_overwrite_by_partition_query(
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
             d.parse_one("b"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
             "b": exp.DataType.build("boolean"),

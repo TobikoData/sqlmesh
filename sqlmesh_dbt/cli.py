@@ -2,6 +2,8 @@ import typing as t
 import sys
 import click
 from sqlmesh_dbt.operations import DbtOperations, create
+from sqlmesh_dbt.error import cli_global_error_handler
+from pathlib import Path
 
 
 def _get_dbt_operations(ctx: click.Context) -> DbtOperations:
@@ -10,9 +12,14 @@ def _get_dbt_operations(ctx: click.Context) -> DbtOperations:
     return ctx.obj
 
 
-@click.group()
+@click.group(invoke_without_command=True)
+@click.option("--profile", help="Which existing profile to load. Overrides output.profile")
+@click.option("-t", "--target", help="Which target to load for the given profile")
 @click.pass_context
-def dbt(ctx: click.Context) -> None:
+@cli_global_error_handler
+def dbt(
+    ctx: click.Context, profile: t.Optional[str] = None, target: t.Optional[str] = None
+) -> None:
     """
     An ELT tool for managing your SQL transformations and data models, powered by the SQLMesh engine.
     """
@@ -22,7 +29,12 @@ def dbt(ctx: click.Context) -> None:
         return
 
     # TODO: conditionally call create() if there are times we dont want/need to import sqlmesh and load a project
-    ctx.obj = create()
+    ctx.obj = create(project_dir=Path.cwd(), profile=profile, target=target)
+
+    if not ctx.invoked_subcommand:
+        click.echo(
+            f"No command specified. Run `{ctx.info_name} --help` to see the available commands."
+        )
 
 
 @dbt.command()

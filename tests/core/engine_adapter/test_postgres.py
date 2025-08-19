@@ -99,7 +99,7 @@ def test_merge_version_gte_15(make_mocked_engine_adapter: t.Callable):
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -127,7 +127,7 @@ def test_merge_version_lt_15(
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),

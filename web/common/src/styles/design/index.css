@@ -1,0 +1,22 @@
+@import url('./fonts.css');
+@import url('./palette.css');
+@import url('./semantic-colors.css');
+@import url('./typography.css');
+@import url('./space.css');
+
+:root {
+  /* Radius */
+  --radius-2xs: var(--half);
+  --radius-xs: var(--step);
+  --radius-s: var(--step-2);
+  --radius-m: var(--step-3);
+  --radius-l: var(--step-4);
+  --radius-xl: var(--step-5);
+  --radius-2xl: var(--step-6);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}

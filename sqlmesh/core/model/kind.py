@@ -189,6 +189,7 @@ class OnDestructiveChange(str, Enum):
     ERROR = "ERROR"
     WARN = "WARN"
     ALLOW = "ALLOW"
+    IGNORE = "IGNORE"
 
     @property
     def is_error(self) -> bool:
@@ -201,6 +202,10 @@ class OnDestructiveChange(str, Enum):
     @property
     def is_allow(self) -> bool:
         return self == OnDestructiveChange.ALLOW
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnDestructiveChange.IGNORE
 
 
 def _on_destructive_change_validator(

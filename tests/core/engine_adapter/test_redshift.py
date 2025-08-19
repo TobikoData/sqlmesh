@@ -220,7 +220,7 @@ def test_values_to_sql(adapter: t.Callable, mocker: MockerFixture):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = adapter._values_to_sql(
         values=list(df.itertuples(index=False, name=None)),
-        columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
+        target_columns_to_types={"a": exp.DataType.build("int"), "b": exp.DataType.build("int")},
         batch_start=0,
         batch_end=2,
     )
@@ -272,7 +272,7 @@ def test_replace_query_with_df_table_exists(adapter: t.Callable, mocker: MockerF
     adapter.replace_query(
         table_name="test_table",
         query_or_df=df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -299,7 +299,7 @@ def test_replace_query_with_df_table_not_exists(adapter: t.Callable, mocker: Moc
     adapter.replace_query(
         table_name="test_table",
         query_or_df=df,
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -342,7 +342,7 @@ def test_create_view(adapter: t.Callable):
     adapter.create_view(
         view_name="test_view",
         query_or_df=parse_one("SELECT cola FROM table"),
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "b": exp.DataType.build("int"),
         },
@@ -428,7 +428,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -440,7 +440,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table=exp.to_table("target_table_name"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
@@ -473,7 +473,7 @@ def test_merge_when_matched_error(make_mocked_engine_adapter: t.Callable, mocker
         adapter.merge(
             target_table=exp.to_table("target_table_name"),
             source_table=t.cast(exp.Select, parse_one('SELECT "ID", val FROM source')),
-            columns_to_types={
+            target_columns_to_types={
                 "ID": exp.DataType.build("int"),
                 "val": exp.DataType.build("int"),
             },
@@ -521,7 +521,7 @@ def test_merge_logical_filter_error(make_mocked_engine_adapter: t.Callable, mock
         adapter.merge(
             target_table=exp.to_table("target_table_name_2"),
             source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
-            columns_to_types={
+            target_columns_to_types={
                 "ID": exp.DataType.build("int"),
                 "ts": exp.DataType.build("timestamp"),
             },
@@ -546,7 +546,7 @@ def test_merge_logical(
     adapter.merge(
         target_table=exp.to_table("target"),
         source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts FROM source')),
-        columns_to_types={
+        target_columns_to_types={
             "ID": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
         },

@@ -137,7 +137,7 @@ def _migrate_intervals(
         engine_adapter.insert_append(
             intervals_table,
             pd.DataFrame(new_intervals),
-            columns_to_types=intervals_columns_to_types,
+            target_columns_to_types=intervals_columns_to_types,
         )
 
 
@@ -215,7 +215,7 @@ def _migrate_snapshots(
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
-            columns_to_types=snapshots_columns_to_types,
+            target_columns_to_types=snapshots_columns_to_types,
         )
 
 

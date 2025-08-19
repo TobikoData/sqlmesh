@@ -367,9 +367,12 @@ class GenericContext(BaseContext, t.Generic[C]):
         loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
         users: t.Optional[t.List[User]] = None,
+        config_loader_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.configs = (
-            config if isinstance(config, dict) else load_configs(config, self.CONFIG_TYPE, paths)
+            config
+            if isinstance(config, dict)
+            else load_configs(config, self.CONFIG_TYPE, paths, **(config_loader_kwargs or {}))
         )
         self._projects = {config.project for config in self.configs.values()}
         self.dag: DAG[str] = DAG()

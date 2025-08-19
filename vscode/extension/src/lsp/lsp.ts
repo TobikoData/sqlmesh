@@ -16,6 +16,7 @@ import {
   ErrorTypeSQLMeshOutdated,
 } from '../utilities/errors'
 import { CustomLSPMethods } from './custom'
+import { resolveProjectPath } from '../utilities/config'
 
 type SupportedMethodsState =
   | { type: 'not-fetched' }
@@ -109,6 +110,11 @@ export class LSPClient implements Disposable {
         args: sqlmesh.value.args,
       },
     }
+    const paths = resolveProjectPath(getWorkspaceFolders()[0])
+    if (isErr(paths)) {
+      traceError(`Failed to resolve project paths: ${paths.error}`)
+      return err({ type: 'generic', message: paths.error })
+    }
     const clientOptions: LanguageClientOptions = {
       documentSelector: [
         { scheme: 'file', pattern: '**/*.sql' },
@@ -117,6 +123,11 @@ export class LSPClient implements Disposable {
       ],
       diagnosticCollectionName: 'sqlmesh',
       outputChannel,
+      initializationOptions: paths.value.projectPaths
+        ? {
+            project_paths: paths.value.projectPaths,
+          }
+        : null,
     }
 
     traceInfo(

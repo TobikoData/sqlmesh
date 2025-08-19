@@ -341,7 +341,7 @@ class TestContext:
                 list(data.itertuples(index=False, name=None)),
                 batch_start=0,
                 batch_end=sys.maxsize,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=columns_to_types,
             )
         if self.test_type == "df":
             formatted_df = self._format_df(data, to_datetime=self.dialect != "trino")

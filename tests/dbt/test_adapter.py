@@ -31,16 +31,16 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("ignored")
     engine_adapter.create_table(
-        table_name="foo.bar", columns_to_types={"baz": exp.DataType.build("int")}
+        table_name="foo.bar", target_columns_to_types={"baz": exp.DataType.build("int")}
     )
     engine_adapter.create_table(
-        table_name="foo.another", columns_to_types={"col": exp.DataType.build("int")}
+        table_name="foo.another", target_columns_to_types={"col": exp.DataType.build("int")}
     )
     engine_adapter.create_view(
         view_name="foo.bar_view", query_or_df=parse_one("select * from foo.bar")
     )
     engine_adapter.create_table(
-        table_name="ignored.ignore", columns_to_types={"col": exp.DataType.build("int")}
+        table_name="ignored.ignore", target_columns_to_types={"col": exp.DataType.build("int")}
     )
 
     assert (
@@ -262,10 +262,10 @@ def test_adapter_map_snapshot_tables(
     engine_adapter.create_schema("sqlmesh")
     engine_adapter.create_table(
         table_name='"memory"."sqlmesh"."test_db__test_model"',
-        columns_to_types={"baz": exp.DataType.build("int")},
+        target_columns_to_types={"baz": exp.DataType.build("int")},
     )
     engine_adapter.create_table(
-        table_name="foo.bar", columns_to_types={"col": exp.DataType.build("int")}
+        table_name="foo.bar", target_columns_to_types={"col": exp.DataType.build("int")}
     )
 
     expected_test_model_table_name = parse_one('"memory"."sqlmesh"."test_db__test_model"').sql(
@@ -324,7 +324,7 @@ def test_adapter_get_relation_normalization(
 
         engine_adapter.create_schema('"FOO"')
         engine_adapter.create_table(
-            table_name='"FOO"."BAR"', columns_to_types={"baz": exp.DataType.build("int")}
+            table_name='"FOO"."BAR"', target_columns_to_types={"baz": exp.DataType.build("int")}
         )
 
         assert (

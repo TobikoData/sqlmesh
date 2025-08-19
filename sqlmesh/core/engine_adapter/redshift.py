@@ -168,7 +168,7 @@ class RedshiftEngineAdapter(
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
         table_description: t.Optional[str] = None,
@@ -186,7 +186,7 @@ class RedshiftEngineAdapter(
             return super()._create_table_from_source_queries(
                 table_name,
                 source_queries,
-                columns_to_types,
+                target_columns_to_types,
                 exists,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
@@ -207,13 +207,14 @@ class RedshiftEngineAdapter(
         self,
         view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -232,7 +233,7 @@ class RedshiftEngineAdapter(
         return super().create_view(
             view_name,
             query_or_df,
-            columns_to_types,
+            target_columns_to_types,
             replace,
             materialized,
             materialized_properties,
@@ -240,6 +241,7 @@ class RedshiftEngineAdapter(
             column_descriptions=column_descriptions,
             no_schema_binding=no_schema_binding,
             view_properties=view_properties,
+            source_columns=source_columns,
             **create_kwargs,
         )
 
@@ -247,9 +249,10 @@ class RedshiftEngineAdapter(
         self,
         table_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -271,28 +274,32 @@ class RedshiftEngineAdapter(
             return super().replace_query(
                 table_name,
                 query_or_df,
-                columns_to_types,
+                target_columns_to_types,
                 table_description,
                 column_descriptions,
+                source_columns=source_columns,
                 **kwargs,
             )
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+        source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df,
+            target_columns_to_types,
+            target_table=table_name,
+            source_columns=source_columns,
         )
-        columns_to_types = columns_to_types or self.columns(table_name)
+        target_columns_to_types = target_columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
         with self.transaction():
             temp_table = self._get_temp_table(target_table)
             old_table = self._get_temp_table(target_table)
             self.create_table(
                 temp_table,
-                columns_to_types,
+                target_columns_to_types,
                 exists=False,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 **kwargs,
             )
-            self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
+            self._insert_append_source_queries(temp_table, source_queries, target_columns_to_types)
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
@@ -354,10 +361,11 @@ class RedshiftEngineAdapter(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         if self.enable_merge:
@@ -365,20 +373,22 @@ class RedshiftEngineAdapter(
             super().merge(
                 target_table=target_table,
                 source_table=source_table,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
                 unique_key=unique_key,
                 when_matched=when_matched,
                 merge_filter=merge_filter,
+                source_columns=source_columns,
             )
         else:
             logical_merge(
                 self,
                 target_table,
                 source_table,
-                columns_to_types,
+                target_columns_to_types,
                 unique_key,
                 when_matched=when_matched,
                 merge_filter=merge_filter,
+                source_columns=source_columns,
             )
 
     def _merge(
