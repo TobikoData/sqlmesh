@@ -63,7 +63,7 @@ def test_insert_overwrite_by_time_partition(adapter: FabricEngineAdapter):
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
-        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
     # Fabric adapter should use DELETE/INSERT strategy, not MERGE.

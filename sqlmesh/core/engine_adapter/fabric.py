@@ -70,7 +70,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             self,
             table_name=table_name,
             source_queries=source_queries,
-            columns_to_types=target_columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             where=where,
             insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
             **kwargs,
