@@ -356,16 +356,10 @@ class RuntimeAdapter(BaseAdapter):
             self.engine_adapter.drop_table(self._normalize(self._relation_to_table(relation)))
 
     def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
-        old_table_name = None
-        if from_relation.schema is not None and from_relation.identifier is not None:
-            old_table_name = self._normalize(self._relation_to_table(from_relation))
+        old_table_name = self._normalize(self._relation_to_table(from_relation))
+        new_table_name = self._normalize(self._relation_to_table(to_relation))
 
-        new_table_name = None
-        if to_relation.schema is not None and to_relation.identifier is not None:
-            new_table_name = self._normalize(self._relation_to_table(to_relation))
-
-        if old_table_name and new_table_name:
-            self.engine_adapter.rename_table(old_table_name, new_table_name)
+        self.engine_adapter.rename_table(old_table_name, new_table_name)
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
