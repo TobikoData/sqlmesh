@@ -186,6 +186,21 @@ gateways:
     state_connection:
       type: duckdb
 
+  inttest_fabric:
+    connection:
+      type: fabric
+      driver: pyodbc
+      host: {{ env_var("FABRIC_HOST") }}
+      user: {{ env_var("FABRIC_CLIENT_ID") }}
+      password: {{ env_var("FABRIC_CLIENT_SECRET") }}
+      database: {{ env_var("FABRIC_DATABASE") }}
+      tenant_id: {{ env_var("FABRIC_TENANT_ID") }}
+      workspace_id: {{ env_var("FABRIC_WORKSPACE_ID") }}
+      odbc_properties:
+        Authentication: ActiveDirectoryServicePrincipal
+    state_connection:
+      type: duckdb
+
   inttest_gcp_postgres:
     connection:
       type: gcp_postgres
@@ -196,6 +211,7 @@ gateways:
       db: {{ env_var("GCP_POSTGRES_DATABASE") }}
       enable_iam_auth: true
       check_import: false
+
 
 model_defaults:
     dialect: duckdb

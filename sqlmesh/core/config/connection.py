@@ -43,7 +43,13 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RECOMMENDED_STATE_SYNC_ENGINES = {"postgres", "gcp_postgres", "mysql", "mssql", "azuresql"}
+RECOMMENDED_STATE_SYNC_ENGINES = {
+    "postgres",
+    "gcp_postgres",
+    "mysql",
+    "mssql",
+    "azuresql",
+}
 FORBIDDEN_STATE_SYNC_ENGINES = {
     # Do not support row-level operations
     "spark",
@@ -1682,6 +1688,55 @@ class AzureSQLConnectionConfig(MSSQLConnectionConfig):
     @property
     def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         return {"catalog_support": CatalogSupport.SINGLE_CATALOG_ONLY}
+
+
+class FabricConnectionConfig(MSSQLConnectionConfig):
+    """
+    Fabric Connection Configuration.
+    Inherits most settings from MSSQLConnectionConfig and sets the type to 'fabric'.
+    It is recommended to use the 'pyodbc' driver for Fabric.
+    """
+
+    type_: t.Literal["fabric"] = Field(alias="type", default="fabric")  # type: ignore
+    DIALECT: t.ClassVar[t.Literal["fabric"]] = "fabric"  # type: ignore
+    DISPLAY_NAME: t.ClassVar[t.Literal["Fabric"]] = "Fabric"  # type: ignore
+    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17  # type: ignore
+    driver: t.Literal["pyodbc"] = "pyodbc"
+    workspace_id: str
+    tenant_id: str
+    autocommit: t.Optional[bool] = True
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        from sqlmesh.core.engine_adapter.fabric import FabricEngineAdapter
+
+        return FabricEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        # Override to support catalog switching for Fabric
+        base_factory = super()._connection_factory
+
+        def create_fabric_connection(
+            target_catalog: t.Optional[str] = None, *args: t.Any, **kwargs: t.Any
+        ) -> t.Callable:
+            kwargs["database"] = target_catalog or self.database
+            return base_factory(*args, **kwargs)
+
+        return create_fabric_connection
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            # more operations than not require a specific catalog to be already active
+            # in particular, create/drop view, create/drop schema and querying information_schema
+            "catalog_support": CatalogSupport.REQUIRES_SET_CATALOG,
+            "workspace_id": self.workspace_id,
+            "tenant_id": self.tenant_id,
+            "user": self.user,
+            "password": self.password,
+        }
 
 
 class SparkConnectionConfig(ConnectionConfig):
