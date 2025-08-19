@@ -15,7 +15,8 @@ from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.core.plan.definition import Plan
-from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.core.cicd.config import MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
     MergeStateStatus,

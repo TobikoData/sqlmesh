@@ -1,0 +1,16 @@
+{
+  "object_kind": "merge_request",
+  "event_type": "merge_request",
+  "object_attributes": {
+    "id": 12345,
+    "iid": 1,
+    "project_id": 123,
+    "title": "Test Merge Request",
+    "state": "opened",
+    "merge_status": "can_be_merged",
+    "source_branch": "feature-branch",
+    "target_branch": "main",
+    "url": "http://example.com/my-group/my-project/merge_requests/1",
+    "action": "open"
+  }
+}

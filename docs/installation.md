@@ -37,6 +37,7 @@ Some extras add features, like the SQLMesh VSCode extension or Github CI/CD bot:
     | ------------------- | ------------------------------- |
     | VSCode extension    | `pip install "sqlmesh[lsp]"`    |
     | Github CI/CD bot    | `pip install "sqlmesh[github]"` |
+    | Gitlab CI/CD bot    | `pip install "sqlmesh[gitlab]"` |
     | dbt projects        | `pip install "sqlmesh[dbt]"`    |
     | dlt projects        | `pip install "sqlmesh[dlt]"`    |
     | Slack notifications | `pip install "sqlmesh[slack]"`  |

@@ -96,6 +96,9 @@ dbt-test:
 github-test:
 	pytest -n auto -m "github"
 
+gitlab-test:
+	pytest -n auto -m "gitlab"
+
 jupyter-test:
 	pytest -n auto -m "jupyter"
 

@@ -8,6 +8,7 @@ from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.integrations.github.cicd.command import github
+from sqlmesh.integrations.gitlab.cicd.command import gitlab
 
 
 @click.group(no_args_is_help=True)
@@ -30,3 +31,4 @@ def bot(
 
 
 bot.add_command(github)
+bot.add_command(gitlab)

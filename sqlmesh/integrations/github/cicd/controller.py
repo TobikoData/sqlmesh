@@ -33,6 +33,7 @@ from sqlglot.errors import SqlglotError
 from sqlmesh.core.user import User
 from sqlmesh.core.config import Config
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.integrations.gitlab.cicd.config import GitlabCICDBotConfig
 from sqlmesh.utils import word_characters_only, Verbosity
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
@@ -459,7 +460,7 @@ class GithubController:
         return self._prod_plan_with_gaps_builder.build()
 
     @property
-    def bot_config(self) -> GithubCICDBotConfig:
+    def bot_config(self) -> t.Union[GithubCICDBotConfig, GitlabCICDBotConfig]:
         bot_config = self._context.config.cicd_bot or GithubCICDBotConfig(
             auto_categorize_changes=self._context.auto_categorize_changes
         )

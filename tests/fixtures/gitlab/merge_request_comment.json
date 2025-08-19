@@ -1,0 +1,22 @@
+{
+  "object_kind": "note",
+  "event_type": "note",
+  "object_attributes": {
+    "id": 123456,
+    "noteable_type": "MergeRequest",
+    "note": "example_comment",
+    "url": "http://example.com/my-group/my-project/merge_requests/1#note_123456",
+    "noteable_id": 12345
+  },
+  "merge_request": {
+    "id": 12345,
+    "iid": 1,
+    "project_id": 123,
+    "title": "Test Merge Request",
+    "state": "opened",
+    "merge_status": "can_be_merged",
+    "source_branch": "feature-branch",
+    "target_branch": "main",
+    "url": "http://example.com/my-group/my-project/merge_requests/1"
+  }
+}

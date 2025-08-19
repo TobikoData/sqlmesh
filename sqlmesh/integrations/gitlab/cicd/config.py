@@ -1,19 +1,20 @@
 import typing as t
 
-from sqlmesh.core.cicd.config import MergeMethod
-
 from pydantic import Field
 
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.pydantic import model_validator
 from sqlmesh.core.console import get_console
 
 
-class GithubCICDBotConfig(BaseConfig):
-    type_: t.Literal["github"] = Field(alias="type", default="github")
+from sqlmesh.core.cicd.config import MergeMethod
 
+
+class GitlabCICDBotConfig(BaseConfig):
+    type_: t.Literal["gitlab"] = Field(alias="type", default="gitlab")
+
+    project_id: t.Optional[str] = None
     invalidate_environment_after_deploy: bool = True
     enable_deploy_command: bool = False
     merge_method: t.Optional[MergeMethod] = None
@@ -31,19 +32,6 @@ class GithubCICDBotConfig(BaseConfig):
     forward_only_branch_suffix_: t.Optional[str] = Field(
         default=None, alias="forward_only_branch_suffix"
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _validate(cls, data: t.Any) -> t.Any:
-        if not isinstance(data, dict):
-            return data
-
-        if data.get("enable_deploy_command") and not data.get("merge_method"):
-            raise ValueError("merge_method must be set if enable_deploy_command is True")
-        if data.get("command_namespace") and not data.get("enable_deploy_command"):
-            raise ValueError("enable_deploy_command must be set if command_namespace is set")
-
-        return data
 
     @property
     def prod_branch_names(self) -> t.List[str]:
@@ -66,7 +54,7 @@ class GithubCICDBotConfig(BaseConfig):
                 "`skip_pr_backfill` is unset, defaulting it to `true` (no data will be backfilled).\n"
                 "Future versions of SQLMesh will default to `skip_pr_backfill: false` to align with the CLI default behaviour.\n"
                 "If you would like to preserve the current behaviour and remove this warning, please explicitly set `skip_pr_backfill: true` in the bot config.\n\n"
-                "For more information on configuring the bot, see: https://sqlmesh.readthedocs.io/en/stable/integrations/github/"
+                "For more information on configuring the bot, see: https://sqlmesh.readthedocs.io/en/stable/integrations/gitlab/"
             )
             return True
         return self.skip_pr_backfill_
@@ -78,8 +66,6 @@ class GithubCICDBotConfig(BaseConfig):
     FIELDS_FOR_ANALYTICS: t.ClassVar[t.Set[str]] = {
         "invalidate_environment_after_deploy",
         "enable_deploy_command",
-        "merge_method",
-        "command_namespace",
         "auto_categorize_changes",
         "default_pr_start",
         "skip_pr_backfill",

@@ -12,7 +12,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.core.cicd.config import MergeMethod
 from tests.utils.test_filesystem import create_temp_file
 
-pytestmark = pytest.mark.github
+pytestmark = pytest.mark.gitlab
 
 
 def test_load_yaml_config_default(tmp_path):
@@ -21,7 +21,7 @@ def test_load_yaml_config_default(tmp_path):
         pathlib.Path("config.yaml"),
         """
 cicd_bot:
-    type: github
+    type: gitlab
 model_defaults:
     dialect: duckdb
 """,
@@ -30,7 +30,7 @@ model_defaults:
         Config,
         project_paths=[tmp_path / "config.yaml"],
     )
-    assert config.cicd_bot.type_ == "github"
+    assert config.cicd_bot.type_ == "gitlab"
     assert config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
@@ -50,7 +50,7 @@ def test_load_yaml_config(tmp_path):
         pathlib.Path("config.yaml"),
         """
 cicd_bot:
-    type: github
+    type: gitlab
     invalidate_environment_after_deploy: false
     merge_method: squash
     command_namespace: "#SQLMesh"
@@ -74,7 +74,7 @@ model_defaults:
         Config,
         project_paths=[tmp_path / "config.yaml"],
     )
-    assert config.cicd_bot.type_ == "github"
+    assert config.cicd_bot.type_ == "gitlab"
     assert not config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method == MergeMethod.SQUASH
     assert config.cicd_bot.command_namespace == "#SQLMesh"
@@ -98,11 +98,11 @@ def test_load_python_config_defaults(tmp_path):
         tmp_path,
         pathlib.Path("config.py"),
         """
-from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.integrations.gitlab.cicd.config import GitlabCICDBotConfig
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 
 config = Config(
-    cicd_bot=GithubCICDBotConfig(),
+    cicd_bot=GitlabCICDBotConfig(),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 """,
@@ -111,7 +111,7 @@ config = Config(
         Config,
         project_paths=[tmp_path / "config.py"],
     )
-    assert config.cicd_bot.type_ == "github"
+    assert config.cicd_bot.type_ == "gitlab"
     assert config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method is None
     assert config.cicd_bot.command_namespace is None
@@ -130,11 +130,11 @@ def test_load_python_config(tmp_path):
         tmp_path,
         pathlib.Path("config.py"),
         """
-from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+from sqlmesh.integrations.gitlab.cicd.config import GitlabCICDBotConfig, MergeMethod
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, Config, ModelDefaultsConfig
 
 config = Config(
-    cicd_bot=GithubCICDBotConfig(
+    cicd_bot=GitlabCICDBotConfig(
         invalidate_environment_after_deploy=False,
         merge_method=MergeMethod.SQUASH,
         command_namespace="#SQLMesh",
@@ -161,7 +161,7 @@ config = Config(
         Config,
         project_paths=[tmp_path / "config.py"],
     )
-    assert config.cicd_bot.type_ == "github"
+    assert config.cicd_bot.type_ == "gitlab"
     assert not config.cicd_bot.invalidate_environment_after_deploy
     assert config.cicd_bot.merge_method == MergeMethod.SQUASH
     assert config.cicd_bot.command_namespace == "#SQLMesh"
@@ -186,7 +186,7 @@ def test_validation(tmp_path):
         pathlib.Path("config.yaml"),
         """
 cicd_bot:
-    type: github
+    type: gitlab
     command_namespace: "#SQLMesh"
     enable_deploy_command: False
 model_defaults:
@@ -203,7 +203,7 @@ model_defaults:
         pathlib.Path("config.yaml"),
         """
 cicd_bot:
-    type: github
+    type: gitlab
     enable_deploy_command: True
 model_defaults:
     dialect: duckdb
@@ -271,7 +271,7 @@ plan:
   include_unmodified: true
                                           
 cicd_bot:
-  type: github
+  type: gitlab
 
 model_defaults:
   dialect: duckdb

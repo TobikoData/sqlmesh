@@ -1,0 +1,19 @@
+
+stages:
+  - test
+
+test-vscode:
+  stage: test
+  image: node:22
+  script:
+    - pnpm install
+    - pnpm run ci
+
+test-gitlab-integration:
+  stage: test
+  image: python:3.12
+  before_script:
+    - pip install poetry
+    - poetry install --no-root
+  script:
+    - poetry run pytest tests/integrations/gitlab/cicd/

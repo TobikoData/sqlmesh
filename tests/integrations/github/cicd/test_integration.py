@@ -17,7 +17,8 @@ from sqlmesh.core.config import CategorizerConfig, Config, ModelDefaultsConfig, 
 from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd import command
-from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.core.cicd.config import MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,

@@ -22,6 +22,8 @@ class User(PydanticModel):
     """The name to refer to the user"""
     github_username: t.Optional[str] = None
     """The github login username"""
+    gitlab_username: t.Optional[str] = None
+    """The gitlab login username"""
     slack_username: t.Optional[str] = None
     """The slack username"""
     email: t.Optional[str] = None

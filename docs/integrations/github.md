@@ -97,7 +97,8 @@ Regardless of signal approach being used, the bot needs to be configured to use 
 === "Python"
 
     ```python linenums="1"
-    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.core.cicd.config import MergeMethod
     from sqlmesh.core.config import Config
     
     config = Config(
@@ -188,7 +189,8 @@ This command must be enabled in the bot's configuration.
 === "Python"
 
     ```python linenums="1"
-    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.core.cicd.config import MergeMethod
     from sqlmesh.core.config import Config
     
     config = Config(
@@ -327,7 +329,8 @@ Example with all properties defined:
 === "Python"
 
     ```python linenums="1"
-    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+    from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.core.cicd.config import MergeMethod
     from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, Config
     
     config = Config(
