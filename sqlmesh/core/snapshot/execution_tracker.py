@@ -41,7 +41,7 @@ class QueryExecutionContext:
     def add_execution(
         self, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
     ) -> None:
-        if row_count is not None and row_count >= 0:
+        if row_count is not None:
             if self.stats.total_rows_processed is None:
                 self.stats.total_rows_processed = row_count
             else:
@@ -49,7 +49,7 @@ class QueryExecutionContext:
 
             # conditional on row_count because we should only count bytes corresponding to
             # DML actions whose rows were captured
-            if bytes_processed is not None and bytes_processed >= 0:
+            if bytes_processed is not None:
                 if self.stats.total_bytes_processed is None:
                     self.stats.total_bytes_processed = bytes_processed
                 else:
