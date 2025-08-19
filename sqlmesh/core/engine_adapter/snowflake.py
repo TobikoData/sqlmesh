@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 import typing as t
 
 from sqlglot import exp
@@ -23,6 +24,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
+from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_dtypes
@@ -72,6 +74,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     }
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
     SNOWPARK = "snowpark"
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -664,3 +667,33 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             self._connection_pool.set_attribute(self.SNOWPARK, None)
 
         return super().close()
+
+    def _record_execution_stats(
+        self, sql: str, rowcount: t.Optional[int] = None, bytes_processed: t.Optional[int] = None
+    ) -> None:
+        """Snowflake does not report row counts for CTAS like other DML operations.
+
+        They neither report the sentinel value -1 nor do they report 0 rows. Instead, they return a single data row
+        containing the string "Table <table_name> successfully created." and a row count of 1.
+
+        We do not want to record the row count of 1 for CTAS operations, so we check for that data pattern and return
+        early if it is detected.
+
+        Regex explanation - Snowflake identifiers may be:
+        - An unquoted contiguous set of [a-zA-Z0-9_$] characters
+        - A double-quoted string that may contain spaces and nested double-quotes represented by `""`
+          - Example: " my ""table"" name "
+          - Pattern: "(?:[^"]|"")+"
+            - ?: is a non-capturing group
+            - [^"] matches any single character except a double-quote
+            - "" matches two sequential double-quotes
+        """
+        if rowcount == 1:
+            results = self.cursor.fetchall()
+            if results and len(results) == 1:
+                is_ctas = re.match(
+                    r'Table ([a-zA-Z0-9_$]+|"(?:[^"]|"")+") successfully created\.', results[0][0]
+                )
+                if is_ctas:
+                    return
+        QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)

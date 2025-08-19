@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 @dataclass
 class QueryExecutionStats:
     snapshot_batch_id: str
-    total_rows_processed: int = 0
-    total_bytes_processed: int = 0
+    total_rows_processed: t.Optional[int] = None
+    total_bytes_processed: t.Optional[int] = None
     query_count: int = 0
     queries_executed: t.List[t.Tuple[str, t.Optional[int], t.Optional[int], float]] = field(
         default_factory=list
@@ -42,12 +42,18 @@ class QueryExecutionContext:
         self, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
     ) -> None:
         if row_count is not None and row_count >= 0:
-            self.stats.total_rows_processed += row_count
+            if self.stats.total_rows_processed is None:
+                self.stats.total_rows_processed = row_count
+            else:
+                self.stats.total_rows_processed += row_count
 
             # conditional on row_count because we should only count bytes corresponding to
             # DML actions whose rows were captured
             if bytes_processed is not None and bytes_processed >= 0:
-                self.stats.total_bytes_processed += bytes_processed
+                if self.stats.total_bytes_processed is None:
+                    self.stats.total_bytes_processed = bytes_processed
+                else:
+                    self.stats.total_bytes_processed += bytes_processed
 
         self.stats.query_count += 1
         # TODO: remove this

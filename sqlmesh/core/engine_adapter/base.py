@@ -2445,6 +2445,11 @@ class EngineAdapter:
 
         logger.log(self._execute_log_level, "Executing SQL: %s", sql_to_log)
 
+    def _record_execution_stats(
+        self, sql: str, rowcount: t.Optional[int] = None, bytes_processed: t.Optional[int] = None
+    ) -> None:
+        QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
+
     def _execute(self, sql: str, track_execution_stats: bool = False, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)
 
@@ -2461,7 +2466,7 @@ class EngineAdapter:
                 except (TypeError, ValueError):
                     pass
 
-            QueryExecutionTracker.record_execution(sql, rowcount, None)
+            self._record_execution_stats(sql, rowcount)
 
     @contextlib.contextmanager
     def temp_table(
