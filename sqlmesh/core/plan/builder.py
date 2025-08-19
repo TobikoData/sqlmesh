@@ -733,17 +733,11 @@ class PlanBuilder:
                 # One of the new parents in the chain was breaking so this indirect snapshot is breaking
                 return SnapshotChangeCategory.INDIRECT_BREAKING
 
-            if SnapshotChangeCategory.FORWARD_ONLY in previous_parent_categories:
-                # One of the new parents in the chain was forward-only so this indirect snapshot is forward-only
-                indirect_category = SnapshotChangeCategory.FORWARD_ONLY
-            elif (
-                previous_parent_categories.intersection(
-                    {
-                        SnapshotChangeCategory.NON_BREAKING,
-                        SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-                    }
-                )
-                and indirect_category != SnapshotChangeCategory.FORWARD_ONLY
+            if previous_parent_categories.intersection(
+                {
+                    SnapshotChangeCategory.NON_BREAKING,
+                    SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+                }
             ):
                 # All changes in the chain were non-breaking so this indirect snapshot can be non-breaking too
                 indirect_category = SnapshotChangeCategory.INDIRECT_NON_BREAKING
