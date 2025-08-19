@@ -1,7 +1,7 @@
 name: Private Repo Testing
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
 
@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
