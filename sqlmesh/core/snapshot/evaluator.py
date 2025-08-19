@@ -733,15 +733,7 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
-                if (
-                    not is_snapshot_deployable
-                    and snapshot.is_forward_only
-                    and snapshot.is_materialized
-                    and snapshot.previous_versions
-                    and adapter.SUPPORTS_CLONING
-                    # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
-                    and not snapshot.is_managed
-                ):
+                if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
                         snapshots=snapshots,
@@ -750,18 +742,17 @@ class SnapshotEvaluator:
                         rendered_physical_properties=rendered_physical_properties,
                         allow_destructive_snapshots=allow_destructive_snapshots,
                     )
-                else:
-                    if model.annotated or model.is_seed or model.kind.is_scd_type_2:
-                        self._execute_create(
-                            snapshot=snapshot,
-                            table_name=target_table_name,
-                            is_table_deployable=is_snapshot_deployable,
-                            deployability_index=deployability_index,
-                            create_render_kwargs=create_render_kwargs,
-                            rendered_physical_properties=rendered_physical_properties,
-                            dry_run=False,
-                            run_pre_post_statements=False,
-                        )
+                elif model.annotated or model.is_seed or model.kind.is_scd_type_2:
+                    self._execute_create(
+                        snapshot=snapshot,
+                        table_name=target_table_name,
+                        is_table_deployable=is_snapshot_deployable,
+                        deployability_index=deployability_index,
+                        create_render_kwargs=create_render_kwargs,
+                        rendered_physical_properties=rendered_physical_properties,
+                        dry_run=False,
+                        run_pre_post_statements=False,
+                    )
 
             wap_id: t.Optional[str] = None
             if snapshot.is_materialized and (
@@ -808,6 +799,8 @@ class SnapshotEvaluator:
         if not snapshot.is_model:
             return
 
+        logger.info("Creating a physical table for snapshot %s", snapshot.snapshot_id)
+
         adapter = self.get_adapter(snapshot.model.gateway)
         create_render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=adapter,
@@ -824,16 +817,7 @@ class SnapshotEvaluator:
                 **create_render_kwargs
             )
 
-            if (
-                snapshot.is_forward_only
-                and snapshot.is_materialized
-                and snapshot.previous_versions
-                and adapter.SUPPORTS_CLONING
-                # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
-                and not snapshot.is_managed
-                # If the deployable table is missing we can't clone it
-                and not deployability_index.is_deployable(snapshot)
-            ):
+            if self._can_clone(snapshot, deployability_index):
                 self._clone_snapshot_in_dev(
                     snapshot=snapshot,
                     snapshots=snapshots,
@@ -1369,6 +1353,19 @@ class SnapshotEvaluator:
         )
         if run_pre_post_statements:
             adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
+
+    def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
+        adapter = self.get_adapter(snapshot.model.gateway)
+        return (
+            snapshot.is_forward_only
+            and snapshot.is_materialized
+            and bool(snapshot.previous_versions)
+            and adapter.SUPPORTS_CLONING
+            # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
+            and not snapshot.is_managed
+            # If the deployable table is missing we can't clone it
+            and not deployability_index.is_deployable(snapshot)
+        )
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:

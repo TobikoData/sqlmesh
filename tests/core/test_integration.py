@@ -37,7 +37,7 @@ from sqlmesh.core.config import (
     DuckDBConnectionConfig,
     TableNamingConvention,
 )
-from sqlmesh.core.config.common import EnvironmentSuffixTarget
+from sqlmesh.core.config.common import EnvironmentSuffixTarget, VirtualEnvironmentMode
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
@@ -2660,6 +2660,66 @@ def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_conte
     ].intervals
     context.apply(prod_plan)
     data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change_incremental(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+
+    forward_only_model_name = "memory.sushi.test_forward_only_model"
+    forward_only_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {forward_only_model_name},
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only true,
+            ),
+        );
+
+        SELECT '2023-01-01' AS ds, 'value' AS value;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expressions)
+    forward_only_model = forward_only_model.copy(
+        update={"virtual_environment_mode": VirtualEnvironmentMode.DEV_ONLY}
+    )
+    context.upsert_model(forward_only_model)
+
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Change to view
+    model = context.get_model(forward_only_model_name)
+    original_kind = model.kind
+    model = model.copy(update={"kind": ViewKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"test_forward_only_model"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "view"
+
+    model = model.copy(update={"kind": original_kind})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"test_forward_only_model"})
     assert len(data_objects) == 1
     assert data_objects[0].type == "table"
 

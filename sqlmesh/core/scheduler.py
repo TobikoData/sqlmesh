@@ -480,7 +480,7 @@ class Scheduler:
                 execution_time=execution_time,
             )
 
-        def evaluate_node(node: SchedulingUnit) -> None:
+        def run_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
                 raise CircuitBreakerError()
             if isinstance(node, DummyNode):
@@ -546,7 +546,7 @@ class Scheduler:
             with self.snapshot_evaluator.concurrent_context():
                 errors, skipped_intervals = concurrent_apply_to_dag(
                     dag,
-                    evaluate_node,
+                    run_node,
                     self.max_workers,
                     raise_on_error=False,
                 )
