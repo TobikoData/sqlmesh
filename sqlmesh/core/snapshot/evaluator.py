@@ -278,7 +278,11 @@ class SnapshotEvaluator:
         for gateway, tables in tables_by_gateway.items():
             if environment_naming_info.suffix_target.is_catalog:
                 self._create_catalogs(tables=tables, gateway=gateway)
-            self._create_schemas(tables=tables, gateway=gateway)
+
+        gateway_table_pairs = [
+            (gateway, table) for gateway, tables in tables_by_gateway.items() for table in tables
+        ]
+        self._create_schemas(gateway_table_pairs=gateway_table_pairs)
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
@@ -381,8 +385,10 @@ class SnapshotEvaluator:
                     snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
                 )
 
-        for gateway, tables in tables_by_gateway.items():
-            self._create_schemas(tables=tables, gateway=gateway)
+        gateway_table_pairs = [
+            (gateway, table) for gateway, tables in tables_by_gateway.items() for table in tables
+        ]
+        self._create_schemas(gateway_table_pairs=gateway_table_pairs)
 
     def get_snapshots_to_create(
         self, target_snapshots: t.Iterable[Snapshot], deployability_index: DeployabilityIndex
@@ -1296,18 +1302,29 @@ class SnapshotEvaluator:
 
     def _create_schemas(
         self,
-        tables: t.Iterable[t.Union[exp.Table, str]],
-        gateway: t.Optional[str] = None,
+        gateway_table_pairs: t.Iterable[t.Tuple[t.Optional[str], t.Union[exp.Table, str]]],
     ) -> None:
-        table_exprs = [exp.to_table(t) for t in tables]
-        unique_schemas = {(t.args["db"], t.args.get("catalog")) for t in table_exprs if t and t.db}
-        # Create schemas sequentially, since some engines (eg. Postgres) may not support concurrent creation
-        # of schemas with the same name.
-        for schema_name, catalog in unique_schemas:
+        table_exprs = [(gateway, exp.to_table(t)) for gateway, t in gateway_table_pairs]
+        unique_schemas = {
+            (gateway, t.args["db"], t.args.get("catalog"))
+            for gateway, t in table_exprs
+            if t and t.db
+        }
+
+        def _create_schema(
+            gateway: t.Optional[str], schema_name: str, catalog: t.Optional[str]
+        ) -> None:
             schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
             adapter = self.get_adapter(gateway)
             adapter.create_schema(schema)
+
+        with self.concurrent_context():
+            concurrent_apply_to_values(
+                list(unique_schemas),
+                lambda item: _create_schema(item[0], item[1], item[2]),
+                self.ddl_concurrent_tasks,
+            )
 
     def get_adapter(self, gateway: t.Optional[str] = None) -> EngineAdapter:
         """Returns the adapter for the specified gateway or the default adapter if none is provided."""
