@@ -30,7 +30,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from functools import reduce
 
-from sqlglot import exp, select
+from sqlglot import exp
 from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
@@ -1334,12 +1334,7 @@ class SnapshotEvaluator:
         else:
             raise SQLMeshError("Expected model or standalone audit. {snapshot}: {audit}")
 
-        if isinstance(query, d.RawSql):
-            sql_payload: exp.Expression | str = f"SELECT COUNT(*) FROM ({query.name}) AS audit"
-        else:
-            sql_payload = select("COUNT(*)").from_(query.subquery("audit"))
-
-        count, *_ = adapter.fetchone(sql_payload, quote_identifiers=True)  # type: ignore
+        count, *_ = adapter.fetchone(query, quote_identifiers=True)  # type: ignore
 
         return AuditResult(
             audit=audit,

@@ -185,7 +185,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Iterator[QueryOrDF | d.RawSql]:
+    ) -> t.Iterator[QueryOrDF]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
         be fetched, or a dataframe object which contains the data itself.
 
@@ -284,7 +284,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query | d.RawSql]:
+    ) -> t.Optional[exp.Query]:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -322,7 +322,7 @@ class _Model(ModelMeta, frozen=True):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Query | d.RawSql:
+    ) -> exp.Query:
         """Same as `render_query()` but raises an exception if the query can't be rendered.
 
         Args:
@@ -508,7 +508,6 @@ class _Model(ModelMeta, frozen=True):
             exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
         )
 
-        # TODO: pass run_original_sql setting here when we add support for it in SQLMesh projects
         query_renderer = QueryRenderer(
             audit.query,
             audit.dialect or self.dialect,
@@ -588,7 +587,6 @@ class _Model(ModelMeta, frozen=True):
                 only_execution_time=False,
                 default_catalog=self.default_catalog,
                 model_fqn=self.fqn,
-                run_original_sql=self.run_original_sql,
             )
         return self._statement_renderer_cache[expression_key]
 
@@ -715,7 +713,6 @@ class _Model(ModelMeta, frozen=True):
             python_env=self.python_env,
             only_execution_time=False,
             quote_identifiers=False,
-            run_original_sql=self.run_original_sql,
         )
 
     def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
@@ -1332,7 +1329,7 @@ class SqlModel(_Model):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query | d.RawSql]:
+    ) -> t.Optional[exp.Query]:
         query = self._query_renderer.render(
             start=start,
             end=end,
@@ -1538,7 +1535,6 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
-            run_original_sql=self.run_original_sql,
         )
 
     @property
