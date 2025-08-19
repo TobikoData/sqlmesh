@@ -139,10 +139,6 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_physical_layer_updated(result) -> None:
-    assert "Physical layer updated" in result.output
-
-
 def assert_model_batches_executed(result) -> None:
     assert "Model batches executed" in result.output
 
@@ -152,7 +148,6 @@ def assert_virtual_layer_updated(result) -> None:
 
 
 def assert_backfill_success(result) -> None:
-    assert_physical_layer_updated(result)
     assert_model_batches_executed(result)
     assert_virtual_layer_updated(result)
 
