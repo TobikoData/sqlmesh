@@ -21,6 +21,9 @@ from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
+if t.TYPE_CHECKING:
+    pass
+
 pytestmark = pytest.mark.engine
 
 
@@ -81,10 +84,10 @@ def test_create_view_pandas_source_columns(make_mocked_engine_adapter: t.Callabl
     bigint_dtype = exp.DataType.build("BIGINT")
     adapter.create_view(
         "test_view",
-        pd.DataFrame({"a": [1, 2, 3]}),
+        pd.DataFrame({"a": [1, 2, 3], "ignored_source": [4, 5, 6]}),
         target_columns_to_types={"a": bigint_dtype, "b": bigint_dtype},
         replace=False,
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
 
     assert to_sql_calls(adapter) == [
@@ -96,16 +99,16 @@ def test_create_view_query_source_columns(make_mocked_engine_adapter: t.Callable
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_view(
         "test_view",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         target_columns_to_types={
             "a": exp.DataType.build("BIGINT"),
             "b": exp.DataType.build("BIGINT"),
         },
         replace=False,
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        'CREATE VIEW "test_view" ("a", "b") AS SELECT "a", CAST(NULL AS BIGINT) AS "b" FROM (SELECT "a" FROM "tbl") AS "select_source_columns"',
+        'CREATE VIEW "test_view" ("a", "b") AS SELECT "a", CAST(NULL AS BIGINT) AS "b" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns"',
     ]
 
 
@@ -318,7 +321,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_sou
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
-    df = pd.DataFrame({"a": [1, 2]})
+    df = pd.DataFrame({"a": [1, 2], "ignored_source": [3, 4]})
     adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
@@ -330,7 +333,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_sou
             "a": exp.DataType.build("INT"),
             "ds": exp.DataType.build("STRING"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
         """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT "a", "ds" FROM (SELECT CAST("a" AS INT) AS "a", CAST(NULL AS TEXT) AS "ds" FROM (VALUES (1), (2)) AS "t"("a")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
@@ -344,7 +347,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_query_sour
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     adapter.insert_overwrite_by_time_partition(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         start="2022-01-01",
         end="2022-01-02",
         time_column="ds",
@@ -353,10 +356,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_query_sour
             "a": exp.DataType.build("INT"),
             "ds": exp.DataType.build("STRING"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT "a", "ds" FROM (SELECT "a", CAST(NULL AS TEXT) AS "ds" FROM (SELECT "a" FROM "tbl") AS "select_source_columns") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT "a", "ds" FROM (SELECT "a", CAST(NULL AS TEXT) AS "ds" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     ]
 
 
@@ -410,7 +413,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas_source_columns(
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
-    df = pd.DataFrame({"a": [1, 2]})
+    df = pd.DataFrame({"a": [1, 2], "ignored_source": [3, 4]})
     adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
@@ -422,7 +425,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas_source_columns(
             "a": exp.DataType.build("INT"),
             "ds": exp.DataType.build("STRING"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
         """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT "a", "ds" FROM (SELECT CAST("a" AS INT) AS "a", CAST(NULL AS TEXT) AS "ds" FROM (VALUES (1), (2)) AS "t"("a")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
@@ -436,7 +439,7 @@ def test_insert_overwrite_by_time_partition_replace_where_query_source_columns(
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     adapter.insert_overwrite_by_time_partition(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         start="2022-01-01",
         end="2022-01-02",
         time_column="ds",
@@ -445,10 +448,10 @@ def test_insert_overwrite_by_time_partition_replace_where_query_source_columns(
             "a": exp.DataType.build("INT"),
             "ds": exp.DataType.build("STRING"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT "a", "ds" FROM (SELECT "a", CAST(NULL AS TEXT) AS "ds" FROM (SELECT "a" FROM "tbl") AS "select_source_columns") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT "a", "ds" FROM (SELECT "a", CAST(NULL AS TEXT) AS "ds" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     ]
 
 
@@ -572,7 +575,7 @@ def test_insert_append_pandas_batches(make_mocked_engine_adapter: t.Callable):
 
 def test_insert_append_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3]})
+    df = pd.DataFrame({"a": [1, 2, 3], "ignored_source": [4, 5, 6]})
     adapter.insert_append(
         "test_table",
         df,
@@ -580,7 +583,7 @@ def test_insert_append_pandas_source_columns(make_mocked_engine_adapter: t.Calla
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST(NULL AS INT) AS "b" FROM (VALUES (1), (2), (3)) AS "t"("a")',
@@ -591,15 +594,15 @@ def test_insert_append_query_source_columns(make_mocked_engine_adapter: t.Callab
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.insert_append(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        'INSERT INTO "test_table" ("a", "b") SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a" FROM "tbl") AS "select_source_columns"',
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns"',
     ]
 
 
@@ -1067,12 +1070,8 @@ def test_alter_table(
     adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
     original_from_structs = adapter.SCHEMA_DIFFER._from_structs
 
-    def _from_structs(
-        current_struct: exp.DataType, new_struct: exp.DataType, *, ignore_destructive: bool = False
-    ) -> t.List[TableAlterOperation]:
-        operations = original_from_structs(
-            current_struct, new_struct, ignore_destructive=ignore_destructive
-        )
+    def _from_structs(*args, **kwargs) -> t.List[TableAlterOperation]:
+        operations = original_from_structs(*args, **kwargs)
         if not operations:
             return operations
         assert (
@@ -1093,7 +1092,7 @@ def test_alter_table(
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
@@ -1191,7 +1190,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
 
 def test_merge_upsert_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    df = pd.DataFrame({"id": [1, 2, 3], "ts": [4, 5, 6]})
+    df = pd.DataFrame({"id": [1, 2, 3], "ts": [4, 5, 6], "ignored_source": [7, 8, 9]})
     adapter.merge(
         target_table="target",
         source_table=df,
@@ -1201,7 +1200,7 @@ def test_merge_upsert_pandas_source_columns(make_mocked_engine_adapter: t.Callab
             "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("id")],
-        source_columns=["id", "ts"],
+        source_columns=["id", "ignored_source", "ts"],
     )
     adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST(NULL AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
@@ -1214,17 +1213,17 @@ def test_merge_upsert_query_source_columns(make_mocked_engine_adapter: t.Callabl
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.merge(
         target_table="target",
-        source_table=parse_one("SELECT id, ts FROM source"),
+        source_table=parse_one("SELECT id, ts, ignored_source FROM source"),
         target_columns_to_types={
             "id": exp.DataType.build("int"),
             "ts": exp.DataType.build("timestamp"),
             "val": exp.DataType.build("int"),
         },
         unique_key=[exp.to_identifier("id")],
-        source_columns=["id", "ts"],
+        source_columns=["id", "ts", "ignored_source"],
     )
     adapter.cursor.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", CAST(NULL AS INT) AS "val" FROM (SELECT "id", "ts" FROM "source") AS "select_source_columns") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", CAST(NULL AS INT) AS "val" FROM (SELECT "id", "ts", "ignored_source" FROM "source") AS "select_source_columns") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
@@ -1639,6 +1638,7 @@ def test_scd_type_2_by_time_source_columns(make_mocked_engine_adapter: t.Callabl
                 "2020-01-02 15:00:00",
                 "2020-01-03 12:00:00",
             ],
+            "ignored_source": [4, 5, 6],
         }
     )
     adapter.scd_type_2_by_time(
@@ -1656,7 +1656,7 @@ def test_scd_type_2_by_time_source_columns(make_mocked_engine_adapter: t.Callabl
             "test_valid_from": exp.DataType.build("TIMESTAMP"),
             "test_valid_to": exp.DataType.build("TIMESTAMP"),
         },
-        source_columns=["id", "name", "test_UPDATED_at"],
+        source_columns=["id", "name", "test_UPDATED_at", "ignored_source"],
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
         start=datetime(2020, 1, 1, 0, 0, 0),
         is_restatement=True,
@@ -3201,7 +3201,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
 
 def test_replace_query_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3]})
+    df = pd.DataFrame({"a": [1, 2, 3], "ignored_source": [4, 5, 6]})
     adapter.replace_query(
         "test_table",
         df,
@@ -3209,7 +3209,7 @@ def test_replace_query_pandas_source_columns(make_mocked_engine_adapter: t.Calla
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT CAST("a" AS INT) AS "a", CAST(NULL AS INT) AS "b" FROM (VALUES (1), (2), (3)) AS "t"("a")) AS "_subquery"',
@@ -3220,15 +3220,15 @@ def test_replace_query_query_source_columns(make_mocked_engine_adapter: t.Callab
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.replace_query(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a" FROM "tbl") AS "select_source_columns") AS "_subquery"',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns") AS "_subquery"',
     ]
 
 
@@ -3382,7 +3382,7 @@ def test_ctas_pandas(make_mocked_engine_adapter: t.Callable):
 
 def test_ctas_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3]})
+    df = pd.DataFrame({"a": [1, 2, 3], "ignored_source": [4, 5, 6]})
     adapter.ctas(
         "test_table",
         df,
@@ -3390,7 +3390,7 @@ def test_ctas_pandas_source_columns(make_mocked_engine_adapter: t.Callable):
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
         'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT CAST("a" AS INT) AS "a", CAST(NULL AS INT) AS "b" FROM (VALUES (1), (2), (3)) AS "t"("a")) AS "_subquery"',
@@ -3401,15 +3401,15 @@ def test_ctas_query_source_columns(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.ctas(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, ignored_source FROM tbl"),
         target_columns_to_types={
             "a": exp.DataType.build("INT"),
             "b": exp.DataType.build("INT"),
         },
-        source_columns=["a"],
+        source_columns=["a", "ignored_source"],
     )
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a" FROM "tbl") AS "select_source_columns") AS "_subquery"',
+        'CREATE TABLE IF NOT EXISTS "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (SELECT "a", CAST(NULL AS INT) AS "b" FROM (SELECT "a", "ignored_source" FROM "tbl") AS "select_source_columns") AS "_subquery"',
     ]
 
 

@@ -162,7 +162,7 @@ def test_alter_table(make_mocked_engine_adapter: t.Callable):
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     adapter.cursor.execute.assert_has_calls(
         [

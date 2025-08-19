@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import abc
 import logging
 import typing as t
+from dataclasses import dataclass
 
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
@@ -10,6 +12,7 @@ from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.dialect import schema_
+from sqlmesh.core.schema_diff import TableAlterOperation
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -340,6 +343,53 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         return statement
 
 
+@dataclass(frozen=True)
+class TableAlterClusterByOperation(TableAlterOperation, abc.ABC):
+    pass
+
+
+@dataclass(frozen=True)
+class TableAlterChangeClusterKeyOperation(TableAlterClusterByOperation):
+    clustering_key: str
+    dialect: str
+
+    @property
+    def is_additive(self) -> bool:
+        return False
+
+    @property
+    def is_destructive(self) -> bool:
+        return False
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [exp.Cluster(expressions=self.cluster_key_expressions)]
+
+    @property
+    def cluster_key_expressions(self) -> t.List[exp.Expression]:
+        # Note: Assumes `clustering_key` as a string like:
+        # - "(col_a)"
+        # - "(col_a, col_b)"
+        # - "func(col_a, transform(col_b))"
+        parsed_cluster_key = parse_one(self.clustering_key, dialect=self.dialect)
+        return parsed_cluster_key.expressions or [parsed_cluster_key.this]
+
+
+@dataclass(frozen=True)
+class TableAlterDropClusterKeyOperation(TableAlterClusterByOperation):
+    @property
+    def is_additive(self) -> bool:
+        return False
+
+    @property
+    def is_destructive(self) -> bool:
+        return False
+
+    @property
+    def _alter_actions(self) -> t.List[exp.Expression]:
+        return [exp.Command(this="DROP", expression="CLUSTERING KEY")]
+
+
 class ClusteredByMixin(EngineAdapter):
     def _build_clustered_by_exp(
         self,
@@ -348,27 +398,19 @@ class ClusteredByMixin(EngineAdapter):
     ) -> t.Optional[exp.Cluster]:
         return exp.Cluster(expressions=[c.copy() for c in clustered_by])
 
-    def _parse_clustering_key(self, clustering_key: t.Optional[str]) -> t.List[exp.Expression]:
-        if not clustering_key:
-            return []
-
-        # Note: Assumes `clustering_key` as a string like:
-        # - "(col_a)"
-        # - "(col_a, col_b)"
-        # - "func(col_a, transform(col_b))"
-        parsed_cluster_key = parse_one(clustering_key, dialect=self.dialect)
-
-        return parsed_cluster_key.expressions or [parsed_cluster_key.this]
-
-    def get_alter_expressions(
+    def get_alter_operations(
         self,
         current_table_name: TableName,
         target_table_name: TableName,
         *,
         ignore_destructive: bool = False,
-    ) -> t.List[exp.Alter]:
-        expressions = super().get_alter_expressions(
-            current_table_name, target_table_name, ignore_destructive=ignore_destructive
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterOperation]:
+        operations = super().get_alter_operations(
+            current_table_name,
+            target_table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
         )
 
         # check for a change in clustering
@@ -390,32 +432,17 @@ class ClusteredByMixin(EngineAdapter):
                 if target_table_info.clustering_key and (
                     current_table_info.clustering_key != target_table_info.clustering_key
                 ):
-                    expressions.append(
-                        self._change_clustering_key_expr(
-                            current_table,
-                            self._parse_clustering_key(target_table_info.clustering_key),
+                    operations.append(
+                        TableAlterChangeClusterKeyOperation(
+                            target_table=current_table,
+                            clustering_key=target_table_info.clustering_key,
+                            dialect=self.dialect,
                         )
                     )
             elif current_table_info.is_clustered:
-                expressions.append(self._drop_clustering_key_expr(current_table))
+                operations.append(TableAlterDropClusterKeyOperation(target_table=current_table))
 
-        return expressions
-
-    def _change_clustering_key_expr(
-        self, table: exp.Table, cluster_by: t.List[exp.Expression]
-    ) -> exp.Alter:
-        return exp.Alter(
-            this=table,
-            kind="TABLE",
-            actions=[exp.Cluster(expressions=cluster_by)],
-        )
-
-    def _drop_clustering_key_expr(self, table: exp.Table) -> exp.Alter:
-        return exp.Alter(
-            this=table,
-            kind="TABLE",
-            actions=[exp.Command(this="DROP", expression="CLUSTERING KEY")],
-        )
+        return operations
 
 
 def logical_merge(

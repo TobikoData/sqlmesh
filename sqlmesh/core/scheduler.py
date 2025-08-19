@@ -197,6 +197,7 @@ class Scheduler:
         batch_index: int,
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         target_table_exists: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
@@ -208,6 +209,7 @@ class Scheduler:
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            allow_additive_snapshots: Snapshots for which additive schema changes are allowed.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             auto_restatement_enabled: Whether to enable auto restatements.
@@ -230,6 +232,7 @@ class Scheduler:
             execution_time=execution_time,
             snapshots=snapshots,
             allow_destructive_snapshots=allow_destructive_snapshots,
+            allow_additive_snapshots=allow_additive_snapshots,
             deployability_index=deployability_index,
             batch_index=batch_index,
             target_table_exists=target_table_exists,
@@ -412,6 +415,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
         audit_only: bool = False,
@@ -427,6 +431,7 @@ class Scheduler:
             start: The start of the run.
             end: The end of the run.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            allow_additive_snapshots: Snapshots for which additive schema changes are allowed.
             selected_snapshot_ids: The snapshots to include in the run DAG. If None, all snapshots with missing intervals will be included.
 
         Returns:
@@ -517,6 +522,7 @@ class Scheduler:
                             deployability_index=deployability_index,
                             batch_index=node.batch_index,
                             allow_destructive_snapshots=allow_destructive_snapshots,
+                            allow_additive_snapshots=allow_additive_snapshots,
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
                         )
 
@@ -538,6 +544,7 @@ class Scheduler:
                     snapshots=self.snapshots_by_name,
                     deployability_index=deployability_index,
                     allow_destructive_snapshots=allow_destructive_snapshots or set(),
+                    allow_additive_snapshots=allow_additive_snapshots or set(),
                 )
 
         try:

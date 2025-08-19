@@ -32,7 +32,7 @@ from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core import lineage
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel, model
-from sqlmesh.core.model.kind import OnDestructiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan, stages as plan_stages
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -431,6 +431,52 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                 query=parse_one(new_query),
                 kind=IncrementalByTimeRangeKind(
                     time_column="ds", forward_only=True, on_destructive_change=on_destructive_change
+                ),
+            )
+        )
+        snapshot.previous_versions = (
+            SnapshotDataVersion(
+                fingerprint=SnapshotFingerprint(
+                    data_hash="test_data_hash",
+                    metadata_hash="test_metadata_hash",
+                ),
+                version="test_version",
+                change_category=SnapshotChangeCategory.NON_BREAKING,
+                dev_table_suffix="dev",
+            ),
+        )
+
+        return snapshot_old, snapshot
+
+    return _make_function
+
+
+@pytest.fixture
+def make_snapshot_on_additive_change(make_snapshot: t.Callable) -> t.Callable:
+    def _make_function(
+        name: str = "a",
+        old_query: str = "select '1' as one, '2' as two, '2022-01-01' ds",
+        new_query: str = "select '1' as one, '2' as two, '3' as three, '2022-01-01' ds",
+        on_additive_change: OnAdditiveChange = OnAdditiveChange.ERROR,
+    ) -> t.Tuple[Snapshot, Snapshot]:
+        snapshot_old = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(old_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_additive_change=on_additive_change
+                ),
+            )
+        )
+
+        snapshot = make_snapshot(
+            SqlModel(
+                name=name,
+                dialect="duckdb",
+                query=parse_one(new_query),
+                kind=IncrementalByTimeRangeKind(
+                    time_column="ds", forward_only=True, on_additive_change=on_additive_change
                 ),
             )
         )

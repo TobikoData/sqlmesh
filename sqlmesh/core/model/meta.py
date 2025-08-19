@@ -31,6 +31,7 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _IncrementalBy,
     model_kind_validator,
+    OnAdditiveChange,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
@@ -516,6 +517,11 @@ class ModelMeta(_Node):
     @property
     def on_destructive_change(self) -> OnDestructiveChange:
         return getattr(self.kind, "on_destructive_change", OnDestructiveChange.ALLOW)
+
+    @property
+    def on_additive_change(self) -> OnAdditiveChange:
+        """Return the model's additive change setting if it has one."""
+        return getattr(self.kind, "on_additive_change", OnAdditiveChange.ALLOW)
 
     @property
     def ignored_rules(self) -> t.Set[str]:

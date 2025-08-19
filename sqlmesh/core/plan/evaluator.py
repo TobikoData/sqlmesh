@@ -179,6 +179,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 snapshots_to_create,
                 stage.all_snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
+                allow_additive_snapshots=plan.allow_additive_models,
                 deployability_index=stage.deployability_index,
                 on_start=lambda x: self.console.start_creation_progress(
                     x, plan.environment, self.default_catalog
@@ -254,6 +255,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             allow_destructive_snapshots=plan.allow_destructive_models,
+            allow_additive_snapshots=plan.allow_additive_models,
             selected_snapshot_ids=stage.selected_snapshot_ids,
         )
         if errors:
@@ -322,6 +324,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 stage.snapshots,
                 stage.all_snapshots,
                 allow_destructive_snapshots=plan.allow_destructive_models,
+                allow_additive_snapshots=plan.allow_additive_models,
                 deployability_index=stage.deployability_index,
             )
         except NodeExecutionFailedError as ex:

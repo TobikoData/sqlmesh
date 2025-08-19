@@ -4,6 +4,8 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+
+from sqlmesh.core.console import TerminalConsole
 from sqlmesh.utils.metaprogramming import Executable
 from tests.core.test_table_diff import create_test_console
 import time_machine
@@ -24,7 +26,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ModelKindName,
 )
-from sqlmesh.core.model.kind import OnDestructiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
@@ -480,6 +482,75 @@ def test_forward_only_plan_allow_destructive_models(
         assert mock_logger.call_count == 0
 
 
+def test_forward_only_plan_allow_additive_models(
+    mocker, make_snapshot, make_snapshot_on_additive_change
+):
+    # forward-only model, not forward-only plan
+    snapshot_a_old, snapshot_a = make_snapshot_on_additive_change()
+
+    context_diff_a = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    with pytest.raises(PlanError, match="Plan requires an additive change to a forward-only model"):
+        PlanBuilder(context_diff_a, forward_only=False).build()
+
+    console = TerminalConsole()
+    log_warning_spy = mocker.spy(console, "log_warning")
+    assert PlanBuilder(
+        context_diff_a, forward_only=False, allow_additive_models=['"a"'], console=console
+    ).build()
+    assert log_warning_spy.call_count == 0
+
+    snapshot_a_old, snapshot_a = make_snapshot_on_additive_change(
+        on_additive_change=OnAdditiveChange.WARN
+    )
+
+    context_diff_a = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={snapshot_a.name: (snapshot_a, snapshot_a_old)},
+        snapshots={snapshot_a.snapshot_id: snapshot_a, snapshot_a_old.snapshot_id: snapshot_a_old},
+        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    log_warning_spy.reset_mock()
+    assert PlanBuilder(context_diff_a, forward_only=False, console=console).build()
+    log_warning_spy.assert_called_once_with("""
+Plan requires additive change to forward-only model '"a"'s schema that adds column 'three'.
+
+Schema changes:
+  ALTER TABLE "a" ADD COLUMN three TEXT""")
+
+
 def test_forward_only_model_on_destructive_change(
     make_snapshot, make_snapshot_on_destructive_change
 ):
@@ -748,6 +819,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         no_gaps=False,
         forward_only=False,
         allow_destructive_models=set(),
+        allow_additive_models=set(),
         include_unmodified=True,
         environment_naming_info=EnvironmentNamingInfo(),
         directly_modified={snapshot_a.snapshot_id},
@@ -3274,6 +3346,645 @@ def test_plan_dates_relative_to_execution_time(
         assert to_datetime(plan.start) == to_datetime(output_start)
         assert to_datetime(plan.end) == to_datetime(output_end)
         assert to_datetime(plan.execution_time) == to_datetime(output_execution_time)
+
+
+def test_plan_builder_additive_change_error_blocks_plan(make_snapshot):
+    """Test that additive changes block plan when on_additive_change=ERROR."""
+    # Create models with actual schema differences
+    # Use explicit column schemas in CTE so columns_to_types can be determined
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    # New model with additional column (additive change)
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={old_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={
+            old_snapshot.snapshot_id: old_snapshot,
+            new_snapshot.snapshot_id: new_snapshot,
+        },
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    builder = PlanBuilder(context_diff, forward_only=True)
+
+    # Should raise PlanError for additive changes when on_additive_change=ERROR
+    with pytest.raises(PlanError, match="additive change"):
+        builder.build()
+
+
+def test_plan_builder_additive_change_warn_allows_plan(make_snapshot):
+    """Test that additive changes allow plan with warning when on_additive_change=WARN."""
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.WARN,
+        ),
+    )
+
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.WARN,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={old_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={
+            old_snapshot.snapshot_id: old_snapshot,
+            new_snapshot.snapshot_id: new_snapshot,
+        },
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    builder = PlanBuilder(context_diff, forward_only=True)
+
+    # Should log warning but not fail
+    with patch.object(builder._console, "log_additive_change") as mock_log_additive:
+        plan = builder.build()
+        assert plan is not None
+        mock_log_additive.assert_called()  # Should have logged an additive change
+
+
+def test_plan_builder_additive_change_allow_permits_plan(make_snapshot):
+    """Test that additive changes are permitted when on_additive_change=ALLOW."""
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ALLOW,
+        ),
+    )
+
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ALLOW,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={old_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={
+            old_snapshot.snapshot_id: old_snapshot,
+            new_snapshot.snapshot_id: new_snapshot,
+        },
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    builder = PlanBuilder(context_diff, forward_only=True)
+
+    # Should build plan without issues
+    plan = builder.build()
+    assert plan is not None
+
+
+def test_plan_builder_additive_change_ignore_skips_validation(make_snapshot):
+    """Test that additive changes are ignored when on_additive_change=IGNORE."""
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.IGNORE,
+        ),
+    )
+
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.IGNORE,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={old_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={
+            old_snapshot.snapshot_id: old_snapshot,
+            new_snapshot.snapshot_id: new_snapshot,
+        },
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    builder = PlanBuilder(context_diff, forward_only=True)
+
+    # Should build plan without any validation
+    with patch("sqlmesh.core.plan.builder.logger.warning") as mock_warning:
+        plan = builder.build()
+        assert plan is not None
+        mock_warning.assert_not_called()  # Should not log any warnings
+
+
+def test_plan_builder_mixed_destructive_and_additive_changes(make_snapshot):
+    """Test scenarios with both destructive and additive changes."""
+    # Test case: on_destructive_change=IGNORE, on_additive_change=ERROR
+    # Should ignore destructive changes but error on additive changes
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'old_value'::VARCHAR as old_col, '2022-01-01'::DATE as ds
+            )
+            select id, name, old_col, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_destructive_change=OnDestructiveChange.IGNORE,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'new_value'::VARCHAR as new_col, '2022-01-01'::DATE as ds
+            )
+            select id, name, new_col, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_destructive_change=OnDestructiveChange.IGNORE,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={old_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={
+            old_snapshot.snapshot_id: old_snapshot,
+            new_snapshot.snapshot_id: new_snapshot,
+        },
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    builder = PlanBuilder(context_diff, forward_only=True)
+
+    # Should error on additive change (new_col), but ignore destructive change (old_col removal)
+    with pytest.raises(PlanError, match="additive change"):
+        builder.build()
+
+
+def test_plan_builder_allow_additive_models_flag(make_snapshot):
+    """Test that --allow-additive-model flag overrides on_additive_change=ERROR."""
+    old_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    # New model with additional column (additive change)
+    new_model = SqlModel(
+        name="test_model",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    old_snapshot = make_snapshot(old_model)
+    new_snapshot = make_snapshot(new_model)
+
+    # Set previous versions to simulate a modification
+    new_snapshot.previous_versions = (
+        SnapshotDataVersion(
+            fingerprint=SnapshotFingerprint(
+                data_hash="old_data_hash",
+                metadata_hash="old_metadata_hash",
+            ),
+            version="old_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
+            dev_table_suffix="dev",
+        ),
+    )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={new_snapshot.name: (new_snapshot, old_snapshot)},
+        snapshots={new_snapshot.snapshot_id: new_snapshot},
+        new_snapshots={new_snapshot.snapshot_id: new_snapshot},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # First, verify that without the flag, the plan fails with additive change error
+    builder = PlanBuilder(context_diff, forward_only=True)
+    with pytest.raises(PlanError, match="additive change"):
+        builder.build()
+
+    # Now test that the --allow-additive-model flag allows the plan to succeed
+    builder_with_flag = PlanBuilder(
+        context_diff,
+        forward_only=True,
+        allow_additive_models={'"test_model"'},
+    )
+
+    # Should succeed without raising an exception
+    plan = builder_with_flag.build()
+    assert plan is not None
+
+
+def test_plan_builder_allow_additive_models_pattern_matching(make_snapshot):
+    """Test that --allow-additive-model flag supports pattern matching like destructive models."""
+    # Create two models with additive changes
+    old_model_1 = SqlModel(
+        name="test.model_1",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    new_model_1 = SqlModel(
+        name="test.model_1",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'email@test.com'::VARCHAR as email, '2022-01-01'::DATE as ds
+            )
+            select id, name, email, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    old_model_2 = SqlModel(
+        name="other.model_2",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, '2022-01-01'::DATE as ds
+            )
+            select id, name, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    new_model_2 = SqlModel(
+        name="other.model_2",
+        dialect="duckdb",
+        query=parse_one("""
+            with source as (
+                select 1::INT as id, 'test'::VARCHAR as name, 'phone'::VARCHAR as phone, '2022-01-01'::DATE as ds
+            )
+            select id, name, phone, ds from source
+        """),
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds",
+            forward_only=True,
+            on_additive_change=OnAdditiveChange.ERROR,
+        ),
+    )
+
+    old_snapshot_1 = make_snapshot(old_model_1)
+    new_snapshot_1 = make_snapshot(new_model_1)
+    old_snapshot_2 = make_snapshot(old_model_2)
+    new_snapshot_2 = make_snapshot(new_model_2)
+
+    # Set previous versions to simulate modifications
+    for new_snapshot in [new_snapshot_1, new_snapshot_2]:
+        new_snapshot.previous_versions = (
+            SnapshotDataVersion(
+                fingerprint=SnapshotFingerprint(
+                    data_hash="old_data_hash",
+                    metadata_hash="old_metadata_hash",
+                ),
+                version="old_version",
+                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                dev_table_suffix="dev",
+            ),
+        )
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=False,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            new_snapshot_1.name: (new_snapshot_1, old_snapshot_1),
+            new_snapshot_2.name: (new_snapshot_2, old_snapshot_2),
+        },
+        snapshots={
+            new_snapshot_1.snapshot_id: new_snapshot_1,
+            new_snapshot_2.snapshot_id: new_snapshot_2,
+        },
+        new_snapshots={
+            new_snapshot_1.snapshot_id: new_snapshot_1,
+            new_snapshot_2.snapshot_id: new_snapshot_2,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    # Test pattern matching: allow only models in "test" schema
+    # In real usage, patterns would be expanded by Context.expand_model_selections
+    # Here we simulate what the expansion would produce
+    builder_with_pattern = PlanBuilder(
+        context_diff,
+        forward_only=True,
+        allow_additive_models={'"test"."model_1"'},  # Only allow test.model_1, not other.model_2
+    )
+
+    # Should still fail because other.model_2 is not allowed
+    with pytest.raises(PlanError, match="additive change"):
+        builder_with_pattern.build()
+
+    # Test allowing both patterns
+    builder_with_both = PlanBuilder(
+        context_diff,
+        forward_only=True,
+        allow_additive_models={'"test"."model_1"', '"other"."model_2"'},  # Allow both models
+    )
+
+    # Should succeed
+    plan = builder_with_both.build()
+    assert plan is not None
 
 
 def test_environment_statements_change_allows_dev_environment_creation(make_snapshot):

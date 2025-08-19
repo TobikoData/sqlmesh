@@ -1141,6 +1141,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             and self.name not in allow_destructive_snapshots
         )
 
+    def needs_additive_check(
+        self,
+        allow_additive_snapshots: t.Set[str],
+    ) -> bool:
+        return (
+            self.is_model
+            and not self.model.on_additive_change.is_allow
+            and self.name not in allow_additive_snapshots
+        )
+
     def get_next_auto_restatement_interval(self, execution_time: TimeLike) -> t.Optional[Interval]:
         """Returns the next auto restatement interval for the snapshot.
 

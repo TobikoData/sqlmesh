@@ -50,8 +50,13 @@ from sqlmesh.core.model import (
     ViewKind,
     CustomKind,
 )
+from sqlmesh.core.model.kind import _Incremental
 from sqlmesh.utils import CompletionStatus
-from sqlmesh.core.schema_diff import has_drop_alteration, get_dropped_column_names
+from sqlmesh.core.schema_diff import (
+    has_drop_alteration,
+    TableAlterOperation,
+    has_additive_alteration,
+)
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Intervals,
@@ -72,6 +77,8 @@ from sqlmesh.utils.errors import (
     DestructiveChangeError,
     SQLMeshError,
     format_destructive_change_msg,
+    format_additive_change_msg,
+    AdditiveChangeError,
 )
 
 if sys.version_info >= (3, 12):
@@ -138,6 +145,7 @@ class SnapshotEvaluator:
         execution_time: TimeLike,
         snapshots: t.Dict[str, Snapshot],
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         batch_index: int = 0,
         target_table_exists: t.Optional[bool] = None,
@@ -152,6 +160,7 @@ class SnapshotEvaluator:
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            allow_additive_snapshots: Snapshots for which additive schema changes are allowed.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             target_table_exists: Whether the target table exists. If None, the table will be checked for existence.
@@ -167,6 +176,7 @@ class SnapshotEvaluator:
             snapshot=snapshot,
             snapshots=snapshots,
             allow_destructive_snapshots=allow_destructive_snapshots or set(),
+            allow_additive_snapshots=allow_additive_snapshots or set(),
             deployability_index=deployability_index,
             batch_index=batch_index,
             target_table_exists=target_table_exists,
@@ -338,6 +348,7 @@ class SnapshotEvaluator:
         on_start: t.Optional[t.Callable] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        allow_additive_snapshots: t.Optional[t.Set[str]] = None,
     ) -> CompletionStatus:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
@@ -348,6 +359,7 @@ class SnapshotEvaluator:
             on_start: A callback to initialize the snapshot creation progress bar.
             on_complete: A callback to call on each successfully created snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+            allow_additive_snapshots: Set of snapshots that are allowed to have additive schema changes.
 
         Returns:
             CompletionStatus: The status of the creation operation (success, failure, nothing to do).
@@ -366,6 +378,7 @@ class SnapshotEvaluator:
             deployability_index=deployability_index,
             on_complete=on_complete,
             allow_destructive_snapshots=allow_destructive_snapshots or set(),
+            allow_additive_snapshots=allow_additive_snapshots or set(),
         )
         return CompletionStatus.SUCCESS
 
@@ -454,6 +467,7 @@ class SnapshotEvaluator:
         deployability_index: DeployabilityIndex,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
     ) -> None:
         """Internal method to create tables in parallel."""
         with self.concurrent_context():
@@ -464,6 +478,7 @@ class SnapshotEvaluator:
                     snapshots=snapshots,
                     deployability_index=deployability_index,
                     allow_destructive_snapshots=allow_destructive_snapshots,
+                    allow_additive_snapshots=allow_additive_snapshots,
                     on_complete=on_complete,
                 ),
                 self.ddl_concurrent_tasks,
@@ -477,6 +492,7 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
@@ -485,9 +501,11 @@ class SnapshotEvaluator:
             target_snapshots: Target snapshots.
             snapshots: Mapping of snapshot ID to snapshot.
             allow_destructive_snapshots: Set of snapshots that are allowed to have destructive schema changes.
+            allow_additive_snapshots: Set of snapshots that are allowed to have additive schema changes.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         """
         allow_destructive_snapshots = allow_destructive_snapshots or set()
+        allow_additive_snapshots = allow_additive_snapshots or set()
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         snapshots_by_name = {s.name: s for s in snapshots.values()}
         with self.concurrent_context():
@@ -497,6 +515,7 @@ class SnapshotEvaluator:
                     s,
                     snapshots_by_name,
                     allow_destructive_snapshots,
+                    allow_additive_snapshots,
                     self.get_adapter(s.model_gateway),
                     deployability_index,
                 ),
@@ -669,6 +688,7 @@ class SnapshotEvaluator:
         snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
         deployability_index: t.Optional[DeployabilityIndex],
         batch_index: int,
         target_table_exists: t.Optional[bool],
@@ -683,6 +703,7 @@ class SnapshotEvaluator:
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            allow_additive_snapshots: Snapshots for which additive schema changes are allowed.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             batch_index: If the snapshot is part of a batch of related snapshots; which index in the batch is it
             target_table_exists: Whether the target table exists. If None, the table will be checked for existence.
@@ -750,6 +771,7 @@ class SnapshotEvaluator:
                         render_kwargs=create_render_kwargs,
                         rendered_physical_properties=rendered_physical_properties,
                         allow_destructive_snapshots=allow_destructive_snapshots,
+                        allow_additive_snapshots=allow_additive_snapshots,
                     )
                     common_render_kwargs["runtime_stage"] = RuntimeStage.EVALUATING
                 elif model.annotated or model.is_seed or model.kind.is_scd_type_2:
@@ -780,6 +802,7 @@ class SnapshotEvaluator:
                 snapshot=snapshot,
                 snapshots=snapshots,
                 render_kwargs=common_render_kwargs,
+                create_render_kwargs=create_render_kwargs,
                 rendered_physical_properties=rendered_physical_properties,
                 deployability_index=deployability_index,
                 is_first_insert=is_first_insert,
@@ -796,6 +819,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Creates a physical table for the given snapshot.
@@ -806,6 +830,7 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this creation.
             on_complete: A callback to call on each successfully created database object.
             allow_destructive_snapshots: Snapshots for which destructive schema changes are allowed.
+            allow_additive_snapshots: Snapshots for which additive schema changes are allowed.
         """
         if not snapshot.is_model:
             return
@@ -836,6 +861,7 @@ class SnapshotEvaluator:
                     render_kwargs=create_render_kwargs,
                     rendered_physical_properties=rendered_physical_properties,
                     allow_destructive_snapshots=allow_destructive_snapshots,
+                    allow_additive_snapshots=allow_additive_snapshots,
                 )
             else:
                 is_table_deployable = deployability_index.is_deployable(snapshot)
@@ -860,6 +886,7 @@ class SnapshotEvaluator:
         snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         render_kwargs: t.Dict[str, t.Any],
+        create_render_kwargs: t.Dict[str, t.Any],
         rendered_physical_properties: t.Dict[str, exp.Expression],
         deployability_index: DeployabilityIndex,
         is_first_insert: bool,
@@ -896,7 +923,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
-                    render_kwargs=render_kwargs,
+                    render_kwargs=create_render_kwargs,
                 )
             else:
                 logger.info(
@@ -918,7 +945,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     physical_properties=rendered_physical_properties,
-                    render_kwargs=render_kwargs,
+                    render_kwargs=create_render_kwargs,
                 )
 
         # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
@@ -982,6 +1009,7 @@ class SnapshotEvaluator:
         render_kwargs: t.Dict[str, t.Any],
         rendered_physical_properties: t.Dict[str, exp.Expression],
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
@@ -1004,6 +1032,7 @@ class SnapshotEvaluator:
                 render_kwargs=render_kwargs,
                 rendered_physical_properties=rendered_physical_properties,
                 allow_destructive_snapshots=allow_destructive_snapshots,
+                allow_additive_snapshots=allow_additive_snapshots,
             )
         except Exception:
             adapter.drop_table(target_table_name)
@@ -1014,6 +1043,7 @@ class SnapshotEvaluator:
         snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
     ) -> None:
@@ -1051,6 +1081,7 @@ class SnapshotEvaluator:
                         **render_kwargs
                     ),
                     allow_destructive_snapshots=allow_destructive_snapshots,
+                    allow_additive_snapshots=allow_additive_snapshots,
                     run_pre_post_statements=True,
                 )
 
@@ -1063,6 +1094,7 @@ class SnapshotEvaluator:
         render_kwargs: t.Dict[str, t.Any],
         rendered_physical_properties: t.Dict[str, exp.Expression],
         allow_destructive_snapshots: t.Set[str],
+        allow_additive_snapshots: t.Set[str],
         run_pre_post_statements: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
@@ -1092,7 +1124,9 @@ class SnapshotEvaluator:
                 snapshot=snapshot,
                 snapshots=snapshots,
                 allow_destructive_snapshots=allow_destructive_snapshots,
+                allow_additive_snapshots=allow_additive_snapshots,
                 ignore_destructive=snapshot.model.on_destructive_change.is_ignore,
+                ignore_additive=snapshot.model.on_additive_change.is_ignore,
             )
         finally:
             if snapshot.is_materialized:
@@ -1501,6 +1535,7 @@ class EvaluationStrategy(abc.ABC):
         snapshot: Snapshot,
         *,
         ignore_destructive: bool,
+        ignore_additive: bool,
         **kwargs: t.Any,
     ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
@@ -1510,6 +1545,8 @@ class EvaluationStrategy(abc.ABC):
             source_table_name: The source table name.
             snapshot: The target snapshot.
             ignore_destructive: If True, destructive changes are not created when migrating.
+                This is used for forward-only models that are being migrated to a new version.
+            ignore_additive: If True, additive changes are not created when migrating.
                 This is used for forward-only models that are being migrated to a new version.
         """
 
@@ -1587,6 +1624,7 @@ class SymbolicStrategy(EvaluationStrategy):
         snapshot: Snapshot,
         *,
         ignore_destructive: bool,
+        ignore_additive: bool,
         **kwarg: t.Any,
     ) -> None:
         pass
@@ -1713,16 +1751,23 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         snapshot: Snapshot,
         *,
         ignore_destructive: bool,
+        ignore_additive: bool,
         **kwargs: t.Any,
     ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
-        alter_expressions = self.adapter.get_alter_expressions(
-            target_table_name, source_table_name, ignore_destructive=ignore_destructive
+        alter_operations = self.adapter.get_alter_operations(
+            target_table_name,
+            source_table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
         )
         _check_destructive_schema_change(
-            snapshot, alter_expressions, kwargs["allow_destructive_snapshots"]
+            snapshot, alter_operations, kwargs["allow_destructive_snapshots"]
         )
-        self.adapter.alter_table(alter_expressions)
+        _check_additive_schema_change(
+            snapshot, alter_operations, kwargs["allow_additive_snapshots"]
+        )
+        self.adapter.alter_table(alter_operations)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
@@ -1783,11 +1828,13 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         else:
             target_column_to_types = (
                 model.columns_to_types  # type: ignore
-                if model.annotated and not model.on_destructive_change.is_ignore
+                if model.annotated
+                and not model.on_destructive_change.is_ignore
+                and not model.on_additive_change.is_ignore
                 else self.adapter.columns(table_name)
             )
         assert target_column_to_types is not None
-        if model.on_destructive_change.is_ignore:
+        if model.on_destructive_change.is_ignore or model.on_additive_change.is_ignore:
             # We need to identify the columns that are only in the source so we create an empty table with
             # the user query to determine that
             with self.adapter.temp_table(model.ctas_query(**render_kwargs)) as temp_table:
@@ -2305,6 +2352,7 @@ class ViewStrategy(PromotableStrategy):
         snapshot: Snapshot,
         *,
         ignore_destructive: bool,
+        ignore_additive: bool,
         **kwargs: t.Any,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
@@ -2552,12 +2600,16 @@ class EngineManagedStrategy(MaterializableStrategy):
         snapshot: Snapshot,
         *,
         ignore_destructive: bool,
+        ignore_additive: bool,
         **kwargs: t.Any,
     ) -> None:
-        potential_alter_expressions = self.adapter.get_alter_expressions(
-            target_table_name, source_table_name, ignore_destructive=ignore_destructive
+        potential_alter_operations = self.adapter.get_alter_operations(
+            target_table_name,
+            source_table_name,
+            ignore_destructive=ignore_destructive,
+            ignore_additive=ignore_additive,
         )
-        if len(potential_alter_expressions) > 0:
+        if len(potential_alter_operations) > 0:
             # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`
             raise SQLMeshError(
                 f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
@@ -2584,34 +2636,63 @@ def _intervals(snapshot: Snapshot, deployability_index: DeployabilityIndex) -> I
 
 def _check_destructive_schema_change(
     snapshot: Snapshot,
-    alter_expressions: t.List[exp.Alter],
+    alter_operations: t.List[TableAlterOperation],
     allow_destructive_snapshots: t.Set[str],
 ) -> None:
     if (
         snapshot.is_no_rebuild
         and snapshot.needs_destructive_check(allow_destructive_snapshots)
-        and has_drop_alteration(alter_expressions)
+        and has_drop_alteration(alter_operations)
     ):
         snapshot_name = snapshot.name
-        dropped_column_names = get_dropped_column_names(alter_expressions)
         model_dialect = snapshot.model.dialect
 
         if snapshot.model.on_destructive_change.is_warn:
             logger.warning(
                 format_destructive_change_msg(
                     snapshot_name,
-                    dropped_column_names,
-                    alter_expressions,
+                    alter_operations,
                     model_dialect,
                     error=False,
                 )
             )
             return
         raise DestructiveChangeError(
-            format_destructive_change_msg(
-                snapshot_name, dropped_column_names, alter_expressions, model_dialect
-            )
+            format_destructive_change_msg(snapshot_name, alter_operations, model_dialect)
         )
+
+
+def _check_additive_schema_change(
+    snapshot: Snapshot,
+    alter_operations: t.List[TableAlterOperation],
+    allow_additive_snapshots: t.Set[str],
+) -> None:
+    # Only check additive changes for incremental models that have the on_additive_change property
+    if not isinstance(snapshot.model.kind, _Incremental):
+        return
+
+    if snapshot.needs_additive_check(allow_additive_snapshots) and has_additive_alteration(
+        alter_operations
+    ):
+        # Note: IGNORE filtering is applied before this function is called
+        # so if we reach here, additive changes are not being ignored
+        snapshot_name = snapshot.name
+        model_dialect = snapshot.model.dialect
+
+        if snapshot.model.on_additive_change.is_warn:
+            logger.warning(
+                format_additive_change_msg(
+                    snapshot_name,
+                    alter_operations,
+                    model_dialect,
+                    error=False,
+                )
+            )
+            return
+        if snapshot.model.on_additive_change.is_error:
+            raise AdditiveChangeError(
+                format_additive_change_msg(snapshot_name, alter_operations, model_dialect)
+            )
 
 
 def _check_table_db_is_physical_schema(table_name: str, physical_schema: str) -> None:

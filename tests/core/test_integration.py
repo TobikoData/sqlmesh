@@ -7880,6 +7880,215 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
     context.close()
 
 
+def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+            forward_only true,
+            on_destructive_change allow,
+            on_additive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT 
+        *,
+        1 as id,
+        'test_name' as name,
+        'other' as other_column,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column to the source table
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT 
+                *,
+                1 as id,
+                'other' as other_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("ALTER TABLE source_table ADD COLUMN new_column INT")
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is removed since destructive is allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since additive is ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was applied
+        assert "name" not in updated_df.columns
+        # new_column is still not added since additive is ignored
+        assert "new_column" not in updated_df.columns
+
+    with time_machine.travel("2023-01-11 00:00:00 UTC"):
+        updated_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT 
+                *,
+                CAST(1 AS STRING) as id,
+                'other' as other_column,
+                @start_ds as ds
+            FROM
+                source_table;
+        """
+        (models_dir / "test_model.sql").write_text(updated_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+            exp.DataType.build("INT"): {exp.DataType.build("STRING")}
+        }
+        context.plan("prod", auto_apply=True, no_prompts=True, run=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 3
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is still not added since additive is ignored
+        assert "new_column" not in updated_df.columns
+        # The additive change was ignored since we set the change as compatible therefore
+        # instead of getting strings in the result we still return ints
+        assert updated_df["id"].tolist() == [1, 1, 1]
+
+    with time_machine.travel("2023-01-12 00:00:00 UTC"):
+        updated_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change allow,
+                    on_additive_change allow
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT 
+                *,
+                CAST(1 AS STRING) as id,
+                'other' as other_column,
+                @start_ds as ds
+            FROM
+                source_table;
+        """
+        (models_dir / "test_model.sql").write_text(updated_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        # Make the change compatible since that means we will attempt and alter now that is considered additive
+        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+            exp.DataType.build("INT"): {exp.DataType.build("STRING")}
+        }
+        context.plan("prod", auto_apply=True, no_prompts=True, run=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 4
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is now added since it is additive is now allowed
+        assert "new_column" in updated_df.columns
+        # The change is now reflected since an additive alter could be performed
+        assert updated_df["id"].dropna().tolist() == ["1", "1", "1", "1"]
+
+    context.close()
+
+
 def test_incremental_by_unique_key_model_ignore_destructive_change(tmp_path: Path):
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -7993,6 +8202,121 @@ def test_incremental_by_unique_key_model_ignore_destructive_change(tmp_path: Pat
     context.close()
 
 
+def test_incremental_by_unique_key_model_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key id,
+            forward_only true,
+            on_destructive_change allow,
+            on_additive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT 
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key id,
+                    forward_only true,
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT 
+                *,
+                2 as id,
+                3 as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still not in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+    context.close()
+
+
 def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -8098,6 +8422,117 @@ def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
         assert "name" in updated_df.columns
         # new_column is added since it is additive and allowed
         assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_incremental_unmanaged_model_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_UNMANAGED(
+            on_destructive_change allow,
+            on_additive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT 
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_UNMANAGED(
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *, 
+                2 as id,
+                3 as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
 
     context.close()
 
@@ -8215,6 +8650,121 @@ def test_scd_type_2_by_time_ignore_destructive_change(tmp_path: Path):
     context.close()
 
 
+def test_scd_type_2_by_time_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key id,
+            updated_at_name ds,
+            on_destructive_change allow,
+            on_additive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_dt as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind SCD_TYPE_2_BY_TIME (
+                    unique_key id,
+                    updated_at_name ds,
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                1 as id,
+                3 as new_column,
+                @start_dt as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+    context.close()
+
+
 def test_scd_type_2_by_column_ignore_destructive_change(tmp_path: Path):
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -8328,6 +8878,123 @@ def test_scd_type_2_by_column_ignore_destructive_change(tmp_path: Path):
     context.close()
 
 
+def test_scd_type_2_by_column_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+        MODEL (
+            name test_model,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key id,
+                columns [stable],
+                on_destructive_change allow,
+                on_additive_change ignore
+            ),
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT 
+            *,
+            1 as id,
+            'test_name' as name,
+            'stable' as stable,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+        MODEL (
+            name test_model,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key id,
+                columns [stable],
+                on_destructive_change allow,
+                on_additive_change ignore
+            ),
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *, 
+            1 as id,
+            'stable2' as stable,
+            3 as new_column,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was ignored
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+    context.close()
+
+
 def test_incremental_partition_ignore_destructive_change(tmp_path: Path):
     models_dir = tmp_path / "models"
     models_dir.mkdir()
@@ -8435,6 +9102,119 @@ def test_incremental_partition_ignore_destructive_change(tmp_path: Path):
         assert "name" in updated_df.columns
         # new_column is added since it is additive and allowed
         assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_incremental_partition_ignore_additive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_PARTITION (
+                on_destructive_change allow,
+                on_additive_change ignore
+            ),
+            partitioned_by [ds],
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT 
+            *,
+            1 as id,
+            'test_name' as name,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_PARTITION (
+                on_destructive_change allow,
+                on_additive_change ignore
+            ),
+            partitioned_by [ds],
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *, 
+            1 as id,
+            3 as new_column,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not still in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
 
     context.close()
 
@@ -8595,6 +9375,172 @@ test_test_model:
         assert "name" in updated_df.columns
         # new_column is added since it is additive and allowed
         assert "new_column" in updated_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+    context.close()
+
+
+def test_incremental_by_time_model_ignore_additive_change_unit_test(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    test_filepath = test_dir / "test_test_model.yaml"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+            forward_only true,
+            on_destructive_change allow,
+            on_additive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT 
+        id,
+        name,
+        ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    initial_test = f"""
+
+test_test_model:
+  model: test_model
+  inputs:
+    source_table:
+      - id: 1
+        name: 'test_name'
+        ds: '2025-01-01'
+  outputs:
+    query:
+      - id: 1
+        name: 'test_name'
+        ds: '2025-01-01'
+"""
+
+    # Write initial test
+    test_filepath.write_text(initial_test)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute(
+            "CREATE TABLE source_table (id INT, name STRING, new_column INT, ds STRING)"
+        )
+        context.engine_adapter.execute(
+            "INSERT INTO source_table VALUES (1, 'test_name', NULL, '2023-01-01')"
+        )
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+        test_result = context.test()
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change allow,
+                    on_additive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT 
+                id,
+                new_column,
+                ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        # `new_column` is in the output since unit tests are based on the model definition that currently
+        # exists and doesn't take into account the historical changes to the table. Therefore `new_column` is
+        # not actually in the table but it is represented in the test
+        updated_test = f"""
+        test_test_model:
+          model: test_model
+          inputs:
+            source_table:
+              - id: 1
+                new_column: 3
+                ds: '2025-01-01'
+          outputs:
+            query:
+              - id: 1
+                new_column: 3
+                ds: '2025-01-01'
+        """
+
+        # Write initial test
+        test_filepath.write_text(updated_test)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+        test_result = context.test()
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 1
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is not in table since destructive was ignored
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (2, NULL, 3, '2023-01-09')")
+        context.run()
+        test_result = context.test()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still not in table since destructive was allowed
+        assert "name" not in updated_df.columns
+        # new_column is not added since it is additive and ignored
+        assert "new_column" not in updated_df.columns
         assert len(test_result.successes) == 1
         assert test_result.testsRun == len(test_result.successes)
 

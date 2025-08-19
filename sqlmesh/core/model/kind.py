@@ -208,6 +208,31 @@ class OnDestructiveChange(str, Enum):
         return self == OnDestructiveChange.IGNORE
 
 
+class OnAdditiveChange(str, Enum):
+    """What should happen when a forward-only model change requires an additive schema change."""
+
+    ERROR = "ERROR"
+    WARN = "WARN"
+    ALLOW = "ALLOW"
+    IGNORE = "IGNORE"
+
+    @property
+    def is_error(self) -> bool:
+        return self == OnAdditiveChange.ERROR
+
+    @property
+    def is_warn(self) -> bool:
+        return self == OnAdditiveChange.WARN
+
+    @property
+    def is_allow(self) -> bool:
+        return self == OnAdditiveChange.ALLOW
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnAdditiveChange.IGNORE
+
+
 def _on_destructive_change_validator(
     cls: t.Type, v: t.Union[OnDestructiveChange, str, exp.Identifier]
 ) -> t.Any:
@@ -217,6 +242,20 @@ def _on_destructive_change_validator(
         )
     return v
 
+
+def _on_additive_change_validator(
+    cls: t.Type, v: t.Union[OnAdditiveChange, str, exp.Identifier]
+) -> t.Any:
+    if v and not isinstance(v, OnAdditiveChange):
+        return OnAdditiveChange(
+            v.this.upper() if isinstance(v, (exp.Identifier, exp.Literal)) else v.upper()
+        )
+    return v
+
+
+on_additive_change_validator = field_validator("on_additive_change", mode="before")(
+    _on_additive_change_validator
+)
 
 on_destructive_change_validator = field_validator("on_destructive_change", mode="before")(
     _on_destructive_change_validator
@@ -336,15 +375,18 @@ kind_dialect_validator = field_validator("dialect", mode="before")(_kind_dialect
 
 class _Incremental(_ModelKind):
     on_destructive_change: OnDestructiveChange = OnDestructiveChange.ERROR
+    on_additive_change: OnAdditiveChange = OnAdditiveChange.ALLOW
     auto_restatement_cron: t.Optional[SQLGlotCron] = None
 
     _on_destructive_change_validator = on_destructive_change_validator
+    _on_additive_change_validator = on_additive_change_validator
 
     @property
     def metadata_hash_values(self) -> t.List[t.Optional[str]]:
         return [
             *super().metadata_hash_values,
             str(self.on_destructive_change),
+            str(self.on_additive_change),
             self.auto_restatement_cron,
         ]
 
@@ -357,6 +399,7 @@ class _Incremental(_ModelKind):
                 *_properties(
                     {
                         "on_destructive_change": self.on_destructive_change.value,
+                        "on_additive_change": self.on_additive_change.value,
                         "auto_restatement_cron": self.auto_restatement_cron,
                     }
                 ),
@@ -1001,14 +1044,15 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
         if "dialect" in kind_type.all_fields() and props.get("dialect") is None:
             props["dialect"] = dialect
 
-        # only pass the on_destructive_change user default to models inheriting from _Incremental
+        # only pass the on_destructive_change or on_additive_change user default to models inheriting from _Incremental
         # that don't explicitly set it in the model definition
-        if (
-            issubclass(kind_type, _Incremental)
-            and props.get("on_destructive_change") is None
-            and defaults.get("on_destructive_change") is not None
-        ):
-            props["on_destructive_change"] = defaults.get("on_destructive_change")
+        if issubclass(kind_type, _Incremental):
+            for on_change_property in ("on_additive_change", "on_destructive_change"):
+                if (
+                    props.get(on_change_property) is None
+                    and defaults.get(on_change_property) is not None
+                ):
+                    props[on_change_property] = defaults.get(on_change_property)
 
         if kind_type == CustomKind:
             # load the custom materialization class and check if it uses a custom kind type

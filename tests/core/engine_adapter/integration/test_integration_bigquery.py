@@ -7,7 +7,10 @@ from sqlglot.helper import seq_get
 from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
 from sqlmesh.core.config import Config
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
-from sqlmesh.core.engine_adapter.bigquery import _CLUSTERING_META_KEY
+from sqlmesh.core.engine_adapter.mixins import (
+    TableAlterDropClusterKeyOperation,
+    TableAlterChangeClusterKeyOperation,
+)
 from sqlmesh.core.engine_adapter.shared import DataObject
 import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
@@ -68,41 +71,43 @@ def test_get_alter_expressions_includes_clustering(
     assert clustered_differently_table_metadata.clustering_key == "(c1,c2)"
     assert normal_table_metadata.clustering_key is None
 
-    assert len(engine_adapter.get_alter_expressions(normal_table, normal_table)) == 0
-    assert len(engine_adapter.get_alter_expressions(clustered_table, clustered_table)) == 0
+    assert len(engine_adapter.get_alter_operations(normal_table, normal_table)) == 0
+    assert len(engine_adapter.get_alter_operations(clustered_table, clustered_table)) == 0
 
     # alter table drop clustered
-    clustered_to_normal = engine_adapter.get_alter_expressions(clustered_table, normal_table)
+    clustered_to_normal = engine_adapter.get_alter_operations(clustered_table, normal_table)
     assert len(clustered_to_normal) == 1
-    assert clustered_to_normal[0].meta[_CLUSTERING_META_KEY] == (clustered_table, None)
+    assert isinstance(clustered_to_normal[0], TableAlterDropClusterKeyOperation)
+    assert clustered_to_normal[0].target_table == clustered_table
+    assert not hasattr(clustered_to_normal[0], "clustering_key")
 
     # alter table add clustered
-    normal_to_clustered = engine_adapter.get_alter_expressions(normal_table, clustered_table)
+    normal_to_clustered = engine_adapter.get_alter_operations(normal_table, clustered_table)
     assert len(normal_to_clustered) == 1
-    assert normal_to_clustered[0].meta[_CLUSTERING_META_KEY] == (
-        normal_table,
-        [exp.to_column("c1")],
-    )
+    operation = normal_to_clustered[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == normal_table
+    assert operation.clustering_key == "(c1)"
 
     # alter table change clustering (c1 -> (c1, c2))
-    clustered_to_clustered_differently = engine_adapter.get_alter_expressions(
+    clustered_to_clustered_differently = engine_adapter.get_alter_operations(
         clustered_table, clustered_differently_table
     )
     assert len(clustered_to_clustered_differently) == 1
-    assert clustered_to_clustered_differently[0].meta[_CLUSTERING_META_KEY] == (
-        clustered_table,
-        [exp.to_column("c1"), exp.to_column("c2")],
-    )
+    operation = clustered_to_clustered_differently[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == clustered_table
+    assert operation.clustering_key == "(c1,c2)"
 
     # alter table change clustering ((c1, c2) -> c1)
-    clustered_differently_to_clustered = engine_adapter.get_alter_expressions(
+    clustered_differently_to_clustered = engine_adapter.get_alter_operations(
         clustered_differently_table, clustered_table
     )
     assert len(clustered_differently_to_clustered) == 1
-    assert clustered_differently_to_clustered[0].meta[_CLUSTERING_META_KEY] == (
-        clustered_differently_table,
-        [exp.to_column("c1")],
-    )
+    operation = clustered_differently_to_clustered[0]
+    assert isinstance(operation, TableAlterChangeClusterKeyOperation)
+    assert operation.target_table == clustered_differently_table
+    assert operation.clustering_key == "(c1)"
 
 
 def test_mutating_clustered_by_forward_only(
