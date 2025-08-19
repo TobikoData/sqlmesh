@@ -1260,6 +1260,21 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
 
         return super()._native_df_to_pandas_df(query_or_df)
 
+    def _drop_object(
+        self,
+        name: TableName | SchemaName,
+        exists: bool = True,
+        kind: str = "TABLE",
+        **drop_args: t.Any,
+    ) -> None:
+        if kind.upper() == "TABLE" and "cascade" in drop_args:
+            # BigQuery doesnt support DROP CASCADE for tables
+            # ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_statement
+            # so set it to False here so SQLGlot doesnt output a CASCADE argument
+            drop_args["cascade"] = False
+
+        super()._drop_object(name=name, exists=exists, kind=kind, **drop_args)
+
     @property
     def _query_data(self) -> t.Any:
         return self._connection_pool.get_attribute("query_data")

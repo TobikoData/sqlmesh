@@ -20,8 +20,10 @@ pytestmark = [pytest.mark.bigquery, pytest.mark.engine]
 
 
 @pytest.fixture
-def adapter(make_mocked_engine_adapter: t.Callable) -> BigQueryEngineAdapter:
-    return make_mocked_engine_adapter(BigQueryEngineAdapter)
+def adapter(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture) -> BigQueryEngineAdapter:
+    mocked_adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    mocker.patch("sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute")
+    return mocked_adapter
 
 
 def test_insert_overwrite_by_time_partition_query(
@@ -575,6 +577,8 @@ def test_begin_end_session(mocker: MockerFixture):
 
 
 def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
+    if isinstance(execute_mock, BigQueryEngineAdapter):
+        execute_mock = execute_mock.execute
     output = []
     for call in execute_mock.call_args_list:
         value = call[0][0]
@@ -1150,3 +1154,22 @@ def test_job_cancellation_on_keyboard_interrupt_job_already_done(mocker: MockerF
     # Verify job status was checked but cancellation was NOT called
     mock_job.done.assert_called_once()
     mock_job.cancel.assert_not_called()
+
+
+def test_drop_cascade(adapter: BigQueryEngineAdapter):
+    adapter.drop_table("foo", cascade=True)
+    adapter.drop_table("foo", cascade=False)
+
+    # BigQuery doesnt support DROP CASCADE for tables
+    # ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_table_statement
+    assert _to_sql_calls(adapter) == ["DROP TABLE IF EXISTS `foo`", "DROP TABLE IF EXISTS `foo`"]
+    adapter.execute.reset_mock()  # type: ignore
+
+    # But, it does for schemas
+    adapter.drop_schema("foo", cascade=True)
+    adapter.drop_schema("foo", cascade=False)
+
+    assert _to_sql_calls(adapter) == [
+        "DROP SCHEMA IF EXISTS `foo` CASCADE",
+        "DROP SCHEMA IF EXISTS `foo`",
+    ]

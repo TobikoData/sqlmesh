@@ -27,7 +27,7 @@ from _pytest.mark import MarkDecorator
 from _pytest.mark.structures import ParameterSet
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import TableName, SchemaName
     from sqlmesh.core.engine_adapter._typing import Query
 
 TEST_SCHEMA = "test_schema"
@@ -223,6 +223,13 @@ class TestContext:
         return None
 
     @property
+    def engine_type(self) -> str:
+        if self.mark.startswith("gcp_postgres"):
+            return "gcp_postgres"
+
+        return self.mark.split("_")[0]
+
+    @property
     def columns_to_types(self):
         if self._columns_to_types is None:
             self._columns_to_types = {
@@ -307,7 +314,7 @@ class TestContext:
     def add_test_suffix(self, value: str) -> str:
         return f"{value}_{self.test_id}"
 
-    def get_metadata_results(self, schema: t.Optional[str] = None) -> MetadataResults:
+    def get_metadata_results(self, schema: t.Optional[SchemaName] = None) -> MetadataResults:
         schema = schema if schema else self.schema(TEST_SCHEMA)
         return MetadataResults.from_data_objects(self.engine_adapter.get_data_objects(schema))
 
