@@ -21,6 +21,7 @@ from sqlmesh.cli.project_init import init_example_project
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
+from sqlmesh.core.environment import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.model import Model, load_sql_based_model
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
@@ -2372,11 +2373,7 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
             k: [_normalize_snowflake(name) for name in v] for k, v in object_names.items()
         }
 
-    if ctx.mark.startswith("gcp_postgres"):
-        engine_type = "gcp_postgres"
-    else:
-        engine_type = ctx.mark.split("_")[0]
-    init_example_project(tmp_path, engine_type, schema_name=schema_name)
+    init_example_project(tmp_path, ctx.engine_type, schema_name=schema_name)
 
     config = load_config_from_paths(
         Config,
@@ -3596,3 +3593,137 @@ def test_identifier_length_limit(ctx: TestContext):
         match=re.escape(match),
     ):
         adapter.create_table(long_table_name, {"col": exp.DataType.build("int")})
+
+
+@pytest.mark.parametrize(
+    "environment_suffix_target",
+    [
+        EnvironmentSuffixTarget.TABLE,
+        EnvironmentSuffixTarget.SCHEMA,
+        EnvironmentSuffixTarget.CATALOG,
+    ],
+)
+def test_janitor(
+    ctx: TestContext, tmp_path: pathlib.Path, environment_suffix_target: EnvironmentSuffixTarget
+):
+    if (
+        environment_suffix_target == EnvironmentSuffixTarget.CATALOG
+        and not ctx.engine_adapter.SUPPORTS_CREATE_DROP_CATALOG
+    ):
+        pytest.skip("Engine does not support catalog-based virtual environments")
+
+    schema = ctx.schema()  # catalog.schema
+    parsed_schema = d.to_schema(schema)
+
+    init_example_project(tmp_path, ctx.engine_type, schema_name=parsed_schema.db)
+
+    def _set_config(_gateway: str, config: Config) -> None:
+        config.environment_suffix_target = environment_suffix_target
+        config.model_defaults.dialect = ctx.dialect
+
+    sqlmesh = ctx.create_context(path=tmp_path, config_mutator=_set_config)
+
+    sqlmesh.plan(auto_apply=True)
+
+    # create a new model in dev
+    (tmp_path / "models" / "new_model.sql").write_text(f"""
+        MODEL (
+            name {schema}.new_model,
+            kind FULL
+        );
+
+        select * from {schema}.full_model
+    """)
+    sqlmesh.load()
+
+    result = sqlmesh.plan(environment="dev", auto_apply=True)
+    assert result.context_diff.is_new_environment
+    assert len(result.context_diff.new_snapshots) == 1
+    new_model = list(result.context_diff.new_snapshots.values())[0]
+    assert "new_model" in new_model.name.lower()
+
+    # check physical objects
+    snapshot_table_name = exp.to_table(new_model.table_name(), dialect=ctx.dialect)
+    snapshot_schema = snapshot_table_name.db
+
+    prod_schema = normalize_identifiers(d.to_schema(schema), dialect=ctx.dialect)
+    dev_env_schema = prod_schema.copy()
+    if environment_suffix_target == EnvironmentSuffixTarget.CATALOG:
+        dev_env_schema.set("catalog", exp.to_identifier(f"{prod_schema.catalog}__dev"))
+    else:
+        dev_env_schema.set("db", exp.to_identifier(f"{prod_schema.db}__dev"))
+    normalize_identifiers(dev_env_schema, dialect=ctx.dialect)
+
+    md = ctx.get_metadata_results(prod_schema)
+    if environment_suffix_target == EnvironmentSuffixTarget.TABLE:
+        assert sorted([v.lower() for v in md.views]) == [
+            "full_model",
+            "incremental_model",
+            "new_model__dev",
+            "seed_model",
+        ]
+    else:
+        assert sorted([v.lower() for v in md.views]) == [
+            "full_model",
+            "incremental_model",
+            "seed_model",
+        ]
+    assert not md.tables
+    assert not md.managed_tables
+
+    if environment_suffix_target != EnvironmentSuffixTarget.TABLE:
+        # note: this is "catalog__dev.schema" for EnvironmentSuffixTarget.CATALOG and "catalog.schema__dev" for EnvironmentSuffixTarget.SCHEMA
+        md = ctx.get_metadata_results(dev_env_schema)
+        assert [v.lower() for v in md.views] == ["new_model"]
+        assert not md.tables
+        assert not md.managed_tables
+
+    md = ctx.get_metadata_results(snapshot_schema)
+    assert not md.views
+    assert not md.managed_tables
+    assert sorted(t.split("__")[1].lower() for t in md.tables) == [
+        "full_model",
+        "incremental_model",
+        "new_model",
+        "seed_model",
+    ]
+
+    # invalidate dev and run the janitor to clean it up
+    sqlmesh.invalidate_environment("dev")
+    assert sqlmesh.run_janitor(
+        ignore_ttl=True
+    )  # ignore_ttl to delete the new_model snapshot even though it hasnt expired yet
+
+    # there should be no dev environment or dev tables / schemas
+    md = ctx.get_metadata_results(prod_schema)
+    assert sorted([v.lower() for v in md.views]) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]
+    assert not md.tables
+    assert not md.managed_tables
+
+    if environment_suffix_target != EnvironmentSuffixTarget.TABLE:
+        if environment_suffix_target == EnvironmentSuffixTarget.SCHEMA:
+            md = ctx.get_metadata_results(dev_env_schema)
+        else:
+            try:
+                md = ctx.get_metadata_results(dev_env_schema)
+            except Exception as e:
+                # Most engines will raise an error when @set_catalog tries to set a catalog that doesnt exist
+                # in this case, we just swallow the error. We know this call already worked before in the earlier checks
+                md = MetadataResults()
+
+        assert not md.views
+        assert not md.tables
+        assert not md.managed_tables
+
+    md = ctx.get_metadata_results(snapshot_schema)
+    assert not md.views
+    assert not md.managed_tables
+    assert sorted(t.split("__")[1].lower() for t in md.tables) == [
+        "full_model",
+        "incremental_model",
+        "seed_model",
+    ]

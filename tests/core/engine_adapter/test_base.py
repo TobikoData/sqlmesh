@@ -3463,6 +3463,7 @@ def test_drop_view(make_mocked_engine_adapter: t.Callable):
 )
 def test_drop_schema(kwargs, expected, make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
 
     adapter.drop_schema(**kwargs)
 

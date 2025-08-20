@@ -66,6 +66,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     SUPPORTS_CLONING = True
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
 
     SCHEMA_DIFFER = SchemaDiffer(
         compatible_types={

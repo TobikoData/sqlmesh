@@ -57,6 +57,7 @@ class SparkEngineAdapter(
     # currently check for storage formats we say we don't support REPLACE TABLE
     SUPPORTS_REPLACE_TABLE = False
     QUOTE_IDENTIFIERS_IN_VIEWS = False
+    SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA"]
 
     WAP_PREFIX = "wap_"
     BRANCH_PREFIX = "branch_"
