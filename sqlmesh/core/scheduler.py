@@ -490,33 +490,33 @@ class Scheduler:
             if isinstance(node, DummyNode):
                 return
 
-            with QueryExecutionTracker.track_execution(
-                f"{snapshot.name}_{batch_idx}"
-            ) as execution_context:
-                snapshot = self.snapshots_by_name[node.snapshot_name]
+            snapshot = self.snapshots_by_name[node.snapshot_name]
 
-                if isinstance(node, EvaluateNode):
-                    self.console.start_snapshot_evaluation_progress(snapshot)
-                    execution_start_ts = now_timestamp()
-                    evaluation_duration_ms: t.Optional[int] = None
-                    start, end = node.interval
+            if isinstance(node, EvaluateNode):
+                self.console.start_snapshot_evaluation_progress(snapshot)
+                execution_start_ts = now_timestamp()
+                evaluation_duration_ms: t.Optional[int] = None
+                start, end = node.interval
 
-                    audit_results: t.List[AuditResult] = []
-                    try:
-                        assert execution_time  # mypy
-                        assert deployability_index  # mypy
+                audit_results: t.List[AuditResult] = []
+                try:
+                    assert execution_time  # mypy
+                    assert deployability_index  # mypy
 
-                        if audit_only:
-                            audit_results = self._audit_snapshot(
-                                snapshot=snapshot,
-                                environment_naming_info=environment_naming_info,
-                                deployability_index=deployability_index,
-                                snapshots=self.snapshots_by_name,
-                                start=start,
-                                end=end,
-                                execution_time=execution_time,
-                            )
-                        else:
+                    if audit_only:
+                        audit_results = self._audit_snapshot(
+                            snapshot=snapshot,
+                            environment_naming_info=environment_naming_info,
+                            deployability_index=deployability_index,
+                            snapshots=self.snapshots_by_name,
+                            start=start,
+                            end=end,
+                            execution_time=execution_time,
+                        )
+                    else:
+                        with self.snapshot_evaluator.execution_tracker.track_execution(
+                            f"{snapshot.name}_{node.batch_index}"
+                        ) as execution_context:
                             audit_results = self.evaluate(
                                 snapshot=snapshot,
                                 environment_naming_info=environment_naming_info,
@@ -530,35 +530,30 @@ class Scheduler:
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
                             )
 
-                        evaluation_duration_ms = now_timestamp() - execution_start_ts
-                    finally:
-                        num_audits = len(audit_results)
-                        num_audits_failed = sum(1 for result in audit_results if result.count)
+                    evaluation_duration_ms = now_timestamp() - execution_start_ts
+                finally:
+                    num_audits = len(audit_results)
+                    num_audits_failed = sum(1 for result in audit_results if result.count)
 
-                        execution_stats = self.snapshot_evaluator.execution_tracker.get_execution_stats(
-                            f"{snapshot.snapshot_id}_{batch_idx}"
-                        )
-
-                        self.console.update_snapshot_evaluation_progress(
-                                snapshot,
-                                batched_intervals[snapshot][node.batch_index],
-                                node.batch_index,
-                                evaluation_duration_ms,
-                                num_audits - num_audits_failed,
-                                num_audits_failed,
-                                execution_stats=execution_stats,
-                            auto_restatement_triggers=auto_restatement_triggers.get(
-                            snapshot.snapshot_id
-                        ),
+                    execution_stats = self.snapshot_evaluator.execution_tracker.get_execution_stats(
+                        f"{snapshot.snapshot_id}_{node.batch_index}"
                     )
-                elif isinstance(node, CreateNode):
-                    self.snapshot_evaluator.create_snapshot(
-                        snapshot=snapshot,
-                        snapshots=self.snapshots_by_name,
-                        deployability_index=deployability_index,
-                        allow_destructive_snapshots=allow_destructive_snapshots or set(),
-                        allow_additive_snapshots=allow_additive_snapshots or set(),
-                        rows_processed=rows_processed,
+
+                    self.console.update_snapshot_evaluation_progress(
+                            snapshot,
+                            batched_intervals[snapshot][node.batch_index],
+                            node.batch_index,
+                            evaluation_duration_ms,
+                            num_audits - num_audits_failed,
+                            num_audits_failed,
+                            execution_stats=execution_stats,
+                    )
+            elif isinstance(node, CreateNode):
+                self.snapshot_evaluator.create_snapshot(
+                    snapshot=snapshot,
+                    snapshots=self.snapshots_by_name,
+                    deployability_index=deployability_index,
+                    allow_destructive_snapshots=allow_destructive_snapshots or set(),
                     )
 
         try:
