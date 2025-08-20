@@ -3102,7 +3102,7 @@ def test_apply_auto_restatements(make_snapshot):
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
     ]
 
-    restated_intervals = apply_auto_restatements(
+    restated_intervals, _ = apply_auto_restatements(
         {
             snapshot_a.snapshot_id: snapshot_a,
             snapshot_b.snapshot_id: snapshot_b,
@@ -3239,7 +3239,7 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     snapshot_b.add_interval("2020-01-01", "2020-01-05")
     assert snapshot_a.snapshot_id in snapshot_b.parents
 
-    restated_intervals = apply_auto_restatements(
+    restated_intervals, _ = apply_auto_restatements(
         {
             snapshot_a.snapshot_id: snapshot_a,
             snapshot_b.snapshot_id: snapshot_b,
@@ -3276,6 +3276,116 @@ def test_apply_auto_restatements_disable_restatement_downstream(make_snapshot):
     snapshot_b.apply_pending_restatement_intervals()
     assert snapshot_b.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-06")),
+    ]
+
+
+def test_auto_restatement_triggers(make_snapshot):
+    # Auto restatements:
+    #   a, c, d
+    # dag:
+    #   a -> b
+    #   a -> c
+    #   [b, c, d] -> e
+    model_a = SqlModel(
+        name="test_model_a",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=24,
+        ),
+        start="2020-01-01",
+        cron="@daily",
+        query=parse_one("SELECT 1 as ds"),
+    )
+    snapshot_a = make_snapshot(model_a, version="1")
+    snapshot_a.add_interval("2020-01-01", "2020-01-05")
+    snapshot_a.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    model_b = SqlModel(
+        name="test_model_b",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+        ),
+        start="2020-01-01",
+        cron="@daily",
+        query=parse_one("SELECT ds FROM test_model_a"),
+    )
+    snapshot_b = make_snapshot(model_b, nodes={model_a.fqn: model_a}, version="1")
+    snapshot_b.add_interval("2020-01-01", "2020-01-05")
+
+    model_c = SqlModel(
+        name="test_model_c",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=24,
+        ),
+        start="2020-01-01",
+        cron="@daily",
+        query=parse_one("SELECT ds FROM test_model_a"),
+    )
+    snapshot_c = make_snapshot(model_c, nodes={model_a.fqn: model_a}, version="1")
+    snapshot_c.add_interval("2020-01-01", "2020-01-05")
+    snapshot_c.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    model_d = SqlModel(
+        name="test_model_d",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+            auto_restatement_cron="0 10 * * *",
+            auto_restatement_intervals=24,
+        ),
+        start="2020-01-01",
+        cron="@daily",
+        query=parse_one("SELECT 1 as ds"),
+    )
+    snapshot_d = make_snapshot(model_d, version="1")
+    snapshot_d.add_interval("2020-01-01", "2020-01-05")
+    snapshot_d.next_auto_restatement_ts = to_timestamp("2020-01-06 10:00:00")
+
+    model_e = SqlModel(
+        name="test_model_e",
+        kind=IncrementalByTimeRangeKind(
+            time_column=TimeColumn(column="ds"),
+        ),
+        start="2020-01-01",
+        cron="@daily",
+        query=parse_one(
+            "SELECT ds from test_model_b UNION ALL SELECT ds from test_model_c UNION ALL SELECT ds from test_model_d"
+        ),
+    )
+    snapshot_e = make_snapshot(
+        model_e,
+        nodes={
+            model_a.fqn: model_a,
+            model_b.fqn: model_b,
+            model_c.fqn: model_c,
+            model_d.fqn: model_d,
+        },
+        version="1",
+    )
+    snapshot_e.add_interval("2020-01-01", "2020-01-05")
+
+    _, auto_restatement_triggers = apply_auto_restatements(
+        {
+            snapshot_a.snapshot_id: snapshot_a,
+            snapshot_b.snapshot_id: snapshot_b,
+            snapshot_c.snapshot_id: snapshot_c,
+            snapshot_d.snapshot_id: snapshot_d,
+            snapshot_e.snapshot_id: snapshot_e,
+        },
+        "2020-01-06 10:01:00",
+    )
+
+    assert auto_restatement_triggers[snapshot_a.snapshot_id] == [snapshot_a.snapshot_id]
+    assert auto_restatement_triggers[snapshot_c.snapshot_id] == [snapshot_c.snapshot_id]
+    assert auto_restatement_triggers[snapshot_d.snapshot_id] == [snapshot_d.snapshot_id]
+    assert auto_restatement_triggers[snapshot_b.snapshot_id] == [snapshot_a.snapshot_id]
+    # a via b, c and d directly
+    assert sorted(auto_restatement_triggers[snapshot_e.snapshot_id]) == [
+        snapshot_a.snapshot_id,
+        snapshot_c.snapshot_id,
+        snapshot_d.snapshot_id,
     ]
 
 
