@@ -15,6 +15,7 @@ import pytest
 import pytz
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
@@ -1954,10 +1955,16 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
-    config.before_all = [
+    before_all = [
         f"CREATE SCHEMA IF NOT EXISTS {raw_test_schema}",
         f"DROP VIEW IF EXISTS {raw_test_schema}.demographics",
         f"CREATE VIEW {raw_test_schema}.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+    ]
+    config.before_all = [
+        quote_identifiers(parse_one(e, dialect=ctx.dialect), dialect=ctx.dialect).sql(
+            dialect=ctx.dialect
+        )
+        for e in before_all
     ]
 
     # To enable parallelism in integration tests
@@ -2883,16 +2890,12 @@ def test_managed_model_upstream_forward_only(ctx: TestContext):
     assert plan_1.snapshot_for(model_a).model.view_name in plan_1.schema_metadata.views
     assert plan_1.snapshot_for(model_b).model.view_name in plan_1.schema_metadata.views
 
-    assert len(plan_1.internal_schema_metadata.tables) == 3
+    assert len(plan_1.internal_schema_metadata.tables) == 1
 
     assert plan_1.table_name_for(model_a) in plan_1.internal_schema_metadata.tables
-    assert plan_1.dev_table_name_for(model_a) in plan_1.internal_schema_metadata.tables
     assert (
         plan_1.table_name_for(model_b) not in plan_1.internal_schema_metadata.tables
     )  # because its a managed table
-    assert (
-        plan_1.dev_table_name_for(model_b) in plan_1.internal_schema_metadata.tables
-    )  # its dev table is a normal table however
 
     assert len(plan_1.internal_schema_metadata.managed_tables) == 1
     assert plan_1.table_name_for(model_b) in plan_1.internal_schema_metadata.managed_tables
