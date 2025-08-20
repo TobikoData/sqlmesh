@@ -527,7 +527,7 @@ class Scheduler:
                                 batch_index=node.batch_index,
                                 allow_destructive_snapshots=allow_destructive_snapshots,
                                 allow_additive_snapshots=allow_additive_snapshots,
-                            target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
+                                target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
                             )
 
                     evaluation_duration_ms = now_timestamp() - execution_start_ts
@@ -554,6 +554,7 @@ class Scheduler:
                     snapshots=self.snapshots_by_name,
                     deployability_index=deployability_index,
                     allow_destructive_snapshots=allow_destructive_snapshots or set(),
+                    allow_additive_snapshots=allow_additive_snapshots or set(),
                 )
 
         try:
