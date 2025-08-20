@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
+from sqlmesh.engines.spark.db_api.spark_session import SparkSessionCursor
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
@@ -379,38 +380,59 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             except:
                 return
 
-            history = self.cursor.fetchall_arrow()
-            if history.num_rows:
-                history_df = history.to_pandas()
-                write_df = history_df[history_df["operation"] == "WRITE"]
-                write_df = write_df[write_df["timestamp"] == write_df["timestamp"].max()]
-                if not write_df.empty:
-                    metrics = write_df["operationMetrics"][0]
-                    if metrics:
-                        rowcount = None
-                        rowcount_str = [
-                            metric[1] for metric in metrics if metric[0] == "numOutputRows"
-                        ]
-                        if rowcount_str:
-                            try:
-                                rowcount = int(rowcount_str[0])
-                            except (TypeError, ValueError):
-                                pass
+            history = (
+                self.cursor.fetchdf()
+                if isinstance(self.cursor, SparkSessionCursor)
+                else self.cursor.fetchall_arrow()
+            )
+            if history is not None:
+                from pandas import DataFrame as PandasDataFrame
+                from pyspark.sql import DataFrame as PySparkDataFrame
+                from pyspark.sql.connect.dataframe import DataFrame as PySparkConnectDataFrame
 
-                        bytes_processed = None
-                        bytes_str = [
-                            metric[1] for metric in metrics if metric[0] == "numOutputBytes"
-                        ]
-                        if bytes_str:
-                            try:
-                                bytes_processed = int(bytes_str[0])
-                            except (TypeError, ValueError):
-                                pass
+                history_df = None
+                if isinstance(history, PandasDataFrame):
+                    history_df = history
+                elif isinstance(history, (PySparkDataFrame, PySparkConnectDataFrame)):
+                    history_df = history.toPandas()
+                else:
+                    # arrow table
+                    history_df = history.to_pandas()
 
-                        if rowcount is not None or bytes_processed is not None:
-                            # if no rows were written, df contains 0 for bytes but no value for rows
-                            rowcount = (
-                                0 if rowcount is None and bytes_processed is not None else rowcount
-                            )
+                if history_df is not None and not history_df.empty:
+                    write_df = history_df[history_df["operation"] == "WRITE"]
+                    write_df = write_df[write_df["timestamp"] == write_df["timestamp"].max()]
+                    if not write_df.empty:
+                        metrics = write_df["operationMetrics"][0]
+                        if metrics:
+                            rowcount = None
+                            rowcount_str = [
+                                metric[1] for metric in metrics if metric[0] == "numOutputRows"
+                            ]
+                            if rowcount_str:
+                                try:
+                                    rowcount = int(rowcount_str[0])
+                                except (TypeError, ValueError):
+                                    pass
 
-                            QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
+                            bytes_processed = None
+                            bytes_str = [
+                                metric[1] for metric in metrics if metric[0] == "numOutputBytes"
+                            ]
+                            if bytes_str:
+                                try:
+                                    bytes_processed = int(bytes_str[0])
+                                except (TypeError, ValueError):
+                                    pass
+
+                            if rowcount is not None or bytes_processed is not None:
+                                # if no rows were written, df contains 0 for bytes but no value for rows
+                                rowcount = (
+                                    0
+                                    if rowcount is None and bytes_processed is not None
+                                    else rowcount
+                                )
+
+                                QueryExecutionTracker.record_execution(
+                                    sql, rowcount, bytes_processed
+                                )
