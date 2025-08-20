@@ -184,6 +184,8 @@ class Dependencies(PydanticModel):
     variables: t.Set[str] = set()
     model_attrs: t.Set[str] = set()
 
+    has_dynamic_var_names: bool = False
+
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
             macros=list(set(self.macros) | set(other.macros)),
@@ -191,6 +193,7 @@ class Dependencies(PydanticModel):
             refs=self.refs | other.refs,
             variables=self.variables | other.variables,
             model_attrs=self.model_attrs | other.model_attrs,
+            has_dynamic_var_names=self.has_dynamic_var_names or other.has_dynamic_var_names,
         )
 
     @field_validator("macros", mode="after")

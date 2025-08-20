@@ -362,6 +362,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "nested_vars": {
             "some_nested_var": 2,
         },
+        "dynamic_test_var": 3,
         "list_var": [
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},
@@ -385,6 +386,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "nested_vars": {
             "some_nested_var": 2,
         },
+        "dynamic_test_var": 3,
         "list_var": [
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},

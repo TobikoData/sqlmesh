@@ -37,6 +37,7 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -50,6 +51,7 @@ from sqlmesh.dbt.seed import SeedConfig, Integer
 from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig, ClickhouseConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
+from sqlmesh.utils.jinja import MacroReference
 
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 
@@ -1854,3 +1856,65 @@ def test_on_run_start_end():
             "CREATE OR REPLACE TABLE schema_table_sushi__dev_nested_package AS SELECT 'sushi__dev' AS schema",
         ]
     )
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_track_dynamic_var_names_on_render(
+    sushi_test_project: Project, sushi_test_dbt_context: Context
+):
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(name="production", database="main", schema="sushi")
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized="table",
+        unique_key="ds",
+        partition_by={"field": "ds", "granularity": "month"},
+        sql="""
+        {% set var_name = "yet_" + "another_" + "var" %}
+        {% set results = run_query('select 1 as one') %}
+        {% if results %}
+        SELECT {{ results.columns[0].values()[0] }} AS one {{ var(var_name) }} AS var FROM {{ this.identifier }}
+        {% else %}
+        SELECT NULL AS one {{ var(var_name) }} AS var FROM {{ this.identifier }}
+        {% endif %}
+        """,
+        dependencies=Dependencies(has_dynamic_var_names=True),
+    )
+    converted_model = model_config.to_sqlmesh(context)
+    assert converted_model.jinja_macros.global_objs["vars"] == {"yet_another_var": 1}
+
+    # Test the existing model in the sushi project
+    assert (
+        "dynamic_test_var"  # type: ignore
+        in sushi_test_dbt_context.get_model(
+            "sushi.waiter_revenue_by_day_v2"
+        ).jinja_macros.global_objs["vars"]
+    )
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_track_dynamic_var_names_on_render_in_macro(sushi_test_project: Project):
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(name="production", database="main", schema="sushi")
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized="table",
+        unique_key="ds",
+        partition_by={"field": "ds", "granularity": "month"},
+        sql="""
+        {% set var_name = "yet_" + "another_" + "var" %}
+        SELECT {{ sushi.dynamic_var_name_dependency(var_name) }} AS var
+        """,
+        dependencies=Dependencies(
+            macros=[MacroReference(package="sushi", name="dynamic_var_name_dependency")],
+            has_dynamic_var_names=True,
+        ),
+    )
+    converted_model = model_config.to_sqlmesh(context)
+    assert converted_model.jinja_macros.global_objs["vars"] == {"yet_another_var": 1}

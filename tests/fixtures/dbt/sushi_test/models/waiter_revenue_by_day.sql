@@ -13,7 +13,8 @@
 
 {{ test_dependencies() }}
 
-{% set results = run_query('select 1 as constant') %}
+{% set var_name = "dynamic_" + "test_" + "var" %}
+{% set results = run_query('select ' ~ dynamic_var_name_dependency(var_name) ~ ' as constant') %}
 
 SELECT
   o.waiter_id::INT AS waiter_id, /* Waiter id */

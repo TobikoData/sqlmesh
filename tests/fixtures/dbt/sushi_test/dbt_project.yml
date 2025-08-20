@@ -47,6 +47,7 @@ vars:
   customers:boo: ["a", "b"]
 
   yet_another_var: 1
+  dynamic_test_var: 3
 
   customers:
     some_var: ["foo", "bar"]
