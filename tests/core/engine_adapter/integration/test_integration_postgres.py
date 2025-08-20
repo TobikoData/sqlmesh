@@ -195,7 +195,10 @@ def test_janitor_drop_cascade(ctx: TestContext, tmp_path: Path) -> None:
         sqlmesh = ctx.create_context(
             path=tmp_path, config_mutator=_mutate_config, ephemeral_state_connection=False
         )
-        sqlmesh.plan(environment="dev", auto_apply=True)
+        # need run=True to prevent a "start date is greater than end date" error
+        # since dev cant exceed what is in prod, and prod has no cadence runs,
+        # without run=True this plan gets start=2020-01-04 (now) end=2020-01-01 (last prod interval) which fails
+        sqlmesh.plan(environment="dev", auto_apply=True, run=True)
 
         # should now have 7 snapshots in state - 2x model a, 3x model b, 1x model c and 1x model d
         all_snapshot_ids = _all_snapshot_ids(sqlmesh)
