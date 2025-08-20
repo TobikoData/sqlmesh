@@ -3731,3 +3731,60 @@ def test_janitor(
         "incremental_model",
         "seed_model",
     ]
+
+
+def test_materialized_view_evaluation(ctx: TestContext):
+    adapter = ctx.engine_adapter
+    dialect = ctx.dialect
+    if not adapter.SUPPORTS_MATERIALIZED_VIEWS:
+        pytest.skip(f"Skipping engine {dialect} as it does not support materialized views")
+
+    elif dialect == "snowflake":
+        pytest.skip(
+            f"Skipping Snowflake as it requires an enterprise account for materialized views"
+        )
+
+    model_name = ctx.table("test_tbl")
+    mview_name = ctx.table("test_mview")
+
+    sqlmesh = ctx.create_context()
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {model_name}, kind FULL);
+
+                SELECT 1 AS col
+                """
+            )
+        )
+    )
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {mview_name}, kind VIEW (materialized true));
+
+                SELECT * FROM {model_name}
+                """
+            )
+        )
+    )
+
+    # Case 1: Ensure that plan is successful and we can query the materialized view
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
+    assert df["col"][0] == 1
+
+    # Case 2: Ensure that we can change the underlying table and the materialized view is recreated
+    sqlmesh.upsert_model(
+        load_sql_based_model(d.parse(f"""MODEL (name {model_name}, kind FULL); SELECT 2 AS col"""))
+    )
+
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
+    assert df["col"][0] == 2

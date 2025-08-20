@@ -2297,7 +2297,7 @@ class ViewStrategy(PromotableStrategy):
             table_name,
             query_or_df,
             model.columns_to_types,
-            replace=not self.adapter.HAS_VIEW_BINDING,
+            replace=snapshot.is_materialized_view or not self.adapter.HAS_VIEW_BINDING,
             materialized=self._is_materialized_view(model),
             view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
