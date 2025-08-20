@@ -532,7 +532,9 @@ class Scheduler:
                         evaluation_duration_ms,
                         num_audits - num_audits_failed,
                         num_audits_failed,
-                        auto_restatement_triggers=auto_restatement_triggers.get(snapshot.snapshot_id),
+                        auto_restatement_triggers=auto_restatement_triggers.get(
+                            snapshot.snapshot_id
+                        ),
                     )
             elif isinstance(node, CreateNode):
                 self.snapshot_evaluator.create_snapshot(
