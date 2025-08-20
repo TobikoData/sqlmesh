@@ -133,7 +133,26 @@ gcp-postgres_down() {
     gcp-postgres_exec "drop database $1"
 }
 
+# Fabric
+fabric_init() {    
+    python --version #note: as at 2025-08-20, ms-fabric-cli is pinned to Python >= 3.10, <3.13
+    pip install ms-fabric-cli
+    
+    # to prevent the '[EncryptionFailed] An error occurred with the encrypted cache.' error
+    # ref: https://microsoft.github.io/fabric-cli/#switch-to-interactive-mode-optional
+    fab config set encryption_fallback_enabled true 
 
+    echo "Logging in to Fabric"
+    fab auth login -u $FABRIC_CLIENT_ID -p $FABRIC_CLIENT_SECRET --tenant $FABRIC_TENANT_ID
+}
+
+fabric_up() {
+    fab create "SQLMesh CircleCI.Workspace/$1.Warehouse"
+}
+
+fabric_down() {
+    fab rm -f "SQLMesh CircleCI.Workspace/$1.Warehouse" || true
+}
 
 INIT_FUNC="${ENGINE}_init"
 UP_FUNC="${ENGINE}_up"
