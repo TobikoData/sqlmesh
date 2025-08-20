@@ -2431,23 +2431,21 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
             assert actual_execution_stats["full_model"].total_bytes_processed is not None
 
     # run that loads 0 rows in incremental model
-    actual_execution_stats = {}
-    with patch.object(
-        context.console, "update_snapshot_evaluation_progress", capture_execution_stats
-    ):
-        with time_machine.travel(date.today() + timedelta(days=1)):
-            context.run()
+    # - some cloud DBs error because time travel messes up token expiration
+    if not ctx.is_remote:
+        actual_execution_stats = {}
+        with patch.object(
+            context.console, "update_snapshot_evaluation_progress", capture_execution_stats
+        ):
+            with time_machine.travel(date.today() + timedelta(days=1)):
+                context.run()
 
-    if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
-        assert actual_execution_stats["incremental_model"].total_rows_processed == 0
-        # snowflake doesn't track rows for CTAS
-        assert actual_execution_stats["full_model"].total_rows_processed == (
-            None if ctx.mark.startswith("snowflake") else 3
-        )
-
-        if ctx.mark.startswith("bigquery") or ctx.mark.startswith("databricks"):
-            assert actual_execution_stats["incremental_model"].total_bytes_processed is not None
-            assert actual_execution_stats["full_model"].total_bytes_processed is not None
+        if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+            assert actual_execution_stats["incremental_model"].total_rows_processed == 0
+            # snowflake doesn't track rows for CTAS
+            assert actual_execution_stats["full_model"].total_rows_processed == (
+                None if ctx.mark.startswith("snowflake") else 3
+            )
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(
