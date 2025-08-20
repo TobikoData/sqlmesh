@@ -64,7 +64,6 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
-from sqlmesh.core.snapshot.definition import parent_snapshots_by_name
 from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import random_id, CorrelationId
 from sqlmesh.utils.concurrency import (
