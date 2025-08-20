@@ -33,6 +33,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
+    OptionalExpressionsRawSql = t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[RawSql]]
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +67,7 @@ class BaseExpressionRenderer:
         self._normalize_identifiers = normalize_identifiers
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
-        self._cache: t.Optional[
-            t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[d.RawSql]]
-        ] = None
+        self._cache: t.Optional[OptionalExpressionsRawSql] = None
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
 
@@ -84,7 +84,7 @@ class BaseExpressionRenderer:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[d.RawSql]]:
+    ) -> OptionalExpressionsRawSql:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
@@ -216,7 +216,7 @@ class BaseExpressionRenderer:
             try:
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
-                raw_sql = d.RawSql(this=rendered_expression)
+                raw_sql: t.Optional[d.RawSql] = d.RawSql(this=rendered_expression)
 
                 logger.debug(
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
@@ -235,8 +235,10 @@ class BaseExpressionRenderer:
         else:
             raw_sql = d.RawSql(this=self._expression.meta.get("sql") or "")
 
-        # TODO: what if the raw SQL contains multiple semicolon-separated statements?
-        if not raw_sql.name.strip():
+        # TODO:
+        # - What if the raw SQL contains multiple semicolon-separated statements?
+        # - Should we warn if the raw SQL is unavailable, for whatever reason?
+        if not t.cast(d.RawSql, raw_sql).name.strip():
             raw_sql = None
 
         macro_evaluator.locals.update(render_kwargs)
@@ -288,12 +290,12 @@ class BaseExpressionRenderer:
         return result
 
     def update_cache(self, expression: t.Optional[exp.Expression]) -> None:
-        if len(self._cache or []) == 2:
+        if isinstance(self._cache, tuple) and len(self._cache) == 2:
             # Note: based on the current call sites of update_cache, the following line
             # assumes that the raw SQL corresponding to the expression hasn't changed
-            self._cache[0] = expression
+            self._cache = ([expression], self._cache[1])
         else:
-            self._cache = [expression, None]
+            self._cache = ([expression], None)
 
     def _resolve_table(
         self,
@@ -514,7 +516,7 @@ class QueryRenderer(BaseExpressionRenderer):
         needs_optimization: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Optional[d.ExpressionRawSql]:
+    ) -> t.Optional[d.QueryRawSql]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -541,9 +543,11 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
+        raw_sql: t.Optional[d.RawSql]
+
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
-            raw_sql = seq_get(self._cache or [], 1)
+            raw_sql = seq_get(self._cache or (), 1)  # type: ignore
         else:
             try:
                 expressions, raw_sql = super()._render(
