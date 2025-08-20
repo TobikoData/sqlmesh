@@ -1308,7 +1308,7 @@ def test_migrate_missing_table(mocker: MockerFixture, make_snapshot, make_mocked
         [
             call('CREATE TABLE "pre" ("a" INT)'),
             call(
-                'CREATE TABLE IF NOT EXISTS "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\' AND FALSE LIMIT 0'
+                'CREATE TABLE IF NOT EXISTS "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-02\' AND FALSE LIMIT 0'
             ),
             call('DROP TABLE "pre"'),
         ]
