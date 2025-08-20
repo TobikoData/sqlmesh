@@ -32,10 +32,13 @@
       "type": "object",
       "title": "SQLMesh",
       "properties": {
-        "sqlmesh.projectPath": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi` or relative `./project_folder/sushi` to the workspace root."
+        "sqlmesh.projectPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "The path to the SQLMesh project. If not set, the extension will try to find the project root automatically. If set, the extension will use the project root as the workspace path, e.g. it will run `sqlmesh` and `sqlmesh_lsp` in the project root. The path can be absolute `/Users/sqlmesh_user/sqlmesh_project/sushi` or relative `./project_folder/sushi` to the workspace root. Multiple paths can be used for multi-project setups."
         },
         "sqlmesh.lspEntrypoint": {
           "type": "string",
@@ -58,7 +61,8 @@
         {
           "id": "sqlmesh.lineage",
           "name": "",
-          "type": "webview"
+          "type": "webview",
+          "icon": "./assets/images/dag.svg"
         }
       ]
     },
@@ -109,12 +113,23 @@
         "command": "sqlmesh.stop",
         "title": "SQLMesh: Stop Server",
         "description": "SQLMesh"
+      },
+      {
+        "command": "sqlmesh.showTableDiff",
+        "title": "SQLMesh: Show Table Diff",
+        "description": "SQLMesh",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "sqlmesh.renderModel",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
+        },
+        {
+          "command": "sqlmesh.showTableDiff",
           "when": "resourceExtname == .sql",
           "group": "navigation"
         }

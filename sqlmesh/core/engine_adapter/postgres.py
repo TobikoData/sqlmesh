@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import typing as t
-from functools import partial
+from functools import cached_property, partial
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
@@ -105,23 +106,32 @@ class PostgresEngineAdapter(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         # Merge isn't supported until Postgres 15
-        merge_impl = (
-            super().merge
-            if self._connection_pool.get().server_version >= 150000
-            else partial(logical_merge, self)
-        )
+        major, minor = self.server_version
+        merge_impl = super().merge if major >= 15 else partial(logical_merge, self)
         merge_impl(  # type: ignore
             target_table,
             source_table,
-            columns_to_types,
+            target_columns_to_types,
             unique_key,
             when_matched=when_matched,
             merge_filter=merge_filter,
+            source_columns=source_columns,
         )
+
+    @cached_property
+    def server_version(self) -> t.Tuple[int, int]:
+        """Lazily fetch and cache major and minor server version"""
+        if result := self.fetchone("SHOW server_version"):
+            server_version, *_ = result
+            match = re.search(r"(\d+)\.(\d+)", server_version)
+            if match:
+                return int(match.group(1)), int(match.group(2))
+        return 0, 0

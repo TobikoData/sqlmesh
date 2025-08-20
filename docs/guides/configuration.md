@@ -322,7 +322,7 @@ SQLMesh creates schemas, physical tables, and views in the data warehouse/engine
 
 The default SQLMesh behavior described in the FAQ is appropriate for most deployments, but you can override *where* SQLMesh creates physical tables and views with the `physical_schema_mapping`, `environment_suffix_target`, and `environment_catalog_mapping` configuration options.
 
-You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option. 
+You can also override *what* the physical tables are called by using the `physical_table_naming_convention` option.
 
 These options are in the [environments](../reference/configuration.md#environments) section of the configuration reference page.
 
@@ -537,6 +537,44 @@ sqlmesh_md5__d3b07384d113edec49eaa6238ad5ff00__dev
 ```
 
 This has a downside that now it's much more difficult to determine which table corresponds to which model by just looking at the database with a SQL client. However, the table names have a predictable length so there are no longer any surprises with identfiers exceeding the max length at the physical layer.
+
+#### Virtual Data Environment Modes
+
+By default, Virtual Data Environments (VDE) are applied across both development and production environments. This allows SQLMesh to reuse physical tables when appropriate, even when promoting from development to production.
+
+However, users may prefer their production environment to be non-virtual. The non-exhaustive list of reasons may include:
+
+- Integration with third-party tools and platforms, such as data catalogs, may not work well with the virtual view layer that SQLMesh imposes by default
+- A desire to rely on time travel features provided by cloud data warehouses such as BigQuery, Snowflake, and Databricks
+
+To mitigate this, SQLMesh offers an alternative 'dev-only' mode for using VDE. It can be enabled in the project configuration like so:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    virtual_environment_mode: dev_only
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import Config
+
+    config = Config(
+        virtual_environment_mode="dev_only",
+    )
+    ```
+
+'dev-only' mode means that VDE is applied only in development environments. While in production, model tables and views are updated directly and bypass the virtual layer. This also means that physical tables in production will be created using the original, **unversioned** model names. Users will still benefit from VDE and data reuse across development environments.
+
+Please note the following tradeoffs when enabling this mode:
+
+- All data inserted in development environments is used only for [preview](../concepts/plans.md#data-preview-for-forward-only-changes) and will **not** be reused in production
+- Reverting a model to a previous version will be applied going forward and may require an explicit data restatement
+
+!!! warning
+    Switching the mode for an existing project will result in a **complete rebuild** of all models in the project. Refer to the [Table Migration Guide](./table_migration.md) to migrate existing tables without rebuilding them from scratch.
+
 
 #### Environment view catalogs
 
@@ -767,7 +805,9 @@ Even though the second change should have been a metadata change (thus not requi
 
 The `gateways` configuration defines how SQLMesh should connect to the data warehouse, state backend, and scheduler. These options are in the [gateway](../reference/configuration.md#gateway) section of the configuration reference page.
 
-Each gateway key represents a unique gateway name and configures its connections. For example, this configures the `my_gateway` gateway:
+Each gateway key represents a unique gateway name and configures its connections. **Gateway names are case-insensitive** - SQLMesh automatically normalizes gateway names to lowercase during configuration validation. This means you can use any case in your configuration files (e.g., `MyGateway`, `mygateway`, `MYGATEWAY`) and they will all work correctly.
+
+For example, this configures the `my_gateway` gateway:
 
 === "YAML"
 
@@ -869,6 +909,7 @@ These pages describe the connection configuration options for each execution eng
 * [BigQuery](../integrations/engines/bigquery.md)
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
+* [Fabric](../integrations/engines/fabric.md)
 * [MotherDuck](../integrations/engines/motherduck.md)
 * [MySQL](../integrations/engines/mysql.md)
 * [MSSQL](../integrations/engines/mssql.md)

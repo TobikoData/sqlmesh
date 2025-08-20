@@ -37,7 +37,7 @@ from sqlmesh.core.config import (
     DuckDBConnectionConfig,
     TableNamingConvention,
 )
-from sqlmesh.core.config.common import EnvironmentSuffixTarget
+from sqlmesh.core.config.common import EnvironmentSuffixTarget, VirtualEnvironmentMode
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
@@ -114,18 +114,17 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
-        ),
         SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
@@ -256,12 +255,15 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert plan.start == to_datetime("2023-01-01")
     assert not plan.missing_intervals
 
@@ -362,20 +364,17 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
+    assert plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].is_forward_only
+
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
         SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
             intervals=[
@@ -429,7 +428,12 @@ def test_forward_only_model_restate_full_history_in_dev(init_and_plan_context: t
     context.upsert_model(SqlModel.parse_obj(model_kwargs))
 
     # Apply the model change in dev
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert not plan.missing_intervals
     context.apply(plan)
 
@@ -484,67 +488,32 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
     waiter_as_customer_snapshot = context.get_snapshot(
         "sushi.waiter_as_customer_by_day", raise_if_missing=True
     )
-    count_customers_active_snapshot = context.get_snapshot(
-        "sushi.count_customers_active", raise_if_missing=True
-    )
-    count_customers_inactive_snapshot = context.get_snapshot(
-        "sushi.count_customers_inactive", raise_if_missing=True
-    )
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
 
     assert len(plan.new_snapshots) == 6
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[customers_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[active_customers_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[waiter_as_customer_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
 
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
-            snapshot_id=active_customers_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=count_customers_active_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=count_customers_inactive_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=customers_snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
             snapshot_id=snapshot.snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=waiter_as_customer_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
             ],
@@ -788,15 +757,6 @@ def test_cron_not_aligned_with_day_boundary_new_model(init_and_plan_context: t.C
         ),
         SnapshotIntervals(
             snapshot_id=context.get_snapshot(
-                "sushi.top_waiters", raise_if_missing=True
-            ).snapshot_id,
-            intervals=[
-                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
-                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_id=context.get_snapshot(
                 "sushi.waiter_revenue_by_day", raise_if_missing=True
             ).snapshot_id,
             intervals=[
@@ -944,12 +904,13 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
     assert plan.start == to_datetime("2023-01-01")
     assert not plan.missing_intervals
 
@@ -992,8 +953,9 @@ def test_new_forward_only_model(init_and_plan_context: t.Callable):
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    context.upsert_model(context.get_model("sushi.top_waiters").copy(update={"kind": FullKind()}))
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
 
     model_name = "sushi.waiter_revenue_by_day"
 
@@ -1155,18 +1117,15 @@ def test_non_breaking_change_after_forward_only_in_dev(
     assert len(plan.new_snapshots) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert all(s.is_forward_only for s in plan.new_snapshots)
     assert to_timestamp(plan.start) == to_timestamp("2023-01-07")
     assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_id=top_waiters_snapshot.snapshot_id,
-            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
-        ),
         SnapshotIntervals(
             snapshot_id=waiter_revenue_by_day_snapshot.snapshot_id,
             intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
@@ -1267,11 +1226,17 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     context.upsert_model(model)
     snapshot = context.get_snapshot(model, raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.BREAKING
     )
+    assert plan.context_diff.snapshots[snapshot.snapshot_id].is_forward_only
     assert not plan.requires_backfill
     context.apply(plan)
 
@@ -1381,8 +1346,37 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC", tick=True)
+def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Make a forward-only change
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    model = model.copy(update={"kind": model.kind.copy(update={"forward_only": True})})
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert len(plan.new_snapshots) == 2
+    assert all(s.is_forward_only for s in plan.new_snapshots)
+
+    # Follow-up with a metadata change in the same environment
+    model = model.copy(update={"owner": "new_owner"})
+    context.upsert_model(model)
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert len(plan.new_snapshots) == 2
+    assert all(s.change_category == SnapshotChangeCategory.METADATA for s in plan.new_snapshots)
+
+    # Deploy the latest change to prod
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    # Check that the new column was added in prod
+    columns = context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+    assert "one" in columns
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_context: t.Callable):
+def test_indirect_non_breaking_downstream_of_forward_only(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
 
@@ -1396,14 +1390,20 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     forward_only_snapshot = context.get_snapshot(forward_only_model, raise_if_missing=True)
 
     non_breaking_model = context.get_model("sushi.waiter_revenue_by_day")
+    non_breaking_model = non_breaking_model.copy(update={"start": "2023-01-01"})
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, non_breaking_model)))
     non_breaking_snapshot = context.get_snapshot(non_breaking_model, raise_if_missing=True)
     top_waiter_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
-    plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
+    plan = context.plan_builder(
+        "dev",
+        skip_tests=True,
+        enable_preview=False,
+        categorizer_config=CategorizerConfig.all_full(),
+    ).build()
     assert (
         plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.BREAKING
     )
     assert (
         plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].change_category
@@ -1411,10 +1411,26 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     )
     assert (
         plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+    assert plan.context_diff.snapshots[forward_only_snapshot.snapshot_id].is_forward_only
+    assert not plan.context_diff.snapshots[non_breaking_snapshot.snapshot_id].is_forward_only
+    assert not plan.context_diff.snapshots[top_waiter_snapshot.snapshot_id].is_forward_only
+
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=top_waiter_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
         SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,
             intervals=[
@@ -1441,6 +1457,18 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
     assert plan.start == to_timestamp("2023-01-01")
     assert plan.missing_intervals == [
         SnapshotIntervals(
+            snapshot_id=top_waiter_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
             snapshot_id=non_breaking_snapshot.snapshot_id,
             intervals=[
                 (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
@@ -1464,8 +1492,9 @@ def test_forward_only_precedence_over_indirect_non_breaking(init_and_plan_contex
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_breaking_only_impacts_immediate_children(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
+    context, _ = init_and_plan_context("examples/sushi")
+    context.upsert_model(context.get_model("sushi.top_waiters").copy(update={"kind": FullKind()}))
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
 
     breaking_model = context.get_model("sushi.orders")
     breaking_model = breaking_model.copy(update={"stamp": "force new version"})
@@ -1586,6 +1615,60 @@ def test_plan_with_run(
             '"memory"."sushi"."count_customers_active"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."count_customers_inactive"': to_timestamp("2023-01-09"),
         }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_plan_ignore_cron(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_allow_partials,
+            kind INCREMENTAL_UNMANAGED,
+            allow_partials true,
+            start '2023-01-01',
+        );
+
+        SELECT @end_ts AS end_ts
+        """
+    )
+    model = load_sql_based_model(expressions)
+
+    context.upsert_model(model)
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT MAX(end_ts) FROM memory.sushi.test_allow_partials")[
+            0
+        ]
+        == "2023-01-07 23:59:59.999999"
+    )
+
+    plan_no_ignore_cron = context.plan_builder(
+        "prod", run=True, ignore_cron=False, skip_tests=True
+    ).build()
+    assert not plan_no_ignore_cron.missing_intervals
+
+    plan = context.plan_builder("prod", run=True, ignore_cron=True, skip_tests=True).build()
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot(model, raise_if_missing=True).snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-08"), to_timestamp("2023-01-08 15:00:00")),
+            ],
+        )
+    ]
+    context.apply(plan)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT MAX(end_ts) FROM memory.sushi.test_allow_partials")[
+            0
+        ]
+        == "2023-01-08 14:59:59.999999"
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1777,6 +1860,82 @@ def test_select_unchanged_model_for_backfill(init_and_plan_context: t.Callable):
     # Make sure that a view has been created for the downstream selected model.
     schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {"waiter_revenue_by_day", "top_waiters"}
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_snapshot_triggers(init_and_plan_context: t.Callable, mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # auto-restatement triggers
+    orders = context.get_model("sushi.orders")
+    orders_kind = {
+        **orders.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    orders_kwargs = {
+        **orders.dict(),
+        "kind": orders_kind,
+    }
+    context.upsert_model(PythonModel.parse_obj(orders_kwargs))
+
+    order_items = context.get_model("sushi.order_items")
+    order_items_kind = {
+        **order_items.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    order_items_kwargs = {
+        **order_items.dict(),
+        "kind": order_items_kind,
+    }
+    context.upsert_model(PythonModel.parse_obj(order_items_kwargs))
+
+    waiter_revenue_by_day = context.get_model("sushi.waiter_revenue_by_day")
+    waiter_revenue_by_day_kind = {
+        **waiter_revenue_by_day.kind.dict(),
+        "auto_restatement_cron": "@hourly",
+    }
+    waiter_revenue_by_day_kwargs = {
+        **waiter_revenue_by_day.dict(),
+        "kind": waiter_revenue_by_day_kind,
+    }
+    context.upsert_model(SqlModel.parse_obj(waiter_revenue_by_day_kwargs))
+
+    context.plan(auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full())
+
+    scheduler = context.scheduler()
+
+    import sqlmesh
+
+    spy = mocker.spy(sqlmesh.core.scheduler.Scheduler, "run_merged_intervals")
+
+    with time_machine.travel("2023-01-09 00:00:01 UTC"):
+        scheduler.run(
+            environment=c.PROD,
+            start="2023-01-01",
+            auto_restatement_enabled=True,
+        )
+
+    assert spy.called
+
+    actual_triggers = spy.call_args.kwargs["auto_restatement_triggers"]
+    actual_triggers = {k: v for k, v in actual_triggers.items() if v}
+    assert len(actual_triggers) == 12
+
+    for id, trigger in actual_triggers.items():
+        model_name = id.name.replace('"memory"."sushi".', "").replace('"', "")
+        auto_restatement_triggers = [
+            t.name.replace('"memory"."sushi".', "").replace('"', "") for t in trigger
+        ]
+
+        if model_name in ("orders", "order_items", "waiter_revenue_by_day"):
+            assert auto_restatement_triggers == [model_name]
+        elif model_name in ("customer_revenue_lifetime", "customer_revenue_by_day"):
+            assert sorted(auto_restatement_triggers) == sorted(["orders", "order_items"])
+        elif model_name == "top_waiters":
+            assert auto_restatement_triggers == ["waiter_revenue_by_day"]
+        else:
+            assert auto_restatement_triggers == ["orders"]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -1984,12 +2143,13 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
             query_or_df: QueryOrDF,
             model: Model,
             is_first_insert: bool,
+            render_kwargs: t.Dict[str, t.Any],
             **kwargs: t.Any,
         ) -> None:
             nonlocal custom_insert_called
             custom_insert_called = True
 
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)
 
     model = context.get_model("sushi.top_waiters")
     kwargs = {
@@ -2029,6 +2189,7 @@ def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callab
             query_or_df: QueryOrDF,
             model: Model,
             is_first_insert: bool,
+            render_kwargs: t.Dict[str, t.Any],
             **kwargs: t.Any,
         ) -> None:
             assert isinstance(model.kind, TestCustomKind)
@@ -2036,7 +2197,7 @@ def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callab
             nonlocal custom_insert_calls
             custom_insert_calls.append(model.kind.custom_property)
 
-            self._replace_query_for_model(model, table_name, query_or_df)
+            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)
 
     model = context.get_model("sushi.top_waiters")
     kwargs = {
@@ -2129,21 +2290,19 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, forward_only_model)))
     forward_only_model_snapshot_id = context.get_snapshot(forward_only_model_name).snapshot_id
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan("dev", auto_apply=True, no_prompts=True, enable_preview=False)
     assert (
         dev_plan.snapshots[forward_only_model_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
         dev_plan.snapshots[full_downstream_model_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
-        == SnapshotChangeCategory.FORWARD_ONLY
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert not dev_plan.missing_intervals
 
@@ -2161,9 +2320,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     new_full_downstream_model = load_sql_based_model(new_full_downstream_model_expressions)
     context.upsert_model(new_full_downstream_model)
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan(
         "dev",
         categorizer_config=CategorizerConfig.all_full(),
@@ -2176,12 +2333,12 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         == SnapshotChangeCategory.BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_BREAKING
     )
     assert len(dev_plan.missing_intervals) == 2
     assert dev_plan.missing_intervals[0].snapshot_id == full_downstream_model_snapshot_id
-    assert dev_plan.missing_intervals[1].snapshot_id == full_downstream_model_2_snapshot_id
+    assert dev_plan.missing_intervals[1].snapshot_id == view_downstream_model_snapshot_id
 
     # Check that the representative view hasn't been created yet.
     assert not context.engine_adapter.table_exists(
@@ -2195,9 +2352,7 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
     # Finally, make a non-breaking change to the full model in the same dev environment.
     context.upsert_model(add_projection_to_model(t.cast(SqlModel, new_full_downstream_model)))
     full_downstream_model_snapshot_id = context.get_snapshot(full_downstream_model_name).snapshot_id
-    full_downstream_model_2_snapshot_id = context.get_snapshot(
-        view_downstream_model_name
-    ).snapshot_id
+    view_downstream_model_snapshot_id = context.get_snapshot(view_downstream_model_name).snapshot_id
     dev_plan = context.plan(
         "dev",
         categorizer_config=CategorizerConfig.all_full(),
@@ -2210,9 +2365,12 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot(
         == SnapshotChangeCategory.NON_BREAKING
     )
     assert (
-        dev_plan.snapshots[full_downstream_model_2_snapshot_id].change_category
+        dev_plan.snapshots[view_downstream_model_snapshot_id].change_category
         == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
+
+    # Deploy changes to prod
+    context.plan("prod", auto_apply=True, no_prompts=True)
 
     # Check that the representative view has been created.
     assert context.engine_adapter.table_exists(
@@ -2334,21 +2492,6 @@ def test_indirect_non_breaking_view_model_non_representative_snapshot_migration(
             SnapshotChangeCategory.METADATA,
             SnapshotChangeCategory.METADATA,
         ),
-        (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.INDIRECT_BREAKING,
-        ),
-        (
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
-        ),
-        (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.FORWARD_ONLY,
-        ),
     ],
 )
 def test_rebase_two_changed_parents(
@@ -2449,6 +2592,297 @@ def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_c
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+
+    assert all(
+        s.virtual_environment_mode.is_dev_only or not s.is_model or s.is_symbolic
+        for s in context.snapshots.values()
+    )
+
+    # Init prod
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make a change in dev
+    original_model = context.get_model("sushi.waiter_revenue_by_day")
+    original_fingerprint = context.get_snapshot(original_model.name).fingerprint
+    model = original_model.copy(update={"query": original_model.query.order_by("waiter_id")})
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+
+    plan_dev = context.plan_builder("dev").build()
+    assert to_timestamp(plan_dev.start) == to_timestamp("2023-01-07")
+    assert plan_dev.requires_backfill
+    assert plan_dev.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.waiter_revenue_by_day").snapshot_id,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+    ]
+    assert plan_dev.context_diff.snapshots[context.get_snapshot(model.name).snapshot_id].intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot("sushi.top_waiters").snapshot_id
+    ].intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].dev_intervals
+    assert plan_dev.context_diff.snapshots[
+        context.get_snapshot("sushi.top_waiters").snapshot_id
+    ].dev_intervals
+    context.apply(plan_dev)
+
+    # Make sure the waiter_revenue_by_day model is a table in prod and a view in dev
+    table_types_df = context.engine_adapter.fetchdf(
+        "SELECT table_schema, table_type FROM INFORMATION_SCHEMA.TABLES WHERE table_name = 'waiter_revenue_by_day'"
+    )
+    assert table_types_df.to_dict("records") == [
+        {"table_schema": "sushi", "table_type": "BASE TABLE"},
+        {"table_schema": "sushi__dev", "table_type": "VIEW"},
+    ]
+
+    # Check that the specified dates were backfilled
+    min_event_date = context.engine_adapter.fetchone(
+        "SELECT MIN(event_date) FROM sushi__dev.waiter_revenue_by_day"
+    )[0]
+    assert min_event_date == to_date("2023-01-07")
+
+    # Make sure the changes are applied without backfill in prod
+    plan_prod = context.plan_builder("prod").build()
+    assert not plan_prod.requires_backfill
+    assert not plan_prod.missing_intervals
+    context.apply(plan_prod)
+    assert "one" in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+
+    # Make sure the revert of a breaking changes results in a full rebuild
+    context.upsert_model(original_model)
+    assert context.get_snapshot(original_model.name).fingerprint == original_fingerprint
+
+    plan_prod = context.plan_builder(
+        "prod", allow_destructive_models=["sushi.waiter_revenue_by_day"]
+    ).build()
+    assert not plan_prod.requires_backfill
+    assert not plan_prod.missing_intervals
+    context.apply(plan_prod)
+    assert "one" not in context.engine_adapter.columns("sushi.waiter_revenue_by_day")
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    # Change to full kind
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.missing_intervals
+    assert prod_plan.requires_backfill
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+    # Change back to view
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": ViewKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "view"
+
+    # Change to incremental
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": IncrementalUnmanagedKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+    # Change back to full
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change_incremental(
+    init_and_plan_context: t.Callable,
+):
+    context, _ = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+
+    forward_only_model_name = "memory.sushi.test_forward_only_model"
+    forward_only_model_expressions = d.parse(
+        f"""
+        MODEL (
+            name {forward_only_model_name},
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                forward_only true,
+            ),
+        );
+
+        SELECT '2023-01-01' AS ds, 'value' AS value;
+        """
+    )
+    forward_only_model = load_sql_based_model(forward_only_model_expressions)
+    forward_only_model = forward_only_model.copy(
+        update={"virtual_environment_mode": VirtualEnvironmentMode.DEV_ONLY}
+    )
+    context.upsert_model(forward_only_model)
+
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Change to view
+    model = context.get_model(forward_only_model_name)
+    original_kind = model.kind
+    model = model.copy(update={"kind": ViewKind()})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"test_forward_only_model"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "view"
+
+    model = model.copy(update={"kind": original_kind})
+    context.upsert_model(model)
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"test_forward_only_model"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change_with_follow_up_changes_in_dev(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    # Make sure the initial state is a view
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "view"
+
+    # Change to incremental unmanaged kind
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": IncrementalUnmanagedKind()})
+    context.upsert_model(model)
+    dev_plan = context.plan_builder("dev", skip_tests=True).build()
+    assert dev_plan.missing_intervals
+    assert dev_plan.requires_backfill
+    context.apply(dev_plan)
+
+    # Make a follow-up forward-only change
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+    dev_plan = context.plan_builder("dev", skip_tests=True, forward_only=True).build()
+    context.apply(dev_plan)
+
+    # Deploy to prod
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals
+    assert not prod_plan.context_diff.snapshots[
+        context.get_snapshot(model.name).snapshot_id
+    ].intervals
+    context.apply(prod_plan)
+    data_objects = context.engine_adapter.get_data_objects("sushi", {"top_waiters"})
+    assert len(data_objects) == 1
+    assert data_objects[0].type == "table"
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_kind_change_manual_categorization(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    model = model.copy(update={"kind": FullKind()})
+    context.upsert_model(model)
+    dev_plan_builder = context.plan_builder("dev", skip_tests=True, no_auto_categorization=True)
+    dev_plan_builder.set_choice(
+        dev_plan_builder._context_diff.snapshots[context.get_snapshot(model.name).snapshot_id],
+        SnapshotChangeCategory.NON_BREAKING,
+    )
+    dev_plan = dev_plan_builder.build()
+    assert dev_plan.requires_backfill
+    assert len(dev_plan.missing_intervals) == 1
+    context.apply(dev_plan)
+
+    prod_plan = context.plan_builder("prod", skip_tests=True).build()
+    assert prod_plan.requires_backfill
+    assert prod_plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=context.get_snapshot("sushi.top_waiters").snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)
@@ -2499,7 +2933,11 @@ def test_restatement_plan_across_environments_snapshot_with_shared_version(
     assert isinstance(previous_kind, IncrementalByTimeRangeKind)
 
     model = model.copy(
-        update={"kind": IncrementalUnmanagedKind(), "physical_version": "pinned_version_12345"}
+        update={
+            "kind": IncrementalUnmanagedKind(),
+            "physical_version": "pinned_version_12345",
+            "partitioned_by_": [exp.column("event_date")],
+        }
     )
     context.upsert_model(model)
     context.plan("prod", auto_apply=True, no_prompts=True)
@@ -2589,9 +3027,9 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply
@@ -2642,7 +3080,7 @@ def test_restatement_plan_hourly_with_downstream_daily_restates_correct_interval
         }
     )
     engine_adapter.replace_query(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # Restate A across a day boundary with the expectation that two day intervals in B are affected
@@ -2721,9 +3159,9 @@ def test_restatement_plan_respects_disable_restatements(tmp_path: Path):
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply
@@ -2827,9 +3265,9 @@ def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path:
         "date": exp.DataType.build("date"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # first, create the prod models
@@ -2849,7 +3287,7 @@ def test_restatement_plan_clears_correct_intervals_across_environments(tmp_path:
         cron '@daily'
     );
 
-    select account_id, name, date from test.external_table;
+    select 1 as account_id, date from test.external_table;
     """
     with open(models_dir / "model1.sql", "w") as f:
         f.write(model1)
@@ -3022,9 +3460,9 @@ def test_prod_restatement_plan_clears_correct_intervals_in_derived_dev_tables(tm
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A, B, C in prod
@@ -3172,9 +3610,9 @@ def test_prod_restatement_plan_clears_unaligned_intervals_in_derived_dev_tables(
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in prod
@@ -3314,9 +3752,9 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_processed_in_next_dev_
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in prod
@@ -3449,9 +3887,9 @@ def test_prod_restatement_plan_causes_dev_intervals_to_be_widened_on_full_restat
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[daily] in prod
@@ -3584,9 +4022,9 @@ def test_prod_restatement_plan_missing_model_in_dev(
         "ts": exp.DataType.build("timestamp"),
     }
     external_table = exp.table_(table="external_table", db="test", quoted=True)
-    engine_adapter.create_table(table_name=external_table, columns_to_types=columns_to_types)
+    engine_adapter.create_table(table_name=external_table, target_columns_to_types=columns_to_types)
     engine_adapter.insert_append(
-        table_name=external_table, query_or_df=df, columns_to_types=columns_to_types
+        table_name=external_table, query_or_df=df, target_columns_to_types=columns_to_types
     )
 
     # plan + apply A[hourly] in dev
@@ -3648,11 +4086,12 @@ def test_plan_snapshot_table_exists_for_promoted_snapshot(init_and_plan_context:
         "UPDATE sqlmesh._environments SET finalized_ts = NULL WHERE name = 'dev'"
     )
 
-    model = context.get_model("sushi.customers")
-    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
-
     context.plan(
-        "dev", select_models=["sushi.customers"], auto_apply=True, no_prompts=True, skip_tests=True
+        "prod",
+        restate_models=["sushi.top_waiters"],
+        auto_apply=True,
+        no_prompts=True,
+        skip_tests=True,
     )
     assert context.engine_adapter.table_exists(top_waiters_snapshot.table_name())
 
@@ -4229,7 +4668,7 @@ def test_plan_repairs_unrenderable_snapshot_state(
     plan = plan_builder.build()
     assert plan.directly_modified == {target_snapshot.snapshot_id}
     if not forward_only:
-        assert {i.snapshot_id for i in plan.missing_intervals} == {target_snapshot.snapshot_id}
+        assert target_snapshot.snapshot_id in {i.snapshot_id for i in plan.missing_intervals}
         plan_builder.set_choice(target_snapshot, SnapshotChangeCategory.NON_BREAKING)
         plan = plan_builder.build()
 
@@ -4509,12 +4948,6 @@ def test_breaking_change(sushi_context: Context):
     validate_query_change(sushi_context, environment, SnapshotChangeCategory.BREAKING, False)
 
 
-def test_forward_only(sushi_context: Context):
-    environment = "dev"
-    initial_add(sushi_context, environment)
-    validate_query_change(sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False)
-
-
 def test_logical_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
@@ -4766,8 +5199,11 @@ def test_environment_promotion(sushi_context: Context):
             plan.context_diff.modified_snapshots[sushi_customer_revenue_by_day_snapshot.name][
                 0
             ].change_category
-            == SnapshotChangeCategory.FORWARD_ONLY
+            == SnapshotChangeCategory.NON_BREAKING
         )
+        assert plan.context_diff.snapshots[
+            sushi_customer_revenue_by_day_snapshot.snapshot_id
+        ].is_forward_only
 
     apply_to_environment(
         sushi_context,
@@ -4971,11 +5407,14 @@ def test_multi(mocker):
     assert context.fetchdf("select * from after_1").to_dict()["repo_1"][0] == "repo_1"
     assert context.fetchdf("select * from after_2").to_dict()["repo_2"][0] == "repo_2"
 
+    old_context = context
     context = Context(
         paths=["examples/multi/repo_1"],
-        state_sync=context.state_sync,
+        state_sync=old_context.state_sync,
         gateway="memory",
     )
+    context._engine_adapter = old_context.engine_adapter
+    del context.engine_adapters
 
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
@@ -5568,7 +6007,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 0
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 15
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
         {
@@ -5587,7 +6026,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5607,7 +6046,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 32
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5628,7 +6067,7 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
     ) = get_default_catalog_and_non_tables(metadata, context.default_catalog)
     assert len(prod_views) == 16
     assert len(dev_views) == 16
-    assert len(user_default_tables) == 21
+    assert len(user_default_tables) == 16
     assert len(non_default_tables) == 0
     assert state_metadata.schemas == ["sqlmesh"]
     assert {x.sql() for x in state_metadata.qualified_tables}.issuperset(
@@ -5780,13 +6219,13 @@ def test_restatement_of_full_model_with_start(init_and_plan_context: t.Callable)
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_should_not_override_environment_statements(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
-    context.config.before_all = ["SELECT 'test_before_all';"]
+    context.config.before_all = ["SELECT 'test_before_all';", *context.config.before_all]
     context.load()
 
     context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
 
     prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+    assert prod_env_statements[0].before_all[0] == "SELECT 'test_before_all';"
 
     context.plan(
         restate_models=["sushi.waiter_revenue_by_day"],
@@ -5796,7 +6235,7 @@ def test_restatement_should_not_override_environment_statements(init_and_plan_co
     )
 
     prod_env_statements = context.state_reader.get_environment_statements(c.PROD)
-    assert prod_env_statements[0].before_all == ["SELECT 'test_before_all';"]
+    assert prod_env_statements[0].before_all[0] == "SELECT 'test_before_all';"
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -5844,7 +6283,7 @@ def test_plan_production_environment_statements(tmp_path: Path):
     );
 
     @IF(
-        @runtime_stage = 'creating',
+        @runtime_stage IN ('evaluating', 'creating'),
         INSERT INTO schema_names_for_prod (physical_schema_name) VALUES (@resolve_template('@{schema_name}'))
     );
 
@@ -6045,6 +6484,9 @@ def apply_to_environment(
         plan_builder.set_start(plan_start or start(context))
 
     if choice:
+        if choice == SnapshotChangeCategory.FORWARD_ONLY:
+            # FORWARD_ONLY is deprecated, fallback to NON_BREAKING to keep the existing tests
+            choice = SnapshotChangeCategory.NON_BREAKING
         plan_choice(plan_builder, choice)
     for validator in plan_validators:
         validator(context, plan_builder.build())
@@ -6596,16 +7038,17 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     assert "New environment `dev` will be created from `prod`" in output.stdout
     assert "Differences from the `prod` environment" in output.stdout
 
+    stdout_rstrip = "\n".join([line.rstrip() for line in output.stdout.split("\n")])
     assert (
-        """MODEL (                                                                        
-   name test.a,                                                                 
-+  owner test,                                                                  
-   kind FULL                                                                    
- )                                                                              
- SELECT                                                                         
--  5 AS col                                                                     
+        """MODEL (
+   name test.a,
++  owner test,
+   kind FULL
+ )
+ SELECT
+-  5 AS col
 +  10 AS col"""
-        in output.stdout
+        in stdout_rstrip
     )
 
     # Case 6: Ensure that target environment and create_from environment are not the same
@@ -6616,169 +7059,6 @@ def test_plan_always_recreate_environment(tmp_path: Path):
     for environment in ["dev", "prod"]:
         context_diff = ctx._context_diff(environment)
         assert context_diff.environment == environment
-
-
-@time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_scd_type_2_restatement(init_and_plan_context: t.Callable):
-    context, plan = init_and_plan_context("examples/sushi")
-    context.apply(plan)
-
-    raw_employee_status = d.parse("""
-    MODEL (
-        name memory.hr_system.raw_employee_status,
-        kind FULL
-    );
-
-    SELECT
-        1001 AS employee_id,
-        'engineering' AS department,
-        'EMEA' AS region,
-        '2023-01-08 15:00:00 UTC' AS last_modified;
-    """)
-
-    # Create SCD Type 2 model for employee history tracking
-    employee_history = d.parse("""
-    MODEL (
-        name memory.hr_system.employee_history,
-        kind SCD_TYPE_2_BY_TIME (
-            unique_key employee_id,
-            updated_at_name last_modified,
-            disable_restatement false
-        ),
-        owner hr_analytics,
-        cron '*/5 * * * *',
-        grain employee_id,
-        description 'Historical tracking of employee status changes'
-    );
-
-    SELECT
-        employee_id::INT AS employee_id,
-        department::TEXT AS department,
-        region::TEXT AS region,
-        last_modified AS last_modified
-    FROM
-        memory.hr_system.raw_employee_status;
-    """)
-
-    raw_employee_status_model = load_sql_based_model(raw_employee_status)
-    employee_history_model = load_sql_based_model(employee_history)
-    context.upsert_model(raw_employee_status_model)
-    context.upsert_model(employee_history_model)
-
-    # Initial plan and apply
-    plan = context.plan_builder("prod", skip_tests=True).build()
-    context.apply(plan)
-
-    query = "SELECT employee_id, department, region, valid_from, valid_to FROM memory.hr_system.employee_history ORDER BY employee_id, valid_from"
-    initial_data = context.engine_adapter.fetchdf(query)
-
-    assert len(initial_data) == 1
-    assert initial_data["valid_to"].isna().all()
-    assert initial_data["department"].tolist() == ["engineering"]
-    assert initial_data["region"].tolist() == ["EMEA"]
-
-    # Apply a future plan with source changes
-    with time_machine.travel("2023-01-08 15:10:00 UTC"):
-        # Update source model, employee 1001 changed region
-        raw_employee_status_v2 = d.parse("""
-        MODEL (
-            name memory.hr_system.raw_employee_status,
-            kind FULL
-        );
-
-        SELECT
-            1001 AS employee_id,
-            'engineering' AS department,
-            'AMER' AS region,
-            '2023-01-08 15:10:00 UTC' AS last_modified;
-        """)
-        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
-        context.upsert_model(raw_employee_status_v2_model)
-        context.plan(
-            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
-        )
-
-    with time_machine.travel("2023-01-08 15:20:00 UTC"):
-        context.run()
-        data_after_change = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history for employee 1001
-        assert len(data_after_change) == 2
-        assert data_after_change.iloc[0]["employee_id"] == 1001
-        assert data_after_change.iloc[0]["department"] == "engineering"
-        assert data_after_change.iloc[0]["region"] == "EMEA"
-        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
-        assert data_after_change.iloc[1]["employee_id"] == 1001
-        assert data_after_change.iloc[1]["department"] == "engineering"
-        assert data_after_change.iloc[1]["region"] == "AMER"
-        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
-        assert pd.isna(data_after_change.iloc[1]["valid_to"])
-
-        # Update source model, employee 1001 changed region again and department
-        raw_employee_status_v2 = d.parse("""
-        MODEL (
-            name memory.hr_system.raw_employee_status,
-            kind FULL
-        );
-
-        SELECT
-            1001 AS employee_id,
-            'sales' AS department,
-            'ANZ' AS region,
-            '2023-01-08 15:26:00 UTC' AS last_modified;
-        """)
-        raw_employee_status_v2_model = load_sql_based_model(raw_employee_status_v2)
-        context.upsert_model(raw_employee_status_v2_model)
-        context.plan(
-            auto_apply=True, no_prompts=True, categorizer_config=CategorizerConfig.all_full()
-        )
-
-    with time_machine.travel("2023-01-08 15:35:00 UTC"):
-        context.run()
-        data_after_change = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history for employee 1001 after second change
-        assert len(data_after_change) == 3
-        assert data_after_change.iloc[0]["employee_id"] == 1001
-        assert data_after_change.iloc[0]["department"] == "engineering"
-        assert data_after_change.iloc[0]["region"] == "EMEA"
-        assert str(data_after_change.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(data_after_change.iloc[0]["valid_to"]) == "2023-01-08 15:10:00"
-        assert data_after_change.iloc[1]["employee_id"] == 1001
-        assert data_after_change.iloc[1]["department"] == "engineering"
-        assert data_after_change.iloc[1]["region"] == "AMER"
-        assert str(data_after_change.iloc[1]["valid_from"]) == "2023-01-08 15:10:00"
-        assert str(data_after_change.iloc[1]["valid_to"]) == "2023-01-08 15:26:00"
-        assert data_after_change.iloc[2]["employee_id"] == 1001
-        assert data_after_change.iloc[2]["department"] == "sales"
-        assert data_after_change.iloc[2]["region"] == "ANZ"
-        assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-08 15:26:00"
-        assert pd.isna(data_after_change.iloc[2]["valid_to"])
-
-    # Now test restatement cleanup by restating from 15:10 (first change)
-    with time_machine.travel("2023-01-08 15:38:00 UTC"):
-        plan = context.plan_builder(
-            "prod",
-            skip_tests=True,
-            restate_models=["memory.hr_system.employee_history"],
-            start="2023-01-08 15:09:00",
-        ).build()
-        context.apply(plan)
-        restated_data = context.engine_adapter.fetchdf(query)
-
-        # Validate the SCD2 history after restatement
-        assert len(restated_data) == 2
-        assert restated_data.iloc[0]["employee_id"] == 1001
-        assert restated_data.iloc[0]["department"] == "engineering"
-        assert restated_data.iloc[0]["region"] == "EMEA"
-        assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-08 15:26:00"
-        assert restated_data.iloc[1]["employee_id"] == 1001
-        assert restated_data.iloc[1]["department"] == "sales"
-        assert restated_data.iloc[1]["region"] == "ANZ"
-        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-08 15:26:00"
-        assert pd.isna(restated_data.iloc[1]["valid_to"])
 
 
 @time_machine.travel("2020-01-01 00:00:00 UTC")
@@ -7107,7 +7387,7 @@ def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
         assert str(data_after_change.iloc[2]["valid_from"]) == "2023-01-09 07:26:00"
         assert pd.isna(data_after_change.iloc[2]["valid_to"])
 
-    # Now test restatement still works as expected by restating from 2023-01-09 00:10:00 (first change)
+    # Now test restatement works (full restatement support currently)
     with time_machine.travel("2023-01-10 07:38:00 UTC"):
         plan = context.plan_builder(
             "prod",
@@ -7118,18 +7398,13 @@ def test_scd_type_2_regular_run_with_offset(init_and_plan_context: t.Callable):
         context.apply(plan)
         restated_data = context.engine_adapter.fetchdf(query)
 
-        # Validate the SCD2 history after restatement
-        assert len(restated_data) == 2
+        # Validate the SCD2 history after restatement has been wiped bar one
+        assert len(restated_data) == 1
         assert restated_data.iloc[0]["employee_id"] == 1001
-        assert restated_data.iloc[0]["department"] == "engineering"
-        assert restated_data.iloc[0]["region"] == "EMEA"
+        assert restated_data.iloc[0]["department"] == "sales"
+        assert restated_data.iloc[0]["region"] == "ANZ"
         assert str(restated_data.iloc[0]["valid_from"]) == "1970-01-01 00:00:00"
-        assert str(restated_data.iloc[0]["valid_to"]) == "2023-01-09 07:26:00"
-        assert restated_data.iloc[1]["employee_id"] == 1001
-        assert restated_data.iloc[1]["department"] == "sales"
-        assert restated_data.iloc[1]["region"] == "ANZ"
-        assert str(restated_data.iloc[1]["valid_from"]) == "2023-01-09 07:26:00"
-        assert pd.isna(restated_data.iloc[1]["valid_to"])
+        assert pd.isna(restated_data.iloc[0]["valid_to"])
 
 
 def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
@@ -7170,11 +7445,7 @@ def test_engine_adapters_multi_repo_all_gateways_gathered(copy_to_temp_path):
 def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable):
     sushi_context = Context(
         paths=copy_to_temp_path("examples/sushi"),
-        config=Config(
-            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-            default_connection=DuckDBConnectionConfig(),
-            physical_table_naming_convention=TableNamingConvention.TABLE_ONLY,
-        ),
+        config="table_only_naming_config",
     )
 
     assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.TABLE_ONLY
@@ -7205,11 +7476,7 @@ def test_physical_table_naming_strategy_table_only(copy_to_temp_path: t.Callable
 def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
     sushi_context = Context(
         paths=copy_to_temp_path("examples/sushi"),
-        config=Config(
-            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
-            default_connection=DuckDBConnectionConfig(),
-            physical_table_naming_convention=TableNamingConvention.HASH_MD5,
-        ),
+        config="hash_md5_naming_config",
     )
 
     assert sushi_context.config.physical_table_naming_convention == TableNamingConvention.HASH_MD5
@@ -7236,3 +7503,1186 @@ def test_physical_table_naming_strategy_hash_md5(copy_to_temp_path: t.Callable):
         s.table_naming_convention == TableNamingConvention.HASH_MD5
         for s in prod_env_snapshots.values()
     )
+
+
+@pytest.mark.slow
+def test_default_audits_applied_in_plan(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    # Create a model with data that will pass the audits
+    create_temp_file(
+        tmp_path,
+        models_dir / "orders.sql",
+        dedent("""
+            MODEL (
+                name test.orders,
+                kind FULL
+            );
+
+            SELECT
+                1 AS order_id,
+                'customer_1' AS customer_id,
+                100.50 AS amount,
+                '2024-01-01'::DATE AS order_date
+            UNION ALL
+            SELECT
+                2 AS order_id,
+                'customer_2' AS customer_id,
+                200.75 AS amount,
+                '2024-01-02'::DATE AS order_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [order_id, customer_id])",
+                "unique_values(columns := [order_id])",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan, here audits should pass
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has the default audits
+    model = context.get_model("test.orders")
+    assert len(model.audits) == 2
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+
+    # Verify audit arguments are preserved
+    for audit_name, audit_args in model.audits:
+        if audit_name == "not_null":
+            assert "columns" in audit_args
+            columns = [col.name for col in audit_args["columns"].expressions]
+            assert "order_id" in columns
+            assert "customer_id" in columns
+        elif audit_name == "unique_values":
+            assert "columns" in audit_args
+            columns = [col.name for col in audit_args["columns"].expressions]
+            assert "order_id" in columns
+
+
+@pytest.mark.slow
+def test_default_audits_fail_on_bad_data(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+
+    # Create a model with data that violates NOT NULL constraint
+    create_temp_file(
+        tmp_path,
+        models_dir / "bad_orders.sql",
+        dedent("""
+            MODEL (
+                name test.bad_orders,
+                kind FULL
+            );
+
+            SELECT
+                1 AS order_id,
+                NULL AS customer_id,  -- This violates NOT NULL
+                100.50 AS amount,
+                '2024-01-01'::DATE AS order_date
+            UNION ALL
+            SELECT
+                2 AS order_id,
+                'customer_2' AS customer_id,
+                200.75 AS amount,
+                '2024-01-02'::DATE AS order_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb", audits=["not_null(columns := [customer_id])"]
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Plan should fail due to audit failure
+    with pytest.raises(PlanError):
+        context.plan("prod", no_prompts=True, auto_apply=True)
+
+
+@pytest.mark.slow
+def test_default_audits_with_model_specific_audits(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+    audits_dir = tmp_path / "audits"
+    audits_dir.mkdir(exist_ok=True)
+
+    create_temp_file(
+        tmp_path,
+        audits_dir / "range_check.sql",
+        dedent("""
+            AUDIT (
+                name range_check
+            );
+
+            SELECT * FROM @this_model
+            WHERE @column < @min_value OR @column > @max_value
+        """),
+    )
+
+    # Create a model with its own audits in addition to defaults
+    create_temp_file(
+        tmp_path,
+        models_dir / "products.sql",
+        dedent("""
+            MODEL (
+                name test.products,
+                kind FULL,
+                audits (
+                    range_check(column := price, min_value := 0, max_value := 10000)
+                )
+            );
+
+            SELECT
+                1 AS product_id,
+                'Widget' AS product_name,
+                99.99 AS price
+            UNION ALL
+            SELECT
+                2 AS product_id,
+                'Gadget' AS product_name,
+                149.99 AS price
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [product_id, product_name])",
+                "unique_values(columns := [product_id])",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has both default and model-specific audits
+    model = context.get_model("test.products")
+    assert len(model.audits) == 3
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+    assert "range_check" in audit_names
+
+    # Verify audit execution order, default audits first then model-specific
+    assert model.audits[0][0] == "not_null"
+    assert model.audits[1][0] == "unique_values"
+    assert model.audits[2][0] == "range_check"
+
+
+@pytest.mark.slow
+def test_default_audits_with_custom_audit_definitions(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(exist_ok=True)
+    audits_dir = tmp_path / "audits"
+    audits_dir.mkdir(exist_ok=True)
+
+    # Create custom audit definition
+    create_temp_file(
+        tmp_path,
+        audits_dir / "positive_amount.sql",
+        dedent("""
+            AUDIT (
+                name positive_amount
+            );
+
+            SELECT * FROM @this_model
+            WHERE @column <= 0
+        """),
+    )
+
+    # Create a model
+    create_temp_file(
+        tmp_path,
+        models_dir / "transactions.sql",
+        dedent("""
+            MODEL (
+                name test.transactions,
+                kind FULL
+            );
+
+            SELECT
+                1 AS transaction_id,
+                'TXN001' AS transaction_code,
+                250.00 AS amount,
+                '2024-01-01'::DATE AS transaction_date
+            UNION ALL
+            SELECT
+                2 AS transaction_id,
+                'TXN002' AS transaction_code,
+                150.00 AS amount,
+                '2024-01-02'::DATE AS transaction_date
+        """),
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(
+            dialect="duckdb",
+            audits=[
+                "not_null(columns := [transaction_id, transaction_code])",
+                "unique_values(columns := [transaction_id])",
+                "positive_amount(column := amount)",
+            ],
+        )
+    )
+
+    context = Context(paths=tmp_path, config=config)
+
+    # Create and apply plan
+    plan = context.plan("prod", no_prompts=True)
+    context.apply(plan)
+
+    # Verify model has all default audits including custom
+    model = context.get_model("test.transactions")
+    assert len(model.audits) == 3
+
+    audit_names = [audit[0] for audit in model.audits]
+    assert "not_null" in audit_names
+    assert "unique_values" in audit_names
+    assert "positive_amount" in audit_names
+
+    # Verify custom audit arguments
+    for audit_name, audit_args in model.audits:
+        if audit_name == "positive_amount":
+            assert "column" in audit_args
+            assert audit_args["column"].name == "amount"
+
+
+def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+            forward_only true,
+            on_destructive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                2 as id,
+                3 as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+        assert updated_df["new_column"].dropna().tolist() == [3]
+
+    with time_machine.travel("2023-01-11 00:00:00 UTC"):
+        updated_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                2 as id,
+                CAST(4 AS STRING) as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+        """
+        (models_dir / "test_model.sql").write_text(updated_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True, run=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 3
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+        # The destructive change was ignored but this change is coercable and therefore we still return ints
+        assert updated_df["new_column"].dropna().tolist() == [3, 4]
+
+    with time_machine.travel("2023-01-12 00:00:00 UTC"):
+        updated_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                2 as id,
+                CAST(5 AS STRING) as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+        """
+        (models_dir / "test_model.sql").write_text(updated_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        # Make the change compatible since that means we will attempt and alter now that is considered additive
+        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+            exp.DataType.build("INT"): {exp.DataType.build("STRING")}
+        }
+        context.plan("prod", auto_apply=True, no_prompts=True, run=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 4
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+        # The change is now reflected since an additive alter could be performed
+        assert updated_df["new_column"].dropna().tolist() == ["3", "4", "5"]
+
+    context.close()
+
+
+def test_incremental_by_unique_key_model_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_UNIQUE_KEY (
+            unique_key id,
+            forward_only true,
+            on_destructive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key id,
+                    forward_only true,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                2 as id,
+                3 as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_incremental_unmanaged_model_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_UNMANAGED(
+            on_destructive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_ds as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_UNMANAGED(
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                2 as id,
+                3 as new_column,
+                @start_ds as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_scd_type_2_by_time_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind SCD_TYPE_2_BY_TIME (
+            unique_key id,
+            updated_at_name ds,
+            on_destructive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        *,
+        1 as id,
+        'test_name' as name,
+        @start_dt as ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind SCD_TYPE_2_BY_TIME (
+                    unique_key id,
+                    updated_at_name ds,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                *,
+                1 as id,
+                3 as new_column,
+                @start_dt as ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_scd_type_2_by_column_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+        MODEL (
+            name test_model,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key id,
+                columns [name],
+                on_destructive_change ignore
+            ),
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *,
+            1 as id,
+            'test_name' as name,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+        MODEL (
+            name test_model,
+            kind SCD_TYPE_2_BY_COLUMN (
+                unique_key id,
+                columns [new_column],
+                on_destructive_change ignore
+            ),
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *,
+            1 as id,
+            3 as new_column,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_incremental_partition_ignore_destructive_change(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_PARTITION (
+                on_destructive_change ignore
+            ),
+            partitioned_by [ds],
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *,
+            1 as id,
+            'test_name' as name,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("CREATE TABLE source_table (source_id INT)")
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (1)")
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_PARTITION (
+                on_destructive_change ignore
+            ),
+            partitioned_by [ds],
+            start '2023-01-01',
+            cron '@daily'
+        );
+
+        SELECT
+            *,
+            1 as id,
+            3 as new_column,
+            @start_ds as ds
+        FROM
+            source_table;
+        """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+
+        assert len(updated_df) == 1
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.run()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "source_id" in initial_df.columns
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+
+    context.close()
+
+
+def test_incremental_by_time_model_ignore_destructive_change_unit_test(tmp_path: Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    data_filepath = data_dir / "test.duckdb"
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    test_filepath = test_dir / "test_test_model.yaml"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        default_connection=DuckDBConnectionConfig(database=str(data_filepath)),
+    )
+
+    # Initial model with 3 columns
+    initial_model = f"""
+    MODEL (
+        name test_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+            forward_only true,
+            on_destructive_change ignore
+        ),
+        start '2023-01-01',
+        cron '@daily'
+    );
+
+    SELECT
+        id,
+        name,
+        ds
+    FROM
+        source_table;
+    """
+
+    # Write initial model
+    (models_dir / "test_model.sql").write_text(initial_model)
+
+    initial_test = f"""
+
+test_test_model:
+  model: test_model
+  inputs:
+    source_table:
+      - id: 1
+        name: 'test_name'
+        ds: '2025-01-01'
+  outputs:
+    query:
+      - id: 1
+        name: 'test_name'
+        ds: '2025-01-01'
+"""
+
+    # Write initial test
+    test_filepath.write_text(initial_test)
+
+    with time_machine.travel("2023-01-08 00:00:00 UTC"):
+        # Create context and apply initial model
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute(
+            "CREATE TABLE source_table (id INT, name STRING, new_column INT, ds STRING)"
+        )
+        context.engine_adapter.execute(
+            "INSERT INTO source_table VALUES (1, 'test_name', NULL, '2023-01-01')"
+        )
+
+        # Apply initial plan and load data
+        context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+        test_result = context.test()
+
+        # Verify initial data was loaded
+        initial_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(initial_df) == 1
+        assert "id" in initial_df.columns
+        assert "name" in initial_df.columns
+        assert "ds" in initial_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+        context.close()
+
+        # remove `name` column and add new column
+        initial_model = """
+            MODEL (
+                name test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds,
+                    forward_only true,
+                    on_destructive_change ignore
+                ),
+                start '2023-01-01',
+                cron '@daily'
+            );
+
+            SELECT
+                id,
+                new_column,
+                ds
+            FROM
+                source_table;
+            """
+        (models_dir / "test_model.sql").write_text(initial_model)
+
+        updated_test = f"""
+
+        test_test_model:
+          model: test_model
+          inputs:
+            source_table:
+              - id: 1
+                new_column: 3
+                ds: '2025-01-01'
+          outputs:
+            query:
+              - id: 1
+                new_column: 3
+                ds: '2025-01-01'
+        """
+
+        # Write initial test
+        test_filepath.write_text(updated_test)
+
+        context = Context(paths=[tmp_path], config=config)
+        context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+        test_result = context.test()
+
+        # Verify data loading continued to work
+        # The existing data should still be there and new data should be loaded
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 1
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+        context.close()
+
+    with time_machine.travel("2023-01-10 00:00:00 UTC"):
+        context = Context(paths=[tmp_path], config=config)
+        context.engine_adapter.execute("INSERT INTO source_table VALUES (2, NULL, 3, '2023-01-09')")
+        context.run()
+        test_result = context.test()
+        updated_df = context.fetchdf('SELECT * FROM "default"."test_model"')
+        assert len(updated_df) == 2
+        assert "id" in updated_df.columns
+        assert "ds" in updated_df.columns
+        # name is still in table since destructive was ignored
+        assert "name" in updated_df.columns
+        # new_column is added since it is additive and allowed
+        assert "new_column" in updated_df.columns
+        assert len(test_result.successes) == 1
+        assert test_result.testsRun == len(test_result.successes)
+
+    context.close()

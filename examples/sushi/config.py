@@ -1,5 +1,6 @@
 import os
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode, TableNamingConvention
 from sqlmesh.core.config import (
     AutoCategorizationMode,
     BigQueryConnectionConfig,
@@ -26,6 +27,11 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 defaults = {"dialect": "duckdb"}
 model_defaults = ModelDefaultsConfig(**defaults)
 model_defaults_iceberg = ModelDefaultsConfig(**defaults, storage_format="iceberg")
+before_all = [
+    "CREATE SCHEMA IF NOT EXISTS raw",
+    "DROP VIEW IF EXISTS raw.demographics",
+    "CREATE VIEW raw.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+]
 
 
 # A DuckDB config, in-memory by default.
@@ -51,6 +57,7 @@ config = Config(
             "nomissingexternalmodels",
         ],
     ),
+    before_all=before_all,
 )
 
 bigquery_config = Config(
@@ -62,6 +69,7 @@ bigquery_config = Config(
     },
     default_gateway="bq",
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 # A configuration used for SQLMesh tests.
@@ -74,6 +82,17 @@ test_config = Config(
         )
     ),
     model_defaults=model_defaults,
+    before_all=before_all,
+)
+
+# A configuration used for SQLMesh tests with virtual environment mode set to DEV_ONLY.
+test_config_virtual_environment_mode_dev_only = test_config.copy(
+    update={
+        "virtual_environment_mode": VirtualEnvironmentMode.DEV_ONLY,
+        "plan": PlanConfig(
+            auto_categorize_changes=CategorizerConfig.all_full(),
+        ),
+    },
 )
 
 # A DuckDB config with a physical schema map.
@@ -81,6 +100,7 @@ map_config = Config(
     default_connection=DuckDBConnectionConfig(),
     physical_schema_mapping={"^sushi$": "company_internal"},
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 # A config representing isolated systems with a gateway per system
@@ -92,6 +112,7 @@ isolated_systems_config = Config(
     },
     default_gateway="dev",
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 required_approvers_config = Config(
@@ -126,6 +147,7 @@ required_approvers_config = Config(
         ),
     ],
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 
@@ -133,12 +155,13 @@ environment_suffix_table_config = Config(
     default_connection=DuckDBConnectionConfig(),
     model_defaults=model_defaults,
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+    before_all=before_all,
 )
 
 environment_suffix_catalog_config = environment_suffix_table_config.model_copy(
     update={
         "environment_suffix_target": EnvironmentSuffixTarget.CATALOG,
-    }
+    },
 )
 
 CATALOGS = {
@@ -150,6 +173,7 @@ local_catalogs = Config(
     default_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     default_test_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
     model_defaults=model_defaults,
+    before_all=before_all,
 )
 
 environment_catalog_mapping_config = Config(
@@ -166,4 +190,13 @@ environment_catalog_mapping_config = Config(
         "^prod$": "prod_catalog",
         ".*": "dev_catalog",
     },
+    before_all=before_all,
+)
+
+hash_md5_naming_config = config.copy(
+    update={"physical_table_naming_convention": TableNamingConvention.HASH_MD5}
+)
+
+table_only_naming_config = config.copy(
+    update={"physical_table_naming_convention": TableNamingConvention.TABLE_ONLY}
 )

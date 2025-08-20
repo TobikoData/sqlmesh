@@ -222,7 +222,9 @@ class ContextDiff(PydanticModel):
             infer_python_dependencies=infer_python_dependencies,
         )
 
-        previous_environment_statements = state_reader.get_environment_statements(environment)
+        previous_environment_statements = (
+            state_reader.get_environment_statements(env.name) if env else []
+        )
 
         if existing_env and always_recreate_environment:
             previous_plan_id: t.Optional[str] = existing_env.plan_id
@@ -288,7 +290,7 @@ class ContextDiff(PydanticModel):
             previous_finalized_snapshots=env.previous_finalized_snapshots,
             previous_requirements=env.requirements,
             requirements=env.requirements,
-            previous_environment_statements=[],
+            previous_environment_statements=environment_statements,
             environment_statements=environment_statements,
             previous_gateway_managed_virtual_layer=env.gateway_managed,
             gateway_managed_virtual_layer=env.gateway_managed,

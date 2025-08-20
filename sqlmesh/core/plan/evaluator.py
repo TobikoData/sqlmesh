@@ -205,6 +205,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                     success=completion_status is not None and completion_status.is_success
                 )
 
+    def visit_physical_layer_schema_creation_stage(
+        self, stage: stages.PhysicalLayerSchemaCreationStage, plan: EvaluatablePlan
+    ) -> None:
+        try:
+            self.snapshot_evaluator.create_physical_schemas(
+                stage.snapshots, stage.deployability_index
+            )
+        except Exception as ex:
+            raise PlanError("Plan application failed.") from ex
+
     def visit_backfill_stage(self, stage: stages.BackfillStage, plan: EvaluatablePlan) -> None:
         if plan.empty_backfill:
             intervals_to_add = []
@@ -235,11 +245,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         scheduler = self.create_scheduler(stage.all_snapshots.values(), self.snapshot_evaluator)
-        # Convert model name restatements to snapshot ID restatements
-        restatements_by_snapshot_id = {
-            stage.all_snapshots[name].snapshot_id: interval
-            for name, interval in plan.restatements.items()
-        }
         errors, _ = scheduler.run_merged_intervals(
             merged_intervals=stage.snapshot_to_intervals,
             deployability_index=stage.deployability_index,
@@ -248,7 +253,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             circuit_breaker=self._circuit_breaker,
             start=plan.start,
             end=plan.end,
-            restatements=restatements_by_snapshot_id,
+            allow_destructive_snapshots=plan.allow_destructive_models,
+            selected_snapshot_ids=stage.selected_snapshot_ids,
         )
         if errors:
             raise PlanError("Plan application failed.")

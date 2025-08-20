@@ -139,10 +139,6 @@ def assert_new_env(result, new_env="prod", from_env="prod", initialize=True) -> 
     ) in result.output
 
 
-def assert_physical_layer_updated(result) -> None:
-    assert "Physical layer updated" in result.output
-
-
 def assert_model_batches_executed(result) -> None:
     assert "Model batches executed" in result.output
 
@@ -152,7 +148,6 @@ def assert_virtual_layer_updated(result) -> None:
 
 
 def assert_backfill_success(result) -> None:
-    assert_physical_layer_updated(result)
     assert_model_batches_executed(result)
     assert_virtual_layer_updated(result)
 
@@ -1954,21 +1949,13 @@ def test_init_dbt_template(runner: CliRunner, tmp_path: Path):
     )
     assert result.exit_code == 0
 
-    config_path = tmp_path / "config.py"
+    config_path = tmp_path / "sqlmesh.yaml"
     assert config_path.exists()
 
-    with open(config_path) as file:
-        config = file.read()
+    config = config_path.read_text()
 
-    assert (
-        config
-        == """from pathlib import Path
-
-from sqlmesh.dbt.loader import sqlmesh_config
-
-config = sqlmesh_config(Path(__file__).parent)
-"""
-    )
+    assert "model_defaults" in config
+    assert "start:" in config
 
 
 @time_machine.travel(FREEZE_TIME)

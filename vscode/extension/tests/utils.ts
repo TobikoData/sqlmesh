@@ -14,6 +14,14 @@ export const SUSHI_SOURCE_PATH = path.join(
   'examples',
   'sushi',
 )
+export const MULTI_SOURCE_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'examples',
+  'multi',
+)
 export const REPO_ROOT = path.join(__dirname, '..', '..', '..')
 
 /**
@@ -215,11 +223,13 @@ export const waitForLoadedSQLMesh = (page: Page) =>
  */
 export const openServerPage = async (
   page: Page,
-  tempDir: string,
+  targetPath: string,
   context: CodeServerContext,
 ) => {
+  const isWorkspace = targetPath.endsWith('.code-workspace')
+  const param = isWorkspace ? 'workspace' : 'folder'
   await page.goto(
-    `http://127.0.0.1:${context.codeServerPort}/?folder=${tempDir}`,
+    `http://127.0.0.1:${context.codeServerPort}/?${param}=${targetPath}`,
   )
   await page.waitForLoadState('networkidle')
   await page.waitForSelector('[role="application"]', { timeout: 10000 })

@@ -135,7 +135,7 @@ def test_model_to_sqlmesh_fields():
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
     assert (
         kind.merge_filter.sql(dialect=model.dialect)
-        == """55 > "__merge_source__"."b" AND "__merge_target__"."session_start" > CURRENT_DATE + INTERVAL '7' DAY"""
+        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7' DAY"""
     )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
@@ -650,6 +650,28 @@ def test_postgres_config():
         "outputs",
         "dev",
     )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-postgres:
+          target: dev
+          outputs:
+            dev:
+              type: postgres
+              host: postgres
+              user: postgres
+              pass: postgres
+              port: 5432
+              dbname: postgres
+              schema: demo
+              threads: 3
+              keepalives_idle: 0
+        """,
+        PostgresConfig,
+        "dbt-postgres",
+        "outputs",
+        "dev",
+    )
 
 
 def test_redshift_config():
@@ -663,6 +685,28 @@ def test_redshift_config():
               host: hostname.region.redshift.amazonaws.com
               user: username
               password: password1
+              port: 5439
+              dbname: analytics
+              schema: analytics
+              threads: 4
+              ra3_node: false
+        """,
+        RedshiftConfig,
+        "dbt-redshift",
+        "outputs",
+        "dev",
+    )
+    # 'pass' field instead of 'password'
+    _test_warehouse_config(
+        """
+        dbt-redshift:
+          target: dev
+          outputs:
+            dev:
+              type: redshift
+              host: hostname.region.redshift.amazonaws.com
+              user: username
+              pass: password1
               port: 5439
               dbname: analytics
               schema: analytics
@@ -895,10 +939,10 @@ def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
     config = sqlmesh_config(dbt_project_dir)
-    assert config.gateways["in_memory"].connection.register_comments
-
-    config = sqlmesh_config(dbt_project_dir, register_comments=False)
     assert not config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=True)
+    assert config.gateways["in_memory"].connection.register_comments
 
 
 def test_custom_dbt_loader():

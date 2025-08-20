@@ -15,6 +15,7 @@ except ImportError:
     SUPPORTS_DELIMITER = False
 from sqlglot import exp
 
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.column import ColumnConfig
@@ -38,7 +39,10 @@ class SeedConfig(BaseModelConfig):
     quote_columns: t.Optional[bool] = False
 
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
@@ -54,35 +58,34 @@ class SeedConfig(BaseModelConfig):
             kwargs = self.sqlmesh_model_kwargs(context)
 
         columns = kwargs.get("columns") or {}
-        descriptions = kwargs.get("column_descriptions") or {}
-        missing_types = (set(descriptions) | set(self.columns)) - set(columns)
-        if not columns or missing_types:
-            agate_table = (
-                agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
-                if SUPPORTS_DELIMITER
-                else agate_helper.from_csv(seed_path, [])
-            )
-            inferred_types = {
-                name: AGATE_TYPE_MAPPING[tpe.__class__]
-                for name, tpe in zip(agate_table.column_names, agate_table.column_types)
-            }
 
-            # The columns list built from the mixture of supplied and inferred types needs to
-            # be in the same order as the data for assumptions elsewhere in the codebase to hold true
-            new_columns = {}
-            for column_name in agate_table.column_names:
-                if (column_name in missing_types) or (column_name not in columns):
-                    new_columns[column_name] = inferred_types[column_name]
-                else:
-                    new_columns[column_name] = columns[column_name]
+        agate_table = (
+            agate_helper.from_csv(seed_path, [], delimiter=self.delimiter)
+            if SUPPORTS_DELIMITER
+            else agate_helper.from_csv(seed_path, [])
+        )
+        inferred_types = {
+            name: AGATE_TYPE_MAPPING[tpe.__class__]
+            for name, tpe in zip(agate_table.column_names, agate_table.column_types)
+        }
 
-            kwargs["columns"] = new_columns
+        # The columns list built from the mixture of supplied and inferred types needs to
+        # be in the same order as the data for assumptions elsewhere in the codebase to hold true
+        new_columns = {}
+        for column_name in agate_table.column_names:
+            if column_name not in columns:
+                new_columns[column_name] = inferred_types[column_name]
+            else:
+                new_columns[column_name] = columns[column_name]
+
+        kwargs["columns"] = new_columns
 
         return create_seed_model(
             self.canonical_name(context),
             SeedKind(path=seed_path),
             dialect=self.dialect(context),
             audit_definitions=audit_definitions,
+            virtual_environment_mode=virtual_environment_mode,
             **kwargs,
         )
 

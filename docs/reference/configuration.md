@@ -46,6 +46,7 @@ Configuration options for how SQLMesh manages environment creation and promotion
 | `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema`, `table` or `catalog` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                      | string               | N        |
 | `gateway_managed_virtual_layer`   | Whether SQLMesh views of the virtual layer will be created by the default gateway or model specified gateways - [additional details](../guides/multi_engine.md#gateway-managed-virtual-layer). (Default: False)                                                                                | boolean              | N        |
 | `environment_catalog_mapping` | A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.                                                                                                                                                             | dict[string, string] | N        |
+| `virtual_environment_mode` | Determines the Virtual Data Environment (VDE) mode. If set to `full`, VDE is used in both production and development environments. The `dev_only` option enables VDE only in development environments, while in production, no virtual layer is used and models are materialized directly using their original names (i.e., no versioned physical tables). (Default: `full`) | string | N |
 
 ### Models
 
@@ -141,7 +142,7 @@ SQLMesh UI settings.
 
 The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
 
-It takes one or more named `gateway` configuration keys, each of which can define its own connections. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+It takes one or more named `gateway` configuration keys, each of which can define its own connections. **Gateway names are case-insensitive** - SQLMesh normalizes all gateway names to lowercase during configuration validation, allowing you to use any case when referencing gateways. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
 
 For example, a project might configure the `gate1` and `gate2` gateways:
 
@@ -247,7 +248,7 @@ If a configuration contains multiple gateways, SQLMesh will use the first one in
 
 | Option            | Description                                                                                                                  |  Type  | Required |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
-| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option) | string |    N     |
+| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option). Gateway names are case-insensitive. | string |    N     |
 
 ### Default connections/scheduler
 

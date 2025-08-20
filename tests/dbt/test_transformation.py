@@ -177,12 +177,12 @@ def test_model_kind():
     expected_sqlmesh_predicate = parse_one(
         "__MERGE_TARGET__.session_start > DATEADD(day, -7, CURRENT_DATE)"
     )
-    ModelConfig(
+    assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         unique_key=["bar"],
         incremental_strategy="merge",
         dialect="postgres",
-        merge_filter=[dbt_incremental_predicate],
+        incremental_predicates=[dbt_incremental_predicate],
     ).model_kind(context) == IncrementalByUniqueKeyKind(
         unique_key=["bar"],
         dialect="postgres",
@@ -237,6 +237,16 @@ def test_model_kind():
         disable_restatement=True,
         auto_restatement_cron="0 0 * * *",
     )
+
+    # Test incompatibile incremental strategies
+    for incremental_strategy in ("delete+insert", "insert_overwrite", "append"):
+        assert ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy=incremental_strategy,
+        ).model_kind(context) == IncrementalByUniqueKeyKind(
+            unique_key=["bar"], dialect="duckdb", forward_only=True, disable_restatement=False
+        )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
@@ -372,25 +382,6 @@ def test_model_kind():
         == ManagedKind()
     )
 
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="delete+insert",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="insert_overwrite",
-        ).model_kind(context)
-    with pytest.raises(ConfigError):
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            unique_key=["bar"],
-            incremental_strategy="append",
-        ).model_kind(context)
-
 
 def test_model_kind_snapshot_bigquery():
     context = DbtContext()
@@ -480,22 +471,18 @@ def test_seed_columns():
         package="package",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         columns={
-            "address": ColumnConfig(
-                name="address", data_type="text", description="Business address"
-            ),
-            "zipcode": ColumnConfig(
-                name="zipcode", data_type="text", description="Business zipcode"
-            ),
+            "id": ColumnConfig(name="id", data_type="text", description="The ID"),
+            "name": ColumnConfig(name="name", data_type="text", description="The name"),
         },
     )
 
     expected_column_types = {
-        "address": exp.DataType.build("text"),
-        "zipcode": exp.DataType.build("text"),
+        "id": exp.DataType.build("text"),
+        "name": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
-        "address": "Business address",
-        "zipcode": "Business zipcode",
+        "id": "The ID",
+        "name": "The name",
     }
 
     context = DbtContext()
@@ -512,21 +499,21 @@ def test_seed_column_types():
         package="package",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         column_types={
-            "address": "text",
-            "zipcode": "text",
+            "id": "text",
+            "name": "text",
         },
         columns={
-            "zipcode": ColumnConfig(name="zipcode", description="Business zipcode"),
+            "name": ColumnConfig(name="name", description="The name"),
         },
         quote_columns=True,
     )
 
     expected_column_types = {
-        "address": exp.DataType.build("text"),
-        "zipcode": exp.DataType.build("text"),
+        "id": exp.DataType.build("text"),
+        "name": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
-        "zipcode": "Business zipcode",
+        "name": "The name",
     }
 
     context = DbtContext()
@@ -863,13 +850,40 @@ def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
-    with patch.object(logger, "debug") as mock_logger:
-        assert renderer('{{ log("foo") }}') == ""
-    assert "foo" in mock_logger.call_args[0][0]
 
-    with patch.object(logger, "debug") as mock_logger:
+    # Test log with info=False (default), should only log to file with debug and not to console
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
+        assert renderer('{{ log("foo") }}') == ""
+        mock_debug.assert_called_once()
+        assert "foo" in mock_debug.call_args[0][0]
+        mock_info.assert_not_called()
+        mock_console.assert_not_called()
+
+    # Test log with info=True, should log to info and also call log_status_update
+    with (
+        patch.object(logger, "debug") as mock_debug,
+        patch.object(logger, "info") as mock_info,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
+        assert renderer('{{ log("output to be logged with info", info=true) }}') == ""
+        mock_info.assert_called_once()
+        assert "output to be logged with info" in mock_info.call_args[0][0]
+        mock_debug.assert_not_called()
+        mock_console.assert_called_once()
+        assert "output to be logged with info" in mock_console.call_args[0][0]
+
+    # Test print function as well, should use debug
+    with (
+        patch.object(logger, "debug") as mock_logger,
+        patch.object(get_console(), "log_status_update") as mock_console,
+    ):
         assert renderer('{{ print("bar") }}') == ""
-    assert "bar" in mock_logger.call_args[0][0]
+        assert "bar" in mock_logger.call_args[0][0]
+        mock_console.assert_not_called()
 
 
 @pytest.mark.xdist_group("dbt_manifest")
@@ -1592,6 +1606,7 @@ def test_on_run_start_end():
     assert root_environment_statements.after_all == [
         "JINJA_STATEMENT_BEGIN;\n{{ create_tables(schemas) }}\nJINJA_END;",
         "JINJA_STATEMENT_BEGIN;\nDROP TABLE to_be_executed_last;\nJINJA_END;",
+        "JINJA_STATEMENT_BEGIN;\n{{ graph_usage() }}\nJINJA_END;",
     ]
 
     assert root_environment_statements.jinja_macros.root_package_name == "sushi"
@@ -1612,6 +1627,7 @@ def test_on_run_start_end():
         snapshots=sushi_context.snapshots,
         runtime_stage=RuntimeStage.AFTER_ALL,
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
+        engine_adapter=sushi_context.engine_adapter,
     )
 
     assert rendered_before_all == [
@@ -1621,12 +1637,35 @@ def test_on_run_start_end():
     ]
 
     # The jinja macro should have resolved the schemas for this environment and generated corresponding statements
-    assert sorted(rendered_after_all) == sorted(
-        [
-            "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
-            "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
-            "DROP TABLE to_be_executed_last",
-        ]
+    expected_statements = [
+        "CREATE OR REPLACE TABLE schema_table_snapshots__dev AS SELECT 'snapshots__dev' AS schema",
+        "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
+        "DROP TABLE to_be_executed_last",
+    ]
+    assert sorted(rendered_after_all[:-1]) == sorted(expected_statements)
+
+    # Assert the models with their materialisations are present in the rendered graph_table statement
+    graph_table_stmt = rendered_after_all[-1]
+    assert "'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert "'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized" in graph_table_stmt
+    assert "'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized" in graph_table_stmt
+    assert (
+        "'model.sushi.waiter_as_customer_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert "'model.sushi.top_waiters' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert "'model.customers.customers' AS unique_id, 'view' AS materialized" in graph_table_stmt
+    assert (
+        "'model.customers.customer_revenue_by_day' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v1' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
+    )
+    assert (
+        "'model.sushi.waiter_revenue_by_day.v2' AS unique_id, 'incremental' AS materialized"
+        in graph_table_stmt
     )
 
     # Nested dbt_packages on run start / on run end
@@ -1661,6 +1700,7 @@ def test_on_run_start_end():
         snapshots=sushi_context.snapshots,
         runtime_stage=RuntimeStage.AFTER_ALL,
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
+        engine_adapter=sushi_context.engine_adapter,
     )
 
     # Validate order of execution to match dbt's

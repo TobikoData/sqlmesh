@@ -38,7 +38,7 @@ def test_insert_overwrite_by_time_partition_query(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -68,7 +68,7 @@ def test_insert_overwrite_by_partition_query(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("DATETIME"),
         },
@@ -111,7 +111,7 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
         ],
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("unknown"),
             "ds": exp.DataType.build("UNKNOWN"),
         },
@@ -176,7 +176,7 @@ def test_insert_overwrite_by_time_partition_pandas(
         end="2022-01-05",
         time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
-        columns_to_types={
+        target_columns_to_types={
             "a": exp.DataType.build("int"),
             "ds": exp.DataType.build("string"),
         },
@@ -205,7 +205,7 @@ def test_insert_overwrite_by_time_partition_pandas(
     assert load_temp_table.kwargs["job_config"].write_disposition is None
     assert (
         merge_sql.sql(dialect="bigquery")
-        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT `a`, `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
+        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT `a`, `ds` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`ds` AS STRING) AS `ds` FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
     )
     assert (
         drop_temp_table_sql.sql(dialect="bigquery")
@@ -295,7 +295,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM (SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM `project`.`dataset`.`temp_table`) AS `_subquery`",
         "DROP TABLE IF EXISTS `project`.`dataset`.`temp_table`",
     ]
 
@@ -431,7 +431,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
@@ -488,7 +488,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     adapter.merge(
         target_table="target",
         source_table=df,
-        columns_to_types={
+        target_columns_to_types={
             "id": exp.DataType.build("INT"),
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("INT"),
@@ -498,7 +498,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
 
     sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT `id`, `ts`, `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(`id` AS INT64) AS `id`, CAST(`ts` AS DATETIME) AS `ts`, CAST(`val` AS INT64) AS `val` FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
         "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)",
         "DROP TABLE IF EXISTS project.dataset.temp_table",
@@ -733,14 +733,14 @@ def test_nested_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerF
 
     adapter.create_table(
         "test_table",
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 
     adapter.ctas(
         "test_table",
         parse_one("SELECT * FROM source_table"),
-        columns_to_types=nested_columns_to_types,
+        target_columns_to_types=nested_columns_to_types,
         column_descriptions=long_column_descriptions,
     )
 
@@ -1072,3 +1072,81 @@ def test_get_alter_expressions_includes_catalog(
     assert schema.db == "bar"
     assert schema.sql(dialect="bigquery") == "catalog2.bar"
     assert tables == {"bing"}
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_still_running(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-123"
+    mock_job.done.return_value = False  # Job is still running
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked and cancellation was called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_called_once()
+
+
+def test_job_cancellation_on_keyboard_interrupt_job_already_done(mocker: MockerFixture):
+    # Create a mock connection
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    # Mock the query job
+    mock_job = mocker.Mock()
+    mock_job.project = "test-project"
+    mock_job.location = "us-central1"
+    mock_job.job_id = "test-job-456"
+    mock_job.done.return_value = True  # Job is already done
+    mock_job.result.side_effect = KeyboardInterrupt()
+    mock_job._query_results = mocker.Mock()
+    mock_job._query_results.total_rows = 0
+    mock_job._query_results.schema = []
+
+    # Set up the client to return our mock job
+    connection_mock._client.query.return_value = mock_job
+
+    # Create adapter with the mocked connection
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
+
+    # Execute a query and expect KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        adapter.execute("SELECT 1")
+
+    # Ensure the adapter's closed, so that the job can be aborted
+    adapter.close()
+
+    # Verify the job was created
+    connection_mock._client.query.assert_called_once()
+
+    # Verify job status was checked but cancellation was NOT called
+    mock_job.done.assert_called_once()
+    mock_job.cancel.assert_not_called()

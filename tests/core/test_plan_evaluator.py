@@ -69,10 +69,12 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, sushi_context.state_sync, sushi_context.default_catalog
     )
-    assert isinstance(stages[0], plan_stages.CreateSnapshotRecordsStage)
-    evaluator.visit_create_snapshot_records_stage(stages[0], evaluatable_plan)
-    assert isinstance(stages[1], plan_stages.PhysicalLayerUpdateStage)
-    evaluator.visit_physical_layer_update_stage(stages[1], evaluatable_plan)
+    assert isinstance(stages[1], plan_stages.CreateSnapshotRecordsStage)
+    evaluator.visit_create_snapshot_records_stage(stages[1], evaluatable_plan)
+    assert isinstance(stages[2], plan_stages.PhysicalLayerSchemaCreationStage)
+    evaluator.visit_physical_layer_schema_creation_stage(stages[2], evaluatable_plan)
+    assert isinstance(stages[3], plan_stages.BackfillStage)
+    evaluator.visit_backfill_stage(stages[3], evaluatable_plan)
 
     assert (
         len(sushi_context.state_sync.get_snapshots([new_model_snapshot, new_view_model_snapshot]))

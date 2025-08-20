@@ -271,13 +271,16 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.default_catalog,
     )
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
-    evaluatable_plan = plan.to_evaluatable()
+    evaluatable_plan = plan.to_evaluatable().copy(update={"skip_backfill": True})
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, context.state_sync, context.default_catalog
     )
     for stage in stages:
         if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
             plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.PhysicalLayerSchemaCreationStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_physical_layer_schema_creation_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
             stage.deployability_index = deployability_index
             plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)
@@ -438,7 +441,7 @@ def make_snapshot_on_destructive_change(make_snapshot: t.Callable) -> t.Callable
                     metadata_hash="test_metadata_hash",
                 ),
                 version="test_version",
-                change_category=SnapshotChangeCategory.FORWARD_ONLY,
+                change_category=SnapshotChangeCategory.NON_BREAKING,
                 dev_table_suffix="dev",
             ),
         )
@@ -470,6 +473,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         dialect: t.Optional[str] = None,
         register_comments: bool = True,
         default_catalog: t.Optional[str] = None,
+        patch_get_data_objects: bool = True,
         **kwargs: t.Any,
     ) -> T:
         connection_mock = mocker.NonCallableMock()
@@ -477,7 +481,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         connection_mock.cursor.return_value = cursor_mock
         cursor_mock.connection.return_value = connection_mock
         adapter = klass(
-            lambda: connection_mock,
+            lambda *args, **kwargs: connection_mock,
             dialect=dialect or klass.DIALECT,
             register_comments=register_comments,
             default_catalog=default_catalog,
@@ -493,6 +497,8 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
                 "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.catalog_support",
                 new_callable=PropertyMock(return_value=CatalogSupport.REQUIRES_SET_CATALOG),
             )
+        if patch_get_data_objects:
+            mocker.patch.object(adapter, "_get_data_objects", return_value=[])
         return adapter
 
     return _make_function

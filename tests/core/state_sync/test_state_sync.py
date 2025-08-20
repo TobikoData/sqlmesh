@@ -139,7 +139,7 @@ def test_push_snapshots(
         state_sync.push_snapshots([snapshot_a, snapshot_b])
 
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.version = "2"
 
     state_sync.push_snapshots([snapshot_a, snapshot_b])
@@ -258,7 +258,8 @@ def test_add_interval(
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
     intervals = get_snapshot_intervals(snapshot)
     assert intervals.intervals == [
@@ -1144,7 +1145,7 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 11000
 
@@ -1298,7 +1299,7 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1338,7 +1339,7 @@ def test_delete_expired_snapshots_shared_dev_table(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1430,7 +1431,7 @@ def test_delete_expired_snapshots_cleanup_intervals(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 12000
 
@@ -1497,7 +1498,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.updated_ts = now_ts - 5000
 
@@ -1612,7 +1613,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
         ),
     )
     new_snapshot.ttl = "in 10 seconds"
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = snapshot.version
     new_snapshot.dev_version_ = snapshot.dev_version
     new_snapshot.updated_ts = now_ts - 5000
@@ -1740,7 +1741,7 @@ def test_compact_intervals_after_cleanup(
     )
     snapshot_b.previous_versions = snapshot_a.all_versions
     snapshot_b.ttl = "in 10 seconds"
-    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot_b.updated_ts = now_ts - 12000
 
     # An indirect non-breaking change on top of the forward-only change. Not expired.
@@ -1872,7 +1873,7 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     new_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_snapshot.version = "a"
 
     assert not new_snapshot.unpaused_ts
@@ -1885,50 +1886,6 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     assert actual_snapshots[snapshot.snapshot_id].unrestorable
     assert not actual_snapshots[new_snapshot.snapshot_id].unrestorable
-
-
-def test_unpause_snapshots_hourly(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
-    snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 1, ds"),
-            cron="@hourly",
-        ),
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot.version = "a"
-
-    assert not snapshot.unpaused_ts
-    state_sync.push_snapshots([snapshot])
-
-    # Unpaused timestamp not aligned with cron
-    unpaused_dt = "2022-01-01 01:22:33"
-    state_sync.unpause_snapshots([snapshot], unpaused_dt)
-
-    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
-    assert actual_snapshot.unpaused_ts
-    assert actual_snapshot.unpaused_ts == to_timestamp("2022-01-01 01:00:00")
-
-    new_snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 2, ds"),
-            cron="@daily",
-            interval_unit="hour",
-        )
-    )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-
-    assert not new_snapshot.unpaused_ts
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
-
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
-    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(
-        "2022-01-01 01:00:00"
-    )
 
 
 def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -1974,7 +1931,7 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     new_forward_only_snapshot = make_snapshot(
         SqlModel(name="test_snapshot", query=parse_one("select 3, ds"), cron="@daily")
     )
-    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_forward_only_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     new_forward_only_snapshot.version = "a"
 
     assert not new_forward_only_snapshot.unpaused_ts
@@ -1995,7 +1952,7 @@ def test_unrestorable_snapshot(state_sync: EngineAdapterStateSync, make_snapshot
     assert not actual_snapshots[new_forward_only_snapshot.snapshot_id].unrestorable
 
 
-def test_unpause_snapshots_remove_intervals(
+def test_unrestorable_snapshot_target_not_forward_only(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     snapshot = make_snapshot(
@@ -2004,70 +1961,36 @@ def test_unpause_snapshots_remove_intervals(
             query=parse_one("select 1, ds"),
             cron="@daily",
         ),
-        version="a",
     )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
     snapshot.version = "a"
+
+    assert not snapshot.unpaused_ts
     state_sync.push_snapshots([snapshot])
-    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
 
-    new_snapshot = make_snapshot(
-        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
-        version="a",
+    unpaused_dt = "2022-01-01"
+    state_sync.unpause_snapshots([snapshot], unpaused_dt)
+
+    actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
+    assert actual_snapshot.unpaused_ts
+    assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
+
+    updated_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-    new_snapshot.effective_from = "2023-01-03"
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
-    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
+    updated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
+    updated_snapshot.version = "a"
 
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
-    assert actual_snapshots[snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
+    assert not updated_snapshot.unpaused_ts
+    state_sync.push_snapshots([updated_snapshot])
+    state_sync.unpause_snapshots([updated_snapshot], unpaused_dt)
 
+    actual_snapshots = state_sync.get_snapshots([snapshot, updated_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[updated_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
 
-def test_unpause_snapshots_remove_intervals_disabled_restatement(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
-    kind = dict(name="INCREMENTAL_BY_TIME_RANGE", time_column="ds", disable_restatement=True)
-    snapshot = make_snapshot(
-        SqlModel(
-            name="test_snapshot",
-            query=parse_one("select 1, ds"),
-            cron="@daily",
-            kind=kind,
-        ),
-        version="a",
-    )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshot.version = "a"
-    state_sync.push_snapshots([snapshot])
-    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
-
-    new_snapshot = make_snapshot(
-        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily", kind=kind),
-        version="a",
-    )
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    new_snapshot.version = "a"
-    new_snapshot.effective_from = "2023-01-03"
-    state_sync.push_snapshots([new_snapshot])
-    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
-    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
-
-    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
-    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
-    ]
-    # The intervals shouldn't have been removed because restatement is disabled
-    assert actual_snapshots[snapshot.snapshot_id].intervals == [
-        (to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
-    ]
+    assert actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[updated_snapshot.snapshot_id].unrestorable
 
 
 def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
@@ -2089,7 +2012,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
 
     with pytest.raises(
         SQLMeshError,
-        match=rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
+        match=rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '0.0.0' \(remote\). Please run a migration \('sqlmesh migrate' command\).",
     ):
         state_sync.get_versions()
 
@@ -2099,7 +2022,7 @@ def test_version_schema(state_sync: EngineAdapterStateSync, tmp_path) -> None:
     state_sync.version_state.update_versions(schema_version=SCHEMA_VERSION + 1)
     error = (
         rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}' \(remote\). "
-        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={SQLMESH_VERSION}"' command\)."""
+        rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={re.escape(SQLMESH_VERSION)}"' command\)."""
     )
 
     with pytest.raises(SQLMeshError, match=error):
@@ -2136,7 +2059,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
     # sqlmesh version is behind
     sqlmesh_version_minor_bump = f"{major}.{int(minor) + 1}.{patch}"
     error = (
-        rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
+        rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is behind '{sqlmesh_version_minor_bump}' \(remote\). "
         rf"""Please upgrade SQLMesh \('pip install --upgrade "sqlmesh=={sqlmesh_version_minor_bump}"' command\)."""
     )
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_bump)
@@ -2146,7 +2069,7 @@ def test_version_sqlmesh(state_sync: EngineAdapterStateSync) -> None:
 
     # sqlmesh version is ahead
     sqlmesh_version_minor_decrease = f"{major}.{int(minor) - 1}.{patch}"
-    error = rf"SQLMesh \(local\) is using version '{SQLMESH_VERSION}' which is ahead of '{sqlmesh_version_minor_decrease}'"
+    error = rf"SQLMesh \(local\) is using version '{re.escape(SQLMESH_VERSION)}' which is ahead of '{sqlmesh_version_minor_decrease}'"
     state_sync.version_state.update_versions(sqlmesh_version=sqlmesh_version_minor_decrease)
     with pytest.raises(SQLMeshError, match=error):
         state_sync.get_versions()
@@ -2282,7 +2205,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
@@ -2293,7 +2216,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     state_sync.engine_adapter.replace_query(
         "sqlmesh._environments",
         pd.read_json("tests/fixtures/migrations/environments.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "snapshots": exp.DataType.build("text"),
             "start_at": exp.DataType.build("text"),
@@ -2362,7 +2285,7 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types={
+        target_columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
@@ -2387,7 +2310,7 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
-        columns_to_types=snapshot_columns_to_types,
+        target_columns_to_types=snapshot_columns_to_types,
     )
 
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
@@ -2957,6 +2880,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 1,
                 1,
                 False,
+                False,
                 None,
             ],
             [
@@ -2968,6 +2892,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "2",
                 1,
                 1,
+                False,
                 False,
                 None,
             ],
@@ -2982,6 +2907,7 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
                 "3",
                 1,
                 1,
+                False,
                 False,
                 None,
             ],
@@ -3019,7 +2945,7 @@ def test_seed_model_metadata_update(
     model = model.copy(update={"owner": "jen"})
     new_snapshot = make_snapshot(model)
     new_snapshot.previous_versions = snapshot.all_versions
-    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
 
     assert snapshot.fingerprint != new_snapshot.fingerprint
     assert snapshot.version == new_snapshot.version

@@ -494,7 +494,7 @@ class TableDiff:
             schema = to_schema(temp_schema, dialect=self.dialect)
             temp_table = exp.table_("diff", db=schema.db, catalog=schema.catalog, quoted=True)
 
-            temp_table_kwargs = {}
+            temp_table_kwargs: t.Dict[str, t.Any] = {}
             if isinstance(self.adapter, AthenaEngineAdapter):
                 # Athena has two table formats: Hive (the default) and Iceberg. TableDiff requires that
                 # the formats be the same for the source, target, and temp tables.
@@ -512,7 +512,7 @@ class TableDiff:
                     )
 
             with self.adapter.temp_table(
-                query, name=temp_table, columns_to_types=None, **temp_table_kwargs
+                query, name=temp_table, target_columns_to_types=None, **temp_table_kwargs
             ) as table:
                 summary_sums = [
                     exp.func("SUM", "s_exists").as_("s_count"),

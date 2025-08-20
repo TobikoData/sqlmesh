@@ -31,6 +31,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -194,18 +195,22 @@ class MSSQLEngineAdapter(
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
         merge_filter: t.Optional[exp.Expression] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
         mssql_merge_exists = kwargs.get("physical_properties", {}).get("mssql_merge_exists")
 
-        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
-            source_table, columns_to_types, target_table=target_table
+        source_queries, target_columns_to_types = self._get_source_queries_and_columns_to_types(
+            source_table,
+            target_columns_to_types,
+            target_table=target_table,
+            source_columns=source_columns,
         )
-        columns_to_types = columns_to_types or self.columns(target_table)
+        target_columns_to_types = target_columns_to_types or self.columns(target_table)
         on = exp.and_(
             *(
                 add_table(part, MERGE_TARGET_ALIAS).eq(add_table(part, MERGE_SOURCE_ALIAS))
@@ -218,7 +223,9 @@ class MSSQLEngineAdapter(
         match_expressions = []
         if not when_matched:
             unique_key_names = [y.name for y in unique_key]
-            columns_to_types_no_keys = [c for c in columns_to_types if c not in unique_key_names]
+            columns_to_types_no_keys = [
+                c for c in target_columns_to_types if c not in unique_key_names
+            ]
 
             target_columns_no_keys = [
                 exp.column(c, MERGE_TARGET_ALIAS) for c in columns_to_types_no_keys
@@ -261,10 +268,12 @@ class MSSQLEngineAdapter(
                 matched=False,
                 source=False,
                 then=exp.Insert(
-                    this=exp.Tuple(expressions=[exp.column(col) for col in columns_to_types]),
+                    this=exp.Tuple(
+                        expressions=[exp.column(col) for col in target_columns_to_types]
+                    ),
                     expression=exp.Tuple(
                         expressions=[
-                            exp.column(col, MERGE_SOURCE_ALIAS) for col in columns_to_types
+                            exp.column(col, MERGE_SOURCE_ALIAS) for col in target_columns_to_types
                         ]
                     ),
                 ),
@@ -303,9 +312,10 @@ class MSSQLEngineAdapter(
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         import pandas as pd
         import numpy as np
@@ -315,25 +325,31 @@ class MSSQLEngineAdapter(
 
         # Return the superclass implementation if the connection pool doesn't support bulk_copy
         if not hasattr(self._connection_pool.get(), "bulk_copy"):
-            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+            return super()._df_to_source_queries(
+                df, target_columns_to_types, batch_size, target_table, source_columns=source_columns
+            )
 
         def query_factory() -> Query:
             # It is possible for the factory to be called multiple times and if so then the temp table will already
             # be created so we skip creating again. This means we are assuming the first call is the same result
             # as later calls.
             if not self.table_exists(temp_table):
-                columns_to_types_create = columns_to_types.copy()
+                source_columns_to_types = get_source_columns_to_types(
+                    target_columns_to_types, source_columns
+                )
                 ordered_df = df[
-                    list(columns_to_types_create)
+                    list(source_columns_to_types)
                 ]  # reorder DataFrame so it matches columns_to_types
-                self._convert_df_datetime(ordered_df, columns_to_types_create)
-                self.create_table(temp_table, columns_to_types_create)
+                self._convert_df_datetime(ordered_df, source_columns_to_types)
+                self.create_table(temp_table, source_columns_to_types)
                 rows: t.List[t.Tuple[t.Any, ...]] = list(
                     ordered_df.replace({np.nan: None}).itertuples(index=False, name=None)  # type: ignore
                 )
                 conn = self._connection_pool.get()
                 conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
+            return exp.select(
+                *self._casted_columns(target_columns_to_types, source_columns=source_columns)
+            ).from_(temp_table)  # type: ignore
 
         return [
             SourceQuery(
@@ -393,7 +409,7 @@ class MSSQLEngineAdapter(
         self,
         table_name: TableName,
         source_queries: t.List[SourceQuery],
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
@@ -405,7 +421,7 @@ class MSSQLEngineAdapter(
                 self,
                 table_name=table_name,
                 source_queries=source_queries,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
                 where=where,
                 insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
                 **kwargs,
@@ -415,7 +431,7 @@ class MSSQLEngineAdapter(
         return super()._insert_overwrite_by_condition(
             table_name=table_name,
             source_queries=source_queries,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=target_columns_to_types,
             where=where,
             insert_overwrite_strategy_override=insert_overwrite_strategy_override,
             **kwargs,

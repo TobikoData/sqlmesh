@@ -109,6 +109,51 @@ clickhouse-cloud_init() {
     echo "Clickhouse Cloud instance $CLICKHOUSE_CLOUD_HOST is up and running"
 }
 
+# GCP Postgres
+gcp-postgres_init() {
+    # Download and start Cloud SQL Proxy
+    curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.18.0/cloud-sql-proxy.linux.amd64
+    chmod +x cloud-sql-proxy
+    echo "$GCP_POSTGRES_KEYFILE_JSON" > /tmp/keyfile.json
+    ./cloud-sql-proxy --credentials-file /tmp/keyfile.json $GCP_POSTGRES_INSTANCE_CONNECTION_STRING &
+
+    # Wait for proxy to start
+    sleep 5
+}
+
+gcp-postgres_exec() {
+    PGPASSWORD=$GCP_POSTGRES_PASSWORD psql -h 127.0.0.1 -U $GCP_POSTGRES_USER -c "$1" postgres
+}
+
+gcp-postgres_up() {
+    gcp-postgres_exec "create database $1"
+}
+
+gcp-postgres_down() {
+    gcp-postgres_exec "drop database $1"
+}
+
+# Fabric
+fabric_init() {    
+    python --version #note: as at 2025-08-20, ms-fabric-cli is pinned to Python >= 3.10, <3.13
+    pip install ms-fabric-cli
+    
+    # to prevent the '[EncryptionFailed] An error occurred with the encrypted cache.' error
+    # ref: https://microsoft.github.io/fabric-cli/#switch-to-interactive-mode-optional
+    fab config set encryption_fallback_enabled true 
+
+    echo "Logging in to Fabric"
+    fab auth login -u $FABRIC_CLIENT_ID -p $FABRIC_CLIENT_SECRET --tenant $FABRIC_TENANT_ID
+}
+
+fabric_up() {
+    fab create "SQLMesh CircleCI.Workspace/$1.Warehouse"
+}
+
+fabric_down() {
+    fab rm -f "SQLMesh CircleCI.Workspace/$1.Warehouse" || true
+}
+
 INIT_FUNC="${ENGINE}_init"
 UP_FUNC="${ENGINE}_up"
 DOWN_FUNC="${ENGINE}_down"

@@ -12,6 +12,8 @@ from pathlib import Path
 
 from dbt import constants as dbt_constants, flags
 
+from sqlmesh.utils.conversions import make_serializable
+
 # Override the file name to prevent dbt commands from invalidating the cache.
 dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
 
@@ -32,6 +34,7 @@ except ImportError:
 from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.model import ModelConfig
@@ -78,12 +81,14 @@ class ManifestHelper:
         target: TargetConfig,
         variable_overrides: t.Optional[t.Dict[str, t.Any]] = None,
         cache_dir: t.Optional[str] = None,
+        model_defaults: t.Optional[ModelDefaultsConfig] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
         self.profile_name = profile_name
         self.target = target
         self.variable_overrides = variable_overrides or {}
+        self.model_defaults = model_defaults or ModelDefaultsConfig()
 
         self.__manifest: t.Optional[Manifest] = None
         self._project_name: str = ""
@@ -151,6 +156,39 @@ class ManifestHelper:
             for macro_name, macro_config in macro_configs.items():
                 result[package_name][macro_name] = macro_config.info
         return result
+
+    @property
+    def flat_graph(self) -> t.Dict[str, t.Any]:
+        return {
+            "exposures": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "exposures", {}).items()
+            },
+            "groups": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "groups", {}).items()
+            },
+            "metrics": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "metrics", {}).items()
+            },
+            "nodes": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in self._manifest.nodes.items()
+            },
+            "sources": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in self._manifest.sources.items()
+            },
+            "semantic_models": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "semantic_models", {}).items()
+            },
+            "saved_queries": {
+                k: make_serializable(v.to_dict(omit_none=False))
+                for k, v in getattr(self._manifest, "saved_queries", {}).items()
+            },
+        }
 
     def _load_all(self) -> None:
         if self._is_loaded:
@@ -380,9 +418,12 @@ class ManifestHelper:
         profile = self._load_profile()
         project = self._load_project(profile)
 
-        if not any(k in project.models for k in ("start", "+start")):
+        if (
+            not any(k in project.models for k in ("start", "+start"))
+            and not self.model_defaults.start
+        ):
             raise ConfigError(
-                "SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
+                "SQLMesh requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)

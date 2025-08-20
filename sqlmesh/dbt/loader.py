@@ -19,7 +19,6 @@ from sqlmesh.core.signal import signal
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
@@ -45,21 +44,22 @@ logger = logging.getLogger(__name__)
 def sqlmesh_config(
     project_root: t.Optional[Path] = None,
     state_connection: t.Optional[ConnectionConfig] = None,
+    dbt_profile_name: t.Optional[str] = None,
     dbt_target_name: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     register_comments: t.Optional[bool] = None,
     **kwargs: t.Any,
 ) -> Config:
     project_root = project_root or Path()
-    context = DbtContext(project_root=project_root)
+    context = DbtContext(project_root=project_root, profile_name=dbt_profile_name)
     profile = Profile.load(context, target_name=dbt_target_name)
     model_defaults = kwargs.pop("model_defaults", ModelDefaultsConfig())
     if model_defaults.dialect is None:
         model_defaults.dialect = profile.target.dialect
 
-    target_to_sqlmesh_args = {}
-    if register_comments is not None:
-        target_to_sqlmesh_args["register_comments"] = register_comments
+    target_to_sqlmesh_args = {
+        "register_comments": register_comments or False,
+    }
 
     loader = kwargs.pop("loader", DbtLoader)
     if not issubclass(loader, DbtLoader):
@@ -117,7 +117,11 @@ class DbtLoader(Loader):
 
         def _to_sqlmesh(config: BMC, context: DbtContext) -> Model:
             logger.debug("Converting '%s' to sqlmesh format", config.canonical_name(context))
-            return config.to_sqlmesh(context, audit_definitions=audits)
+            return config.to_sqlmesh(
+                context,
+                audit_definitions=audits,
+                virtual_environment_mode=self.config.virtual_environment_mode,
+            )
 
         for project in self._load_projects():
             context = project.context.copy()
@@ -135,16 +139,6 @@ class DbtLoader(Loader):
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
                 for model in package_models.values():
-                    if (
-                        not context.sqlmesh_config.feature_flags.dbt.scd_type_2_support
-                        and isinstance(model, ModelConfig)
-                        and model.model_kind(context).is_scd_type_2
-                    ):
-                        logger.info(
-                            "Skipping loading Snapshot (SCD Type 2) models due to the feature flag disabling this feature"
-                        )
-                        continue
-
                     sqlmesh_model = cache.get_or_load_models(
                         model.path, loader=lambda: [_to_sqlmesh(model, context)]
                     )[0]
@@ -289,9 +283,15 @@ class DbtLoader(Loader):
             )
         ]
 
-    def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
-        if not root.is_dir():
+    def _compute_yaml_max_mtime_per_subfolder(
+        self, root: Path, visited: t.Optional[t.Set[Path]] = None
+    ) -> t.Dict[Path, float]:
+        root = root.resolve()
+        visited = visited or set()
+        if not root.is_dir() or root in visited:
             return {}
+
+        visited.add(root)
 
         result = {}
         max_mtime: t.Optional[float] = None
@@ -299,7 +299,9 @@ class DbtLoader(Loader):
         for nested in root.iterdir():
             try:
                 if nested.is_dir():
-                    result.update(self._compute_yaml_max_mtime_per_subfolder(nested))
+                    result.update(
+                        self._compute_yaml_max_mtime_per_subfolder(nested, visited=visited)
+                    )
                 elif nested.suffix.lower() in (".yaml", ".yml"):
                     yaml_mtime = self._path_mtimes.get(nested)
                     if yaml_mtime:

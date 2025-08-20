@@ -61,20 +61,23 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        target_columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
+        source_columns: t.Optional[t.List[str]] = None,
     ) -> t.List[SourceQuery]:
         temp_table = self._get_temp_table(target_table)
         temp_table_sql = (
-            exp.select(*self._casted_columns(columns_to_types))
+            exp.select(*self._casted_columns(target_columns_to_types, source_columns))
             .from_("df")
             .sql(dialect=self.dialect)
         )
         self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
         return [
             SourceQuery(
-                query_factory=lambda: self._select_columns(columns_to_types).from_(temp_table),  # type: ignore
+                query_factory=lambda: self._select_columns(target_columns_to_types).from_(
+                    temp_table
+                ),  # type: ignore
                 cleanup_func=lambda: self.drop_table(temp_table),
             )
         ]
@@ -149,7 +152,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
@@ -172,7 +175,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin,
             expression,
             exists,
             replace,
-            columns_to_types,
+            target_columns_to_types,
             table_description,
             column_descriptions,
             table_kind,

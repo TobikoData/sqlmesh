@@ -23,6 +23,7 @@ from sqlglot.schema import MappingSchema
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
+from sqlmesh.utils import get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError, ConfigError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -1121,7 +1122,7 @@ def select_from_values(
     for i in range(0, num_rows, batch_size):
         yield select_from_values_for_batch_range(
             values=values,
-            columns_to_types=columns_to_types,
+            target_columns_to_types=columns_to_types,
             batch_start=i,
             batch_end=min(i + batch_size, num_rows),
             alias=alias,
@@ -1130,35 +1131,49 @@ def select_from_values(
 
 def select_from_values_for_batch_range(
     values: t.List[t.Tuple[t.Any, ...]],
-    columns_to_types: t.Dict[str, exp.DataType],
+    target_columns_to_types: t.Dict[str, exp.DataType],
     batch_start: int,
     batch_end: int,
     alias: str = "t",
+    source_columns: t.Optional[t.List[str]] = None,
 ) -> exp.Select:
-    casted_columns = [
-        exp.alias_(exp.cast(exp.column(column), to=kind), column, copy=False)
-        for column, kind in columns_to_types.items()
-    ]
+    source_columns = source_columns or list(target_columns_to_types)
+    source_columns_to_types = get_source_columns_to_types(target_columns_to_types, source_columns)
 
     if not values:
         # Ensures we don't generate an empty VALUES clause & forces a zero-row output
         where = exp.false()
-        expressions = [tuple(exp.cast(exp.null(), to=kind) for kind in columns_to_types.values())]
+        expressions = [
+            tuple(exp.cast(exp.null(), to=kind) for kind in source_columns_to_types.values())
+        ]
     else:
         where = None
         expressions = [
-            tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]
+            tuple(transform_values(v, source_columns_to_types))
+            for v in values[batch_start:batch_end]
         ]
 
-    values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
+    values_exp = exp.values(expressions, alias=alias, columns=source_columns_to_types)
     if values:
         # BigQuery crashes on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([NULL]) AS x`, but not
         # on `SELECT CAST(x AS TIMESTAMP) FROM UNNEST([CAST(NULL AS TIMESTAMP)]) AS x`. This
         # ensures nulls under the `Values` expression are cast to avoid similar issues.
-        for value, kind in zip(values_exp.expressions[0].expressions, columns_to_types.values()):
+        for value, kind in zip(
+            values_exp.expressions[0].expressions, source_columns_to_types.values()
+        ):
             if isinstance(value, exp.Null):
                 value.replace(exp.cast(value, to=kind))
 
+    casted_columns = [
+        exp.alias_(
+            exp.cast(
+                exp.column(column) if column in source_columns_to_types else exp.Null(), to=kind
+            ),
+            column,
+            copy=False,
+        )
+        for column, kind in target_columns_to_types.items()
+    ]
     return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 
 
@@ -1408,6 +1423,41 @@ def extract_func_call(
     return func.lower(), kwargs
 
 
+def extract_function_calls(func_calls: t.Any, allow_tuples: bool = False) -> t.Any:
+    """Used for extracting function calls for signals or audits."""
+
+    if isinstance(func_calls, (exp.Tuple, exp.Array)):
+        return [extract_func_call(i, allow_tuples=allow_tuples) for i in func_calls.expressions]
+    if isinstance(func_calls, exp.Paren):
+        return [extract_func_call(func_calls.this, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, exp.Expression):
+        return [extract_func_call(func_calls, allow_tuples=allow_tuples)]
+    if isinstance(func_calls, list):
+        function_calls = []
+        for entry in func_calls:
+            if isinstance(entry, dict):
+                args = entry
+                name = "" if allow_tuples else entry.pop("name")
+            elif isinstance(entry, (tuple, list)):
+                name, args = entry
+            else:
+                raise ConfigError(f"Audit must be a dictionary or named tuple. Got {entry}.")
+
+            function_calls.append(
+                (
+                    name.lower(),
+                    {
+                        key: parse_one(value) if isinstance(value, str) else value
+                        for key, value in args.items()
+                    },
+                )
+            )
+
+        return function_calls
+
+    return func_calls or []
+
+
 def is_meta_expression(v: t.Any) -> bool:
     return isinstance(v, (Audit, Metric, Model))
 
@@ -1421,18 +1471,10 @@ def replace_merge_table_aliases(
     """
     from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 
-    normalized_merge_source_alias = quote_identifiers(
-        normalize_identifiers(exp.to_identifier(MERGE_SOURCE_ALIAS), dialect), dialect=dialect
-    )
-
-    normalized_merge_target_alias = quote_identifiers(
-        normalize_identifiers(exp.to_identifier(MERGE_TARGET_ALIAS), dialect), dialect=dialect
-    )
-
     if isinstance(expression, exp.Column) and (first_part := expression.parts[0]):
         if first_part.this.lower() in ("target", "dbt_internal_dest", "__merge_target__"):
-            first_part.replace(normalized_merge_target_alias)
+            first_part.replace(exp.to_identifier(MERGE_TARGET_ALIAS, quoted=True))
         elif first_part.this.lower() in ("source", "dbt_internal_source", "__merge_source__"):
-            first_part.replace(normalized_merge_source_alias)
+            first_part.replace(exp.to_identifier(MERGE_SOURCE_ALIAS, quoted=True))
 
     return expression

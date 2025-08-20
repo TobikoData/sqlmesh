@@ -1,15 +1,17 @@
 import { workspace, WorkspaceFolder } from 'vscode'
 import path from 'path'
 import fs from 'fs'
-import { Result, err, ok } from '@bus/result'
+import { Result, err, isErr, ok } from '@bus/result'
 import { traceVerbose, traceInfo } from './common/log'
 import { parse } from 'shell-quote'
 import { z } from 'zod'
 
-export interface SqlmeshConfiguration {
-  projectPath: string
-  lspEntryPoint: string
-}
+const sqlmeshConfigurationSchema = z.object({
+  projectPaths: z.array(z.string()),
+  lspEntryPoint: z.string(),
+})
+
+export type SqlmeshConfiguration = z.infer<typeof sqlmeshConfigurationSchema>
 
 /**
  * Get the SQLMesh configuration from VS Code settings.
@@ -18,12 +20,18 @@ export interface SqlmeshConfiguration {
  */
 function getSqlmeshConfiguration(): SqlmeshConfiguration {
   const config = workspace.getConfiguration('sqlmesh')
-  const projectPath = config.get<string>('projectPath', '')
+  const projectPaths = config.get<string[]>('projectPaths', [])
   const lspEntryPoint = config.get<string>('lspEntrypoint', '')
-  return {
-    projectPath,
+  const parsed = sqlmeshConfigurationSchema.safeParse({
+    projectPaths,
     lspEntryPoint,
+  })
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid SQLMesh configuration: ${JSON.stringify(parsed.error)}`,
+    )
   }
+  return parsed.data
 }
 
 const stringsArray = z.array(z.string())
@@ -57,31 +65,57 @@ export function getSqlmeshLspEntryPoint():
 }
 
 /**
- * Validate and resolve the project path from configuration.
+ * Validate and resolve the project paths from configuration.
  * If no project path is configured, use the workspace folder.
  * If the project path is configured, it must be a directory that contains a SQLMesh project.
  *
  * @param workspaceFolder The current workspace folder
- * @returns A Result containing the resolved project path or an error
+ * @returns A Result containing the resolved project paths or an error
  */
-export function resolveProjectPath(
-  workspaceFolder: WorkspaceFolder,
-): Result<string, string> {
+export function resolveProjectPath(workspaceFolder: WorkspaceFolder): Result<
+  {
+    projectPaths: string[] | undefined
+    workspaceFolder: string
+  },
+  string
+> {
   const config = getSqlmeshConfiguration()
 
-  if (!config.projectPath) {
+  if (config.projectPaths.length === 0) {
     // If no project path is configured, use the workspace folder
     traceVerbose('No project path configured, using workspace folder')
-    return ok(workspaceFolder.uri.fsPath)
+    return ok({
+      workspaceFolder: workspaceFolder.uri.fsPath,
+      projectPaths: undefined,
+    })
   }
+
+  const resolvedPaths: string[] = []
+  for (const projectPath of config.projectPaths) {
+    const result = resolveSingleProjectPath(workspaceFolder, projectPath)
+    if (isErr(result)) {
+      return result
+    }
+    resolvedPaths.push(result.value)
+  }
+  return ok({
+    projectPaths: resolvedPaths,
+    workspaceFolder: workspaceFolder.uri.fsPath,
+  })
+}
+
+function resolveSingleProjectPath(
+  workspaceFolder: WorkspaceFolder,
+  projectPath: string,
+): Result<string, string> {
   let resolvedPath: string
 
   // Check if the path is absolute
-  if (path.isAbsolute(config.projectPath)) {
-    resolvedPath = config.projectPath
+  if (path.isAbsolute(projectPath)) {
+    resolvedPath = projectPath
   } else {
     // Resolve relative path from workspace root
-    resolvedPath = path.join(workspaceFolder.uri.fsPath, config.projectPath)
+    resolvedPath = path.join(workspaceFolder.uri.fsPath, projectPath)
   }
 
   // Normalize the path

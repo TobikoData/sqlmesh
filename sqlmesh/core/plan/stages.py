@@ -1,14 +1,15 @@
 import typing as t
 
 from dataclasses import dataclass
-from sqlmesh.core.environment import EnvironmentStatements, EnvironmentNamingInfo
+from sqlmesh.core import constants as c
+from sqlmesh.core.environment import EnvironmentStatements, EnvironmentNamingInfo, Environment
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.scheduler import merged_missing_intervals, SnapshotToIntervals
 from sqlmesh.core.snapshot.definition import (
     DeployabilityIndex,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotTableInfo,
     SnapshotId,
     Interval,
@@ -72,6 +73,19 @@ class PhysicalLayerUpdateStage:
 
 
 @dataclass
+class PhysicalLayerSchemaCreationStage:
+    """Create the physical schemas for the given snapshots.
+
+    Args:
+        snapshots: Snapshots to create physical schemas for.
+        deployability_index: Deployability index for this stage.
+    """
+
+    snapshots: t.List[Snapshot]
+    deployability_index: DeployabilityIndex
+
+
+@dataclass
 class AuditOnlyRunStage:
     """Run audits only for given snapshots.
 
@@ -102,12 +116,14 @@ class BackfillStage:
     Args:
         snapshot_to_intervals: Intervals to backfill. This collection can be empty in which case no backfill is needed.
             This can be useful to report the lack of backfills back to the user.
+        selected_snapshot_ids: The snapshots to include in the run DAG.
         all_snapshots: All snapshots in the plan by name.
         deployability_index: Deployability index for this stage.
         before_promote: Whether this stage is before the promotion stage.
     """
 
     snapshot_to_intervals: SnapshotToIntervals
+    selected_snapshot_ids: t.Set[SnapshotId]
     all_snapshots: t.Dict[str, Snapshot]
     deployability_index: DeployabilityIndex
     before_promote: bool = True
@@ -185,6 +201,7 @@ PlanStage = t.Union[
     AfterAllStage,
     CreateSnapshotRecordsStage,
     PhysicalLayerUpdateStage,
+    PhysicalLayerSchemaCreationStage,
     AuditOnlyRunStage,
     RestatementStage,
     BackfillStage,
@@ -231,11 +248,11 @@ class PlanStagesBuilder:
         all_selected_for_backfill_snapshots = {
             s.snapshot_id for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
         }
+        existing_environment = self.state_reader.get_environment(plan.environment.name)
 
-        self._adjust_intervals(snapshots_by_name, plan)
+        self._adjust_intervals(snapshots_by_name, plan, existing_environment)
 
         deployability_index = DeployabilityIndex.create(snapshots, start=plan.start)
-        deployability_index_for_creation = deployability_index
         if plan.is_dev:
             before_promote_snapshots = all_selected_for_backfill_snapshots
             after_promote_snapshots = set()
@@ -251,18 +268,7 @@ class PlanStagesBuilder:
             deployability_index = DeployabilityIndex.all_deployable()
 
             snapshots_with_schema_migration = [
-                s
-                for s in snapshots.values()
-                if s.is_paused
-                and s.is_model
-                and not s.is_symbolic
-                and (
-                    not deployability_index_for_creation.is_representative(s)
-                    or (
-                        s.is_view
-                        and s.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
-                    )
-                )
+                s for s in snapshots.values() if s.requires_schema_migration_in_prod
             ]
 
         snapshots_to_intervals = self._missing_intervals(
@@ -281,7 +287,7 @@ class PlanStagesBuilder:
                     missing_intervals_after_promote[snapshot] = intervals
 
         promoted_snapshots, demoted_snapshots, demoted_environment_naming_info = (
-            self._get_promoted_demoted_snapshots(plan)
+            self._get_promoted_demoted_snapshots(plan, existing_environment)
         )
 
         stages: t.List[PlanStage] = []
@@ -293,11 +299,23 @@ class PlanStagesBuilder:
         if plan.new_snapshots:
             stages.append(CreateSnapshotRecordsStage(snapshots=plan.new_snapshots))
 
-        stages.append(
-            self._get_physical_layer_update_stage(
-                plan, snapshots, snapshots_to_intervals, deployability_index_for_creation
+        snapshots_to_create = self._get_snapshots_to_create(plan, snapshots)
+        if snapshots_to_create:
+            stages.append(
+                PhysicalLayerSchemaCreationStage(
+                    snapshots=snapshots_to_create, deployability_index=deployability_index
+                )
             )
-        )
+        if not needs_backfill:
+            stages.append(
+                self._get_physical_layer_update_stage(
+                    plan,
+                    snapshots_to_create,
+                    snapshots,
+                    snapshots_to_intervals,
+                    deployability_index,
+                )
+            )
 
         audit_only_snapshots = self._get_audit_only_snapshots(new_snapshots)
         if audit_only_snapshots:
@@ -311,6 +329,11 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals=missing_intervals_before_promote,
+                    selected_snapshot_ids={
+                        s_id
+                        for s_id in before_promote_snapshots
+                        if plan.is_selected_for_backfill(s_id.name)
+                    },
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
@@ -320,6 +343,7 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals={},
+                    selected_snapshot_ids=set(),
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
@@ -336,7 +360,7 @@ class PlanStagesBuilder:
                 MigrateSchemasStage(
                     snapshots=snapshots_with_schema_migration,
                     all_snapshots=snapshots,
-                    deployability_index=deployability_index_for_creation,
+                    deployability_index=deployability_index,
                 )
             )
 
@@ -350,6 +374,11 @@ class PlanStagesBuilder:
             stages.append(
                 BackfillStage(
                     snapshot_to_intervals=missing_intervals_after_promote,
+                    selected_snapshot_ids={
+                        s_id
+                        for s_id in after_promote_snapshots
+                        if plan.is_selected_for_backfill(s_id.name)
+                    },
                     all_snapshots=snapshots_by_name,
                     deployability_index=deployability_index,
                 )
@@ -370,6 +399,7 @@ class PlanStagesBuilder:
             demoted_environment_naming_info,
             snapshots | full_demoted_snapshots,
             deployability_index,
+            plan.is_dev,
         )
         if virtual_layer_update_stage:
             stages.append(virtual_layer_update_stage)
@@ -427,13 +457,14 @@ class PlanStagesBuilder:
     def _get_physical_layer_update_stage(
         self,
         plan: EvaluatablePlan,
-        snapshots: t.Dict[SnapshotId, Snapshot],
+        snapshots_to_create: t.List[Snapshot],
+        all_snapshots: t.Dict[SnapshotId, Snapshot],
         snapshots_to_intervals: SnapshotToIntervals,
         deployability_index: DeployabilityIndex,
     ) -> PhysicalLayerUpdateStage:
         return PhysicalLayerUpdateStage(
-            snapshots=self._get_snapshots_to_create(plan, snapshots),
-            all_snapshots=snapshots,
+            snapshots=snapshots_to_create,
+            all_snapshots=all_snapshots,
             snapshots_with_missing_intervals={
                 s.snapshot_id
                 for s in snapshots_to_intervals
@@ -449,11 +480,18 @@ class PlanStagesBuilder:
         demoted_environment_naming_info: t.Optional[EnvironmentNamingInfo],
         all_snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: DeployabilityIndex,
+        is_dev: bool,
     ) -> t.Optional[VirtualLayerUpdateStage]:
-        promoted_snapshots = {s for s in promoted_snapshots if s.is_model and not s.is_symbolic}
-        demoted_snapshots = {s for s in demoted_snapshots if s.is_model and not s.is_symbolic}
+        def _should_update_virtual_layer(snapshot: SnapshotTableInfo) -> bool:
+            # Skip virtual layer update for snapshots with virtual environment support disabled
+            virtual_environment_enabled = is_dev or snapshot.virtual_environment_mode.is_full
+            return snapshot.is_model and not snapshot.is_symbolic and virtual_environment_enabled
+
+        promoted_snapshots = {s for s in promoted_snapshots if _should_update_virtual_layer(s)}
+        demoted_snapshots = {s for s in demoted_snapshots if _should_update_virtual_layer(s)}
         if not promoted_snapshots and not demoted_snapshots:
             return None
+
         return VirtualLayerUpdateStage(
             promoted_snapshots=promoted_snapshots,
             demoted_snapshots=demoted_snapshots,
@@ -463,11 +501,10 @@ class PlanStagesBuilder:
         )
 
     def _get_promoted_demoted_snapshots(
-        self, plan: EvaluatablePlan
+        self, plan: EvaluatablePlan, existing_environment: t.Optional[Environment]
     ) -> t.Tuple[
         t.Set[SnapshotTableInfo], t.Set[SnapshotTableInfo], t.Optional[EnvironmentNamingInfo]
     ]:
-        existing_environment = self.state_reader.get_environment(plan.environment.name)
         if existing_environment:
             new_table_infos = {
                 table_info.name: table_info for table_info in plan.environment.promoted_snapshots
@@ -527,6 +564,7 @@ class PlanStagesBuilder:
             },
             deployability_index=deployability_index,
             end_bounded=plan.end_bounded,
+            ignore_cron=plan.ignore_cron,
             start_override_per_model=plan.start_override_per_model,
             end_override_per_model=plan.end_override_per_model,
         )
@@ -583,10 +621,43 @@ class PlanStagesBuilder:
         return [s for s in snapshots.values() if _should_create(s)]
 
     def _adjust_intervals(
-        self, snapshots_by_name: t.Dict[str, Snapshot], plan: EvaluatablePlan
+        self,
+        snapshots_by_name: t.Dict[str, Snapshot],
+        plan: EvaluatablePlan,
+        existing_environment: t.Optional[Environment],
     ) -> None:
         # Make sure the intervals are up to date and restatements are reflected
         self.state_reader.refresh_snapshot_intervals(snapshots_by_name.values())
+
+        if not existing_environment:
+            existing_environment = self.state_reader.get_environment(c.PROD)
+
+        if existing_environment:
+            new_snapshot_ids = set()
+            new_snapshot_versions = set()
+            for s in snapshots_by_name.values():
+                if s.is_model:
+                    new_snapshot_ids.add(s.snapshot_id)
+                    new_snapshot_versions.add(s.name_version)
+            # Only compare to old snapshots that share the same version as the new snapshots
+            old_snapshot_ids = {
+                s.snapshot_id
+                for s in existing_environment.snapshots
+                if s.is_model
+                and s.name_version in new_snapshot_versions
+                and s.snapshot_id not in new_snapshot_ids
+            }
+            if old_snapshot_ids:
+                old_snapshots = self.state_reader.get_snapshots(old_snapshot_ids)
+                for old in old_snapshots.values():
+                    new = snapshots_by_name.get(old.name)
+                    if not new or old.version != new.version:
+                        continue
+                    if should_force_rebuild(old, new):
+                        # If the difference between 2 snapshots requires a full rebuild,
+                        # then clear the intervals for the new snapshot.
+                        new.intervals = []
+
         for new_snapshot in plan.new_snapshots:
             if new_snapshot.is_forward_only:
                 # Forward-only snapshots inherit intervals in dev because of cloning

@@ -14,7 +14,11 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
-from sqlmesh.core.config import EnvironmentSuffixTarget, TableNamingConvention
+from sqlmesh.core.config.common import (
+    EnvironmentSuffixTarget,
+    TableNamingConvention,
+    VirtualEnvironmentMode,
+)
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
@@ -23,7 +27,6 @@ from sqlmesh.core.config.connection import (
     SerializableConnectionConfig,
     connection_config_validator,
 )
-from sqlmesh.core.config.feature_flag import FeatureFlag
 from sqlmesh.core.config.format import FormatConfig
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.janitor import JanitorConfig
@@ -62,6 +65,9 @@ def gateways_ensure_dict(value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
             GatewayConfig.parse_obj(value)
         return {"": value}
     except Exception:
+        # Normalize all gateway keys to lowercase for case-insensitive matching
+        if isinstance(value, dict):
+            return {k.lower(): v for k, v in value.items()}
         return value
 
 
@@ -107,6 +113,7 @@ class Config(BaseConfig):
         physical_schema_mapping: A mapping from regular expressions to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         physical_table_naming_convention: Indicates how tables should be named at the physical layer
+        virtual_environment_mode: Indicates how environments should be handled.
         gateway_managed_virtual_layer: Whether the models' views in the virtual layer are created by the model-specific gateway rather than the default gateway.
         infer_python_dependencies: Whether to statically analyze Python code to automatically infer Python package requirements.
         environment_catalog_mapping: A mapping from regular expressions to catalog names. The catalog name is used to determine the target catalog for a given environment.
@@ -114,7 +121,6 @@ class Config(BaseConfig):
         log_limit: The default number of logs to keep.
         format: The formatting options for SQL code.
         ui: The UI configuration for SQLMesh.
-        feature_flags: Feature flags to enable/disable certain features.
         plan: The plan configuration.
         migration: The migration configuration.
         variables: A dictionary of variables that can be used in models / macros.
@@ -145,12 +151,9 @@ class Config(BaseConfig):
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     physical_schema_mapping: RegexKeyDict = {}
-    environment_suffix_target: EnvironmentSuffixTarget = Field(
-        default=EnvironmentSuffixTarget.default
-    )
-    physical_table_naming_convention: TableNamingConvention = Field(
-        default=TableNamingConvention.default
-    )
+    environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default
+    physical_table_naming_convention: TableNamingConvention = TableNamingConvention.default
+    virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
     gateway_managed_virtual_layer: bool = False
     infer_python_dependencies: bool = True
     environment_catalog_mapping: RegexKeyDict = {}
@@ -160,7 +163,6 @@ class Config(BaseConfig):
     run: RunConfig = RunConfig()
     format: FormatConfig = FormatConfig()
     ui: UIConfig = UIConfig()
-    feature_flags: FeatureFlag = FeatureFlag()
     plan: PlanConfig = PlanConfig()
     migration: MigrationConfig = MigrationConfig()
     model_naming: NameInferenceConfig = NameInferenceConfig()
@@ -257,6 +259,11 @@ class Config(BaseConfig):
                 "Please specify one or the other"
             )
 
+        if self.plan.use_finalized_state and not self.virtual_environment_mode.is_full:
+            raise ConfigError(
+                "Using the finalized state is only supported when `virtual_environment_mode` is set to `full`."
+            )
+
         if self.environment_catalog_mapping:
             _normalize_identifiers("environment_catalog_mapping")
         if self.physical_schema_mapping:
@@ -298,19 +305,23 @@ class Config(BaseConfig):
         if isinstance(self.gateways, dict):
             if name is None:
                 if self.default_gateway:
-                    if self.default_gateway not in self.gateways:
+                    # Normalize default_gateway name to lowercase for lookup
+                    default_key = self.default_gateway.lower()
+                    if default_key not in self.gateways:
                         raise ConfigError(f"Missing gateway with name '{self.default_gateway}'")
-                    return self.gateways[self.default_gateway]
+                    return self.gateways[default_key]
 
                 if "" in self.gateways:
                     return self.gateways[""]
 
                 return first(self.gateways.values())
 
-            if name not in self.gateways:
+            # Normalize lookup name to lowercase since gateway keys are already lowercase
+            lookup_key = name.lower()
+            if lookup_key not in self.gateways:
                 raise ConfigError(f"Missing gateway with name '{name}'.")
 
-            return self.gateways[name]
+            return self.gateways[lookup_key]
         if name is not None:
             raise ConfigError("Gateway name is not supported when only one gateway is configured.")
         return self.gateways

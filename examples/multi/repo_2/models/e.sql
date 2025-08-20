@@ -1,5 +1,6 @@
 MODEL (
-  name silver.e
+  name silver.e,
+  kind FULL
 );
 
 SELECT

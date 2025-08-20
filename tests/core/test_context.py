@@ -16,7 +16,7 @@ from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.cli.project_init import init_example_project
-from sqlmesh.core.console import get_console, TerminalConsole
+from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core import dialect as d, constants as c
 from sqlmesh.core.config import (
     load_configs,
@@ -647,6 +647,9 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
     assert models_dir.exists()
 
+    # Ensure that we don't initialize a CachingStateSync only to clear its (empty) caches
+    assert context._state_sync is None
+
     # Test clearing caches when cache directory doesn't exist
     # This should not raise an exception
     context.clear_caches()
@@ -686,9 +689,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
         config_content = f.read()
 
     # Add cache_dir to the test_config definition
-    config_content = config_content.replace(
-        'test_config = Config(\n    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},\n    default_gateway="in_memory",\n    plan=PlanConfig(\n        auto_categorize_changes=CategorizerConfig(\n            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF\n        )\n    ),\n    model_defaults=model_defaults,\n)',
-        f"""test_config = Config(
+    config_content += f"""test_config_cache_dir = Config(
     gateways={{"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())}},
     default_gateway="in_memory",
     plan=PlanConfig(
@@ -698,14 +699,14 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
     ),
     model_defaults=model_defaults,
     cache_dir="{custom_cache_dir.as_posix()}",
-)""",
-    )
+    before_all=before_all,
+)"""
 
     with open(config_py_path, "w") as f:
         f.write(config_content)
 
     # Create context with the test config
-    context = Context(paths=sushi_path, config="test_config")
+    context = Context(paths=sushi_path, config="test_config_cache_dir")
     custom_cache_dir = context.cache_dir
     assert "custom_cache" in str(custom_cache_dir)
     assert (custom_cache_dir / "optimized_query").exists()
@@ -730,7 +731,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
 
     # New context should load same models and create the cache for optimized_query and model_definition
     initial_model_count = len(context.models)
-    context2 = Context(paths=context.path, config="test_config")
+    context2 = Context(paths=context.path, config="test_config_cache_dir")
     cached_model_count = len(context2.models)
 
     assert initial_model_count == cached_model_count > 0
@@ -1124,6 +1125,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         no_prompts=True,
         forward_only=True,
         allow_destructive_models=["memory.sushi.test_unrestorable"],
+        categorizer_config=CategorizerConfig.all_full(),
     )
 
     sushi_context.upsert_model(model_v1)
@@ -1132,6 +1134,7 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         no_prompts=True,
         forward_only=True,
         allow_destructive_models=["memory.sushi.test_unrestorable"],
+        categorizer_config=CategorizerConfig.all_full(),
     )
     model_v1_new_snapshot = sushi_context.get_snapshot(
         "memory.sushi.test_unrestorable", raise_if_missing=True
@@ -1220,6 +1223,12 @@ def test_load_gateway_specific_external_models(copy_to_temp_path):
 
     # gateway explicitly set to prod; prod model should now show
     assert "prod_raw.model1" in _get_external_model_names(gateway="prod")
+
+    # test uppercase gateway name should match lowercase external model definition
+    assert "prod_raw.model1" in _get_external_model_names(gateway="PROD")
+
+    # test mixed case gateway name should also work
+    assert "prod_raw.model1" in _get_external_model_names(gateway="Prod")
 
 
 def test_disabled_model(copy_to_temp_path):
@@ -1767,14 +1776,14 @@ MODEL(
 );
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   SET VARIABLE stats_model_start = now()
 );
 
 SELECT 1 AS cola;
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time)
   VALUES (@resolve_template('@{schema_name}.@{table_name}'), getvariable('stats_model_start'), now(), now() - getvariable('stats_model_start'))
 );
@@ -1840,11 +1849,11 @@ def access_adapter(evaluator):
 
     assert (
         model.pre_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = NOW())"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), SET VARIABLE stats_model_start = NOW())"
     )
     assert (
         model.post_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
     )
 
     stats_table = context.fetchdf("select * from memory.analytic_stats").to_dict()
@@ -2192,13 +2201,13 @@ def test_plan_audit_intervals(tmp_path: pathlib.Path, caplog):
 
     # Case 1: The timestamp audit should be in the inclusive range ['2025-02-01 00:00:00', '2025-02-01 23:59:59.999999']
     assert (
-        f"""SELECT COUNT(*) FROM (SELECT ("timestamp_id") AS "timestamp_id" FROM (SELECT * FROM "sqlmesh__sqlmesh_audit"."sqlmesh_audit__timestamp_example__{timestamp_snapshot.version}" AS "sqlmesh_audit__timestamp_example__{timestamp_snapshot.version}" WHERE "timestamp_id" BETWEEN CAST('2025-02-01 00:00:00' AS TIMESTAMP) AND CAST('2025-02-01 23:59:59.999999' AS TIMESTAMP)) AS "_q_0" WHERE TRUE GROUP BY ("timestamp_id") HAVING COUNT(*) > 1) AS "audit\""""
+        f"""SELECT COUNT(*) FROM (SELECT "timestamp_id" AS "timestamp_id" FROM (SELECT * FROM "sqlmesh__sqlmesh_audit"."sqlmesh_audit__timestamp_example__{timestamp_snapshot.version}" AS "sqlmesh_audit__timestamp_example__{timestamp_snapshot.version}" WHERE "timestamp_id" BETWEEN CAST('2025-02-01 00:00:00' AS TIMESTAMP) AND CAST('2025-02-01 23:59:59.999999' AS TIMESTAMP)) AS "_q_0" WHERE TRUE GROUP BY "timestamp_id" HAVING COUNT(*) > 1) AS "audit\""""
         in caplog.text
     )
 
     # Case 2: The date audit should be in the inclusive range ['2025-02-01', '2025-02-01']
     assert (
-        f"""SELECT COUNT(*) FROM (SELECT ("date_id") AS "date_id" FROM (SELECT * FROM "sqlmesh__sqlmesh_audit"."sqlmesh_audit__date_example__{date_snapshot.version}" AS "sqlmesh_audit__date_example__{date_snapshot.version}" WHERE "date_id" BETWEEN CAST('2025-02-01' AS DATE) AND CAST('2025-02-01' AS DATE)) AS "_q_0" WHERE TRUE GROUP BY ("date_id") HAVING COUNT(*) > 1) AS "audit\""""
+        f"""SELECT COUNT(*) FROM (SELECT "date_id" AS "date_id" FROM (SELECT * FROM "sqlmesh__sqlmesh_audit"."sqlmesh_audit__date_example__{date_snapshot.version}" AS "sqlmesh_audit__date_example__{date_snapshot.version}" WHERE "date_id" BETWEEN CAST('2025-02-01' AS DATE) AND CAST('2025-02-01' AS DATE)) AS "_q_0" WHERE TRUE GROUP BY "date_id" HAVING COUNT(*) > 1) AS "audit\""""
         in caplog.text
     )
 
@@ -2867,3 +2876,188 @@ ON_VIRTUAL_UPDATE_END;
     # Default statements should come first
     assert model.on_virtual_update[0].sql() == "SELECT 'Model-defailt virtual update' AS message"
     assert model.on_virtual_update[1].sql() == "SELECT 'Model-specific update' AS message"
+
+
+def test_uppercase_gateway_external_models(tmp_path):
+    # Create a temporary SQLMesh project with uppercase gateway name
+    config_py = tmp_path / "config.py"
+    config_py.write_text("""
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+
+config = Config(
+    gateways={
+        "UPPERCASE_GATEWAY": GatewayConfig(
+            connection=DuckDBConnectionConfig(),
+        ),
+    },
+    default_gateway="UPPERCASE_GATEWAY",
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+)
+""")
+
+    # Create external models file with lowercase gateway name (this should still match uppercase)
+    external_models_yaml = tmp_path / "external_models.yaml"
+    external_models_yaml.write_text("""
+- name: test_db.uppercase_gateway_table
+  description: Test external model with lowercase gateway name that should match uppercase gateway
+  gateway: uppercase_gateway  # lowercase in external model, but config has UPPERCASE_GATEWAY
+  columns:
+    id: int
+    name: text
+
+- name: test_db.no_gateway_table
+  description: Test external model without gateway (should be available for all gateways)
+  columns:
+    id: int
+    name: text
+""")
+
+    # Create a model that references the external model
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    model_sql = models_dir / "test_model.sql"
+    model_sql.write_text("""
+MODEL (
+    name test.my_model,
+    kind FULL,
+);
+
+SELECT * FROM test_db.uppercase_gateway_table;
+""")
+
+    # Test with uppercase gateway name - this should find both models
+    context_uppercase = Context(paths=[tmp_path], gateway="UPPERCASE_GATEWAY")
+
+    # Verify external model with lowercase gateway name in YAML is found when using uppercase gateway
+    gateway_specific_models = [
+        model
+        for model in context_uppercase.models.values()
+        if model.name == "test_db.uppercase_gateway_table"
+    ]
+    assert len(gateway_specific_models) == 1, (
+        f"External model with lowercase gateway name should be found with uppercase gateway. Found {len(gateway_specific_models)} models"
+    )
+
+    # Verify external model without gateway is also found
+    no_gateway_models = [
+        model
+        for model in context_uppercase.models.values()
+        if model.name == "test_db.no_gateway_table"
+    ]
+    assert len(no_gateway_models) == 1, (
+        f"External model without gateway should be found. Found {len(no_gateway_models)} models"
+    )
+
+    # Check that the column types are properly loaded (not UNKNOWN)
+    external_model = gateway_specific_models[0]
+    column_types = {name: str(dtype) for name, dtype in external_model.columns_to_types.items()}
+    assert column_types == {"id": "INT", "name": "TEXT"}, (
+        f"External model column types should not be UNKNOWN, got: {column_types}"
+    )
+
+    # Test that when using a different case for the gateway parameter, we get the same results
+    context_mixed_case = Context(
+        paths=[tmp_path], gateway="uppercase_gateway"
+    )  # lowercase parameter
+
+    gateway_specific_models_mixed = [
+        model
+        for model in context_mixed_case.models.values()
+        if model.name == "test_db.uppercase_gateway_table"
+    ]
+    # This should work but might fail if case sensitivity is not handled correctly
+    assert len(gateway_specific_models_mixed) == 1, (
+        f"External model should be found regardless of gateway parameter case. Found {len(gateway_specific_models_mixed)} models"
+    )
+
+    # Test a case that should demonstrate the potential issue:
+    # Create another external model file with uppercase gateway name in the YAML
+    external_models_yaml_uppercase = tmp_path / "external_models_uppercase.yaml"
+    external_models_yaml_uppercase.write_text("""
+- name: test_db.uppercase_in_yaml
+  description: Test external model with uppercase gateway name in YAML
+  gateway: UPPERCASE_GATEWAY  # uppercase in external model yaml
+  columns:
+    id: int
+    status: text
+""")
+
+    # Add the new external models file to the project
+    models_dir = tmp_path / "external_models"
+    models_dir.mkdir(exist_ok=True)
+    (models_dir / "uppercase_gateway_models.yaml").write_text("""
+- name: test_db.uppercase_in_yaml
+  description: Test external model with uppercase gateway name in YAML
+  gateway: UPPERCASE_GATEWAY  # uppercase in external model yaml
+  columns:
+    id: int
+    status: text
+""")
+
+    # Reload context to pick up the new external models
+    context_reloaded = Context(paths=[tmp_path], gateway="UPPERCASE_GATEWAY")
+
+    uppercase_in_yaml_models = [
+        model
+        for model in context_reloaded.models.values()
+        if model.name == "test_db.uppercase_in_yaml"
+    ]
+    assert len(uppercase_in_yaml_models) == 1, (
+        f"External model with uppercase gateway in YAML should be found. Found {len(uppercase_in_yaml_models)} models"
+    )
+
+
+def test_plan_no_start_configured():
+    context = Context(config=Config())
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.xvg,
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily'
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    prod_plan = context.plan(auto_apply=True)
+    assert len(prod_plan.new_snapshots) == 1
+
+    context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+                MODEL(
+                    name db.xvg,
+                    kind INCREMENTAL_BY_TIME_RANGE (
+                        time_column ds
+                    ),
+                    cron '@daily',
+                    physical_properties ('some_prop' = 1),
+                );
+
+                SELECT id, ds FROM (VALUES
+                    ('1', '2020-01-01'),
+                ) data(id, ds)
+                WHERE ds BETWEEN @start_ds AND @end_ds
+                """
+            )
+        )
+    )
+
+    # This should raise an error because the model has no start configured and the end time is less than the start time which will be calculated from the intervals
+    with pytest.raises(
+        PlanError,
+        match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
+    ):
+        context.plan("dev", execution_time="1999-01-05")

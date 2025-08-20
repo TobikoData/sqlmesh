@@ -32,7 +32,7 @@ from sqlmesh.core.model.common import (
     sorted_python_env_payloads,
     validate_extra_and_required_fields,
 )
-from sqlmesh.core.model.meta import ModelMeta, FunctionCall
+from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.kind import (
     ModelKindName,
     SeedKind,
@@ -244,14 +244,7 @@ class _Model(ModelMeta, frozen=True):
                             value=exp.to_table(field_value, dialect=self.dialect),
                         )
                     )
-                elif field_name not in (
-                    "column_descriptions_",
-                    "default_catalog",
-                    "enabled",
-                    "inline_audits",
-                    "optimize_query",
-                    "ignored_rules_",
-                ):
+                elif field_name not in ("default_catalog", "enabled", "ignored_rules_"):
                     expressions.append(
                         exp.Property(
                             this=field_info.alias or field_name,
@@ -681,10 +674,10 @@ class _Model(ModelMeta, frozen=True):
             # in turn makes @this_model available in the evaluation context
             rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
 
-            # Warn instead of raising for cases where a property is conditionally assigned
+            # Inform instead of raising for cases where a property is conditionally assigned
             if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
-                logger.warning(
-                    f"Expected rendering '{expression.sql(dialect=self.dialect)}' to return an expression"
+                logger.info(
+                    f"Rendering '{expression.sql(dialect=self.dialect)}' did not return an expression"
                 )
                 return None
 
@@ -1062,6 +1055,7 @@ class _Model(ModelMeta, frozen=True):
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
             str(self.optimize_query) if self.optimize_query is not None else None,
+            self.virtual_environment_mode.value,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -1782,12 +1776,17 @@ class PythonModel(_Model):
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH, self.dialect)
         execution_time = to_datetime(execution_time or c.EPOCH)
 
-        variables = env.get(c.SQLMESH_VARS, {})
-        variables.update(kwargs.pop("variables", {}))
-
+        variables = {
+            **env.get(c.SQLMESH_VARS, {}),
+            **env.get(c.SQLMESH_VARS_METADATA, {}),
+            **kwargs.pop("variables", {}),
+        }
         blueprint_variables = {
             k: d.parse_one(v.sql, dialect=self.dialect) if isinstance(v, SqlValue) else v
-            for k, v in env.get(c.SQLMESH_BLUEPRINT_VARS, {}).items()
+            for k, v in {
+                **env.get(c.SQLMESH_BLUEPRINT_VARS, {}),
+                **env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA, {}),
+            }.items()
         }
         try:
             kwargs = {
@@ -1909,11 +1908,11 @@ def _extract_blueprint_variables(blueprint: t.Any, path: Path) -> t.Dict[str, t.
         return {}
     if isinstance(blueprint, (exp.Paren, exp.PropertyEQ)):
         blueprint = blueprint.unnest()
-        return {blueprint.left.name: blueprint.right}
+        return {blueprint.left.name.lower(): blueprint.right}
     if isinstance(blueprint, (exp.Tuple, exp.Array)):
-        return {e.left.name: e.right for e in blueprint.expressions}
+        return {e.left.name.lower(): e.right for e in blueprint.expressions}
     if isinstance(blueprint, dict):
-        return blueprint
+        return {k.lower(): v for k, v in blueprint.items()}
 
     raise_config_error(
         f"Expected a key-value mapping for the blueprint value, got '{blueprint}' instead",
@@ -2038,7 +2037,6 @@ def load_sql_based_model(
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     audits: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[FunctionCall]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
@@ -2211,7 +2209,6 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
         physical_schema_mapping=physical_schema_mapping,
         default_catalog=default_catalog,
         variables=variables,
-        default_audits=default_audits,
         inline_audits=inline_audits,
         blueprint_variables=blueprint_variables,
         **meta_fields,
@@ -2431,7 +2428,6 @@ def _create_model(
     physical_schema_mapping: t.Optional[t.Dict[re.Pattern, str]] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
-    default_audits: t.Optional[t.List[FunctionCall]] = None,
     inline_audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     module_path: Path = Path(),
     macros: t.Optional[MacroRegistry] = None,
@@ -2512,7 +2508,7 @@ def _create_model(
     if isinstance(getattr(kwargs.get("kind"), "merge_filter", None), exp.Expression):
         statements.append(kwargs["kind"].merge_filter)
 
-    jinja_macro_references, used_variables = extract_macro_references_and_variables(
+    jinja_macro_references, referenced_variables = extract_macro_references_and_variables(
         *(gen(e if isinstance(e, exp.Expression) else e[0]) for e in statements)
     )
 
@@ -2535,11 +2531,17 @@ def _create_model(
             _extract_migrated_dbt_variable_references(jinja_macros, variables)
         )
 
-        used_variables.update(nested_macro_used_variables)
+        referenced_variables.update(nested_macro_used_variables)
         variables.update(flattened_package_variables)
     else:
         for jinja_macro in jinja_macros.root_macros.values():
-            used_variables.update(extract_macro_references_and_variables(jinja_macro.definition)[1])
+            referenced_variables.update(
+                extract_macro_references_and_variables(jinja_macro.definition)[1]
+            )
+
+    # Merge model-specific audits with default audits
+    if default_audits := defaults.pop("audits", None):
+        kwargs["audits"] = default_audits + d.extract_function_calls(kwargs.pop("audits", []))
 
     model = klass(
         name=name,
@@ -2558,12 +2560,7 @@ def _create_model(
         **(inline_audits or {}),
     }
 
-    # TODO: default_audits needs to be merged with model.audits; the former's arguments
-    # are silently dropped today because we add them in audit_definitions. We also need
-    # to check for duplicates when we implement this merging logic.
-    used_audits: t.Set[str] = set()
-    used_audits.update(audit_name for audit_name, _ in default_audits or [])
-    used_audits.update(audit_name for audit_name, _ in model.audits)
+    used_audits: t.Set[str] = {audit_name for audit_name, _ in model.audits}
 
     audit_definitions = {
         audit_name: audit_definitions[audit_name]
@@ -2602,7 +2599,7 @@ def _create_model(
         module_path,
         macros or macro.get_registry(),
         variables=variables,
-        used_variables=used_variables,
+        referenced_variables=referenced_variables,
         path=path,
         python_env=python_env,
         strict_resolution=depends_on is None,
@@ -2936,6 +2933,9 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
+    "column_descriptions_": lambda value: exp.Schema(
+        expressions=[exp.to_column(c).eq(d) for c, d in value.items()]
+    ),
     "tags": single_value_or_tuple,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
@@ -2954,6 +2954,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         )
     ),
     "formatting": str,
+    "optimize_query": str,
+    "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 
 

@@ -374,6 +374,7 @@ class Loader(abc.ABC):
 
             # however, if there is a gateway defined, gateway-specific models take precedence
             if gateway:
+                gateway = gateway.lower()
                 for model in external_models:
                     if model.gateway == gateway:
                         if model.fqn in models and models[model.fqn].gateway == gateway:
@@ -593,7 +594,6 @@ class SqlMeshLoader(Loader):
                 macros=macros,
                 jinja_macros=jinja_macros,
                 audit_definitions=audits,
-                default_audits=self.config.model_defaults.audits,
                 module_path=self.config_path,
                 dialect=self.config.model_defaults.dialect,
                 time_column_format=self.config.time_column_format,
@@ -603,6 +603,7 @@ class SqlMeshLoader(Loader):
                 infer_names=self.config.model_naming.infer_names,
                 signal_definitions=signals,
                 default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                virtual_environment_mode=self.config.virtual_environment_mode,
                 **loading_default_kwargs or {},
             )
 
@@ -683,6 +684,7 @@ class SqlMeshLoader(Loader):
                             audit_definitions=audits,
                             signal_definitions=signals,
                             default_catalog_per_gateway=self.context.default_catalog_per_gateway,
+                            virtual_environment_mode=self.config.virtual_environment_mode,
                         ):
                             if model.enabled:
                                 models[model.fqn] = model

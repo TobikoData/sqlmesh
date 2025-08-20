@@ -490,6 +490,12 @@ class SQLMeshMagics(Magics):
         help="Run latest intervals as part of the plan application (prod environment only).",
     )
     @argument(
+        "--ignore-cron",
+        action="store_true",
+        help="Run for all missing intervals, ignoring individual cron schedules. Only applies if --run is set.",
+        default=None,
+    )
+    @argument(
         "--enable-preview",
         action="store_true",
         help="Enable preview for forward-only models when targeting a development environment.",
@@ -536,6 +542,7 @@ class SQLMeshMagics(Magics):
             select_models=args.select_model,
             no_diff=args.no_diff,
             run=args.run,
+            ignore_cron=args.run,
             enable_preview=args.enable_preview,
             diff_rendered=args.diff_rendered,
         )

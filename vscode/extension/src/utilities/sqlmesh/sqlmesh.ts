@@ -69,8 +69,8 @@ export const isTcloudProject = async (): Promise<Result<boolean, string>> => {
   if (isErr(resolvedPath)) {
     return err(resolvedPath.error)
   }
-  const tcloudYamlPath = path.join(resolvedPath.value, 'tcloud.yaml')
-  const tcloudYmlPath = path.join(resolvedPath.value, 'tcloud.yml')
+  const tcloudYamlPath = path.join(resolvedPath.value.workspaceFolder, 'tcloud.yaml')
+  const tcloudYmlPath = path.join(resolvedPath.value.workspaceFolder, 'tcloud.yml')
   const isTcloudYamlFilePresent = fs.existsSync(tcloudYamlPath)
   const isTcloudYmlFilePresent = fs.existsSync(tcloudYmlPath)
   if (isTcloudYamlFilePresent || isTcloudYmlFilePresent) {
@@ -144,7 +144,7 @@ export const isSqlmeshEnterpriseInstalled = async (): Promise<
     })
   }
   const called = await execAsync(tcloudBin.value.bin, ['is_sqlmesh_installed'], {
-    cwd: resolvedPath.value,
+    cwd: resolvedPath.value.workspaceFolder,
     env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
@@ -185,7 +185,7 @@ export const installSqlmeshEnterprise = async (
   }
   const called = await execAsync(tcloudBin.value.bin, ['install_sqlmesh'], {
     signal: abortController.signal,
-    cwd: resolvedPath.value,
+    cwd: resolvedPath.value.workspaceFolder,
     env: tcloudBin.value.env,
   })
   if (called.exitCode !== 0) {
@@ -263,109 +263,6 @@ export const ensureSqlmeshEnterpriseInstalled = async (): Promise<
 }
 
 /**
- * Get the sqlmesh executable for the current workspace.
- *
- * @deprecated Use LSP instead of direct sqlmesh execution for any new functionality.
- */
-export const sqlmeshExec = async (): Promise<
-  Result<SqlmeshExecInfo, ErrorType>
-> => {
-  const sqlmesh = IS_WINDOWS ? 'sqlmesh.exe' : 'sqlmesh'
-  const projectRoot = await getProjectRoot()
-  const resolvedPath = resolveProjectPath(projectRoot)
-  if (isErr(resolvedPath)) {
-    return err({
-      type: 'generic',
-      message: resolvedPath.error,
-    })
-  }
-  const envVariables = await getPythonEnvVariables()
-  if (isErr(envVariables)) {
-    return err({
-      type: 'generic',
-      message: envVariables.error,
-    })
-  }
-  const workspacePath = resolvedPath.value
-  const interpreterDetails = await getInterpreterDetails()
-  traceLog(`Interpreter details: ${JSON.stringify(interpreterDetails)}`)
-  if (interpreterDetails.path) {
-    traceVerbose(
-      `Using interpreter from Python extension: ${interpreterDetails.path.join(
-        ' ',
-      )}`,
-    )
-  }
-  if (interpreterDetails.isVirtualEnvironment) {
-    traceLog('Using virtual environment')
-    const isTcloudInstalled = await isTcloudProject()
-    if (isErr(isTcloudInstalled)) {
-      return err({
-        type: 'generic',
-        message: isTcloudInstalled.error,
-      })
-    }
-    if (isTcloudInstalled.value) {
-      const tcloudBin = await getTcloudBin()
-      if (isErr(tcloudBin)) {
-        return tcloudBin
-      }
-      const isSignedIn = await isSignedIntoTobikoCloud()
-      if (!isSignedIn) {
-        return err({
-          type: 'not_signed_in',
-        })
-      }
-      const ensured = await ensureSqlmeshEnterpriseInstalled()
-      if (isErr(ensured)) {
-        return ensured
-      }
-      return ok({
-        bin: tcloudBin.value.bin,
-        workspacePath,
-        env: tcloudBin.value.env,
-        args: ["sqlmesh"],
-      })
-    }
-    const binPath = path.join(interpreterDetails.binPath!, sqlmesh)
-    traceLog(`Bin path: ${binPath}`)
-    const env = await getSqlmeshEnvironment()
-    if (isErr(env)) {
-      return err({
-        type: 'generic',
-        message: env.error,
-      })
-    }
-    return ok({
-      bin: binPath,
-      workspacePath,
-      env: env.value,
-      args: [],
-    })
-  } else {
-    const exists = await doesExecutableExist(sqlmesh)
-    if (!exists) {
-      return err({
-        type: 'sqlmesh_not_found',
-      })
-    }
-    const env = await getSqlmeshEnvironment()
-    if (isErr(env)) {
-      return err({
-        type: 'generic',
-        message: env.error,
-      })
-    }
-    return ok({
-      bin: sqlmesh,
-      workspacePath,
-      env: env.value,
-      args: [],
-    })
-  }
-}
-
-/**
  * Ensure that the sqlmesh_lsp dependencies are installed.
  *
  * @returns A Result indicating whether the sqlmesh_lsp dependencies were installed.
@@ -421,14 +318,14 @@ export const sqlmeshLspExec = async (): Promise<
       message: resolvedPath.error,
     })
   }
-  const workspacePath = resolvedPath.value
+  const workspacePath = resolvedPath.value.workspaceFolder
 
   const configuredLSPExec = getSqlmeshLspEntryPoint()
   if (configuredLSPExec) {
     traceLog(`Using configured SQLMesh LSP entry point: ${configuredLSPExec.entrypoint} ${configuredLSPExec.args.join(' ')}`)
     return ok({
       bin: configuredLSPExec.entrypoint,
-      workspacePath,
+      workspacePath: workspacePath,
       env: process.env,
       args: configuredLSPExec.args,
     })
@@ -484,7 +381,7 @@ export const sqlmeshLspExec = async (): Promise<
       if (isSemVerGreaterThanOrEqual(tcloudBinVersion.value, [2, 10, 1])) {
         return ok ({
           bin: tcloudBin.value.bin,
-          workspacePath,
+          workspacePath: workspacePath,
           env: tcloudBin.value.env,
           args: ['sqlmesh_lsp'],
         })
@@ -510,7 +407,7 @@ export const sqlmeshLspExec = async (): Promise<
     }
     return ok({
       bin: binPath,
-      workspacePath,
+      workspacePath: workspacePath,
       env: env.value,
       args: [],
     })
@@ -530,7 +427,7 @@ export const sqlmeshLspExec = async (): Promise<
     }
     return ok({
       bin: sqlmeshLSP,
-      workspacePath,
+      workspacePath: workspacePath,
       env: env.value,
       args: [],
     })

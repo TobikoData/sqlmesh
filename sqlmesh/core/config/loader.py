@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config.common import (
+    ALL_CONFIG_FILENAMES,
+    YAML_CONFIG_FILENAMES,
+    DBT_PROJECT_FILENAME,
+)
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.root import Config
 from sqlmesh.utils import env_vars, merge_dicts, sys_path
@@ -27,6 +32,7 @@ def load_configs(
     paths: t.Union[str | Path, t.Iterable[str | Path]],
     sqlmesh_path: t.Optional[Path] = None,
     dotenv_path: t.Optional[Path] = None,
+    **kwargs: t.Any,
 ) -> t.Dict[Path, C]:
     sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
@@ -51,10 +57,7 @@ def load_configs(
         return {path: config for path in absolute_paths}
 
     config_env_vars = None
-    personal_paths = [
-        sqlmesh_path / "config.yml",
-        sqlmesh_path / "config.yaml",
-    ]
+    personal_paths = [sqlmesh_path / name for name in YAML_CONFIG_FILENAMES]
     for path in personal_paths:
         if path.exists():
             config_env_vars = load_config_from_yaml(path).get("env_vars")
@@ -65,9 +68,10 @@ def load_configs(
         return {
             path: load_config_from_paths(
                 config_type,
-                project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
+                project_paths=[path / name for name in ALL_CONFIG_FILENAMES],
                 personal_paths=personal_paths,
                 config_name=config,
+                **kwargs,
             )
             for path in absolute_paths
         }
@@ -79,6 +83,7 @@ def load_config_from_paths(
     personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
+    **kwargs: t.Any,
 ) -> C:
     project_paths = project_paths or []
     personal_paths = personal_paths or []
@@ -156,6 +161,26 @@ def load_config_from_paths(
         )
 
     no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
+
+    # if "dbt_project.yml" is present *and there was no python config already defined*,
+    # create a basic one to ensure we are using the DBT loader.
+    # any config within yaml files will get overlayed on top of it.
+    if not python_config:
+        potential_project_files = [f / DBT_PROJECT_FILENAME for f in visited_folders]
+        dbt_project_file = next((f for f in potential_project_files if f.exists()), None)
+        if dbt_project_file:
+            from sqlmesh.dbt.loader import sqlmesh_config
+
+            dbt_python_config = sqlmesh_config(
+                project_root=dbt_project_file.parent,
+                dbt_profile_name=kwargs.pop("profile", None),
+                dbt_target_name=kwargs.pop("target", None),
+            )
+            if type(dbt_python_config) != config_type:
+                dbt_python_config = convert_config_type(dbt_python_config, config_type)
+
+            python_config = dbt_python_config
+
     if python_config:
         model_defaults = python_config.model_defaults
         if model_defaults.dialect is None:
@@ -165,6 +190,7 @@ def load_config_from_paths(
     model_defaults = non_python_config.model_defaults
     if model_defaults.dialect is None:
         raise ConfigError(no_dialect_err_msg)
+
     return non_python_config
 
 

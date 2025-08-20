@@ -141,6 +141,7 @@ class ModelKindMixin:
             self.is_incremental_unmanaged
             or self.is_incremental_by_unique_key
             or self.is_incremental_by_partition
+            or self.is_scd_type_2
             or self.is_managed
             or self.is_full
             or self.is_view
@@ -188,6 +189,7 @@ class OnDestructiveChange(str, Enum):
     ERROR = "ERROR"
     WARN = "WARN"
     ALLOW = "ALLOW"
+    IGNORE = "IGNORE"
 
     @property
     def is_error(self) -> bool:
@@ -200,6 +202,10 @@ class OnDestructiveChange(str, Enum):
     @property
     def is_allow(self) -> bool:
         return self == OnDestructiveChange.ALLOW
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == OnDestructiveChange.IGNORE
 
 
 def _on_destructive_change_validator(
@@ -478,10 +484,9 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
                 v = v[1:-1]
 
             v = t.cast(exp.Whens, d.parse_one(v, into=exp.Whens, dialect=dialect))
-        else:
-            v = t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
-        return validate_expression(v, dialect=dialect)
+        v = validate_expression(v, dialect=dialect)
+        return t.cast(exp.Whens, v.transform(d.replace_merge_table_aliases, dialect=dialect))
 
     @field_validator("merge_filter", mode="before")
     def _merge_filter_validator(
@@ -497,10 +502,9 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
         if isinstance(v, str):
             v = v.strip()
             v = d.parse_one(v, dialect=dialect)
-        else:
-            v = v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
-        return validate_expression(v, dialect=dialect)
+        v = validate_expression(v, dialect=dialect)
+        return v.transform(d.replace_merge_table_aliases, dialect=dialect)
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:

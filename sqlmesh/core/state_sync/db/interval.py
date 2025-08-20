@@ -114,7 +114,7 @@ class IntervalState:
         self.engine_adapter.insert_append(
             self.intervals_table,
             _intervals_to_df(intervals_to_remove, is_dev=False, is_removed=True),
-            columns_to_types=self._interval_columns_to_types,
+            target_columns_to_types=self._interval_columns_to_types,
         )
 
     def get_snapshot_intervals(
@@ -242,7 +242,7 @@ class IntervalState:
             self.engine_adapter.insert_append(
                 self.intervals_table,
                 pd.DataFrame(new_intervals),
-                columns_to_types=self._interval_columns_to_types,
+                target_columns_to_types=self._interval_columns_to_types,
             )
 
     def _get_snapshot_intervals(

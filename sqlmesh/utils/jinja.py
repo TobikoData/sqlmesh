@@ -229,7 +229,7 @@ def extract_macro_references_and_variables(
                     )
 
         for call_name, node in extract_call_names(jinja_str):
-            if call_name[0] == c.VAR:
+            if call_name[0] in (c.VAR, c.BLUEPRINT_VAR):
                 assert isinstance(node, nodes.Call)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
@@ -363,6 +363,9 @@ class JinjaMacroRegistry(PydanticModel):
         Args:
             globals: The global objects that should be added.
         """
+        # Keep the registry lightweight when the graph is not needed
+        if not "graph" in self.packages:
+            globals.pop("flat_graph", None)
         self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:

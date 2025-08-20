@@ -23,7 +23,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=27.5.1",
+    "sqlglot[rs]~=27.8.0",
     "tenacity",
     "time-machine",
     "json-stream"
@@ -103,6 +103,7 @@ dev = [
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
 duckdb = []
+fabric = ["pyodbc>=5.0.0"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub>=2.6.0"]
 llm = ["langchain", "openai"]
@@ -142,6 +143,7 @@ risingwave = ["psycopg2"]
 
 [project.scripts]
 sqlmesh = "sqlmesh.cli.main:cli"
+sqlmesh_dbt = "sqlmesh_dbt.cli:dbt"
 sqlmesh_cicd = "sqlmesh.cicd.bot:bot"
 sqlmesh_lsp = "sqlmesh.lsp.main:main"
 
@@ -164,7 +166,7 @@ fallback_version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include = ["sqlmesh", "sqlmesh.*", "web*"]
+include = ["sqlmesh", "sqlmesh.*", "sqlmesh_dbt", "sqlmesh_dbt.*", "web*"]
 
 [tool.setuptools.package-data]
 web = ["client/dist/**"]
@@ -252,6 +254,7 @@ markers = [
     "clickhouse_cloud: test for Clickhouse (cloud mode)",
     "databricks: test for Databricks",
     "duckdb: test for DuckDB",
+    "fabric: test for Fabric",
     "motherduck: test for MotherDuck",
     "mssql: test for MSSQL",
     "mysql: test for MySQL",
@@ -271,6 +274,9 @@ filterwarnings = [
     "ignore:The localize method is no longer necessary, as this time zone supports the fold attribute"
 ]
 retry_delay = 10
+
+[tool.ruff]
+line-length = 100
 
 [tool.ruff.lint]
 select = [
@@ -297,3 +303,4 @@ banned-module-level-imports = [
 "sqlmesh/lsp/**/*.py" = ["TID251"]
 "tests/lsp/**/*.py" = ["TID251"]
 "benchmarks/lsp*.py" = ["TID251"]
+"sqlmesh/dbt/builtin.py" = ["T100"]

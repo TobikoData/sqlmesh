@@ -428,6 +428,7 @@ class Console(
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Updates the snapshot evaluation progress."""
 
@@ -575,6 +576,7 @@ class NoopConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         pass
 
@@ -1056,6 +1058,7 @@ class TerminalConsole(Console):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         """Update the snapshot evaluation progress."""
         if (
@@ -3639,6 +3642,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.snapshot_id]
 
@@ -3808,11 +3812,15 @@ class DebuggerTerminalConsole(TerminalConsole):
         num_audits_passed: int,
         num_audits_failed: int,
         audit_only: bool = False,
+        auto_restatement_triggers: t.Optional[t.List[SnapshotId]] = None,
     ) -> None:
-        message = f"Evaluating {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+        message = f"Evaluated {snapshot.name} | batch={batch_idx} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+
+        if auto_restatement_triggers:
+            message += f" | auto_restatement_triggers=[{', '.join(trigger.name for trigger in auto_restatement_triggers)}]"
 
         if audit_only:
-            message = f"Auditing {snapshot.name} duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
+            message = f"Audited {snapshot.name} | duration={duration_ms}ms | num_audits_passed={num_audits_passed} | num_audits_failed={num_audits_failed}"
 
         self._write(message)
 
@@ -4074,8 +4082,8 @@ def _format_node_errors(errors: t.List[NodeExecutionFailedError]) -> t.Dict[str,
         node_name = ""
         if isinstance(error.node, SnapshotId):
             node_name = error.node.name
-        elif isinstance(error.node, tuple):
-            node_name = error.node[0]
+        elif hasattr(error.node, "snapshot_name"):
+            node_name = error.node.snapshot_name
 
         msg = _format_node_error(error)
         msg = "  " + msg.replace("\n", "\n  ")

@@ -53,7 +53,9 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
-            raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
+            raise SQLMeshError(
+                f"Could not get columns for table '{table.sql(dialect=self.dialect)}'. Table not found."
+            )
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
@@ -91,13 +93,14 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self,
         view_name: TableName,
         query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
         materialized: bool = False,
         materialized_properties: t.Optional[t.Dict[str, t.Any]] = None,
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         view_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -113,13 +116,14 @@ class BasePostgresEngineAdapter(EngineAdapter):
             super().create_view(
                 view_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
+                target_columns_to_types=target_columns_to_types,
                 replace=False,
                 materialized=materialized,
                 materialized_properties=materialized_properties,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 view_properties=view_properties,
+                source_columns=source_columns,
                 **create_kwargs,
             )
 

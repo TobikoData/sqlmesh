@@ -21,6 +21,9 @@ from sqlmesh.core.scheduler import (
     interval_diff,
     compute_interval_params,
     SnapshotToIntervals,
+    EvaluateNode,
+    SchedulingUnit,
+    DummyNode,
 )
 from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import (
@@ -160,9 +163,10 @@ def test_incremental_by_unique_key_kind_dag(
     batches = get_batched_missing_intervals(scheduler, start, end, end)
     dag = scheduler._dag(batches)
     assert dag.graph == {
-        (
+        EvaluateNode(
             unique_by_key_snapshot.name,
-            ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+            batch_index=0,
         ): set(),
     }
 
@@ -202,60 +206,66 @@ def test_incremental_time_self_reference_dag(
 
     assert dag.graph == {
         # Only run one day at a time and each day relies on the previous days
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
         ): set(),
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
+            interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+            batch_index=1,
         ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
-            )
-        },
-        (
-            incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
-        ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
             ),
         },
-        (
+        EvaluateNode(
             incremental_self_snapshot.name,
-            ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 3),
+            interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+            batch_index=2,
         ): {
-            (
-                incremental_self_snapshot.name,
-                ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                batch_index=1,
             ),
         },
-        (
-            incremental_self_snapshot.name,
-            ((to_timestamp(0), to_timestamp(0)), -1),
-        ): set(
-            [
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 1),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 2),
-                ),
-                (
-                    incremental_self_snapshot.name,
-                    ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 3),
-                ),
-            ]
-        ),
+        EvaluateNode(
+            snapshot_name=incremental_self_snapshot.name,
+            interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+            batch_index=3,
+        ): {
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                batch_index=2,
+            ),
+        },
+        DummyNode(snapshot_name=incremental_self_snapshot.name): {
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                batch_index=1,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                batch_index=2,
+            ),
+            EvaluateNode(
+                snapshot_name=incremental_self_snapshot.name,
+                interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                batch_index=3,
+            ),
+        },
     }
 
 
@@ -266,16 +276,26 @@ def test_incremental_time_self_reference_dag(
             2,
             2,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-03")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-05")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-05")),
+                    batch_index=1,
                 ): set(),
-                ('"test_model"', ((to_timestamp("2023-01-05"), to_timestamp("2023-01-07")), 2)): {
-                    ('"test_model"', ((to_timestamp("2023-01-01"), to_timestamp("2023-01-03")), 0)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-07")),
+                    batch_index=2,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+                        batch_index=0,
+                    ),
                 },
             },
         ),
@@ -283,26 +303,53 @@ def test_incremental_time_self_reference_dag(
             1,
             3,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    batch_index=1,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    batch_index=2,
                 ): set(),
-                ('"test_model"', ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 3)): {
-                    ('"test_model"', ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    batch_index=3,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                        batch_index=0,
+                    ),
                 },
-                ('"test_model"', ((to_timestamp("2023-01-05"), to_timestamp("2023-01-06")), 4)): {
-                    ('"test_model"', ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    batch_index=4,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                        batch_index=1,
+                    ),
                 },
-                ('"test_model"', ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 5)): {
-                    ('"test_model"', ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2)),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    batch_index=5,
+                ): {
+                    EvaluateNode(
+                        snapshot_name='"test_model"',
+                        interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                        batch_index=2,
+                    ),
                 },
             },
         ),
@@ -310,29 +357,35 @@ def test_incremental_time_self_reference_dag(
             1,
             10,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-02")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                    batch_index=0,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-02"), to_timestamp("2023-01-03")), 1),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                    batch_index=1,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-03"), to_timestamp("2023-01-04")), 2),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                    batch_index=2,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-04"), to_timestamp("2023-01-05")), 3),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                    batch_index=3,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-05"), to_timestamp("2023-01-06")), 4),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                    batch_index=4,
                 ): set(),
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-06"), to_timestamp("2023-01-07")), 5),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                    batch_index=5,
                 ): set(),
             },
         ),
@@ -340,9 +393,10 @@ def test_incremental_time_self_reference_dag(
             10,
             10,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+                    batch_index=0,
                 ): set(),
             },
         ),
@@ -350,9 +404,10 @@ def test_incremental_time_self_reference_dag(
             10,
             1,
             {
-                (
-                    '"test_model"',
-                    ((to_timestamp("2023-01-01"), to_timestamp("2023-01-07")), 0),
+                EvaluateNode(
+                    snapshot_name='"test_model"',
+                    interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-07")),
+                    batch_index=0,
                 ): set(),
             },
         ),
@@ -364,7 +419,7 @@ def test_incremental_batch_concurrency(
     get_batched_missing_intervals,
     batch_size: int,
     batch_concurrency: int,
-    expected_graph: t.Dict[str, t.Any],
+    expected_graph: t.Dict[SchedulingUnit, t.Set[SchedulingUnit]],
 ):
     start = to_datetime("2023-01-01")
     end = to_datetime("2023-01-07")
@@ -392,7 +447,7 @@ def test_incremental_batch_concurrency(
 
     batches = get_batched_missing_intervals(scheduler, start, end, end)
     dag = scheduler._dag(batches)
-    graph = {k: v for k, v in dag.graph.items() if k[1][1] != -1}  # exclude the terminal node.}
+    graph = {k: v for k, v in dag.graph.items() if isinstance(k, EvaluateNode)}
     assert graph == expected_graph
 
 

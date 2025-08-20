@@ -55,6 +55,7 @@ from sqlmesh.core.model import (
     create_seed_model,
     create_sql_model,
     load_sql_based_model,
+    load_sql_based_models,
     model,
 )
 from sqlmesh.core.model.common import parse_expression
@@ -1671,13 +1672,13 @@ def test_enable_audits_from_model_defaults():
     model = load_sql_based_model(
         expressions,
         path=Path("./examples/sushi/models/test_model.sql"),
-        default_audits=model_defaults.audits,
+        defaults=model_defaults.dict(),
     )
 
-    assert len(model.audits) == 0
+    assert len(model.audits) == 1
 
     config = Config(model_defaults=model_defaults)
-    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {})
+    assert config.model_defaults.audits[0] == ("assert_positive_order_ids", {}) == model.audits[0]
 
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 1
@@ -1907,7 +1908,8 @@ def test_render_definition_with_defaults():
             dialect spark,
             kind VIEW (
                 materialized FALSE
-            )
+            ),
+            virtual_environment_mode 'full'
         );
 
         {query}
@@ -5479,7 +5481,7 @@ def test_when_matched():
     """
     )
 
-    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`))"
+    expected_when_matched = "(WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`))"
 
     model = load_sql_based_model(expressions, dialect="hive")
     assert model.kind.when_matched.sql(dialect="hive") == expected_when_matched
@@ -5513,9 +5515,9 @@ def test_when_matched():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "__merge_source__"."_operation" = 1 THEN DELETE
-      WHEN MATCHED AND "__merge_source__"."_operation" <> 1 THEN UPDATE SET
-        "__merge_target__"."purchase_order_id" = 1
+      WHEN MATCHED AND "__MERGE_SOURCE__"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "__MERGE_SOURCE__"."_operation" <> 1 THEN UPDATE SET
+        "__MERGE_TARGET__"."purchase_order_id" = 1
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -5566,7 +5568,7 @@ FROM @{macro_val}.upstream"""
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "__merge_source__"."salary" <> "__merge_target__"."salary" THEN UPDATE SET
+      WHEN MATCHED AND "__MERGE_SOURCE__"."salary" <> "__MERGE_TARGET__"."salary" THEN UPDATE SET
         ARRAY('target.update_datetime = source.update_datetime', 'target.salary = source.salary')
     ),
     batch_concurrency 1,
@@ -5600,8 +5602,8 @@ def test_when_matched_multiple():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND `__merge_source__`.`x` = 1 THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
-        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`salary` = COALESCE(`__merge_source__`.`salary`, `__merge_target__`.`salary`)",
+        "WHEN MATCHED AND `__MERGE_SOURCE__`.`x` = 1 THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`)",
+        "WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`salary` = COALESCE(`__MERGE_SOURCE__`.`salary`, `__MERGE_TARGET__`.`salary`)",
     ]
 
     model = load_sql_based_model(expressions, dialect="hive", variables={"schema": "db"})
@@ -5642,13 +5644,13 @@ def test_when_matched_merge_filter_multi_part_columns():
     )
 
     expected_when_matched = [
-        "WHEN MATCHED AND `__merge_source__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
-        "WHEN MATCHED THEN UPDATE SET `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED AND `__MERGE_SOURCE__`.`record`.`nested_record`.`field` = 1 THEN UPDATE SET `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
+        "WHEN MATCHED THEN UPDATE SET `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` = COALESCE(`__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`, `__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field`)",
     ]
 
     expected_merge_filter = (
-        "`__merge_source__`.`record`.`nested_record`.`field` < `__merge_target__`.`record`.`nested_record`.`field` AND "
-        "`__merge_target__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__merge_source__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
+        "`__MERGE_SOURCE__`.`record`.`nested_record`.`field` < `__MERGE_TARGET__`.`record`.`nested_record`.`field` AND "
+        "`__MERGE_TARGET__`.`repeated_record`.`sub_repeated_record`.`sub_field` > `__MERGE_SOURCE__`.`repeated_record`.`sub_repeated_record`.`sub_field`"
     )
 
     model = load_sql_based_model(expressions, dialect="bigquery", variables={"schema": "db"})
@@ -5730,7 +5732,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "516937963"
+    HASH_WITH_CATALOG = "1269513823"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -5896,7 +5898,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "770057346"
+    HASH_WITH_CATALOG = "2728996410"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -5988,7 +5990,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "3614876346"
+    EXPECTED_HASH = "763256265"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None
@@ -6678,7 +6680,7 @@ def test_unrendered_macros_sql_model(mocker: MockerFixture) -> None:
     assert model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         t.cast(exp.Expression, model.merge_filter).sql()
-        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+        == '"__MERGE_SOURCE__"."id" > 0 AND "__MERGE_TARGET__"."updated_at" < @end_ds AND "__MERGE_SOURCE__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -6774,7 +6776,7 @@ def test_unrendered_macros_python_model(mocker: MockerFixture) -> None:
     assert python_sql_model.unique_key[0] == exp.column("a", quoted=True)
     assert (
         python_sql_model.merge_filter.sql()
-        == '"__merge_source__"."id" > 0 AND "__merge_target__"."updated_at" < @end_ds AND "__merge_source__"."updated_at" > @start_ds AND @merge_filter_var'
+        == '"__MERGE_SOURCE__"."id" > 0 AND "__MERGE_TARGET__"."updated_at" < @end_ds AND "__MERGE_SOURCE__"."updated_at" > @start_ds AND @merge_filter_var'
     )
 
 
@@ -7252,23 +7254,26 @@ def test_macro_references_in_audits():
         "assert_max_value": load_audit(audit_expression, dialect="duckdb"),
         "assert_not_zero": load_audit(not_zero_audit, dialect="duckdb"),
     }
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
-    )
+    model_defaults = ModelDefaultsConfig(dialect="duckdb", audits=["assert_not_zero"])
+
     model = load_sql_based_model(
         model_expression,
-        audits=audits,
-        default_audits=config.model_defaults.audits,
+        defaults=model_defaults.dict(),
         audit_definitions=audits,
     )
 
-    assert len(model.audits) == 2
+    assert len(model.audits) == 3
     audits_with_args = model.audits_with_args
     assert len(audits_with_args) == 3
     assert len(model.python_env) == 3
-    assert config.model_defaults.audits == [("assert_not_zero", {})]
-    assert model.audits == [("assert_max_value", {}), ("assert_positive_ids", {})]
+    assert model.audits == [
+        ("assert_not_zero", {}),
+        ("assert_max_value", {}),
+        ("assert_positive_ids", {}),
+    ]
     assert isinstance(audits_with_args[0][0], ModelAudit)
+    assert isinstance(audits_with_args[1][0], ModelAudit)
+    assert isinstance(audits_with_args[2][0], ModelAudit)
     assert isinstance(model.python_env["min_value"], Executable)
     assert isinstance(model.python_env["max_value"], Executable)
     assert isinstance(model.python_env["zero_value"], Executable)
@@ -7861,7 +7866,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
+when_matched (WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -7889,7 +7894,7 @@ on_destructive_change 'ERROR'
         .sql()
         == """INCREMENTAL_BY_UNIQUE_KEY (
 unique_key ("a"),
-when_matched (WHEN MATCHED AND "__merge_source__"."x" = 1 THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b") WHEN MATCHED THEN UPDATE SET "__merge_target__"."b" = COALESCE("__merge_source__"."b", "__merge_target__"."b")),
+when_matched (WHEN MATCHED AND "__MERGE_SOURCE__"."x" = 1 THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b") WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."b" = COALESCE("__MERGE_SOURCE__"."b", "__MERGE_TARGET__"."b")),
 batch_concurrency 1,
 forward_only FALSE,
 disable_restatement FALSE,
@@ -8150,7 +8155,7 @@ def test_merge_filter():
     """
     )
 
-    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS.lower()}`.`salary` > 0"
+    expected_incremental_predicate = f"`{MERGE_SOURCE_ALIAS}`.`salary` > 0"
 
     model = load_sql_based_model(expressions, dialect="hive")
     assert model.kind.merge_filter.sql(dialect="hive") == expected_incremental_predicate
@@ -8193,19 +8198,19 @@ def test_merge_filter():
   kind INCREMENTAL_BY_UNIQUE_KEY (
     unique_key ("purchase_order_id"),
     when_matched (
-      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" = 1 THEN DELETE
-      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1 THEN UPDATE SET
-        "{MERGE_TARGET_ALIAS.lower()}"."purchase_order_id" = 1
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS}"."_operation" = 1 THEN DELETE
+      WHEN MATCHED AND "{MERGE_SOURCE_ALIAS}"."_operation" <> 1 THEN UPDATE SET
+        "{MERGE_TARGET_ALIAS}"."purchase_order_id" = 1
     ),
     merge_filter (
-      "{MERGE_SOURCE_ALIAS.lower()}"."ds" > (
+      "{MERGE_SOURCE_ALIAS}"."ds" > (
         SELECT
           MAX("ds")
         FROM "db"."test"
       )
-      AND "{MERGE_SOURCE_ALIAS.lower()}"."ds" > @start_ds
-      AND "{MERGE_SOURCE_ALIAS.lower()}"."_operation" <> 1
-      AND "{MERGE_TARGET_ALIAS.lower()}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
+      AND "{MERGE_SOURCE_ALIAS}"."ds" > @start_ds
+      AND "{MERGE_SOURCE_ALIAS}"."_operation" <> 1
+      AND "{MERGE_TARGET_ALIAS}"."start_date" > CURRENT_DATE + INTERVAL '7' DAY
     ),
     batch_concurrency 1,
     forward_only FALSE,
@@ -8223,7 +8228,7 @@ FROM db.upstream"""
     rendered_merge_filters = model.render_merge_filter(start="2023-01-01", end="2023-01-02")
     assert (
         rendered_merge_filters.sql(dialect="hive")
-        == "(`__merge_source__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__merge_source__`.`ds` > '2023-01-01' AND `__merge_source__`.`_operation` <> 1 AND `__merge_target__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
+        == "(`__MERGE_SOURCE__`.`ds` > (SELECT MAX(`ds`) FROM `db`.`test`) AND `__MERGE_SOURCE__`.`ds` > '2023-01-01' AND `__MERGE_SOURCE__`.`_operation` <> 1 AND `__MERGE_TARGET__`.`start_date` > CURRENT_DATE + INTERVAL '7' DAY)"
     )
 
 
@@ -9379,13 +9384,15 @@ def entrypoint(evaluator):
             assert "blueprints" not in model.all_fields()
 
             python_env = model.python_env
-            serialized_blueprint = (
-                SqlValue(sql=blueprint_value) if model_name == "test_model_sql" else blueprint_value
-            )
+
             assert python_env.get(c.SQLMESH_VARS) == Executable.value({"x": gateway_no})
-            assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-                {"blueprint": serialized_blueprint}
-            )
+
+            if model_name == "test_model_sql":
+                assert c.SQLMESH_BLUEPRINT_VARS not in python_env
+            else:
+                assert python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
+                    {"blueprint": blueprint_value}
+                )
 
             assert context.fetchdf(f"from {model.fqn}").to_dict() == {"x": {0: gateway_no}}
 
@@ -10049,6 +10056,185 @@ def metadata_macro(evaluator):
     assert new_snapshot.change_category == SnapshotChangeCategory.METADATA
 
 
+def test_vars_are_taken_into_account_when_propagating_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL, blueprints ((v4 := 4, v5 := 5)));"
+        "@m1_metadata_references_v1();"  # metadata macro, references v1 internally => v1 metadata
+        "@m2_metadata_does_not_reference_var(@v2, @v3);"  # metadata macro => v2 metadata, v3 metadata
+        "@m3_non_metadata_references_v4(@v3);"  # non-metadata macro, references v4 => v3, v4 are not metadata
+        "SELECT 1 AS c;"
+        "@m2_metadata_does_not_reference_var(@v6);"  # metadata macro => v6 is metadata
+        "@m4_non_metadata_references_v6();"  # non-metadata macro, references v6 => v6 is not metadata
+        "ON_VIRTUAL_UPDATE_BEGIN;"
+        "@m3_non_metadata_references_v4(@v5);"  # non-metadata macro, metadata expression => v5 metadata
+        "ON_VIRTUAL_UPDATE_END;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_metadata_references_v1(evaluator):
+    evaluator.var("v1")
+    return None
+
+@macro(metadata_only=True)
+def m2_metadata_does_not_reference_var(evaluator, *args):
+    return None
+
+@macro()
+def m3_non_metadata_references_v4(evaluator, *args):
+    evaluator.var("v4")
+    return None
+
+@macro()
+def m4_non_metadata_references_v6(evaluator):
+    evaluator.var("v6")
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(
+            model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+            variables={"v1": 1, "v2": 2, "v3": 3, "v6": 6},
+        ),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 8
+    assert "m1_metadata_references_v1" in python_env
+    assert "m2_metadata_does_not_reference_var" in python_env
+    assert "m3_non_metadata_references_v4" in python_env
+    assert "m4_non_metadata_references_v6" in python_env
+
+    variables = python_env.get(c.SQLMESH_VARS)
+    metadata_variables = python_env.get(c.SQLMESH_VARS_METADATA)
+
+    assert variables == Executable.value({"v3": 3, "v6": 6})
+    assert metadata_variables == Executable.value({"v1": 1, "v2": 2}, is_metadata=True)
+
+    blueprint_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS)
+    blueprint_metadata_variables = python_env.get(c.SQLMESH_BLUEPRINT_VARS_METADATA)
+
+    assert blueprint_variables == Executable.value({"v4": SqlValue(sql="4")})
+    assert blueprint_metadata_variables == Executable.value(
+        {"v5": SqlValue(sql="5")}, is_metadata=True
+    )
+
+    macro_evaluator = MacroEvaluator(python_env=python_env)
+
+    assert macro_evaluator.locals == {
+        "runtime_stage": "loading",
+        "default_catalog": None,
+        c.SQLMESH_VARS: {"v3": 3, "v6": 6},
+        c.SQLMESH_VARS_METADATA: {"v1": 1, "v2": 2},
+        c.SQLMESH_BLUEPRINT_VARS: {"v4": exp.Literal.number("4")},
+        c.SQLMESH_BLUEPRINT_VARS_METADATA: {"v5": exp.Literal.number("5")},
+    }
+    assert macro_evaluator.var("v1") == 1
+    assert macro_evaluator.var("v2") == 2
+    assert macro_evaluator.var("v3") == 3
+    assert macro_evaluator.var("v6") == 6
+    assert macro_evaluator.blueprint_var("v4") == exp.Literal.number("4")
+    assert macro_evaluator.blueprint_var("v5") == exp.Literal.number("5")
+
+    query_with_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @VAR('v{var}')" for var in [1, 2, 3, 6]))
+    )
+    assert t.cast(exp.Expression, query_with_vars).sql() == "SELECT 1, 1, 2, 2, 3, 3, 6, 6"
+
+    query_with_blueprint_vars = macro_evaluator.transform(
+        parse_one("SELECT " + ", ".join(f"@v{var}, @BLUEPRINT_VAR('v{var}')" for var in [4, 5]))
+    )
+    assert t.cast(exp.Expression, query_with_blueprint_vars).sql() == "SELECT 4, 4, 5, 5"
+
+
+def test_variable_mentioned_in_both_metadata_and_non_metadata_macro(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL); @m1_references_v_metadata(); SELECT @m2_references_v_non_metadata() AS c;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_references_v_metadata(evaluator):
+    evaluator.var("v")
+    return None
+
+@macro()
+def m2_references_v_non_metadata(evaluator):
+    evaluator.var("v")
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), variables={"v": 1}),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 3
+    assert set(python_env) > {"m1_references_v_metadata", "m2_references_v_non_metadata"}
+    assert python_env.get(c.SQLMESH_VARS) == Executable.value({"v": 1})
+
+
+def test_only_top_level_macro_func_impacts_var_descendant_metadata_status(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    test_model = tmp_path / "models/test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text(
+        "MODEL (name test_model, kind FULL); @m1_metadata(@m2_non_metadata(@v)); SELECT 1 AS c;"
+    )
+
+    macro_code = """
+from sqlmesh import macro
+
+@macro(metadata_only=True)
+def m1_metadata(evaluator, *args):
+    return None
+
+@macro()
+def m2_non_metadata(evaluator, *args):
+    return None"""
+
+    test_macros = tmp_path / "macros/test_macros.py"
+    test_macros.parent.mkdir(parents=True, exist_ok=True)
+    test_macros.write_text(macro_code)
+
+    ctx = Context(
+        config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"), variables={"v": 1}),
+        paths=tmp_path,
+    )
+    model = ctx.get_model("test_model")
+
+    python_env = model.python_env
+
+    assert len(python_env) == 3
+    assert set(python_env) > {"m1_metadata", "m2_non_metadata"}
+    assert python_env.get(c.SQLMESH_VARS_METADATA) == Executable.value({"v": 1}, is_metadata=True)
+
+
 def test_non_metadata_object_takes_precedence_over_metadata_only_object(tmp_path: Path) -> None:
     init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
@@ -10255,9 +10441,9 @@ def test_signal_always_true(batch, arg1, arg2):
 
 
 def test_scd_type_2_full_history_restatement():
-    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is False
-    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is False
-    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is False
+    assert ModelKindName.SCD_TYPE_2.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_TIME.full_history_restatement_only is True
+    assert ModelKindName.SCD_TYPE_2_BY_COLUMN.full_history_restatement_only is True
     assert ModelKindName.INCREMENTAL_BY_TIME_RANGE.full_history_restatement_only is False
 
 
@@ -10954,7 +11140,7 @@ def entrypoint(
     assert customer1_model.enabled
     assert "blueprints" not in customer1_model.all_fields()
     assert customer1_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer1", "field_a": "x", "field_b": "y", "min": 5}
+        {"customer": "customer1", "field_a": "x", "field_b": "y"}
     )
 
     # Test second blueprint
@@ -10962,7 +11148,7 @@ def entrypoint(
     assert customer2_model is not None
     assert customer2_model.cron == "*/10 * * * *"
     assert customer2_model.python_env.get(c.SQLMESH_BLUEPRINT_VARS) == Executable.value(
-        {"customer": "customer2", "field_a": "z", "field_b": "w", "min": 10}
+        {"customer": "customer2", "field_a": "z", "field_b": "w"}
     )
 
     # Test that the models can be planned and applied
@@ -11096,3 +11282,129 @@ def test_render_query_optimize_query_false(assert_exp_eq, sushi_context):
         LIMIT 10
         """,
     )
+
+
+def test_each_macro_with_paren_expression_arg(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (
+            name dataset.@table_name,
+            kind VIEW,
+            blueprints (
+                (
+                    table_name := model1,
+                    event_columns := (
+                        'value' AS property1,
+                        'value' AS property2
+                    )
+                ),
+                (
+                    table_name := model2,
+                    event_columns := (
+                        'value' AS property1
+                    )
+                )
+            ),
+        );
+
+        SELECT @EACH(@event_columns, x -> x)
+        """
+    )
+
+    models = load_sql_based_models(expressions, lambda _: {})
+
+    # Should generate 2 models from the blueprints
+    assert len(models) == 2
+
+    # Get the models sorted by name for consistent testing
+    model1 = next(m for m in models if "model1" in m.name)
+    model2 = next(m for m in models if "model2" in m.name)
+
+    # Verify model names
+    assert model1.name == "dataset.model1"
+    assert model2.name == "dataset.model2"
+
+    assert_exp_eq(
+        model1.render_query(),
+        """
+        SELECT
+          'value' AS "property1",
+          'value' AS "property2"
+        """,
+    )
+
+    assert_exp_eq(
+        model2.render_query(),
+        """
+        SELECT
+          'value' AS "property1"
+        """,
+    )
+
+
+@pytest.mark.parametrize(
+    "macro_func, variables",
+    [
+        ("@M(@v1)", {"v1"}),
+        ("@M(@{v1})", {"v1"}),
+        ("@M(@SQL('@v1'))", {"v1"}),
+        ("@M(@'@{v1}_foo')", {"v1"}),
+        ("@M1(@VAR('v1'))", {"v1"}),
+        ("@M1(@v1, @M2(@v2), @BLUEPRINT_VAR('v3'))", {"v1", "v2", "v3"}),
+        ("@M1(@BLUEPRINT_VAR(@VAR('v1')))", {"v1"}),
+    ],
+)
+def test_extract_macro_func_variable_references(macro_func: str, variables: t.Set[str]) -> None:
+    from sqlmesh.core.model.common import _extract_macro_func_variable_references
+
+    macro_func_ast = parse_one(macro_func)
+    assert _extract_macro_func_variable_references(macro_func_ast, True)[0] == variables
+
+
+def test_text_diff_column_descriptions():
+    """Test that column_descriptions changes are visible in text_diff."""
+    # Create model without column descriptions
+    model1 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+    )
+
+    # Create model with column descriptions
+    model2 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+        column_descriptions={"id": "User identifier", "name": "User name"},
+    )
+
+    # Verify the diff shows the column_descriptions
+    diff = model1.text_diff(model2)
+    assert diff, "Expected diff to show column_descriptions change"
+    assert "+    id = 'User identifier'," in diff
+    assert "+    name = 'User name'" in diff
+
+    # Verify reverse diff also works
+    diff = model2.text_diff(model1)
+    assert diff, "Expected reverse diff to show column_descriptions removal"
+    assert "-    id = 'User identifier'," in diff
+    assert "-    name = 'User name'" in diff
+
+
+def test_text_diff_optimize_query():
+    """Test that optimize_query changes are visible in text_diff."""
+    # Create model without optimize_query
+    model1 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+    )
+
+    # Create model with optimize_query enabled
+    model2 = create_sql_model(
+        name="test.model",
+        query=parse("SELECT id, name FROM upstream")[0],
+        optimize_query=True,
+    )
+
+    # Verify the diff shows the optimize_query change
+    diff = model1.text_diff(model2)
+    assert diff, "Expected diff to show optimize_query change"
+    assert "+  optimize_query" in diff.lower()

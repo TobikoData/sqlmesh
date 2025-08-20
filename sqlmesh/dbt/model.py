@@ -8,6 +8,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.console import get_console
 from sqlmesh.core.model import (
     EmbeddedKind,
@@ -292,10 +293,11 @@ class ModelConfig(BaseModelConfig):
                     self.incremental_strategy
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
-                    raise ConfigError(
-                        f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
-                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
+                    get_console().log_warning(
+                        f"Unique key is not compatible with '{strategy}' incremental strategy in model '{self.canonical_name(context)}'. "
+                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}. Falling back to 'merge' strategy."
                     )
+                    strategy = "merge"
 
                 if self.incremental_predicates:
                     dialect = self.dialect(context)
@@ -421,7 +423,10 @@ class ModelConfig(BaseModelConfig):
         }
 
     def to_sqlmesh(
-        self, context: DbtContext, audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None
+        self,
+        context: DbtContext,
+        audit_definitions: t.Optional[t.Dict[str, ModelAudit]] = None,
+        virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default,
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
@@ -565,7 +570,7 @@ class ModelConfig(BaseModelConfig):
             query,
             dialect=model_dialect,
             kind=kind,
-            start=self.start,
+            start=self.start or context.sqlmesh_config.model_defaults.start,
             audit_definitions=audit_definitions,
             path=model_kwargs.pop("path", self.path),
             # This ensures that we bypass query rendering that would otherwise be required to extract additional
@@ -573,6 +578,7 @@ class ModelConfig(BaseModelConfig):
             # Note: any table dependencies that are not referenced using the `ref` macro will not be included.
             extract_dependencies_from_query=False,
             allow_partials=allow_partials,
+            virtual_environment_mode=virtual_environment_mode,
             **optional_kwargs,
             **model_kwargs,
         )
