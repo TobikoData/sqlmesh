@@ -286,13 +286,13 @@ workflows:
             parameters:
               engine:
                 - duckdb
-                #- postgres
-                #- mysql
-                #- mssql
-                #- trino
-                #- spark
-                #- clickhouse
-                #- risingwave
+                - postgres
+                - mysql
+                - mssql
+                - trino
+                - spark
+                - clickhouse
+                - risingwave
       - engine_tests_cloud:
           name: cloud_engine_<< matrix.engine >>
           context:
@@ -302,14 +302,14 @@ workflows:
           matrix:
             parameters:
               engine:
-                #- snowflake
-                #- databricks
-                #- redshift
-                #- bigquery
-                #- clickhouse-cloud
-                #- athena                
+                - snowflake
+                - databricks
+                - redshift
+                - bigquery
+                - clickhouse-cloud
+                - athena                
                 - fabric
-                #- gcp-postgres
+                - gcp-postgres
           #filters:
           #  branches:
           #    only:
