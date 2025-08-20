@@ -9917,6 +9917,31 @@ def test_seed_dont_coerce_na_into_null(tmp_path):
     assert next(model.render(context=None)).to_dict() == {"code": {0: "NA"}}
 
 
+def test_seed_coerce_datetime(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("bad_datetime\n9999-12-31 23:59:59")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+            ),
+            columns (
+              bad_datetime datetime,
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    df = next(model.render(context=None))
+    assert df["bad_datetime"].iloc[0] == "9999-12-31 23:59:59"
+
+
 def test_missing_column_data_in_columns_key():
     expressions = d.parse(
         """

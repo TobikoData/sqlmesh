@@ -1610,7 +1610,7 @@ class SeedModel(_Model):
             for column in [*date_columns, *datetime_columns]:
                 import pandas as pd
 
-                df[column] = pd.to_datetime(df[column])
+                df[column] = pd.to_datetime(df[column], infer_datetime_format=True, errors="ignore")  # type: ignore
 
             # extract datetime.date from pandas timestamp for DATE columns
             for column in date_columns:
