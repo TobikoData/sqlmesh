@@ -27,6 +27,7 @@ from rich.table import Table
 from rich.tree import Tree
 from sqlglot import exp
 
+from sqlmesh.core.schema_diff import TableAlterOperation
 from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.environment import EnvironmentNamingInfo, EnvironmentSummary
 from sqlmesh.core.linter.rule import RuleViolation
@@ -47,6 +48,7 @@ from sqlmesh.utils.errors import (
     PythonModelEvalError,
     NodeAuditsErrors,
     format_destructive_change_msg,
+    format_additive_change_msg,
 )
 from sqlmesh.utils.rich import strip_ansi_codes
 
@@ -327,12 +329,21 @@ class PlanBuilderConsole(BaseConsole, abc.ABC):
     def log_destructive_change(
         self,
         snapshot_name: str,
-        dropped_column_names: t.List[str],
-        alter_expressions: t.List[exp.Alter],
+        alter_operations: t.List[TableAlterOperation],
         dialect: str,
         error: bool = True,
     ) -> None:
         """Display a destructive change error or warning to the user."""
+
+    @abc.abstractmethod
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        alter_operations: t.List[TableAlterOperation],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        """Display an additive change error or warning to the user."""
 
 
 class UnitTestConsole(abc.ABC):
@@ -759,8 +770,16 @@ class NoopConsole(Console):
     def log_destructive_change(
         self,
         snapshot_name: str,
-        dropped_column_names: t.List[str],
-        alter_expressions: t.List[exp.Alter],
+        alter_operations: t.List[TableAlterOperation],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        pass
+
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        alter_operations: t.List[TableAlterOperation],
         dialect: str,
         error: bool = True,
     ) -> None:
@@ -2202,22 +2221,29 @@ class TerminalConsole(Console):
     def log_destructive_change(
         self,
         snapshot_name: str,
-        dropped_column_names: t.List[str],
-        alter_expressions: t.List[exp.Alter],
+        alter_operations: t.List[TableAlterOperation],
         dialect: str,
         error: bool = True,
     ) -> None:
         if error:
-            self._print(
-                format_destructive_change_msg(
-                    snapshot_name, dropped_column_names, alter_expressions, dialect
-                )
-            )
+            self._print(format_destructive_change_msg(snapshot_name, alter_operations, dialect))
         else:
             self.log_warning(
-                format_destructive_change_msg(
-                    snapshot_name, dropped_column_names, alter_expressions, dialect, error
-                )
+                format_destructive_change_msg(snapshot_name, alter_operations, dialect, error)
+            )
+
+    def log_additive_change(
+        self,
+        snapshot_name: str,
+        alter_operations: t.List[TableAlterOperation],
+        dialect: str,
+        error: bool = True,
+    ) -> None:
+        if error:
+            self._print(format_additive_change_msg(snapshot_name, alter_operations, dialect))
+        else:
+            self.log_warning(
+                format_additive_change_msg(snapshot_name, alter_operations, dialect, error)
             )
 
     def log_error(self, message: str) -> None:

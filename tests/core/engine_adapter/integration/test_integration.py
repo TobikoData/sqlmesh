@@ -272,9 +272,9 @@ def test_ctas_source_columns(ctx_query_and_df: TestContext):
 
     input_data = pd.DataFrame(
         [
-            {"id": 1, "ds": "2022-01-01"},
-            {"id": 2, "ds": "2022-01-02"},
-            {"id": 3, "ds": "2022-01-03"},
+            {"id": 1, "ds": "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, "ds": "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, "ds": "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.ctas(
@@ -284,11 +284,12 @@ def test_ctas_source_columns(ctx_query_and_df: TestContext):
         column_descriptions={"id": "test id column description"},
         table_format=ctx.default_table_format,
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
     )
 
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
+    expected_data = expected_data.drop(columns=["ignored_source"])
 
     results = ctx.get_metadata_results(schema=table.db)
     assert len(results.views) == 0
@@ -360,9 +361,9 @@ def test_create_view_source_columns(ctx_query_and_df: TestContext):
 
     input_data = pd.DataFrame(
         [
-            {"id": 1, "ds": "2022-01-01"},
-            {"id": 2, "ds": "2022-01-02"},
-            {"id": 3, "ds": "2022-01-03"},
+            {"id": 1, "ds": "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, "ds": "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, "ds": "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     view = ctx.table("test_view")
@@ -371,12 +372,13 @@ def test_create_view_source_columns(ctx_query_and_df: TestContext):
         ctx.input_data(input_data),
         table_description="test view description",
         column_descriptions={"id": "test id column description"},
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
         target_columns_to_types=columns_to_types,
     )
 
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
+    expected_data = expected_data.drop(columns=["ignored_source"])
 
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
@@ -550,9 +552,9 @@ def test_replace_query_source_columns(ctx_query_and_df: TestContext):
     # Initial Load
     input_data = pd.DataFrame(
         [
-            {"id": 1, "ds": "2022-01-01"},
-            {"id": 2, "ds": "2022-01-02"},
-            {"id": 3, "ds": "2022-01-03"},
+            {"id": 1, "ds": "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, "ds": "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, "ds": "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
@@ -560,11 +562,12 @@ def test_replace_query_source_columns(ctx_query_and_df: TestContext):
         table,
         ctx.input_data(input_data),
         table_format=ctx.default_table_format,
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
         target_columns_to_types=columns_to_types,
     )
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
+    expected_data = expected_data.drop(columns=["ignored_source"])
 
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -709,19 +712,21 @@ def test_insert_append_source_columns(ctx_query_and_df: TestContext):
     # Initial Load
     input_data = pd.DataFrame(
         [
-            {"id": 1, "ds": "2022-01-01"},
-            {"id": 2, "ds": "2022-01-02"},
-            {"id": 3, "ds": "2022-01-03"},
+            {"id": 1, "ds": "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, "ds": "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, "ds": "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.insert_append(
         table,
         ctx.input_data(input_data),
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
         target_columns_to_types=columns_to_types,
     )
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
+    expected_data = expected_data.drop(columns=["ignored_source"])
+
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.materialized_views) == 0
@@ -733,19 +738,21 @@ def test_insert_append_source_columns(ctx_query_and_df: TestContext):
     if ctx.test_type == "df":
         append_data = pd.DataFrame(
             [
-                {"id": 4, "ds": "2022-01-04"},
-                {"id": 5, "ds": "2022-01-05"},
-                {"id": 6, "ds": "2022-01-06"},
+                {"id": 4, "ds": "2022-01-04", "ignored_source": "ignored_value"},
+                {"id": 5, "ds": "2022-01-05", "ignored_source": "ignored_value"},
+                {"id": 6, "ds": "2022-01-06", "ignored_source": "ignored_value"},
             ]
         )
         ctx.engine_adapter.insert_append(
             table,
             ctx.input_data(append_data),
-            source_columns=["id", "ds"],
+            source_columns=["id", "ds", "ignored_source"],
             target_columns_to_types=columns_to_types,
         )
         append_expected_data = append_data.copy()
         append_expected_data["ignored_column"] = pd.Series()
+        append_expected_data = append_expected_data.drop(columns=["ignored_source"])
+
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.materialized_views) == 0
@@ -871,9 +878,9 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     )
     input_data = pd.DataFrame(
         [
-            {"id": 1, ctx.time_column: "2022-01-01"},
-            {"id": 2, ctx.time_column: "2022-01-02"},
-            {"id": 3, ctx.time_column: "2022-01-03"},
+            {"id": 1, ctx.time_column: "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, ctx.time_column: "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, ctx.time_column: "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.insert_overwrite_by_time_partition(
@@ -884,10 +891,11 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
         time_formatter=ctx.time_formatter,
         time_column=ctx.time_column,
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
     )
 
     expected_data = input_data.copy()
+    expected_data = expected_data.drop(columns=["ignored_source"])
     expected_data.insert(len(expected_data.columns) - 1, "ignored_column", pd.Series())
 
     results = ctx.get_metadata_results()
@@ -905,9 +913,9 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     if ctx.test_type == "df":
         overwrite_data = pd.DataFrame(
             [
-                {"id": 10, ctx.time_column: "2022-01-03"},
-                {"id": 4, ctx.time_column: "2022-01-04"},
-                {"id": 5, ctx.time_column: "2022-01-05"},
+                {"id": 10, ctx.time_column: "2022-01-03", "ignored_source": "ignored_value"},
+                {"id": 4, ctx.time_column: "2022-01-04", "ignored_source": "ignored_value"},
+                {"id": 5, ctx.time_column: "2022-01-05", "ignored_source": "ignored_value"},
             ]
         )
         ctx.engine_adapter.insert_overwrite_by_time_partition(
@@ -918,7 +926,7 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
             time_formatter=ctx.time_formatter,
             time_column=ctx.time_column,
             target_columns_to_types=columns_to_types,
-            source_columns=["id", "ds"],
+            source_columns=["id", "ds", "ignored_source"],
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -1025,9 +1033,9 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
     ctx.engine_adapter.create_table(table, columns_to_types, table_format=table_format)
     input_data = pd.DataFrame(
         [
-            {"id": 1, "ds": "2022-01-01"},
-            {"id": 2, "ds": "2022-01-02"},
-            {"id": 3, "ds": "2022-01-03"},
+            {"id": 1, "ds": "2022-01-01", "ignored_source": "ignored_value"},
+            {"id": 2, "ds": "2022-01-02", "ignored_source": "ignored_value"},
+            {"id": 3, "ds": "2022-01-03", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.merge(
@@ -1035,11 +1043,12 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
         ctx.input_data(input_data),
         unique_key=[exp.to_identifier("id")],
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "ds"],
+        source_columns=["id", "ds", "ignored_source"],
     )
 
     expected_data = input_data.copy()
     expected_data["ignored_column"] = pd.Series()
+    expected_data = expected_data.drop(columns=["ignored_source"])
 
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1052,9 +1061,9 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
     if ctx.test_type == "df":
         merge_data = pd.DataFrame(
             [
-                {"id": 2, "ds": "2022-01-10"},
-                {"id": 4, "ds": "2022-01-04"},
-                {"id": 5, "ds": "2022-01-05"},
+                {"id": 2, "ds": "2022-01-10", "ignored_source": "ignored_value"},
+                {"id": 4, "ds": "2022-01-04", "ignored_source": "ignored_value"},
+                {"id": 5, "ds": "2022-01-05", "ignored_source": "ignored_value"},
             ]
         )
         ctx.engine_adapter.merge(
@@ -1062,7 +1071,7 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
             ctx.input_data(merge_data),
             unique_key=[exp.to_identifier("id")],
             target_columns_to_types=columns_to_types,
-            source_columns=["id", "ds"],
+            source_columns=["id", "ds", "ignored_source"],
         )
 
         results = ctx.get_metadata_results()
@@ -1265,9 +1274,24 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
     ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
     input_data = pd.DataFrame(
         [
-            {"id": 1, "name": "a", "updated_at": "2022-01-01 00:00:00"},
-            {"id": 2, "name": "b", "updated_at": "2022-01-02 00:00:00"},
-            {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
+            {
+                "id": 1,
+                "name": "a",
+                "updated_at": "2022-01-01 00:00:00",
+                "ignored_source": "ignored_value",
+            },
+            {
+                "id": 2,
+                "name": "b",
+                "updated_at": "2022-01-02 00:00:00",
+                "ignored_source": "ignored_value",
+            },
+            {
+                "id": 3,
+                "name": "c",
+                "updated_at": "2022-01-03 00:00:00",
+                "ignored_source": "ignored_value",
+            },
         ]
     )
     ctx.engine_adapter.scd_type_2_by_time(
@@ -1283,7 +1307,7 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
         truncate=True,
         start="2022-01-01 00:00:00",
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "name", "updated_at"],
+        source_columns=["id", "name", "updated_at", "ignored_source"],
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1329,13 +1353,28 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
     current_data = pd.DataFrame(
         [
             # Change `a` to `x`
-            {"id": 1, "name": "x", "updated_at": "2022-01-04 00:00:00"},
+            {
+                "id": 1,
+                "name": "x",
+                "updated_at": "2022-01-04 00:00:00",
+                "ignored_source": "ignored_value",
+            },
             # Delete
-            # {"id": 2, "name": "b", "updated_at": "2022-01-02 00:00:00"},
+            # {"id": 2, "name": "b", "updated_at": "2022-01-02 00:00:00", "ignored_source": "ignored_value"},
             # No change
-            {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
+            {
+                "id": 3,
+                "name": "c",
+                "updated_at": "2022-01-03 00:00:00",
+                "ignored_source": "ignored_value",
+            },
             # Add
-            {"id": 4, "name": "d", "updated_at": "2022-01-04 00:00:00"},
+            {
+                "id": 4,
+                "name": "d",
+                "updated_at": "2022-01-04 00:00:00",
+                "ignored_source": "ignored_value",
+            },
         ]
     )
     ctx.engine_adapter.scd_type_2_by_time(
@@ -1351,7 +1390,7 @@ def test_scd_type_2_by_time_source_columns(ctx_query_and_df: TestContext):
         truncate=False,
         start="2022-01-01 00:00:00",
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "name", "updated_at"],
+        source_columns=["id", "name", "updated_at", "ignored_source"],
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1610,10 +1649,10 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
     ctx.engine_adapter.create_table(table, columns_to_types, table_format=ctx.default_table_format)
     input_data = pd.DataFrame(
         [
-            {"id": 1, "name": "a", "status": "active"},
-            {"id": 2, "name": "b", "status": "inactive"},
-            {"id": 3, "name": "c", "status": "active"},
-            {"id": 4, "name": "d", "status": "active"},
+            {"id": 1, "name": "a", "status": "active", "ignored_source": "ignored_value"},
+            {"id": 2, "name": "b", "status": "inactive", "ignored_source": "ignored_value"},
+            {"id": 3, "name": "c", "status": "active", "ignored_source": "ignored_value"},
+            {"id": 4, "name": "d", "status": "active", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.scd_type_2_by_column(
@@ -1628,7 +1667,7 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
         truncate=True,
         start="2023-01-01",
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "name", "status"],
+        source_columns=["id", "name", "status", "ignored_source"],
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -1682,15 +1721,15 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
     current_data = pd.DataFrame(
         [
             # Change `a` to `x`
-            {"id": 1, "name": "x", "status": "active"},
+            {"id": 1, "name": "x", "status": "active", "ignored_source": "ignored_value"},
             # Delete
-            # {"id": 2, "name": "b", status: "inactive"},
+            # {"id": 2, "name": "b", status: "inactive", "ignored_source": "ignored_value"},
             # No change
-            {"id": 3, "name": "c", "status": "active"},
+            {"id": 3, "name": "c", "status": "active", "ignored_source": "ignored_value"},
             # Change status to inactive
-            {"id": 4, "name": "d", "status": "inactive"},
+            {"id": 4, "name": "d", "status": "inactive", "ignored_source": "ignored_value"},
             # Add
-            {"id": 5, "name": "e", "status": "inactive"},
+            {"id": 5, "name": "e", "status": "inactive", "ignored_source": "ignored_value"},
         ]
     )
     ctx.engine_adapter.scd_type_2_by_column(
@@ -1705,7 +1744,7 @@ def test_scd_type_2_by_column_source_columns(ctx_query_and_df: TestContext):
         truncate=False,
         start="2023-01-01",
         target_columns_to_types=columns_to_types,
-        source_columns=["id", "name", "status"],
+        source_columns=["id", "name", "status", "ignored_source"],
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0

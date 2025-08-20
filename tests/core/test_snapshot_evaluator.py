@@ -41,7 +41,7 @@ from sqlmesh.core.model import (
     ExternalModel,
     model,
 )
-from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind
+from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind, OnAdditiveChange
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -57,7 +57,12 @@ from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.core.snapshot.evaluator import CustomMaterialization, SnapshotCreationFailedError
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import ConfigError, SQLMeshError, DestructiveChangeError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    SQLMeshError,
+    DestructiveChangeError,
+    AdditiveChangeError,
+)
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import list_of_fields_validator
 
@@ -1535,7 +1540,7 @@ def python_func(**kwargs):
 
 def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
-    adapter_mock.get_alter_expressions.return_value = []
+    adapter_mock.get_alter_operations.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = load_sql_based_model(
@@ -1587,10 +1592,11 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
         rendered_physical_properties={},
     )
 
-    adapter_mock.get_alter_expressions.assert_called_once_with(
+    adapter_mock.get_alter_operations.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev_schema_tmp",
         ignore_destructive=False,
+        ignore_additive=False,
     )
 
     adapter_mock.alter_table.assert_called_once_with([])
@@ -1602,7 +1608,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
 
 def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
-    adapter_mock.get_alter_expressions.return_value = []
+    adapter_mock.get_alter_operations.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
     adapter_mock.alter_table.side_effect = Exception("Migration failed")
@@ -1644,10 +1650,11 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
         rendered_physical_properties={},
     )
 
-    adapter_mock.get_alter_expressions.assert_called_once_with(
+    adapter_mock.get_alter_operations.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev_schema_tmp",
         ignore_destructive=False,
+        ignore_additive=False,
     )
 
     adapter_mock.alter_table.assert_called_once_with([])
@@ -1667,7 +1674,7 @@ def test_create_clone_in_dev_self_referencing(
     mocker: MockerFixture, adapter_mock, make_snapshot, use_this_model: bool
 ):
     adapter_mock.SUPPORTS_CLONING = True
-    adapter_mock.get_alter_expressions.return_value = []
+    adapter_mock.get_alter_operations.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
     from_table = "test_schema.test_model" if not use_this_model else "@this_model"
@@ -1773,7 +1780,7 @@ def test_on_destructive_change_runtime_check(
     assert isinstance(destructive_change_err, DestructiveChangeError)
     assert (
         str(destructive_change_err)
-        == "\nPlan requires a destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn` or `allow` or include the model in the plan's `--allow-destructive-model` option.\n"
+        == "\nPlan requires destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT\n\nTo allow the destructive change, set the model's `on_destructive_change` setting to `warn`, `allow`, or `ignore` or include the model in the plan's `--allow-destructive-model` option.\n"
     )
 
     # WARN
@@ -1794,7 +1801,7 @@ def test_on_destructive_change_runtime_check(
         evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
         assert (
             mock_logger.call_args[0][0]
-            == "\nPlan requires a destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"
+            == "\nPlan requires destructive change to forward-only model '\"test_schema\".\"test_model\"'s schema that drops column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"
         )
 
     # allow destructive
@@ -1806,6 +1813,79 @@ def test_on_destructive_change_runtime_check(
             deployability_index=DeployabilityIndex.none_deployable(),
         )
         assert mock_logger.call_count == 0
+
+
+def test_on_additive_change_runtime_check(
+    mocker: MockerFixture,
+    make_snapshot,
+    make_mocked_engine_adapter,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    current_table = "sqlmesh__test_schema.test_schema__test_model__1"
+
+    def columns(table_name):
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+        return {
+            "c": exp.DataType.build("int"),
+            "a": exp.DataType.build("int"),
+            "b": exp.DataType.build("int"),
+        }
+
+    adapter.columns = columns  # type: ignore
+    mocker.patch.object(
+        adapter,
+        "get_data_object",
+        return_value=DataObject(schema="test_schema", name="test_model", type=DataObjectType.TABLE),
+    )
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    # SQLMesh default: ERROR
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a", on_additive_change=OnAdditiveChange.ERROR),
+        query=parse_one("SELECT c, a, b FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
+    snapshot.previous_versions = snapshot.all_versions
+
+    with pytest.raises(NodeExecutionFailedError) as ex:
+        evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+
+    additive_change_error = ex.value.__cause__
+    assert isinstance(additive_change_error, AdditiveChangeError)
+    assert (
+        str(additive_change_error)
+        == "\nPlan requires additive change to forward-only model '\"test_schema\".\"test_model\"'s schema that adds column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN b INT\n\nTo allow the additive change, set the model's `on_additive_change` setting to `warn`, `allow`, or `ignore` or include the model in the plan's `--allow-additive-model` option.\n"
+    )
+
+    # WARN
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="a", on_additive_change=OnDestructiveChange.WARN
+        ),
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
+    snapshot.forward_only = True
+    snapshot.previous_versions = snapshot.all_versions
+
+    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+    with patch.object(logger, "warning") as mock_logger:
+        evaluator.migrate([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+        assert (
+            mock_logger.call_args[0][0]
+            == "\nPlan requires additive change to forward-only model '\"test_schema\".\"test_model\"'s schema that adds column 'b'.\n\nSchema changes:\n  ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN b INT"
+        )
 
 
 def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mock, make_snapshot):
@@ -3698,10 +3778,11 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
         ]
     )
 
-    adapter_mock.get_alter_expressions.assert_called_once_with(
+    adapter_mock.get_alter_operations.assert_called_once_with(
         snapshot.table_name(),
         f"{new_snapshot.table_name()}_schema_tmp",
         ignore_destructive=False,
+        ignore_additive=False,
     )
 
 
@@ -3730,7 +3811,7 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.drop_data_object_on_type_mismatch.return_value = False
 
     # no schema changes - no-op
-    adapter_mock.get_alter_expressions.return_value = []
+    adapter_mock.get_alter_operations.return_value = []
     evaluator.migrate(
         target_snapshots=[snapshot],
         snapshots={},
@@ -3743,7 +3824,7 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     adapter_mock.reset_mock()
 
     # schema changes - exception thrown
-    adapter_mock.get_alter_expressions.return_value = [exp.Alter()]
+    adapter_mock.get_alter_operations.return_value = [exp.Alter()]
 
     with pytest.raises(NodeExecutionFailedError) as ex:
         evaluator.migrate(
@@ -3968,10 +4049,11 @@ def test_multiple_engine_migration(
     )
 
     # The second mock adapter has to be called only for the gateway-specific model
-    adapter_mock.get_alter_expressions.assert_called_once_with(
+    adapter_mock.get_alter_operations.assert_called_once_with(
         snapshot_2.table_name(True),
         f"{snapshot_2.table_name(True)}_schema_tmp",
         ignore_destructive=False,
+        ignore_additive=False,
     )
 
 

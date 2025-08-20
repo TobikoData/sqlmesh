@@ -273,18 +273,18 @@ Similarly, the [allow_partials](../concepts/models/overview.md#allow_partials) p
 
 #### on_schema_change
 
-SQLMesh automatically detects destructive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
+SQLMesh automatically detects both destructive and additive schema changes to [forward-only incremental models](../guides/incremental_time.md#forward-only-models) and to all incremental models in [forward-only plans](../concepts/plans.md#destructive-changes).
 
-A model's [`on_destructive_change` setting](../guides/incremental_time.md#destructive-changes) determines whether it errors (default), warns, or silently allows the changes. SQLMesh always allows non-destructive forward-only schema changes, such as adding or casting a column in place.
+A model's [`on_destructive_change` and `on_additive_change` settings](../guides/incremental_time.md#schema-changes) determine whether it errors, warns, silently allows, or ignores the changes. SQLMesh provides fine-grained control over both destructive changes (like dropping columns) and additive changes (like adding new columns).
 
-`on_schema_change` configuration values are mapped to these SQLMesh `on_destructive_change` values:
+`on_schema_change` configuration values are mapped to these SQLMesh settings:
 
-| `on_schema_change` | SQLMesh `on_destructive_change` |
-| ------------------ | ------------------------------- |
-| ignore             | warn                            |
-| append_new_columns | warn                            |
-| sync_all_columns   | allow                           |
-| fail               | error                           |
+| `on_schema_change` | SQLMesh `on_destructive_change` | SQLMesh `on_additive_change` |
+|--------------------|---------------------------------|------------------------------|
+| ignore             | ignore                          | ignore                       |
+| fail               | error                           | error                        |
+| append_new_columns | ignore                          | allow                        |
+| sync_all_columns   | allow                           | allow                        |
 
 
 ## Snapshot support

@@ -1053,7 +1053,7 @@ def test_get_alter_expressions_includes_catalog(
     )
     get_data_objects_mock.return_value = []
 
-    adapter.get_alter_expressions("catalog1.foo.bar", "catalog2.bar.bing")
+    adapter.get_alter_operations("catalog1.foo.bar", "catalog2.bar.bing")
 
     assert get_data_objects_mock.call_count == 2
 

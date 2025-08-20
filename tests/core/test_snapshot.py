@@ -135,6 +135,7 @@ def test_json(snapshot: Snapshot):
                 "batch_size": 30,
                 "forward_only": False,
                 "on_destructive_change": "ERROR",
+                "on_additive_change": "ALLOW",
                 "partition_by_time_column": True,
                 "disable_restatement": False,
                 "dialect": "spark",
@@ -913,7 +914,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="3301649319",
-        metadata_hash="1125608408",
+        metadata_hash="3575333731",
     )
 
     assert fingerprint == original_fingerprint
@@ -1013,7 +1014,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="2908339239",
-        metadata_hash="1125608408",
+        metadata_hash="3575333731",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})

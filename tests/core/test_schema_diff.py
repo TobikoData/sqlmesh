@@ -10,11 +10,14 @@ from sqlmesh.core.schema_diff import (
     TableAlterColumnPosition,
     TableAlterOperation,
     get_schema_differ,
+    TableAlterAddColumnOperation,
+    TableAlterDropColumnOperation,
+    TableAlterChangeColumnTypeOperation,
 )
 
 
 def test_schema_diff_calculate():
-    alter_expressions = SchemaDiffer(
+    alter_operations = SchemaDiffer(
         **{
             "support_positional_add": False,
             "support_nested_operations": False,
@@ -24,7 +27,7 @@ def test_schema_diff_calculate():
             },
         }
     ).compare_columns(
-        "apply_to_table",
+        exp.to_table("apply_to_table"),
         {
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
@@ -39,7 +42,7 @@ def test_schema_diff_calculate():
         },
     )
 
-    assert [x.sql() for x in alter_expressions] == [
+    assert [x.expression.sql() for x in alter_operations] == [
         """ALTER TABLE apply_to_table DROP COLUMN price""",
         """ALTER TABLE apply_to_table ADD COLUMN new_column DOUBLE""",
         """ALTER TABLE apply_to_table ALTER COLUMN name SET DATA TYPE INT""",
@@ -55,7 +58,7 @@ def test_schema_diff_drop_cascade():
             "drop_cascade": True,
         }
     ).compare_columns(
-        "apply_to_table",
+        exp.to_table("apply_to_table"),
         {
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
@@ -67,7 +70,7 @@ def test_schema_diff_drop_cascade():
         },
     )
 
-    assert [x.sql() for x in alter_expressions] == [
+    assert [x.expression.sql() for x in alter_expressions] == [
         """ALTER TABLE apply_to_table DROP COLUMN price CASCADE"""
     ]
 
@@ -83,7 +86,7 @@ def test_schema_diff_calculate_type_transitions():
             },
         }
     ).compare_columns(
-        "apply_to_table",
+        exp.to_table("apply_to_table"),
         {
             "id": exp.DataType.build("INT"),
             "ds": exp.DataType.build("STRING"),
@@ -94,7 +97,7 @@ def test_schema_diff_calculate_type_transitions():
         },
     )
 
-    assert [x.sql() for x in alter_expressions] == [
+    assert [x.expression.sql() for x in alter_expressions] == [
         """ALTER TABLE apply_to_table DROP COLUMN id""",
         """ALTER TABLE apply_to_table ADD COLUMN id BIGINT""",
         """ALTER TABLE apply_to_table ALTER COLUMN ds SET DATA TYPE INT""",
@@ -114,10 +117,14 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING, age INT, address STRING>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    "STRUCT<id INT, name STRING, age INT, address STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             {},
@@ -127,10 +134,14 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, id INT, name STRING, age INT>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.first(),
                 )
             ],
@@ -141,10 +152,14 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, address STRING, name STRING, age INT>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    expected_table_struct="STRUCT<id INT, address STRING, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address STRING, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.middle(after="id"),
                 )
             ],
@@ -155,22 +170,34 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT, address3 STRING>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.first(),
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address2"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address2")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.middle(after="id"),
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address3"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT, address3 STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address3")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT, address3 STRING>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.last(after="age"),
                 ),
             ],
@@ -181,16 +208,24 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.first(),
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address2"),
-                    "STRING",
-                    expected_table_struct="STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address2")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.middle(after="address"),
                 ),
             ],
@@ -204,10 +239,11 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<name STRING, age INT>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("id"),
-                    "STRUCT<name STRING, age INT>",
-                    "INT",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    expected_table_struct=exp.DataType.build("STRUCT<name STRING, age INT>"),
+                    array_element_selector="",
                 )
             ],
             {},
@@ -217,10 +253,11 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, age INT>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("name"),
-                    "STRUCT<id INT, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
                 )
             ],
             {},
@@ -230,10 +267,11 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("age"),
-                    "STRUCT<id INT, name STRING>",
-                    "INT",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, name STRING>"),
+                    array_element_selector="",
                 )
             ],
             {},
@@ -243,20 +281,27 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, middle STRING, address STRING, age INT>",
             "STRUCT<name STRING, address STRING>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("id"),
-                    "STRUCT<name STRING, middle STRING, address STRING, age INT>",
-                    "INT",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<name STRING, middle STRING, address STRING, age INT>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("middle"),
-                    "STRUCT<name STRING, address STRING, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("middle")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<name STRING, address STRING, age INT>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("age"),
-                    "STRUCT<name STRING, address STRING>",
-                    "INT",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    expected_table_struct=exp.DataType.build("STRUCT<name STRING, address STRING>"),
+                    array_element_selector="",
                 ),
             ],
             {},
@@ -266,15 +311,21 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING, age INT>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<address2 STRING, id INT, name STRING, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<address2 STRING, id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address2"),
-                    "STRUCT<id INT, name STRING, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address2")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             {},
@@ -296,11 +347,15 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id STRING, name STRING, age INT>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("id"),
-                    "STRING",
-                    current_type="INT",
-                    expected_table_struct="STRUCT<id STRING, name STRING, age INT>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -317,21 +372,30 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id STRING, age INT, address STRING>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("name"),
-                    "STRUCT<id INT, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    expected_table_struct="STRUCT<id INT, age INT, address STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("id"),
-                    "STRING",
-                    current_type="INT",
-                    expected_table_struct="STRUCT<id STRING, age INT, address STRING>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -348,13 +412,17 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.first(),
                 ),
             ],
@@ -365,13 +433,17 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>"
+                    ),
+                    array_element_selector="",
                     position=TableAlterColumnPosition.last(after="col_c"),
                 ),
             ],
@@ -382,14 +454,18 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_d INT, col_b INT, col_c INT>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_d INT, col_b INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_d INT, col_b INT, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.middle(after="col_a"),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=True, support_nested_operations=True),
@@ -399,23 +475,31 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_e INT, col_a INT, col_b INT, col_c INT>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.first(),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_e"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_e INT, col_a INT, col_b INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_e INT, col_a INT, col_b INT, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.middle(after="col_d"),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=True, support_nested_operations=True),
@@ -425,20 +509,28 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>, txt TEXT>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.primitive("txt"),
                     ],
-                    "TEXT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, txt TEXT>",
+                    column_type=exp.DataType.build("TEXT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, txt TEXT>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>, txt TEXT>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>, txt TEXT>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=False, support_nested_operations=True),
@@ -448,13 +540,16 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_a"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -468,13 +563,16 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_c"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -488,13 +586,16 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_b"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -508,19 +609,25 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                     ],
-                    expected_table_struct="STRUCT<id INT>",
-                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                     ],
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
-                    column_type="STRUCT<col_a INT, col_b INT>",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>"
+                    ),
+                    column_type=exp.DataType.build("STRUCT<col_a INT, col_b INT>"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -533,21 +640,27 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_c INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_a"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_b"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -561,15 +674,18 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>",
             [
-                TableAlterOperation.alter_type(
-                    [
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_c"),
                     ],
-                    "TEXT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>",
-                    position=TableAlterColumnPosition.last(after="col_b"),
+                    column_type=exp.DataType.build("TEXT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>"
+                    ),
                     current_type=exp.DataType.build("INT"),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -585,41 +701,55 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c TEXT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_a"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.first(),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_e"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.middle(after="col_b"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.alter_type(
-                    [
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_c"),
                     ],
-                    "TEXT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c TEXT>>",
-                    position=TableAlterColumnPosition.last(after="col_e"),
+                    column_type=exp.DataType.build("TEXT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c TEXT>>"
+                    ),
                     current_type=exp.DataType.build("INT"),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -636,19 +766,25 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                     ],
-                    expected_table_struct="STRUCT<id INT>",
-                    column_type="STRUCT<col_a INT, col_b INT, col_c INT>",
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                     ],
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>",
-                    column_type="STRUCT<col_a INT, col_b TEXT, col_d INT>",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b TEXT, col_d INT>>"
+                    ),
+                    column_type=exp.DataType.build("STRUCT<col_a INT, col_b TEXT, col_d INT>"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -664,41 +800,55 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>>>",
             "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_c INT>, col_c INT>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_b"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>>>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.primitive("col_c"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.last("nested_info"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.struct("nested_info"),
                         TableAlterColumn.primitive("nest_col_b"),
                     ],
-                    "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT>, col_c INT>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT>, col_c INT>>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.struct("info"),
                         TableAlterColumn.struct("nested_info"),
                         TableAlterColumn.primitive("nest_col_c"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_c INT>, col_c INT>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_c INT>, col_c INT>>"
+                    ),
                     position=TableAlterColumnPosition.last("nest_col_a"),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -715,14 +865,18 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_d INT, col_c INT>>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_struct("infos"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_d INT, col_c INT>>>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_d INT, col_c INT>>>"
+                    ),
                     position=TableAlterColumnPosition.middle("col_b"),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=True, support_nested_operations=True),
@@ -732,13 +886,16 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_c INT>>>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_struct("infos"),
                         TableAlterColumn.primitive("col_b"),
                     ],
-                    "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_c INT>>>",
-                    "INT",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_c INT>>>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -752,15 +909,18 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c TEXT>>>",
             [
-                TableAlterOperation.alter_type(
-                    [
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_struct("infos"),
                         TableAlterColumn.primitive("col_c"),
                     ],
-                    "TEXT",
-                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c TEXT>>>",
-                    position=TableAlterColumnPosition.last("col_b"),
-                    current_type="INT",
+                    column_type=exp.DataType.build("TEXT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c TEXT>>>"
+                    ),
+                    current_type=exp.DataType.build("INT"),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -776,20 +936,26 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT, col_d INT >>, col_e INT>",
             [
-                TableAlterOperation.add(
-                    [
-                        TableAlterColumn.primitive("col_e"),
-                    ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, col_e INT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("col_e")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, col_e INT>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_struct("infos"),
                         TableAlterColumn.primitive("col_d"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT,  col_c INT, col_d INT>>, col_e INT>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT,  col_c INT, col_d INT>>, col_e INT>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=False, support_nested_operations=True),
@@ -799,13 +965,17 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, values ARRAY<INT>>",
             [
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_primitive("values"),
                     ],
-                    "ARRAY<INT>",
-                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, values ARRAY<INT>>",
+                    column_type=exp.DataType.build("ARRAY<INT>"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, values ARRAY<INT>>"
+                    ),
                     position=TableAlterColumnPosition.last("infos"),
+                    array_element_selector="",
                 ),
             ],
             dict(support_positional_add=True, support_nested_operations=True),
@@ -822,19 +992,19 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, ids INT>",
             "STRUCT<id INT, ids ARRAY>",
             [
-                TableAlterOperation.drop(
-                    [
-                        TableAlterColumn.primitive("ids"),
-                    ],
-                    "STRUCT<id INT>",
-                    "INT",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("ids")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
-                        TableAlterColumn.primitive("ids"),
-                    ],
-                    "ARRAY",
-                    expected_table_struct="STRUCT<id INT, ids ARRAY>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("ids")],
+                    column_type=exp.DataType.build("ARRAY"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, ids ARRAY>"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             {},
@@ -844,19 +1014,23 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, ids ARRAY>",
             "STRUCT<id INT, ids INT>",
             [
-                TableAlterOperation.drop(
-                    [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_primitive("ids"),
                     ],
-                    "STRUCT<id INT>",
-                    "ARRAY",
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
                         TableAlterColumn.array_of_primitive("ids"),
                     ],
-                    "INT",
-                    expected_table_struct="STRUCT<id INT, ids INT>",
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, ids INT>"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             {},
@@ -876,11 +1050,15 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(121)>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(121)",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(121)"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(121)>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             {},
@@ -890,11 +1068,15 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(121)>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(121)",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(121)"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(121)>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -906,15 +1088,21 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(121)>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR(120)",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(121)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(121)>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(121)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(121)>"
+                    ),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -926,16 +1114,22 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(100)>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR(120)",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(100)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(100)>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(100)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(100)>"
+                    ),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -949,16 +1143,20 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR(120)",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, address VARCHAR>"),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -970,16 +1168,22 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR>",
             "STRUCT<id INT, address VARCHAR(120)>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(120)>"
+                    ),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -991,11 +1195,13 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR>",  # default of 1 --> VARCHAR(1)
             "STRUCT<id INT, address VARCHAR(2)>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(2)",
-                    current_type="VARCHAR",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(2)>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(2)"),
+                    current_type=exp.DataType.build("VARCHAR"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, address VARCHAR(2)>"),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1009,16 +1215,20 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR>",  # default of 1 --> VARCHAR(1)
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR(120)",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, address VARCHAR>"),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1033,11 +1243,15 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(max)>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(max)",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(max)>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(max)"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(max)>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1051,11 +1265,15 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(max)>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(max)",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(max)>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(max)"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(max)>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1069,16 +1287,22 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(max)>",
             "STRUCT<id INT, address VARCHAR(120)>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR(max)",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(120)>"
+                    ),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1093,11 +1317,13 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, address VARCHAR>"),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1113,16 +1339,22 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR>",
             "STRUCT<id INT, address VARCHAR(120)>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("address"),
-                    "STRUCT<id INT>",
-                    "VARCHAR",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address VARCHAR(120)>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, address VARCHAR(120)>"
+                    ),
                     position=TableAlterColumnPosition.last("id"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             dict(
@@ -1139,11 +1371,13 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address TEXT>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("address"),
-                    "TEXT",
-                    current_type="VARCHAR(120)",
-                    expected_table_struct="STRUCT<id INT, address TEXT>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("TEXT"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, address TEXT>"),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1204,13 +1438,17 @@ def test_schema_diff_calculate_type_transitions():
             "STRUCT<id INT, name STRING, revenue FLOAT, total INT>",
             "STRUCT<id INT, name STRING, revenue INT, total FLOAT>",
             [
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("total"),
-                    "FLOAT",
-                    current_type="INT",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("total")],
+                    column_type=exp.DataType.build("FLOAT"),
+                    current_type=exp.DataType.build("INT"),
                     # Note that the resulting table struct will not match what we defined as the desired
                     # result since it could be coerced
-                    expected_table_struct="STRUCT<id INT, name STRING, revenue FLOAT, total FLOAT>",
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, revenue FLOAT, total FLOAT>"
+                    ),
+                    array_element_selector="",
                 )
             ],
             dict(
@@ -1232,7 +1470,9 @@ def test_struct_diff(
 ):
     resolver = SchemaDiffer(**config)
     operations = resolver._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct)
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
     )
     assert operations == expected_diff
 
@@ -1260,7 +1500,7 @@ def test_schema_diff_calculate_duckdb(duck_conn):
         },
     )
 
-    alter_expressions = engine_adapter.get_alter_expressions("apply_to_table", "schema_from_table")
+    alter_expressions = engine_adapter.get_alter_operations("apply_to_table", "schema_from_table")
     engine_adapter.alter_table(alter_expressions)
     assert engine_adapter.columns("apply_to_table") == {
         "id": exp.DataType.build("int"),
@@ -1271,46 +1511,57 @@ def test_schema_diff_calculate_duckdb(duck_conn):
 
 
 def test_schema_diff_alter_op_column():
-    nested = TableAlterOperation.add(
-        [
+    nested = TableAlterAddColumnOperation(
+        target_table=exp.to_table("apply_to_table"),
+        column_parts=[
             TableAlterColumn.array_of_struct("nested"),
             TableAlterColumn.primitive("col_a"),
         ],
-        "INT",
-        expected_table_struct="STRUCT<id INT, nested ARRAY<STRUCT<col_a INT>>>",
+        column_type=exp.DataType.build("INT"),
+        expected_table_struct=exp.DataType.build("STRUCT<id INT, nested ARRAY<STRUCT<col_a INT>>>"),
         position=TableAlterColumnPosition.last("id"),
+        array_element_selector="",
     )
-    assert nested.column("").sql() == "nested.col_a"
-    nested_complete_column = TableAlterOperation.add(
-        [
+    assert nested.column.sql() == "nested.col_a"
+    nested_complete_column = TableAlterAddColumnOperation(
+        target_table=exp.to_table("apply_to_table"),
+        column_parts=[
             TableAlterColumn.array_of_struct("nested_1", quoted=True),
             TableAlterColumn.struct("nested_2"),
             TableAlterColumn.array_of_struct("nested_3"),
             TableAlterColumn.primitive("col_a", quoted=True),
         ],
-        "INT",
-        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<"col_a" INT>>>>>>""",
+        column_type=exp.DataType.build("INT"),
+        expected_table_struct=exp.DataType.build(
+            """STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<"col_a" INT>>>>>>"""
+        ),
         position=TableAlterColumnPosition.last("id"),
+        array_element_selector="",
     )
-    assert nested_complete_column.column("").sql() == '"nested_1".nested_2.nested_3."col_a"'
-    nested_one_more_complete_column = TableAlterOperation.add(
-        [
+    assert nested_complete_column.column.sql() == '"nested_1".nested_2.nested_3."col_a"'
+    nested_one_more_complete_column = TableAlterAddColumnOperation(
+        target_table=exp.to_table("apply_to_table"),
+        column_parts=[
             TableAlterColumn.array_of_struct("nested_1", quoted=True),
             TableAlterColumn.struct("nested_2"),
             TableAlterColumn.array_of_struct("nested_3"),
             TableAlterColumn.struct("nested_4"),
             TableAlterColumn.primitive("col_a", quoted=True),
         ],
-        "INT",
-        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<"col_a" INT>>>>>>>""",
+        column_type=exp.DataType.build("INT"),
+        expected_table_struct=exp.DataType.build(
+            """STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<"col_a" INT>>>>>>>"""
+        ),
         position=TableAlterColumnPosition.last("id"),
+        array_element_selector="",
     )
     assert (
-        nested_one_more_complete_column.column("").sql()
+        nested_one_more_complete_column.column.sql()
         == '"nested_1".nested_2.nested_3.nested_4."col_a"'
     )
-    super_nested = TableAlterOperation.add(
-        [
+    super_nested = TableAlterAddColumnOperation(
+        target_table=exp.to_table("apply_to_table"),
+        column_parts=[
             TableAlterColumn.array_of_struct("nested_1", quoted=True),
             TableAlterColumn.struct("nested_2"),
             TableAlterColumn.array_of_struct("nested_3"),
@@ -1321,12 +1572,15 @@ def test_schema_diff_alter_op_column():
             TableAlterColumn.array_of_struct("nested_8"),
             TableAlterColumn.primitive("col_a", quoted=True),
         ],
-        "INT",
-        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<nested_5 STRUCT<"nested_6" STRUCT<nested_7 STRUCT<nested_8 ARRAY<STRUCT<"col_a" INT>>>>>>>>>>>>""",
+        column_type=exp.DataType.build("INT"),
+        expected_table_struct=exp.DataType.build(
+            """STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<nested_5 STRUCT<"nested_6" STRUCT<nested_7 STRUCT<nested_8 ARRAY<STRUCT<"col_a" INT>>>>>>>>>>>>"""
+        ),
         position=TableAlterColumnPosition.last("id"),
+        array_element_selector="element",
     )
     assert (
-        super_nested.column("element").sql()
+        super_nested.column.sql()
         == '"nested_1".element.nested_2.nested_3.element.nested_4.nested_5."nested_6".nested_7.nested_8.element."col_a"'
     )
 
@@ -1339,10 +1593,11 @@ def test_schema_diff_alter_op_column():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, age INT>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("name"),
-                    "STRUCT<id INT, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
                 )
             ],
             [],  # No operations when ignoring destructive
@@ -1353,15 +1608,21 @@ def test_schema_diff_alter_op_column():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name BIGINT, age INT>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("name"),
-                    "STRUCT<id INT, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("name"),
-                    "BIGINT",
-                    "STRUCT<id INT, age INT, name BIGINT>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    column_type=exp.DataType.build("BIGINT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, name BIGINT>"
+                    ),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
                 ),
             ],
             [],  # No operations when ignoring destructive
@@ -1372,18 +1633,26 @@ def test_schema_diff_alter_op_column():
             "STRUCT<id INT, name STRING>",
             "STRUCT<id INT, name STRING, new_col STRING>",
             [
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("new_col"),
-                    "STRING",
-                    "STRUCT<id INT, name STRING, new_col STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("new_col")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, new_col STRING>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             [
                 # Same operation when ignoring destructive
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("new_col"),
-                    "STRING",
-                    "STRUCT<id INT, name STRING, new_col STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("new_col")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, new_col STRING>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             {},
@@ -1393,35 +1662,52 @@ def test_schema_diff_alter_op_column():
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id STRING, age INT, address STRING>",
             [
-                TableAlterOperation.drop(
-                    TableAlterColumn.primitive("name"),
-                    "STRUCT<id INT, age INT>",
-                    "STRING",
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    "STRUCT<id INT, age INT, address STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("id"),
-                    "STRING",
-                    current_type="INT",
-                    expected_table_struct="STRUCT<id STRING, age INT, address STRING>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             [
                 # Only non-destructive operations remain
-                TableAlterOperation.add(
-                    TableAlterColumn.primitive("address"),
-                    "STRING",
-                    "STRUCT<id INT, name STRING, age INT, address STRING>",
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
-                TableAlterOperation.alter_type(
-                    TableAlterColumn.primitive("id"),
-                    "STRING",
-                    current_type="INT",
-                    expected_table_struct="STRUCT<id STRING, name STRING, age INT, address STRING>",
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, name STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
                 ),
             ],
             dict(
@@ -1443,13 +1729,19 @@ def test_ignore_destructive_operations(
 
     # Test with destructive operations allowed (default behavior)
     operations_with_destructive = resolver._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=False,
     )
     assert operations_with_destructive == expected_diff_with_destructive
 
     # Test with destructive operations ignored
     operations_ignore_destructive = resolver._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=True,
     )
     assert operations_ignore_destructive == expected_diff_ignore_destructive
 
@@ -1491,7 +1783,7 @@ def test_ignore_destructive_compare_columns():
     assert len(alter_expressions_ignore_destructive) == 2  # Only ADD + ALTER
 
     # Verify the operations are correct
-    operations_sql = [expr.sql() for expr in alter_expressions_ignore_destructive]
+    operations_sql = [expr.expression.sql() for expr in alter_expressions_ignore_destructive]
     add_column_found = any("ADD COLUMN new_col DOUBLE" in op for op in operations_sql)
     alter_column_found = any("ALTER COLUMN id SET DATA TYPE" in op for op in operations_sql)
     drop_column_found = any("DROP COLUMN to_drop" in op for op in operations_sql)
@@ -1513,15 +1805,21 @@ def test_ignore_destructive_nested_struct_without_support():
 
     # With destructive operations allowed - should do DROP+ADD of entire struct
     operations_with_destructive = schema_differ._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=False,
     )
     assert len(operations_with_destructive) == 2  # DROP struct + ADD struct
-    assert operations_with_destructive[0].is_drop
-    assert operations_with_destructive[1].is_add
+    assert isinstance(operations_with_destructive[0], TableAlterDropColumnOperation)
+    assert isinstance(operations_with_destructive[1], TableAlterAddColumnOperation)
 
     # With destructive operations ignored - should do nothing
     operations_ignore_destructive = schema_differ._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=True,
     )
     assert len(operations_ignore_destructive) == 0
 
@@ -1582,7 +1880,10 @@ def test_ignore_destructive_edge_cases():
     new_struct = "STRUCT<>"  # Remove all columns
 
     operations_ignore_destructive = schema_differ._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=True,
     )
     assert len(operations_ignore_destructive) == 0
 
@@ -1590,10 +1891,16 @@ def test_ignore_destructive_edge_cases():
     same_struct = "STRUCT<id INT, name STRING>"
 
     operations_same_with_destructive = schema_differ._from_structs(
-        exp.DataType.build(same_struct), exp.DataType.build(same_struct), ignore_destructive=False
+        exp.DataType.build(same_struct),
+        exp.DataType.build(same_struct),
+        "apply_to_table",
+        ignore_destructive=False,
     )
     operations_same_ignore_destructive = schema_differ._from_structs(
-        exp.DataType.build(same_struct), exp.DataType.build(same_struct), ignore_destructive=True
+        exp.DataType.build(same_struct),
+        exp.DataType.build(same_struct),
+        "apply_to_table",
+        ignore_destructive=True,
     )
     assert len(operations_same_with_destructive) == 0
     assert len(operations_same_ignore_destructive) == 0
@@ -1603,11 +1910,346 @@ def test_ignore_destructive_edge_cases():
     new_struct = "STRUCT<id INT, name STRING, age INT>"
 
     operations_add_with_destructive = schema_differ._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=False
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=False,
     )
     operations_add_ignore_destructive = schema_differ._from_structs(
-        exp.DataType.build(current_struct), exp.DataType.build(new_struct), ignore_destructive=True
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=True,
     )
     assert len(operations_add_with_destructive) == 2  # ADD name, ADD age
     assert len(operations_add_ignore_destructive) == 2  # Same operations
     assert operations_add_with_destructive == operations_add_ignore_destructive
+
+
+@pytest.mark.parametrize(
+    "current_struct, new_struct, expected_diff_with_additive, expected_diff_ignore_additive, config",
+    [
+        # Simple ADD operation - should be ignored when ignore_additive=True
+        (
+            "STRUCT<id INT, name STRING>",
+            "STRUCT<id INT, name STRING, age INT>",
+            [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
+                )
+            ],
+            [],  # No operations when ignoring additive
+            {},
+        ),
+        # Multiple ADD operations - should all be ignored when ignore_additive=True
+        (
+            "STRUCT<id INT>",
+            "STRUCT<id INT, name STRING, age INT, address STRING>",
+            [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, name STRING>"),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, name STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+            ],
+            [],  # No operations when ignoring additive
+            {},
+        ),
+        # Pure DROP operation - should work same way regardless of ignore_additive
+        (
+            "STRUCT<id INT, name STRING, age INT>",
+            "STRUCT<id INT, name STRING>",
+            [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, name STRING>"),
+                    array_element_selector="",
+                ),
+            ],
+            [
+                # Same operation when ignoring additive
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, name STRING>"),
+                    array_element_selector="",
+                ),
+            ],
+            {},
+        ),
+        # Mix of additive and non-additive operations
+        (
+            "STRUCT<id INT, name STRING, age INT, something STRING>",
+            "STRUCT<id STRING, age INT, address STRING, something INT>",
+            [
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, something STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("address")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, something STRING, address STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("id")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, age INT, something STRING, address STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("something")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, age INT, address STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("something")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id STRING, age INT, address STRING, something INT>"
+                    ),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
+                ),
+            ],
+            [
+                # Only non-additive operations remain (alter is considered additive since it was a compatible change)
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("name")],
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, something STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterDropColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("something")],
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age INT>"),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("something")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, age INT, something INT>"
+                    ),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
+                ),
+            ],
+            dict(
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+                }
+            ),
+        ),
+        # ADD operations with nested structs - should be ignored when ignore_additive=True
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, new_field STRING>",
+            [
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("new_field")],
+                    column_type=exp.DataType.build("STRING"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>, new_field STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[
+                        TableAlterColumn.struct("info"),
+                        TableAlterColumn.primitive("col_c"),
+                    ],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, new_field STRING>"
+                    ),
+                    array_element_selector="",
+                ),
+            ],
+            [],  # No operations when ignoring additive
+            dict(support_nested_operations=True),
+        ),
+    ],
+)
+def test_ignore_additive_operations(
+    current_struct,
+    new_struct,
+    expected_diff_with_additive: t.List[TableAlterOperation],
+    expected_diff_ignore_additive: t.List[TableAlterOperation],
+    config: t.Dict[str, t.Any],
+):
+    resolver = SchemaDiffer(**config)
+
+    # Test with additive operations allowed (default behavior)
+    operations_with_additive = resolver._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=False,
+    )
+    assert operations_with_additive == expected_diff_with_additive
+
+    # Test with additive operations ignored
+    operations_ignore_additive = resolver._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=True,
+    )
+    assert operations_ignore_additive == expected_diff_ignore_additive
+
+
+def test_ignore_additive_edge_cases():
+    """Test edge cases for ignore_additive behavior."""
+    schema_differ = SchemaDiffer(support_positional_add=True)
+
+    # Test when all operations are additive - should result in empty list
+    current_struct = "STRUCT<id INT>"
+    new_struct = "STRUCT<id INT, col_a STRING, col_b DOUBLE, col_c INT>"  # Add all columns
+
+    operations_ignore_additive = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=True,
+    )
+    assert len(operations_ignore_additive) == 0
+
+    # Test when no operations are needed - should result in empty list regardless of ignore_additive
+    same_struct = "STRUCT<id INT, name STRING>"
+
+    operations_same_with_additive = schema_differ._from_structs(
+        exp.DataType.build(same_struct),
+        exp.DataType.build(same_struct),
+        "apply_to_table",
+        ignore_additive=False,
+    )
+    operations_same_ignore_additive = schema_differ._from_structs(
+        exp.DataType.build(same_struct),
+        exp.DataType.build(same_struct),
+        "apply_to_table",
+        ignore_additive=True,
+    )
+    assert len(operations_same_with_additive) == 0
+    assert len(operations_same_ignore_additive) == 0
+
+    # Test when only DROP operations are needed - should be same regardless of ignore_additive
+    current_struct = "STRUCT<id INT, name STRING, age INT>"
+    new_struct = "STRUCT<id INT>"
+
+    operations_drop_with_additive = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=False,
+    )
+    operations_drop_ignore_additive = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=True,
+    )
+    assert len(operations_drop_with_additive) == 2  # DROP name, DROP age
+    assert len(operations_drop_ignore_additive) == 2  # Same operations
+    assert operations_drop_with_additive == operations_drop_ignore_additive
+
+
+def test_ignore_both_destructive_and_additive():
+    """Test behavior when both ignore_destructive and ignore_additive are True."""
+    schema_differ = SchemaDiffer(
+        support_positional_add=True,
+        compatible_types={
+            exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+        },
+    )
+
+    current_struct = "STRUCT<id INT, name STRING, age INT>"
+    new_struct = "STRUCT<id STRING, age INT, address STRING>"  # DROP name, ADD address, ALTER id
+
+    operations_ignore_both = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_destructive=True,
+        ignore_additive=True,
+    )
+    assert len(operations_ignore_both) == 0
+
+
+def test_ignore_additive_array_operations():
+    """Test ignore_additive with array of struct operations."""
+    schema_differ = SchemaDiffer(
+        support_nested_operations=True,
+        support_positional_add=True,
+    )
+
+    current_struct = "STRUCT<id INT, items ARRAY<STRUCT<col_a INT, col_b STRING>>>"
+    new_struct = "STRUCT<id INT, items ARRAY<STRUCT<col_a INT, col_b STRING, col_c DOUBLE>>>"
+
+    # With additive operations allowed - should add to array struct
+    operations_with_additive = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=False,
+    )
+    assert len(operations_with_additive) == 1  # ADD to array struct
+    assert isinstance(operations_with_additive[0], TableAlterAddColumnOperation)
+
+    # With additive operations ignored - should do nothing
+    operations_ignore_additive = schema_differ._from_structs(
+        exp.DataType.build(current_struct),
+        exp.DataType.build(new_struct),
+        "apply_to_table",
+        ignore_additive=True,
+    )
+    assert len(operations_ignore_additive) == 0

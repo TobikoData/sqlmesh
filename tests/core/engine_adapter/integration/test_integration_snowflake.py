@@ -52,42 +52,42 @@ def test_get_alter_expressions_includes_clustering(
     )
     engine_adapter.execute(f"CREATE TABLE {normal_table} (c1 int, c2 timestamp)")
 
-    assert len(engine_adapter.get_alter_expressions(normal_table, normal_table)) == 0
-    assert len(engine_adapter.get_alter_expressions(clustered_table, clustered_table)) == 0
+    assert len(engine_adapter.get_alter_operations(normal_table, normal_table)) == 0
+    assert len(engine_adapter.get_alter_operations(clustered_table, clustered_table)) == 0
 
     # alter table drop clustered
-    clustered_to_normal = engine_adapter.get_alter_expressions(clustered_table, normal_table)
+    clustered_to_normal = engine_adapter.get_alter_operations(clustered_table, normal_table)
     assert len(clustered_to_normal) == 1
     assert (
-        clustered_to_normal[0].sql(dialect=ctx.dialect)
+        clustered_to_normal[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_table} DROP CLUSTERING KEY"
     )
 
     # alter table add clustered
-    normal_to_clustered = engine_adapter.get_alter_expressions(normal_table, clustered_table)
+    normal_to_clustered = engine_adapter.get_alter_operations(normal_table, clustered_table)
     assert len(normal_to_clustered) == 1
     assert (
-        normal_to_clustered[0].sql(dialect=ctx.dialect)
+        normal_to_clustered[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {normal_table} CLUSTER BY (c1)"
     )
 
     # alter table change clustering
-    clustered_to_clustered_differently = engine_adapter.get_alter_expressions(
+    clustered_to_clustered_differently = engine_adapter.get_alter_operations(
         clustered_table, clustered_differently_table
     )
     assert len(clustered_to_clustered_differently) == 1
     assert (
-        clustered_to_clustered_differently[0].sql(dialect=ctx.dialect)
+        clustered_to_clustered_differently[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_table} CLUSTER BY (c1, TO_DATE(c2))"
     )
 
     # alter table change clustering
-    clustered_differently_to_clustered = engine_adapter.get_alter_expressions(
+    clustered_differently_to_clustered = engine_adapter.get_alter_operations(
         clustered_differently_table, clustered_table
     )
     assert len(clustered_differently_to_clustered) == 1
     assert (
-        clustered_differently_to_clustered[0].sql(dialect=ctx.dialect)
+        clustered_differently_to_clustered[0].expression.sql(dialect=ctx.dialect)
         == f"ALTER TABLE {clustered_differently_table} CLUSTER BY (c1)"
     )
 

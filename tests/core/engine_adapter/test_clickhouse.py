@@ -172,7 +172,7 @@ def test_alter_table(
     adapter.columns = table_columns  # type: ignore
 
     # ON CLUSTER not added because engine_run_mode.is_cluster=False
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     mocker.patch.object(
         ClickhouseEngineAdapter,
@@ -185,7 +185,7 @@ def test_alter_table(
         new_callable=mocker.PropertyMock(return_value=EngineRunMode.CLUSTER),
     )
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
 
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "c"',

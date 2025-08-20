@@ -39,7 +39,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.model.kind import TimeColumn
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils import (
     CorrelationId,
     columns_to_types_all_known,
@@ -376,6 +376,13 @@ class EngineAdapter:
             target_columns_to_types = columns_to_types_from_df(t.cast(pd.DataFrame, query_or_df))
         if not source_columns and target_columns_to_types:
             source_columns = list(target_columns_to_types)
+        # source columns should only contain columns that are defined in the target. If there are extras then
+        # that means they are intended to be ignored and will be excluded
+        source_columns = (
+            [x for x in source_columns if x in target_columns_to_types]
+            if source_columns and target_columns_to_types
+            else None
+        )
         return target_columns_to_types, source_columns
 
     def recycle(self) -> None:
@@ -1074,32 +1081,39 @@ class EngineAdapter:
         """
         self.execute(exp.Drop(this=exp.to_table(name), kind=kind, exists=exists, **drop_args))
 
-    def get_alter_expressions(
+    def get_alter_operations(
         self,
         current_table_name: TableName,
         target_table_name: TableName,
         *,
         ignore_destructive: bool = False,
-    ) -> t.List[exp.Alter]:
+        ignore_additive: bool = False,
+    ) -> t.List[TableAlterOperation]:
         """
         Determines the alter statements needed to change the current table into the structure of the target table.
         """
-        return self.SCHEMA_DIFFER.compare_columns(
-            current_table_name,
-            self.columns(current_table_name),
-            self.columns(target_table_name),
-            ignore_destructive=ignore_destructive,
+        return t.cast(
+            t.List[TableAlterOperation],
+            self.SCHEMA_DIFFER.compare_columns(
+                current_table_name,
+                self.columns(current_table_name),
+                self.columns(target_table_name),
+                ignore_destructive=ignore_destructive,
+                ignore_additive=ignore_additive,
+            ),
         )
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.Alter],
+        alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table.
         """
         with self.transaction():
-            for alter_expression in alter_expressions:
+            for alter_expression in [
+                x.expression if isinstance(x, TableAlterOperation) else x for x in alter_expressions
+            ]:
                 self.execute(alter_expression)
 
     def create_view(

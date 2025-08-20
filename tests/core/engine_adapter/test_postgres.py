@@ -157,7 +157,7 @@ def test_alter_table_drop_column_cascade(make_mocked_engine_adapter: t.Callable)
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
     ]

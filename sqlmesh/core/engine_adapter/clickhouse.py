@@ -15,7 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
     InsertOverwriteStrategy,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
@@ -596,13 +596,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
 
     def alter_table(
         self,
-        alter_expressions: t.List[exp.Alter],
+        alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]],
     ) -> None:
         """
         Performs the alter statements to change the current table into the structure of the target table.
         """
         with self.transaction():
-            for alter_expression in alter_expressions:
+            for alter_expression in [
+                x.expression if isinstance(x, TableAlterOperation) else x for x in alter_expressions
+            ]:
                 if self.engine_run_mode.is_cluster:
                     alter_expression.set(
                         "cluster", exp.OnCluster(this=exp.to_identifier(self.cluster))

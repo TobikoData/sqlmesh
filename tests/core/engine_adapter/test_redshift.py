@@ -365,7 +365,7 @@ def test_alter_table_drop_column_cascade(adapter: t.Callable):
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
     ]
@@ -388,7 +388,7 @@ def test_alter_table_precision_increase_varchar(adapter: t.Callable):
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" ALTER COLUMN "test_column" TYPE VARCHAR(20)',
     ]
@@ -411,7 +411,7 @@ def test_alter_table_precision_increase_decimal(adapter: t.Callable):
 
     adapter.columns = table_columns
 
-    adapter.alter_table(adapter.get_alter_expressions(current_table_name, target_table_name))
+    adapter.alter_table(adapter.get_alter_operations(current_table_name, target_table_name))
     assert to_sql_calls(adapter) == [
         'ALTER TABLE "test_table" DROP COLUMN "test_column" CASCADE',
         'ALTER TABLE "test_table" ADD COLUMN "test_column" DECIMAL(25, 10)',
