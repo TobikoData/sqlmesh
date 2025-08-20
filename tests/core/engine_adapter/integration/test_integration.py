@@ -1961,9 +1961,10 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         f"CREATE VIEW {raw_test_schema}.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
     ]
     config.before_all = [
-        quote_identifiers(parse_one(e, dialect=ctx.dialect), dialect=ctx.dialect).sql(
-            dialect=ctx.dialect
-        )
+        quote_identifiers(
+            parse_one(e, dialect=config.model_defaults.dialect),
+            dialect=config.model_defaults.dialect,
+        ).sql(dialect=config.model_defaults.dialect)
         for e in before_all
     ]
 
