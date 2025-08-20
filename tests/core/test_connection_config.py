@@ -11,6 +11,7 @@ from sqlmesh.core.config.connection import (
     ClickhouseConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
+    DorisConnectionConfig,
     DuckDBAttachOptions,
     FabricConnectionConfig,
     DuckDBConnectionConfig,
@@ -1048,6 +1049,62 @@ def test_mysql(make_config):
     )
     assert isinstance(config, MySQLConnectionConfig)
     assert config.is_recommended_for_state_sync is True
+
+
+def test_doris(make_config):
+    """Test DorisConnectionConfig basic functionality"""
+    # Basic configuration
+    config = make_config(
+        type="doris",
+        host="localhost",
+        user="root",
+        password="password",
+        port=9030,
+        database="demo",
+        check_import=False,
+    )
+    assert isinstance(config, DorisConnectionConfig)
+    assert config.type_ == "doris"
+    assert config.host == "localhost"
+    assert config.user == "root"
+    assert config.password == "password"
+    assert config.port == 9030
+    assert config.database == "demo"
+    assert config.DIALECT == "doris"
+    assert config.DISPLAY_NAME == "Apache Doris"
+    assert config.DISPLAY_ORDER == 17
+    assert config.is_recommended_for_state_sync is False
+
+    # Test with minimal configuration (using default port)
+    minimal_config = make_config(
+        type="doris",
+        host="fe.doris.cluster",
+        user="doris_user",
+        password="doris_pass",
+        check_import=False,
+    )
+    assert isinstance(minimal_config, DorisConnectionConfig)
+    assert minimal_config.port == 9030  # Default Doris FE port
+    assert minimal_config.host == "fe.doris.cluster"
+    assert minimal_config.user == "doris_user"
+
+    # Test with additional MySQL-compatible options
+    advanced_config = make_config(
+        type="doris",
+        host="doris-fe",
+        user="admin",
+        password="admin123",
+        port=9030,
+        database="analytics",
+        charset="utf8mb4",
+        ssl_disabled=True,
+        concurrent_tasks=10,
+        check_import=False,
+    )
+    assert isinstance(advanced_config, DorisConnectionConfig)
+    assert advanced_config.charset == "utf8mb4"
+    assert advanced_config.ssl_disabled is True
+    assert advanced_config.concurrent_tasks == 10
 
 
 def test_clickhouse(make_config):
