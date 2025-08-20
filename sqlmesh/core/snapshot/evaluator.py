@@ -751,6 +751,7 @@ class SnapshotEvaluator:
                         rendered_physical_properties=rendered_physical_properties,
                         allow_destructive_snapshots=allow_destructive_snapshots,
                     )
+                    common_render_kwargs["runtime_stage"] = RuntimeStage.EVALUATING
                 elif model.annotated or model.is_seed or model.kind.is_scd_type_2:
                     self._execute_create(
                         snapshot=snapshot,
@@ -762,6 +763,7 @@ class SnapshotEvaluator:
                         dry_run=False,
                         run_pre_post_statements=False,
                     )
+                    common_render_kwargs["runtime_stage"] = RuntimeStage.EVALUATING
 
             wap_id: t.Optional[str] = None
             if snapshot.is_materialized and (
@@ -1024,7 +1026,6 @@ class SnapshotEvaluator:
             snapshots=snapshots,
             runtime_stage=RuntimeStage.CREATING,
             deployability_index=deployability_index,
-            execution_time=now(),
         )
         target_table_name = snapshot.table_name()
 
