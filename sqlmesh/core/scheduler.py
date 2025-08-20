@@ -540,13 +540,13 @@ class Scheduler:
                     )
 
                     self.console.update_snapshot_evaluation_progress(
-                            snapshot,
-                            batched_intervals[snapshot][node.batch_index],
-                            node.batch_index,
-                            evaluation_duration_ms,
-                            num_audits - num_audits_failed,
-                            num_audits_failed,
-                            execution_stats=execution_stats,
+                        snapshot,
+                        batched_intervals[snapshot][node.batch_index],
+                        node.batch_index,
+                        evaluation_duration_ms,
+                        num_audits - num_audits_failed,
+                        num_audits_failed,
+                        execution_stats=execution_stats,
                     )
             elif isinstance(node, CreateNode):
                 self.snapshot_evaluator.create_snapshot(
@@ -554,7 +554,7 @@ class Scheduler:
                     snapshots=self.snapshots_by_name,
                     deployability_index=deployability_index,
                     allow_destructive_snapshots=allow_destructive_snapshots or set(),
-                    )
+                )
 
         try:
             with self.snapshot_evaluator.concurrent_context():
