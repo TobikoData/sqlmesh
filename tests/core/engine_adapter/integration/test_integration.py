@@ -2457,13 +2457,12 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+        assert actual_execution_stats["seed_model"].total_rows_processed == 7
         assert actual_execution_stats["incremental_model"].total_rows_processed == 7
         # snowflake doesn't track rows for CTAS
         assert actual_execution_stats["full_model"].total_rows_processed == (
             None if ctx.mark.startswith("snowflake") else 3
         )
-        # seed rows aren't tracked
-        assert actual_execution_stats["seed_model"].total_rows_processed is None
 
         if ctx.mark.startswith("bigquery") or ctx.mark.startswith("databricks"):
             assert actual_execution_stats["incremental_model"].total_bytes_processed is not None

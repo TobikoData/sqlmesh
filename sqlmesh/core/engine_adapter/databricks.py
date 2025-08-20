@@ -402,8 +402,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 if history_df is not None and not history_df.empty:
                     write_df = history_df[history_df["operation"] == "WRITE"]
                     write_df = write_df[write_df["timestamp"] == write_df["timestamp"].max()]
-                    if not write_df.empty:
-                        metrics = write_df["operationMetrics"][0]
+                    if not write_df.empty and "operationMetrics" in write_df.columns:
+                        metrics = write_df["operationMetrics"].iloc[0]
                         if metrics:
                             rowcount = None
                             rowcount_str = [
