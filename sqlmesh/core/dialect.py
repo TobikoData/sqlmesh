@@ -122,8 +122,8 @@ class StagedFilePath(exp.Expression):
     arg_types = exp.Table.arg_types.copy()
 
 
-ExpressionRawSql = t.Tuple[exp.Expression, t.Optional[d.RawSql]]
-ExpressionsRawSql = t.Tuple[t.List[exp.Expression], t.Optional[d.RawSql]]
+QueryRawSql = t.Tuple[exp.Query, t.Optional[RawSql]]
+ExpressionsRawSql = t.Tuple[t.List[exp.Expression], t.Optional[RawSql]]
 
 
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
