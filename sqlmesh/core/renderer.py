@@ -33,7 +33,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
-    OptionalExpressionsRawSql = t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[RawSql]]
+    OptionalExpressionsRawSql = t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[d.RawSql]]
 
 
 logger = logging.getLogger(__name__)
