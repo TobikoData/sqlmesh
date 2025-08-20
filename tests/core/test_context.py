@@ -689,9 +689,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
         config_content = f.read()
 
     # Add cache_dir to the test_config definition
-    config_content = config_content.replace(
-        'test_config = Config(\n    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},\n    default_gateway="in_memory",\n    plan=PlanConfig(\n        auto_categorize_changes=CategorizerConfig(\n            sql=AutoCategorizationMode.SEMI, python=AutoCategorizationMode.OFF\n        )\n    ),\n    model_defaults=model_defaults,\n)',
-        f"""test_config = Config(
+    config_content += f"""test_config_cache_dir = Config(
     gateways={{"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())}},
     default_gateway="in_memory",
     plan=PlanConfig(
@@ -701,14 +699,14 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
     ),
     model_defaults=model_defaults,
     cache_dir="{custom_cache_dir.as_posix()}",
-)""",
-    )
+    before_all=before_all,
+)"""
 
     with open(config_py_path, "w") as f:
         f.write(config_content)
 
     # Create context with the test config
-    context = Context(paths=sushi_path, config="test_config")
+    context = Context(paths=sushi_path, config="test_config_cache_dir")
     custom_cache_dir = context.cache_dir
     assert "custom_cache" in str(custom_cache_dir)
     assert (custom_cache_dir / "optimized_query").exists()
@@ -733,7 +731,7 @@ def test_plan_apply_populates_cache(copy_to_temp_path, mocker):
 
     # New context should load same models and create the cache for optimized_query and model_definition
     initial_model_count = len(context.models)
-    context2 = Context(paths=context.path, config="test_config")
+    context2 = Context(paths=context.path, config="test_config_cache_dir")
     cached_model_count = len(context2.models)
 
     assert initial_model_count == cached_model_count > 0
@@ -1778,14 +1776,14 @@ MODEL(
 );
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   SET VARIABLE stats_model_start = now()
 );
 
 SELECT 1 AS cola;
 
 @IF(
-  @runtime_stage = 'evaluating',
+  @runtime_stage IN ('evaluating', 'creating'),
   INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time)
   VALUES (@resolve_template('@{schema_name}.@{table_name}'), getvariable('stats_model_start'), now(), now() - getvariable('stats_model_start'))
 );
@@ -1851,11 +1849,11 @@ def access_adapter(evaluator):
 
     assert (
         model.pre_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', SET VARIABLE stats_model_start = NOW())"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), SET VARIABLE stats_model_start = NOW())"
     )
     assert (
         model.post_statements[0].sql()
-        == "@IF(@runtime_stage = 'evaluating', INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
+        == "@IF(@runtime_stage IN ('evaluating', 'creating'), INSERT INTO analytic_stats (physical_table, evaluation_start, evaluation_end, evaluation_time) VALUES (@resolve_template('@{schema_name}.@{table_name}'), GETVARIABLE('stats_model_start'), NOW(), NOW() - GETVARIABLE('stats_model_start')))"
     )
 
     stats_table = context.fetchdf("select * from memory.analytic_stats").to_dict()

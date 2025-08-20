@@ -57,9 +57,9 @@ def sqlmesh_config(
     if model_defaults.dialect is None:
         model_defaults.dialect = profile.target.dialect
 
-    target_to_sqlmesh_args = {}
-    if register_comments is not None:
-        target_to_sqlmesh_args["register_comments"] = register_comments
+    target_to_sqlmesh_args = {
+        "register_comments": register_comments or False,
+    }
 
     loader = kwargs.pop("loader", DbtLoader)
     if not issubclass(loader, DbtLoader):

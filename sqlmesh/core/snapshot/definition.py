@@ -1043,8 +1043,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             # If the model has a pinned version then use that.
             self.version = self.model.physical_version
         elif is_no_rebuild and self.previous_version:
+            self.version = self.previous_version.data_version.version
+        elif self.is_model and self.model.forward_only and not self.previous_version:
+            # If this is a new model then use a deterministic version, independent of the fingerprint.
+            self.version = hash_data([self.name, *self.model.kind.data_hash_values])
+        else:
+            self.version = self.fingerprint.to_version()
+
+        if is_no_rebuild and self.previous_version:
             previous_version = self.previous_version
-            self.version = previous_version.data_version.version
             self.physical_schema_ = previous_version.physical_schema
             self.table_naming_convention = previous_version.table_naming_convention
             if self.is_materialized and (category.is_indirect_non_breaking or category.is_metadata):
@@ -1054,11 +1061,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     or previous_version.fingerprint.to_version()
                 )
                 self.dev_table_suffix = previous_version.data_version.dev_table_suffix
-        elif self.is_model and self.model.forward_only and not self.previous_version:
-            # If this is a new model then use a deterministic version, independent of the fingerprint.
-            self.version = hash_data([self.name, *self.model.kind.data_hash_values])
-        else:
-            self.version = self.fingerprint.to_version()
 
         self.change_category = category
         self.forward_only = forward_only
@@ -1383,12 +1385,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return (
             self.is_paused
             and self.is_model
-            and not self.is_symbolic
+            and self.is_materialized
             and (
                 (self.previous_version and self.previous_version.version == self.version)
                 or self.model.forward_only
                 or bool(self.model.physical_version)
-                or self.is_view
                 or not self.virtual_environment_mode.is_full
             )
         )
@@ -1588,7 +1589,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     # Similarly, if the model depends on past and the start date is not aligned with the
                     # model's start, we should consider this snapshot non-deployable.
                     this_deployable = False
-                    if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
+                    if not snapshot.is_paused or (
+                        snapshot.is_indirect_non_breaking and snapshot.intervals
+                    ):
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
 

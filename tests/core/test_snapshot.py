@@ -2052,6 +2052,7 @@ def test_deployability_index(make_snapshot):
     snapshot_f.parents = (snapshot_e.snapshot_id, snapshot_a.snapshot_id)
 
     snapshot_g = make_snapshot(SqlModel(name="g", query=parse_one("SELECT 1")))
+    snapshot_g.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
     snapshot_g.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     snapshot_g.parents = (snapshot_e.snapshot_id,)
 

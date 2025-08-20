@@ -12,6 +12,7 @@ from sqlmesh.core.plan.stages import (
     AfterAllStage,
     AuditOnlyRunStage,
     PhysicalLayerUpdateStage,
+    PhysicalLayerSchemaCreationStage,
     CreateSnapshotRecordsStage,
     BeforeAllStage,
     BackfillStage,
@@ -134,15 +135,11 @@ def test_build_plan_stages_basic(
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
-        snapshot_a.snapshot_id,
-        snapshot_b.snapshot_id,
-    }
-    assert {s.snapshot_id for s in physical_stage.snapshots_with_missing_intervals} == {
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
@@ -252,9 +249,9 @@ def test_build_plan_stages_with_before_all_and_after_all(
         snapshot_b.snapshot_id,
     }
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[2]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
         snapshot_a.snapshot_id,
@@ -356,13 +353,12 @@ def test_build_plan_stages_select_models(
         snapshot_b.snapshot_id,
     }
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 1
     assert {s.snapshot_id for s in physical_stage.snapshots} == {snapshot_a.snapshot_id}
     assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
-    assert physical_stage.snapshots_with_missing_intervals == {snapshot_a.snapshot_id}
 
     # Verify BackfillStage
     backfill_stage = stages[2]
@@ -446,7 +442,7 @@ def test_build_plan_stages_basic_no_backfill(
     stages = build_plan_stages(plan, state_reader, None)
 
     # Verify stages
-    assert len(stages) == 7
+    assert len(stages) == 8
 
     # Verify CreateSnapshotRecordsStage
     create_snapshot_records_stage = stages[0]
@@ -456,8 +452,17 @@ def test_build_plan_stages_basic_no_backfill(
         snapshot_a.snapshot_id,
         snapshot_b.snapshot_id,
     }
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
+
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[2]
     assert isinstance(physical_stage, PhysicalLayerUpdateStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
@@ -466,28 +471,28 @@ def test_build_plan_stages_basic_no_backfill(
     }
 
     # Verify BackfillStage
-    backfill_stage = stages[2]
+    backfill_stage = stages[3]
     assert isinstance(backfill_stage, BackfillStage)
     assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
     assert backfill_stage.snapshot_to_intervals == {}
 
     # Verify EnvironmentRecordUpdateStage
-    assert isinstance(stages[3], EnvironmentRecordUpdateStage)
-    assert stages[3].no_gaps_snapshot_names == {snapshot_a.name, snapshot_b.name}
+    assert isinstance(stages[4], EnvironmentRecordUpdateStage)
+    assert stages[4].no_gaps_snapshot_names == {snapshot_a.name, snapshot_b.name}
 
     # Verify UnpauseStage
-    assert isinstance(stages[4], UnpauseStage)
-    assert {s.name for s in stages[4].promoted_snapshots} == {snapshot_a.name, snapshot_b.name}
+    assert isinstance(stages[5], UnpauseStage)
+    assert {s.name for s in stages[5].promoted_snapshots} == {snapshot_a.name, snapshot_b.name}
 
     # Verify VirtualLayerUpdateStage
-    virtual_stage = stages[5]
+    virtual_stage = stages[6]
     assert isinstance(virtual_stage, VirtualLayerUpdateStage)
     assert len(virtual_stage.promoted_snapshots) == 2
     assert len(virtual_stage.demoted_snapshots) == 0
     assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
 
     # Verify FinalizeEnvironmentStage
-    assert isinstance(stages[6], FinalizeEnvironmentStage)
+    assert isinstance(stages[7], FinalizeEnvironmentStage)
 
 
 def test_build_plan_stages_restatement(
@@ -558,9 +563,9 @@ def test_build_plan_stages_restatement(
     # Verify stages
     assert len(stages) == 5
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[0]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
         snapshot_a.snapshot_id,
@@ -679,17 +684,15 @@ def test_build_plan_stages_forward_only(
         new_snapshot_b.snapshot_id,
     }
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
         new_snapshot_a.snapshot_id,
         new_snapshot_b.snapshot_id,
     }
-    assert physical_stage.deployability_index == DeployabilityIndex.create(
-        [new_snapshot_a, new_snapshot_b]
-    )
+    assert physical_stage.deployability_index == DeployabilityIndex.all_deployable()
 
     # Verify EnvironmentRecordUpdateStage
     assert isinstance(stages[2], EnvironmentRecordUpdateStage)
@@ -808,9 +811,9 @@ def test_build_plan_stages_forward_only_dev(
         new_snapshot_b.snapshot_id,
     }
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
-    assert isinstance(physical_stage, PhysicalLayerUpdateStage)
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
         new_snapshot_a.snapshot_id,
@@ -921,7 +924,7 @@ def test_build_plan_stages_audit_only(
     stages = build_plan_stages(plan, state_reader, None)
 
     # Verify stages
-    assert len(stages) == 7
+    assert len(stages) == 8
 
     # Verify CreateSnapshotRecordsStage
     create_snapshot_records_stage = stages[0]
@@ -932,8 +935,20 @@ def test_build_plan_stages_audit_only(
         new_snapshot_b.snapshot_id,
     }
 
-    # Verify PhysicalLayerUpdateStage
+    # Verify PhysicalLayerSchemaCreationStage
     physical_stage = stages[1]
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        new_snapshot_a.snapshot_id,
+        new_snapshot_b.snapshot_id,
+    }
+    assert physical_stage.deployability_index == DeployabilityIndex.create(
+        [new_snapshot_a, new_snapshot_b]
+    )
+
+    # Verify PhysicalLayerUpdateStage
+    physical_stage = stages[2]
     assert isinstance(physical_stage, PhysicalLayerUpdateStage)
     assert len(physical_stage.snapshots) == 2
     assert {s.snapshot_id for s in physical_stage.snapshots} == {
@@ -945,28 +960,28 @@ def test_build_plan_stages_audit_only(
     )
 
     # Verify AuditOnlyRunStage
-    audit_only_stage = stages[2]
+    audit_only_stage = stages[3]
     assert isinstance(audit_only_stage, AuditOnlyRunStage)
     assert len(audit_only_stage.snapshots) == 1
     assert audit_only_stage.snapshots[0].snapshot_id == new_snapshot_a.snapshot_id
 
     # Verify BackfillStage
-    backfill_stage = stages[3]
+    backfill_stage = stages[4]
     assert isinstance(backfill_stage, BackfillStage)
     assert len(backfill_stage.snapshot_to_intervals) == 0
 
     # Verify EnvironmentRecordUpdateStage
-    assert isinstance(stages[4], EnvironmentRecordUpdateStage)
+    assert isinstance(stages[5], EnvironmentRecordUpdateStage)
 
     # Verify VirtualLayerUpdateStage
-    virtual_stage = stages[5]
+    virtual_stage = stages[6]
     assert isinstance(virtual_stage, VirtualLayerUpdateStage)
     assert len(virtual_stage.promoted_snapshots) == 2
     assert len(virtual_stage.demoted_snapshots) == 0
     assert {s.name for s in virtual_stage.promoted_snapshots} == {'"a"', '"b"'}
 
     # Verify FinalizeEnvironmentStage
-    assert isinstance(stages[6], FinalizeEnvironmentStage)
+    assert isinstance(stages[7], FinalizeEnvironmentStage)
 
 
 def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
@@ -1046,7 +1061,7 @@ def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
 
     assert len(stages) == 8
     assert isinstance(stages[0], CreateSnapshotRecordsStage)
-    assert isinstance(stages[1], PhysicalLayerUpdateStage)
+    assert isinstance(stages[1], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[2], EnvironmentRecordUpdateStage)
     assert isinstance(stages[3], MigrateSchemasStage)
     assert isinstance(stages[4], BackfillStage)
@@ -1120,7 +1135,7 @@ def test_build_plan_stages_removed_model(
     # Verify stages
     assert len(stages) == 5
 
-    assert isinstance(stages[0], PhysicalLayerUpdateStage)
+    assert isinstance(stages[0], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[1], BackfillStage)
     assert isinstance(stages[2], EnvironmentRecordUpdateStage)
     assert isinstance(stages[3], VirtualLayerUpdateStage)
@@ -1202,7 +1217,7 @@ def test_build_plan_stages_environment_suffix_target_changed(
     # Verify stages
     assert len(stages) == 5
 
-    assert isinstance(stages[0], PhysicalLayerUpdateStage)
+    assert isinstance(stages[0], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[1], BackfillStage)
     assert isinstance(stages[2], EnvironmentRecordUpdateStage)
     assert isinstance(stages[3], VirtualLayerUpdateStage)
@@ -1303,16 +1318,13 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
     assert len(stages) == 8
 
     assert isinstance(stages[0], CreateSnapshotRecordsStage)
-    assert isinstance(stages[1], PhysicalLayerUpdateStage)
+    assert isinstance(stages[1], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[2], BackfillStage)
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
-    assert isinstance(stages[4], MigrateSchemasStage)
-    assert isinstance(stages[5], UnpauseStage)
+    assert isinstance(stages[4], UnpauseStage)
+    assert isinstance(stages[5], BackfillStage)
     assert isinstance(stages[6], VirtualLayerUpdateStage)
     assert isinstance(stages[7], FinalizeEnvironmentStage)
-
-    migrate_schemas_stage = stages[4]
-    assert {s.snapshot_id for s in migrate_schemas_stage.snapshots} == {new_snapshot_c.snapshot_id}
 
 
 def test_build_plan_stages_virtual_environment_mode_filtering(

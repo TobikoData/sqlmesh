@@ -304,10 +304,6 @@ Models needing backfill (missing dates):
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
-Creating physical table ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:07
-
-All model versions have been created successfully
-
 [1/1] demo__dev.incrementals_demo evaluated in 6.97s
 Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:06
 
@@ -640,9 +636,10 @@ Models:
     ├── tcloud_raw_data.product_usage
     └── tcloud_raw_data.sales
 Apply - Virtual Update [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 15/15 • 0:00:03
 
-All model versions have been created successfully
+SKIP: No physical layer updates to perform
+
+SKIP: No model batches to execute
 
 Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:02
 
@@ -732,10 +729,6 @@ Models needing backfill (missing dates):
 Enter the preview start date (eg. '1 year', '2020-01-01') or blank to backfill to preview starting from yesterday: 2024-10-27
 Enter the preview end date (eg. '1 month ago', '2020-01-01') or blank to preview up until '2024-11-08 00:00:00':
 Apply - Preview Tables [y/n]: y
-Creating physical table ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:16
-
-All model versions have been created successfully
-
 [1/1] demo__dev.incrementals_demo evaluated in 6.18s
 Evaluating models ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:06
 
@@ -1249,9 +1242,10 @@ Models:
      THEN 'Regular User'
 Directly Modified: demo.incrementals_demo (Forward-only)
 Apply - Virtual Update [y/n]: y
-Creating physical tables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 15/15 • 0:00:02
 
-All model versions have been created successfully
+SKIP: No physical layer updates to perform
+
+SKIP: No model batches to execute
 
 Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:02
 

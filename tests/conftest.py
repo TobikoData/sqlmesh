@@ -271,13 +271,16 @@ def push_plan(context: Context, plan: Plan) -> None:
         context.default_catalog,
     )
     deployability_index = DeployabilityIndex.create(context.snapshots.values())
-    evaluatable_plan = plan.to_evaluatable()
+    evaluatable_plan = plan.to_evaluatable().copy(update={"skip_backfill": True})
     stages = plan_stages.build_plan_stages(
         evaluatable_plan, context.state_sync, context.default_catalog
     )
     for stage in stages:
         if isinstance(stage, plan_stages.CreateSnapshotRecordsStage):
             plan_evaluator.visit_create_snapshot_records_stage(stage, evaluatable_plan)
+        elif isinstance(stage, plan_stages.PhysicalLayerSchemaCreationStage):
+            stage.deployability_index = deployability_index
+            plan_evaluator.visit_physical_layer_schema_creation_stage(stage, evaluatable_plan)
         elif isinstance(stage, plan_stages.PhysicalLayerUpdateStage):
             stage.deployability_index = deployability_index
             plan_evaluator.visit_physical_layer_update_stage(stage, evaluatable_plan)

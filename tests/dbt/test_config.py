@@ -939,10 +939,10 @@ def test_connection_args(tmp_path):
     dbt_project_dir = "tests/fixtures/dbt/sushi_test"
 
     config = sqlmesh_config(dbt_project_dir)
-    assert config.gateways["in_memory"].connection.register_comments
-
-    config = sqlmesh_config(dbt_project_dir, register_comments=False)
     assert not config.gateways["in_memory"].connection.register_comments
+
+    config = sqlmesh_config(dbt_project_dir, register_comments=True)
+    assert config.gateways["in_memory"].connection.register_comments
 
 
 def test_custom_dbt_loader():

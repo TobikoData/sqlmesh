@@ -16,7 +16,7 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.plan.common import should_force_rebuild
+from sqlmesh.core.plan.common import should_force_rebuild, is_breaking_kind_change
 from sqlmesh.core.plan.definition import (
     Plan,
     SnapshotMapping,
@@ -597,7 +597,7 @@ class PlanBuilder:
             forward_only = self._forward_only or self._is_forward_only_change(s_id)
             if forward_only and s_id.name in self._context_diff.modified_snapshots:
                 new, old = self._context_diff.modified_snapshots[s_id.name]
-                if should_force_rebuild(old, new) or snapshot.is_seed:
+                if is_breaking_kind_change(old, new) or snapshot.is_seed:
                     # Breaking kind changes and seed changes can't be forward-only.
                     forward_only = False
 
@@ -622,7 +622,7 @@ class PlanBuilder:
         if self._context_diff.directly_modified(s_id.name):
             if self._auto_categorization_enabled:
                 new, old = self._context_diff.modified_snapshots[s_id.name]
-                if should_force_rebuild(old, new):
+                if is_breaking_kind_change(old, new):
                     snapshot.categorize_as(SnapshotChangeCategory.BREAKING, False)
                     return
 
@@ -774,7 +774,7 @@ class PlanBuilder:
         if snapshot.name in self._context_diff.modified_snapshots:
             _, old = self._context_diff.modified_snapshots[snapshot.name]
             # If the model kind has changed in a breaking way, then we can't consider this to be a forward-only change.
-            if snapshot.is_model and should_force_rebuild(old, snapshot):
+            if snapshot.is_model and is_breaking_kind_change(old, snapshot):
                 return False
         return (
             snapshot.is_model and snapshot.model.forward_only and bool(snapshot.previous_versions)

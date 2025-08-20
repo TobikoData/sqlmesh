@@ -443,14 +443,20 @@ class EngineAdapter:
             target_table=target_table,
             source_columns=source_columns,
         )
+        if not target_columns_to_types and table_exists:
+            target_columns_to_types = self.columns(target_table)
         query = source_queries[0].query_factory()
-        target_columns_to_types = target_columns_to_types or self.columns(target_table)
         self_referencing = any(
             quote_identifiers(table) == quote_identifiers(target_table)
             for table in query.find_all(exp.Table)
         )
         # If a query references itself then it must have a table created regardless of approach used.
         if self_referencing:
+            if not target_columns_to_types:
+                raise SQLMeshError(
+                    f"Cannot create a self-referencing table {target_table.sql(dialect=self.dialect)} without knowing the column types. "
+                    "Try casting the columns to an expected type or defining the columns in the model metadata. "
+                )
             self._create_table_from_columns(
                 target_table,
                 target_columns_to_types,
@@ -472,6 +478,7 @@ class EngineAdapter:
                 **kwargs,
             )
         if self_referencing:
+            assert target_columns_to_types is not None
             with self.temp_table(
                 self._select_columns(target_columns_to_types).from_(target_table),
                 name=target_table,
