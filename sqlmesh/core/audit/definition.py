@@ -223,7 +223,8 @@ class StandaloneAudit(_Node, AuditMixin):
         if rendered_query is None:
             raise SQLMeshError(f"Failed to render query for audit '{self.name}'.")
 
-        return rendered_query
+        # TODO: execute raw audit queries as well?
+        return rendered_query[0]
 
     @cached_property
     def depends_on(self) -> t.Set[str]:
