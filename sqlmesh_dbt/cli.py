@@ -64,6 +64,10 @@ def dbt(
     ctx.obj = functools.partial(create, project_dir=Path.cwd(), profile=profile, target=target)
 
     if not ctx.invoked_subcommand:
+        if profile or target:
+            # trigger a project load to validate the specified profile / target
+            ctx.obj()
+
         click.echo(
             f"No command specified. Run `{ctx.info_name} --help` to see the available commands."
         )
