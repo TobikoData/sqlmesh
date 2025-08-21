@@ -2866,8 +2866,12 @@ def render_meta_fields(
             for key, value in field_value.items():
                 if key in RUNTIME_RENDERED_MODEL_FIELDS:
                     rendered_dict[key] = parse_strings_with_macro_refs(value, dialect)
-                elif key == "auto_restatement_cron":
-                    # Don't parse auto_restatement_cron="@..." kwarg (e.g. @daily) into MacroVar
+                elif (
+                    # don't parse kind auto_restatement_cron="@..." kwargs (e.g. @daily) into MacroVar
+                    key == "auto_restatement_cron"
+                    and isinstance(value, str)
+                    and value.lower() in CRON_SHORTCUTS
+                ):
                     rendered_dict[key] = value
                 elif (rendered := render_field_value(value)) is not None:
                     rendered_dict[key] = rendered

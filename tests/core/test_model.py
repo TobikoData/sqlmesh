@@ -2920,6 +2920,28 @@ def test_python_model_decorator_kind() -> None:
         assert not mock_logger.call_args
 
 
+def test_python_model_decorator_auto_restatement_cron() -> None:
+    @model(
+        "auto_restatement_model",
+        cron="@daily",
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+            time_column="ds",
+            auto_restatement_cron="@hourly",
+        ),
+        columns={'"ds"': "date", '"COL"': "int"},
+    )
+    def my_model(context):
+        pass
+
+    python_model = model.get_registry()["auto_restatement_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert python_model.auto_restatement_cron == "@hourly"
+
+
 def test_python_model_decorator_col_descriptions() -> None:
     # `columns` and `column_descriptions` column names are different cases, but name normalization makes both lower
     @model("col_descriptions", columns={"col": "int"}, column_descriptions={"COL": "a column"})
