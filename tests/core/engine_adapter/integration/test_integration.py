@@ -3738,13 +3738,11 @@ def test_janitor(
 def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
     adapter = ctx.engine_adapter
     dialect = ctx.dialect
+
     if not adapter.SUPPORTS_MATERIALIZED_VIEWS:
         pytest.skip(f"Skipping engine {dialect} as it does not support materialized views")
-
-    elif dialect == "snowflake":
-        pytest.skip(
-            f"Skipping Snowflake as it requires an enterprise account for materialized views"
-        )
+    elif dialect in ("snowflake", "databricks"):
+        pytest.skip(f"Skipping {dialect} as they're not enabled on standard accounts")
 
     model_name = ctx.table("test_tbl")
     mview_name = ctx.table("test_mview")
