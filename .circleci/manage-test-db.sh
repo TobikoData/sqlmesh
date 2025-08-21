@@ -134,13 +134,13 @@ gcp-postgres_down() {
 }
 
 # Fabric
-fabric_init() {    
+fabric_init() {
     python --version #note: as at 2025-08-20, ms-fabric-cli is pinned to Python >= 3.10, <3.13
     pip install ms-fabric-cli
-    
+
     # to prevent the '[EncryptionFailed] An error occurred with the encrypted cache.' error
     # ref: https://microsoft.github.io/fabric-cli/#switch-to-interactive-mode-optional
-    fab config set encryption_fallback_enabled true 
+    fab config set encryption_fallback_enabled true
 
     echo "Logging in to Fabric"
     fab auth login -u $FABRIC_CLIENT_ID -p $FABRIC_CLIENT_SECRET --tenant $FABRIC_TENANT_ID

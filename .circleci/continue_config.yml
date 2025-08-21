@@ -239,7 +239,7 @@ jobs:
       - checkout
       - run:
           name: Install OS-level dependencies
-          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"      
+          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
       - run:
           name: Generate database name
           command: |
@@ -307,7 +307,7 @@ workflows:
                 - redshift
                 - bigquery
                 - clickhouse-cloud
-                - athena                
+                - athena
                 - fabric
                 - gcp-postgres
           filters:
