@@ -8,11 +8,13 @@ import sys
 import typing as t
 import shutil
 from datetime import datetime, timedelta
+import logging
 
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
+from unittest import mock
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -3733,7 +3735,7 @@ def test_janitor(
     ]
 
 
-def test_materialized_view_evaluation(ctx: TestContext):
+def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
     adapter = ctx.engine_adapter
     dialect = ctx.dialect
     if not adapter.SUPPORTS_MATERIALIZED_VIEWS:
@@ -3784,7 +3786,16 @@ def test_materialized_view_evaluation(ctx: TestContext):
         load_sql_based_model(d.parse(f"""MODEL (name {model_name}, kind FULL); SELECT 2 AS col"""))
     )
 
-    sqlmesh.plan(auto_apply=True, no_prompts=True)
+    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+
+    with mock.patch.object(logger, "info") as mock_logger:
+        sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+        # RisingWave does not need to recreate the mview, all other engines do
+        recreate_view = (
+            "Skipping creation of the view" if dialect == "risingwave" else "Replacing view"
+        )
+        assert any(recreate_view in call[0][0] for call in mock_logger.call_args_list)
 
     df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
     assert df["col"][0] == 2

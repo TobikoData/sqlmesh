@@ -2282,13 +2282,12 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        snapshot = kwargs["snapshot"]
-
-        if (
-            not snapshot.is_materialized_view
-            and self.adapter.HAS_VIEW_BINDING
-            and self.adapter.table_exists(table_name)
-        ):
+        # For all engines that support materialized views (except RisingWave) we recreate it.
+        # This is because case if upstream tables were recreated (e.g FULL models), the mview would be invalidated as well.
+        # RisingWave is an exception as it doesn't support CREATE OR REPLACE, so upstream models don't recreate their physical tables.
+        # Standard views still follow the same logic depending on VIEW_BINDING flag.
+        must_recreate_view = not self.adapter.HAS_VIEW_BINDING
+        if self.adapter.table_exists(table_name) and not must_recreate_view:
             logger.info("Skipping creation of the view '%s'", table_name)
             return
 
@@ -2297,7 +2296,7 @@ class ViewStrategy(PromotableStrategy):
             table_name,
             query_or_df,
             model.columns_to_types,
-            replace=snapshot.is_materialized_view or not self.adapter.HAS_VIEW_BINDING,
+            replace=must_recreate_view,
             materialized=self._is_materialized_view(model),
             view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
