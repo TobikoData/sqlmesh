@@ -25,17 +25,5 @@ def cli_global_error_handler(
                 sys.exit(1)
             else:
                 raise
-        finally:
-            context_or_obj = args[0]
-            sqlmesh_context = (
-                context_or_obj.obj if isinstance(context_or_obj, click.Context) else context_or_obj
-            )
-            if sqlmesh_context is not None:
-                # important to import this only if a context was created
-                # otherwise something like `sqlmesh_dbt run --help` will trigger this import because it's in the finally: block
-                from sqlmesh import Context
-
-                if isinstance(sqlmesh_context, Context):
-                    sqlmesh_context.close()
 
     return wrapper
