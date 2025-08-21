@@ -547,7 +547,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
-            raw_sql = seq_get(self._cache or (), 1)  # type: ignore
+            raw_sql = seq_get(self._cache or [], 1)  # type: ignore
         else:
             try:
                 expressions, raw_sql = super()._render(

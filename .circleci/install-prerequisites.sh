@@ -25,7 +25,7 @@ elif [ "$ENGINE" == "fabric" ]; then
     sudo dpkg -i packages-microsoft-prod.deb
     rm packages-microsoft-prod.deb
 
-    ENGINE_DEPENDENCIES="msodbcsql18"    
+    ENGINE_DEPENDENCIES="msodbcsql18"
 fi
 
 ALL_DEPENDENCIES="$COMMON_DEPENDENCIES $ENGINE_DEPENDENCIES"

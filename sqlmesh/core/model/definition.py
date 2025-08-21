@@ -272,6 +272,91 @@ class _Model(ModelMeta, frozen=True):
             *jinja_expressions,
         ]
 
+    def render_query_with_raw_sql(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
+        expand: t.Iterable[str] = tuple(),
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.Optional[d.QueryRawSql]:
+        """Renders a model's query with raw SQL, expanding macros with provided kwargs, and optionally expanding referenced models.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered query along with raw SQL, or None if the query can't be rendered.
+        """
+        query = exp.select(
+            *(
+                exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False, quoted=True)
+                for name, column_type in (self.columns_to_types or {}).items()
+            ),
+            copy=False,
+        ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]), copy=False)
+
+        return (query, None)
+
+    def render_query_or_raise_with_raw_sql(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
+        expand: t.Iterable[str] = tuple(),
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> d.QueryRawSql:
+        """Same as `render_query_with_raw_sql()` but raises an exception if the query can't be rendered.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered query along with raw SQL.
+        """
+        result = self.render_query_with_raw_sql(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            table_mapping=table_mapping,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+        if result is None:
+            raise SQLMeshError(f"Failed to render query for model '{self.name}'.")
+        return result
+
     def render_query(
         self,
         *,
@@ -300,15 +385,22 @@ class _Model(ModelMeta, frozen=True):
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
-            The rendered expression.
+            The rendered query, or None if the query can't be rendered.
         """
-        return exp.select(
-            *(
-                exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False, quoted=True)
-                for name, column_type in (self.columns_to_types or {}).items()
-            ),
-            copy=False,
-        ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]), copy=False)
+        result = self.render_query_with_raw_sql(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            table_mapping=table_mapping,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+        if result is None:
+            return None
+        return result[0]
 
     def render_query_or_raise(
         self,
@@ -338,9 +430,9 @@ class _Model(ModelMeta, frozen=True):
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
-            The rendered expression.
+            The rendered query.
         """
-        query = self.render_query(
+        result = self.render_query(
             start=start,
             end=end,
             execution_time=execution_time,
@@ -351,9 +443,9 @@ class _Model(ModelMeta, frozen=True):
             engine_adapter=engine_adapter,
             **kwargs,
         )
-        if query is None:
+        if result is None:
             raise SQLMeshError(f"Failed to render query for model '{self.name}'.")
-        return query
+        return result
 
     def render_pre_statements(
         self,
@@ -539,7 +631,8 @@ class _Model(ModelMeta, frozen=True):
                 f"Failed to render query for audit '{audit.name}', model '{self.name}'."
             )
 
-        return rendered_query
+        # TODO: execute raw audit queries as well?
+        return rendered_query[0]
 
     @property
     def pre_statements(self) -> t.List[exp.Expression]:
@@ -572,7 +665,12 @@ class _Model(ModelMeta, frozen=True):
             for statement in statements
             if not isinstance(statement, d.MacroDef)
         )
-        return [r for expressions in rendered if expressions for r in expressions]
+        return [
+            r
+            for expressions_raw_sql in rendered
+            if expressions_raw_sql
+            for r in expressions_raw_sql[0]
+        ]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
@@ -609,10 +707,10 @@ class _Model(ModelMeta, frozen=True):
         """
 
         def _render(e: exp.Expression) -> str | int | float | bool:
-            rendered_exprs = (
-                self._create_renderer(e).render(start=start, end=end, execution_time=execution_time)
-                or []
+            expressions_raw_sql = self._create_renderer(e).render(
+                start=start, end=end, execution_time=execution_time
             )
+            rendered_exprs = expressions_raw_sql[0] if expressions_raw_sql else []
             if len(rendered_exprs) != 1:
                 raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
 
@@ -633,13 +731,22 @@ class _Model(ModelMeta, frozen=True):
     def render_signal_calls(self) -> EvaluatableSignals:
         python_env = self.python_env
         env = prepare_env(python_env)
-        signals_to_kwargs = {
-            name: {
-                k: seq_get(self._create_renderer(v).render() or [], 0) for k, v in kwargs.items()
-            }
-            for name, kwargs in self.signals
-            if name
-        }
+
+        signals_to_kwargs = {}
+        for name, kwargs in self.signals:
+            if not name:
+                continue
+
+            upd_kwargs = {}
+            for k, v in kwargs.items():
+                expressions_raw_sql = self._create_renderer(v).render()
+                rendered_exprs = expressions_raw_sql[0] if expressions_raw_sql else []
+                if len(rendered_exprs) != 1:
+                    raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
+
+                upd_kwargs[k] = rendered_exprs[0]
+
+            signals_to_kwargs[name] = upd_kwargs
 
         return EvaluatableSignals(
             signals_to_kwargs=signals_to_kwargs,
@@ -656,14 +763,13 @@ class _Model(ModelMeta, frozen=True):
     ) -> t.Optional[exp.Expression]:
         if self.merge_filter is None:
             return None
-        rendered_exprs = (
-            self._create_renderer(self.merge_filter).render(
-                start=start, end=end, execution_time=execution_time
-            )
-            or []
+        expressions_raw_sql = self._create_renderer(self.merge_filter).render(
+            start=start, end=end, execution_time=execution_time
         )
+        rendered_exprs = expressions_raw_sql[0] if expressions_raw_sql else []
         if len(rendered_exprs) != 1:
             raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
+
         return rendered_exprs[0].transform(d.replace_merge_table_aliases, dialect=self.dialect)
 
     def _render_properties(
@@ -672,7 +778,8 @@ class _Model(ModelMeta, frozen=True):
         def _render(expression: exp.Expression) -> exp.Expression | None:
             # note: we use the _statement_renderer instead of _create_renderer because it sets model_fqn which
             # in turn makes @this_model available in the evaluation context
-            rendered_exprs = self._statement_renderer(expression).render(**render_kwargs)
+            expressions_raw_sql = self._statement_renderer(expression).render(**render_kwargs)
+            rendered_exprs = expressions_raw_sql[0] if expressions_raw_sql else []
 
             # Inform instead of raising for cases where a property is conditionally assigned
             if not rendered_exprs or rendered_exprs[0].sql().lower() in {"none", "null"}:
@@ -727,37 +834,22 @@ class _Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self.render_query_or_raise(**render_kwarg)
+        query = self.render_query_or_raise(**render_kwarg).limit(0)
 
-        if isinstance(query, d.RawSql):
-            columns = ["*"]
+        for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
+            if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
+                select_or_set_op.where(exp.false(), copy=False)
 
-            if self.managed_columns:
-                columns.extend(
-                    f"CAST(NULL AS {col_type.sql(dialect=self.dialect)}) AS {col}"
+        if self.managed_columns:
+            query.select(
+                *[
+                    exp.alias_(exp.cast(exp.Null(), to=col_type), col)
                     for col, col_type in self.managed_columns.items()
-                )
-
-            query = d.RawSql(
-                this=f"SELECT {', '.join(columns)} FROM ({query.name}) AS _subquery WHERE FALSE LIMIT 0"
+                    if col not in query.named_selects
+                ],
+                append=True,
+                copy=False,
             )
-        else:
-            query = query.limit(0)
-
-            for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
-                if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
-                    select_or_set_op.where(exp.false(), copy=False)
-
-            if self.managed_columns:
-                query.select(
-                    *[
-                        exp.alias_(exp.cast(exp.Null(), to=col_type), col)
-                        for col, col_type in self.managed_columns.items()
-                        if col not in query.named_selects
-                    ],
-                    append=True,
-                    copy=False,
-                )
 
         return query
 
@@ -1088,13 +1180,16 @@ class _Model(ModelMeta, frozen=True):
         for statement in (*self.pre_statements, *self.post_statements):
             statement_exprs: t.List[exp.Expression] = []
             if not isinstance(statement, d.MacroDef):
-                rendered = self._statement_renderer(statement).render()
+                expressions_raw_sql = self._statement_renderer(statement).render()
+                rendered = expressions_raw_sql[0] if expressions_raw_sql else []
+
                 if self._is_metadata_statement(statement):
                     continue
                 if rendered:
                     statement_exprs = rendered
                 else:
                     statement_exprs = [statement]
+
             data.extend(gen(e) for e in statement_exprs)
 
         return data  # type: ignore
@@ -1317,6 +1412,31 @@ class SqlModel(_Model):
             model._full_depends_on = None
         return model
 
+    def render_query_with_raw_sql(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
+        expand: t.Iterable[str] = tuple(),
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.Optional[d.QueryRawSql]:
+        return self._query_renderer.render(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            table_mapping=table_mapping,
+            expand=expand,
+            deployability_index=deployability_index,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
     def render_query(
         self,
         *,
@@ -1330,7 +1450,7 @@ class SqlModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Query]:
-        query = self._query_renderer.render(
+        result = self.render_query_with_raw_sql(
             start=start,
             end=end,
             execution_time=execution_time,
@@ -1341,8 +1461,9 @@ class SqlModel(_Model):
             engine_adapter=engine_adapter,
             **kwargs,
         )
-
-        return query
+        if result is None:
+            return None
+        return result[0]
 
     def render_definition(
         self,
@@ -1379,14 +1500,15 @@ class SqlModel(_Model):
             self._columns_to_types = self.columns_to_types_
         elif self._columns_to_types is None:
             try:
-                query = self._query_renderer.render()
+                query_raw_sql = self._query_renderer.render()
             except Exception:
                 logger.exception("Failed to render query for model %s", self.fqn)
                 return None
 
-            if query is None:
+            if query_raw_sql is None:
                 return None
 
+            query = query_raw_sql[0]
             unknown = exp.DataType.build("unknown")
 
             self._columns_to_types = {
@@ -1429,8 +1551,8 @@ class SqlModel(_Model):
         self._query_renderer.update_schema(self.mapping_schema)
 
     def validate_definition(self) -> None:
-        query = self._query_renderer.render()
-        if query is None:
+        query_raw_sql = self._query_renderer.render()
+        if query_raw_sql is None:
             if self.depends_on_ is None:
                 raise_config_error(
                     "Dependencies must be provided explicitly for models that can be rendered only at runtime",
@@ -1438,6 +1560,7 @@ class SqlModel(_Model):
                 )
             return
 
+        query = query_raw_sql[0]
         if not isinstance(query, exp.Query):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
@@ -2926,7 +3049,7 @@ def render_expression(
         path=path,
         blueprint_variables=blueprint_variables,
     )
-    return ExpressionRenderer(
+    expressions_raw_sql = ExpressionRenderer(
         expression,
         dialect,
         [],
@@ -2937,6 +3060,8 @@ def render_expression(
         quote_identifiers=False,
         normalize_identifiers=False,
     ).render()
+
+    return expressions_raw_sql[0] if expressions_raw_sql else None
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
