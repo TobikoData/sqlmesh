@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import re
 import typing as t
 
-from sqlglot import exp
+from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -683,30 +682,18 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         If so, we return early and do not record the row count.
         """
         if rowcount == 1:
-            results = self.cursor.fetchall()
-            if results and len(results) == 1:
-                try:
-                    results_str = str(results[0][0])
-                except (ValueError, TypeError):
+            query_parsed = parse_one(sql, dialect=self.dialect)
+            if isinstance(query_parsed, exp.Create):
+                if query_parsed.expression and isinstance(query_parsed.expression, exp.Select):
+                    table = query_parsed.find(exp.Table)
+                    if table:
+                        row_query = f"SELECT ROW_COUNT as row_count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{table.db}' AND TABLE_NAME = '{table.name}'"
+                        row_query_results = self.fetchone(row_query, quote_identifiers=True)
+                        if row_query_results:
+                            rowcount = row_query_results[0]
+                        else:
+                            return
+                else:
                     return
 
-                # Snowflake identifiers may be:
-                # - An unquoted contiguous set of [a-zA-Z0-9_$] characters
-                # - A double-quoted string that may contain spaces and nested double-quotes represented by `""`. Example: " my ""table"" name "
-                # - Regex:
-                #   - [a-zA-Z0-9_$]+ matches one or more character in the set
-                #   - "(?:[^"]|"")+" matches a double-quoted string that may contain spaces and nested double-quotes
-                #     - ?: non-capturing group
-                #     - [^"] matches any single character except a double-quote
-                #     - | or
-                #     - "" matches two sequential double-quotes
-                is_created = re.match(
-                    r'Table ([a-zA-Z0-9_$]+|"(?:[^"]|"")+") successfully created\.', results_str
-                )
-                is_already_exists = re.match(
-                    r'([a-zA-Z0-9_$]+|"(?:[^"]|"")+") already exists, statement succeeded\.',
-                    results_str,
-                )
-                if is_created or is_already_exists:
-                    return
         QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
