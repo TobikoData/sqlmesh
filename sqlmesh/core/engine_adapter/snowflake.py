@@ -700,9 +700,13 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 #     - [^"] matches any single character except a double-quote
                 #     - | or
                 #     - "" matches two sequential double-quotes
-                is_ctas = re.match(
+                is_created = re.match(
                     r'Table ([a-zA-Z0-9_$]+|"(?:[^"]|"")+") successfully created\.', results_str
                 )
-                if is_ctas:
+                is_already_exists = re.match(
+                    r'([a-zA-Z0-9_$]+|"(?:[^"]|"")+") already exists, statement succeeded\.',
+                    results_str,
+                )
+                if is_created or is_already_exists:
                     return
         QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
