@@ -272,7 +272,7 @@ def test_ctas_iceberg_partitioned(adapter: AthenaEngineAdapter):
         table_name=model.name,
         target_columns_to_types=model.columns_to_types,
         partitioned_by=model.partitioned_by,
-        query_or_df=model.ctas_query(),
+        query_or_df=model.ctas_query()[0],
         table_format=model.table_format,
     )
 
@@ -491,7 +491,7 @@ def test_iceberg_partition_transforms(adapter: AthenaEngineAdapter):
         table_name=model.name,
         target_columns_to_types=model.columns_to_types_or_raise,
         partitioned_by=model.partitioned_by,
-        query_or_df=model.ctas_query(),
+        query_or_df=model.ctas_query()[0],
         table_format=model.table_format,
     )
 
