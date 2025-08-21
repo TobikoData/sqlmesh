@@ -79,7 +79,7 @@ def test_optimized_query_cache_missing_rendered_query(tmp_path: Path, mocker: Mo
 
     assert cache.with_optimized_query(model)
 
-    assert model._query_renderer._cache == [None]
+    assert model._query_renderer._cache == ([None], None)
     assert model._query_renderer._optimized_cache is None
 
 

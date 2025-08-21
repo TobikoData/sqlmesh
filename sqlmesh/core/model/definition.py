@@ -737,16 +737,16 @@ class _Model(ModelMeta, frozen=True):
             if not name:
                 continue
 
-            upd_kwargs = {}
+            updated_kwargs = {}
             for k, v in kwargs.items():
                 expressions_raw_sql = self._create_renderer(v).render()
                 rendered_exprs = expressions_raw_sql[0] if expressions_raw_sql else []
                 if len(rendered_exprs) != 1:
                     raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
 
-                upd_kwargs[k] = rendered_exprs[0]
+                updated_kwargs[k] = rendered_exprs[0]
 
-            signals_to_kwargs[name] = upd_kwargs
+            signals_to_kwargs[name] = updated_kwargs
 
         return EvaluatableSignals(
             signals_to_kwargs=signals_to_kwargs,

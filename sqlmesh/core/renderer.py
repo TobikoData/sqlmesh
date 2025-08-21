@@ -543,11 +543,9 @@ class QueryRenderer(BaseExpressionRenderer):
             runtime_stage, start, end, execution_time, *kwargs.values()
         )
 
-        raw_sql: t.Optional[d.RawSql]
-
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
-            raw_sql = seq_get(self._cache or [], 1)  # type: ignore
+            raw_sql = self._cache[1] if self._cache else None
         else:
             try:
                 expressions, raw_sql = super()._render(

@@ -1335,7 +1335,7 @@ class SnapshotEvaluator:
             raise SQLMeshError("Expected model or standalone audit. {snapshot}: {audit}")
 
         count, *_ = adapter.fetchone(
-            select("COUNT(*)").from_(query.subquery("audit")),
+            exp.select("COUNT(*)").from_(query.subquery("audit")),
             quote_identifiers=True,
         )  # type: ignore
 
