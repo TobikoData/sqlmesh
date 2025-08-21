@@ -1780,3 +1780,18 @@ def test_fabric_pyodbc_connection_string_generation():
 
         # Check autocommit parameter, should default to True for Fabric
         assert call_args[1]["autocommit"] is True
+
+
+def test_schema_differ_overrides(make_config) -> None:
+    default_config = make_config(type="duckdb")
+    assert default_config.schema_differ_overrides is None
+    default_adapter = default_config.create_engine_adapter()
+    assert default_adapter._schema_differ_overrides is None
+    assert default_adapter.schema_differ.parameterized_type_defaults != {}
+
+    override: t.Dict[str, t.Any] = {"parameterized_type_defaults": {}}
+    config = make_config(type="duckdb", schema_differ_overrides=override)
+    assert config.schema_differ_overrides == override
+    adapter = config.create_engine_adapter()
+    assert adapter._schema_differ_overrides == override
+    assert adapter.schema_differ.parameterized_type_defaults == {}

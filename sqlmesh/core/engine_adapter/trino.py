@@ -26,7 +26,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.date import TimeLike
@@ -56,14 +55,14 @@ class TrinoEngineAdapter(
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
     DEFAULT_CATALOG_TYPE = "hive"
     QUOTE_IDENTIFIERS_IN_VIEWS = False
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             # default decimal precision varies across backends
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
             exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(3,)],
         },
-    )
+    }
     # some catalogs support microsecond (precision 6) but it has to be specifically enabled (Hive) or just isnt available (Delta / TIMESTAMP WITH TIME ZONE)
     # and even if you have a TIMESTAMP(6) the date formatting functions still only support millisecond precision
     MAX_TIMESTAMP_PRECISION = 3

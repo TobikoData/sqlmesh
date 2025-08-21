@@ -7,7 +7,6 @@ from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.dialect import parse
 from sqlglot import exp, parse_one
 import typing as t
-from sqlmesh.core.schema_diff import SchemaDiffer
 from datetime import datetime
 from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import dialect as d
@@ -152,7 +151,7 @@ def test_alter_table(
     adapter: ClickhouseEngineAdapter,
     mocker,
 ):
-    adapter.SCHEMA_DIFFER = SchemaDiffer()
+    adapter.SCHEMA_DIFFER_KWARGS = {}
     current_table_name = "test_table"
     current_table = {"a": "Int8", "b": "String", "c": "Int8"}
     target_table_name = "target_table"

@@ -14,7 +14,6 @@ from sqlmesh.core.engine_adapter.mixins import (
     logical_merge,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
-from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -36,15 +35,15 @@ class PostgresEngineAdapter(
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
     MAX_IDENTIFIER_LENGTH = 63
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             # DECIMAL without precision is "up to 131072 digits before the decimal point; up to 16383 digits after the decimal point"
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(131072 + 16383, 16383), (0,)],
             exp.DataType.build("CHAR", dialect=DIALECT).this: [(1,)],
             exp.DataType.build("TIME", dialect=DIALECT).this: [(6,)],
             exp.DataType.build("TIMESTAMP", dialect=DIALECT).this: [(6,)],
         },
-        types_with_unlimited_length={
+        "types_with_unlimited_length": {
             # all can ALTER to `TEXT`
             exp.DataType.build("TEXT", dialect=DIALECT).this: {
                 exp.DataType.build("VARCHAR", dialect=DIALECT).this,
@@ -63,8 +62,8 @@ class PostgresEngineAdapter(
                 exp.DataType.build("BPCHAR", dialect=DIALECT).this
             },
         },
-        drop_cascade=True,
-    )
+        "drop_cascade": True,
+    }
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

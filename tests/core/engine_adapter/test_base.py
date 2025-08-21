@@ -15,7 +15,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObject
-from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation, NestedSupport
 from sqlmesh.utils import columns_to_types_to_struct
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -715,8 +715,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         (
             {
                 "support_positional_add": True,
-                "support_nested_operations": True,
-                "support_nested_drop": True,
+                "nested_support": NestedSupport.ALL,
                 "array_element_selector": "element",
             },
             {
@@ -774,7 +773,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         ),
         (
             {
-                "support_nested_operations": True,
+                "nested_support": NestedSupport.ALL_BUT_DROP,
                 "array_element_selector": "element",
             },
             {
@@ -892,8 +891,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         (
             {
                 "support_positional_add": True,
-                "support_nested_operations": True,
-                "support_nested_drop": True,
+                "nested_support": NestedSupport.ALL,
                 "array_element_selector": "element",
             },
             {
@@ -922,8 +920,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         (
             {
                 "support_positional_add": True,
-                "support_nested_operations": True,
-                "support_nested_drop": True,
+                "nested_support": NestedSupport.ALL,
                 "array_element_selector": "element",
             },
             {
@@ -979,8 +976,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         # Test multiple operations on a column with no positional and nested features enabled
         (
             {
-                "support_nested_operations": True,
-                "support_nested_drop": True,
+                "nested_support": NestedSupport.ALL,
                 "array_element_selector": "element",
             },
             {
@@ -1037,8 +1033,7 @@ def test_comments(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture)
         # Test deeply nested structures
         (
             {
-                "support_nested_operations": True,
-                "support_nested_drop": True,
+                "nested_support": NestedSupport.ALL,
                 "array_element_selector": "element",
             },
             {
@@ -1067,8 +1062,8 @@ def test_alter_table(
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
-    original_from_structs = adapter.SCHEMA_DIFFER._from_structs
+    adapter.SCHEMA_DIFFER_KWARGS = schema_differ_config
+    original_from_structs = adapter.schema_differ._from_structs
 
     def _from_structs(*args, **kwargs) -> t.List[TableAlterOperation]:
         operations = original_from_structs(*args, **kwargs)

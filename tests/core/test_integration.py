@@ -7944,7 +7944,7 @@ def test_incremental_by_time_model_ignore_destructive_change(tmp_path: Path):
 
         context = Context(paths=[tmp_path], config=config)
         # Make the change compatible since that means we will attempt and alter now that is considered additive
-        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+        context.engine_adapter.SCHEMA_DIFFER_KWARGS["compatible_types"] = {
             exp.DataType.build("INT"): {exp.DataType.build("STRING")}
         }
         context.plan("prod", auto_apply=True, no_prompts=True, run=True)
@@ -8106,7 +8106,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
         (models_dir / "test_model.sql").write_text(updated_model)
 
         context = Context(paths=[tmp_path], config=config)
-        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+        context.engine_adapter.SCHEMA_DIFFER_KWARGS["compatible_types"] = {
             exp.DataType.build("INT"): {exp.DataType.build("STRING")}
         }
         context.plan("prod", auto_apply=True, no_prompts=True, run=True)
@@ -8153,7 +8153,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
 
         context = Context(paths=[tmp_path], config=config)
         # Make the change compatible since that means we will attempt and alter now that is considered additive
-        context.engine_adapter.SCHEMA_DIFFER.compatible_types = {
+        context.engine_adapter.SCHEMA_DIFFER_KWARGS["compatible_types"] = {
             exp.DataType.build("INT"): {exp.DataType.build("STRING")}
         }
         context.plan("prod", auto_apply=True, no_prompts=True, run=True)

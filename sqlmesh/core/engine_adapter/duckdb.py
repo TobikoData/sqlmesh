@@ -18,7 +18,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
@@ -29,11 +28,11 @@ if t.TYPE_CHECKING:
 class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin, RowDiffMixin):
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 3), (0,)],
         },
-    )
+    }
     COMMENT_CREATION_TABLE = CommentCreationTable.COMMENT_COMMAND_ONLY
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_CREATE_DROP_CATALOG = True

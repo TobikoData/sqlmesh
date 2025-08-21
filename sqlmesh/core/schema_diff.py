@@ -5,6 +5,8 @@ import logging
 import typing as t
 from dataclasses import dataclass
 from collections import defaultdict
+from enum import Enum
+
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
@@ -132,14 +134,15 @@ class TableAlterDropColumnOperation(TableAlterColumnOperation):
 @dataclass(frozen=True)
 class TableAlterChangeColumnTypeOperation(TableAlterTypedColumnOperation):
     current_type: exp.DataType
+    is_part_of_destructive_change: bool = False
 
     @property
     def is_additive(self) -> bool:
-        return True
+        return not self.is_part_of_destructive_change
 
     @property
     def is_destructive(self) -> bool:
-        return False
+        return self.is_part_of_destructive_change
 
     @property
     def _alter_actions(self) -> t.List[exp.Expression]:
@@ -278,6 +281,29 @@ class TableAlterColumnPosition:
         return exp.ColumnPosition(this=column, position=position)
 
 
+class NestedSupport(str, Enum):
+    ALL = "ALL"
+    NONE = "NONE"
+    ALL_BUT_DROP = "ALL_BUT_DROP"
+    IGNORE = "IGNORE"
+
+    @property
+    def is_all(self) -> bool:
+        return self == NestedSupport.ALL
+
+    @property
+    def is_none(self) -> bool:
+        return self == NestedSupport.NONE
+
+    @property
+    def is_all_but_drop(self) -> bool:
+        return self == NestedSupport.ALL_BUT_DROP
+
+    @property
+    def is_ignore(self) -> bool:
+        return self == NestedSupport.IGNORE
+
+
 class SchemaDiffer(PydanticModel):
     """
     Compares a source schema against a target schema and returns a list of alter statements to have the source
@@ -297,10 +323,7 @@ class SchemaDiffer(PydanticModel):
     Args:
         support_positional_add: Whether the engine for which the diff is being computed supports adding columns in a
             specific position in the set of existing columns.
-        support_nested_operations: Whether the engine for which the diff is being computed supports modifications to
-            nested data types like STRUCTs and ARRAYs.
-        support_nested_drop: Whether the engine for which the diff is being computed supports removing individual
-            columns of nested STRUCTs.
+        nested_support: How the engine for which the diff is being computed supports nested types.
         compatible_types: Types that are compatible and automatically coerced in actions like UNION ALL. Dict key is data
             type, and value is the set of types that are compatible with it.
         coerceable_types: The mapping from a current type to all types that can be safely coerced to the current one without
@@ -323,11 +346,14 @@ class SchemaDiffer(PydanticModel):
         max_parameter_length: Numeric parameter values corresponding to "max". Example: `VARCHAR(max)` -> `VARCHAR(65535)`.
         types_with_unlimited_length: Data types that accept values of any length up to system limits. Any explicitly
             parameterized type can ALTER to its unlimited length version, along with different types in some engines.
+        treat_alter_data_type_as_destructive: The SchemaDiffer will only output change data type operations if it
+            concludes the change is compatible and won't result in data loss. If this flag is set to True, it will
+            flag these data type changes as destructive. This was added for dbt adapter support and likely shouldn't
+            be set outside of that context.
     """
 
     support_positional_add: bool = False
-    support_nested_operations: bool = False
-    support_nested_drop: bool = False
+    nested_support: NestedSupport = NestedSupport.NONE
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
     coerceable_types_: t.Dict[exp.DataType, t.Set[exp.DataType]] = Field(
@@ -341,6 +367,7 @@ class SchemaDiffer(PydanticModel):
     ] = {}
     max_parameter_length: t.Dict[exp.DataType.Type, t.Union[int, float]] = {}
     types_with_unlimited_length: t.Dict[exp.DataType.Type, t.Set[exp.DataType.Type]] = {}
+    treat_alter_data_type_as_destructive: bool = False
 
     _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
@@ -575,9 +602,11 @@ class SchemaDiffer(PydanticModel):
         # We don't copy on purpose here because current_type may need to be mutated inside
         # _get_operations (struct.expressions.pop and struct.expressions.insert)
         current_type = exp.DataType.build(current_type, copy=False)
-        if self.support_nested_operations:
+        if not self.nested_support.is_none:
             if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
-                if self.support_nested_drop or not self._requires_drop_alteration(
+                if self.nested_support.is_ignore:
+                    return []
+                if self.nested_support.is_all or not self._requires_drop_alteration(
                     current_type, new_type
                 ):
                     return self._get_operations(
@@ -597,7 +626,9 @@ class SchemaDiffer(PydanticModel):
                 new_array_type = new_type.expressions[0]
                 current_array_type = current_type.expressions[0]
                 if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
-                    if self.support_nested_drop or not self._requires_drop_alteration(
+                    if self.nested_support.is_ignore:
+                        return []
+                    if self.nested_support.is_all or not self._requires_drop_alteration(
                         current_array_type, new_array_type
                     ):
                         return self._get_operations(
@@ -624,6 +655,7 @@ class SchemaDiffer(PydanticModel):
                     current_type=current_type,
                     expected_table_struct=root_struct.copy(),
                     array_element_selector=self.array_element_selector,
+                    is_part_of_destructive_change=self.treat_alter_data_type_as_destructive,
                 )
             ]
         if ignore_destructive:
@@ -806,12 +838,15 @@ def get_additive_column_names(alter_expressions: t.List[TableAlterOperation]) ->
     ]
 
 
-def get_schema_differ(dialect: str) -> SchemaDiffer:
+def get_schema_differ(
+    dialect: str, overrides: t.Optional[t.Dict[str, t.Any]] = None
+) -> SchemaDiffer:
     """
     Returns the appropriate SchemaDiffer for a given dialect without initializing the engine adapter.
 
     Args:
         dialect: The dialect for which to get the schema differ.
+        overrides: Optional dictionary of overrides to apply to the SchemaDiffer instance.
 
     Returns:
         The SchemaDiffer instance configured for the given dialect.
@@ -825,7 +860,12 @@ def get_schema_differ(dialect: str) -> SchemaDiffer:
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
     engine_adapter_class = DIALECT_TO_ENGINE_ADAPTER.get(dialect, EngineAdapter)
-    return getattr(engine_adapter_class, "SCHEMA_DIFFER", SchemaDiffer())
+    return SchemaDiffer(
+        **{
+            **getattr(engine_adapter_class, "SCHEMA_DIFFER_KWARGS"),
+            **(overrides or {}),
+        }
+    )
 
 
 def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:

@@ -15,7 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDiffer
+from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.engines.spark.db_api.spark_session import connection, SparkSessionConnection
 from sqlmesh.utils.errors import SQLMeshError, MissingDefaultCatalogError
 
@@ -34,15 +34,14 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
-    SCHEMA_DIFFER = SchemaDiffer(
-        support_positional_add=True,
-        support_nested_operations=True,
-        support_nested_drop=True,
-        array_element_selector="element",
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "support_positional_add": True,
+        "nested_support": NestedSupport.ALL,
+        "array_element_selector": "element",
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(10, 0), (0,)],
         },
-    )
+    }
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)

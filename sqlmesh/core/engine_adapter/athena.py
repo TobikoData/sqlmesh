@@ -39,7 +39,7 @@ class AthenaEngineAdapter(PandasNativeFetchDFSupportMixin, RowDiffMixin):
     # CTAS, Views: No comment support at all
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
-    SCHEMA_DIFFER = TrinoEngineAdapter.SCHEMA_DIFFER
+    SCHEMA_DIFFER_KWARGS = TrinoEngineAdapter.SCHEMA_DIFFER_KWARGS
     MAX_TIMESTAMP_PRECISION = 3  # copied from Trino
     # Athena does not deal with comments well, e.g:
     # >>> self._execute('/* test */ DESCRIBE foo')

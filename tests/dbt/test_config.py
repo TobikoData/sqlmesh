@@ -35,6 +35,7 @@ from sqlmesh.dbt.target import (
     TrinoConfig,
     AthenaConfig,
     ClickhouseConfig,
+    SCHEMA_DIFFER_OVERRIDES,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
@@ -542,6 +543,9 @@ def test_snowflake_config():
     )
     sqlmesh_config = config.to_sqlmesh()
     assert sqlmesh_config.application == "Tobiko_SQLMesh"
+    assert (
+        sqlmesh_config.schema_differ_overrides == SCHEMA_DIFFER_OVERRIDES["schema_differ_overrides"]
+    )
 
 
 def test_snowflake_config_private_key_path():
@@ -771,6 +775,7 @@ def test_databricks_config_oauth():
     assert as_sqlmesh.auth_type == "databricks-oauth"
     assert as_sqlmesh.oauth_client_id == "client-id"
     assert as_sqlmesh.oauth_client_secret == "client-secret"
+    assert as_sqlmesh.schema_differ_overrides == SCHEMA_DIFFER_OVERRIDES["schema_differ_overrides"]
 
 
 def test_bigquery_config():

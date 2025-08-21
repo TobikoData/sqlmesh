@@ -30,7 +30,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
@@ -54,8 +53,8 @@ class MSSQLEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(18, 0), (0,)],
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(1,)],
             exp.DataType.build("VARBINARY", dialect=DIALECT).this: [(1,)],
@@ -67,12 +66,12 @@ class MSSQLEngineAdapter(
             exp.DataType.build("DATETIME2", dialect=DIALECT).this: [(7,)],
             exp.DataType.build("DATETIMEOFFSET", dialect=DIALECT).this: [(7,)],
         },
-        max_parameter_length={
+        "max_parameter_length": {
             exp.DataType.build("VARBINARY", dialect=DIALECT).this: 2147483647,  # 2 GB
             exp.DataType.build("VARCHAR", dialect=DIALECT).this: 2147483647,
             exp.DataType.build("NVARCHAR", dialect=DIALECT).this: 2147483647,
         },
-    )
+    }
     VARIABLE_LENGTH_DATA_TYPES = {"binary", "varbinary", "char", "varchar", "nchar", "nvarchar"}
 
     @property

@@ -22,7 +22,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty, get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -61,12 +60,12 @@ class SparkEngineAdapter(
 
     WAP_PREFIX = "wap_"
     BRANCH_PREFIX = "branch_"
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             # default decimal precision varies across backends
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(), (0,)],
         },
-    )
+    }
 
     @property
     def connection(self) -> SparkSessionConnection:
