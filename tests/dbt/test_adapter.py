@@ -382,7 +382,9 @@ def test_adapter_expand_target_column_types(
     adapter_mock.columns.side_effect = [
         from_columns,
         to_columns,
-    ] * 2
+        from_columns,
+        to_columns,
+    ]
     adapter_mock.SCHEMA_DIFFER = SchemaDiffer()
 
     context = sushi_test_project.context
