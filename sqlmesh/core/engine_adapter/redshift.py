@@ -5,7 +5,7 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import RawSql, to_schema
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
@@ -394,7 +394,7 @@ class RedshiftEngineAdapter(
     def _merge(
         self,
         target_table: TableName,
-        query: Query,
+        query: Query | RawSql,
         on: exp.Expression,
         whens: exp.Whens,
     ) -> None:

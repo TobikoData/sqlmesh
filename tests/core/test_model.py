@@ -2630,7 +2630,7 @@ def test_python_model(assert_exp_eq) -> None:
     assert m.depends_on == {'"foo"', '"bar"."baz"'}
     assert m.columns_to_types == {"COL": exp.DataType.build("int")}
     assert_exp_eq(
-        m.ctas_query(),
+        m.ctas_query()[0],
         """
 SELECT
   CAST(NULL AS INT) AS "COL"
@@ -3245,7 +3245,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'SELECT 1 AS "a" FROM "x" AS "x" WHERE TRUE AND FALSE LIMIT 0'
     )
 
@@ -3257,7 +3257,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions).ctas_query().sql()
+        load_sql_based_model(expressions).ctas_query()[0].sql()
         == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
@@ -3269,7 +3269,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'SELECT 1 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 2 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 3 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 4 AS "a" FROM "t" AS "t" WHERE FALSE LIMIT 0'
     )
 
@@ -3281,7 +3281,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'SELECT 1 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 2 AS "a" FROM "t" AS "t" WHERE FALSE LIMIT 0'
     )
 
@@ -3293,7 +3293,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'SELECT 1 AS "a" FROM "t" AS "t" WHERE FALSE UNION ALL SELECT 2 AS "a" FROM "t" AS "t" WHERE FALSE ORDER BY 1 LIMIT 0'
     )
 
@@ -3311,7 +3311,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'WITH RECURSIVE "a" AS (SELECT * FROM "x" AS "x" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
@@ -3329,7 +3329,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'WITH RECURSIVE "a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
@@ -3350,7 +3350,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
+        load_sql_based_model(expressions, dialect="bigquery").ctas_query()[0].sql()
         == 'WITH RECURSIVE "a" AS (WITH "nested_a" AS (SELECT * FROM (SELECT * FROM (SELECT * FROM "x" AS "x" WHERE FALSE) AS "_q_0" WHERE FALSE) AS "_q_1" WHERE FALSE) SELECT * FROM "nested_a" AS "nested_a" WHERE FALSE), "b" AS (SELECT * FROM "a" AS "a" WHERE FALSE UNION ALL SELECT * FROM "a" AS "a" WHERE FALSE) SELECT * FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 

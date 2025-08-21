@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
-from sqlglot.helper import ensure_list, seq_get
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.simplify import simplify

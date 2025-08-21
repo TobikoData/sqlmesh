@@ -10,7 +10,7 @@ from enum import Enum
 from pydantic import Field
 from sqlglot import exp
 
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import RawSql, to_schema
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -264,7 +264,7 @@ class InsertOverwriteStrategy(Enum):
 class SourceQuery:
     def __init__(
         self,
-        query_factory: t.Callable[[], Query],
+        query_factory: t.Callable[[], Query | RawSql],
         cleanup_func: t.Optional[t.Callable[[], None]] = None,
         transforms: t.Optional[t.List[t.Callable[[Query], Query]]] = None,
         **kwargs: t.Any,
@@ -276,10 +276,13 @@ class SourceQuery:
     def add_transform(self, transform: t.Callable[[Query], Query]) -> None:
         self._transforms.append(transform)
 
-    def __enter__(self) -> Query:
+    def __enter__(self) -> Query | RawSql:
         query = self.query_factory()
-        for transform in self._transforms:
-            query = t.cast(exp.Query, query.transform(transform))
+
+        if isinstance(query, exp.Query):
+            for transform in self._transforms:
+                query = t.cast(exp.Query, query.transform(transform))
+
         return query
 
     def __exit__(

@@ -822,7 +822,7 @@ class _Model(ModelMeta, frozen=True):
             quote_identifiers=False,
         )
 
-    def ctas_query(self, **render_kwarg: t.Any) -> exp.Query:
+    def ctas_query(self, **render_kwarg: t.Any) -> d.QueryRawSql:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -831,16 +831,32 @@ class _Model(ModelMeta, frozen=True):
 
         Args:
             render_kwarg: Additional kwargs to pass to the renderer.
+
         Return:
-            The mocked out ctas query.
+            The mocked out ctas query along with raw SQL.
         """
-        query = self.render_query_or_raise(**render_kwarg).limit(0)
+        query, raw_sql = self.render_query_or_raise_with_raw_sql(**render_kwarg)
+        query = query.limit(0)
+
+        # Some dialects don't support nested CTEs, so we can't convert `query` into a subquery
+        dialect = d.Dialect.get_or_raise(self.dialect)
+        if query.args.get("with") and (
+            type(query) in dialect.generator_class.EXPRESSIONS_WITHOUT_NESTED_CTES
+        ):
+            raw_sql = None
+        elif raw_sql:
+            raw_sql = d.RawSql(
+                this=f"SELECT * FROM ({raw_sql.name}) AS _subquery LIMIT 0 WHERE FALSE"
+            )
 
         for select_or_set_op in query.find_all(exp.Select, exp.SetOperation):
             if isinstance(select_or_set_op, exp.Select) and select_or_set_op.args.get("from"):
                 select_or_set_op.where(exp.false(), copy=False)
 
         if self.managed_columns:
+            # Injecting projections via string mangling is brittle, so we just discard the raw SQL
+            raw_sql = None
+
             query.select(
                 *[
                     exp.alias_(exp.cast(exp.Null(), to=col_type), col)
@@ -851,7 +867,7 @@ class _Model(ModelMeta, frozen=True):
                 copy=False,
             )
 
-        return query
+        return query, raw_sql
 
     def text_diff(self, other: Node, rendered: bool = False) -> str:
         """Produce a text diff against another node.

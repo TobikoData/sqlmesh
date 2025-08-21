@@ -1305,7 +1305,7 @@ def test_parsetime_adapter_call(
     assert sqlmesh_model.columns_to_types is None
     assert not sqlmesh_model.annotated
     with pytest.raises(SQLMeshError):
-        sqlmesh_model.ctas_query()
+        sqlmesh_model.ctas_query()[0]
 
     engine_adapter = sushi_test_dbt_context.engine_adapter
     assert_exp_eq(

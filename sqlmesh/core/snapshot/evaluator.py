@@ -1445,7 +1445,11 @@ class SnapshotEvaluator:
         )
 
 
-def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
+def _evaluation_strategy(
+    snapshot: SnapshotInfoLike,
+    adapter: EngineAdapter,
+    run_original_sql: bool = False,
+) -> EvaluationStrategy:
     klass: t.Type
     if snapshot.is_embedded:
         klass = EmbeddedStrategy
@@ -1473,18 +1477,19 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
                 f"Missing the name of a custom evaluation strategy in model '{snapshot.name}'."
             )
         _, klass = get_custom_materialization_type_or_raise(snapshot.custom_materialization)
-        return klass(adapter)
+        return klass(adapter, run_original_sql=run_original_sql)
     elif snapshot.is_managed:
         klass = EngineManagedStrategy
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
-    return klass(adapter)
+    return klass(adapter, run_original_sql=run_original_sql)
 
 
 class EvaluationStrategy(abc.ABC):
-    def __init__(self, adapter: EngineAdapter):
+    def __init__(self, adapter: EngineAdapter, run_original_sql: bool = False):
         self.adapter = adapter
+        self.run_original_sql = run_original_sql
 
     @abc.abstractmethod
     def insert(
@@ -1724,8 +1729,12 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        ctas_query = model.ctas_query(**render_kwargs)
+        ctas_query: exp.Query | d.RawSql
+        ctas_query, raw_sql = model.ctas_query(**render_kwargs)
         physical_properties = kwargs.get("physical_properties", model.physical_properties)
+
+        if raw_sql and self.run_original_sql:
+            ctas_query = raw_sql
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:
@@ -1859,7 +1868,13 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         if model.on_destructive_change.is_ignore or model.on_additive_change.is_ignore:
             # We need to identify the columns that are only in the source so we create an empty table with
             # the user query to determine that
-            with self.adapter.temp_table(model.ctas_query(**render_kwargs)) as temp_table:
+            ctas_query: exp.Query | d.RawSql
+            ctas_query, raw_sql = model.ctas_query(**render_kwargs)
+
+            if raw_sql and self.run_original_sql:
+                ctas_query = raw_sql
+
+            with self.adapter.temp_table(ctas_query) as temp_table:
                 source_columns = list(self.adapter.columns(temp_table))
         else:
             source_columns = None

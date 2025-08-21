@@ -22,6 +22,7 @@ from sqlglot.helper import ensure_list
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import (
+    RawSql,
     add_table,
     schema_,
     select_from_values_for_batch_range,
@@ -262,7 +263,7 @@ class EngineAdapter:
 
     def _get_source_queries(
         self,
-        query_or_df: QueryOrDF,
+        query_or_df: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         target_table: TableName,
         *,
@@ -276,9 +277,10 @@ class EngineAdapter:
         if isinstance(query_or_df, exp.Query):
             query_factory = lambda: query_or_df
             if source_columns:
-                source_columns_lookup = set(source_columns)
                 if not target_columns_to_types:
                     raise SQLMeshError("columns_to_types must be set if source_columns is set")
+
+                source_columns_lookup = set(source_columns)
                 if not set(target_columns_to_types).issubset(source_columns_lookup):
                     select_columns = [
                         exp.column(c, quoted=True)
@@ -293,7 +295,10 @@ class EngineAdapter:
                         .select(*select_columns)
                         .from_(query_or_df.subquery("select_source_columns"))
                     )
+
             return [SourceQuery(query_factory=query_factory)]  # type: ignore
+        if isinstance(query_or_df, RawSql):
+            return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
 
         if not target_columns_to_types:
             raise SQLMeshError(
@@ -350,7 +355,7 @@ class EngineAdapter:
 
     def _get_source_queries_and_columns_to_types(
         self,
-        query_or_df: QueryOrDF,
+        query_or_df: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         target_table: TableName,
         *,
@@ -380,14 +385,14 @@ class EngineAdapter:
     @t.overload
     def _columns_to_types(
         self,
-        query_or_df: Query,
+        query_or_df: Query | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]: ...
 
     def _columns_to_types(
         self,
-        query_or_df: QueryOrDF,
+        query_or_df: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         source_columns: t.Optional[t.List[str]] = None,
     ) -> t.Tuple[t.Optional[t.Dict[str, exp.DataType]], t.Optional[t.List[str]]]:
@@ -653,7 +658,7 @@ class EngineAdapter:
     def ctas(
         self,
         table_name: TableName,
-        query_or_df: QueryOrDF,
+        query_or_df: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         table_description: t.Optional[str] = None,
@@ -1481,7 +1486,7 @@ class EngineAdapter:
     def _insert_append_query(
         self,
         table_name: TableName,
-        query: Query,
+        query: Query | RawSql,
         target_columns_to_types: t.Dict[str, exp.DataType],
         order_projections: bool = True,
         track_rows_processed: bool = True,
@@ -1646,7 +1651,7 @@ class EngineAdapter:
     def _merge(
         self,
         target_table: TableName,
-        query: Query,
+        query: Query | RawSql,
         on: exp.Expression,
         whens: exp.Whens,
     ) -> None:
@@ -2666,11 +2671,11 @@ class EngineAdapter:
 
     def _order_projections_and_filter(
         self,
-        query: Query,
+        query: Query | RawSql,
         target_columns_to_types: t.Dict[str, exp.DataType],
         where: t.Optional[exp.Expression] = None,
         coerce_types: bool = False,
-    ) -> Query:
+    ) -> Query | RawSql:
         if not isinstance(query, exp.Query) or (
             not where and not coerce_types and query.named_selects == list(target_columns_to_types)
         ):

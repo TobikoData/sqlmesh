@@ -223,7 +223,7 @@ class StandaloneAudit(_Node, AuditMixin):
         if rendered_query is None:
             raise SQLMeshError(f"Failed to render query for audit '{self.name}'.")
 
-        # TODO: execute raw audit queries as well?
+        # TODO: execute raw queries here?
         return rendered_query[0]
 
     @cached_property

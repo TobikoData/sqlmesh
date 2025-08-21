@@ -729,6 +729,7 @@ class SqlModelTest(ModelTest):
         variables = self.body.get("vars", {}).copy()
         time_kwargs = {key: variables.pop(key) for key in TIME_KWARG_KEYS if key in variables}
 
+        # TODO: execute raw queries here?
         query = self.model.render_query_or_raise(
             **time_kwargs,
             variables=variables,
