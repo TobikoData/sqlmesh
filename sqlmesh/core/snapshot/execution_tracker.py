@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 import typing as t
 from contextlib import contextmanager
 from threading import local, Lock
@@ -12,10 +11,6 @@ class QueryExecutionStats:
     snapshot_batch_id: str
     total_rows_processed: t.Optional[int] = None
     total_bytes_processed: t.Optional[int] = None
-    query_count: int = 0
-    queries_executed: t.List[t.Tuple[str, t.Optional[int], t.Optional[int], float]] = field(
-        default_factory=list
-    )
 
 
 @dataclass
@@ -26,10 +21,8 @@ class QueryExecutionContext:
     It accumulates statistics from multiple cursor.execute() calls during a single snapshot evaluation.
 
     Attributes:
-        id: Identifier linking this context to a specific operation
-        total_rows_processed: Running sum of cursor.rowcount from all executed queries during evaluation
-        query_count: Total number of SQL statements executed
-        queries_executed: List of (sql_snippet, row_count, timestamp) tuples for debugging
+        snapshot_batch_id: Identifier linking this context to a specific snapshot evaluation
+        stats: Running sum of cursor.rowcount and possibly bytes processed from all executed queries during evaluation
     """
 
     snapshot_batch_id: str
@@ -55,20 +48,12 @@ class QueryExecutionContext:
                 else:
                     self.stats.total_bytes_processed += bytes_processed
 
-        self.stats.query_count += 1
-        # TODO: remove this
-        # for debugging
-        self.stats.queries_executed.append((sql[:300], row_count, bytes_processed, time.time()))
-
     def get_execution_stats(self) -> QueryExecutionStats:
         return self.stats
 
 
 class QueryExecutionTracker:
-    """
-    Thread-local context manager for snapshot execution statistics, such as
-    rows processed.
-    """
+    """Thread-local context manager for snapshot execution statistics, such as rows processed."""
 
     _thread_local = local()
     _contexts: t.Dict[str, QueryExecutionContext] = {}
@@ -86,9 +71,7 @@ class QueryExecutionTracker:
     def track_execution(
         self, snapshot_id_batch: str
     ) -> t.Iterator[t.Optional[QueryExecutionContext]]:
-        """
-        Context manager for tracking snapshot execution statistics.
-        """
+        """Context manager for tracking snapshot execution statistics such as row counts and bytes processed."""
         context = QueryExecutionContext(snapshot_batch_id=snapshot_id_batch)
         self._thread_local.context = context
         with self._contexts_lock:

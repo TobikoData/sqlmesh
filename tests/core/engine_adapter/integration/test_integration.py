@@ -2434,6 +2434,7 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
         num_audits_failed,
         audit_only=False,
         execution_stats=None,
+        auto_restatement_triggers=None,
     ):
         if execution_stats is not None:
             actual_execution_stats[snapshot.model.name.replace(f"{schema_name}.", "")] = (

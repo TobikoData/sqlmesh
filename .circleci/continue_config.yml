@@ -239,7 +239,7 @@ jobs:
       - checkout
       - run:
           name: Install OS-level dependencies
-          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"      
+          command: ./.circleci/install-prerequisites.sh "<< parameters.engine >>"
       - run:
           name: Generate database name
           command: |
@@ -297,9 +297,8 @@ workflows:
           name: cloud_engine_<< matrix.engine >>
           context:
             - sqlmesh_cloud_database_integration
-          # TODO: uncomment this
-          # requires:
-          #   - engine_tests_docker
+          requires:
+            - engine_tests_docker
           matrix:
             parameters:
               engine:
@@ -308,14 +307,13 @@ workflows:
                 - redshift
                 - bigquery
                 - clickhouse-cloud
-                - athena                
+                - athena
                 - fabric
                 - gcp-postgres
-          # TODO: uncomment this
-          # filters:
-          #   branches:
-          #     only:
-          #       - main
+          filters:
+            branches:
+              only:
+                - main
       - ui_style
       - ui_test
       - vscode_test

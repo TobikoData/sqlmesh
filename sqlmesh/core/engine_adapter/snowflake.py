@@ -680,21 +680,25 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
         We do not want to record the incorrect row count of 1, so we check whether that row contains the table
         successfully created string. If so, we return early and do not record the row count.
+
+        Ref: https://github.com/snowflakedb/snowflake-connector-python/issues/645
         """
         if rowcount == 1:
             results = self.cursor.fetchone()
             if results:
                 try:
                     results_str = str(results[0])
-                except (ValueError, TypeError):
+                except (TypeError, ValueError, IndexError):
                     return
 
                 # Snowflake identifiers may be:
                 # - An unquoted contiguous set of [a-zA-Z0-9_$] characters
                 # - A double-quoted string that may contain spaces and nested double-quotes represented by `""`. Example: " my ""table"" name "
-                is_created = re.match(r'Table [a-zA-Z0-9_$"]*? successfully created\.', results_str)
+                is_created = re.match(
+                    r'Table [a-zA-Z0-9_$ "]*? successfully created\.', results_str
+                )
                 is_already_exists = re.match(
-                    r'[a-zA-Z0-9_$"]*? already exists, statement succeeded\.',
+                    r'[a-zA-Z0-9_$ "]*? already exists, statement succeeded\.',
                     results_str,
                 )
                 if is_created or is_already_exists:
