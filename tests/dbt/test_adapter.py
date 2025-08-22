@@ -23,6 +23,7 @@ from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterChangeColumnTypeOpe
 pytestmark = pytest.mark.dbt
 
 
+@pytest.mark.slow
 def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
@@ -96,6 +97,7 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
     assert engine_adapter.table_exists("foo.bar__backup")
 
 
+@pytest.mark.slow
 def test_bigquery_get_columns_in_relation(
     sushi_test_project: Project,
     runtime_renderer: t.Callable,
@@ -135,6 +137,7 @@ def test_bigquery_get_columns_in_relation(
 
 
 @pytest.mark.cicdonly
+@pytest.mark.slow
 def test_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
@@ -232,6 +235,7 @@ def test_normalization(
     adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
 
+@pytest.mark.slow
 def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     renderer = runtime_renderer(context)
@@ -244,6 +248,7 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
 
 
 @pytest.mark.parametrize("project_dialect", ["duckdb", "bigquery"])
+@pytest.mark.slow
 def test_adapter_map_snapshot_tables(
     sushi_test_project: Project,
     runtime_renderer: t.Callable,
@@ -320,6 +325,7 @@ def test_quote_as_configured():
     adapter.quote_as_configured("foo", "database") == "foo"
 
 
+@pytest.mark.slow
 def test_adapter_get_relation_normalization(
     sushi_test_project: Project, runtime_renderer: t.Callable
 ):
@@ -352,6 +358,7 @@ def test_adapter_get_relation_normalization(
         )
 
 
+@pytest.mark.slow
 def test_adapter_expand_target_column_types(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):

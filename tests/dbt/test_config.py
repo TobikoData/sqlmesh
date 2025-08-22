@@ -6,6 +6,8 @@ from shutil import copytree
 import pytest
 from dbt.adapters.base import BaseRelation, Column
 from pytest_mock import MockerFixture
+
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
@@ -82,7 +84,7 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_to_sqlmesh_fields():
+def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
     model_config = ModelConfig(
         name="name",
         package_name="package",
@@ -111,7 +113,7 @@ def test_model_to_sqlmesh_fields():
     )
     context = DbtContext()
     context.project_name = "Foo"
-    context.target = DuckDbConfig(name="target", schema="foo")
+    context.target = dbt_dummy_postgres_config
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
@@ -119,7 +121,7 @@ def test_model_to_sqlmesh_fields():
     assert model.description == "test model"
     assert (
         model.render_query_or_raise().sql()
-        == 'SELECT 1 AS "a" FROM "memory"."foo"."table" AS "table"'
+        == 'SELECT 1 AS "a" FROM "dbname"."foo"."table" AS "table"'
     )
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ['"a"']
@@ -127,7 +129,7 @@ def test_model_to_sqlmesh_fields():
     assert model.cron == "@hourly"
     assert model.interval_unit.value == "five_minute"
     assert model.stamp == "bar"
-    assert model.dialect == "duckdb"
+    assert model.dialect == "postgres"
     assert model.owner == "Sally"
     assert model.tags == ["test", "incremental"]
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
@@ -136,8 +138,8 @@ def test_model_to_sqlmesh_fields():
     assert kind.on_destructive_change == OnDestructiveChange.ALLOW
     assert kind.on_additive_change == OnAdditiveChange.ALLOW
     assert (
-        kind.merge_filter.sql(dialect=model.dialect)
-        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7' DAY"""
+        kind.merge_filter.sql(dialect=model.dialect)  # type: ignore
+        == """55 > "__MERGE_SOURCE__"."b" AND "__MERGE_TARGET__"."session_start" > CURRENT_DATE + INTERVAL '7'"""
     )
 
     model = model_config.update_with({"dialect": "snowflake"}).to_sqlmesh(context)
@@ -147,7 +149,7 @@ def test_model_to_sqlmesh_fields():
         sqlmesh_config=Config(model_defaults=ModelDefaultsConfig(dialect="bigquery"))
     )
     bq_default_context.project_name = "Foo"
-    bq_default_context.target = DuckDbConfig(name="target", schema="foo")
+    bq_default_context.target = dbt_dummy_postgres_config
     model_config.cluster_by = ["a", "`b`"]
     model = model_config.to_sqlmesh(bq_default_context)
     assert model.dialect == "bigquery"
@@ -229,7 +231,7 @@ def test_test_to_sqlmesh_fields():
     assert audit.dialect == "bigquery"
 
 
-def test_singular_test_to_standalone_audit():
+def test_singular_test_to_standalone_audit(dbt_dummy_postgres_config: PostgresConfig):
     sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
     test_config = TestConfig(
         name="bar_test",
@@ -251,8 +253,8 @@ def test_singular_test_to_standalone_audit():
     context = DbtContext()
     context.add_models({model.name: model})
     context._project_name = "Foo"
-    context.target = DuckDbConfig(name="target", schema="foo")
-    standalone_audit = test_config.to_sqlmesh(context)
+    context.target = dbt_dummy_postgres_config
+    standalone_audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
 
     assert standalone_audit.name == "bar_test"
     assert standalone_audit.description == "test description"
@@ -260,12 +262,12 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.stamp == "bump"
     assert standalone_audit.cron == "@monthly"
     assert standalone_audit.interval_unit.value == "day"
-    assert standalone_audit.dialect == "duckdb"
+    assert standalone_audit.dialect == "postgres"
     assert standalone_audit.query == jinja_query(sql)
-    assert standalone_audit.depends_on == {'"memory"."foo"."bar"'}
+    assert standalone_audit.depends_on == {'"dbname"."foo"."bar"'}
 
     test_config.dialect_ = "bigquery"
-    standalone_audit = test_config.to_sqlmesh(context)
+    standalone_audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
     assert standalone_audit.dialect == "bigquery"
 
 
@@ -305,6 +307,7 @@ query"""
     )
 
 
+@pytest.mark.slow
 def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
@@ -384,6 +387,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
 
 
+@pytest.mark.slow
 def test_nested_variables(sushi_test_project):
     model_config = ModelConfig(
         alias="sushi.test_nested",
@@ -396,6 +400,7 @@ def test_nested_variables(sushi_test_project):
     assert sqlmesh_model.jinja_macros.global_objs["vars"]["nested_vars"] == {"some_nested_var": 2}
 
 
+@pytest.mark.slow
 def test_source_config(sushi_test_project: Project):
     source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
@@ -426,6 +431,7 @@ def test_source_config(sushi_test_project: Project):
     )
 
 
+@pytest.mark.slow
 def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     seed_configs = sushi_test_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
@@ -955,6 +961,7 @@ def test_custom_dbt_loader():
 
 
 @pytest.mark.cicdonly
+@pytest.mark.slow
 def test_db_type_to_relation_class():
     from dbt.adapters.bigquery.relation import BigQueryRelation
     from dbt.adapters.databricks.relation import DatabricksRelation
@@ -978,6 +985,7 @@ def test_db_type_to_relation_class():
 
 
 @pytest.mark.cicdonly
+@pytest.mark.slow
 def test_db_type_to_column_class():
     from dbt.adapters.bigquery import BigQueryColumn
     from dbt.adapters.databricks.column import DatabricksColumn
@@ -1013,6 +1021,7 @@ def test_variable_override():
     assert project.packages["sushi"].variables["yet_another_var"] == 2
 
 
+@pytest.mark.slow
 def test_depends_on(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     context = sushi_test_project.context

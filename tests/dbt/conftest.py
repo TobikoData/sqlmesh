@@ -7,6 +7,7 @@ import pytest
 from sqlmesh.core.context import Context
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.project import Project
+from sqlmesh.dbt.target import PostgresConfig
 
 
 @pytest.fixture()
@@ -25,3 +26,16 @@ def runtime_renderer() -> t.Callable:
         return render
 
     return create_renderer
+
+
+@pytest.fixture()
+def dbt_dummy_postgres_config() -> PostgresConfig:
+    return PostgresConfig(  # type: ignore
+        name="postgres",
+        host="host",
+        user="user",
+        password="password",
+        dbname="dbname",
+        port=5432,
+        schema="schema",
+    )

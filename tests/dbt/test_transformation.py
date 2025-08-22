@@ -6,9 +6,15 @@ import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
+from sqlmesh.dbt.util import DBT_VERSION
+
 import pytest
 from dbt.adapters.base import BaseRelation
-from dbt.exceptions import CompilationError
+
+if DBT_VERSION >= (1, 4, 0):
+    from dbt.exceptions import CompilationError
+else:
+    from dbt.exceptions import CompilationException as CompilationError  # type: ignore
 import time_machine
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -47,8 +53,14 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
-from sqlmesh.dbt.seed import SeedConfig, Integer
-from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig, ClickhouseConfig
+from sqlmesh.dbt.seed import SeedConfig
+from sqlmesh.dbt.target import (
+    BigQueryConfig,
+    DuckDbConfig,
+    SnowflakeConfig,
+    ClickhouseConfig,
+    PostgresConfig,
+)
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import MacroReference
@@ -56,9 +68,9 @@ from sqlmesh.utils.jinja import MacroReference
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 
 
-def test_model_name():
+def test_model_name(dbt_dummy_postgres_config: PostgresConfig):
     context = DbtContext()
-    context._target = DuckDbConfig(name="duckdb", schema="foo")
+    context._target = dbt_dummy_postgres_config
     assert ModelConfig(schema="foo", path="models/bar.sql").canonical_name(context) == "foo.bar"
     assert (
         ModelConfig(schema="foo", path="models/bar.sql", alias="baz").canonical_name(context)
@@ -66,9 +78,8 @@ def test_model_name():
     )
     assert (
         ModelConfig(
-            database="memory", schema="foo", path="models/bar.sql", alias="baz"
+            database="dbname", schema="foo", path="models/bar.sql", alias="baz"
         ).canonical_name(context)
-        == "foo.baz"
         == "foo.baz"
     )
     assert (
@@ -680,7 +691,9 @@ def test_seed_column_inference(tmp_path):
     context.target = DuckDbConfig(name="target", schema="test")
     sqlmesh_seed = seed.to_sqlmesh(context)
     assert sqlmesh_seed.columns_to_types == {
-        "int_col": exp.DataType.build("int"),
+        "int_col": exp.DataType.build("int")
+        if DBT_VERSION >= (1, 8, 0)
+        else exp.DataType.build("double"),
         "double_col": exp.DataType.build("double"),
         "datetime_col": exp.DataType.build("datetime"),
         "date_col": exp.DataType.build("date"),
@@ -793,6 +806,12 @@ def test_seed_column_order(tmp_path):
 
 
 def test_agate_integer_cast():
+    # Not all dbt versions have agate.Integer
+    if DBT_VERSION < (1, 7, 0):
+        pytest.skip("agate.Integer not available")
+
+    from sqlmesh.dbt.seed import Integer
+
     agate_integer = Integer(null_values=("null", ""))
     assert agate_integer.cast("1") == 1
     assert agate_integer.cast(1) == 1
