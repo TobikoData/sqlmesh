@@ -7,6 +7,7 @@ from rich.console import Console
 from sqlmesh.integrations.dlt import generate_dlt_models_and_settings
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 
 from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 from sqlmesh.core.config.connection import (
@@ -114,7 +115,13 @@ linter:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
 """,
-        ProjectTemplate.DBT: f"""# --- Model Defaults ---
+        ProjectTemplate.DBT: f"""# --- Virtual Data Environment Mode ---
+# Enable Virtual Data Environments (VDE) for *development* environments.
+# Note that the production environment in dbt projects is not virtual by default to maintain compatibility with existing tooling.
+# https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#virtual-data-environment-modes
+virtual_environment_mode: {VirtualEnvironmentMode.DEV_ONLY.lower()}
+
+# --- Model Defaults ---
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 model_defaults:
   start: {start or yesterday_ds()}

@@ -34,7 +34,6 @@ class DbtOperations:
 
         self.context.plan(
             select_models=select_models,
-            no_auto_categorization=True,  # everything is breaking / foward-only
             run=True,
             no_diff=True,
             no_prompts=True,
