@@ -12,6 +12,7 @@ from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils import AttributeDict
+from sqlmesh.core.schema_diff import TableAlterOperation
 
 if t.TYPE_CHECKING:
     import agate
@@ -84,6 +85,12 @@ class BaseAdapter(abc.ABC):
     @abc.abstractmethod
     def drop_relation(self, relation: BaseRelation) -> None:
         """Drops a relation (table) in the target database."""
+
+    @abc.abstractmethod
+    def expand_target_column_types(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> None:
+        """Expand to_relation's column types to match those of from_relation."""
 
     @abc.abstractmethod
     def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
@@ -212,6 +219,11 @@ class ParsetimeAdapter(BaseAdapter):
 
     def drop_relation(self, relation: BaseRelation) -> None:
         self._raise_parsetime_adapter_call_error("drop relation")
+
+    def expand_target_column_types(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> None:
+        self._raise_parsetime_adapter_call_error("expand target column types")
 
     def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
         self._raise_parsetime_adapter_call_error("rename relation")
@@ -354,6 +366,39 @@ class RuntimeAdapter(BaseAdapter):
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
             self.engine_adapter.drop_table(self._normalize(self._relation_to_table(relation)))
+
+    def expand_target_column_types(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> None:
+        from_dbt_columns = {c.name: c for c in self.get_columns_in_relation(from_relation)}
+        to_dbt_columns = {c.name: c for c in self.get_columns_in_relation(to_relation)}
+
+        from_table_name = self._normalize(self._relation_to_table(from_relation))
+        to_table_name = self._normalize(self._relation_to_table(to_relation))
+
+        from_columns = self.engine_adapter.columns(from_table_name)
+        to_columns = self.engine_adapter.columns(to_table_name)
+
+        current_columns = {}
+        new_columns = {}
+        for column_name, from_column in from_dbt_columns.items():
+            target_column = to_dbt_columns.get(column_name)
+            if target_column is not None and target_column.can_expand_to(from_column):
+                current_columns[column_name] = to_columns[column_name]
+                new_columns[column_name] = from_columns[column_name]
+
+        alter_expressions = t.cast(
+            t.List[TableAlterOperation],
+            self.engine_adapter.schema_differ.compare_columns(
+                to_table_name,
+                current_columns,
+                new_columns,
+                ignore_destructive=True,
+            ),
+        )
+
+        if alter_expressions:
+            self.engine_adapter.alter_table(alter_expressions)
 
     def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
         old_table_name = self._normalize(self._relation_to_table(from_relation))

@@ -344,18 +344,16 @@ Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-
 
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
-| Method      | Method         | Method       | Method  |
-| ----------- | -------------- | ------------ | ------- |
-| adapter (*) | env_var        | project_name | target  |
-| as_bool     | exceptions     | ref          | this    |
-| as_native   | from_yaml      | return       | to_yaml |
-| as_number   | is_incremental | run_query    | var     |
-| as_text     | load_result    | schema       | zip     |
-| api         | log            | set          |         |
-| builtins    | modules        | source       |         |
-| config      | print          | statement    |         |
-
-\* `adapter.expand_target_column_types` is not currently supported.
+| Method    | Method         | Method       | Method  |
+| --------- | -------------- | ------------ | ------- |
+| adapter   | env_var        | project_name | target  |
+| as_bool   | exceptions     | ref          | this    |
+| as_native | from_yaml      | return       | to_yaml |
+| as_number | is_incremental | run_query    | var     |
+| as_text   | load_result    | schema       | zip     |
+| api       | log            | set          |         |
+| builtins  | modules        | source       |         |
+| config    | print          | statement    |         |
 
 ## Unsupported dbt jinja methods
 
@@ -363,7 +361,6 @@ The dbt jinja methods that are not currently supported are:
 
 * debug
 * selected_sources
-* adapter.expand_target_column_types
 * graph.nodes.values
 * graph.metrics.values
 
