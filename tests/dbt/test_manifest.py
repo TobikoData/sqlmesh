@@ -79,6 +79,7 @@ def test_manifest_helper(caplog):
     waiter_revenue_by_day_config = models["waiter_revenue_by_day_v2"]
     assert waiter_revenue_by_day_config.dependencies == Dependencies(
         macros={
+            MacroReference(name="dynamic_var_name_dependency"),
             MacroReference(name="log_value"),
             MacroReference(name="test_dependencies"),
             MacroReference(package="customers", name="duckdb__current_engine"),
@@ -87,6 +88,7 @@ def test_manifest_helper(caplog):
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
         variables={"yet_another_var", "nested_vars"},
+        has_dynamic_var_names=True,
     )
     assert waiter_revenue_by_day_config.materialized == "incremental"
     assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"

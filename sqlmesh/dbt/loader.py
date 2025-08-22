@@ -124,8 +124,6 @@ class DbtLoader(Loader):
             )
 
         for project in self._load_projects():
-            context = project.context.copy()
-
             macros_max_mtime = self._macros_max_mtime
             yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(
                 project.context.project_root
@@ -135,12 +133,13 @@ class DbtLoader(Loader):
             logger.debug("Converting models to sqlmesh")
             # Now that config is rendered, create the sqlmesh models
             for package in project.packages.values():
-                context.set_and_render_variables(package.variables, package.name)
+                package_context = project.context.copy()
+                package_context.set_and_render_variables(package.variables, package.name)
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
                 for model in package_models.values():
                     sqlmesh_model = cache.get_or_load_models(
-                        model.path, loader=lambda: [_to_sqlmesh(model, context)]
+                        model.path, loader=lambda: [_to_sqlmesh(model, package_context)]
                     )[0]
 
                     models[sqlmesh_model.fqn] = sqlmesh_model
@@ -155,15 +154,14 @@ class DbtLoader(Loader):
         audits: UniqueKeyDict = UniqueKeyDict("audits")
 
         for project in self._load_projects():
-            context = project.context
-
             logger.debug("Converting audits to sqlmesh")
             for package in project.packages.values():
-                context.set_and_render_variables(package.variables, package.name)
+                package_context = project.context.copy()
+                package_context.set_and_render_variables(package.variables, package.name)
                 for test in package.tests.values():
                     logger.debug("Converting '%s' to sqlmesh format", test.name)
                     try:
-                        audits[test.name] = test.to_sqlmesh(context)
+                        audits[test.name] = test.to_sqlmesh(package_context)
                     except MissingModelError as e:
                         logger.warning(
                             "Skipping audit '%s' because model '%s' is not a valid ref",
@@ -244,9 +242,9 @@ class DbtLoader(Loader):
         project_names: t.Set[str] = set()
         dialect = self.config.dialect
         for project in self._load_projects():
-            context = project.context
             for package_name, package in project.packages.items():
-                context.set_and_render_variables(package.variables, package_name)
+                package_context = project.context.copy()
+                package_context.set_and_render_variables(package.variables, package_name)
                 on_run_start: t.List[str] = [
                     on_run_hook.sql
                     for on_run_hook in sorted(package.on_run_start.values(), key=lambda h: h.index)
@@ -261,7 +259,7 @@ class DbtLoader(Loader):
                     for hook in [*package.on_run_start.values(), *package.on_run_end.values()]:
                         dependencies = dependencies.union(hook.dependencies)
 
-                    statements_context = context.context_for_dependencies(dependencies)
+                    statements_context = package_context.context_for_dependencies(dependencies)
                     jinja_registry = make_jinja_registry(
                         statements_context.jinja_macros, package_name, set(dependencies.macros)
                     )

@@ -55,9 +55,6 @@ class Project:
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
         project_yaml = load_yaml(project_file_path)
 
-        variable_overrides = variables
-        variables = {**project_yaml.get("vars", {}), **(variables or {})}
-
         project_name = context.render(project_yaml.get("name", ""))
         context.project_name = project_name
         if not context.project_name:
@@ -69,6 +66,7 @@ class Project:
         profile = Profile.load(context, context.target_name)
         context.target = profile.target
 
+        variable_overrides = variables or {}
         context.manifest = ManifestHelper(
             project_file_path.parent,
             profile.path.parent,
@@ -101,13 +99,17 @@ class Project:
             package = package_loader.load(path.parent)
             packages[package.name] = package
 
+        all_project_variables = {**project_yaml.get("vars", {}), **(variable_overrides or {})}
         for name, package in packages.items():
-            package_vars = variables.get(name)
+            package_vars = all_project_variables.get(name)
 
             if isinstance(package_vars, dict):
                 package.variables.update(package_vars)
 
-            package.variables.update(variables)
+            if name == context.project_name:
+                package.variables.update(all_project_variables)
+            else:
+                package.variables.update(variable_overrides)
 
         return Project(context, profile, packages)
 

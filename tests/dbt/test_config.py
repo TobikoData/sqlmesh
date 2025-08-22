@@ -362,6 +362,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "nested_vars": {
             "some_nested_var": 2,
         },
+        "dynamic_test_var": 3,
         "list_var": [
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},
@@ -375,25 +376,10 @@ def test_variables(assert_exp_eq, sushi_test_project):
     expected_customer_variables = {
         "some_var": ["foo", "bar"],
         "some_other_var": 5,
-        "yet_another_var": 1,
+        "yet_another_var": 5,
         "customers:bla": False,
         "customers:customer_id": "customer_id",
         "start": "Jan 1 2022",
-        "top_waiters:limit": 10,
-        "top_waiters:revenue": "revenue",
-        "customers:boo": ["a", "b"],
-        "nested_vars": {
-            "some_nested_var": 2,
-        },
-        "list_var": [
-            {"name": "item1", "value": 1},
-            {"name": "item2", "value": 2},
-        ],
-        "customers": {
-            "customers:bla": False,
-            "customers:customer_id": "customer_id",
-            "some_var": ["foo", "bar"],
-        },
     }
 
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
@@ -406,7 +392,9 @@ def test_nested_variables(sushi_test_project):
         sql="SELECT {{ var('nested_vars')['some_nested_var'] }}",
         dependencies=Dependencies(variables=["nested_vars"]),
     )
-    sqlmesh_model = model_config.to_sqlmesh(sushi_test_project.context)
+    context = sushi_test_project.context.copy()
+    context.set_and_render_variables(sushi_test_project.packages["sushi"].variables, "sushi")
+    sqlmesh_model = model_config.to_sqlmesh(context)
     assert sqlmesh_model.jinja_macros.global_objs["vars"]["nested_vars"] == {"some_nested_var": 2}
 
 

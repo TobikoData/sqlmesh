@@ -554,6 +554,9 @@ class ManifestHelper:
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     dependencies.variables.add(args[0])
+                else:
+                    # We couldn't determine the var name statically
+                    dependencies.has_dynamic_var_names = True
                 dependencies.macros.append(MacroReference(name="var"))
             elif len(call_name) == 1:
                 macro_name = call_name[0]

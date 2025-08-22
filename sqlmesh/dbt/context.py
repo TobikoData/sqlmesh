@@ -8,6 +8,7 @@ from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.config import Config as SQLMeshConfig
 from sqlmesh.dbt.builtin import _relation_info_to_relation
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
@@ -22,7 +23,6 @@ from sqlmesh.utils.jinja import (
 if t.TYPE_CHECKING:
     from jinja2 import Environment
 
-    from sqlmesh.dbt.basemodel import Dependencies
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.relation import Policy
     from sqlmesh.dbt.seed import SeedConfig
@@ -101,8 +101,6 @@ class DbtContext:
         self._jinja_environment = None
 
     def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
-        self.variables = variables
-
         jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
 
         def _render_var(value: t.Any) -> t.Any:
