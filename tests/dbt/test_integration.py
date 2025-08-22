@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pandas as pd  # noqa: TID253
 import pytest
-from dbt.cli.main import dbtRunner
+
+from sqlmesh.dbt.util import DBT_VERSION
+
+if DBT_VERSION >= (1, 5, 0):
+    from dbt.cli.main import dbtRunner  # type: ignore
+
 import time_machine
 
 from sqlmesh import Context
@@ -303,6 +308,9 @@ test_config = config"""
         test_type: TestType,
         invalidate_hard_deletes: bool,
     ):
+        if test_type.is_dbt_runtime and DBT_VERSION < (1, 5, 0):
+            pytest.skip("The dbt version being tested doesn't support the dbtRunner so skipping.")
+
         run, adapter, context = self._init_test(
             create_scd_type_2_dbt_project,
             create_scd_type_2_sqlmesh_project,

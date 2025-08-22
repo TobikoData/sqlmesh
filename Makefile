@@ -93,6 +93,9 @@ engine-test:
 dbt-test:
 	pytest -n auto -m "dbt and not cicdonly"
 
+dbt-fast-test:
+	pytest -n auto -m "dbt and fast"
+
 github-test:
 	pytest -n auto -m "github"
 
