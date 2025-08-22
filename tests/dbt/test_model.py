@@ -50,7 +50,7 @@ def test_model_test_circular_references() -> None:
         downstream_model.check_for_circular_test_refs(context)
 
 
-def test_load_invalid_ref_audit_constraints(tmp_path: Path) -> None:
+def test_load_invalid_ref_audit_constraints(tmp_path: Path, caplog) -> None:
     yaml = YAML()
     dbt_project_dir = tmp_path / "dbt"
     dbt_project_dir.mkdir()
@@ -126,6 +126,10 @@ def test_load_invalid_ref_audit_constraints(tmp_path: Path) -> None:
         yaml.dump(dbt_profile_config, f)
 
     context = Context(paths=dbt_project_dir)
+    assert (
+        "Skipping audit 'relationships_full_model_cola__cola__ref_not_real_model_' because model 'not_real_model' is not a valid ref"
+        in caplog.text
+    )
     fqn = '"local"."main"."full_model"'
     assert fqn in context.snapshots
     # The audit isn't loaded due to the invalid ref

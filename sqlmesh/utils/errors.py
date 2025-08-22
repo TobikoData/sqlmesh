@@ -36,7 +36,9 @@ class ConfigError(SQLMeshError):
 class MissingModelError(ConfigError):
     """Raised when a model that is referenced is missing."""
 
-    model_name: str
+    def __init__(self, model_name: str) -> None:
+        self.model_name = model_name
+        super().__init__(f"Model '{model_name}' was not found.")
 
 
 class MissingDependencyError(SQLMeshError):

@@ -265,8 +265,7 @@ class DbtContext:
                 else:
                     models[ref] = t.cast(ModelConfig, model)
             else:
-                exception = MissingModelError(f"Model '{ref}' was not found.")
-                exception.model_name = ref
+                exception = MissingModelError(ref)
                 raise exception
 
         for source in dependencies.sources:
