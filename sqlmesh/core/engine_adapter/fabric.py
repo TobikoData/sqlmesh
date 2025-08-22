@@ -172,7 +172,7 @@ class FabricHttpClient:
         self.client_secret = client_secret
         self.workspace_id = workspace_id
 
-    def create_warehouse(self, warehouse_name: str) -> None:
+    def create_warehouse(self, warehouse_name: str, if_not_exists: bool = True) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
@@ -182,6 +182,15 @@ class FabricHttpClient:
         }
 
         response = self.session.post(self._endpoint_url("warehouses"), json=request_data)
+
+        if (
+            if_not_exists
+            and response.status_code == 400
+            and response.json().get("errorCode", None) == "ItemDisplayNameAlreadyInUse"
+        ):
+            logger.warning(f"Fabric warehouse {warehouse_name} already exists")
+            return
+
         response.raise_for_status()
 
         # Handle direct success (201) or async creation (202)
@@ -197,11 +206,12 @@ class FabricHttpClient:
             logger.error(f"Unexpected response from Fabric API: {response}\n{response.text}")
             raise SQLMeshError(f"Unable to create warehouse: {response}")
 
-    def delete_warehouse(self, warehouse_name: str) -> None:
+    def delete_warehouse(self, warehouse_name: str, if_exists: bool = True) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
 
         # Get the warehouse ID by listing warehouses
+        # TODO: handle continuationUri for pagination, ref: https://learn.microsoft.com/en-us/rest/api/fabric/warehouse/items/list-warehouses?tabs=HTTP#warehouses
         response = self.session.get(self._endpoint_url("warehouses"))
         response.raise_for_status()
 
@@ -213,9 +223,12 @@ class FabricHttpClient:
         warehouse_id = warehouse_name_to_id.get(warehouse_name, None)
 
         if not warehouse_id:
-            logger.error(
+            logger.warning(
                 f"Fabric warehouse does not exist: {warehouse_name}\n(available warehouses: {', '.join(warehouse_name_to_id)})"
             )
+            if if_exists:
+                return
+
             raise SQLMeshError(
                 f"Unable to delete Fabric warehouse {warehouse_name} as it doesnt exist"
             )
