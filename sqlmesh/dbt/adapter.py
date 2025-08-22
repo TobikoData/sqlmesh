@@ -389,7 +389,7 @@ class RuntimeAdapter(BaseAdapter):
 
         alter_expressions = t.cast(
             t.List[TableAlterOperation],
-            self.engine_adapter.SCHEMA_DIFFER.compare_columns(
+            self.engine_adapter.schema_differ.compare_columns(
                 to_table_name,
                 current_columns,
                 new_columns,

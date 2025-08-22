@@ -387,7 +387,7 @@ def test_adapter_expand_target_column_types(
         from_columns,
         to_columns,
     ]
-    adapter_mock.SCHEMA_DIFFER = SchemaDiffer()
+    adapter_mock.schema_differ = SchemaDiffer()
 
     context = sushi_test_project.context
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
