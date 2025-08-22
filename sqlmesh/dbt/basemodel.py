@@ -245,6 +245,22 @@ class BaseModelConfig(GeneralConfig):
         dependencies.macros = []
         return dependencies
 
+    def remove_tests_with_invalid_refs(self, context: DbtContext) -> None:
+        """
+        Removes tests that reference models that do not exist in the context in order to match dbt behavior.
+
+        Args:
+            context: The dbt context this model resides within.
+
+        Returns:
+            None
+        """
+        self.tests = [
+            test
+            for test in self.tests
+            if all(ref in context.refs for ref in test.dependencies.refs)
+        ]
+
     def check_for_circular_test_refs(self, context: DbtContext) -> None:
         """
         Checks for direct circular references between two models and raises an exception if found.
@@ -295,6 +311,7 @@ class BaseModelConfig(GeneralConfig):
         column_types_override: t.Optional[t.Dict[str, ColumnConfig]] = None,
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
+        self.remove_tests_with_invalid_refs(context)
         self.check_for_circular_test_refs(context)
         model_dialect = self.dialect(context)
         model_context = context.context_for_dependencies(

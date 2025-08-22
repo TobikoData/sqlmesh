@@ -23,7 +23,7 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, MissingModelError
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
     make_jinja_registry,
@@ -162,7 +162,14 @@ class DbtLoader(Loader):
                 context.set_and_render_variables(package.variables, package.name)
                 for test in package.tests.values():
                     logger.debug("Converting '%s' to sqlmesh format", test.name)
-                    audits[test.name] = test.to_sqlmesh(context)
+                    try:
+                        audits[test.name] = test.to_sqlmesh(context)
+                    except MissingModelError as e:
+                        logger.warning(
+                            "Skipping audit '%s' because model '%s' is not a valid ref",
+                            test.name,
+                            e.model_name,
+                        )
 
         return audits
 
