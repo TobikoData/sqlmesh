@@ -6,12 +6,13 @@ import re
 import sys
 import typing as t
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from unittest.mock import patch
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
+import time_machine
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
