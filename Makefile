@@ -174,7 +174,7 @@ athena-test: guard-AWS_ACCESS_KEY_ID guard-AWS_SECRET_ACCESS_KEY guard-ATHENA_S3
 	pytest -n auto -m "athena" --retries 3 --junitxml=test-results/junit-athena.xml
 
 fabric-test: guard-FABRIC_HOST guard-FABRIC_CLIENT_ID guard-FABRIC_CLIENT_SECRET guard-FABRIC_DATABASE engine-fabric-install
-	pytest -n auto -m "fabric" --retries 3 --junitxml=test-results/junit-fabric.xml	
+	pytest -n 1 -m "fabric" --retries 3 --junitxml=test-results/junit-fabric.xml
 
 gcp-postgres-test: guard-GCP_POSTGRES_INSTANCE_CONNECTION_STRING guard-GCP_POSTGRES_USER guard-GCP_POSTGRES_PASSWORD guard-GCP_POSTGRES_KEYFILE_JSON engine-gcppostgres-install
 	pytest -n auto -m "gcp_postgres" --retries 3 --junitxml=test-results/junit-gcp-postgres.xml
