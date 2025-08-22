@@ -11,7 +11,7 @@ from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, MissingModelError
 from sqlmesh.utils.jinja import (
     JinjaGlobalAttribute,
     JinjaMacroRegistry,
@@ -265,7 +265,8 @@ class DbtContext:
                 else:
                     models[ref] = t.cast(ModelConfig, model)
             else:
-                raise ConfigError(f"Model '{ref}' was not found.")
+                exception = MissingModelError(ref)
+                raise exception
 
         for source in dependencies.sources:
             if source in self.sources:

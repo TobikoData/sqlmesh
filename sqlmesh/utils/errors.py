@@ -33,6 +33,14 @@ class ConfigError(SQLMeshError):
             self.location = Path(location) if isinstance(location, str) else location
 
 
+class MissingModelError(ConfigError):
+    """Raised when a model that is referenced is missing."""
+
+    def __init__(self, model_name: str) -> None:
+        self.model_name = model_name
+        super().__init__(f"Model '{model_name}' was not found.")
+
+
 class MissingDependencyError(SQLMeshError):
     """Local environment is missing a required dependency for the given operation"""
 
