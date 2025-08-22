@@ -6,13 +6,12 @@ import re
 import sys
 import typing as t
 import shutil
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
-import time_machine
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -2418,14 +2417,18 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
-        assert actual_execution_stats["seed_model"].total_rows_processed == 7
         assert actual_execution_stats["incremental_model"].total_rows_processed == 7
         # snowflake doesn't track rows for CTAS
-        assert actual_execution_stats["full_model"].total_rows_processed == 3
+        assert actual_execution_stats["full_model"].total_rows_processed == (
+            None if ctx.mark.startswith("snowflake") else 3
+        )
+        assert actual_execution_stats["seed_model"].total_rows_processed == (
+            None if ctx.mark.startswith("snowflake") else 7
+        )
 
-        if ctx.mark.startswith("bigquery") or ctx.mark.startswith("databricks"):
-            assert actual_execution_stats["incremental_model"].total_bytes_processed is not None
-            assert actual_execution_stats["full_model"].total_bytes_processed is not None
+        if ctx.mark.startswith("bigquery"):
+            assert actual_execution_stats["incremental_model"].total_bytes_processed
+            assert actual_execution_stats["full_model"].total_bytes_processed
 
     # run that loads 0 rows in incremental model
     # - some cloud DBs error because time travel messes up token expiration

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 import typing as t
 
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -672,28 +673,31 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     ) -> None:
         """Snowflake does not report row counts for CTAS like other DML operations.
 
-        They neither report the sentinel value -1 nor do they report 0 rows. Instead, they return a single data row
-        containing the string "Table <table_name> successfully created." and a row count of 1.
+        They neither report the sentinel value -1 nor do they report 0 rows. Instead, they report a rowcount
+        of 1 and return a single data row containing one of the strings:
+          - "Table <table_name> successfully created."
+          - "<table_name> already exists, statement succeeded."
 
-        We do not want to record the incorrect row count of 1, so we check whether:
-          - There is exactly one row to fetch (in general, DML operations should return no rows to fetch from the cursor)
-          - That row contains the table successfully created string
-
-        If so, we return early and do not record the row count.
+        We do not want to record the incorrect row count of 1, so we check whether that row contains the table
+        successfully created string. If so, we return early and do not record the row count.
         """
         if rowcount == 1:
-            query_parsed = parse_one(sql, dialect=self.dialect)
-            if isinstance(query_parsed, exp.Create):
-                if query_parsed.expression and isinstance(query_parsed.expression, exp.Select):
-                    table = query_parsed.find(exp.Table)
-                    if table:
-                        row_query = f"SELECT ROW_COUNT as row_count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{table.db}' AND TABLE_NAME = '{table.name}'"
-                        row_query_results = self.fetchone(row_query, quote_identifiers=True)
-                        if row_query_results:
-                            rowcount = row_query_results[0]
-                        else:
-                            return
-                else:
+            results = self.cursor.fetchone()
+            if results:
+                try:
+                    results_str = str(results[0])
+                except (ValueError, TypeError):
+                    return
+
+                # Snowflake identifiers may be:
+                # - An unquoted contiguous set of [a-zA-Z0-9_$] characters
+                # - A double-quoted string that may contain spaces and nested double-quotes represented by `""`. Example: " my ""table"" name "
+                is_created = re.match(r'Table [a-zA-Z0-9_$"]*? successfully created\.', results_str)
+                is_already_exists = re.match(
+                    r'[a-zA-Z0-9_$"]*? already exists, statement succeeded\.',
+                    results_str,
+                )
+                if is_created or is_already_exists:
                     return
 
         QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
