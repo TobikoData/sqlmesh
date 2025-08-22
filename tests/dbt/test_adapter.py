@@ -367,13 +367,15 @@ def test_adapter_expand_target_column_types(
         "int_col": exp.DataType.build("int"),
         "same_text_col": exp.DataType.build("varchar(1)"),  # varchar(1) -> varchar(1)
         "unexpandable_text_col": exp.DataType.build("varchar(2)"),  # varchar(4) -> varchar(2)
-        "expandable_text_col": exp.DataType.build("varchar(16)"),  # varchar(8) -> varchar(16)
+        "expandable_text_col1": exp.DataType.build("varchar(16)"),  # varchar(8) -> varchar(16)
+        "expandable_text_col2": exp.DataType.build("varchar(64)"),  # varchar(32) -> varchar(64)
     }
     to_columns = {
         "int_col": exp.DataType.build("int"),
         "same_text_col": exp.DataType.build("varchar(1)"),
         "unexpandable_text_col": exp.DataType.build("varchar(4)"),
-        "expandable_text_col": exp.DataType.build("varchar(8)"),
+        "expandable_text_col1": exp.DataType.build("varchar(8)"),
+        "expandable_text_col2": exp.DataType.build("varchar(32)"),
     }
     adapter_mock = mocker.MagicMock()
     adapter_mock.default_catalog = "test"
@@ -411,11 +413,18 @@ def test_adapter_expand_target_column_types(
     )
     assert len(adapter_mock.alter_table.call_args.args) == 1
     alter_expressions = adapter_mock.alter_table.call_args.args[0]
-    assert len(alter_expressions) == 1
-    alter_operation = alter_expressions[0]
-    assert isinstance(alter_operation, TableAlterChangeColumnTypeOperation)
-    assert alter_operation.expression == parse_one(
+    assert len(alter_expressions) == 2
+    alter_operation1 = alter_expressions[0]
+    assert isinstance(alter_operation1, TableAlterChangeColumnTypeOperation)
+    assert alter_operation1.expression == parse_one(
         """ALTER TABLE "test"."foo"."to_table"
-           ALTER COLUMN expandable_text_col
+           ALTER COLUMN expandable_text_col1
            SET DATA TYPE VARCHAR(16)"""
+    )
+    alter_operation2 = alter_expressions[1]
+    assert isinstance(alter_operation2, TableAlterChangeColumnTypeOperation)
+    assert alter_operation2.expression == parse_one(
+        """ALTER TABLE "test"."foo"."to_table"
+           ALTER COLUMN expandable_text_col2
+           SET DATA TYPE VARCHAR(64)"""
     )
