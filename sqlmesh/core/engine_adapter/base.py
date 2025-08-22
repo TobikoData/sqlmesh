@@ -2464,7 +2464,7 @@ class EngineAdapter:
                 try:
                     rowcount = int(rowcount_raw)
                 except (TypeError, ValueError):
-                    pass
+                    return
 
             self._record_execution_stats(sql, rowcount)
 

@@ -514,21 +514,18 @@ class Scheduler:
                             execution_time=execution_time,
                         )
                     else:
-                        with self.snapshot_evaluator.execution_tracker.track_execution(
-                            f"{snapshot.name}_{node.batch_index}"
-                        ) as execution_context:
-                            audit_results = self.evaluate(
-                                snapshot=snapshot,
-                                environment_naming_info=environment_naming_info,
-                                start=start,
-                                end=end,
-                                execution_time=execution_time,
-                                deployability_index=deployability_index,
-                                batch_index=node.batch_index,
-                                allow_destructive_snapshots=allow_destructive_snapshots,
-                                allow_additive_snapshots=allow_additive_snapshots,
-                                target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
-                            )
+                        audit_results = self.evaluate(
+                            snapshot=snapshot,
+                            environment_naming_info=environment_naming_info,
+                            start=start,
+                            end=end,
+                            execution_time=execution_time,
+                            deployability_index=deployability_index,
+                            batch_index=node.batch_index,
+                            allow_destructive_snapshots=allow_destructive_snapshots,
+                            allow_additive_snapshots=allow_additive_snapshots,
+                            target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
+                        )
 
                     evaluation_duration_ms = now_timestamp() - execution_start_ts
                 finally:
@@ -547,6 +544,9 @@ class Scheduler:
                         num_audits - num_audits_failed,
                         num_audits_failed,
                         execution_stats=execution_stats,
+                        auto_restatement_triggers=auto_restatement_triggers.get(
+                            snapshot.snapshot_id
+                        ),
                     )
             elif isinstance(node, CreateNode):
                 self.snapshot_evaluator.create_snapshot(

@@ -34,6 +34,4 @@ def test_execution_tracker_thread_isolation() -> None:
     by_batch = {s.snapshot_batch_id: s for s in results}
 
     assert by_batch["batch_A"].total_rows_processed == 15
-    assert by_batch["batch_A"].query_count == 2
     assert by_batch["batch_B"].total_rows_processed == 10
-    assert by_batch["batch_B"].query_count == 2

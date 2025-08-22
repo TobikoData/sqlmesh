@@ -4030,9 +4030,7 @@ class DebuggerTerminalConsole(TerminalConsole):
         self._write(f"Join On: {keys}")
 
 
-# TODO: remove this
-# _CONSOLE: Console = NoopConsole()
-_CONSOLE: Console = TerminalConsole()
+_CONSOLE: Console = NoopConsole()
 
 
 def set_console(console: Console) -> None:
