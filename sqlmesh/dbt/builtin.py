@@ -17,7 +17,7 @@ from sqlglot import Dialect
 from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
-from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter, StubParsetimeAdapter
+from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
@@ -384,15 +384,15 @@ def create_builtin_globals(
             builtin_globals["this"] = this
 
     sources = jinja_globals.pop("sources", None)
-    if sources is not None and "source" not in jinja_globals:
+    if sources is not None:
         builtin_globals["source"] = generate_source(sources, api)
 
     refs = jinja_globals.pop("refs", None)
-    if refs is not None and "ref" not in jinja_globals:
+    if refs is not None:
         builtin_globals["ref"] = generate_ref(refs, api)
 
     variables = jinja_globals.pop("vars", None)
-    if variables is not None and "var" not in jinja_globals:
+    if variables is not None:
         builtin_globals["var"] = Var(variables)
 
     deployability_index = (
@@ -415,7 +415,6 @@ def create_builtin_globals(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
 
-    execute = True
     if engine_adapter is not None:
         builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
@@ -436,11 +435,7 @@ def create_builtin_globals(
         )
     else:
         builtin_globals["flags"] = Flags(which="parse")
-        adapter_class: t.Type[BaseAdapter] = ParsetimeAdapter
-        if jinja_globals.get("use_stub_adapter", False):
-            adapter_class = StubParsetimeAdapter
-            execute = False
-        adapter = adapter_class(
+        adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
             project_dialect=project_dialect,
@@ -451,7 +446,7 @@ def create_builtin_globals(
     builtin_globals.update(
         {
             "adapter": adapter,
-            "execute": execute,
+            "execute": True,
             "load_relation": adapter.load_relation,
             "store_result": sql_execution.store_result,
             "load_result": sql_execution.load_result,

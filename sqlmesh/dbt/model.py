@@ -25,8 +25,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange, OnAdditiveChange
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
-from sqlmesh.dbt.column import ColumnConfig
-from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator, Dependencies
+from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
@@ -436,30 +435,6 @@ class ModelConfig(BaseModelConfig):
             "allow_partials",
             "physical_version",
         }
-
-    def sqlmesh_model_kwargs(
-        self,
-        context: DbtContext,
-        column_types_override: t.Optional[t.Dict[str, ColumnConfig]] = None,
-        extra_dependencies: t.Optional[Dependencies] = None,
-    ) -> t.Dict[str, t.Any]:
-        if not self.dependencies.has_dynamic_var_names:
-            return super().sqlmesh_model_kwargs(context, column_types_override, extra_dependencies)
-
-        extra_dependencies = extra_dependencies or Dependencies()
-        extra_dependencies = extra_dependencies.union(
-            self._track_dependencies_on_render(self.sql_no_config, context)
-        )
-        for pre_hook in self.pre_hook:
-            extra_dependencies = extra_dependencies.union(
-                self._track_dependencies_on_render(pre_hook.sql, context)
-            )
-        for post_hook in self.post_hook:
-            extra_dependencies = extra_dependencies.union(
-                self._track_dependencies_on_render(post_hook.sql, context)
-            )
-
-        return super().sqlmesh_model_kwargs(context, column_types_override, extra_dependencies)
 
     def to_sqlmesh(
         self,

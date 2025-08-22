@@ -1532,6 +1532,9 @@ def test_dbt_package_macros(sushi_test_project: Project):
 @pytest.mark.xdist_group("dbt_manifest")
 def test_dbt_vars(sushi_test_project: Project):
     context = sushi_test_project.context
+    context.set_and_render_variables(
+        sushi_test_project.packages["customers"].variables, "customers"
+    )
 
     assert context.render("{{ var('some_other_var') }}") == "5"
     assert context.render("{{ var('some_other_var', 0) }}") == "5"
@@ -1859,10 +1862,9 @@ def test_on_run_start_end():
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_track_dynamic_var_names_on_render(
-    sushi_test_project: Project, sushi_test_dbt_context: Context
-):
+def test_dynamic_var_names(sushi_test_project: Project, sushi_test_dbt_context: Context):
     context = sushi_test_project.context
+    context.set_and_render_variables(sushi_test_project.packages["sushi"].variables, "sushi")
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
         name="model",
@@ -1884,7 +1886,7 @@ def test_track_dynamic_var_names_on_render(
         dependencies=Dependencies(has_dynamic_var_names=True),
     )
     converted_model = model_config.to_sqlmesh(context)
-    assert converted_model.jinja_macros.global_objs["vars"] == {"yet_another_var": 1}
+    assert "yet_another_var" in converted_model.jinja_macros.global_objs["vars"]  # type: ignore
 
     # Test the existing model in the sushi project
     assert (
@@ -1896,8 +1898,9 @@ def test_track_dynamic_var_names_on_render(
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_track_dynamic_var_names_on_render_in_macro(sushi_test_project: Project):
+def test_dynamic_var_names_in_macro(sushi_test_project: Project):
     context = sushi_test_project.context
+    context.set_and_render_variables(sushi_test_project.packages["sushi"].variables, "sushi")
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
         name="model",
@@ -1908,7 +1911,7 @@ def test_track_dynamic_var_names_on_render_in_macro(sushi_test_project: Project)
         unique_key="ds",
         partition_by={"field": "ds", "granularity": "month"},
         sql="""
-        {% set var_name = "yet_" + "another_" + "var" %}
+        {% set var_name = "dynamic_" + "test_" + "var" %}
         SELECT {{ sushi.dynamic_var_name_dependency(var_name) }} AS var
         """,
         dependencies=Dependencies(
@@ -1917,4 +1920,4 @@ def test_track_dynamic_var_names_on_render_in_macro(sushi_test_project: Project)
         ),
     )
     converted_model = model_config.to_sqlmesh(context)
-    assert converted_model.jinja_macros.global_objs["vars"] == {"yet_another_var": 1}
+    assert "dynamic_test_var" in converted_model.jinja_macros.global_objs["vars"]  # type: ignore

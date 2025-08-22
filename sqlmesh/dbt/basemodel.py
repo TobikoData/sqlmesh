@@ -309,15 +309,16 @@ class BaseModelConfig(GeneralConfig):
         self,
         context: DbtContext,
         column_types_override: t.Optional[t.Dict[str, ColumnConfig]] = None,
-        extra_dependencies: t.Optional[Dependencies] = None,
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.remove_tests_with_invalid_refs(context)
         self.check_for_circular_test_refs(context)
 
-        dependencies = self.dependencies
-        if extra_dependencies:
-            dependencies = dependencies.union(extra_dependencies)
+        dependencies = self.dependencies.copy()
+        if dependencies.has_dynamic_var_names:
+            # Include ALL variables as dependencies since we couldn't determine
+            # precisely which variables are referenced in the model
+            dependencies.variables |= set(context.variables)
 
         model_dialect = self.dialect(context)
         model_context = context.context_for_dependencies(
@@ -376,8 +377,3 @@ class BaseModelConfig(GeneralConfig):
             "config": self.config_attribute_dict,
             **context.jinja_globals,
         }
-
-    def _track_dependencies_on_render(self, input: str, context: DbtContext) -> Dependencies:
-        return context.track_dependencies_on_render(
-            input, self._model_jinja_context(context, self.dependencies), self.package_name
-        )

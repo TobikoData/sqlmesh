@@ -7,7 +7,7 @@ from pathlib import Path
 from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.config import Config as SQLMeshConfig
-from sqlmesh.dbt.builtin import _relation_info_to_relation, Var
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
@@ -101,8 +101,6 @@ class DbtContext:
         self._jinja_environment = None
 
     def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
-        self.variables = variables
-
         jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
 
         def _render_var(value: t.Any) -> t.Any:
@@ -211,38 +209,6 @@ class DbtContext:
 
     def render(self, source: str, **kwargs: t.Any) -> str:
         return self.jinja_environment.from_string(source).render(**kwargs)
-
-    def track_dependencies_on_render(
-        self, input: str, jinja_context: t.Dict[str, t.Any], package_name: t.Optional[str] = None
-    ) -> Dependencies:
-        dependencies_on_render = Dependencies()
-
-        class TrackingVar(Var):
-            def __call__(
-                self, name: str, default: t.Optional[t.Any] = None, **kwargs: t.Any
-            ) -> t.Any:
-                dependencies_on_render.variables.add(name)
-                return super().__call__(name, default, **kwargs)
-
-            def has_var(self, name: str) -> bool:
-                dependencies_on_render.variables.add(name)
-                return super().has_var(name)
-
-        if package_name:
-            top_level_packages = [*self.jinja_macros.top_level_packages, package_name]
-            jinja_macros = self.jinja_macros.copy(update={"top_level_packages": top_level_packages})
-        else:
-            jinja_macros = self.jinja_macros
-
-        jinja_environment = jinja_macros.build_environment(
-            **{
-                **jinja_context,
-                "var": TrackingVar(self.variables),
-                "use_stub_adapter": True,
-            }
-        )
-        jinja_environment.from_string(input).render()
-        return dependencies_on_render
 
     def get_callable_macro(
         self, name: str, package: t.Optional[str] = None

@@ -245,56 +245,6 @@ class ParsetimeAdapter(BaseAdapter):
         raise ParsetimeAdapterCallError(f"Can't {action} at parse time.")
 
 
-class StubParsetimeAdapter(BaseAdapter):
-    """Same as ParsetimeAdapter, but returns stub / empty values instead of raising an error."""
-
-    def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
-        return None
-
-    def load_relation(self, relation: BaseRelation) -> t.Optional[BaseRelation]:
-        return None
-
-    def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        return []
-
-    def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        return []
-
-    def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-        return []
-
-    def get_missing_columns(
-        self, from_relation: BaseRelation, to_relation: BaseRelation
-    ) -> t.List[Column]:
-        return []
-
-    def create_schema(self, relation: BaseRelation) -> None:
-        pass
-
-    def drop_schema(self, relation: BaseRelation) -> None:
-        pass
-
-    def drop_relation(self, relation: BaseRelation) -> None:
-        pass
-
-    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
-        pass
-
-    def execute(
-        self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> t.Tuple[AdapterResponse, agate.Table]:
-        from dbt.adapters.base.impl import AdapterResponse
-        from sqlmesh.dbt.util import empty_table
-
-        return AdapterResponse(""), empty_table()
-
-    def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
-        return relation.schema
-
-    def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
-        return relation.identifier
-
-
 class RuntimeAdapter(BaseAdapter):
     def __init__(
         self,
