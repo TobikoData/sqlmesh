@@ -282,9 +282,13 @@ class TableAlterColumnPosition:
 
 
 class NestedSupport(str, Enum):
+    # Supports all nested data type operations
     ALL = "ALL"
+    # Does not support any nested data type operations
     NONE = "NONE"
+    # Supports nested data type operations except for those that require dropping a nested field
     ALL_BUT_DROP = "ALL_BUT_DROP"
+    # Ignores all nested data type operations
     IGNORE = "IGNORE"
 
     @property
