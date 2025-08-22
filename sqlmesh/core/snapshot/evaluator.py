@@ -2378,14 +2378,19 @@ class ViewStrategy(PromotableStrategy):
     def delete(self, name: str, **kwargs: t.Any) -> None:
         cascade = kwargs.pop("cascade", False)
         try:
-            self.adapter.drop_view(name, cascade=cascade)
+            # Some engines (e.g., RisingWave) don’t fail when dropping a materialized view with a DROP VIEW statement,
+            # because views and materialized views don’t share the same namespace. Therefore, we should not ignore if the
+            # view doesn't exist and let the exception handler attempt to drop the materialized view.
+            self.adapter.drop_view(name, cascade=cascade, ignore_if_not_exists=False)
         except Exception:
             logger.debug(
                 "Failed to drop view '%s'. Trying to drop the materialized view instead",
                 name,
                 exc_info=True,
             )
-            self.adapter.drop_view(name, materialized=True, cascade=cascade)
+            self.adapter.drop_view(
+                name, materialized=True, cascade=cascade, ignore_if_not_exists=True
+            )
         logger.info("Dropped view '%s'", name)
 
     def _is_materialized_view(self, model: Model) -> bool:
