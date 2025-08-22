@@ -23,7 +23,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_dtypes
@@ -56,8 +55,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SUPPORTS_CREATE_DROP_CATALOG = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA", "TABLE"]
-    SCHEMA_DIFFER = SchemaDiffer(
-        parameterized_type_defaults={
+    SCHEMA_DIFFER_KWARGS = {
+        "parameterized_type_defaults": {
             exp.DataType.build("BINARY", dialect=DIALECT).this: [(8388608,)],
             exp.DataType.build("VARBINARY", dialect=DIALECT).this: [(8388608,)],
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(38, 0), (0,)],
@@ -70,7 +69,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             exp.DataType.build("TIMESTAMP_NTZ", dialect=DIALECT).this: [(9,)],
             exp.DataType.build("TIMESTAMP_TZ", dialect=DIALECT).this: [(9,)],
         },
-    )
+    }
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
     SNOWPARK = "snowpark"
 

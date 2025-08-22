@@ -14,7 +14,7 @@ import itertools
 import logging
 import sys
 import typing as t
-from functools import partial
+from functools import cached_property, partial
 
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
@@ -109,7 +109,7 @@ class EngineAdapter:
     SUPPORTS_MANAGED_MODELS = False
     SUPPORTS_CREATE_DROP_CATALOG = False
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS: t.List[str] = []
-    SCHEMA_DIFFER = SchemaDiffer()
+    SCHEMA_DIFFER_KWARGS: t.Dict[str, t.Any] = {}
     SUPPORTS_TUPLE_IN = True
     HAS_VIEW_BINDING = False
     SUPPORTS_REPLACE_TABLE = True
@@ -132,6 +132,7 @@ class EngineAdapter:
         pretty_sql: bool = False,
         shared_connection: bool = False,
         correlation_id: t.Optional[CorrelationId] = None,
+        schema_differ_overrides: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -154,6 +155,7 @@ class EngineAdapter:
         self._pretty_sql = pretty_sql
         self._multithreaded = multithreaded
         self.correlation_id = correlation_id
+        self._schema_differ_overrides = schema_differ_overrides
 
     def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
         extra_kwargs = {
@@ -203,6 +205,15 @@ class EngineAdapter:
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.UNSUPPORTED
+
+    @cached_property
+    def schema_differ(self) -> SchemaDiffer:
+        return SchemaDiffer(
+            **{
+                **self.SCHEMA_DIFFER_KWARGS,
+                **(self._schema_differ_overrides or {}),
+            }
+        )
 
     @classmethod
     def _casted_columns(
@@ -1101,7 +1112,7 @@ class EngineAdapter:
         """
         return t.cast(
             t.List[TableAlterOperation],
-            self.SCHEMA_DIFFER.compare_columns(
+            self.schema_differ.compare_columns(
                 current_table_name,
                 self.columns(current_table_name),
                 self.columns(target_table_name),

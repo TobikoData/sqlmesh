@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
 )
+from sqlmesh.core.schema_diff import NestedSupport
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.util import DBT_VERSION
@@ -49,6 +50,25 @@ SERIALIZABLE_FIELDS = {
     "database",
     "schema_",
 }
+
+SCHEMA_DIFFER_OVERRIDES = {
+    "schema_differ_overrides": {
+        "treat_alter_data_type_as_destructive": True,
+        "nested_support": NestedSupport.IGNORE,
+    }
+}
+
+
+def with_schema_differ_overrides(
+    func: t.Callable[..., ConnectionConfig],
+) -> t.Callable[..., ConnectionConfig]:
+    """Decorator that merges default config with kwargs."""
+
+    def wrapper(self: TargetConfig, **kwargs: t.Any) -> ConnectionConfig:
+        merged_kwargs = {**SCHEMA_DIFFER_OVERRIDES, **kwargs}
+        return func(self, **merged_kwargs)
+
+    return wrapper
 
 
 class TargetConfig(abc.ABC, DbtConfig):
@@ -92,6 +112,7 @@ class TargetConfig(abc.ABC, DbtConfig):
         """The default incremental strategy for the db"""
         raise NotImplementedError
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
@@ -177,6 +198,7 @@ class DuckDbConfig(TargetConfig):
 
         return DuckDBRelation
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         if self.extensions is not None:
             kwargs["extensions"] = self.extensions
@@ -286,6 +308,7 @@ class SnowflakeConfig(TargetConfig):
 
         return SnowflakeColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return SnowflakeConnectionConfig(
             user=self.user,
@@ -359,6 +382,7 @@ class PostgresConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return PostgresConnectionConfig(
             host=self.host,
@@ -454,6 +478,7 @@ class RedshiftConfig(TargetConfig):
             return RedshiftColumn
         return super(RedshiftConfig, cls).column_class
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return RedshiftConnectionConfig(
             user=self.user,
@@ -504,6 +529,7 @@ class DatabricksConfig(TargetConfig):
 
         return DatabricksColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return DatabricksConnectionConfig(
             server_hostname=self.host,
@@ -605,6 +631,7 @@ class BigQueryConfig(TargetConfig):
 
         return BigQueryColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         job_retries = self.job_retries if self.job_retries is not None else self.retries
         job_execution_timeout_seconds = (
@@ -778,6 +805,7 @@ class MSSQLConfig(TargetConfig):
     def dialect(self) -> str:
         return "tsql"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return MSSQLConnectionConfig(
             host=self.host,
@@ -892,6 +920,7 @@ class TrinoConfig(TargetConfig):
 
         return TrinoColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return TrinoConnectionConfig(
             method=self._method_to_auth_enum[self.method],
@@ -1002,6 +1031,7 @@ class ClickhouseConfig(TargetConfig):
 
         return ClickHouseColumn
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return ClickhouseConnectionConfig(
             host=self.host,
@@ -1085,6 +1115,7 @@ class AthenaConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "insert_overwrite"
 
+    @with_schema_differ_overrides
     def to_sqlmesh(self, **kwargs: t.Any) -> ConnectionConfig:
         return AthenaConnectionConfig(
             type="athena",

@@ -13,6 +13,7 @@ from sqlmesh.core.schema_diff import (
     TableAlterAddColumnOperation,
     TableAlterDropColumnOperation,
     TableAlterChangeColumnTypeOperation,
+    NestedSupport,
 )
 
 
@@ -20,7 +21,7 @@ def test_schema_diff_calculate():
     alter_operations = SchemaDiffer(
         **{
             "support_positional_add": False,
-            "support_nested_operations": False,
+            "nested_support": NestedSupport.NONE,
             "array_element_selector": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
@@ -53,7 +54,7 @@ def test_schema_diff_drop_cascade():
     alter_expressions = SchemaDiffer(
         **{
             "support_positional_add": False,
-            "support_nested_operations": False,
+            "nested_support": NestedSupport.NONE,
             "array_element_selector": "",
             "drop_cascade": True,
         }
@@ -79,7 +80,7 @@ def test_schema_diff_calculate_type_transitions():
     alter_expressions = SchemaDiffer(
         **{
             "support_positional_add": False,
-            "support_nested_operations": False,
+            "nested_support": NestedSupport.NONE,
             "array_element_selector": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
@@ -426,7 +427,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.first(),
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Add a column to the end of a struct
         (
@@ -447,7 +448,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.last(after="col_c"),
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Add a column to the middle of a struct
         (
@@ -468,7 +469,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Add two columns at the start of a struct
         (
@@ -502,7 +503,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Add columns in different levels of nesting of structs
         (
@@ -533,7 +534,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=False, support_nested_operations=True),
+            dict(support_positional_add=False, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Remove a column from the start of a struct
         (
@@ -554,8 +555,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Remove a column from the end of a struct
@@ -577,8 +577,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Remove a column from the middle of a struct
@@ -600,8 +599,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Remove a column from a struct where nested drop is not supported
@@ -631,8 +629,7 @@ def test_schema_diff_calculate_type_transitions():
                 ),
             ],
             dict(
-                support_nested_operations=True,
-                support_nested_drop=False,
+                nested_support=NestedSupport.ALL_BUT_DROP,
             ),
         ),
         # Remove two columns from the start of a struct
@@ -665,8 +662,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Change a column type in a struct
@@ -690,7 +686,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -754,8 +750,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -788,8 +783,7 @@ def test_schema_diff_calculate_type_transitions():
                 ),
             ],
             dict(
-                support_nested_operations=True,
-                support_nested_drop=False,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -853,8 +847,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # #####################
@@ -879,7 +872,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Remove column from array of structs
         (
@@ -900,8 +893,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Alter column type in array of structs
@@ -925,7 +917,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -958,7 +950,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=False, support_nested_operations=True),
+            dict(support_positional_add=False, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # Add an array of primitives
         (
@@ -978,7 +970,7 @@ def test_schema_diff_calculate_type_transitions():
                     array_element_selector="",
                 ),
             ],
-            dict(support_positional_add=True, support_nested_operations=True),
+            dict(support_positional_add=True, nested_support=NestedSupport.ALL_BUT_DROP),
         ),
         # untyped array to support Snowflake
         (
@@ -1134,8 +1126,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
-                support_nested_drop=True,
+                nested_support=NestedSupport.ALL,
             ),
         ),
         # Type with precision to same type with no precision and no default is DROP/ADD
@@ -1398,7 +1389,7 @@ def test_schema_diff_calculate_type_transitions():
             [],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 support_coercing_compatible_types=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
@@ -1411,7 +1402,7 @@ def test_schema_diff_calculate_type_transitions():
             [],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 coerceable_types={
                     exp.DataType.build("FLOAT"): {exp.DataType.build("INT")},
                 },
@@ -1423,7 +1414,7 @@ def test_schema_diff_calculate_type_transitions():
             [],
             dict(
                 support_positional_add=True,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 support_coercing_compatible_types=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
@@ -1453,10 +1444,105 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=False,
-                support_nested_operations=True,
+                nested_support=NestedSupport.ALL_BUT_DROP,
                 support_coercing_compatible_types=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
+                },
+            ),
+        ),
+        # ###################
+        # Ignore Nested Tests
+        # ###################
+        # Remove nested col_c
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
+            [],
+            dict(nested_support=NestedSupport.IGNORE),
+        ),
+        # Add nested col_d
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>",
+            [],
+            dict(nested_support=NestedSupport.IGNORE),
+        ),
+        # Change nested col_c to incompatible type
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c DATE>>",
+            [],
+            dict(nested_support=NestedSupport.IGNORE),
+        ),
+        # Change nested col_c to compatible type
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c STRING>>",
+            [],
+            dict(
+                nested_support=NestedSupport.IGNORE,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+                },
+            ),
+        ),
+        # Mix of ignored nested and non-nested changes
+        (
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, age INT>",
+            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c DATE>, age STRING, new_col INT>",
+            [
+                # `col_c` change is ignored
+                TableAlterAddColumnOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("new_col")],
+                    column_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, age INT, new_col INT>"
+                    ),
+                    position=TableAlterColumnPosition.last("age"),
+                    array_element_selector="",
+                ),
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build(
+                        "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>, age STRING, new_col INT>"
+                    ),
+                    array_element_selector="",
+                ),
+            ],
+            dict(
+                nested_support=NestedSupport.IGNORE,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("STRING")},
+                },
+                support_positional_add=True,
+            ),
+        ),
+        # ############################
+        # Change Data Type Destructive
+        # ############################
+        (
+            "STRUCT<id INT, age INT>",
+            "STRUCT<id INT, age STRING>",
+            [
+                TableAlterChangeColumnTypeOperation(
+                    target_table=exp.to_table("apply_to_table"),
+                    column_parts=[TableAlterColumn.primitive("age")],
+                    column_type=exp.DataType.build("STRING"),
+                    current_type=exp.DataType.build("INT"),
+                    expected_table_struct=exp.DataType.build("STRUCT<id INT, age STRING>"),
+                    array_element_selector="",
+                    is_part_of_destructive_change=True,
+                ),
+            ],
+            dict(
+                treat_alter_data_type_as_destructive=True,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("STRING")},
                 },
             ),
         ),
@@ -1750,7 +1836,7 @@ def test_ignore_destructive_compare_columns():
     """Test ignore_destructive behavior in compare_columns method."""
     schema_differ = SchemaDiffer(
         support_positional_add=True,
-        support_nested_operations=False,
+        nested_support=NestedSupport.NONE,
         compatible_types={
             exp.DataType.build("INT"): {exp.DataType.build("STRING")},
         },
@@ -1796,8 +1882,7 @@ def test_ignore_destructive_compare_columns():
 def test_ignore_destructive_nested_struct_without_support():
     """Test ignore_destructive with nested structs when nested_drop is not supported."""
     schema_differ = SchemaDiffer(
-        support_nested_operations=True,
-        support_nested_drop=False,  # This forces DROP+ADD for nested changes
+        nested_support=NestedSupport.ALL_BUT_DROP,  # This forces DROP+ADD for nested changes
     )
 
     current_struct = "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>"
@@ -1834,8 +1919,7 @@ def test_get_schema_differ():
     # Databricks should support positional add and nested operations
     databricks_differ = get_schema_differ("databricks")
     assert databricks_differ.support_positional_add is True
-    assert databricks_differ.support_nested_operations is True
-    assert databricks_differ.support_nested_drop is True
+    assert databricks_differ.nested_support == NestedSupport.ALL
 
     # BigQuery should have specific compatible types configured
     bigquery_differ = get_schema_differ("bigquery")
@@ -1860,7 +1944,7 @@ def test_get_schema_differ():
     schema_differ_unknown = get_schema_differ("unknown_dialect")
     assert isinstance(schema_differ_unknown, SchemaDiffer)
     assert schema_differ_unknown.support_positional_add is False
-    assert schema_differ_unknown.support_nested_operations is False
+    assert schema_differ_unknown.nested_support == NestedSupport.NONE
 
     # Test case insensitivity
     schema_differ_upper = get_schema_differ("BIGQUERY")
@@ -1869,6 +1953,10 @@ def test_get_schema_differ():
         schema_differ_upper.support_coercing_compatible_types
         == schema_differ_lower.support_coercing_compatible_types
     )
+
+    # Test override
+    schema_differ_with_override = get_schema_differ("postgres", {"drop_cascade": False})
+    assert schema_differ_with_override.drop_cascade is False
 
 
 def test_ignore_destructive_edge_cases():
@@ -2116,7 +2204,7 @@ def test_ignore_destructive_edge_cases():
                 ),
             ],
             [],  # No operations when ignoring additive
-            dict(support_nested_operations=True),
+            dict(nested_support=NestedSupport.ALL_BUT_DROP),
         ),
     ],
 )
@@ -2228,7 +2316,7 @@ def test_ignore_both_destructive_and_additive():
 def test_ignore_additive_array_operations():
     """Test ignore_additive with array of struct operations."""
     schema_differ = SchemaDiffer(
-        support_nested_operations=True,
+        nested_support=NestedSupport.ALL,
         support_positional_add=True,
     )
 

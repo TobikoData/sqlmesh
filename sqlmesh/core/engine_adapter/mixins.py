@@ -259,9 +259,9 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
     ) -> t.Dict[str, exp.DataType]:
         # get default lengths for types that support "max" length
         types_with_max_default_param = {
-            k: [self.SCHEMA_DIFFER.parameterized_type_defaults[k][0][0]]
-            for k in self.SCHEMA_DIFFER.max_parameter_length
-            if k in self.SCHEMA_DIFFER.parameterized_type_defaults
+            k: [self.schema_differ.parameterized_type_defaults[k][0][0]]
+            for k in self.schema_differ.max_parameter_length
+            if k in self.schema_differ.parameterized_type_defaults
         }
 
         # Redshift and MSSQL have a bug where CTAS statements have non-deterministic types. If a LIMIT
@@ -270,7 +270,7 @@ class VarcharSizeWorkaroundMixin(EngineAdapter):
         # and supports "max" length, we convert it to "max" length to prevent inadvertent data truncation.
         for col_name, col_type in columns_to_types.items():
             if col_type.this in types_with_max_default_param and col_type.expressions:
-                parameter = self.SCHEMA_DIFFER.get_type_parameters(col_type)
+                parameter = self.schema_differ.get_type_parameters(col_type)
                 type_default = types_with_max_default_param[col_type.this]
                 if parameter == type_default:
                     col_type.set("expressions", [exp.DataTypeParam(this=exp.var("max"))])

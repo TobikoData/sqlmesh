@@ -22,7 +22,7 @@ from sqlmesh.core.engine_adapter.shared import (
     set_catalog,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
@@ -68,8 +68,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
 
-    SCHEMA_DIFFER = SchemaDiffer(
-        compatible_types={
+    SCHEMA_DIFFER_KWARGS = {
+        "compatible_types": {
             exp.DataType.build("INT64", dialect=DIALECT): {
                 exp.DataType.build("NUMERIC", dialect=DIALECT),
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
@@ -83,17 +83,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
         },
-        coerceable_types={
+        "coerceable_types": {
             exp.DataType.build("FLOAT64", dialect=DIALECT): {
                 exp.DataType.build("BIGNUMERIC", dialect=DIALECT),
             },
         },
-        support_coercing_compatible_types=True,
-        parameterized_type_defaults={
+        "support_coercing_compatible_types": True,
+        "parameterized_type_defaults": {
             exp.DataType.build("DECIMAL", dialect=DIALECT).this: [(38, 9), (0,)],
             exp.DataType.build("BIGDECIMAL", dialect=DIALECT).this: [(76.76, 38), (0,)],
         },
-        types_with_unlimited_length={
+        "types_with_unlimited_length": {
             # parameterized `STRING(n)` can ALTER to unparameterized `STRING`
             exp.DataType.build("STRING", dialect=DIALECT).this: {
                 exp.DataType.build("STRING", dialect=DIALECT).this,
@@ -103,9 +103,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
                 exp.DataType.build("BYTES", dialect=DIALECT).this,
             },
         },
-        support_nested_operations=True,
-        support_nested_drop=False,
-    )
+        "nested_support": NestedSupport.ALL_BUT_DROP,
+    }
 
     @property
     def client(self) -> BigQueryClient:

@@ -15,7 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
     InsertOverwriteStrategy,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.core.schema_diff import TableAlterOperation
 from sqlmesh.utils import get_source_columns_to_types
 
 if t.TYPE_CHECKING:
@@ -37,7 +37,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
     SUPPORTS_REPLACE_TABLE = False
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
 
-    SCHEMA_DIFFER = SchemaDiffer()
+    SCHEMA_DIFFER_KWARGS = {}
 
     DEFAULT_TABLE_ENGINE = "MergeTree"
     ORDER_BY_TABLE_ENGINE_REGEX = "^.*?MergeTree.*$"
