@@ -2037,6 +2037,35 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
     assert plan.snapshots[snapshot_b_id].change_category == SnapshotChangeCategory.NON_BREAKING
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_dbt_is_incremental_table_is_missing(sushi_test_dbt_context: Context):
+    context = sushi_test_dbt_context
+
+    model = context.get_model("sushi.waiter_revenue_by_day_v2")
+    model = model.copy(update={"kind": IncrementalUnmanagedKind(), "start": "2023-01-01"})
+    context.upsert_model(model)
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    snapshot = context.get_snapshot("sushi.waiter_revenue_by_day_v2")
+    assert snapshot
+
+    # Manually drop the table
+    context.engine_adapter.drop_table(snapshot.table_name())
+
+    context.snapshot_evaluator.evaluate(
+        snapshot,
+        start="2023-01-01",
+        end="2023-01-08",
+        execution_time="2023-01-08 15:00:00",
+        snapshots={s.name: s for s in context.snapshots.values()},
+        deployability_index=DeployabilityIndex.all_deployable(),
+    )
+
+    # Make sure the table was recreated
+    assert context.engine_adapter.table_exists(snapshot.table_name())
+
+
 def test_model_attr(sushi_test_dbt_context: Context, assert_exp_eq):
     context = sushi_test_dbt_context
     model = context.get_model("sushi.top_waiters")

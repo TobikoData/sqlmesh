@@ -3,11 +3,9 @@ from pathlib import Path
 from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.loader import sqlmesh_config
 
-variables = {"start": "Jan 1 2022"}
-
 
 config = sqlmesh_config(
-    Path(__file__).parent, variables=variables, model_defaults=ModelDefaultsConfig(dialect="duckdb")
+    Path(__file__).parent, model_defaults=ModelDefaultsConfig(dialect="duckdb", start="Jan 1 2022")
 )
 
 
@@ -15,6 +13,7 @@ test_config = config
 
 test_config_with_normalization_strategy = sqlmesh_config(
     Path(__file__).parent,
-    variables=variables,
-    model_defaults=ModelDefaultsConfig(dialect="duckdb,normalization_strategy=LOWERCASE"),
+    model_defaults=ModelDefaultsConfig(
+        dialect="duckdb,normalization_strategy=LOWERCASE", start="Jan 1 2022"
+    ),
 )
