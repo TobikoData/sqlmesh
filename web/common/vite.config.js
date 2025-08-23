@@ -10,6 +10,7 @@ export default defineConfig({
     dts({
       insertTypesEntry: true,
       declarationMap: true,
+      tsconfigPath: './tsconfig.build.json',
     }),
     viteStaticCopy({
       targets: [
@@ -30,6 +31,7 @@ export default defineConfig({
     },
   },
   build: {
+    cssMinify: true,
     lib: {
       entry: path.resolve(__dirname, 'src/index.ts'),
       name: 'sqlmesh-common',
@@ -54,6 +56,12 @@ export default defineConfig({
           'tailwind-merge': 'tailwindMerge',
           'class-variance-authority': 'classVarianceAuthority',
           '@radix-ui/react-slot': 'radixSlot',
+        },
+        assetFileNames: assetInfo => {
+          if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+            return 'styles/[name].min[extname]'
+          }
+          return '[name][extname]'
         },
       },
     },
