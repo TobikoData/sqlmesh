@@ -6,6 +6,8 @@ import { type Size, type Shape } from '@/types/enums'
 import { cn } from '@/utils'
 import { badgeVariants } from './help'
 
+import './Badge.css'
+
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {
