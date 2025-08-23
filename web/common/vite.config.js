@@ -17,6 +17,10 @@ export default defineConfig({
           src: 'src/styles/design',
           dest: 'styles',
         },
+        {
+          src: 'tailwind.base.config.js',
+          dest: 'configs',
+        },
       ],
     }),
   ],

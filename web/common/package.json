@@ -50,8 +50,11 @@
         "default": "./dist/sqlmesh-common.umd.js"
       }
     },
-    "./design": "./dist/styles/design/index.css",
-    "./design/*": "./dist/styles/design/*"
+    "./styles/*": "./dist/styles/*",
+    "./design/*": "./dist/styles/design/*",
+    "./configs/*": "./dist/configs/*",
+    "./tailwind.base.config.js": "./dist/configs/tailwind.base.config.js",
+    "./styles/tailwind.min.css": "./dist/styles/tailwind.min.css"
   },
   "files": [
     "/dist"
