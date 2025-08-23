@@ -21,6 +21,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       <Comp
         className={cn(badgeVariants({ size, shape, className }))}
         ref={ref}
+        data-component="Badge"
         {...props}
       />
     )
