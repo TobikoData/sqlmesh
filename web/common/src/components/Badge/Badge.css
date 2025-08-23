@@ -1,0 +1,4 @@
+:root {
+  --color-badge-background: var(--color-gray-100);
+  --color-badge-foreground: var(--color-prose);
+}
