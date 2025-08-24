@@ -17,6 +17,7 @@ from sqlglot import exp
 
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
+from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.column import ColumnConfig
 
@@ -80,12 +81,16 @@ class SeedConfig(BaseModelConfig):
 
         kwargs["columns"] = new_columns
 
+        # dbt treats single whitespace as a null value
+        csv_settings = CsvSettings(na_values=[" "], keep_default_na=True)
+
         return create_seed_model(
             self.canonical_name(context),
-            SeedKind(path=seed_path),
+            SeedKind(path=seed_path, csv_settings=csv_settings),
             dialect=self.dialect(context),
             audit_definitions=audit_definitions,
             virtual_environment_mode=virtual_environment_mode,
+            start=self.start or context.sqlmesh_config.model_defaults.start,
             **kwargs,
         )
 

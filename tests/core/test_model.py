@@ -9997,6 +9997,61 @@ def test_seed_coerce_datetime(tmp_path):
     assert df["bad_datetime"].iloc[0] == "9999-12-31 23:59:59"
 
 
+def test_seed_invalid_date_column(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("bad_date\n9999-12-31\n2025-01-01\n1000-01-01")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+            ),
+            columns (
+              bad_date date,
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    df = next(model.render(context=None))
+    # The conversion to date should not raise an error
+    assert df["bad_date"].to_list() == ["9999-12-31", "2025-01-01", "1000-01-01"]
+
+
+def test_seed_missing_columns(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w", encoding="utf-8") as fd:
+        fd.write("key,value\n1,2\n3,4")
+
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '{str(model_csv_path)}',
+            ),
+            columns (
+              key int,
+              value int,
+              missing_column int,
+            ),
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    with pytest.raises(
+        ConfigError, match="Seed model 'db.seed' has missing columns: {'missing_column'}.*"
+    ):
+        next(model.render(context=None))
+
+
 def test_missing_column_data_in_columns_key():
     expressions = d.parse(
         """
