@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 import logging
 import requests
+import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
@@ -14,6 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
+
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -172,8 +174,15 @@ class FabricHttpClient:
         self.client_secret = client_secret
         self.workspace_id = workspace_id
 
-    def create_warehouse(self, warehouse_name: str, if_not_exists: bool = True) -> None:
+    def create_warehouse(
+        self, warehouse_name: str, if_not_exists: bool = True, attempt: int = 0
+    ) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
+
+        # attempt count is arbitrary, it essentially equates to 30 seconds max wait with the time.sleep() below
+        if attempt > 3:
+            raise SQLMeshError("Gave up waiting for warehouse to become available")
+
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
         request_data = {
@@ -186,12 +195,28 @@ class FabricHttpClient:
         if (
             if_not_exists
             and response.status_code == 400
-            and response.json().get("errorCode", None) == "ItemDisplayNameAlreadyInUse"
+            and (errorCode := response.json().get("errorCode", None))
         ):
-            logger.warning(f"Fabric warehouse {warehouse_name} already exists")
-            return
+            if errorCode == "ItemDisplayNameAlreadyInUse":
+                logger.warning(f"Fabric warehouse {warehouse_name} already exists")
+                return
+            if errorCode == "ItemDisplayNameNotAvailableYet":
+                logger.warning(f"Fabric warehouse {warehouse_name} is still spinning up; waiting")
+                time.sleep(
+                    10
+                )  # arbitrary, seems to be "good enough" at least in CI. I was unable to find any guidance in the MS docs on how to handle this case
+                return self.create_warehouse(
+                    warehouse_name=warehouse_name, if_not_exists=if_not_exists, attempt=attempt + 1
+                )
 
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except:
+            # the important information to actually debug anything is in the response body which Requests never prints
+            logger.exception(
+                f"Failed to create warehouse {warehouse_name}. status: {response.status_code}, body: {response.text}"
+            )
+            raise
 
         # Handle direct success (201) or async creation (202)
         if response.status_code == 201:

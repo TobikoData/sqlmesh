@@ -3607,6 +3607,7 @@ def test_identifier_length_limit(ctx: TestContext):
         EnvironmentSuffixTarget.CATALOG,
     ],
 )
+@pytest.mark.xdist_group("serial")
 def test_janitor(
     ctx: TestContext, tmp_path: pathlib.Path, environment_suffix_target: EnvironmentSuffixTarget
 ):
