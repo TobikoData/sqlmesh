@@ -12,6 +12,18 @@ def _get_dbt_operations(ctx: click.Context) -> DbtOperations:
     return ctx.obj
 
 
+select_option = click.option(
+    "-s",
+    "-m",
+    "--select",
+    "--models",
+    "--model",
+    multiple=True,
+    help="Specify the nodes to include.",
+)
+exclude_option = click.option("--exclude", multiple=True, help="Specify the nodes to exclude.")
+
+
 @click.group(invoke_without_command=True)
 @click.option("--profile", help="Which existing profile to load. Overrides output.profile")
 @click.option("-t", "--target", help="Which target to load for the given profile")
@@ -38,23 +50,26 @@ def dbt(
 
 
 @dbt.command()
-@click.option("-s", "-m", "--select", "--models", "--model", help="Specify the nodes to include.")
+@select_option
+@exclude_option
 @click.option(
     "-f",
     "--full-refresh",
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
 )
 @click.pass_context
-def run(ctx: click.Context, select: t.Optional[str], full_refresh: bool) -> None:
+def run(ctx: click.Context, **kwargs: t.Any) -> None:
     """Compile SQL and execute against the current target database."""
-    _get_dbt_operations(ctx).run(select=select, full_refresh=full_refresh)
+    _get_dbt_operations(ctx).run(**kwargs)
 
 
 @dbt.command(name="list")
+@select_option
+@exclude_option
 @click.pass_context
-def list_(ctx: click.Context) -> None:
+def list_(ctx: click.Context, **kwargs: t.Any) -> None:
     """List the resources in your project"""
-    _get_dbt_operations(ctx).list_()
+    _get_dbt_operations(ctx).list_(**kwargs)
 
 
 @dbt.command(name="ls", hidden=True)  # hidden alias for list

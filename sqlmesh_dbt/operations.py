@@ -2,12 +2,17 @@ from __future__ import annotations
 import typing as t
 from rich.progress import Progress
 from pathlib import Path
+import logging
+from sqlmesh_dbt import selectors
 
 if t.TYPE_CHECKING:
     # important to gate these to be able to defer importing sqlmesh until we need to
     from sqlmesh.core.context import Context
     from sqlmesh.dbt.project import Project
     from sqlmesh_dbt.console import DbtCliConsole
+    from sqlmesh.core.model import Model
+
+logger = logging.getLogger(__name__)
 
 
 class DbtOperations:
@@ -15,22 +20,28 @@ class DbtOperations:
         self.context = sqlmesh_context
         self.project = dbt_project
 
-    def list_(self) -> None:
-        for _, model in self.context.models.items():
-            self.console.print(model.name)
+    def list_(
+        self,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+    ) -> None:
+        # dbt list prints:
+        # - models
+        # - "data tests" (audits) for those models
+        # it also applies selectors which is useful for testing selectors
+        selected_models = list(self._selected_models(select, exclude).values())
+        self.console.list_models(selected_models)
 
-    def run(self, select: t.Optional[str] = None, full_refresh: bool = False) -> None:
-        # A dbt run both updates data and changes schemas and has no way of rolling back so more closely maps to a SQLMesh forward-only plan
-        # TODO: if --full-refresh specified, mark incrementals as breaking instead of forward_only?
-
-        # TODO: we need to either convert DBT selector syntax to SQLMesh selector syntax
-        # or make the model selection engine configurable
+    def run(
+        self,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+        full_refresh: bool = False,
+    ) -> None:
         select_models = None
-        if select:
-            if "," in select:
-                select_models = select.split(",")
-            else:
-                select_models = select.split(" ")
+
+        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+            select_models = [sqlmesh_selector]
 
         self.context.plan(
             select_models=select_models,
@@ -39,6 +50,21 @@ class DbtOperations:
             no_prompts=True,
             auto_apply=True,
         )
+
+    def _selected_models(
+        self, select: t.Optional[t.List[str]] = None, exclude: t.Optional[t.List[str]] = None
+    ) -> t.Dict[str, Model]:
+        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+            model_selector = self.context._new_selector()
+            selected_models = {
+                fqn: model
+                for fqn, model in self.context.models.items()
+                if fqn in model_selector.expand_model_selections([sqlmesh_selector])
+            }
+        else:
+            selected_models = dict(self.context.models)
+
+        return selected_models
 
     @property
     def console(self) -> DbtCliConsole:
