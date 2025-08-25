@@ -1586,7 +1586,7 @@ class SeedModel(_Model):
         string_columns = []
 
         columns_to_types = self.columns_to_types_ or {}
-        column_names = set(columns_to_types)
+        column_names_to_check = set(columns_to_types)
         for name, tpe in columns_to_types.items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
@@ -1598,12 +1598,6 @@ class SeedModel(_Model):
                 string_columns.append(name)
 
         for df in self._reader.read(batch_size=self.kind.batch_size):
-            missing_columns = column_names - set(df.columns)
-            if missing_columns:
-                raise_config_error(
-                    f"Seed model '{self.name}' has missing columns: {missing_columns}", self._path
-                )
-
             rename_dict = {}
             for column in columns_to_types:
                 if column not in df:
@@ -1612,6 +1606,14 @@ class SeedModel(_Model):
                         rename_dict[normalized_name] = column
             if rename_dict:
                 df.rename(columns=rename_dict, inplace=True)
+                # These names have already been checked
+                column_names_to_check -= set(rename_dict)
+
+            missing_columns = column_names_to_check - set(df.columns)
+            if missing_columns:
+                raise_config_error(
+                    f"Seed model '{self.name}' has missing columns: {missing_columns}", self._path
+                )
 
             # convert all date/time types to native pandas timestamp
             for column in [*date_columns, *datetime_columns]:
