@@ -179,9 +179,11 @@ class FabricHttpClient:
     ) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
 
-        # attempt count is arbitrary, it essentially equates to 30 seconds max wait with the time.sleep() below
-        if attempt > 3:
-            raise SQLMeshError("Gave up waiting for warehouse to become available")
+        # attempt count is arbitrary, it essentially equates to 5 minutes of 30 second waits
+        if attempt > 10:
+            raise SQLMeshError(
+                f"Gave up waiting for Fabric warehouse {warehouse_name} to become available"
+            )
 
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
@@ -202,9 +204,11 @@ class FabricHttpClient:
                 return
             if errorCode == "ItemDisplayNameNotAvailableYet":
                 logger.warning(f"Fabric warehouse {warehouse_name} is still spinning up; waiting")
-                time.sleep(
-                    10
-                )  # arbitrary, seems to be "good enough" at least in CI. I was unable to find any guidance in the MS docs on how to handle this case
+                # Fabric error message is something like:
+                #  - "Requested 'circleci_51d7087e__dev' is not available yet and is expected to become available in the upcoming minutes."
+                # This seems to happen if a catalog is dropped and then a new one with the same name is immediately created.
+                # There appears to be some delayed async process on the Fabric side that actually drops the warehouses and frees up the names to be used again
+                time.sleep(30)
                 return self.create_warehouse(
                     warehouse_name=warehouse_name, if_not_exists=if_not_exists, attempt=attempt + 1
                 )

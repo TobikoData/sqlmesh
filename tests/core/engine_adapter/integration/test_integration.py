@@ -3610,7 +3610,10 @@ def test_janitor(
 
     # check physical objects
     snapshot_table_name = exp.to_table(new_model.table_name(), dialect=ctx.dialect)
-    snapshot_schema = snapshot_table_name.db
+    snapshot_schema = parsed_schema.copy()
+    snapshot_schema.set(
+        "db", exp.to_identifier(snapshot_table_name.db)
+    )  # we need this to be catalog.schema and not just schema for environment_suffix_target: catalog
 
     prod_schema = normalize_identifiers(d.to_schema(schema), dialect=ctx.dialect)
     dev_env_schema = prod_schema.copy()
