@@ -2290,13 +2290,15 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        snapshot = kwargs["snapshot"]
+        # We should always recreate materialized views across supported engines (Snowflake, BigQuery etc) because
+        # if upstream tables were recreated (e.g FULL models), the MVs would be silently invalidated.
+        # The only exception to that rule is RisingWave, which doesn't support CREATE OR REPLACE, so upstream 
+        # models don't recreate their physical tables for the MVs to be invalidated.
+        # However, even for RW we still want to recreate MVs to avoid stale references  
+        is_materialized_view = self._is_materialized_view(model)
+        must_recreate_view = not self.adapter.HAS_VIEW_BINDING or is_materialized_view
 
-        if (
-            not snapshot.is_materialized_view
-            and self.adapter.HAS_VIEW_BINDING
-            and self.adapter.table_exists(table_name)
-        ):
+        if self.adapter.table_exists(table_name) and not must_recreate_view:
             logger.info("Skipping creation of the view '%s'", table_name)
             return
 
@@ -2305,8 +2307,8 @@ class ViewStrategy(PromotableStrategy):
             table_name,
             query_or_df,
             model.columns_to_types,
-            replace=not self.adapter.HAS_VIEW_BINDING,
-            materialized=self._is_materialized_view(model),
+            replace=must_recreate_view,
+            materialized=is_materialized_view,
             view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
