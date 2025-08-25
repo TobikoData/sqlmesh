@@ -470,6 +470,64 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_cleanup_view(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="catalog.test_schema.test_model",
+        kind=ViewKind(materialized=False),
+        query=parse_one("SELECT a FROM tbl"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    evaluator.cleanup([SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)])
+
+    adapter_mock.get_data_object.assert_not_called()
+    adapter_mock.drop_view.assert_called_once_with(
+        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+        cascade=True,
+        ignore_if_not_exists=False,
+    )
+
+
+def test_cleanup_materialized_view(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="catalog.test_schema.test_model",
+        kind=ViewKind(materialized=True),
+        query=parse_one("SELECT a FROM tbl"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+
+    adapter_mock.drop_view.side_effect = [RuntimeError("failed to drop view"), None]
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+    evaluator.cleanup([SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)])
+
+    adapter_mock.get_data_object.assert_not_called()
+    adapter_mock.drop_view.assert_has_calls(
+        [
+            call(
+                f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+                cascade=True,
+                ignore_if_not_exists=False,
+            ),
+            call(
+                f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__dev",
+                materialized=True,
+                cascade=True,
+                ignore_if_not_exists=True,
+            ),
+        ]
+    )
+
+
 def test_cleanup_fails(adapter_mock, make_snapshot):
     adapter_mock.drop_table.side_effect = RuntimeError("test_error")
 
