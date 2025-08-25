@@ -52,14 +52,14 @@ bigframes = ["bigframes>=1.32.0"]
 clickhouse = ["clickhouse-connect"]
 databricks = ["databricks-sql-connector[pyarrow]"]
 dev = [
-    "agate==1.7.1",
+    "agate",
     "beautifulsoup4",
     "clickhouse-connect",
     "cryptography",
     "databricks-sql-connector",
     "dbt-bigquery",
     "dbt-core",
-    "dbt-duckdb>=1.7.1",
+    "dbt-duckdb",
     "dbt-snowflake",
     "dbt-athena-community",
     "dbt-clickhouse",

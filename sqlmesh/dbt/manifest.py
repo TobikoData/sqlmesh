@@ -15,7 +15,12 @@ from dbt import constants as dbt_constants, flags
 from sqlmesh.utils.conversions import make_serializable
 
 # Override the file name to prevent dbt commands from invalidating the cache.
-dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
+if hasattr(dbt_constants, "PARTIAL_PARSE_FILE_NAME"):
+    dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
+else:
+    from dbt.parser import manifest as dbt_manifest
+
+    dbt_manifest.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"
 
 import jinja2
 from dbt.adapters.factory import register_adapter, reset_adapters
@@ -378,11 +383,17 @@ class ManifestHelper:
 
                 if "on-run-start" in node.tags:
                     self._on_run_start_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
+                        sql=sql,
+                        index=getattr(node, "index", None) or 0,
+                        path=node_path,
+                        dependencies=dependencies,
                     )
                 else:
                     self._on_run_end_per_package[node.package_name][node_name] = HookConfig(
-                        sql=sql, index=node.index or 0, path=node_path, dependencies=dependencies
+                        sql=sql,
+                        index=getattr(node, "index", None) or 0,
+                        path=node_path,
+                        dependencies=dependencies,
                     )
 
     @property
@@ -598,6 +609,9 @@ def _macro_references(
     manifest: Manifest, node: t.Union[ManifestNode, Macro]
 ) -> t.Set[MacroReference]:
     result: t.Set[MacroReference] = set()
+    if not hasattr(node, "depends_on"):
+        return result
+
     for macro_node_id in node.depends_on.macros:
         if not macro_node_id:
             continue
@@ -613,18 +627,20 @@ def _macro_references(
 
 def _refs(node: ManifestNode) -> t.Set[str]:
     if DBT_VERSION >= (1, 5, 0):
-        result = set()
+        result: t.Set[str] = set()
+        if not hasattr(node, "refs"):
+            return result
         for r in node.refs:
-            ref_name = f"{r.package}.{r.name}" if r.package else r.name
+            ref_name = f"{r.package}.{r.name}" if r.package else r.name  # type: ignore
             if getattr(r, "version", None):
-                ref_name = f"{ref_name}_v{r.version}"
+                ref_name = f"{ref_name}_v{r.version}"  # type: ignore
             result.add(ref_name)
         return result
     return {".".join(r) for r in node.refs}  # type: ignore
 
 
 def _sources(node: ManifestNode) -> t.Set[str]:
-    return {".".join(s) for s in node.sources}
+    return {".".join(s) for s in getattr(node, "sources", [])}
 
 
 def _model_node_id(model_name: str, package: str) -> str:

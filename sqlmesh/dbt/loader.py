@@ -188,8 +188,11 @@ class DbtLoader(Loader):
 
             self._projects.append(project)
 
-            if project.context.target.database != (self.context.default_catalog or ""):
-                raise ConfigError("Project default catalog does not match context default catalog")
+            context_default_catalog = self.context.default_catalog or ""
+            if project.context.target.database != context_default_catalog:
+                raise ConfigError(
+                    f"Project default catalog ('{project.context.target.database}') does not match context default catalog ('{context_default_catalog}')."
+                )
             for path in project.project_files:
                 self._track_file(path)
 
