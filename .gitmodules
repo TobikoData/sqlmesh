@@ -1,0 +1,4 @@
+[submodule "dbt-core"]
+	path = dbt-core
+	url = https://github.com/TobikoData/dbt-core.git
+	branch = converting_docs_parser
