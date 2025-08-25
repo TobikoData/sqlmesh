@@ -12,6 +12,12 @@ from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
 from tests.core.engine_adapter.integration import TestContext
 from sqlmesh import model, ExecutionContext
+from pytest_mock import MockerFixture
+from sqlmesh.core.snapshot import SnapshotId, SnapshotIdBatch
+from sqlmesh.core.snapshot.execution_tracker import (
+    QueryExecutionContext,
+    QueryExecutionTracker,
+)
 from sqlmesh.core.model import ModelKindName
 from datetime import datetime
 
@@ -307,3 +313,30 @@ def test_create_drop_catalog(ctx: TestContext, engine_adapter: SnowflakeEngineAd
 
     engine_adapter.drop_catalog(sqlmesh_managed_catalog)  # works, catalog is SQLMesh-managed
     assert fetch_database_names() == {non_sqlmesh_managed_catalog}
+
+
+def test_rows_tracker(
+    ctx: TestContext, engine_adapter: SnowflakeEngineAdapter, mocker: MockerFixture
+):
+    sqlmesh = ctx.create_context()
+    tracker = QueryExecutionTracker()
+
+    add_execution_spy = mocker.spy(QueryExecutionContext, "add_execution")
+
+    with tracker.track_execution(
+        SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
+    ):
+        # Snowflake doesn't report row counts for CTAS, so this should not be tracked
+        engine_adapter.execute(
+            "CREATE TABLE a (id int) AS SELECT 1 as id", track_rows_processed=True
+        )
+        engine_adapter.execute("INSERT INTO a VALUES (2), (3)", track_rows_processed=True)
+        engine_adapter.execute("INSERT INTO a VALUES (4)", track_rows_processed=True)
+
+    assert add_execution_spy.call_count == 2
+
+    stats = tracker.get_execution_stats(
+        SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
+    )
+    assert stats is not None
+    assert stats.total_rows_processed == 3

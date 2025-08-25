@@ -294,7 +294,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     )
 
                 try:
-                    self.execute(existing_records_insert_exp)
+                    self.execute(existing_records_insert_exp, track_rows_processed=True)
                 finally:
                     if table_partition_exp:
                         self.drop_table(partitions_temp_table_name)
@@ -489,6 +489,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Creates a table in the database.
@@ -525,6 +526,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             column_descriptions,
             table_kind,
             empty_ctas=(self.engine_run_mode.is_cloud and expression is not None),
+            track_rows_processed=track_rows_processed,
             **kwargs,
         )
 

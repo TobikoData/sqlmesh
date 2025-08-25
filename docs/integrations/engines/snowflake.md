@@ -250,6 +250,14 @@ And confirm that our schemas and objects exist in the Snowflake catalog:
 
 Congratulations - your SQLMesh project is up and running on Snowflake!
 
+### Where are the row counts?
+
+SQLMesh reports the number of rows processed by each model in its `plan` and `run` terminal output.
+
+However, due to limitations in the Snowflake Python connector, row counts cannot be determined for `CREATE TABLE AS` statements. Therefore, SQLMesh does not report row counts for certain model kinds, such as `FULL` models.
+
+Learn more about the connector limitation [on Github](https://github.com/snowflakedb/snowflake-connector-python/issues/645).
+
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `snowflake`
 
