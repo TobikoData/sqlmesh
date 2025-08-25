@@ -2,6 +2,7 @@ version: 2
 
 models:
   - name: top_waiters
+    description: description of top waiters
     columns:
       - name: waiter_id
         data_type: int
@@ -18,6 +19,7 @@ models:
         warn_after: {count: 8, period: hour}
         error_after: {count: 9, period: hour}
   - name: waiters
+    description: '{{ doc("waiters") }}'
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day
     versions:
