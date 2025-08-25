@@ -11,7 +11,7 @@ from sqlglot.helper import seq_get
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.dialect import schema_
+from sqlmesh.core.dialect import RawSql, schema_
 from sqlmesh.core.schema_diff import TableAlterOperation
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -30,7 +30,7 @@ class LogicalMergeMixin(EngineAdapter):
     def merge(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        source_table: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
@@ -448,7 +448,7 @@ class ClusteredByMixin(EngineAdapter):
 def logical_merge(
     engine_adapter: EngineAdapter,
     target_table: TableName,
-    source_table: QueryOrDF,
+    source_table: QueryOrDF | RawSql,
     target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     unique_key: t.Sequence[exp.Expression],
     when_matched: t.Optional[exp.Whens] = None,

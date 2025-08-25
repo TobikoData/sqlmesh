@@ -360,7 +360,7 @@ class RedshiftEngineAdapter(
     def merge(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        source_table: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,

@@ -6,7 +6,7 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.dialect import to_schema, add_table
+from sqlmesh.core.dialect import RawSql, to_schema, add_table
 from sqlmesh.core.engine_adapter.base import (
     EngineAdapterWithIndexSupport,
     EngineAdapter,
@@ -194,7 +194,7 @@ class MSSQLEngineAdapter(
     def merge(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        source_table: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,

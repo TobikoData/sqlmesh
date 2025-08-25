@@ -236,29 +236,33 @@ class SnapshotEvaluator:
             runtime_stage=RuntimeStage.EVALUATING,
             **kwargs,
         )
-        queries_or_dfs = self._render_snapshot_for_evaluation(
+        dfs_or_query_raw_sql = self._render_snapshot_for_evaluation(
             snapshot,
             snapshots,
             deployability_index or DeployabilityIndex.all_deployable(),
             render_kwargs,
         )
-        query_or_df = next(queries_or_dfs)
-        if isinstance(query_or_df, pd.DataFrame):
-            return query_or_df.head(limit)
-        if not isinstance(query_or_df, exp.Expression):
+        df_or_query_raw_sql = next(dfs_or_query_raw_sql)
+
+        if isinstance(df_or_query_raw_sql, pd.DataFrame):
+            return df_or_query_raw_sql.head(limit)
+
+        if not isinstance(df_or_query_raw_sql, (tuple, exp.Expression)):
             # We assume that if this branch is reached, `query_or_df` is a pyspark / snowpark / bigframe dataframe,
             # so we use `limit` instead of `head` to get back a dataframe instead of List[Row]
             # https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrame.head.html#pyspark.sql.DataFrame.head
-            return query_or_df.limit(limit)
+            return df_or_query_raw_sql.limit(limit)
 
-        assert isinstance(query_or_df, exp.Query)
+        # We don't execute the raw SQL here because the AST is needed to add a limit
+        query, _ = df_or_query_raw_sql
+        assert isinstance(query, exp.Query)
 
-        existing_limit = query_or_df.args.get("limit")
+        existing_limit = query.args.get("limit")
         if existing_limit:
             limit = min(limit, execute(exp.select(existing_limit.expression)).rows[0][0])
             assert limit is not None
 
-        return adapter._fetch_native_df(query_or_df.limit(limit))
+        return adapter._fetch_native_df(query.limit(limit))
 
     def promote(
         self,
@@ -920,18 +924,18 @@ class SnapshotEvaluator:
         adapter = self.get_adapter(model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
-        queries_or_dfs = self._render_snapshot_for_evaluation(
+        dfs_or_query_raw_sql = self._render_snapshot_for_evaluation(
             snapshot,
             snapshots,
             deployability_index,
             render_kwargs,
         )
 
-        def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
+        def apply(df_or_query_raw_sql: DF | d.QueryRawSql, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
                     table_name=table_name,
-                    query_or_df=query_or_df,
+                    df_or_query_raw_sql=df_or_query_raw_sql,
                     model=snapshot.model,
                     snapshot=snapshot,
                     snapshots=snapshots,
@@ -952,7 +956,7 @@ class SnapshotEvaluator:
                 )
                 evaluation_strategy.insert(
                     table_name=table_name,
-                    query_or_df=query_or_df,
+                    df_or_query_raw_sql=df_or_query_raw_sql,
                     is_first_insert=is_first_insert,
                     model=snapshot.model,
                     snapshot=snapshot,
@@ -971,7 +975,7 @@ class SnapshotEvaluator:
         # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
         # union all the dataframes together before writing. For pandas this could result in OOM and a potential
         # workaround for that would be to serialize pandas to disk and then read it back with Spark.
-        # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
+        # Note: We assume that if multiple things are yielded from `dfs_or_query_raw_sql` that they are dataframes
         # and not SQL expressions.
         if (
             adapter.INSERT_OVERWRITE_STRATEGY
@@ -980,21 +984,22 @@ class SnapshotEvaluator:
                 InsertOverwriteStrategy.REPLACE_WHERE,
             )
             and snapshot.is_incremental_by_time_range
+            and not isinstance(dfs_or_query_raw_sql, tuple)
         ):
             import pandas as pd
 
-            query_or_df = reduce(
+            df = reduce(
                 lambda a, b: (
                     pd.concat([a, b], ignore_index=True)  # type: ignore
                     if isinstance(a, pd.DataFrame)
                     else a.union_all(b)  # type: ignore
                 ),  # type: ignore
-                queries_or_dfs,
+                dfs_or_query_raw_sql,
             )
-            apply(query_or_df, index=0)
+            apply(df, index=0)
         else:
-            for index, query_or_df in enumerate(queries_or_dfs):
-                apply(query_or_df, index)
+            for index, df_or_query_raw_sql in enumerate(dfs_or_query_raw_sql):
+                apply(df_or_query_raw_sql, index)
 
     def _render_snapshot_for_evaluation(
         self,
@@ -1002,7 +1007,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         deployability_index: DeployabilityIndex,
         render_kwargs: t.Dict[str, t.Any],
-    ) -> t.Iterator[QueryOrDF]:
+    ) -> t.Iterator[DF | d.QueryRawSql]:
         from sqlmesh.core.context import ExecutionContext
 
         model = snapshot.model
@@ -1518,7 +1523,7 @@ class EvaluationStrategy(abc.ABC):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        df_or_query_raw_sql: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -1527,7 +1532,7 @@ class EvaluationStrategy(abc.ABC):
 
         Args:
             table_name: The target table name.
-            query_or_df: A query or a DataFrame to insert.
+            df_or_query_raw_sql: A query or a DataFrame to insert.
             model: The target model.
             render_kwargs: Additional key-value arguments to pass when rendering the model's query.
         """
@@ -1627,7 +1632,7 @@ class SymbolicStrategy(EvaluationStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        df_or_query_raw_sql: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -1885,7 +1890,7 @@ class IncrementalStrategy(MaterializableStrategy, abc.ABC):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        df_or_query_raw_sql: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -1893,6 +1898,7 @@ class IncrementalStrategy(MaterializableStrategy, abc.ABC):
         columns_to_types, source_columns = self._get_target_and_source_columns(
             model, table_name, render_kwargs=render_kwargs
         )
+
         self.adapter.insert_append(
             table_name,
             query_or_df,
@@ -1987,7 +1993,7 @@ class IncrementalByUniqueKeyStrategy(IncrementalStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2015,7 +2021,7 @@ class IncrementalUnmanagedStrategy(IncrementalStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2070,7 +2076,7 @@ class FullRefreshStrategy(MaterializableStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2145,7 +2151,7 @@ class SeedStrategy(MaterializableStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2253,7 +2259,7 @@ class SCDType2Strategy(IncrementalStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2340,7 +2346,7 @@ class ViewStrategy(PromotableStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2629,7 +2635,7 @@ class EngineManagedStrategy(MaterializableStrategy):
     def append(
         self,
         table_name: str,
-        query_or_df: QueryOrDF,
+        query_or_df: DF | d.QueryRawSql,
         model: Model,
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
@@ -2756,3 +2762,14 @@ def _snapshot_to_data_object_type(snapshot: Snapshot) -> DataObjectType:
     if snapshot.is_materialized:
         return DataObjectType.TABLE
     return DataObjectType.UNKNOWN
+
+
+def _get_query_or_df(df_or_query_raw_sql: DF | d.QueryRawSql) -> QueryOrDF | d.RawSql:
+    if isinstance(df_or_query_raw_sql, tuple):
+        # We assume that a non-empty raw SQL can be safely executed. If it can't,
+        # callers upstream need to set it to None, signalling that an AST is needed
+        # for whatever operation follows downstream
+        query, raw_sql = df_or_query_raw_sql
+        return raw_sql or query
+
+    return df_or_query_raw_sql

@@ -1450,7 +1450,7 @@ class EngineAdapter:
     def insert_append(
         self,
         table_name: TableName,
-        query_or_df: QueryOrDF,
+        query_or_df: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         track_rows_processed: bool = True,
         source_columns: t.Optional[t.List[str]] = None,
@@ -2128,7 +2128,7 @@ class EngineAdapter:
     def merge(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        source_table: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
         when_matched: t.Optional[exp.Whens] = None,
@@ -2733,7 +2733,7 @@ class EngineAdapter:
     def _replace_by_key(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        source_table: QueryOrDF | RawSql,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         key: t.Sequence[exp.Expression],
         is_unique_key: bool,
