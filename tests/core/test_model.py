@@ -4375,6 +4375,7 @@ def test_model_defaults_macros(make_snapshot):
         cron="@cron_macro",
         storage_format="@IF(@gateway = 'local', 'parquet', NULL)",
         optimize_query="@IF(@gateway = 'dev', True, False)",
+        run_original_sql="@IF(@gateway = 'dev', True, False)",
         enabled="@IF(@gateway = 'dev', True, False)",
         allow_partials="@IF(@gateway = 'local', True, False)",
         interval_unit="@IF(@gateway = 'local', 'quarter_hour', 'day')",
@@ -4416,6 +4417,7 @@ def test_model_defaults_macros(make_snapshot):
 
     # Validate rendering of model defaults
     assert model.optimize_query
+    assert model.run_original_sql
     assert model.enabled
     assert model.start == "1 month ago"
     assert not model.allow_partials
@@ -5732,7 +5734,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "1269513823"
+    HASH_WITH_CATALOG = "3993976499"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -5898,7 +5900,7 @@ def test_default_catalog_sql(assert_exp_eq):
 
 
 def test_default_catalog_python():
-    HASH_WITH_CATALOG = "2728996410"
+    HASH_WITH_CATALOG = "2216726783"
 
     @model(name="db.table", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
@@ -5990,7 +5992,7 @@ def test_default_catalog_external_model():
     Since external models fqns are the only thing affected by default catalog, and when they change new snapshots
     are made, the hash will be the same across different names.
     """
-    EXPECTED_HASH = "763256265"
+    EXPECTED_HASH = "1430665761"
 
     model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
     assert model.default_catalog is None

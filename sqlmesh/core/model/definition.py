@@ -1006,6 +1006,8 @@ class _Model(ModelMeta, frozen=True):
                     "SQLMesh query optimizer can only be enabled for SQL models",
                     self._path,
                 )
+            if self.run_original_sql:
+                raise_config_error("SQL can only be preserved for SQL models", self._path)
 
         if isinstance(self.kind, CustomKind):
             from sqlmesh.core.snapshot.evaluator import get_custom_materialization_type_or_raise
@@ -1055,6 +1057,7 @@ class _Model(ModelMeta, frozen=True):
             self.gateway,
             self.interval_unit.value if self.interval_unit is not None else None,
             str(self.optimize_query) if self.optimize_query is not None else None,
+            str(self.run_original_sql) if self.run_original_sql is not None else None,
             self.virtual_environment_mode.value,
         ]
 
@@ -2479,6 +2482,7 @@ def _create_model(
     defaults = {k: v for k, v in (defaults or {}).items() if k in klass.all_fields()}
     if not issubclass(klass, SqlModel):
         defaults.pop("optimize_query", None)
+        defaults.pop("run_original_sql", None)
 
     statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
@@ -2858,7 +2862,7 @@ def render_model_defaults(
     )
 
     # Validate defaults that have macros are rendered to boolean
-    for boolean in {"optimize_query", "allow_partials", "enabled"}:
+    for boolean in {"optimize_query", "allow_partials", "enabled", "run_original_sql"}:
         var = rendered_defaults.get(boolean)
         if var is not None and not isinstance(var, (exp.Boolean, bool)):
             raise ConfigError(f"Expected boolean for '{var}', got '{type(var)}' instead")
@@ -2954,6 +2958,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "formatting": str,
     "optimize_query": str,
+    "run_original_sql": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
 }
 
