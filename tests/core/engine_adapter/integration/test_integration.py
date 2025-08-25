@@ -3583,9 +3583,10 @@ def test_janitor(
 
     init_example_project(tmp_path, ctx.engine_type, schema_name=parsed_schema.db)
 
-    def _set_config(_gateway: str, config: Config) -> None:
+    def _set_config(gateway: str, config: Config) -> None:
         config.environment_suffix_target = environment_suffix_target
         config.model_defaults.dialect = ctx.dialect
+        config.gateways[gateway].connection.concurrent_tasks = 1
 
     sqlmesh = ctx.create_context(path=tmp_path, config_mutator=_set_config)
 
