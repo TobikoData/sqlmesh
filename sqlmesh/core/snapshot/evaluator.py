@@ -2300,7 +2300,7 @@ class ViewStrategy(PromotableStrategy):
             query_or_df,
             model.columns_to_types,
             replace=must_recreate_view,
-            materialized=self._is_materialized_view(model),
+            materialized=is_materialized_view,
             view_properties=kwargs.get("physical_properties", model.physical_properties),
             table_description=model.description,
             column_descriptions=model.column_descriptions,
