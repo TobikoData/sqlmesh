@@ -52,7 +52,7 @@ def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
 
     assert not cache.with_optimized_query(model)
 
-    model._query_renderer._cache = []
+    model._query_renderer._cache = None
     model._query_renderer._optimized_cache = None
 
     assert cache.with_optimized_query(model)
@@ -74,12 +74,12 @@ def test_optimized_query_cache_missing_rendered_query(tmp_path: Path, mocker: Mo
 
     assert not cache.with_optimized_query(model)
 
-    model._query_renderer._cache = []
+    model._query_renderer._cache = None
     model._query_renderer._optimized_cache = None
 
     assert cache.with_optimized_query(model)
 
-    assert model._query_renderer._cache == [None]
+    assert model._query_renderer._cache == ([None], None)
     assert model._query_renderer._optimized_cache is None
 
 
@@ -99,7 +99,7 @@ def test_optimized_query_cache_macro_def_change(tmp_path: Path, mocker: MockerFi
 
     assert not cache.with_optimized_query(model)
 
-    model._query_renderer._cache = []
+    model._query_renderer._cache = None
     model._query_renderer._optimized_cache = None
 
     assert cache.with_optimized_query(model)
@@ -122,7 +122,7 @@ def test_optimized_query_cache_macro_def_change(tmp_path: Path, mocker: MockerFi
 
     assert not cache.with_optimized_query(new_model)
 
-    new_model._query_renderer._cache = []
+    new_model._query_renderer._cache = None
     new_model._query_renderer._optimized_cache = None
 
     assert cache.with_optimized_query(new_model)

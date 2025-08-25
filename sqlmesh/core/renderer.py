@@ -33,6 +33,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
+    ExpressionsSql = t.Tuple[t.List[t.Optional[exp.Expression]], t.Optional[str]]
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,7 @@ class BaseExpressionRenderer:
         self._normalize_identifiers = normalize_identifiers
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
-        self._cache: t.List[t.Optional[exp.Expression]] = []
+        self._cache: t.Optional[ExpressionsSql] = None
         self._model_fqn = model_fqn
         self._optimize_query_flag = optimize_query is not False
 
@@ -82,7 +84,7 @@ class BaseExpressionRenderer:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.List[t.Optional[exp.Expression]]:
+    ) -> ExpressionsSql:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
@@ -96,7 +98,7 @@ class BaseExpressionRenderer:
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
-            The rendered expressions.
+            The rendered expression and the corresponding original SQL.
         """
 
         should_cache = self._should_cache(
@@ -214,6 +216,8 @@ class BaseExpressionRenderer:
             try:
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
+                original_sql: t.Optional[str] = rendered_expression
+
                 logger.debug(
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
                 )
@@ -228,6 +232,14 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+        else:
+            original_sql = self._expression.meta.get("sql") or ""
+
+        # TODO:
+        # - What if the original SQL contains multiple semicolon-separated statements?
+        # - Should we warn if the original SQL is unavailable, for whatever reason?
+        if not t.cast(str, original_sql).strip():
+            original_sql = None
 
         macro_evaluator.locals.update(render_kwargs)
 
@@ -255,32 +267,35 @@ class BaseExpressionRenderer:
 
             for expression in t.cast(t.List[exp.Expression], transformed_expressions):
                 with self._normalize_and_quote(expression) as expression:
-                    if hasattr(expression, "selects"):
-                        for select in expression.selects:
-                            if not isinstance(select, exp.Alias) and select.output_name not in (
-                                "*",
-                                "",
-                            ):
-                                alias = exp.alias_(
-                                    select, select.output_name, quoted=self._quote_identifiers
-                                )
-                                comments = alias.this.comments
-                                if comments:
-                                    alias.add_comments(comments)
-                                    comments.clear()
+                    for select in getattr(expression, "selects", []):
+                        output_name = select.output_name
+                        if not isinstance(select, exp.Alias) and output_name not in ("*", ""):
+                            alias = exp.alias_(select, output_name, quoted=self._quote_identifiers)
+                            comments = alias.this.comments
+                            if comments:
+                                alias.add_comments(comments)
+                                comments.clear()
 
-                                select.replace(alias)
+                            select.replace(alias)
+
                 resolved_expressions.append(expression)
 
-        # We dont cache here if columns_to_type was called in a macro.
-        # This allows the model's query to be re-rendered so that the
-        # MacroEvaluator can resolve columns_to_types calls and provide true schemas.
+        result = (resolved_expressions, original_sql)
+
+        # We don't cache here if columns_to_types was called in a macro. This allows the model's query to be
+        # re-rendered so that the MacroEvaluator can resolve columns_to_types calls and provide true schemas.
         if should_cache and (not self.schema.empty or not macro_evaluator.columns_to_types_called):
-            self._cache = resolved_expressions
-        return resolved_expressions
+            self._cache = result
+
+        return result
 
     def update_cache(self, expression: t.Optional[exp.Expression]) -> None:
-        self._cache = [expression]
+        if self._cache is None:
+            self._cache = ([expression], None)
+        else:
+            # Note: based on the current call sites of update_cache, the following line
+            # assumes that the original SQL corresponding to the expression hasn't changed
+            self._cache = ([expression], self._cache[1])
 
     def _resolve_table(
         self,
@@ -364,7 +379,9 @@ class BaseExpressionRenderer:
                                     alias=node.alias or model.view_name,
                                     copy=False,
                                 )
+
                             logger.warning("Failed to expand the nested model '%s'", name)
+
                     return node
 
                 expression = expression.transform(_expand, copy=False)  # type: ignore
@@ -408,9 +425,9 @@ class ExpressionRenderer(BaseExpressionRenderer):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
-    ) -> t.Optional[t.List[exp.Expression]]:
+    ) -> t.Optional[d.RenderedExpressions]:
         try:
-            expressions = super()._render(
+            expressions, original_sql = super()._render(
                 start=start,
                 end=end,
                 execution_time=execution_time,
@@ -422,7 +439,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
         except ParsetimeAdapterCallError:
             return None
 
-        return [
+        resolved_expressions = [
             self._resolve_tables(
                 e,
                 snapshots=snapshots,
@@ -437,6 +454,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
             for e in expressions
             if e and not isinstance(e, exp.Semicolon)
         ]
+        return d.RenderedExpressions(rendered=resolved_expressions, original=original_sql)
 
 
 def render_statements(
@@ -462,13 +480,16 @@ def render_statements(
                     normalize_identifiers=False,
                 ).render(**render_kwargs)
 
-                if not rendered:
+                if rendered:
+                    # TODO: include the original SQL here?
+                    rendered_statements.extend(
+                        expr.sql(dialect=dialect) for expr in rendered.rendered
+                    )
+                else:
                     # Warning instead of raising for cases where a statement is conditionally executed
                     logger.warning(
                         f"Rendering `{expression.sql(dialect=dialect)}` did not return an expression"
                     )
-                else:
-                    rendered_statements.extend(expr.sql(dialect=dialect) for expr in rendered)
 
     return rendered_statements
 
@@ -495,7 +516,7 @@ class QueryRenderer(BaseExpressionRenderer):
         needs_optimization: bool = True,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Query]:
+    ) -> t.Optional[d.RenderedQuery]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -515,7 +536,7 @@ class QueryRenderer(BaseExpressionRenderer):
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
-            The rendered expression.
+            The rendered expression and the corresponding original SQL.
         """
 
         should_cache = self._should_cache(
@@ -524,9 +545,10 @@ class QueryRenderer(BaseExpressionRenderer):
 
         if should_cache and self._optimized_cache:
             query = self._optimized_cache
+            original_sql = self._cache[1] if self._cache else None
         else:
             try:
-                expressions = super()._render(
+                expressions, original_sql = super()._render(
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -551,6 +573,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
             if not query:
                 return None
+
             if not isinstance(query, exp.Query):
                 raise_config_error(
                     f"Model query needs to be a SELECT or a UNION, got {query}.", self._path
@@ -581,7 +604,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 **kwargs,
             )
 
-        return query
+        return d.RenderedQuery(rendered=query, original=original_sql)
 
     def update_cache(
         self,
