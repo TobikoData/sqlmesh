@@ -51,7 +51,7 @@ databricks_init() {
 
     # Note: the cluster doesnt need to be running to create / drop catalogs, but it does need to be running to run the integration tests
     echo "Ensuring cluster is running"
-    databricks clusters start $CLUSTER_ID || true
+    databricks clusters start $CLUSTER_ID
 }
 
 databricks_up() {
