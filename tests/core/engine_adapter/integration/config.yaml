@@ -5,7 +5,7 @@ gateways:
       type: duckdb
       catalogs:
         memory: ':memory:'
-        testing: 'testing.duckdb'
+        testing: "{{ var('tmp_path') }}/testing.duckdb"
 
   # Databases with docker images available
   inttest_trino_hive:

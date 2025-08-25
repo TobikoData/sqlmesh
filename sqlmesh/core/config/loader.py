@@ -83,6 +83,7 @@ def load_config_from_paths(
     personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> C:
     project_paths = project_paths or []
@@ -116,7 +117,7 @@ def load_config_from_paths(
                     "YAML configs do not support multiple configs. Use Python instead.",
                 )
             yaml_config_path = path.resolve()
-            non_python_configs.append(load_config_from_yaml(path))
+            non_python_configs.append(load_config_from_yaml(path, variables))
         elif extension == "py":
             try:
                 python_config = load_config_from_python_module(
@@ -194,8 +195,10 @@ def load_config_from_paths(
     return non_python_config
 
 
-def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
-    content = yaml_load(path)
+def load_config_from_yaml(
+    path: Path, variables: t.Optional[t.Dict[str, t.Any]] = None
+) -> t.Dict[str, t.Any]:
+    content = yaml_load(path, variables=variables)
     if not isinstance(content, dict):
         raise ConfigError(
             f"Invalid YAML configuration: expected a dictionary but got {type(content).__name__}. "
