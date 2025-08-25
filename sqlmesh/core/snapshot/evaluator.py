@@ -2030,6 +2030,17 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
     ) -> None:
         ctas_query = model.ctas_query(**render_kwargs)
         physical_properties = kwargs.get("physical_properties", model.physical_properties)
+        # If Doris and incremental-by-unique-key, ensure unique_key is present for creation
+        if (
+            model.dialect == "doris"
+            and getattr(model.kind, "is_incremental_by_unique_key", False)
+            and model.unique_key
+            and "unique_key" not in physical_properties
+        ):
+            physical_properties = dict(physical_properties)
+            physical_properties["unique_key"] = (
+                model.unique_key[0] if len(model.unique_key) == 1 else exp.Tuple(expressions=model.unique_key)
+            )
 
         logger.info("Creating table '%s'", table_name)
         if model.annotated:

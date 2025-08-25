@@ -183,7 +183,7 @@ class ExampleObjects:
     python_macros: t.Dict[str, str]
 
 
-def _gen_example_objects(schema_name: str) -> ExampleObjects:
+def _gen_example_objects(schema_name: str, dialect: str) -> ExampleObjects:
     sql_models: t.Dict[str, str] = {}
     python_models: t.Dict[str, str] = {}
     seeds: t.Dict[str, str] = {}
@@ -216,6 +216,7 @@ GROUP BY item_id
   name {incremental_model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column event_date
+    {"partition_by_time_column false" if dialect == "doris" else ""}
   ),
   start '2020-01-01',
   cron '@daily',
@@ -368,7 +369,10 @@ def init_example_project(
         )
         return config_path
 
-    example_objects = _gen_example_objects(schema_name=schema_name)
+    example_objects = _gen_example_objects(
+        schema_name=schema_name,
+        dialect=dialect if dialect else DIALECT_TO_TYPE.get(engine_type, "duckdb"),
+    )
 
     if template != ProjectTemplate.EMPTY:
         _create_object_files(models_path, example_objects.sql_models, "sql")

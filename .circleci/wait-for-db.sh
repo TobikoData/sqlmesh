@@ -34,6 +34,34 @@ clickhouse_ready() {
     probe_port 8123
 }
 
+doris_ready() {
+    probe_port 9030
+
+    echo "Checking for 3 alive Doris backends..."
+    sleep 15
+
+    while true; do
+        echo "Checking Doris backends..."
+        ALIVE_BACKENDS=$(docker exec -i doris-fe-01 mysql -h127.0.0.1 -P9030 -uroot -e "show backends \G" | grep -c "^ *Alive: true$")
+
+        # fallback value if failed to get number
+        if ! [[ "$ALIVE_BACKENDS" =~ ^[0-9]+$ ]]; then
+            echo "WARN: Unable to parse number of alive backends, got: '$ALIVE_BACKENDS'"
+            ALIVE_BACKENDS=0
+        fi
+
+        echo "Found $ALIVE_BACKENDS alive backends"
+
+        if [ "$ALIVE_BACKENDS" -ge 3 ]; then
+            echo "Doris has 3 or more alive backends"
+            break
+        fi
+
+        echo "Waiting for more backends to become alive..."
+        sleep 5
+    done
+}
+
 postgres_ready() {
     probe_port 5432
 }

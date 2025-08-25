@@ -107,6 +107,7 @@ dev = [
 ]
 dbt = ["dbt-core<2"]
 dlt = ["dlt"]
+doris = ["pymysql"]
 duckdb = []
 fabric = ["pyodbc>=5.0.0"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
@@ -271,6 +272,7 @@ markers = [
     "pyspark: test for PySpark that need to run separately from the other spark tests",
     "trino: test for Trino (all connectors)",
     "risingwave: test for Risingwave",
+    "doris: test for Doris",,
 
     # Other
     "set_default_connection",
