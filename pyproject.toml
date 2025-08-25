@@ -59,7 +59,7 @@ dev = [
     "cryptography<46.0.0",
     "databricks-sql-connector",
     "dbt-bigquery",
-    "dbt-core",
+    "dbt-core @ file:./dbt-core/core",
     "dbt-duckdb>=1.7.1",
     # version 1.10.1 of dbt-snowflake declares that it's compatible with dbt-adapters>=1.16 but in reality
     # it depends on the 'InvalidCatalogIntegrationConfigError' class that only exists as of dbt-adapters==1.16.6
@@ -105,7 +105,7 @@ dev = [
     "types-requests==2.28.8",
     "typing-extensions",
 ]
-dbt = ["dbt-core<2"]
+dbt = ["dbt-core @ file:./dbt-core/core"]
 dlt = ["dlt"]
 duckdb = []
 fabric = ["pyodbc>=5.0.0"]
