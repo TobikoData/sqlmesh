@@ -46,3 +46,17 @@ def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..
     assert "main.orders" not in result.output
     assert "main.stg_payments" not in result.output
     assert "main.raw_orders" not in result.output
+
+
+def test_list_with_vars(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
+    (jaffle_shop_duckdb / "models" / "aliased_model.sql").write_text("""
+    {{ config(alias='model_' + var('foo')) }}                                                              
+    select 1
+    """)
+
+    result = invoke_cli(["list", "--vars", "foo: bar"])
+
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert "model_bar" in result.output
