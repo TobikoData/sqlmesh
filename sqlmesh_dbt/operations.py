@@ -76,11 +76,15 @@ class DbtOperations:
 
         return console
 
+    def close(self) -> None:
+        self.context.close()
+
 
 def create(
     project_dir: t.Optional[Path] = None,
     profile: t.Optional[str] = None,
     target: t.Optional[str] = None,
+    vars: t.Optional[t.Dict[str, t.Any]] = None,
     debug: bool = False,
 ) -> DbtOperations:
     with Progress(transient=True) as progress:
@@ -104,7 +108,7 @@ def create(
 
         sqlmesh_context = Context(
             paths=[project_dir],
-            config_loader_kwargs=dict(profile=profile, target=target),
+            config_loader_kwargs=dict(profile=profile, target=target, variables=vars),
             load=True,
         )
 

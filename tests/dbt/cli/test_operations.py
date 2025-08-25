@@ -69,3 +69,17 @@ def test_create_can_specify_profile_and_target(jaffle_shop_duckdb: Path):
 
     assert dbt_project.context.profile_name == "jaffle_shop"
     assert dbt_project.context.target_name == "dev"
+
+
+def test_create_can_set_project_variables(jaffle_shop_duckdb: Path):
+    (jaffle_shop_duckdb / "models" / "test_model.sql").write_text("""
+       select '{{ var('foo') }}' as a
+    """)
+
+    dbt_project = create(vars={"foo": "bar"})
+    assert dbt_project.context.config.variables["foo"] == "bar"
+
+    test_model = dbt_project.context.models['"jaffle_shop"."main"."test_model"']
+    query = test_model.render_query()
+    assert query is not None
+    assert query.sql() == "SELECT 'bar' AS \"a\""
