@@ -65,7 +65,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import Self, TableName, SessionProperties
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
@@ -185,7 +185,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Iterator[QueryOrDF]:
+    ) -> t.Iterator[DF | d.QueryRawSql]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
         be fetched, or a dataframe object which contains the data itself.
 
@@ -201,7 +201,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A generator which yields either a query object or one of the supported dataframe objects.
         """
-        yield self.render_query_or_raise(
+        yield self.render_query_or_raise_with_raw_sql(
             start=start,
             end=end,
             execution_time=execution_time,
@@ -631,7 +631,7 @@ class _Model(ModelMeta, frozen=True):
                 f"Failed to render query for audit '{audit.name}', model '{self.name}'."
             )
 
-        # TODO: execute raw audit queries as well?
+        # TODO: execute raw queries here?
         return rendered_query[0]
 
     @property
@@ -1728,12 +1728,12 @@ class SeedModel(_Model):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Iterator[QueryOrDF]:
+    ) -> t.Iterator[DF | d.QueryRawSql]:
         if not self.is_hydrated:
             return
         yield from self.render_seed()
 
-    def render_seed(self) -> t.Iterator[QueryOrDF]:
+    def render_seed(self) -> t.Iterator[DF]:
         import numpy as np
 
         self._ensure_hydrated()
@@ -1946,7 +1946,7 @@ class PythonModel(_Model):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
-    ) -> t.Iterator[QueryOrDF]:
+    ) -> t.Iterator[DF | d.QueryRawSql]:
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH, self.dialect)
         execution_time = to_datetime(execution_time or c.EPOCH)
