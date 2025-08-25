@@ -3745,7 +3745,7 @@ def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
         pytest.skip(f"Skipping {dialect} as they're not enabled on standard accounts")
 
     model_name = ctx.table("test_tbl")
-    mview_name = ctx.table("test_mview")
+    mview_name = ctx.table("test_mview1")
 
     sqlmesh = ctx.create_context()
 
@@ -3772,12 +3772,15 @@ def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
             )
         )
     )
+    
+    def _assert_mview_value(value: int):
+        df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
+        assert df["col"][0] == value
 
     # Case 1: Ensure that plan is successful and we can query the materialized view
     sqlmesh.plan(auto_apply=True, no_prompts=True)
 
-    df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
-    assert df["col"][0] == 1
+    _assert_mview_value(value=1)
 
     # Case 2: Ensure that we can change the underlying table and the materialized view is recreated
     sqlmesh.upsert_model(
@@ -3789,11 +3792,7 @@ def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
     with mock.patch.object(logger, "info") as mock_logger:
         sqlmesh.plan(auto_apply=True, no_prompts=True)
 
-        # RisingWave does not need to recreate the mview, all other engines do
-        recreate_view = (
-            "Skipping creation of the view" if dialect == "risingwave" else "Replacing view"
-        )
-        assert any(recreate_view in call[0][0] for call in mock_logger.call_args_list)
+        assert any("Replacing view" in call[0][0] for call in mock_logger.call_args_list)
 
-    df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
-    assert df["col"][0] == 2
+
+    _assert_mview_value(value=2)

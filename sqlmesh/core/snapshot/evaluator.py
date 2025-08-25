@@ -2282,11 +2282,14 @@ class ViewStrategy(PromotableStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        # For all engines that support materialized views (except RisingWave) we recreate it.
-        # This is because case if upstream tables were recreated (e.g FULL models), the mview would be invalidated as well.
-        # RisingWave is an exception as it doesn't support CREATE OR REPLACE, so upstream models don't recreate their physical tables.
-        # Standard views still follow the same logic depending on VIEW_BINDING flag.
-        must_recreate_view = not self.adapter.HAS_VIEW_BINDING
+        # We should always recreate materialized views across supported engines (Snowflake, BigQuery etc) because
+        # if upstream tables were recreated (e.g FULL models), the MVs would be silently invalidated.
+        # The only exception to that rule is RisingWave, which doesn't support CREATE OR REPLACE, so upstream 
+        # models don't recreate their physical tables for the MVs to be invalidated.
+        # However, even for RW we still want to recreate MVs to avoid stale references  
+        is_materialized_view = self._is_materialized_view(model)
+        must_recreate_view = not self.adapter.HAS_VIEW_BINDING or is_materialized_view
+
         if self.adapter.table_exists(table_name) and not must_recreate_view:
             logger.info("Skipping creation of the view '%s'", table_name)
             return
