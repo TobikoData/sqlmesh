@@ -50,8 +50,9 @@
         "default": "./dist/sqlmesh-common.umd.js"
       }
     },
-    "./design": "./dist/styles/design/index.css",
-    "./design/*": "./dist/styles/design/*"
+    "./styles/*": "./dist/styles/*",
+    "./design/*": "./dist/styles/design/*",
+    "./configs/*": "./dist/configs/*"
   },
   "files": [
     "/dist"
