@@ -91,6 +91,7 @@ def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.An
 @dbt.command(name="list")
 @select_option
 @exclude_option
+@vars_option
 @click.pass_context
 def list_(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
     """List the resources in your project"""
