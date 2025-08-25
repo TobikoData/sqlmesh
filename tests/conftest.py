@@ -212,6 +212,39 @@ def pytest_collection_modifyitems(items, *args, **kwargs):
             item.add_marker("fast")
 
 
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    # The tmp_path fixture frequently throws errors like:
+    # - KeyError: <_pytest.stash.StashKey object at 0x79ba385fe1a0>
+    # in its teardown. This causes pytest to mark the test as failed even though we have zero control over this behaviour.
+    # So we log/swallow that particular error here rather than raising it
+
+    # note: the hook always has to yield
+    outcome = yield
+
+    # we only care about tests that used the tmp_path fixture
+    if "tmp_path" not in getattr(item, "fixturenames", []):
+        return
+
+    result: pytest.TestReport = outcome.get_result()
+
+    if result.when != "teardown":
+        return
+
+    # If we specifically failed with a StashKey error in teardown, mark the test as passed
+    if result.failed:
+        exception = call.excinfo
+        if (
+            exception
+            and isinstance(exception.value, KeyError)
+            and "_pytest.stash.StashKey" in repr(exception)
+        ):
+            result.outcome = "passed"
+            item.add_report_section(
+                "teardown", "stderr", f"Ignored tmp_path teardown error: {exception}"
+            )
+
+
 # Ignore all local config files
 @pytest.fixture(scope="session", autouse=True)
 def ignore_local_config_files():
