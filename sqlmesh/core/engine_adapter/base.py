@@ -2458,7 +2458,9 @@ class EngineAdapter:
             and track_rows_processed
             and QueryExecutionTracker.is_tracking()
         ):
-            if (rowcount := getattr(self.cursor, "rowcount", None)) and rowcount is not None:
+            if (
+                rowcount := getattr(self.cursor, "rowcount", None)
+            ) is not None and rowcount is not None:
                 try:
                     self._record_execution_stats(sql, int(rowcount))
                 except (TypeError, ValueError):
