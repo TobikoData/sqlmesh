@@ -1346,6 +1346,29 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
     )
 
+    # If the snapshot_table_exists flag was set to False, intervals should be ignored
+    assert_exp_eq(
+        model_config.to_sqlmesh(context)
+        .render_query_or_raise(snapshot=snapshot, snapshot_table_exists=False)
+        .sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a"',
+    )
+
+    # If the snapshot_table_exists flag was set to True, intervals should be taken into account
+    assert_exp_eq(
+        model_config.to_sqlmesh(context)
+        .render_query_or_raise(snapshot=snapshot, snapshot_table_exists=True)
+        .sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
+    )
+    snapshot.intervals = []
+    assert_exp_eq(
+        model_config.to_sqlmesh(context)
+        .render_query_or_raise(snaspshot=snapshot, snapshot_table_exists=True)
+        .sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a"',
+    )
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_is_incremental_non_incremental_model(sushi_test_project: Project, assert_exp_eq, mocker):

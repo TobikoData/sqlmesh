@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
@@ -24,7 +25,7 @@ def test_manifest_helper(caplog):
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
 
     models = helper.models()
@@ -135,7 +136,7 @@ def test_tests_referencing_disabled_models():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
 
     assert "disabled_model" not in helper.models()
@@ -151,7 +152,7 @@ def test_call_cache():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
 
     unused = "0000"
@@ -172,7 +173,7 @@ def test_variable_override():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
     assert helper.models()["top_waiters"].limit_value == 10
 
@@ -181,7 +182,8 @@ def test_variable_override():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"top_waiters:limit": 1, "start": "2020-01-01"},
+        variable_overrides={"top_waiters:limit": 1},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
     assert helper.models()["top_waiters"].limit_value == 1
 
@@ -196,7 +198,7 @@ def test_source_meta_external_location():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
 
     sources = helper.sources()
@@ -229,7 +231,7 @@ def test_top_level_dbt_adapter_macros():
         project_path,
         "sushi",
         profile.target,
-        variable_overrides={"start": "2020-01-01"},
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
 
     # Adapter macros must be marked as top-level

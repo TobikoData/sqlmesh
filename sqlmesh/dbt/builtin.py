@@ -407,6 +407,12 @@ def create_builtin_globals(
             else snapshot.dev_intervals
         )
         is_incremental = bool(intervals)
+
+        snapshot_table_exists = jinja_globals.get("snapshot_table_exists")
+        if is_incremental and snapshot_table_exists is not None:
+            # If we know the information about table existence, we can use it to correctly
+            # set the flag
+            is_incremental &= snapshot_table_exists
     else:
         is_incremental = False
     builtin_globals["is_incremental"] = lambda: is_incremental

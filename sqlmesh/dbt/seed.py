@@ -86,6 +86,7 @@ class SeedConfig(BaseModelConfig):
             dialect=self.dialect(context),
             audit_definitions=audit_definitions,
             virtual_environment_mode=virtual_environment_mode,
+            start=self.start or context.sqlmesh_config.model_defaults.start,
             **kwargs,
         )
 
