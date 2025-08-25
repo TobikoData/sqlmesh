@@ -6,14 +6,15 @@ import re
 import sys
 import typing as t
 from contextlib import contextmanager
+from dataclasses import dataclass
 from difflib import unified_diff
 from enum import Enum, auto
 from functools import lru_cache
 
+import sqlglot.dialects.athena as athena
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects import DuckDB, Snowflake
-import sqlglot.dialects.athena as athena
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -116,6 +117,18 @@ class StagedFilePath(exp.Expression):
     """Represents paths to "staged files" in Snowflake."""
 
     arg_types = exp.Table.arg_types.copy()
+
+
+@dataclass
+class RenderedExpressions:
+    rendered: t.List[exp.Expression]
+    original: t.Optional[str]
+
+
+@dataclass
+class RenderedQuery:
+    rendered: exp.Query
+    original: t.Optional[str]
 
 
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
