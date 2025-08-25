@@ -1,20 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   theme: {
-    colors: {
-      transparent: 'transparent',
-      white: 'var(--color-white)',
-      black: 'var(--color-black)',
-      dark: 'var(--color-dark)',
-      light: 'var(--color-light)',
-      brand: 'var(--color-brand)',
-      prose: 'var(--color-prose)',
-      badge: {
-        background: 'var(--color-badge-background)',
-        foreground: 'var(--color-badge-foreground)',
-      },
-    },
+    colors: {},
     extend: {
+      colors: {
+        transparent: 'transparent',
+        white: 'var(--color-white)',
+        black: 'var(--color-black)',
+        dark: 'var(--color-dark)',
+        light: 'var(--color-light)',
+        brand: 'var(--color-brand)',
+        prose: 'var(--color-prose)',
+        badge: {
+          background: 'var(--color-badge-background)',
+          foreground: 'var(--color-badge-foreground)',
+        },
+      },
       borderRadius: {
         '2xs': 'var(--radius-xs)',
         xs: 'calc(var(--radius-xs) + 1px)',
