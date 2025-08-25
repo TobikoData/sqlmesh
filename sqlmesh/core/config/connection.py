@@ -537,6 +537,10 @@ class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
             connection_str += f"{'&' if self.database else '?'}motherduck_token={self.token}"
         return {"database": connection_str, "config": custom_user_agent_config}
 
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"is_motherduck": True}
+
 
 class DuckDBConnectionConfig(BaseDuckDBConnectionConfig):
     """Configuration for the DuckDB connection."""

@@ -101,11 +101,29 @@ def test_create_catalog(make_mocked_engine_adapter: t.Callable) -> None:
     assert to_sql_calls(adapter) == ["ATTACH IF NOT EXISTS 'foo.db' AS \"foo\""]
 
 
+def test_create_catalog_motherduck(make_mocked_engine_adapter: t.Callable) -> None:
+    adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(
+        DuckDBEngineAdapter, is_motherduck=True
+    )
+    adapter.create_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == ['CREATE DATABASE IF NOT EXISTS "foo"']
+
+
 def test_drop_catalog(make_mocked_engine_adapter: t.Callable) -> None:
     adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(DuckDBEngineAdapter)
     adapter.drop_catalog(exp.to_identifier("foo"))
 
     assert to_sql_calls(adapter) == ['DETACH DATABASE IF EXISTS "foo"']
+
+
+def test_drop_catalog_motherduck(make_mocked_engine_adapter: t.Callable) -> None:
+    adapter: DuckDBEngineAdapter = make_mocked_engine_adapter(
+        DuckDBEngineAdapter, is_motherduck=True
+    )
+    adapter.drop_catalog(exp.to_identifier("foo"))
+
+    assert to_sql_calls(adapter) == ['DROP DATABASE IF EXISTS "foo" CASCADE']
 
 
 def test_ducklake_partitioning(adapter: EngineAdapter, duck_conn, tmp_path):

@@ -7,6 +7,7 @@ import itertools
 import abc
 
 from dataclasses import dataclass
+from sqlglot import exp
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import schema_
@@ -29,7 +30,7 @@ def cleanup_expired_views(
     warn_on_delete_failure: bool = False,
     console: t.Optional[Console] = None,
 ) -> None:
-    expired_schema_environments = [
+    expired_schema_or_catalog_environments = [
         environment
         for environment in environments
         if environment.suffix_target.is_schema or environment.suffix_target.is_catalog
@@ -45,8 +46,9 @@ def cleanup_expired_views(
         return default_adapter
 
     catalogs_to_drop: t.Set[t.Tuple[EngineAdapter, str]] = set()
+    schemas_to_drop: t.Set[t.Tuple[EngineAdapter, exp.Table]] = set()
 
-    # Drop the schemas for the expired environments
+    # Collect schemas and catalogs to drop
     for engine_adapter, expired_catalog, expired_schema, suffix_target in {
         (
             (engine_adapter := get_adapter(environment.gateway_managed, snapshot.model_gateway)),
@@ -58,29 +60,16 @@ def cleanup_expired_views(
             ),
             environment.suffix_target,
         )
-        for environment in expired_schema_environments
+        for environment in expired_schema_or_catalog_environments
         for snapshot in environment.snapshots
         if snapshot.is_model and not snapshot.is_symbolic
     }:
-        schema = schema_(expired_schema, expired_catalog)
-        try:
-            engine_adapter.drop_schema(
-                schema,
-                ignore_if_not_exists=True,
-                cascade=True,
-            )
-
-            if suffix_target.is_catalog and expired_catalog:
+        if suffix_target.is_catalog:
+            if expired_catalog:
                 catalogs_to_drop.add((engine_adapter, expired_catalog))
-
-            if console:
-                console.update_cleanup_progress(schema.sql(dialect=engine_adapter.dialect))
-        except Exception as e:
-            message = f"Failed to drop the expired environment schema '{schema}': {e}"
-            if warn_on_delete_failure:
-                logger.warning(message)
-            else:
-                raise SQLMeshError(message) from e
+        else:
+            schema = schema_(expired_schema, expired_catalog)
+            schemas_to_drop.add((engine_adapter, schema))
 
     # Drop the views for the expired environments
     for engine_adapter, expired_view in {
@@ -100,6 +89,23 @@ def cleanup_expired_views(
                 console.update_cleanup_progress(expired_view)
         except Exception as e:
             message = f"Failed to drop the expired environment view '{expired_view}': {e}"
+            if warn_on_delete_failure:
+                logger.warning(message)
+            else:
+                raise SQLMeshError(message) from e
+
+    # Drop the schemas for the expired environments
+    for engine_adapter, schema in schemas_to_drop:
+        try:
+            engine_adapter.drop_schema(
+                schema,
+                ignore_if_not_exists=True,
+                cascade=True,
+            )
+            if console:
+                console.update_cleanup_progress(schema.sql(dialect=engine_adapter.dialect))
+        except Exception as e:
+            message = f"Failed to drop the expired environment schema '{schema}': {e}"
             if warn_on_delete_failure:
                 logger.warning(message)
             else:
