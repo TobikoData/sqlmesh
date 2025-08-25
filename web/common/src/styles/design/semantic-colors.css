@@ -5,8 +5,4 @@
   --color-dark: hsl(226, 24%, 8%);
   --color-brand: var(--color-tobiko);
   --color-prose: var(--color-gray-800);
-
-  /* Badge */
-  --color-badge-background: var(--color-gray-100);
-  --color-badge-foreground: var(--color-prose);
 }

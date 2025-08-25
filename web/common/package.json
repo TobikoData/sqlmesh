@@ -25,12 +25,14 @@
         "default": "./dist/sqlmesh-common.umd.js"
       }
     },
-    "./design": "./dist/styles/design/index.css",
-    "./design/*": "./dist/styles/design/*"
+    "./styles/*": "./dist/styles/*",
+    "./design/*": "./dist/styles/design/*",
+    "./configs/*": "./dist/configs/*"
   },
   "scripts": {
     "ci": "pnpm run lint && pnpm run build",
-    "build": "tsc -p tsconfig.build.json && vite build --base './'",
+    "build": "tsc -p tsconfig.build.json && vite build --base './' && pnpm run build:css",
+    "build:css": "tailwindcss -i ./src/styles/index.css -o ./dist/styles/tailwind.min.css --minify",
     "build:storybook": "storybook build",
     "dev": "storybook dev -p 6006",
     "lint": "eslint --max-warnings 0 --fix src",
