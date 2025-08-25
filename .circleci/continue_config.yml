@@ -302,14 +302,14 @@ workflows:
           matrix:
             parameters:
               engine:
-                #- snowflake
-                #- databricks
-                #- redshift
-                #- bigquery
-                #- clickhouse-cloud
-                #- athena                
+                - snowflake
+                - databricks
+                - redshift
+                - bigquery
+                - clickhouse-cloud
+                - athena                
                 - fabric
-                #- gcp-postgres
+                - gcp-postgres
           #filters:
           #  branches:
           #    only:

@@ -193,6 +193,7 @@ class TestContext:
         engine_adapter: EngineAdapter,
         mark: str,
         gateway: str,
+        tmp_path: pathlib.Path,
         is_remote: bool = False,
         columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
@@ -210,6 +211,7 @@ class TestContext:
         self._catalogs: t.List[
             str
         ] = []  # keep track of any catalogs created via self.create_catalog() so we can drop them at the end
+        self.tmp_path = tmp_path
 
     @property
     def test_type(self) -> str:
@@ -655,6 +657,7 @@ class TestContext:
                 private_sqlmesh_dir / "config.yml",
                 private_sqlmesh_dir / "config.yaml",
             ],
+            variables={"tmp_path": str(path or self.tmp_path)},
         )
         if config_mutator:
             config_mutator(self.gateway, config)

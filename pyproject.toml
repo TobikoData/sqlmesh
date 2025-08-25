@@ -259,6 +259,7 @@ markers = [
     "mssql: test for MSSQL",
     "mysql: test for MySQL",
     "postgres: test for Postgres",
+    "gcp_postgres: test for Postgres on GCP",
     "redshift: test for Redshift",
     "snowflake: test for Snowflake",
     "spark: test for Spark",
@@ -267,7 +268,7 @@ markers = [
 ]
 addopts = "-n 0 --dist=loadgroup"
 asyncio_default_fixture_loop_scope = "session"
-log_cli = false # Set this to true to enable logging during tests
+log_cli = true # Set this to true to enable logging during tests
 log_cli_format = "%(asctime)s.%(msecs)03d %(filename)s:%(lineno)d %(levelname)s %(message)s"
 log_cli_level = "INFO"
 filterwarnings = [
