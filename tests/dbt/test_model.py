@@ -79,10 +79,10 @@ def test_load_invalid_ref_audit_constraints(tmp_path: Path, caplog) -> None:
                         ],
                         "tests": [
                             {
+                                # References a model that doesn't exist
                                 "relationships": {
                                     "to": "ref('not_real_model')",
                                     "field": "cola",
-                                    "description": "A test that references a model that does not exist",
                                 }
                             }
                         ],
