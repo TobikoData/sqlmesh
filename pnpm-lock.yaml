@@ -398,10 +398,6 @@ importers:
         version: 1.13.2
 
   web/common:
-    dependencies:
-      syncpack:
-        specifier: ^13.0.4
-        version: 13.0.4(typescript@5.8.3)
     devDependencies:
       '@eslint/js':
         specifier: ^9.31.0
@@ -434,7 +430,7 @@ importers:
         specifier: ^16.3.0
         version: 16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.23))(@types/react@18.3.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/node':
-        specifier: 20.11.25
+        specifier: ^20.11.25
         version: 20.11.25
       '@types/react':
         specifier: ^18.3.23
@@ -446,7 +442,7 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(vite@6.3.5(@types/node@20.11.25)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0))
       '@vitest/browser':
-        specifier: 3.2.4
+        specifier: ^3.2.4
         version: 3.2.4(playwright@1.54.1)(vite@6.3.5(@types/node@20.11.25)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0))(vitest@3.2.4)
       autoprefixer:
         specifier: ^10.4.21
@@ -484,6 +480,9 @@ importers:
       storybook:
         specifier: ^9.1.2
         version: 9.1.2(@testing-library/dom@10.4.1)(prettier@3.6.2)(vite@6.3.5(@types/node@20.11.25)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0))
+      syncpack:
+        specifier: ^13.0.4
+        version: 13.0.4(typescript@5.8.3)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
