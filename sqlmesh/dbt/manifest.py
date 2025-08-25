@@ -8,6 +8,7 @@ import re
 import typing as t
 from argparse import Namespace
 from collections import defaultdict
+from functools import cached_property
 from pathlib import Path
 
 from dbt import constants as dbt_constants, flags
@@ -158,7 +159,7 @@ class ManifestHelper:
                 result[package_name][macro_name] = macro_config.info
         return result
 
-    @property
+    @cached_property
     def flat_graph(self) -> t.Dict[str, t.Any]:
         return {
             "exposures": {
