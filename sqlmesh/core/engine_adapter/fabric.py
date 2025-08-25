@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 import logging
 import requests
+import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
@@ -14,6 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
+
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -172,8 +174,17 @@ class FabricHttpClient:
         self.client_secret = client_secret
         self.workspace_id = workspace_id
 
-    def create_warehouse(self, warehouse_name: str) -> None:
+    def create_warehouse(
+        self, warehouse_name: str, if_not_exists: bool = True, attempt: int = 0
+    ) -> None:
         """Create a catalog (warehouse) in Microsoft Fabric via REST API."""
+
+        # attempt count is arbitrary, it essentially equates to 5 minutes of 30 second waits
+        if attempt > 10:
+            raise SQLMeshError(
+                f"Gave up waiting for Fabric warehouse {warehouse_name} to become available"
+            )
+
         logger.info(f"Creating Fabric warehouse: {warehouse_name}")
 
         request_data = {
@@ -182,7 +193,34 @@ class FabricHttpClient:
         }
 
         response = self.session.post(self._endpoint_url("warehouses"), json=request_data)
-        response.raise_for_status()
+
+        if (
+            if_not_exists
+            and response.status_code == 400
+            and (errorCode := response.json().get("errorCode", None))
+        ):
+            if errorCode == "ItemDisplayNameAlreadyInUse":
+                logger.warning(f"Fabric warehouse {warehouse_name} already exists")
+                return
+            if errorCode == "ItemDisplayNameNotAvailableYet":
+                logger.warning(f"Fabric warehouse {warehouse_name} is still spinning up; waiting")
+                # Fabric error message is something like:
+                #  - "Requested 'circleci_51d7087e__dev' is not available yet and is expected to become available in the upcoming minutes."
+                # This seems to happen if a catalog is dropped and then a new one with the same name is immediately created.
+                # There appears to be some delayed async process on the Fabric side that actually drops the warehouses and frees up the names to be used again
+                time.sleep(30)
+                return self.create_warehouse(
+                    warehouse_name=warehouse_name, if_not_exists=if_not_exists, attempt=attempt + 1
+                )
+
+        try:
+            response.raise_for_status()
+        except:
+            # the important information to actually debug anything is in the response body which Requests never prints
+            logger.exception(
+                f"Failed to create warehouse {warehouse_name}. status: {response.status_code}, body: {response.text}"
+            )
+            raise
 
         # Handle direct success (201) or async creation (202)
         if response.status_code == 201:
@@ -197,11 +235,12 @@ class FabricHttpClient:
             logger.error(f"Unexpected response from Fabric API: {response}\n{response.text}")
             raise SQLMeshError(f"Unable to create warehouse: {response}")
 
-    def delete_warehouse(self, warehouse_name: str) -> None:
+    def delete_warehouse(self, warehouse_name: str, if_exists: bool = True) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
 
         # Get the warehouse ID by listing warehouses
+        # TODO: handle continuationUri for pagination, ref: https://learn.microsoft.com/en-us/rest/api/fabric/warehouse/items/list-warehouses?tabs=HTTP#warehouses
         response = self.session.get(self._endpoint_url("warehouses"))
         response.raise_for_status()
 
@@ -213,9 +252,12 @@ class FabricHttpClient:
         warehouse_id = warehouse_name_to_id.get(warehouse_name, None)
 
         if not warehouse_id:
-            logger.error(
+            logger.warning(
                 f"Fabric warehouse does not exist: {warehouse_name}\n(available warehouses: {', '.join(warehouse_name_to_id)})"
             )
+            if if_exists:
+                return
+
             raise SQLMeshError(
                 f"Unable to delete Fabric warehouse {warehouse_name} as it doesnt exist"
             )

@@ -1,7 +1,6 @@
 # type: ignore
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 import sys
@@ -19,7 +18,6 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
-from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -1936,48 +1934,15 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
+def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
     if ctx.mark == "athena_hive":
         pytest.skip(
             "Sushi end-to-end tests only need to run once for Athena because sushi needs a hybrid of both Hive and Iceberg"
         )
 
-    tmp_path = tmp_path_factory.mktemp(f"sushi_{ctx.test_id}")
-
     sushi_test_schema = ctx.add_test_suffix("sushi")
     sushi_state_schema = ctx.add_test_suffix("sushi_state")
     raw_test_schema = ctx.add_test_suffix("raw")
-
-    config = load_config_from_paths(
-        Config,
-        project_paths=[
-            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
-        ],
-        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
-    )
-    before_all = [
-        f"CREATE SCHEMA IF NOT EXISTS {raw_test_schema}",
-        f"DROP VIEW IF EXISTS {raw_test_schema}.demographics",
-        f"CREATE VIEW {raw_test_schema}.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
-    ]
-    config.before_all = [
-        quote_identifiers(
-            parse_one(e, dialect=config.model_defaults.dialect),
-            dialect=config.model_defaults.dialect,
-        ).sql(dialect=config.model_defaults.dialect)
-        for e in before_all
-    ]
-
-    # To enable parallelism in integration tests
-    config.gateways = {ctx.gateway: config.gateways[ctx.gateway]}
-    current_gateway_config = config.gateways[ctx.gateway]
-    current_gateway_config.state_schema = sushi_state_schema
-
-    if ctx.dialect == "athena":
-        # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
-        current_gateway_config.connection.s3_warehouse_location = (
-            ctx.engine_adapter.s3_warehouse_location
-        )
 
     # Copy sushi example to tmpdir
     shutil.copytree(pathlib.Path("./examples/sushi"), tmp_path, dirs_exist_ok=True)
@@ -2000,7 +1965,23 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
                     contents = contents.replace(search, replace)
                 f.write_text(contents)
 
-    context = Context(paths=tmp_path, config=config, gateway=ctx.gateway)
+    before_all = [
+        f"CREATE SCHEMA IF NOT EXISTS {raw_test_schema}",
+        f"DROP VIEW IF EXISTS {raw_test_schema}.demographics",
+        f"CREATE VIEW {raw_test_schema}.demographics AS (SELECT 1 AS customer_id, '00000' AS zip)",
+    ]
+
+    def _mutate_config(gateway: str, config: Config) -> None:
+        config.gateways[gateway].state_schema = sushi_state_schema
+        config.before_all = [
+            quote_identifiers(
+                parse_one(e, dialect=config.model_defaults.dialect),
+                dialect=config.model_defaults.dialect,
+            ).sql(dialect=config.model_defaults.dialect)
+            for e in before_all
+        ]
+
+    context = ctx.create_context(_mutate_config, path=tmp_path, ephemeral_state_connection=False)
 
     end = now()
     start = to_date(end - timedelta(days=7))
@@ -2355,9 +2336,7 @@ def test_sushi(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
         ctx._schemas.append(schema)
 
 
-def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory):
-    tmp_path = tmp_path_factory.mktemp(f"init_project_{ctx.test_id}")
-
+def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     schema_name = ctx.add_test_suffix(TEST_SCHEMA)
     state_schema = ctx.add_test_suffix("sqlmesh_state")
 
@@ -2383,33 +2362,15 @@ def test_init_project(ctx: TestContext, tmp_path_factory: pytest.TempPathFactory
 
     init_example_project(tmp_path, ctx.engine_type, schema_name=schema_name)
 
-    config = load_config_from_paths(
-        Config,
-        project_paths=[
-            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
-        ],
-        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
-    )
+    def _mutate_config(gateway: str, config: Config):
+        # ensure default dialect comes from init_example_project and not ~/.sqlmesh/config.yaml
+        if config.model_defaults.dialect != ctx.dialect:
+            config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
 
-    # ensure default dialect comes from init_example_project and not ~/.sqlmesh/config.yaml
-    if config.model_defaults.dialect != ctx.dialect:
-        config.model_defaults = config.model_defaults.copy(update={"dialect": ctx.dialect})
+        # Ensure the state schema is unique to this test (since we deliberately use the warehouse as the state connection)
+        config.gateways[gateway].state_schema = state_schema
 
-    # To enable parallelism in integration tests
-    config.gateways = {ctx.gateway: config.gateways[ctx.gateway]}
-    current_gateway_config = config.gateways[ctx.gateway]
-
-    if ctx.dialect == "athena":
-        # Ensure that this test is using the same s3_warehouse_location as TestContext (which includes the testrun_id)
-        current_gateway_config.connection.s3_warehouse_location = (
-            ctx.engine_adapter.s3_warehouse_location
-        )
-
-    # Ensure the state schema is unique to this test
-    config.gateways[ctx.gateway].state_schema = state_schema
-
-    context = Context(paths=tmp_path, config=config, gateway=ctx.gateway)
-    ctx.engine_adapter = context.engine_adapter
+    context = ctx.create_context(_mutate_config, path=tmp_path, ephemeral_state_connection=False)
 
     if ctx.default_table_format:
         # if the default table format is explicitly set, ensure its being used
@@ -3607,6 +3568,7 @@ def test_identifier_length_limit(ctx: TestContext):
         EnvironmentSuffixTarget.CATALOG,
     ],
 )
+@pytest.mark.xdist_group("serial")
 def test_janitor(
     ctx: TestContext, tmp_path: pathlib.Path, environment_suffix_target: EnvironmentSuffixTarget
 ):
@@ -3621,9 +3583,10 @@ def test_janitor(
 
     init_example_project(tmp_path, ctx.engine_type, schema_name=parsed_schema.db)
 
-    def _set_config(_gateway: str, config: Config) -> None:
+    def _set_config(gateway: str, config: Config) -> None:
         config.environment_suffix_target = environment_suffix_target
         config.model_defaults.dialect = ctx.dialect
+        config.gateways[gateway].connection.concurrent_tasks = 1
 
     sqlmesh = ctx.create_context(path=tmp_path, config_mutator=_set_config)
 
@@ -3648,7 +3611,10 @@ def test_janitor(
 
     # check physical objects
     snapshot_table_name = exp.to_table(new_model.table_name(), dialect=ctx.dialect)
-    snapshot_schema = snapshot_table_name.db
+    snapshot_schema = parsed_schema.copy()
+    snapshot_schema.set(
+        "db", exp.to_identifier(snapshot_table_name.db)
+    )  # we need this to be catalog.schema and not just schema for environment_suffix_target: catalog
 
     prod_schema = normalize_identifiers(d.to_schema(schema), dialect=ctx.dialect)
     dev_env_schema = prod_schema.copy()
