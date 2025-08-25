@@ -4,11 +4,12 @@ import typing as t
 from contextlib import contextmanager
 from threading import local, Lock
 from dataclasses import dataclass, field
+from sqlmesh.core.snapshot import SnapshotIdBatch
 
 
 @dataclass
 class QueryExecutionStats:
-    snapshot_batch_id: str
+    snapshot_id_batch: SnapshotIdBatch
     total_rows_processed: t.Optional[int] = None
     total_bytes_processed: t.Optional[int] = None
 
@@ -21,15 +22,15 @@ class QueryExecutionContext:
     It accumulates statistics from multiple cursor.execute() calls during a single snapshot evaluation.
 
     Attributes:
-        snapshot_batch_id: Identifier linking this context to a specific snapshot evaluation
+        snapshot_id_batch: Identifier linking this context to a specific snapshot evaluation
         stats: Running sum of cursor.rowcount and possibly bytes processed from all executed queries during evaluation
     """
 
-    snapshot_batch_id: str
+    snapshot_id_batch: SnapshotIdBatch
     stats: QueryExecutionStats = field(init=False)
 
     def __post_init__(self) -> None:
-        self.stats = QueryExecutionStats(snapshot_batch_id=self.snapshot_batch_id)
+        self.stats = QueryExecutionStats(snapshot_id_batch=self.snapshot_id_batch)
 
     def add_execution(
         self, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
@@ -56,10 +57,12 @@ class QueryExecutionTracker:
     """Thread-local context manager for snapshot execution statistics, such as rows processed."""
 
     _thread_local = local()
-    _contexts: t.Dict[str, QueryExecutionContext] = {}
+    _contexts: t.Dict[SnapshotIdBatch, QueryExecutionContext] = {}
     _contexts_lock = Lock()
 
-    def get_execution_context(self, snapshot_id_batch: str) -> t.Optional[QueryExecutionContext]:
+    def get_execution_context(
+        self, snapshot_id_batch: SnapshotIdBatch
+    ) -> t.Optional[QueryExecutionContext]:
         with self._contexts_lock:
             return self._contexts.get(snapshot_id_batch)
 
@@ -69,10 +72,10 @@ class QueryExecutionTracker:
 
     @contextmanager
     def track_execution(
-        self, snapshot_id_batch: str
+        self, snapshot_id_batch: SnapshotIdBatch
     ) -> t.Iterator[t.Optional[QueryExecutionContext]]:
         """Context manager for tracking snapshot execution statistics such as row counts and bytes processed."""
-        context = QueryExecutionContext(snapshot_batch_id=snapshot_id_batch)
+        context = QueryExecutionContext(snapshot_id_batch=snapshot_id_batch)
         self._thread_local.context = context
         with self._contexts_lock:
             self._contexts[snapshot_id_batch] = context
@@ -90,7 +93,9 @@ class QueryExecutionTracker:
         if context is not None:
             context.add_execution(sql, row_count, bytes_processed)
 
-    def get_execution_stats(self, snapshot_id_batch: str) -> t.Optional[QueryExecutionStats]:
+    def get_execution_stats(
+        self, snapshot_id_batch: SnapshotIdBatch
+    ) -> t.Optional[QueryExecutionStats]:
         with self._contexts_lock:
             context = self._contexts.get(snapshot_id_batch)
             self._contexts.pop(snapshot_id_batch, None)

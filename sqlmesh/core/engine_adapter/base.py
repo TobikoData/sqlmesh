@@ -2458,15 +2458,11 @@ class EngineAdapter:
             and track_rows_processed
             and QueryExecutionTracker.is_tracking()
         ):
-            rowcount_raw = getattr(self.cursor, "rowcount", None)
-            rowcount = None
-            if rowcount_raw is not None:
+            if (rowcount := getattr(self.cursor, "rowcount", None)) and rowcount is not None:
                 try:
-                    rowcount = int(rowcount_raw)
+                    self._record_execution_stats(sql, int(rowcount))
                 except (TypeError, ValueError):
                     return
-
-            self._record_execution_stats(sql, rowcount)
 
     @contextlib.contextmanager
     def temp_table(

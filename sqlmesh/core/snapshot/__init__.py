@@ -8,6 +8,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotDataVersion as SnapshotDataVersion,
     SnapshotFingerprint as SnapshotFingerprint,
     SnapshotId as SnapshotId,
+    SnapshotIdBatch as SnapshotIdBatch,
     SnapshotIdLike as SnapshotIdLike,
     SnapshotInfoLike as SnapshotInfoLike,
     SnapshotIntervals as SnapshotIntervals,

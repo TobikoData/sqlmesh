@@ -61,6 +61,7 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
     SnapshotId,
+    SnapshotIdBatch,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
@@ -171,7 +172,9 @@ class SnapshotEvaluator:
         Returns:
             The WAP ID of this evaluation if supported, None otherwise.
         """
-        with self.execution_tracker.track_execution(f"{snapshot.snapshot_id}_{batch_index}"):
+        with self.execution_tracker.track_execution(
+            SnapshotIdBatch(snapshot_id=snapshot.snapshot_id, batch_id=batch_index)
+        ):
             result = self._evaluate_snapshot(
                 start=start,
                 end=end,

@@ -162,6 +162,11 @@ class SnapshotId(PydanticModel, frozen=True):
         return f"SnapshotId<{self.name}: {self.identifier}>"
 
 
+class SnapshotIdBatch(PydanticModel, frozen=True):
+    snapshot_id: SnapshotId
+    batch_id: int
+
+
 class SnapshotNameVersion(PydanticModel, frozen=True):
     name: str
     version: str
