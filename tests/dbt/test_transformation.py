@@ -689,6 +689,33 @@ def test_seed_column_inference(tmp_path):
     }
 
 
+def test_seed_single_whitespace_is_na(tmp_path):
+    seed_csv = tmp_path / "seed.csv"
+    with open(seed_csv, "w", encoding="utf-8") as fd:
+        fd.write("col_a, col_b\n")
+        fd.write(" ,1\n")
+        fd.write("2, \n")
+
+    seed = SeedConfig(
+        name="test_model",
+        package="foo",
+        path=Path(seed_csv),
+    )
+
+    context = DbtContext()
+    context.project_name = "foo"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == {
+        "col_a": exp.DataType.build("int"),
+        "col_b": exp.DataType.build("int"),
+    }
+
+    df = next(sqlmesh_seed.render_seed())
+    assert df["col_a"].to_list() == [None, 2]
+    assert df["col_b"].to_list() == [1, None]
+
+
 def test_seed_partial_column_inference(tmp_path):
     seed_csv = tmp_path / "seed.csv"
     with open(seed_csv, "w", encoding="utf-8") as fd:

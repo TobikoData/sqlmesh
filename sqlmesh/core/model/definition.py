@@ -1586,6 +1586,7 @@ class SeedModel(_Model):
         string_columns = []
 
         columns_to_types = self.columns_to_types_ or {}
+        column_names_to_check = set(columns_to_types)
         for name, tpe in columns_to_types.items():
             if tpe.this in (exp.DataType.Type.DATE, exp.DataType.Type.DATE32):
                 date_columns.append(name)
@@ -1605,6 +1606,14 @@ class SeedModel(_Model):
                         rename_dict[normalized_name] = column
             if rename_dict:
                 df.rename(columns=rename_dict, inplace=True)
+                # These names have already been checked
+                column_names_to_check -= set(rename_dict)
+
+            missing_columns = column_names_to_check - set(df.columns)
+            if missing_columns:
+                raise_config_error(
+                    f"Seed model '{self.name}' has missing columns: {missing_columns}", self._path
+                )
 
             # convert all date/time types to native pandas timestamp
             for column in [*date_columns, *datetime_columns]:
@@ -1614,7 +1623,15 @@ class SeedModel(_Model):
 
             # extract datetime.date from pandas timestamp for DATE columns
             for column in date_columns:
-                df[column] = df[column].dt.date
+                try:
+                    df[column] = df[column].dt.date
+                except Exception as ex:
+                    logger.error(
+                        "Failed to convert column '%s' to date in seed model '%s': %s",
+                        column,
+                        self.name,
+                        ex,
+                    )
 
             for column in bool_columns:
                 df[column] = df[column].apply(lambda i: str_to_bool(str(i)))
