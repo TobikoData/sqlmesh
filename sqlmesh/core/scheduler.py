@@ -54,6 +54,8 @@ from sqlmesh.utils.errors import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
+    from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter import EngineAdapter
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -188,6 +190,46 @@ class Scheduler:
             }
         return snapshots_to_intervals
 
+    def can_skip_evaluation(self, snapshot: Snapshot, snapshots: t.Dict[str, Snapshot]) -> bool:
+        if not snapshot.last_altered_ts:
+            return False
+
+        from collections import defaultdict
+
+        parent_snapshots = {p for p in snapshots.values() if p.name != snapshot.name}
+        if len(parent_snapshots) != len(snapshot.node.depends_on):
+            # The mismatch can happen if e.g an external model is not registered in the project
+            return False
+
+        adapter_to_parent_snapshots: t.Dict[EngineAdapter, t.List[Snapshot]] = defaultdict(list)
+
+        for parent_snapshot in parent_snapshots:
+            if not parent_snapshot.is_external:
+                return False
+
+            adapter = self.snapshot_evaluator.get_adapter(parent_snapshot.model_gateway)
+            if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
+                return False
+
+            adapter_to_parent_snapshots[adapter].append(parent_snapshot)
+
+        if not adapter_to_parent_snapshots:
+            return False
+
+        external_models_freshness: t.List[int] = []
+
+        for adapter, adapter_snapshots in adapter_to_parent_snapshots.items():
+            table_names: t.List[TableName] = [
+                exp.to_table(parent_snapshot.name, parent_snapshot.node.dialect)
+                for parent_snapshot in adapter_snapshots
+            ]
+            external_models_freshness.extend(adapter.get_external_model_freshness(table_names))
+
+        return all(
+            snapshot.last_altered_ts > external_model_freshness
+            for external_model_freshness in external_models_freshness
+        )
+
     def evaluate(
         self,
         snapshot: Snapshot,
@@ -200,6 +242,7 @@ class Scheduler:
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         target_table_exists: t.Optional[bool] = None,
+        is_restatement_plan: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -223,6 +266,14 @@ class Scheduler:
         validate_date_range(start, end)
 
         snapshots = parent_snapshots_by_name(snapshot, self.snapshots)
+
+        if not is_restatement_plan and self.can_skip_evaluation(snapshot, snapshots):
+            logger.info(f"""
+            Skipping evaluation for snapshot {snapshot.name} as it depends on external models 
+            that have not been updated since the last run.
+            """)
+
+            return []
 
         is_deployable = deployability_index.is_deployable(snapshot)
 
@@ -251,7 +302,9 @@ class Scheduler:
             **kwargs,
         )
 
-        self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
+        self.state_sync.add_interval(
+            snapshot, start, end, is_dev=not is_deployable, last_altered_ts=now_timestamp()
+        )
         return audit_results
 
     def run(
@@ -422,6 +475,7 @@ class Scheduler:
         run_environment_statements: bool = False,
         audit_only: bool = False,
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {},
+        is_restatement_plan: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -542,6 +596,7 @@ class Scheduler:
                             allow_additive_snapshots=allow_additive_snapshots,
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
                             selected_models=selected_models,
+                            is_restatement_plan=is_restatement_plan,
                         )
 
                     evaluation_duration_ms = now_timestamp() - execution_start_ts
