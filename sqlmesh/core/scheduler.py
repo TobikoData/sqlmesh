@@ -457,17 +457,6 @@ class Scheduler:
             audit_only=audit_only,
         )
 
-        snapshots_to_create = {
-            s.snapshot_id
-            for s in self.snapshot_evaluator.get_snapshots_to_create(
-                selected_snapshots, deployability_index
-            )
-        }
-
-        dag = self._dag(
-            batched_intervals, snapshot_dag=snapshot_dag, snapshots_to_create=snapshots_to_create
-        )
-
         if run_environment_statements:
             environment_statements = self.state_sync.get_environment_statements(
                 environment_naming_info.name
@@ -483,6 +472,17 @@ class Scheduler:
                 end=end,
                 execution_time=execution_time,
             )
+
+        snapshots_to_create = {
+            s.snapshot_id
+            for s in self.snapshot_evaluator.get_snapshots_to_create(
+                selected_snapshots, deployability_index
+            )
+        }
+
+        dag = self._dag(
+            batched_intervals, snapshot_dag=snapshot_dag, snapshots_to_create=snapshots_to_create
+        )
 
         def run_node(node: SchedulingUnit) -> None:
             if circuit_breaker and circuit_breaker():
