@@ -36,6 +36,8 @@ models:
               field: waiter_id
       - name: revenue
         description: Revenue from orders served by this waiter
+      - name: unused_column
+        data_type: int
   - name: waiters
     columns:
       - name: waiter_id
