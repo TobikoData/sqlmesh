@@ -165,6 +165,10 @@ class EngineAdapter:
         extra_kwargs = {
             "null_connection": True,
             "execute_log_level": kwargs.pop("execute_log_level", self._execute_log_level),
+            "correlation_id": kwargs.pop("correlation_id", self.correlation_id),
+            "query_execution_tracker": kwargs.pop(
+                "query_execution_tracker", self._query_execution_tracker
+            ),
             **self._extra_config,
             **kwargs,
         }
