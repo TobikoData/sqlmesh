@@ -185,6 +185,7 @@ class SnapshotIntervals(PydanticModel):
     intervals: Intervals = []
     dev_intervals: Intervals = []
     pending_restatement_intervals: Intervals = []
+    last_altered_ts: t.Optional[int] = None
 
     @property
     def snapshot_id(self) -> t.Optional[SnapshotId]:
@@ -713,6 +714,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     dev_table_suffix: str = "dev"
     table_naming_convention: TableNamingConvention = TableNamingConvention.default
     forward_only: bool = False
+    # Physical table last modified timestamp, not to be confused with the "updated_ts" field
+    # which is for the snapshot record itself
+    last_altered_ts: t.Optional[int] = None
 
     @field_validator("ttl")
     @classmethod
@@ -751,6 +755,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             for interval in snapshot_intervals:
                 snapshot.merge_intervals(interval)
+
+                if interval.last_altered_ts:
+                    snapshot.last_altered_ts = max(
+                        snapshot.last_altered_ts or -1, interval.last_altered_ts
+                    )
+
             result.append(snapshot)
 
         return result
