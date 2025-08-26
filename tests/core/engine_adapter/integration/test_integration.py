@@ -6,12 +6,13 @@ import re
 import sys
 import typing as t
 import shutil
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta, date
+from unittest.mock import patch
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import pytz
+import time_machine
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -2382,8 +2383,30 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
                 )
         context._models.update(replacement_models)
 
+    # capture row counts for each evaluated snapshot
+    actual_execution_stats = {}
+
+    def capture_execution_stats(
+        snapshot,
+        interval,
+        batch_idx,
+        duration_ms,
+        num_audits_passed,
+        num_audits_failed,
+        audit_only=False,
+        execution_stats=None,
+        auto_restatement_triggers=None,
+    ):
+        if execution_stats is not None:
+            actual_execution_stats[snapshot.model.name.replace(f"{schema_name}.", "")] = (
+                execution_stats
+            )
+
     # apply prod plan
-    context.plan(auto_apply=True, no_prompts=True)
+    with patch.object(
+        context.console, "update_snapshot_evaluation_progress", capture_execution_stats
+    ):
+        context.plan(auto_apply=True, no_prompts=True)
 
     prod_schema_results = ctx.get_metadata_results(object_names["view_schema"][0])
     assert sorted(prod_schema_results.views) == object_names["views"]
@@ -2394,6 +2417,34 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
     assert len(physical_layer_results.views) == 0
     assert len(physical_layer_results.materialized_views) == 0
     assert len(physical_layer_results.tables) == len(physical_layer_results.non_temp_tables) == 3
+
+    if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+        assert actual_execution_stats["incremental_model"].total_rows_processed == 7
+        # snowflake doesn't track rows for CTAS
+        assert actual_execution_stats["full_model"].total_rows_processed == (
+            None if ctx.mark.startswith("snowflake") else 3
+        )
+        assert actual_execution_stats["seed_model"].total_rows_processed == (
+            None if ctx.mark.startswith("snowflake") else 7
+        )
+
+        if ctx.mark.startswith("bigquery"):
+            assert actual_execution_stats["incremental_model"].total_bytes_processed
+            assert actual_execution_stats["full_model"].total_bytes_processed
+
+    # run that loads 0 rows in incremental model
+    # - some cloud DBs error because time travel messes up token expiration
+    if not ctx.is_remote:
+        actual_execution_stats = {}
+        with patch.object(
+            context.console, "update_snapshot_evaluation_progress", capture_execution_stats
+        ):
+            with time_machine.travel(date.today() + timedelta(days=1)):
+                context.run()
+
+        if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
+            assert actual_execution_stats["incremental_model"].total_rows_processed == 0
+            assert actual_execution_stats["full_model"].total_rows_processed == 3
 
     # make and validate unmodified dev environment
     no_change_plan: Plan = context.plan_builder(

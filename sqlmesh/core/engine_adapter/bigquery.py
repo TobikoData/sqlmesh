@@ -66,6 +66,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     SUPPORTS_CLONING = True
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
 
     SCHEMA_DIFFER_KWARGS = {
@@ -1049,6 +1050,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     def _execute(
         self,
         sql: str,
+        track_rows_processed: bool = False,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -1093,6 +1095,23 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         query_results = query_job._query_results
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
+
+        if (
+            track_rows_processed
+            and self._query_execution_tracker
+            and self._query_execution_tracker.is_tracking()
+        ):
+            num_rows = None
+            if query_job.statement_type == "CREATE_TABLE_AS_SELECT":
+                # since table was just created, number rows in table == number rows processed
+                query_table = self.client.get_table(query_job.destination)
+                num_rows = query_table.num_rows
+            elif query_job.statement_type in ["INSERT", "DELETE", "MERGE", "UPDATE"]:
+                num_rows = query_job.num_dml_affected_rows
+
+            self._query_execution_tracker.record_execution(
+                sql, num_rows, query_job.total_bytes_processed
+            )
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None

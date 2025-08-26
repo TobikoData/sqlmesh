@@ -8022,7 +8022,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -8068,7 +8068,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 1 as id,
                 'other' as other_column,
@@ -8124,7 +8124,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 CAST(1 AS STRING) as id,
                 'other' as other_column,
@@ -8170,7 +8170,7 @@ def test_incremental_by_time_model_ignore_additive_change(tmp_path: Path):
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 CAST(1 AS STRING) as id,
                 'other' as other_column,
@@ -8344,7 +8344,7 @@ def test_incremental_by_unique_key_model_ignore_additive_change(tmp_path: Path):
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -8389,7 +8389,7 @@ def test_incremental_by_unique_key_model_ignore_additive_change(tmp_path: Path):
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 *,
                 2 as id,
                 3 as new_column,
@@ -8566,7 +8566,7 @@ def test_incremental_unmanaged_model_ignore_additive_change(tmp_path: Path):
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         *,
         1 as id,
         'test_name' as name,
@@ -8610,7 +8610,7 @@ def test_incremental_unmanaged_model_ignore_additive_change(tmp_path: Path):
             );
 
             SELECT
-                *, 
+                *,
                 2 as id,
                 3 as new_column,
                 @start_ds as ds
@@ -9020,7 +9020,7 @@ def test_scd_type_2_by_column_ignore_additive_change(tmp_path: Path):
             cron '@daily'
         );
 
-        SELECT 
+        SELECT
             *,
             1 as id,
             'test_name' as name,
@@ -9067,7 +9067,7 @@ def test_scd_type_2_by_column_ignore_additive_change(tmp_path: Path):
         );
 
         SELECT
-            *, 
+            *,
             1 as id,
             'stable2' as stable,
             3 as new_column,
@@ -9247,7 +9247,7 @@ def test_incremental_partition_ignore_additive_change(tmp_path: Path):
             cron '@daily'
         );
 
-        SELECT 
+        SELECT
             *,
             1 as id,
             'test_name' as name,
@@ -9292,7 +9292,7 @@ def test_incremental_partition_ignore_additive_change(tmp_path: Path):
         );
 
         SELECT
-            *, 
+            *,
             1 as id,
             3 as new_column,
             @start_ds as ds
@@ -9526,7 +9526,7 @@ def test_incremental_by_time_model_ignore_additive_change_unit_test(tmp_path: Pa
         cron '@daily'
     );
 
-    SELECT 
+    SELECT
         id,
         name,
         ds
@@ -9595,7 +9595,7 @@ test_test_model:
                 cron '@daily'
             );
 
-            SELECT 
+            SELECT
                 id,
                 new_column,
                 ds

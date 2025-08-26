@@ -874,7 +874,8 @@ test_child:
         'CAST("s" AS STRUCT("d" DATE)) AS "s", '
         'CAST("a" AS INT) AS "a", '
         'CAST("b" AS TEXT) AS "b" '
-        """FROM (VALUES ({'d': CAST('2020-01-01' AS DATE)}, 1, 'bla')) AS "t"("s", "a", "b")"""
+        """FROM (VALUES ({'d': CAST('2020-01-01' AS DATE)}, 1, 'bla')) AS "t"("s", "a", "b")""",
+        False,
     )
 
 
@@ -1329,14 +1330,15 @@ test_foo:
 
     spy_execute.assert_has_calls(
         [
-            call('CREATE SCHEMA IF NOT EXISTS "memory"."sqlmesh_test_jzngz56a"'),
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."sqlmesh_test_jzngz56a"', False),
             call(
                 "SELECT "
                 """CAST('2023-01-01 12:05:03+00:00' AS DATE) AS "cur_date", """
                 """CAST('2023-01-01 12:05:03+00:00' AS TIME) AS "cur_time", """
-                '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"'''
+                '''CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMP) AS "cur_timestamp"''',
+                False,
             ),
-            call('DROP SCHEMA IF EXISTS "memory"."sqlmesh_test_jzngz56a" CASCADE'),
+            call('DROP SCHEMA IF EXISTS "memory"."sqlmesh_test_jzngz56a" CASCADE', False),
         ]
     )
 
@@ -1361,7 +1363,12 @@ test_foo:
     _check_successful_or_raise(test.run())
 
     spy_execute.assert_has_calls(
-        [call('''SELECT CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMPTZ) AS "cur_timestamp"''')]
+        [
+            call(
+                '''SELECT CAST('2023-01-01 12:05:03+00:00' AS TIMESTAMPTZ) AS "cur_timestamp"''',
+                False,
+            )
+        ]
     )
 
     @model("py_model", columns={"ts1": "timestamptz", "ts2": "timestamptz"})
@@ -1496,7 +1503,7 @@ def test_gateway(copy_to_temp_path: t.Callable, mocker: MockerFixture) -> None:
         'AS "t"("id", "customer_id", "waiter_id", "start_ts", "end_ts", "event_date")'
     )
     test_adapter = t.cast(ModelTest, result.successes[0]).engine_adapter
-    assert call(test_adapter, expected_view_sql) in spy_execute.mock_calls
+    assert call(test_adapter, expected_view_sql, False) in spy_execute.mock_calls
 
     _check_successful_or_raise(context.test())
 
@@ -1621,7 +1628,8 @@ test_foo:
 
     spy_execute.assert_any_call(
         'CREATE OR REPLACE VIEW "memory"."sqlmesh_test_jzngz56a"."foo" AS '
-        '''SELECT {'x': 1, 'n': {'y': 2}} AS "struct_value"'''
+        '''SELECT {'x': 1, 'n': {'y': 2}} AS "struct_value"''',
+        False,
     )
 
     with pytest.raises(
@@ -1817,9 +1825,9 @@ test_foo:
 
     spy_execute.assert_has_calls(
         [
-            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"'),
-            call('SELECT 1 AS "a"'),
-            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE'),
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"', False),
+            call('SELECT 1 AS "a"', False),
+            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE', False),
         ]
     )
 
@@ -1845,9 +1853,9 @@ test_foo:
     _check_successful_or_raise(test.run())
     spy_execute.assert_has_calls(
         [
-            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"'),
-            call('SELECT\n  1 AS "a"'),
-            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE'),
+            call('CREATE SCHEMA IF NOT EXISTS "memory"."my_schema"', False),
+            call('SELECT\n  1 AS "a"', False),
+            call('DROP SCHEMA IF EXISTS "memory"."my_schema" CASCADE', False),
         ]
     )
 
@@ -2950,7 +2958,7 @@ test_foo:
   outputs:
     query:
       - id: 1
-        name: foo  
+        name: foo
             """,
             variables=variables,
         ),
@@ -2999,7 +3007,7 @@ test_foo:
   outputs:
     query:
       - id: 1
-        name: foo  
+        name: foo
             """,
             variables=variables,
         ),
@@ -3049,7 +3057,7 @@ test_foo_intial_state:
         v: int
   outputs:
     query:
-      - v: 1 
+      - v: 1
             """,
             variables=variables,
         ),
@@ -3171,7 +3179,7 @@ test_foo:
         - id: 5
   outputs:
     query:
-      - id: 8        
+      - id: 8
             """,
             variables=variables,
         ),

@@ -78,6 +78,7 @@ class EnvironmentState:
             self.environments_table,
             _environment_to_df(environment),
             target_columns_to_types=self._environment_columns_to_types,
+            track_rows_processed=False,
         )
 
     def update_environment_statements(
@@ -108,6 +109,7 @@ class EnvironmentState:
                 self.environment_statements_table,
                 _environment_statements_to_df(environment_name, plan_id, environment_statements),
                 target_columns_to_types=self._environment_statements_columns_to_types,
+                track_rows_processed=False,
             )
 
     def invalidate_environment(self, name: str, protect_prod: bool = True) -> None:

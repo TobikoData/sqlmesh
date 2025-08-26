@@ -72,6 +72,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     }
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
     SNOWPARK = "snowpark"
+    SUPPORTS_QUERY_EXECUTION_TRACKING = True
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -166,6 +167,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         table_kind: t.Optional[str] = None,
+        track_rows_processed: bool = True,
         **kwargs: t.Any,
     ) -> None:
         table_format = kwargs.get("table_format")
@@ -185,6 +187,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
+            track_rows_processed=False,  # snowflake tracks CTAS row counts incorrectly
             **kwargs,
         )
 

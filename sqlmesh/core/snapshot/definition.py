@@ -13,10 +13,13 @@ from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.config.common import TableNamingConvention, VirtualEnvironmentMode
+from sqlmesh.core.config.common import (
+    TableNamingConvention,
+    VirtualEnvironmentMode,
+    EnvironmentSuffixTarget,
+)
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import StandaloneAudit
-from sqlmesh.core.environment import EnvironmentSuffixTarget
 from sqlmesh.core.macros import call_macro
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind, CustomKind
 from sqlmesh.core.model.definition import _Model
@@ -157,6 +160,11 @@ class SnapshotId(PydanticModel, frozen=True):
 
     def __str__(self) -> str:
         return f"SnapshotId<{self.name}: {self.identifier}>"
+
+
+class SnapshotIdBatch(PydanticModel, frozen=True):
+    snapshot_id: SnapshotId
+    batch_id: int
 
 
 class SnapshotNameVersion(PydanticModel, frozen=True):

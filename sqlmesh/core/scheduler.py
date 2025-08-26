@@ -20,6 +20,7 @@ from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
     SnapshotId,
+    SnapshotIdBatch,
     SnapshotEvaluator,
     apply_auto_restatements,
     earliest_start_date,
@@ -531,6 +532,11 @@ class Scheduler:
                 finally:
                     num_audits = len(audit_results)
                     num_audits_failed = sum(1 for result in audit_results if result.count)
+
+                    execution_stats = self.snapshot_evaluator.execution_tracker.get_execution_stats(
+                        SnapshotIdBatch(snapshot_id=snapshot.snapshot_id, batch_id=node.batch_index)
+                    )
+
                     self.console.update_snapshot_evaluation_progress(
                         snapshot,
                         batched_intervals[snapshot][node.batch_index],
@@ -538,6 +544,7 @@ class Scheduler:
                         evaluation_duration_ms,
                         num_audits - num_audits_failed,
                         num_audits_failed,
+                        execution_stats=execution_stats,
                         auto_restatement_triggers=auto_restatement_triggers.get(
                             snapshot.snapshot_id
                         ),

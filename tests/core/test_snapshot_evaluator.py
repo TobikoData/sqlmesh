@@ -115,6 +115,7 @@ def adapter_mock(mocker: MockerFixture):
     adapter_mock.HAS_VIEW_BINDING = False
     adapter_mock.wap_supported.return_value = False
     adapter_mock.get_data_objects.return_value = []
+    adapter_mock.with_settings.return_value = adapter_mock
     return adapter_mock
 
 
@@ -137,6 +138,7 @@ def adapters(mocker: MockerFixture):
         adapter_mock.HAS_VIEW_BINDING = False
         adapter_mock.wap_supported.return_value = False
         adapter_mock.get_data_objects.return_value = []
+        adapter_mock.with_settings.return_value = adapter_mock
         adapters.append(adapter_mock)
     return adapters
 
@@ -652,6 +654,7 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
     adapter.table_exists = lambda *args, **kwargs: False  # type: ignore
     adapter.get_data_objects = lambda *args, **kwargs: []  # type: ignore
     adapter._execute = execute_mock  # type: ignore
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     evaluator = SnapshotEvaluator(adapter)
 
     model = SqlModel(
@@ -676,7 +679,8 @@ def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
     execute_mock.assert_has_calls(
         [
             call(
-                f"CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__{snapshot.version}` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`"
+                f"CREATE MATERIALIZED VIEW `sqlmesh__test_schema`.`test_schema__test_model__{snapshot.version}` PARTITION BY `a` CLUSTER BY `b` AS SELECT `a` AS `a`, `b` AS `b` FROM `tbl` AS `tbl`",
+                False,
             ),
         ]
     )
@@ -991,6 +995,7 @@ def test_create_tables_exist(
 ):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
+    adapter_mock.with_settings.return_value = adapter_mock
 
     evaluator = SnapshotEvaluator(adapter_mock)
     snapshot.categorize_as(category=snapshot_category, forward_only=forward_only)
@@ -1193,6 +1198,7 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
 def test_promote_model_info(mocker: MockerFixture, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
+    adapter_mock.with_settings.return_value = adapter_mock
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -1221,6 +1227,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
 def test_promote_deployable(mocker: MockerFixture, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
+    adapter_mock.with_settings.return_value = adapter_mock
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -1266,6 +1273,7 @@ def test_promote_deployable(mocker: MockerFixture, make_snapshot):
 
 def test_migrate(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     session_spy = mocker.spy(adapter, "session")
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
@@ -1321,6 +1329,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapte
 def test_migrate_missing_table(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapter):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.table_exists = lambda _: False  # type: ignore
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     mocker.patch.object(adapter, "get_data_object", return_value=None)
 
     evaluator = SnapshotEvaluator(adapter)
@@ -1389,6 +1398,7 @@ def test_migrate_snapshot_data_object_type_mismatch(
     make_mocked_engine_adapter,
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     mocker.patch.object(
         adapter,
         "get_data_object",
@@ -1803,7 +1813,7 @@ def test_on_destructive_change_runtime_check(
     make_mocked_engine_adapter,
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
     def columns(table_name):
@@ -1885,7 +1895,7 @@ def test_on_additive_change_runtime_check(
     make_mocked_engine_adapter,
 ):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
     def columns(table_name):
@@ -3777,6 +3787,7 @@ def test_create_managed_forward_only_with_previous_version_doesnt_clone_for_dev_
 def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
+    adapter_mock.with_settings.return_value = adapter_mock
 
     evaluator = SnapshotEvaluator(adapter_mock)
     evaluator.create([snapshot], {})
@@ -3986,6 +3997,7 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
+    adapter.with_settings = lambda **kwargs: adapter  # type: ignore
     engine_adapters = {"default": adapter_mock, "secondary": adapter}
 
     def columns(table_name):
@@ -4045,7 +4057,9 @@ def test_multiple_engine_migration(
     mocker: MockerFixture, adapter_mock, make_snapshot, make_mocked_engine_adapter
 ):
     adapter_one = make_mocked_engine_adapter(EngineAdapter)
+    adapter_one.with_settings = lambda **kwargs: adapter_one  # type: ignore
     adapter_two = adapter_mock
+    adapter_two.with_settings.return_value = adapter_two
     engine_adapters = {"one": adapter_one, "two": adapter_two}
 
     current_table = "sqlmesh__test_schema.test_schema__test_model__1"

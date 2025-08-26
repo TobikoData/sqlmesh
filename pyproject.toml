@@ -12,6 +12,7 @@ dependencies = [
     "croniter",
     "duckdb>=0.10.0,!=0.10.3",
     "dateparser<=1.2.1",
+    "humanize",
     "hyperscript>=0.1.0",
     "importlib-metadata; python_version<'3.12'",
     "ipywidgets",

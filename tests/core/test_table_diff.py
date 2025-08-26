@@ -360,11 +360,11 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
         temp_schema="sqlmesh_temp_test",
     )
 
-    spy_execute.assert_any_call(query_sql)
-    spy_execute.assert_any_call(summary_query_sql)
-    spy_execute.assert_any_call(compare_sql)
-    spy_execute.assert_any_call(sample_query_sql)
-    spy_execute.assert_any_call(drop_sql)
+    spy_execute.assert_any_call(query_sql, False)
+    spy_execute.assert_any_call(summary_query_sql, False)
+    spy_execute.assert_any_call(compare_sql, False)
+    spy_execute.assert_any_call(sample_query_sql, False)
+    spy_execute.assert_any_call(drop_sql, False)
 
     spy_execute.reset_mock()
 
@@ -378,7 +378,7 @@ def test_generated_sql(sushi_context_fixed_date: Context, mocker: MockerFixture)
     )
 
     query_sql_where = 'CREATE TABLE IF NOT EXISTS "memory"."sqlmesh_temp"."__temp_diff_abcdefgh" AS WITH "__source" AS (SELECT "s"."key", "s"."value", "s"."key" AS "__sqlmesh_join_key" FROM "table_diff_source" AS "s" WHERE "s"."key" = 2), "__target" AS (SELECT "t"."key", "t"."value", "t"."key" AS "__sqlmesh_join_key" FROM "table_diff_target" AS "t" WHERE "t"."key" = 2), "__stats" AS (SELECT "s"."key" AS "s__key", "s"."value" AS "s__value", "s"."__sqlmesh_join_key" AS "s____sqlmesh_join_key", "t"."key" AS "t__key", "t"."value" AS "t__value", "t"."__sqlmesh_join_key" AS "t____sqlmesh_join_key", CASE WHEN NOT "s"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "s_exists", CASE WHEN NOT "t"."__sqlmesh_join_key" IS NULL THEN 1 ELSE 0 END AS "t_exists", CASE WHEN "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key" THEN 1 ELSE 0 END AS "row_joined", CASE WHEN "s"."key" IS NULL AND "t"."key" IS NULL THEN 1 ELSE 0 END AS "null_grain", CASE WHEN "s"."key" = "t"."key" THEN 1 WHEN ("s"."key" IS NULL) AND ("t"."key" IS NULL) THEN 1 WHEN ("s"."key" IS NULL) OR ("t"."key" IS NULL) THEN 0 ELSE 0 END AS "key_matches", CASE WHEN ROUND("s"."value", 3) = ROUND("t"."value", 3) THEN 1 WHEN ("s"."value" IS NULL) AND ("t"."value" IS NULL) THEN 1 WHEN ("s"."value" IS NULL) OR ("t"."value" IS NULL) THEN 0 ELSE 0 END AS "value_matches" FROM "__source" AS "s" FULL JOIN "__target" AS "t" ON "s"."__sqlmesh_join_key" = "t"."__sqlmesh_join_key") SELECT *, CASE WHEN "key_matches" = 1 AND "value_matches" = 1 THEN 1 ELSE 0 END AS "row_full_match" FROM "__stats"'
-    spy_execute.assert_any_call(query_sql_where)
+    spy_execute.assert_any_call(query_sql_where, False)
 
 
 def test_tables_and_grain_inferred_from_model(sushi_context_fixed_date: Context):
