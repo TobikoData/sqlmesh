@@ -197,9 +197,7 @@ def test_run_option_mapping_dev(jaffle_shop_duckdb: Path):
     assert plan.include_unmodified is False
     assert plan.context_diff.create_from == "prod"
     assert plan.context_diff.is_new_environment is True
-    assert (
-        console.plan_builder._enable_preview is False
-    )  # duckdb doesnt support cloning so dev previews are not enabled for dbt projects
+    assert console.plan_builder._enable_preview is True
     assert plan.end_bounded is True
     assert plan.ignore_cron is False
     assert plan.skip_backfill is False
@@ -213,7 +211,7 @@ def test_run_option_mapping_dev(jaffle_shop_duckdb: Path):
     assert plan.include_unmodified is False
     assert plan.context_diff.create_from == "prod"
     assert plan.context_diff.is_new_environment is True
-    assert console.plan_builder._enable_preview is False
+    assert console.plan_builder._enable_preview is True
     assert plan.end_bounded is True
     assert plan.ignore_cron is False
     assert plan.skip_backfill is True
@@ -227,8 +225,9 @@ def test_run_option_mapping_dev(jaffle_shop_duckdb: Path):
     assert plan.include_unmodified is False
     assert plan.context_diff.create_from == "prod"
     assert plan.context_diff.is_new_environment is True
-    assert console.plan_builder._enable_preview is False
+    assert console.plan_builder._enable_preview is True
     # dev plans with --select have run=True, ignore_cron=True set
+    # as opposed to dev plans that dont have a specific selector
     assert plan.end_bounded is False
     assert plan.ignore_cron is True
     assert plan.skip_backfill is False

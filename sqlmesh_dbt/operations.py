@@ -113,15 +113,17 @@ class DbtOperations:
                     # this results in the full scope of changes vs prod always being shown on the local branch
                     create_from=c.PROD,
                     always_recreate_environment=True,
-                    # setting enable_preview=None enables dev previews of forward_only changes for dbt projects IF the target engine supports cloning
-                    # if we set enable_preview=True here, this enables dev previews in all cases.
-                    # In the case of dbt default INCREMENTAL_UNMANAGED models, this will cause incremental models to be fully rebuilt (potentially a very large computation)
-                    # just to have the results thrown away on promotion to prod because dev previews are not promotable.
+                    # Always enable dev previews for incremental / forward-only models.
+                    # Due to how DBT does incrementals (INCREMENTAL_UNMANAGED on the SQLMesh engine), this will result in the full model being refreshed
+                    # with the entire dataset, which can potentially be very large. If this is undesirable, users have two options:
+                    #  - work around this using jinja to conditionally add extra filters to the WHERE clause or a LIMIT to the model query
+                    #  - upgrade to SQLMesh's incremental models, where we have variables for the start/end date and inject leak guards to
+                    #    limit the amount of data backfilled
                     #
-                    # TODO: if the user "upgrades" to an INCREMENTAL_BY_TIME_RANGE by defining a "time_column", we can inject leak guards to compute
-                    # just a preview instead of the whole thing like we would in a native project, but the enable_preview setting is at the plan level
-                    # and not the individual model level so we currently have no way of doing this selectively
-                    enable_preview=None,
+                    # Note: enable_preview=True is *different* behaviour to the `sqlmesh` CLI, which uses enable_preview=None.
+                    # This means the `sqlmesh` CLI will only enable dev previews for dbt projects if the target adapter supports cloning,
+                    # whereas we enable it unconditionally here
+                    enable_preview=True,
                 )
             )
 
