@@ -11,6 +11,9 @@ from unittest import mock
 from unittest.mock import patch
 import logging
 
+import time_machine
+from pytest_mock.plugin import MockerFixture
+
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
@@ -45,6 +48,7 @@ from tests.core.engine_adapter.integration import (
     TEST_SCHEMA,
     wait_until,
 )
+from tests.utils.test_helpers import use_terminal_console
 
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
@@ -3774,7 +3778,7 @@ def test_janitor(
     ]
 
 
-def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
+def test_materialized_view_evaluation(ctx: TestContext):
     adapter = ctx.engine_adapter
     dialect = ctx.dialect
 
@@ -3834,3 +3838,109 @@ def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
         assert any("Replacing view" in call[0][0] for call in mock_logger.call_args_list)
 
     _assert_mview_value(value=2)
+
+
+@use_terminal_console
+def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_path: pathlib.Path):
+    adapter = ctx.engine_adapter
+    if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
+        pytest.skip("This test only runs for engines that support external model freshness")
+
+    def _run_plan(
+        sqlmesh_context: Context, restate_models: t.Optional[t.List[str]] = None
+    ) -> PlanResults:
+        plan: Plan = sqlmesh_context.plan(
+            auto_apply=True, no_prompts=True, restate_models=restate_models
+        )
+        return PlanResults.create(plan, ctx, schema)
+
+    import sqlmesh
+
+    spy = mocker.spy(sqlmesh.core.snapshot.evaluator.SnapshotEvaluator, "evaluate")
+
+    def _assert_model_evaluation(lambda_func, was_evaluated, day_delta=0):
+        call_count_before = spy.call_count
+        logger = logging.getLogger("sqlmesh.core.scheduler")
+
+        with time_machine.travel(now(minute_floor=False) + timedelta(days=day_delta)):
+            with mock.patch.object(logger, "info") as mock_logger:
+                lambda_func()
+
+        evaluation_skipped_log = any(
+            "Skipping evaluation for snapshot" in call[0][0] for call in mock_logger.call_args_list
+        )
+
+        if was_evaluated:
+            assert not evaluation_skipped_log
+            assert spy.call_count == call_count_before + 1
+        else:
+            assert evaluation_skipped_log
+            assert spy.call_count == call_count_before
+
+    # Create & initialize schema
+    schema = ctx.add_test_suffix(TEST_SCHEMA)
+    ctx._schemas.append(schema)
+    adapter.create_schema(schema)
+
+    # Create & initialize external models
+    external_table1 = f"{schema}.external_table1"
+    external_table2 = f"{schema}.external_table2"
+
+    external_models_yaml = tmp_path / "external_models.yaml"
+    external_models_yaml.write_text(f"""
+- name: {external_table1}
+  columns:
+    col1: int
+
+- name: {external_table2}
+  columns:
+    col2: int
+""")
+
+    adapter.execute(
+        f"CREATE TABLE {external_table1} AS (SELECT 1 AS col1)", quote_identifiers=False
+    )
+    adapter.execute(
+        f"CREATE TABLE {external_table2} AS (SELECT 2 AS col2)", quote_identifiers=False
+    )
+
+    # Create model that depends on external models
+    model_name = f"{schema}.new_model"
+    model_path = tmp_path / "models" / "new_model.sql"
+    (tmp_path / "models").mkdir(parents=True, exist_ok=True)
+    model_path.write_text(f"""
+        MODEL (
+            name {model_name},
+            start '2024-01-01',
+            kind FULL
+        );
+
+         SELECT col1 * col2 AS col FROM {external_table1}, {external_table2};
+    """)
+
+    # Initialize context
+    def _set_config(gateway: str, config: Config) -> None:
+        config.model_defaults.dialect = ctx.dialect
+
+    context = ctx.create_context(path=tmp_path, config_mutator=_set_config)
+
+    # Case 1: Model is evaluated on first insertion
+    _assert_model_evaluation(lambda: _run_plan(context), was_evaluated=True)
+
+    # Case 2: Model is NOT evaluated on run if external models are not fresh
+    _assert_model_evaluation(lambda: context.run(), was_evaluated=False, day_delta=2)
+
+    # Case 3: Model is evaluated on run if any external model is fresh
+    adapter.execute(f"INSERT INTO {external_table2} (col2) VALUES (3)", quote_identifiers=False)
+
+    _assert_model_evaluation(lambda: context.run(), was_evaluated=True, day_delta=2)
+
+    # Case 4: Model is evaluated on a restatement plan even if the external model is not fresh
+    _assert_model_evaluation(
+        lambda: _run_plan(context, restate_models=[model_name]), was_evaluated=True, day_delta=3
+    )
+
+    # Case 5: Model is evaluated if changed even if the external model is not fresh
+    model_path.write_text(model_path.read_text().replace("col1 * col2", "col1 + col2"))
+    context.load()
+    _assert_model_evaluation(lambda: _run_plan(context), was_evaluated=True, day_delta=2)

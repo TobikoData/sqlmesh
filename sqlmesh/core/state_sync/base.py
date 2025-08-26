@@ -496,6 +496,7 @@ class StateSync(StateReader, abc.ABC):
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
+        last_altered_ts: t.Optional[int] = None,
     ) -> None:
         """Add an interval to a snapshot and sync it to the store.
 
@@ -504,6 +505,7 @@ class StateSync(StateReader, abc.ABC):
             start: The start of the interval to add.
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in development mode
+            last_altered_ts: The timestamp of the last modification of the physical table
         """
         start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False, expand=False)
         if not snapshot.version:
@@ -516,6 +518,7 @@ class StateSync(StateReader, abc.ABC):
             dev_version=snapshot.dev_version,
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
+            last_altered_ts=last_altered_ts,
         )
         self.add_snapshots_intervals([snapshot_intervals])
 
