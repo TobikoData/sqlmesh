@@ -257,6 +257,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             allow_destructive_snapshots=plan.allow_destructive_models,
             allow_additive_snapshots=plan.allow_additive_models,
             selected_snapshot_ids=stage.selected_snapshot_ids,
+            is_restatement_plan=bool(plan.restatements),
         )
         if errors:
             raise PlanError("Plan application failed.")
