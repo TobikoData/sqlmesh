@@ -92,7 +92,15 @@ def dbt(
     "--full-refresh",
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
 )
+@click.option(
+    "--environment",
+    help="Run against a specific Virtual Data Environment (VDE) instead of the main environment",
+)
+@click.option(
+    "--empty/--no-empty", default=False, help="If specified, limit input refs and sources"
+)
 @vars_option
+@cli_global_error_handler
 @click.pass_context
 def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
     """Compile SQL and execute against the current target database."""
@@ -103,6 +111,7 @@ def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.An
 @select_option
 @exclude_option
 @vars_option
+@cli_global_error_handler
 @click.pass_context
 def list_(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
     """List the resources in your project"""

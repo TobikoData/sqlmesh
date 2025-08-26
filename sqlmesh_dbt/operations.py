@@ -11,6 +11,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.dbt.project import Project
     from sqlmesh_dbt.console import DbtCliConsole
     from sqlmesh.core.model import Model
+    from sqlmesh.core.plan import Plan
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +36,20 @@ class DbtOperations:
 
     def run(
         self,
+        environment: t.Optional[str] = None,
         select: t.Optional[t.List[str]] = None,
         exclude: t.Optional[t.List[str]] = None,
         full_refresh: bool = False,
-    ) -> None:
-        select_models = None
-
-        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
-            select_models = [sqlmesh_selector]
-
-        self.context.plan(
-            select_models=select_models,
-            run=True,
-            no_diff=True,
-            no_prompts=True,
-            auto_apply=True,
+        empty: bool = False,
+    ) -> Plan:
+        return self.context.plan(
+            **self._plan_options(
+                environment=environment,
+                select=select,
+                exclude=exclude,
+                full_refresh=full_refresh,
+                empty=empty,
+            )
         )
 
     def _selected_models(
@@ -70,6 +70,88 @@ class DbtOperations:
             selected_models = dict(self.context.models)
 
         return selected_models
+
+    def _plan_options(
+        self,
+        environment: t.Optional[str] = None,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+        empty: bool = False,
+        full_refresh: bool = False,
+    ) -> t.Dict[str, t.Any]:
+        import sqlmesh.core.constants as c
+
+        # convert --select and --exclude to a selector expression for the SQLMesh selector engine
+        select_models = None
+        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+            select_models = [sqlmesh_selector]
+
+        is_dev = environment and environment != c.PROD
+        is_prod = not is_dev
+
+        options: t.Dict[str, t.Any] = {}
+
+        if is_prod or (is_dev and select_models):
+            # prod plans should "catch up" before applying the changes so that after the command finishes prod is the latest it can be
+            # dev plans *with* selectors should do the same as the user is saying "specifically update these models to the latest"
+            # dev plans *without* selectors should just have the defaults of never exceeding prod as the user is saying "just create this env" without focusing on any specific models
+            options.update(
+                dict(
+                    # always catch the data up to latest rather than only operating on what has been loaded before
+                    run=True,
+                    # don't taking cron schedules into account when deciding what models to run, do everything even if it just ran
+                    ignore_cron=True,
+                )
+            )
+
+        if is_dev:
+            options.update(
+                dict(
+                    # don't create views for all of prod in the dev environment
+                    include_unmodified=False,
+                    # always plan from scratch against prod rather than planning against the previous state of an existing dev environment
+                    # this results in the full scope of changes vs prod always being shown on the local branch
+                    create_from=c.PROD,
+                    always_recreate_environment=True,
+                    # setting enable_preview=None enables dev previews of forward_only changes for dbt projects IF the target engine supports cloning
+                    # if we set enable_preview=True here, this enables dev previews in all cases.
+                    # In the case of dbt default INCREMENTAL_UNMANAGED models, this will cause incremental models to be fully rebuilt (potentially a very large computation)
+                    # just to have the results thrown away on promotion to prod because dev previews are not promotable.
+                    #
+                    # TODO: if the user "upgrades" to an INCREMENTAL_BY_TIME_RANGE by defining a "time_column", we can inject leak guards to compute
+                    # just a preview instead of the whole thing like we would in a native project, but the enable_preview setting is at the plan level
+                    # and not the individual model level so we currently have no way of doing this selectively
+                    enable_preview=None,
+                )
+            )
+
+        if empty:
+            # dbt --empty adds LIMIT 0 to the queries, resulting in empty tables
+            # this lines up with --skip-backfill in SQLMesh
+            options["skip_backfill"] = True
+
+            if is_prod:
+                # to prevent the following error:
+                # > ConfigError: When targeting the production environment either the backfill should not be skipped or
+                # > the lack of data gaps should be enforced (--no-gaps flag).
+                options["no_gaps"] = True
+
+        if full_refresh:
+            # TODO: handling this requires some updates in the engine to enable restatements+changes in the same plan without affecting prod
+            # if the plan targets dev
+            pass
+
+        return dict(
+            environment=environment,
+            select_models=select_models,
+            # dont output a diff of model changes
+            no_diff=True,
+            # don't throw up any prompts like "set the effective date" - use defaults
+            no_prompts=True,
+            # start doing work immediately (since no_diff is set, there isnt really anything for the user to say yes/no to)
+            auto_apply=True,
+            **options,
+        )
 
     @property
     def console(self) -> DbtCliConsole:

@@ -1296,6 +1296,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         explain: t.Optional[bool] = None,
         ignore_cron: t.Optional[bool] = None,
         min_intervals: t.Optional[int] = None,
+        always_recreate_environment: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively creates a plan.
 
@@ -1345,6 +1346,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             explain: Whether to explain the plan instead of applying it.
             min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
                 on every model when checking for missing intervals
+            always_recreate_environment: Whether to always recreate the target environment from the `create_from` environment.
 
         Returns:
             The populated Plan object.
@@ -1376,6 +1378,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             explain=explain,
             ignore_cron=ignore_cron,
             min_intervals=min_intervals,
+            always_recreate_environment=always_recreate_environment,
         )
 
         plan = plan_builder.build()
@@ -1428,6 +1431,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         explain: t.Optional[bool] = None,
         ignore_cron: t.Optional[bool] = None,
         min_intervals: t.Optional[int] = None,
+        always_recreate_environment: t.Optional[bool] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1466,7 +1470,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered: Whether the diff should compare raw vs rendered models
             min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
                 on every model when checking for missing intervals
-
+            always_recreate_environment: Whether to always recreate the target environment from the `create_from` environment.
         Returns:
             The plan builder.
         """
@@ -1497,6 +1501,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             "diff_rendered": diff_rendered,
             "skip_linter": skip_linter,
             "min_intervals": min_intervals,
+            "always_recreate_environment": always_recreate_environment,
         }
         user_provided_flags: t.Dict[str, UserProvidedFlags] = {
             k: v for k, v in kwargs.items() if v is not None
@@ -1588,7 +1593,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             or (backfill_models is not None and not backfill_models),
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             diff_rendered=diff_rendered,
-            always_recreate_environment=self.config.plan.always_recreate_environment,
+            always_recreate_environment=always_recreate_environment
+            or self.config.plan.always_recreate_environment,
         )
         modified_model_names = {
             *context_diff.modified_snapshots,
