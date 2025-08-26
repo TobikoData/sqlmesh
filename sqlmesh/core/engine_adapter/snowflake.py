@@ -187,7 +187,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
-            track_rows_processed=False,
+            track_rows_processed=False,  # snowflake tracks CTAS row counts incorrectly
             **kwargs,
         )
 
