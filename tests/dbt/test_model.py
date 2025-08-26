@@ -6,6 +6,7 @@ from sqlmesh import Context
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
+from sqlmesh.dbt.target import PostgresConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import YAML
@@ -50,7 +51,10 @@ def test_model_test_circular_references() -> None:
         downstream_model.check_for_circular_test_refs(context)
 
 
-def test_load_invalid_ref_audit_constraints(tmp_path: Path, caplog) -> None:
+@pytest.mark.slow
+def test_load_invalid_ref_audit_constraints(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig
+) -> None:
     yaml = YAML()
     dbt_project_dir = tmp_path / "dbt"
     dbt_project_dir.mkdir()

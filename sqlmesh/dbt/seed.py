@@ -5,11 +5,13 @@ import typing as t
 
 import agate
 
-try:
+from sqlmesh.dbt.util import DBT_VERSION
+
+if DBT_VERSION >= (1, 8, 0):
     from dbt_common.clients import agate_helper  # type: ignore
 
     SUPPORTS_DELIMITER = True
-except ImportError:
+else:
     from dbt.clients import agate_helper  # type: ignore
 
     SUPPORTS_DELIMITER = False
@@ -95,27 +97,7 @@ class SeedConfig(BaseModelConfig):
         )
 
 
-class Integer(agate_helper.Integer):
-    def cast(self, d: t.Any) -> t.Optional[int]:
-        if isinstance(d, str):
-            # The dbt's implementation doesn't support coercion of strings to integers.
-            if d.strip().lower() in self.null_values:
-                return None
-            try:
-                return int(d)
-            except ValueError:
-                raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
-        return super().cast(d)
-
-    def jsonify(self, d: t.Any) -> str:
-        return d
-
-
-agate_helper.Integer = Integer  # type: ignore
-
-
 AGATE_TYPE_MAPPING = {
-    agate_helper.Integer: exp.DataType.build("int"),
     agate_helper.Number: exp.DataType.build("double"),
     agate_helper.ISODateTime: exp.DataType.build("datetime"),
     agate.Date: exp.DataType.build("date"),
@@ -123,3 +105,25 @@ AGATE_TYPE_MAPPING = {
     agate.Boolean: exp.DataType.build("boolean"),
     agate.Text: exp.DataType.build("text"),
 }
+
+
+if DBT_VERSION >= (1, 7, 0):
+
+    class Integer(agate_helper.Integer):
+        def cast(self, d: t.Any) -> t.Optional[int]:
+            if isinstance(d, str):
+                # The dbt's implementation doesn't support coercion of strings to integers.
+                if d.strip().lower() in self.null_values:
+                    return None
+                try:
+                    return int(d)
+                except ValueError:
+                    raise agate.exceptions.CastError('Can not parse value "%s" as Integer.' % d)
+            return super().cast(d)
+
+        def jsonify(self, d: t.Any) -> str:
+            return d
+
+    agate_helper.Integer = Integer  # type: ignore
+
+    AGATE_TYPE_MAPPING[agate_helper.Integer] = exp.DataType.build("int")

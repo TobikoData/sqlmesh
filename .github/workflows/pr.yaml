@@ -8,6 +8,8 @@ on:
 concurrency:
   group: 'pr-${{ github.event.pull_request.number }}'
   cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
   test-vscode:
     env:
@@ -66,3 +68,61 @@ jobs:
           name: playwright-report
           path: vscode/extension/playwright-report/
           retention-days: 30
+  test-dbt-versions:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dbt-version:
+          [
+            '1.3.0',
+            '1.4.0',
+            '1.5.0',
+            '1.6.0',
+            '1.7.0',
+            '1.8.0',
+            '1.9.0',
+            '1.10.0',
+          ]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Install SQLMesh dev dependencies
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          sed -i 's/"pydantic>=2.0.0"/"pydantic"/g' pyproject.toml
+          if [[ "${{ matrix.dbt-version }}" == "1.10.0" ]]; then
+            # For 1.10.0: only add version to dbt-core, remove versions from all adapter packages
+            sed -i -E 's/"(dbt-core)[^"]*"/"\1~=${{ matrix.dbt-version }}"/g' pyproject.toml
+            # Remove version constraints from all dbt adapter packages
+            sed -i -E 's/"(dbt-(bigquery|duckdb|snowflake|athena-community|clickhouse|databricks|redshift|trino))[^"]*"/"\1"/g' pyproject.toml
+          else
+            # For other versions: apply version to all dbt packages
+            sed -i -E 's/"(dbt-[^">=<~!]+)[^"]*"/"\1~=${{ matrix.dbt-version }}"/g' pyproject.toml
+          fi
+          UV=1 make install-dev
+          uv pip install pydantic>=2.0.0 --reinstall
+      - name: Run dbt tests
+        # We can't run slow tests across all engines due to tests requiring DuckDB and old versions
+        # of DuckDB require a version of DuckDB we no longer support
+        run: |
+          source .venv/bin/activate
+          make dbt-fast-test
+      - name: Test SQLMesh info in sushi_dbt
+        working-directory: ./examples/sushi_dbt
+        run: |
+          source ../../.venv/bin/activate
+          sed -i 's/target: in_memory/target: postgres/g' profiles.yml
+          if [[ $(echo -e "${{ matrix.dbt-version }}\n1.5.0" | sort -V | head -n1) == "${{ matrix.dbt-version }}" ]] && [[ "${{ matrix.dbt-version }}" != "1.5.0" ]]; then
+            echo "DBT version is ${{ matrix.dbt-version }} (< 1.5.0), removing version parameters..."
+            sed -i -e 's/, version=1) }}/) }}/g' -e 's/, v=1) }}/) }}/g' models/top_waiters.sql
+          else
+            echo "DBT version is ${{ matrix.dbt-version }} (>= 1.5.0), keeping version parameters"
+          fi
+          sqlmesh info --skip-connection

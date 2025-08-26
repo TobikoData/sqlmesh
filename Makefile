@@ -1,10 +1,16 @@
 .PHONY: docs
 
+ifdef UV
+    PIP := uv pip
+else
+    PIP := pip3
+endif
+
 install-dev:
-	pip3 install -e ".[dev,web,slack,dlt,lsp]" ./examples/custom_materializations
+	$(PIP) install -e ".[dev,web,slack,dlt,lsp]" ./examples/custom_materializations
 
 install-doc:
-	pip3 install -r ./docs/requirements.txt
+	$(PIP) install -r ./docs/requirements.txt
 
 install-pre-commit:
 	pre-commit install
@@ -22,16 +28,16 @@ doc-test:
 	python -m pytest --doctest-modules sqlmesh/core sqlmesh/utils
 
 package:
-	pip3 install build && python3 -m build
+	$(PIP) install build && python3 -m build
 
 publish: package
-	pip3 install twine && python3 -m twine upload dist/*
+	$(PIP) install twine && python3 -m twine upload dist/*
 
 package-tests:
-	pip3 install build && cp pyproject.toml tests/sqlmesh_pyproject.toml && python3 -m build tests/
+	$(PIP) install build && cp pyproject.toml tests/sqlmesh_pyproject.toml && python3 -m build tests/
 
 publish-tests: package-tests
-	pip3 install twine && python3 -m twine upload -r tobiko-private tests/dist/*
+	$(PIP) install twine && python3 -m twine upload -r tobiko-private tests/dist/*
 
 docs-serve:
 	mkdocs serve
@@ -93,6 +99,9 @@ engine-test:
 dbt-test:
 	pytest -n auto -m "dbt and not cicdonly"
 
+dbt-fast-test:
+	pytest -n auto -m "dbt and fast" --retries 3
+
 github-test:
 	pytest -n auto -m "github"
 
@@ -109,7 +118,7 @@ guard-%:
 	fi
 
 engine-%-install:
-	pip3 install -e ".[dev,web,slack,lsp,${*}]" ./examples/custom_materializations
+	$(PIP) install -e ".[dev,web,slack,lsp,${*}]" ./examples/custom_materializations
 
 engine-docker-%-up:
 	docker compose -f ./tests/core/engine_adapter/integration/docker/compose.${*}.yaml up -d
@@ -157,11 +166,11 @@ snowflake-test: guard-SNOWFLAKE_ACCOUNT guard-SNOWFLAKE_WAREHOUSE guard-SNOWFLAK
 	pytest -n auto -m "snowflake" --retries 3 --junitxml=test-results/junit-snowflake.xml
 
 bigquery-test: guard-BIGQUERY_KEYFILE engine-bigquery-install
-	pip install -e ".[bigframes]"
+	$(PIP) install -e ".[bigframes]"
 	pytest -n auto -m "bigquery" --retries 3 --junitxml=test-results/junit-bigquery.xml
 
 databricks-test: guard-DATABRICKS_CATALOG guard-DATABRICKS_SERVER_HOSTNAME guard-DATABRICKS_HTTP_PATH guard-DATABRICKS_ACCESS_TOKEN guard-DATABRICKS_CONNECT_VERSION engine-databricks-install
-	pip install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
+	$(PIP) install 'databricks-connect==${DATABRICKS_CONNECT_VERSION}'
 	pytest -n auto -m "databricks" --retries 3 --junitxml=test-results/junit-databricks.xml
 
 redshift-test: guard-REDSHIFT_HOST guard-REDSHIFT_USER guard-REDSHIFT_PASSWORD guard-REDSHIFT_DATABASE engine-redshift-install

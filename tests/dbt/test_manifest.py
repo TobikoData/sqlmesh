@@ -63,9 +63,12 @@ def test_manifest_helper(caplog):
     assert models["items_no_hard_delete_snapshot"].invalidate_hard_deletes is False
 
     # Test versioned models
-    assert models["waiter_revenue_by_day_v1"].version == 1
-    assert models["waiter_revenue_by_day_v2"].version == 2
-    assert "waiter_revenue_by_day" not in models
+    if DBT_VERSION >= (1, 5, 0):
+        assert models["waiter_revenue_by_day_v1"].version == 1
+        assert models["waiter_revenue_by_day_v2"].version == 2
+        assert "waiter_revenue_by_day" not in models
+    else:
+        assert "waiter_revenue_by_day" in models
 
     waiter_as_customer_by_day_config = models["waiter_as_customer_by_day"]
     assert waiter_as_customer_by_day_config.dependencies == Dependencies(
@@ -77,7 +80,10 @@ def test_manifest_helper(caplog):
     assert waiter_as_customer_by_day_config.cluster_by == ["ds"]
     assert waiter_as_customer_by_day_config.time_column == "ds"
 
-    waiter_revenue_by_day_config = models["waiter_revenue_by_day_v2"]
+    if DBT_VERSION >= (1, 5, 0):
+        waiter_revenue_by_day_config = models["waiter_revenue_by_day_v2"]
+    else:
+        waiter_revenue_by_day_config = models["waiter_revenue_by_day"]
     assert waiter_revenue_by_day_config.dependencies == Dependencies(
         macros={
             MacroReference(name="dynamic_var_name_dependency"),
@@ -218,7 +224,12 @@ def test_source_meta_external_location():
         sources["parquet_file.items"].relation_info, api.Relation, api.quote_policy
     )
     assert relation.identifier == "items"
-    assert relation.render() == "read_parquet('path/to/external/items.parquet')"
+    expected = (
+        "read_parquet('path/to/external/items.parquet')"
+        if DBT_VERSION >= (1, 4, 0)
+        else '"main"."parquet_file".items'
+    )
+    assert relation.render() == expected
 
 
 @pytest.mark.xdist_group("dbt_manifest")

@@ -3,6 +3,14 @@ sushi:
     in_memory:
       type: duckdb
       schema: sushi
+    postgres:
+      type: postgres
+      host: "host"
+      user: "user"
+      password: "password"
+      dbname: "dbname"
+      port: 5432
+      schema: sushi
     duckdb:
       type: duckdb
       path: 'local.duckdb'
