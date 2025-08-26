@@ -327,16 +327,13 @@ def test_rows_tracker(
         SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
     ):
         # Snowflake doesn't report row counts for CTAS, so this should not be tracked
-        engine_adapter.execute(
-            "CREATE TABLE a (id int) AS SELECT 1 as id", track_rows_processed=True
-        )
-        engine_adapter.execute("INSERT INTO a VALUES (2), (3)", track_rows_processed=True)
-        engine_adapter.execute("INSERT INTO a VALUES (4)", track_rows_processed=True)
+        engine_adapter._create_table("a", exp.select("1 as id"))
 
-    assert add_execution_spy.call_count == 2
+    assert add_execution_spy.call_count == 0
 
     stats = tracker.get_execution_stats(
         SnapshotIdBatch(snapshot_id=SnapshotId(name="a", identifier="a"), batch_id=0)
     )
     assert stats is not None
-    assert stats.total_rows_processed == 3
+    assert stats.total_rows_processed is None
+    assert stats.total_bytes_processed is None

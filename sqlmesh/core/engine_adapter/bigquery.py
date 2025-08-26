@@ -23,7 +23,6 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
-from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
@@ -1097,7 +1096,11 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
         self.cursor._set_rowcount(query_results)
         self.cursor._set_description(query_results.schema)
 
-        if track_rows_processed and QueryExecutionTracker.is_tracking():
+        if (
+            track_rows_processed
+            and self._query_execution_tracker
+            and self._query_execution_tracker.is_tracking()
+        ):
             num_rows = None
             if query_job.statement_type == "CREATE_TABLE_AS_SELECT":
                 # since table was just created, number rows in table == number rows processed
@@ -1106,7 +1109,9 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
             elif query_job.statement_type in ["INSERT", "DELETE", "MERGE", "UPDATE"]:
                 num_rows = query_job.num_dml_affected_rows
 
-            QueryExecutionTracker.record_execution(sql, num_rows, query_job.total_bytes_processed)
+            self._query_execution_tracker.record_execution(
+                sql, num_rows, query_job.total_bytes_processed
+            )
 
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None

@@ -135,6 +135,7 @@ class EngineAdapter:
         shared_connection: bool = False,
         correlation_id: t.Optional[CorrelationId] = None,
         schema_differ_overrides: t.Optional[t.Dict[str, t.Any]] = None,
+        query_execution_tracker: t.Optional[QueryExecutionTracker] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -158,6 +159,7 @@ class EngineAdapter:
         self._multithreaded = multithreaded
         self.correlation_id = correlation_id
         self._schema_differ_overrides = schema_differ_overrides
+        self._query_execution_tracker = query_execution_tracker
 
     def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
         extra_kwargs = {
@@ -2448,7 +2450,8 @@ class EngineAdapter:
     def _record_execution_stats(
         self, sql: str, rowcount: t.Optional[int] = None, bytes_processed: t.Optional[int] = None
     ) -> None:
-        QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)
+        if self._query_execution_tracker:
+            self._query_execution_tracker.record_execution(sql, rowcount, bytes_processed)
 
     def _execute(self, sql: str, track_rows_processed: bool = False, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)
@@ -2456,7 +2459,8 @@ class EngineAdapter:
         if (
             self.SUPPORTS_QUERY_EXECUTION_TRACKING
             and track_rows_processed
-            and QueryExecutionTracker.is_tracking()
+            and self._query_execution_tracker
+            and self._query_execution_tracker.is_tracking()
         ):
             if (
                 rowcount := getattr(self.cursor, "rowcount", None)

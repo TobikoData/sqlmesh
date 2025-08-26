@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import re
 import typing as t
 
 from sqlglot import exp
@@ -24,7 +23,6 @@ from sqlmesh.core.engine_adapter.shared import (
     SourceQuery,
     set_catalog,
 )
-from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
 from sqlmesh.utils import optional_import, get_source_columns_to_types
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_dtypes
@@ -189,7 +187,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             table_description=table_description,
             column_descriptions=column_descriptions,
             table_kind=table_kind,
-            track_rows_processed=track_rows_processed,
+            track_rows_processed=False,
             **kwargs,
         )
 
@@ -667,41 +665,3 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             self._connection_pool.set_attribute(self.SNOWPARK, None)
 
         return super().close()
-
-    def _record_execution_stats(
-        self, sql: str, rowcount: t.Optional[int] = None, bytes_processed: t.Optional[int] = None
-    ) -> None:
-        """Snowflake does not report row counts for CTAS like other DML operations.
-
-        They neither report the sentinel value -1 nor do they report 0 rows. Instead, they report a rowcount
-        of 1 and return a single data row containing one of the strings:
-          - "Table <table_name> successfully created."
-          - "<table_name> already exists, statement succeeded."
-
-        We do not want to record the incorrect row count of 1, so we check whether that row contains the table
-        successfully created string. If so, we return early and do not record the row count.
-
-        Ref: https://github.com/snowflakedb/snowflake-connector-python/issues/645
-        """
-        if rowcount == 1:
-            results = self.cursor.fetchone()
-            if results:
-                try:
-                    results_str = str(results[0])
-                except (TypeError, ValueError, IndexError):
-                    return
-
-                # Snowflake identifiers may be:
-                # - An unquoted contiguous set of [a-zA-Z0-9_$] characters
-                # - A double-quoted string that may contain spaces and nested double-quotes represented by `""`. Example: " my ""table"" name "
-                is_created = re.match(
-                    r'Table [a-zA-Z0-9_$ "]*? successfully created\.', results_str
-                )
-                is_already_exists = re.match(
-                    r'[a-zA-Z0-9_$ "]*? already exists, statement succeeded\.',
-                    results_str,
-                )
-                if is_created or is_already_exists:
-                    return
-
-        QueryExecutionTracker.record_execution(sql, rowcount, bytes_processed)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 from contextlib import contextmanager
-from threading import local, Lock
+from threading import local
 from dataclasses import dataclass, field
 from sqlmesh.core.snapshot import SnapshotIdBatch
 
@@ -56,19 +56,17 @@ class QueryExecutionContext:
 class QueryExecutionTracker:
     """Thread-local context manager for snapshot execution statistics, such as rows processed."""
 
-    _thread_local = local()
-    _contexts: t.Dict[SnapshotIdBatch, QueryExecutionContext] = {}
-    _contexts_lock = Lock()
+    def __init__(self) -> None:
+        self._thread_local = local()
+        self._contexts: t.Dict[SnapshotIdBatch, QueryExecutionContext] = {}
 
     def get_execution_context(
         self, snapshot_id_batch: SnapshotIdBatch
     ) -> t.Optional[QueryExecutionContext]:
-        with self._contexts_lock:
-            return self._contexts.get(snapshot_id_batch)
+        return self._contexts.get(snapshot_id_batch)
 
-    @classmethod
-    def is_tracking(cls) -> bool:
-        return getattr(cls._thread_local, "context", None) is not None
+    def is_tracking(self) -> bool:
+        return getattr(self._thread_local, "context", None) is not None
 
     @contextmanager
     def track_execution(
@@ -77,26 +75,23 @@ class QueryExecutionTracker:
         """Context manager for tracking snapshot execution statistics such as row counts and bytes processed."""
         context = QueryExecutionContext(snapshot_id_batch=snapshot_id_batch)
         self._thread_local.context = context
-        with self._contexts_lock:
-            self._contexts[snapshot_id_batch] = context
+        self._contexts[snapshot_id_batch] = context
 
         try:
             yield context
         finally:
             self._thread_local.context = None
 
-    @classmethod
     def record_execution(
-        cls, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
+        self, sql: str, row_count: t.Optional[int], bytes_processed: t.Optional[int]
     ) -> None:
-        context = getattr(cls._thread_local, "context", None)
+        context = getattr(self._thread_local, "context", None)
         if context is not None:
             context.add_execution(sql, row_count, bytes_processed)
 
     def get_execution_stats(
         self, snapshot_id_batch: SnapshotIdBatch
     ) -> t.Optional[QueryExecutionStats]:
-        with self._contexts_lock:
-            context = self._contexts.get(snapshot_id_batch)
-            self._contexts.pop(snapshot_id_batch, None)
+        context = self._contexts.get(snapshot_id_batch)
+        self._contexts.pop(snapshot_id_batch, None)
         return context.get_execution_stats() if context else None

@@ -130,6 +130,11 @@ class SnapshotEvaluator:
         self.adapters = (
             adapters if isinstance(adapters, t.Dict) else {selected_gateway or "": adapters}
         )
+        self.execution_tracker = QueryExecutionTracker()
+        self.adapters = {
+            gateway: adapter.with_settings(query_execution_tracker=self.execution_tracker)
+            for gateway, adapter in self.adapters.items()
+        }
         self.adapter = (
             next(iter(self.adapters.values()))
             if not selected_gateway
@@ -137,7 +142,6 @@ class SnapshotEvaluator:
         )
         self.selected_gateway = selected_gateway
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
-        self.execution_tracker = QueryExecutionTracker()
 
     def evaluate(
         self,
