@@ -7,6 +7,7 @@ import unittest
 import uuid
 import logging
 import textwrap
+from humanize import metric, naturalsize
 from itertools import zip_longest
 from pathlib import Path
 from hyperscript import h
@@ -4186,15 +4187,14 @@ def _create_evaluation_model_annotation(
     execution_stats_str = ""
     if execution_stats:
         rows_processed = execution_stats.total_rows_processed
-        execution_stats_str += (
-            f"{_abbreviate_integer_count(rows_processed)} row{'s' if rows_processed > 1 else ''}"
-            if rows_processed
-            else ""
-        )
+        if rows_processed:
+            # 1.00 and 1.0 to 1
+            rows_processed_str = metric(rows_processed).replace(".00", "").replace(".0", "")
+            execution_stats_str += f"{rows_processed_str} row{'s' if rows_processed > 1 else ''}"
 
         bytes_processed = execution_stats.total_bytes_processed
         execution_stats_str += (
-            f"{', ' if execution_stats_str else ''}{_format_bytes(bytes_processed)}"
+            f"{', ' if execution_stats_str else ''}{naturalsize(bytes_processed, binary=True)}"
             if bytes_processed
             else ""
         )
@@ -4299,39 +4299,3 @@ def _calculate_annotation_str_len(
             + execution_stats_len,
         )
     return annotation_str_len
-
-
-# Convert number of bytes to a human-readable string
-# https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L165
-def _format_bytes(num_bytes: t.Optional[int]) -> str:
-    if num_bytes and num_bytes >= 0:
-        if num_bytes < 1024:
-            return f"{num_bytes} bytes"
-
-        num_bytes_float = float(num_bytes) / 1024.0
-        for unit in ["KiB", "MiB", "GiB", "TiB", "PiB"]:
-            if num_bytes_float < 1024.0:
-                return f"{num_bytes_float:3.1f} {unit}"
-            num_bytes_float /= 1024.0
-
-        num_bytes_float *= 1024.0  # undo last division in loop
-        return f"{num_bytes_float:3.1f} {unit}"
-    return ""
-
-
-# Abbreviate integer count. Example: 1,000,000,000 -> 1b
-# https://github.com/dbt-labs/dbt-adapters/blob/34fd178539dcb6f82e18e738adc03de7784c032f/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L178
-def _abbreviate_integer_count(count: t.Optional[int]) -> str:
-    if count and count >= 0:
-        if count < 1000:
-            return str(count)
-
-        count_float = float(count) / 1000.0
-        for unit in ["k", "m", "b", "t"]:
-            if count_float < 1000.0:
-                return f"{count_float:3.1f}{unit}".strip()
-            count_float /= 1000.0
-
-        count_float *= 1000.0  # undo last division in loop
-        return f"{count_float:3.1f}{unit}".strip()
-    return ""
