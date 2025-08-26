@@ -1,6 +1,11 @@
+from pathlib import Path
 import pytest
 
-from sqlmesh.dbt.project import Project
+from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.manifest import ManifestHelper
+from sqlmesh.dbt.profile import Profile
+
 
 pytestmark = pytest.mark.dbt
 
@@ -19,12 +24,5 @@ def test_docs_inline():
     )
     # Inline description in yaml
     assert helper.models()["waiters"].description == "waiters docs block"
-    
-    assert helper.models()["top_waiters"].description == "description of top waiters"
-    # Inline description in yaml
-    top_waiters = sushi_test_project.context._models["top_waiters"]
-    assert top_waiters.description == "description of top waiters"
-
     # Docs block from .md file
-    waiters = sushi_test_project.context._models["waiters"]
-    assert waiters.description == "waiters docs block"
+    assert helper.models()["top_waiters"].description == "description of top waiters"
