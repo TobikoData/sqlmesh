@@ -42,7 +42,7 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.plan import PlanConfig
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, DuckDBEngineAdapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
@@ -6425,6 +6425,75 @@ Macro 'bad_macro' does not exist."""
 
     with pytest.raises(SQLMeshError, match=expected_error_message):
         ctx.plan(auto_apply=True, no_prompts=True)
+
+
+def test_before_all_after_all_execution_order(tmp_path: Path, mocker: MockerFixture):
+    model = """
+    MODEL (
+        name test_schema.model_that_depends_on_before_all,
+        kind FULL,
+    );
+
+    SELECT id, value FROM before_all_created_table
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    with open(models_dir / "model.sql", "w") as f:
+        f.write(model)
+
+    # before_all statement that creates a table that the above model depends on
+    before_all_statement = (
+        "CREATE TABLE IF NOT EXISTS before_all_created_table AS SELECT 1 AS id, 'test' AS value"
+    )
+
+    # after_all that depends on the model
+    after_all_statement = "CREATE TABLE IF NOT EXISTS after_all_created_table AS SELECT id, value FROM test_schema.model_that_depends_on_before_all"
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+        before_all=[before_all_statement],
+        after_all=[after_all_statement],
+    )
+
+    execute_calls: t.List[str] = []
+
+    original_duckdb_execute = DuckDBEngineAdapter.execute
+
+    def track_duckdb_execute(self, expression, **kwargs):
+        sql = expression if isinstance(expression, str) else expression.sql(dialect="duckdb")
+        state_tables = [
+            "_snapshots",
+            "_environments",
+            "_versions",
+            "_intervals",
+            "_auto_restatements",
+            "_environment_statements",
+            "_plan_dags",
+        ]
+
+        # to ignore the state queries
+        if not any(table in sql.lower() for table in state_tables):
+            execute_calls.append(sql)
+
+        return original_duckdb_execute(self, expression, **kwargs)
+
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # the plan would fail if the execution order ever changes and before_all statements dont execute first
+    ctx.plan(auto_apply=True, no_prompts=True)
+
+    mocker.patch.object(DuckDBEngineAdapter, "execute", track_duckdb_execute)
+
+    # run with the patched execute
+    ctx.run("prod", start="2023-01-01", end="2023-01-02")
+
+    # validate explicitly that the first execute is for the before_all
+    assert "before_all_created_table" in execute_calls[0]
+
+    # and that the last is the sole after all that depends on the model
+    assert "after_all_created_table" in execute_calls[-1]
 
 
 @time_machine.travel("2025-03-08 00:00:00 UTC")
