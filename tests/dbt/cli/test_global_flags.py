@@ -1,8 +1,8 @@
 import typing as t
 from pathlib import Path
 import pytest
+from pytest_mock import MockerFixture
 from click.testing import Result
-from unittest.mock import patch
 from sqlmesh.utils.errors import SQLMeshError
 from sqlglot.errors import SqlglotError
 
@@ -33,59 +33,63 @@ def test_profile_and_target(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[...
     assert "No command specified" in result.output
 
 
-def test_run_error_handler(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
-    with patch("sqlmesh_dbt.operations.DbtOperations.run") as mock_run:
-        mock_run.side_effect = SQLMeshError("Test error message")
+def test_run_error_handler(
+    jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result], mocker: MockerFixture
+) -> None:
+    mock_run = mocker.patch("sqlmesh_dbt.operations.DbtOperations.run")
+    mock_run.side_effect = SQLMeshError("Test error message")
 
-        result = invoke_cli(["run"])
+    result = invoke_cli(["run"])
+    assert result.exit_code == 1
+    assert "Error: Test error message" in result.output
+    assert "Traceback" not in result.output
 
-        # tesg that SQLMeshError are handled gracefully in run command
-        assert result.exit_code == 1
-        assert "Traceback" not in result.output
+    # test SqlglotError in run command
+    mock_run = mocker.patch("sqlmesh_dbt.operations.DbtOperations.run")
+    mock_run.side_effect = SqlglotError("Invalid SQL syntax")
 
-    with patch("sqlmesh_dbt.operations.DbtOperations.run") as mock_run:
-        mock_run.side_effect = SqlglotError("Invalid SQL syntax")
+    result = invoke_cli(["run"])
 
-        result = invoke_cli(["run"])
+    assert result.exit_code == 1
+    assert "Error: Invalid SQL syntax" in result.output
+    assert "Traceback" not in result.output
 
-        assert result.exit_code == 1
-        assert "Error: Invalid SQL syntax" in result.output
-        assert "Traceback" not in result.output
+    # test ValueError in run command
+    mock_run = mocker.patch("sqlmesh_dbt.operations.DbtOperations.run")
+    mock_run.side_effect = ValueError("Invalid configuration value")
 
-    with patch("sqlmesh_dbt.operations.DbtOperations.run") as mock_run:
-        mock_run.side_effect = ValueError("Invalid configuration value")
+    result = invoke_cli(["run"])
 
-        result = invoke_cli(["run"])
+    assert result.exit_code == 1
+    assert "Error: Invalid configuration value" in result.output
+    assert "Traceback" not in result.output
 
-        assert result.exit_code == 1
-        assert "Error: Invalid configuration value" in result.output
-        assert "Traceback" not in result.output
+    # test SQLMeshError in list command
+    mock_list = mocker.patch("sqlmesh_dbt.operations.DbtOperations.list_")
+    mock_list.side_effect = SQLMeshError("List command error")
 
-    with patch("sqlmesh_dbt.operations.DbtOperations.list_") as mock_list:
-        mock_list.side_effect = SQLMeshError("List command error")
+    result = invoke_cli(["list"])
 
-        result = invoke_cli(["list"])
+    assert result.exit_code == 1
+    assert "Error: List command error" in result.output
+    assert "Traceback" not in result.output
 
-        assert result.exit_code == 1
-        assert "Error: List command error" in result.output
-        assert "Traceback" not in result.output
+    # test SQLMeshError in main command wuthout subcommand
+    mock_create = mocker.patch("sqlmesh_dbt.cli.create")
+    mock_create.side_effect = SQLMeshError("Failed to load project")
+    result = invoke_cli(["--profile", "jaffle_shop"])
 
-    with patch("sqlmesh_dbt.cli.create") as mock_create:
-        mock_create.side_effect = SQLMeshError("Failed to load project")
+    assert result.exit_code == 1
+    assert "Error: Failed to load project" in result.output
+    assert "Traceback" not in result.output
+    mocker.stopall()
 
-        # use without subcommand
-        result = invoke_cli(["--profile", "jaffle_shop"])
+    # test error with select option
+    mock_run_select = mocker.patch("sqlmesh_dbt.operations.DbtOperations.run")
+    mock_run_select.side_effect = SQLMeshError("Error with selector")
 
-        assert result.exit_code == 1
-        assert "Error: Failed to load project" in result.output
-        assert "Traceback" not in result.output
+    result = invoke_cli(["run", "--select", "model1"])
 
-    with patch("sqlmesh_dbt.operations.DbtOperations.run") as mock_run:
-        mock_run.side_effect = SQLMeshError("Error with selector")
-
-        # with select option
-        result = invoke_cli(["run", "--select", "model1"])
-
-        assert result.exit_code == 1
-        assert "Error: Error with selector" in result.output
-        assert "Traceback" not in result.output
+    assert result.exit_code == 1
+    assert "Error: Error with selector" in result.output
+    assert "Traceback" not in result.output
