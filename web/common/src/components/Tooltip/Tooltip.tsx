@@ -10,10 +10,12 @@ import React from 'react'
 import { cn } from '@/utils'
 import { EnumPosition, type Position } from '@/types/enums'
 
+import './Tooltip.css'
+
 export type TooltipSide = Extract<Position, 'top' | 'bottom' | 'left' | 'right'>
 export type TooltipAlign = Extract<Position, 'center' | 'start' | 'end'>
 
-export default function Tooltip({
+export function Tooltip({
   delayDuration = 200,
   sideOffset = 0,
   alignOffset = 0,
@@ -39,7 +41,7 @@ export default function Tooltip({
         <TooltipPortal>
           <TooltipContent
             className={cn(
-              'max-w-md break-words rounded-lg bg-dark text-light px-4 py-2 shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] will-change-[transform,opacity] data-[state=delayed-open]:data-[side=bottom]:animate-slideUpAndFade data-[state=delayed-open]:data-[side=left]:animate-slideRightAndFade data-[state=delayed-open]:data-[side=right]:animate-slideLeftAndFade data-[state=delayed-open]:data-[side=top]:animate-slideDownAndFade z-10',
+              'max-w-md break-words rounded-lg bg-tooltip-background text-tooltip-foreground px-4 py-2 shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] will-change-[transform,opacity] data-[state=delayed-open]:data-[side=bottom]:animate-slideUpAndFade data-[state=delayed-open]:data-[side=left]:animate-slideRightAndFade data-[state=delayed-open]:data-[side=right]:animate-slideLeftAndFade data-[state=delayed-open]:data-[side=top]:animate-slideDownAndFade z-10',
               className,
             )}
             align={align}

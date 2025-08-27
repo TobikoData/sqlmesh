@@ -26,6 +26,9 @@ export function isNilOrEmptyString(
 ): value is Maybe<EmptyString> {
   return isNil(value) || isEmptyString(value)
 }
+export function nonEmptyString(value: unknown): value is string {
+  return isString(value) && value.length > 0
+}
 export function truncate(
   text: string,
   maxChars = 0,

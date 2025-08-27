@@ -3,6 +3,8 @@ import React from 'react'
 import { cn } from '@/utils'
 import { EnumLayoutDirection, type LayoutDirection } from '@/types/enums'
 
+import './ScrollContainer.css'
+
 export interface ScrollContainerProps
   extends React.HTMLAttributes<HTMLDivElement> {
   direction?: LayoutDirection
@@ -36,7 +38,7 @@ export const ScrollContainer = React.forwardRef<
             ? 'overflow-x-scroll scrollbar-h-[6px]'
             : 'overflow-x-hidden',
           className,
-          'scrollbar scrollbar-thumb-neutral-300 scrollbar-track-neutral-100 scrollbar-thumb-rounded-full',
+          'scrollbar scrollbar-thumb-rounded-full',
         )}
       >
         {children}

@@ -7,11 +7,43 @@
   --color-prose: var(--color-gray-800);
   --color-focused: var(--color-brand);
 
-  /* Model colors */
-  --color-model-catalog: hsl(226, 24%, 8%);
-  --color-model-catalog-grayscale: hsl(226, 24%, 8%);
-  --color-model-schema: hsl(30, 12%, 100%);
-  --color-model-schema-grayscale: hsl(30, 12%, 100%);
-  --color-model-name: hsl(226, 24%, 8%);
-  --color-model-name-grayscale: hsl(226, 24%, 8%);
+  /* Neutral */
+  --color-neutral-3: var(--color-gray-5);
+  --color-neutral-5: var(--color-gray-5);
+  --color-neutral-10: var(--color-gray-10);
+  --color-neutral-15: var(--color-gray-15);
+  --color-neutral-20: var(--color-gray-20);
+  --color-neutral-25: var(--color-gray-25);
+  --color-neutral-100: var(--color-gray-100);
+  --color-neutral-125: var(--color-gray-125);
+  --color-neutral-150: var(--color-gray-150);
+  --color-neutral-200: var(--color-gray-200);
+  --color-neutral-300: var(--color-gray-300);
+  --color-neutral-400: var(--color-gray-400);
+  --color-neutral-500: var(--color-gray-500);
+  --color-neutral: var(--color-gray-500);
+  --color-neutral-525: var(--color-gray-525);
+  --color-neutral-550: var(--color-gray-550);
+  --color-neutral-600: var(--color-gray-600);
+  --color-neutral-700: var(--color-gray-700);
+  --color-neutral-725: var(--color-gray-725);
+  --color-neutral-750: var(--color-gray-750);
+  --color-neutral-800: var(--color-gray-800);
+  --color-neutral-900: var(--color-gray-900);
+
+  /* Link */
+  --color-link: var(--color-deep-blue-500);
+  --color-link-hover: var(--color-deep-blue-550);
+  --color-link-active: var(--color-deep-blue-550);
+  --color-link-visited: var(--color-purple-600);
+  --color-link-underline: var(--color-deep-blue-125);
+
+  /* Model */
+  --color-model-catalog: var(--color-deep-blue-800);
+  --color-model-schema: var(--color-deep-blue-600);
+  --color-model-name: var(--color-deep-blue-500);
+
+  /* Scrollbar */
+  --color-scrollbar-thumb: var(--color-neutral-300);
+  --color-scrollbar-track: var(--color-neutral-100);
 }

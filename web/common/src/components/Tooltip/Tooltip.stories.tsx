@@ -1,20 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import {
-  Info,
-  HelpCircle,
-  AlertCircle,
-  Settings,
-  User,
-  Mail,
-  Copy,
-  Download,
-} from 'lucide-react'
-
-import Tooltip from './Tooltip'
+import { Tooltip } from '@/components/Tooltip/Tooltip'
 import { Button } from '@/components/Button/Button'
-import { Badge } from '@/components/Badge/Badge'
-import { EnumButtonVariant } from '@/components/Button/help'
-import { EnumSize } from '@/types/enums'
 
 const meta: Meta<typeof Tooltip> = {
   title: 'Components/Tooltip',

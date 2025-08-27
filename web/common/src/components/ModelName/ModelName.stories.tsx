@@ -57,7 +57,7 @@ export const WithTooltip: Story = {
 
 export const WithoutTooltip: Story = {
   args: {
-    name: 'catalog.schema.model',
+    name: 'catalog.model',
     showTooltip: false,
   },
 }
@@ -83,6 +83,15 @@ export const Grayscale: Story = {
 }
 
 export const Link: Story = {
+  args: {
+    name: 'catalog.schema.model',
+    link: 'https://www.google.com',
+    grayscale: false,
+    showCopy: true,
+  },
+}
+
+export const LinkGrayscale: Story = {
   args: {
     name: 'catalog.schema.model',
     link: 'https://www.google.com',

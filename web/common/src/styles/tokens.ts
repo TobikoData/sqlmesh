@@ -35,8 +35,58 @@ export interface ColorTokens {
   '--color-dark': string
   '--color-brand': string
   '--color-prose': string
+  '--color-focused': string
+  '--color-neutral': string
   '--color-badge-background': string
   '--color-badge-foreground': string
+  '--color-scrollbar-thumb': string
+  '--color-scrollbar-track': string
+  '--color-tooltip-background': string
+  '--color-tooltip-foreground': string
+  '--color-model-catalog': string
+  '--color-model-schema': string
+  '--color-model-name': string
+  '--color-button-focused': string
+  '--color-button-primary-background': string
+  '--color-button-primary-foreground': string
+  '--color-button-primary-hover': string
+  '--color-button-primary-active': string
+  '--color-button-secondary-background': string
+  '--color-button-secondary-foreground': string
+  '--color-button-secondary-hover': string
+  '--color-button-secondary-active': string
+  '--color-button-alternative-background': string
+  '--color-button-alternative-foreground': string
+  '--color-button-alternative-hover': string
+  '--color-button-alternative-active': string
+  '--color-button-destructive-background': string
+  '--color-button-destructive-foreground': string
+  '--color-button-destructive-hover': string
+  '--color-button-destructive-active': string
+  '--color-button-danger-background': string
+  '--color-button-danger-foreground': string
+  '--color-button-danger-hover': string
+  '--color-button-danger-active': string
+  '--color-button-transparent-background': string
+  '--color-button-transparent-foreground': string
+  '--color-button-transparent-hover': string
+  '--color-button-transparent-active': string
+  '--color-link-underline': string
+  '--color-link-hover': string
+  '--color-link-active': string
+  '--color-link-visited': string
+  '--color-model-name-grayscale-link-underline': string
+  '--color-model-name-grayscale-link-underline-hover': string
+  '--color-model-name-grayscale-catalog': string
+  '--color-model-name-grayscale-schema': string
+  '--color-model-name-grayscale-model': string
+  '--color-model-name-link-underline': string
+  '--color-model-name-link-underline-hover': string
+  '--color-model-name-catalog': string
+  '--color-model-name-schema': string
+  '--color-model-name-model': string
+  '--color-model-name-copy-icon': string
+  '--color-model-name-copy-icon-hover': string
 }
 
 // Spacing Tokens
@@ -122,6 +172,7 @@ export type CSSCustomProperty<T extends string> = T
 
 // Type-safe color scale definitions
 export type ColorScale =
+  | '3'
   | '5'
   | '10'
   | '15'
