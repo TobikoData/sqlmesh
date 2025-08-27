@@ -46,10 +46,19 @@ exclude_option = click.option("--exclude", multiple=True, help="Specify the node
 @click.group(invoke_without_command=True)
 @click.option("--profile", help="Which existing profile to load. Overrides output.profile")
 @click.option("-t", "--target", help="Which target to load for the given profile")
+@click.option(
+    "-d",
+    "--debug/--no-debug",
+    default=False,
+    help="Display debug logging during dbt execution. Useful for debugging and making bug reports events to help when debugging.",
+)
 @click.pass_context
 @cli_global_error_handler
 def dbt(
-    ctx: click.Context, profile: t.Optional[str] = None, target: t.Optional[str] = None
+    ctx: click.Context,
+    profile: t.Optional[str] = None,
+    target: t.Optional[str] = None,
+    debug: bool = False,
 ) -> None:
     """
     An ELT tool for managing your SQL transformations and data models, powered by the SQLMesh engine.
@@ -61,7 +70,9 @@ def dbt(
 
     # we have a partially applied function here because subcommands might set extra options like --vars
     # that need to be known before we attempt to load the project
-    ctx.obj = functools.partial(create, project_dir=Path.cwd(), profile=profile, target=target)
+    ctx.obj = functools.partial(
+        create, project_dir=Path.cwd(), profile=profile, target=target, debug=debug
+    )
 
     if not ctx.invoked_subcommand:
         if profile or target:
