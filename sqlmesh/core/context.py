@@ -1466,6 +1466,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered: Whether the diff should compare raw vs rendered models
             min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
                 on every model when checking for missing intervals
+
         Returns:
             The plan builder.
         """

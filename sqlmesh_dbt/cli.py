@@ -101,7 +101,6 @@ def dbt(
     "--empty/--no-empty", default=False, help="If specified, limit input refs and sources"
 )
 @vars_option
-@cli_global_error_handler
 @click.pass_context
 def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
     """Compile SQL and execute against the current target database."""
@@ -112,7 +111,6 @@ def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.An
 @select_option
 @exclude_option
 @vars_option
-@cli_global_error_handler
 @click.pass_context
 def list_(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
     """List the resources in your project"""
