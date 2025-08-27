@@ -7,7 +7,7 @@ import pytest
 from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.manifest import ManifestHelper
+from sqlmesh.dbt.manifest import ManifestHelper, _convert_jinja_test_to_macro
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.builtin import Api, _relation_info_to_relation
 from sqlmesh.dbt.util import DBT_VERSION
@@ -257,3 +257,45 @@ def test_top_level_dbt_adapter_macros():
     customers_macros = helper.macros("customers")
     assert not customers_macros["default__current_engine"].info.is_top_level
     assert not customers_macros["duckdb__current_engine"].info.is_top_level
+
+
+def test_convert_jinja_test_to_macro():
+    # Test block with whitespace trimming
+    test_input = """{%- test assert_positive(model, column_name) -%}
+    select * from {{ model }} where {{ column_name }} <= 0
+{%- endtest -%}"""
+
+    expected_output = """{%- macro test_assert_positive(model, column_name) -%}
+    select * from {{ model }} where {{ column_name }} <= 0
+{%- endmacro -%}"""
+
+    assert _convert_jinja_test_to_macro(test_input) == expected_output
+
+    # Test block without whitespace trimming
+    test_input_no_ws = """{% test assert_positive(model, column_name) %}
+    select * from {{ model }} where {{ column_name }} <= 0
+{% endtest %}"""
+
+    expected_output_no_ws = """{% macro test_assert_positive(model, column_name) %}
+    select * from {{ model }} where {{ column_name }} <= 0
+{% endmacro %}"""
+
+    assert _convert_jinja_test_to_macro(test_input_no_ws) == expected_output_no_ws
+
+    # Test block with mixed whitespace trimming
+    test_input_mixed = """{%- test complex_test(model, column_name='id') %}
+    select count(*) from {{ model }} where {{ column_name }} is null
+{% endtest -%}"""
+
+    expected_output_mixed = """{%- macro test_complex_test(model, column_name='id') %}
+    select count(*) from {{ model }} where {{ column_name }} is null
+{% endmacro -%}"""
+
+    assert _convert_jinja_test_to_macro(test_input_mixed) == expected_output_mixed
+
+    # Test already converted macro (should return unchanged)
+    macro_input = """{%- macro test_already_converted(model) -%}
+    select * from {{ model }}
+{%- endmacro -%}"""
+
+    assert _convert_jinja_test_to_macro(macro_input) == macro_input

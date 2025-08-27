@@ -21,6 +21,8 @@ models:
         tests:
           - less_than_amount:
               amount: 1000
+          - greater_than_amount:
+              amount: 0
       - name: ds
         description: Date
   - name: top_waiters
