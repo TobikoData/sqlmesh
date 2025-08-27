@@ -1,5 +1,9 @@
 import pytest
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroExtractor,
+    extract_macro_references_and_variables,
+)
 from sqlmesh.dbt.converter.jinja import JinjaGenerator, convert_jinja_query, convert_jinja_macro
 import sqlmesh.dbt.converter.jinja_transforms as jt
 from pathlib import Path
@@ -437,3 +441,10 @@ def test_convert_jinja_macro(input: str, expected: str, sushi_dbt_context: Conte
     result = convert_jinja_macro(sushi_dbt_context, input.strip())
 
     assert " ".join(result.split()) == " ".join(expected.strip().split())
+
+
+def test_extract_macro_references_and_variables() -> None:
+    input = """JINJA_QUERY('{%- set something = "'"~var("variable").split("|") -%}"""
+    _, variables = extract_macro_references_and_variables(input)
+    assert len(variables) == 1
+    assert variables == {"variable"}
