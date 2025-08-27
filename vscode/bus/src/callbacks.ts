@@ -51,7 +51,7 @@ export type RPCMethods = {
   }
   api_query: {
     params: {
-      endpoint: string
+      url: string
       method: string
       params: any
       body: any

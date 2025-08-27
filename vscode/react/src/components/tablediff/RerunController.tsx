@@ -93,7 +93,7 @@ export function RerunController({
 
         const apiPromise = callRpc('api_query', {
           method: 'GET',
-          endpoint: '/api/table_diff',
+          url: '/api/table_diff',
           params: params,
           body: {},
         })

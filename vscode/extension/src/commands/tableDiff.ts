@@ -206,7 +206,7 @@ export function showTableDiff(
 
         return await lspClient.call_custom_method('sqlmesh/api', {
           method: 'GET',
-          endpoint: '/api/table_diff',
+          url: '/api/table_diff',
           params: {
             source: selectedSourceEnv.label,
             target: selectedTargetEnv.label,
@@ -484,7 +484,7 @@ export function showTableDiff(
 
                     return await lspClient.call_custom_method('sqlmesh/api', {
                       method: 'GET',
-                      endpoint: '/api/table_diff',
+                      url: '/api/table_diff',
                       params: {
                         source: sourceEnvironment,
                         target: targetEnvironment,
