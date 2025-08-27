@@ -25,7 +25,7 @@ class ApiRequest(CustomMethodRequestBaseClass):
     """
 
     requestId: str
-    endpoint: str
+    url: str
     method: t.Optional[str] = "GET"
     params: t.Optional[t.Dict[str, t.Any]] = None
     body: t.Optional[t.Dict[str, t.Any]] = None

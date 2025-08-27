@@ -50,7 +50,7 @@ interface AllModelsResponse extends BaseResponse {
 }
 
 export interface AbstractAPICallRequest {
-  endpoint: string
+  url: string
   method: string
   params: Record<string, any>
   body: Record<string, any>

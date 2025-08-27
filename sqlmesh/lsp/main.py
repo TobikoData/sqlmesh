@@ -326,7 +326,7 @@ class SQLMeshLanguageServer:
         ls.log_trace(f"API request: {request}")
         context = self._context_get_or_load()
 
-        parsed_url = urllib.parse.urlparse(request.endpoint)
+        parsed_url = urllib.parse.urlparse(request.url)
         path_parts = parsed_url.path.strip("/").split("/")
 
         if request.method == "GET":
@@ -423,7 +423,7 @@ class SQLMeshLanguageServer:
                         )
                 return ApiResponseGetTableDiff(data=table_diff_result)
 
-        raise NotImplementedError(f"API request not implemented: {request.endpoint}")
+        raise NotImplementedError(f"API request not implemented: {request.url}")
 
     def _custom_supported_methods(
         self, ls: LanguageServer, params: SupportedMethodsRequest
