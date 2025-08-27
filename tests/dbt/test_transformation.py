@@ -1330,6 +1330,23 @@ def test_partition_by(sushi_test_project: Project):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_partition_by_none(sushi_test_project: Project):
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(name="production", database="main", schema="sushi")
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized="table",
+        unique_key="ds",
+        partition_by=None,
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
+    assert model_config.partition_by is None
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation_info_to_relation():
     assert _relation_info_to_relation(
         {"quote_policy": {}},
