@@ -4,3 +4,5 @@ tsconfig.tsbuildinfo
 
 *storybook.log
 storybook-static
+**/__snapshots__/**
+**/__screenshots__/**

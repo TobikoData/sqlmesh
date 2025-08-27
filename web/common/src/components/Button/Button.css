@@ -1,0 +1,33 @@
+:root {
+  --color-button-focused: var(--color-gray-100);
+
+  --color-button-primary-background: var(--color-gray-100);
+  --color-button-primary-foreground: var(--color-prose);
+  --color-button-primary-hover: var(--color-gray-100);
+  --color-button-primary-active: var(--color-gray-100);
+
+  --color-button-secondary-background: var(--color-gray-100);
+  --color-button-secondary-foreground: var(--color-prose);
+  --color-button-secondary-hover: var(--color-gray-100);
+  --color-button-secondary-active: var(--color-gray-100);
+
+  --color-button-alternative-background: var(--color-gray-100);
+  --color-button-alternative-foreground: var(--color-prose);
+  --color-button-alternative-hover: var(--color-gray-100);
+  --color-button-alternative-active: var(--color-gray-100);
+
+  --color-button-destructive-background: var(--color-gray-100);
+  --color-button-destructive-foreground: var(--color-prose);
+  --color-button-destructive-hover: var(--color-gray-100);
+  --color-button-destructive-active: var(--color-gray-100);
+
+  --color-button-danger-background: var(--color-gray-100);
+  --color-button-danger-foreground: var(--color-prose);
+  --color-button-danger-hover: var(--color-gray-100);
+  --color-button-danger-active: var(--color-gray-100);
+
+  --color-button-transparent-background: var(--color-gray-100);
+  --color-button-transparent-foreground: var(--color-prose);
+  --color-button-transparent-hover: var(--color-gray-100);
+  --color-button-transparent-active: var(--color-gray-100);
+}
