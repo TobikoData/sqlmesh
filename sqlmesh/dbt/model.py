@@ -154,7 +154,11 @@ class ModelConfig(BaseModelConfig):
 
     @field_validator("partition_by", mode="before")
     @classmethod
-    def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
+    def _validate_partition_by(
+        cls, v: t.Any
+    ) -> t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]]:
+        if v is None:
+            return None
         if isinstance(v, str):
             return [v]
         if isinstance(v, list):
