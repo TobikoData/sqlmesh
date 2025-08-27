@@ -200,6 +200,14 @@ def extract_dbt_adapter_dispatch_targets(jinja_str: str) -> t.List[t.Tuple[str, 
     return extracted
 
 
+def is_variable_node(n: nodes.Node) -> bool:
+    return (
+        isinstance(n, nodes.Call)
+        and isinstance(n.node, nodes.Name)
+        and n.node.name in (c.VAR, c.BLUEPRINT_VAR)
+    )
+
+
 def extract_macro_references_and_variables(
     *jinja_strs: str, dbt_target_name: t.Optional[str] = None
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
@@ -227,13 +235,6 @@ def extract_macro_references_and_variables(
                             name=f"{dbt_target_name}__{dispatch_target_name}",
                         )
                     )
-
-        def is_variable_node(n: nodes.Node) -> bool:
-            return (
-                isinstance(n, nodes.Call)
-                and isinstance(n.node, nodes.Name)
-                and n.node.name in (c.VAR, c.BLUEPRINT_VAR)
-            )
 
         for call_name, node in extract_call_names(jinja_str):
             if call_name[0] in (c.VAR, c.BLUEPRINT_VAR):
