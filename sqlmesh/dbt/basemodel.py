@@ -357,7 +357,9 @@ class BaseModelConfig(GeneralConfig):
         # - https://docs.getdbt.com/reference/resource-configs/contract
         # - https://docs.getdbt.com/reference/resource-configs/column_types
         if column_types_override:
-            model_kwargs["columns"] = column_types_to_sqlmesh(column_types_override)
+            model_kwargs["columns"] = (
+                column_types_to_sqlmesh(column_types_override, self.dialect(context)) or None
+            )
 
         return model_kwargs
 
