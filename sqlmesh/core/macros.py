@@ -246,7 +246,9 @@ class MacroEvaluator:
             )
 
     def transform(
-        self, expression: exp.Expression
+        self,
+        expression: exp.Expression,
+        render_jinja: bool = True,
     ) -> exp.Expression | t.List[exp.Expression] | None:
         changed = False
 
@@ -284,7 +286,7 @@ class MacroEvaluator:
                     return exp.to_identifier(text, quoted=node.quoted or None)
             if node.is_string:
                 text = node.this
-                if has_jinja(text):
+                if render_jinja and has_jinja(text):
                     changed = True
                     node.set("this", self.jinja_env.from_string(node.this).render())
                 return node

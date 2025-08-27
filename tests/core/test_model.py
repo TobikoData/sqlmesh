@@ -11543,3 +11543,18 @@ def test_text_diff_optimize_query():
     diff = model1.text_diff(model2)
     assert diff, "Expected diff to show optimize_query change"
     assert "+  optimize_query" in diff.lower()
+
+
+def test_raw_jinja_raw_tag():
+    expressions = d.parse(
+        """
+        MODEL (name test);
+
+        JINJA_QUERY_BEGIN;
+        SELECT {% raw %} '{{ foo }}' {% endraw %} AS col;
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.render_query().sql() == "SELECT '{{ foo }}' AS \"col\""
