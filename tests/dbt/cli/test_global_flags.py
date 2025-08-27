@@ -74,7 +74,7 @@ def test_run_error_handler(
     assert "Error: List command error" in result.output
     assert "Traceback" not in result.output
 
-    # test SQLMeshError in main command wuthout subcommand
+    # test SQLMeshError in main command without subcommand
     mock_create = mocker.patch("sqlmesh_dbt.cli.create")
     mock_create.side_effect = SQLMeshError("Failed to load project")
     result = invoke_cli(["--profile", "jaffle_shop"])
