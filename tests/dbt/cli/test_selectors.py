@@ -27,10 +27,11 @@ def test_selection(dbt_select: t.List[str], expected: t.Optional[str]):
         ([], None),
         (["main.model_a"], "^(main.model_a)"),
         (["(main.model_a & main.model_b)"], "^(main.model_a & main.model_b)"),
-        (["main.model_a +main.model_b"], "^(main.model_a) | ^(+main.model_b)"),
+        (["main.model_a,main.model_b"], "^(main.model_a & main.model_b)"),
+        (["main.model_a +main.model_b"], "^(main.model_a | +main.model_b)"),
         (
             ["(+main.model_a & ^main.model_b)", "main.model_c"],
-            "^(+main.model_a & ^main.model_b) | ^(main.model_c)",
+            "^((+main.model_a & ^main.model_b) | main.model_c)",
         ),
     ],
 )
@@ -51,7 +52,7 @@ def test_exclusion(dbt_exclude: t.List[str], expected: t.Optional[str]):
         (
             ["+main.model_a", "main.*b+"],
             ["raw.src_data", "tag:disabled"],
-            "(+main.model_a | main.*b+) & (^(raw.src_data) | ^(tag:disabled))",
+            "(+main.model_a | main.*b+) & ^(raw.src_data | tag:disabled)",
         ),
     ],
 )

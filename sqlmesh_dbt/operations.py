@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class DbtOperations:
-    def __init__(self, sqlmesh_context: Context, dbt_project: Project):
+    def __init__(self, sqlmesh_context: Context, dbt_project: Project, debug: bool = False):
         self.context = sqlmesh_context
         self.project = dbt_project
+        self.debug = debug
 
     def list_(
         self,
@@ -55,6 +56,10 @@ class DbtOperations:
         self, select: t.Optional[t.List[str]] = None, exclude: t.Optional[t.List[str]] = None
     ) -> t.Dict[str, Model]:
         if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+            if self.debug:
+                self.console.print(f"dbt --select: {select}")
+                self.console.print(f"dbt --exclude: {exclude}")
+                self.console.print(f"sqlmesh equivalent: '{sqlmesh_selector}'")
             model_selector = self.context._new_selector()
             selected_models = {
                 fqn: model
@@ -119,7 +124,7 @@ def create(
         # so that DbtOperations can query information from the DBT project files in order to invoke SQLMesh correctly
         dbt_project = dbt_loader._projects[0]
 
-        return DbtOperations(sqlmesh_context, dbt_project)
+        return DbtOperations(sqlmesh_context, dbt_project, debug=debug)
 
 
 def init_project_if_required(project_dir: Path) -> None:

@@ -37,6 +37,10 @@ def to_sqlmesh(dbt_select: t.Collection[str], dbt_exclude: t.Collection[str]) ->
             -> "+main.model_a & ^(raw.src_data)"
         --select "+main.model_a" --select "main.*b+" --exclude "raw.src_data"
             -> "(+main.model_a | main.*b+) & ^(raw.src_data)"
+        --select "+main.model_a" --select "main.*b+" --exclude "raw.src_data" --exclude "main.model_c"
+            -> "(+main.model_a | main.*b+) & ^(raw.src_data | main.model_c)"
+        --select "+main.model_a main.*b+" --exclude "raw.src_data main.model_c"
+            -> "(+main.model_a | main.*b+) & ^(raw.src_data | main.model_c)"
     """
     if not dbt_select and not dbt_exclude:
         return None
@@ -44,8 +48,13 @@ def to_sqlmesh(dbt_select: t.Collection[str], dbt_exclude: t.Collection[str]) ->
     select_expr = " | ".join(_to_sqlmesh(expr) for expr in dbt_select)
     select_expr = _wrap(select_expr) if dbt_exclude and len(dbt_select) > 1 else select_expr
 
-    exclude_expr = " | ".join(_to_sqlmesh(expr, negate=True) for expr in dbt_exclude)
-    exclude_expr = _wrap(exclude_expr) if dbt_select and len(dbt_exclude) > 1 else exclude_expr
+    exclude_expr = ""
+
+    if dbt_exclude:
+        exclude_expr = " | ".join(_to_sqlmesh(expr) for expr in dbt_exclude)
+        exclude_expr = _negate(
+            _wrap(exclude_expr) if dbt_select and len(dbt_exclude) > 1 else exclude_expr
+        )
 
     main_expr = " & ".join([expr for expr in [select_expr, exclude_expr] if expr])
 
@@ -56,12 +65,8 @@ def to_sqlmesh(dbt_select: t.Collection[str], dbt_exclude: t.Collection[str]) ->
     return main_expr
 
 
-def _to_sqlmesh(selector_str: str, negate: bool = False) -> str:
+def _to_sqlmesh(selector_str: str) -> str:
     unions, intersections = _split_unions_and_intersections(selector_str)
-
-    if negate:
-        unions = [_negate(u) for u in unions]
-        intersections = [_negate(i) for i in intersections]
 
     union_expr = " | ".join(unions)
     intersection_expr = " & ".join(intersections)
@@ -79,6 +84,7 @@ def _split_unions_and_intersections(selector_str: str) -> t.Tuple[t.List[str], t
     # break space-separated items like: "my_first_model my_second_model" into a list of selectors to union
     # and comma-separated items like: "my_first_model,my_second_model" into a list of selectors to intersect
     # but, take into account brackets, eg "(my_first_model & my_second_model)" should not be split
+    # also take into account both types in the same string, eg "my_first_model my_second_model model_3,model_4,model_5"
 
     def _split_by(input: str, delimiter: str) -> t.Iterator[str]:
         buf = ""
