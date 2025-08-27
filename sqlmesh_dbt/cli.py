@@ -102,9 +102,14 @@ def dbt(
 )
 @vars_option
 @click.pass_context
-def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
+def run(
+    ctx: click.Context,
+    vars: t.Optional[t.Dict[str, t.Any]],
+    env: t.Optional[str] = None,
+    **kwargs: t.Any,
+) -> None:
     """Compile SQL and execute against the current target database."""
-    _get_dbt_operations(ctx, vars).run(**kwargs)
+    _get_dbt_operations(ctx, vars).run(environment=env, **kwargs)
 
 
 @dbt.command(name="list")
