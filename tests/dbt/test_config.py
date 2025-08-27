@@ -7,11 +7,13 @@ import pytest
 from dbt.adapters.base import BaseRelation, Column
 from pytest_mock import MockerFixture
 
+from sqlglot import exp
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.loader import sqlmesh_config
@@ -1076,3 +1078,15 @@ def test_on_schema_change_properties(
 
     assert model.on_additive_change == expected_additive
     assert model.on_destructive_change == expected_destructive
+
+
+def test_sqlmesh_model_kwargs_columns_override():
+    context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="foo")
+
+    kwargs = ModelConfig(dialect="duckdb").sqlmesh_model_kwargs(
+        context,
+        {"c": ColumnConfig(name="c", data_type="uinteger")},
+    )
+    assert kwargs.get("columns") == {"c": exp.DataType.build(exp.DataType.Type.UINT)}

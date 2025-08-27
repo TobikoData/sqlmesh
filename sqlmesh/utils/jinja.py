@@ -200,6 +200,14 @@ def extract_dbt_adapter_dispatch_targets(jinja_str: str) -> t.List[t.Tuple[str, 
     return extracted
 
 
+def is_variable_node(n: nodes.Node) -> bool:
+    return (
+        isinstance(n, nodes.Call)
+        and isinstance(n.node, nodes.Name)
+        and n.node.name in (c.VAR, c.BLUEPRINT_VAR)
+    )
+
+
 def extract_macro_references_and_variables(
     *jinja_strs: str, dbt_target_name: t.Optional[str] = None
 ) -> t.Tuple[t.Set[MacroReference], t.Set[str]]:
@@ -230,7 +238,15 @@ def extract_macro_references_and_variables(
 
         for call_name, node in extract_call_names(jinja_str):
             if call_name[0] in (c.VAR, c.BLUEPRINT_VAR):
-                assert isinstance(node, nodes.Call)
+                if not is_variable_node(node):
+                    # Find the variable node which could be nested
+                    for n in node.find_all(nodes.Call):
+                        if is_variable_node(n):
+                            node = n
+                            break
+                    else:
+                        raise ValueError(f"Could not find variable name in {jinja_str}")
+                node = t.cast(nodes.Call, node)
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
                     variable_name = args[0].lower()
