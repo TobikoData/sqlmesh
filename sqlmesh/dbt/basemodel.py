@@ -328,12 +328,9 @@ class BaseModelConfig(GeneralConfig):
             dependencies.macros, package=self.package_name
         )
         jinja_macros.add_globals(self._model_jinja_context(model_context, dependencies))
-        return {
+
+        model_kwargs = {
             "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(
-                column_types_override or self.columns, self.dialect(context)
-            )
-            or None,
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
@@ -348,6 +345,23 @@ class BaseModelConfig(GeneralConfig):
             "grain": [d.parse_one(g, dialect=model_dialect) for g in ensure_list(self.grain)],
             **self.sqlmesh_config_kwargs,
         }
+
+        # dbt doesn't respect the data_type field for DDL statements– instead, it optionally uses
+        # it to validate the actual data types at runtime through contracts or external plugins.
+        # Only the `columns_types` config of seed models is actually respected. We don't set the
+        # columns attribute to self.columns intentionally in all other cases, as that could result
+        # in unfaithful types when models are materialized.
+        #
+        # See:
+        # - https://docs.getdbt.com/reference/resource-properties/columns
+        # - https://docs.getdbt.com/reference/resource-configs/contract
+        # - https://docs.getdbt.com/reference/resource-configs/column_types
+        if column_types_override:
+            model_kwargs["columns"] = (
+                column_types_to_sqlmesh(column_types_override, self.dialect(context)) or None
+            )
+
+        return model_kwargs
 
     @abstractmethod
     def to_sqlmesh(

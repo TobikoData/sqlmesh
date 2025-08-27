@@ -6,7 +6,8 @@
 
 SELECT
   waiter_id::INT AS waiter_id,
-  revenue::DOUBLE AS revenue
+  revenue::DOUBLE AS revenue,
+  1 AS unused_column
 FROM {{ ref('waiter_revenue_by_day', version=1) }}
 WHERE
   ds = (

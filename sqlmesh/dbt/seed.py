@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import typing as t
 
 import agate
@@ -50,15 +49,11 @@ class SeedConfig(BaseModelConfig):
         """Converts the dbt seed into a SQLMesh model."""
         seed_path = self.path.absolute().as_posix()
 
-        if column_types := self.column_types:
-            column_types_override = copy.deepcopy(self.columns)
-            for name, data_type in column_types.items():
-                column = column_types_override.setdefault(name, ColumnConfig(name=name))
-                column.data_type = data_type
-                column.quote = self.quote_columns or column.quote
-                kwargs = self.sqlmesh_model_kwargs(context, column_types_override)
-        else:
-            kwargs = self.sqlmesh_model_kwargs(context)
+        column_types_override = {
+            name: ColumnConfig(name=name, data_type=data_type, quote=self.quote_columns)
+            for name, data_type in (self.column_types or {}).items()
+        }
+        kwargs = self.sqlmesh_model_kwargs(context, column_types_override)
 
         columns = kwargs.get("columns") or {}
 

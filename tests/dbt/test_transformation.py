@@ -608,7 +608,10 @@ def test_model_columns():
         name="target", schema="test", database="test", account="foo", user="bar", password="baz"
     )
     sqlmesh_model = model.to_sqlmesh(context)
-    assert sqlmesh_model.columns_to_types == expected_column_types
+
+    # Columns being present in a schema.yaml are not respected in DDLs, so SQLMesh doesn't
+    # set the corresponding columns_to_types_ attribute either to match dbt's behavior
+    assert sqlmesh_model.columns_to_types == None
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
 
 
@@ -623,8 +626,11 @@ def test_seed_columns():
         },
     )
 
+    # dbt doesn't respect the data_type field in the DDLs– instead, it optionally uses it to
+    # validate the actual data types at runtime through contracts or external plugins. Thus,
+    # the actual data type is int, because that is what is inferred from the seed file.
     expected_column_types = {
-        "id": exp.DataType.build("text"),
+        "id": exp.DataType.build("int"),
         "name": exp.DataType.build("text"),
     }
     expected_column_descriptions = {
@@ -670,6 +676,27 @@ def test_seed_column_types():
 
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
+
+    seed = SeedConfig(
+        name="foo",
+        package="package",
+        path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
+        column_types={
+            "name": "text",
+        },
+        columns={
+            # The `data_type` field does not affect the materialized seed's column type
+            "id": ColumnConfig(name="name", data_type="text"),
+        },
+        quote_columns=True,
+    )
+
+    expected_column_types = {
+        "id": exp.DataType.build("int"),
+        "name": exp.DataType.build("text"),
+    }
+    sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == expected_column_types
 
 
 def test_seed_column_inference(tmp_path):
