@@ -14,6 +14,8 @@ from sqlglot import exp
 
 from sqlmesh.core.console import get_console
 
+SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"
+
 
 def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
@@ -23,13 +25,13 @@ def migrate(state_sync, **kwargs):  # type: ignore
         snapshots_table = f"{schema}.{snapshots_table}"
 
     warning = (
-        "IMPORTANT: this migration may have unexpected side-effects for dbt projects.\n\n"
         "SQLMesh previously misinterpreted dbt's schema.yml 'data_type' field as actual "
-        "column types, but dbt only uses these for contracts/validation, not in actual DDL statements. This "
-        "has been fixed to match dbt's actual behavior. Your existing tables may have been created with "
-        "incorrect column types. After this migration, run 'sqlmesh diff prod' to check for column "
-        "type differences, and if any are found, apply a plan to correct the table schemas. "
-        "For more details, see: https://github.com/TobikoData/sqlmesh/pull/5231."
+        "column types, but dbt only uses these for contracts/validation, not in actual "
+        "DDL statements. This has been fixed to match dbt's actual behavior. Your existing "
+        "tables may have been created with incorrect column types. After this migration, run "
+        "'sqlmesh diff prod' to check for column type differences, and if any are found, "
+        "apply a plan to correct the table schemas. For more details, see: "
+        "https://github.com/TobikoData/sqlmesh/pull/5231."
     )
 
     for (snapshot,) in engine_adapter.fetchall(
@@ -38,6 +40,9 @@ def migrate(state_sync, **kwargs):  # type: ignore
         parsed_snapshot = json.loads(snapshot)
         node = parsed_snapshot["node"]
 
-        if node.get("columns"):
+        jinja_macros = node.get("jinja_macros") or {}
+        create_builtins_module = jinja_macros.get("create_builtins_module") or ""
+
+        if create_builtins_module == SQLMESH_DBT_PACKAGE and node.get("columns"):
             get_console().log_warning(warning)
             return
