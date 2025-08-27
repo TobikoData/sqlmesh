@@ -230,10 +230,6 @@ class BaseExpressionRenderer:
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
 
-            render_jinja = False
-        else:
-            render_jinja = True
-
         macro_evaluator.locals.update(render_kwargs)
 
         if variables:
@@ -251,9 +247,7 @@ class BaseExpressionRenderer:
 
         for expression in expressions:
             try:
-                transformed_expressions = ensure_list(
-                    macro_evaluator.transform(expression, render_jinja=render_jinja)
-                )
+                transformed_expressions = ensure_list(macro_evaluator.transform(expression))
             except Exception as ex:
                 raise_config_error(
                     f"Failed to resolve macros for\n\n{expression.sql(dialect=self._dialect, pretty=True)}\n\n{ex}\n",
@@ -284,7 +278,6 @@ class BaseExpressionRenderer:
         # MacroEvaluator can resolve columns_to_types calls and provide true schemas.
         if should_cache and (not self.schema.empty or not macro_evaluator.columns_to_types_called):
             self._cache = resolved_expressions
-
         return resolved_expressions
 
     def update_cache(self, expression: t.Optional[exp.Expression]) -> None:

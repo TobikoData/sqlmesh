@@ -2566,11 +2566,15 @@ def test_parse(assert_exp_eq):
           dialect '',
         );
 
+        JINJA_QUERY_BEGIN;
+
         SELECT
           id::INT AS id,
           ds
         FROM x
-        WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
+        WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds;
+
+        JINJA_END;
     """
     )
     model = load_sql_based_model(expressions, dialect="hive")
@@ -2580,8 +2584,8 @@ def test_parse(assert_exp_eq):
     }
     assert not model.annotated
     assert model.dialect == ""
-    assert isinstance(model.query, exp.Select)
-    assert isinstance(SqlModel.parse_raw(model.json()).query, exp.Select)
+    assert isinstance(model.query, d.JinjaQuery)
+    assert isinstance(SqlModel.parse_raw(model.json()).query, d.JinjaQuery)
     assert_exp_eq(
         model.render_query(),
         """
