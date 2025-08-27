@@ -21,7 +21,7 @@ WITH order_total AS (
   LEFT JOIN sushi.items AS i
     ON oi.item_id = i.id AND oi.event_date = i.event_date
   WHERE
-    oi.event_date BETWEEN CAST('{{ start_ds }}' as DATE) AND CAST('{{ end_ds }}' as DATE)
+    oi.event_date BETWEEN @start_date AND @end_date
   GROUP BY
     oi.order_id,
     oi.event_date
@@ -35,7 +35,7 @@ FROM sushi.orders AS o
 LEFT JOIN order_total AS ot
   ON o.id = ot.order_id AND o.event_date = ot.event_date
 WHERE
-  o.event_date BETWEEN CAST('{{ start_ds }}' as DATE) AND CAST('{{ end_ds }}' as DATE)
+  o.event_date BETWEEN @start_date AND @end_date
 GROUP BY
   o.customer_id,
   o.event_date

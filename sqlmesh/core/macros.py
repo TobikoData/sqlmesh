@@ -12,7 +12,6 @@ from string import Template
 from datetime import datetime, date
 
 import sqlglot
-from jinja2 import Environment
 from sqlglot import Generator, exp, parse_one
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
@@ -40,7 +39,6 @@ from sqlmesh.utils import (
 )
 from sqlmesh.utils.date import DatetimeRanges, to_datetime, to_date
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import (
     Executable,
     SqlValue,
@@ -193,7 +191,6 @@ class MacroEvaluator:
         self.columns_to_types_called = False
         self.default_catalog = default_catalog
 
-        self._jinja_env: t.Optional[Environment] = None
         self._schema = schema
         self._resolve_table = resolve_table
         self._resolve_tables = resolve_tables
@@ -282,12 +279,6 @@ class MacroEvaluator:
                 if node.this != text:
                     changed = True
                     return exp.to_identifier(text, quoted=node.quoted or None)
-            if node.is_string:
-                text = node.this
-                if has_jinja(text):
-                    changed = True
-                    node.set("this", self.jinja_env.from_string(node.this).render())
-                return node
             if isinstance(node, MacroFunc):
                 changed = True
                 return self.evaluate(node)
@@ -435,14 +426,6 @@ class MacroEvaluator:
             Expression: the syntax tree for the first parsed statement
         """
         return sqlglot.maybe_parse(sql, dialect=self.dialect, into=into, **opts)
-
-    @property
-    def jinja_env(self) -> Environment:
-        if not self._jinja_env:
-            jinja_env_methods = {**self.locals, **self.env}
-            del jinja_env_methods["self"]
-            self._jinja_env = JinjaMacroRegistry().build_environment(**jinja_env_methods)
-        return self._jinja_env
 
     def columns_to_types(self, model_name: TableName | exp.Column) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
