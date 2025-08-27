@@ -27,6 +27,6 @@ SELECT
 FROM sushi.waiters AS w
 JOIN sushi.customers as c ON w.waiter_id = c.customer_id
 JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id
-WHERE w.event_date BETWEEN CAST('{{ start_ds }}' as DATE) AND @end_date;
+WHERE w.event_date BETWEEN @start_date AND @end_date;
 
 JINJA_END;
