@@ -677,6 +677,27 @@ def test_seed_column_types():
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
+    seed = SeedConfig(
+        name="foo",
+        package="package",
+        path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
+        column_types={
+            "name": "text",
+        },
+        columns={
+            # The `data_type` field does not affect the materialized seed's column type
+            "id": ColumnConfig(name="name", data_type="text"),
+        },
+        quote_columns=True,
+    )
+
+    expected_column_types = {
+        "id": exp.DataType.build("int"),
+        "name": exp.DataType.build("text"),
+    }
+    sqlmesh_seed = seed.to_sqlmesh(context)
+    assert sqlmesh_seed.columns_to_types == expected_column_types
+
 
 def test_seed_column_inference(tmp_path):
     seed_csv = tmp_path / "seed.csv"
