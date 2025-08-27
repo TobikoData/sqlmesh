@@ -121,6 +121,13 @@ linter:
 # https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#virtual-data-environment-modes
 virtual_environment_mode: {VirtualEnvironmentMode.DEV_ONLY.lower()}
 
+# --- Plan Defaults ---
+# https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#plan
+plan:
+  # For Virtual Data Environments, this ensures that any changes are always considered against prod,
+  # rather than the previous state of that environment
+  always_recreate_environment: True
+
 # --- Model Defaults ---
 # https://sqlmesh.readthedocs.io/en/stable/reference/model_configuration/#model-defaults
 model_defaults:

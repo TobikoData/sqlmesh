@@ -109,10 +109,9 @@ class DbtOperations:
                 dict(
                     # don't create views for all of prod in the dev environment
                     include_unmodified=False,
-                    # always plan from scratch against prod rather than planning against the previous state of an existing dev environment
-                    # this results in the full scope of changes vs prod always being shown on the local branch
+                    # always plan from scratch against prod. note that this is coupled with the `always_recreate_environment=True` setting in the default config file.
+                    # the result is that rather than planning against the previous state of an existing dev environment, the full scope of changes vs prod are always shown
                     create_from=c.PROD,
-                    always_recreate_environment=True,
                     # Always enable dev previews for incremental / forward-only models.
                     # Due to how DBT does incrementals (INCREMENTAL_UNMANAGED on the SQLMesh engine), this will result in the full model being refreshed
                     # with the entire dataset, which can potentially be very large. If this is undesirable, users have two options:

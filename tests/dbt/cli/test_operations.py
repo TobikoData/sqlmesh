@@ -7,6 +7,7 @@ from sqlmesh.utils.errors import SQLMeshError
 import time_machine
 from sqlmesh.core.console import NoopConsole
 from sqlmesh.core.plan import PlanBuilder
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 
 pytestmark = pytest.mark.slow
 
@@ -91,6 +92,18 @@ def test_create_can_specify_profile_and_target(jaffle_shop_duckdb: Path):
 
     assert dbt_project.context.profile_name == "jaffle_shop"
     assert dbt_project.context.target_name == "dev"
+
+
+def test_default_options(jaffle_shop_duckdb: Path):
+    operations = create()
+
+    config = operations.context.config
+    dbt_project = operations.project
+
+    assert config.plan.always_recreate_environment is True
+    assert config.virtual_environment_mode == VirtualEnvironmentMode.DEV_ONLY
+    assert config.model_defaults.start is not None
+    assert config.model_defaults.dialect == dbt_project.context.target.dialect
 
 
 def test_create_can_set_project_variables(jaffle_shop_duckdb: Path):

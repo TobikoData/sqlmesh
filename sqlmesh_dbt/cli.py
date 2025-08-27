@@ -93,6 +93,7 @@ def dbt(
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
 )
 @click.option(
+    "--env",
     "--environment",
     help="Run against a specific Virtual Data Environment (VDE) instead of the main environment",
 )
