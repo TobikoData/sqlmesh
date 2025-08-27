@@ -2,7 +2,7 @@ import typing as t
 import sys
 import click
 from sqlmesh_dbt.operations import DbtOperations, create
-from sqlmesh_dbt.error import cli_global_error_handler
+from sqlmesh_dbt.error import cli_global_error_handler, ErrorHandlingGroup
 from pathlib import Path
 from sqlmesh_dbt.options import YamlParamType
 import functools
@@ -43,7 +43,7 @@ select_option = click.option(
 exclude_option = click.option("--exclude", multiple=True, help="Specify the nodes to exclude.")
 
 
-@click.group(invoke_without_command=True)
+@click.group(cls=ErrorHandlingGroup, invoke_without_command=True)
 @click.option("--profile", help="Which existing profile to load. Overrides output.profile")
 @click.option("-t", "--target", help="Which target to load for the given profile")
 @click.option(

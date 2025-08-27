@@ -27,3 +27,10 @@ def cli_global_error_handler(
                 raise
 
     return wrapper
+
+
+class ErrorHandlingGroup(click.Group):
+    def add_command(self, cmd: click.Command, name: t.Optional[str] = None) -> None:
+        if cmd.callback:
+            cmd.callback = cli_global_error_handler(cmd.callback)
+        super().add_command(cmd, name=name)
