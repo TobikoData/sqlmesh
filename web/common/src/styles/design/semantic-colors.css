@@ -5,4 +5,13 @@
   --color-dark: hsl(226, 24%, 8%);
   --color-brand: var(--color-tobiko);
   --color-prose: var(--color-gray-800);
+  --color-focused: var(--color-brand);
+
+  /* Model colors */
+  --color-model-catalog: hsl(226, 24%, 8%);
+  --color-model-catalog-grayscale: hsl(226, 24%, 8%);
+  --color-model-schema: hsl(30, 12%, 100%);
+  --color-model-schema-grayscale: hsl(30, 12%, 100%);
+  --color-model-name: hsl(226, 24%, 8%);
+  --color-model-name-grayscale: hsl(226, 24%, 8%);
 }

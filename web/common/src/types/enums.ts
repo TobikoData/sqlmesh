@@ -41,3 +41,15 @@ export const EnumShape = {
   Pill: 'pill',
 } as const
 export type Shape = (typeof EnumShape)[keyof typeof EnumShape]
+
+export const EnumPosition = {
+  TOP: 'top',
+  RIGHT: 'right',
+  BOTTOM: 'bottom',
+  LEFT: 'left',
+  CENTER: 'center',
+  START: 'start',
+  END: 'end',
+} as const
+
+export type Position = (typeof EnumPosition)[keyof typeof EnumPosition]
