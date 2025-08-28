@@ -13,6 +13,7 @@ from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.dbt.builtin import Api
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
@@ -1090,6 +1091,23 @@ def test_sqlmesh_model_kwargs_columns_override():
         {"c": ColumnConfig(name="c", data_type="uinteger")},
     )
     assert kwargs.get("columns") == {"c": exp.DataType.build(exp.DataType.Type.UINT)}
+
+
+@pytest.mark.parametrize(
+    "dialect",
+    [
+        "databricks",
+        "duckdb",
+        "postgres",
+        "redshift",
+        "snowflake",
+        "bigquery",
+        "trino",
+        "clickhouse",
+    ],
+)
+def test_api_class_loading(dialect: str):
+    Api(dialect)
 
 
 def test_empty_vars_config(tmp_path):

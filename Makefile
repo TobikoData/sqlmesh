@@ -43,8 +43,12 @@ install-dev-dbt-%:
 	fi; \
 	$(MAKE) install-dev; \
 	if [ "$$version" = "1.6.0" ]; then \
-		echo "Applying pydantic override for dbt 1.6.0"; \
-		$(PIP) install 'pydantic>=2.0.0' --reinstall; \
+		echo "Applying overrides for dbt 1.6.0"; \
+		$(PIP) install 'pydantic>=2.0.0' 'google-cloud-bigquery==3.30.0' 'databricks-sdk==0.28.0' --reinstall; \
+	fi; \
+	if [ "$$version" = "1.7.0" ]; then \
+		echo "Applying overrides for dbt 1.7.0"; \
+		$(PIP) install 'databricks-sdk==0.28.0' --reinstall; \
 	fi; \
 	mv pyproject.toml.backup pyproject.toml; \
 	echo "Restored original pyproject.toml"
