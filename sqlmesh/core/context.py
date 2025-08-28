@@ -1518,8 +1518,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             include_unmodified = self.config.plan.include_unmodified
 
         if skip_backfill and not no_gaps and not is_dev:
-            raise ConfigError(
-                "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
+            # note: we deliberately don't mention the --no-gaps flag in case the plan came from the sqlmesh_dbt command
+            # todo: perhaps we could have better error messages if we check sys.argv[0] for which cli is running?
+            self.console.log_warning(
+                "Skipping the backfill stage for production can lead to unexpected results, such as tables being empty or incremental data with non-contiguous time ranges being made available.\n"
+                "If you are doing this deliberately to create an empty version of a table to test a change, please consider using Virtual Data Environments instead."
             )
 
         if not skip_linter:

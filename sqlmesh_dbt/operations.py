@@ -127,15 +127,12 @@ class DbtOperations:
             )
 
         if empty:
-            # dbt --empty adds LIMIT 0 to the queries, resulting in empty tables
-            # this lines up with --skip-backfill in SQLMesh
+            # `dbt --empty` adds LIMIT 0 to the queries, resulting in empty tables. In addition, it happily clobbers existing tables regardless of if they are populated.
+            # This *partially* lines up with --skip-backfill in SQLMesh, which indicates to not populate tables if they happened to be created/updated as part of this plan.
+            # However, if a table already exists and has data in it, there is no change so SQLMesh will not recreate the table and thus it will not be cleared.
+            # So in order to fully replicate dbt's --empty, we also need --full-refresh semantics in order to replace existing tables
             options["skip_backfill"] = True
-
-            if is_prod:
-                # to prevent the following error:
-                # > ConfigError: When targeting the production environment either the backfill should not be skipped or
-                # > the lack of data gaps should be enforced (--no-gaps flag).
-                options["no_gaps"] = True
+            full_refresh = True
 
         if full_refresh:
             # TODO: handling this requires some updates in the engine to enable restatements+changes in the same plan without affecting prod
@@ -185,6 +182,12 @@ def create(
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
+
+        # clear any existing handlers set up by click/rich as defaults so that once SQLMesh logging config is applied,
+        # we dont get duplicate messages logged from things like console.log_warning()
+        root_logger = logging.getLogger()
+        while root_logger.hasHandlers():
+            root_logger.removeHandler(root_logger.handlers[0])
 
         configure_logging(force_debug=debug)
         set_console(DbtCliConsole())
