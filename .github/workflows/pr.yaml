@@ -92,6 +92,44 @@ jobs:
         # of DuckDB require a version of DuckDB we no longer support
         run: |
           source .venv/bin/activate
+
+          # Remove semantic_models and metrics sections for DBT versions < 1.6.0
+          # Using explicit list to avoid version comparison issues
+          if [[ "${{ matrix.dbt-version }}" == "1.3" ]] || \
+             [[ "${{ matrix.dbt-version }}" == "1.4" ]] || \
+             [[ "${{ matrix.dbt-version }}" == "1.5" ]]; then
+            
+            echo "DBT version is ${{ matrix.dbt-version }} (< 1.6.0), removing semantic_models and metrics sections..."
+            
+            schema_file="tests/fixtures/dbt/sushi_test/models/schema.yml"
+            if [[ -f "$schema_file" ]]; then
+              echo "Modifying $schema_file..."
+              
+              # Create a temporary file
+              temp_file=$(mktemp)
+              
+              # Use awk to remove semantic_models and metrics sections
+              awk '
+                /^semantic_models:/ { in_semantic=1; next }
+                /^metrics:/ { in_metrics=1; next }
+                /^[^ ]/ && (in_semantic || in_metrics) { 
+                  in_semantic=0; 
+                  in_metrics=0 
+                }
+                !in_semantic && !in_metrics { print }
+              ' "$schema_file" > "$temp_file"
+              
+              # Move the temp file back
+              mv "$temp_file" "$schema_file"
+              
+              echo "Successfully removed semantic_models and metrics sections"
+            else
+              echo "Schema file not found at $schema_file, skipping..."
+            fi
+          else
+            echo "DBT version is ${{ matrix.dbt-version }} (>= 1.6.0), keeping semantic_models and metrics sections"
+          fi
+
           make dbt-fast-test
       - name: Test SQLMesh info in sushi_dbt
         working-directory: ./examples/sushi_dbt
@@ -104,4 +142,5 @@ jobs:
           else
             echo "DBT version is ${{ matrix.dbt-version }} (>= 1.5.0), keeping version parameters"
           fi
+
           sqlmesh info --skip-connection
