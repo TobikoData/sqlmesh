@@ -7,7 +7,10 @@ import sys
 import typing as t
 import shutil
 from datetime import datetime, timedelta, date
+from unittest import mock
 from unittest.mock import patch
+import logging
+
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
@@ -3748,3 +3751,65 @@ def test_janitor(
         "incremental_model",
         "seed_model",
     ]
+
+
+def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
+    adapter = ctx.engine_adapter
+    dialect = ctx.dialect
+
+    if not adapter.SUPPORTS_MATERIALIZED_VIEWS:
+        pytest.skip(f"Skipping engine {dialect} as it does not support materialized views")
+    elif dialect in ("snowflake", "databricks"):
+        pytest.skip(f"Skipping {dialect} as they're not enabled on standard accounts")
+
+    model_name = ctx.table("test_tbl")
+    mview_name = ctx.table("test_mview")
+
+    sqlmesh = ctx.create_context()
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {model_name}, kind FULL);
+
+                SELECT 1 AS col
+                """
+            )
+        )
+    )
+
+    sqlmesh.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (name {mview_name}, kind VIEW (materialized true));
+
+                SELECT * FROM {model_name}
+                """
+            )
+        )
+    )
+
+    def _assert_mview_value(value: int):
+        df = adapter.fetchdf(f"SELECT * FROM {mview_name.sql(dialect=dialect)}")
+        assert df["col"][0] == value
+
+    # Case 1: Ensure that plan is successful and we can query the materialized view
+    sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+    _assert_mview_value(value=1)
+
+    # Case 2: Ensure that we can change the underlying table and the materialized view is recreated
+    sqlmesh.upsert_model(
+        load_sql_based_model(d.parse(f"""MODEL (name {model_name}, kind FULL); SELECT 2 AS col"""))
+    )
+
+    logger = logging.getLogger("sqlmesh.core.snapshot.evaluator")
+
+    with mock.patch.object(logger, "info") as mock_logger:
+        sqlmesh.plan(auto_apply=True, no_prompts=True)
+
+        assert any("Replacing view" in call[0][0] for call in mock_logger.call_args_list)
+
+    _assert_mview_value(value=2)
