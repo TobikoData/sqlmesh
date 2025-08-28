@@ -33,12 +33,17 @@ class ConfigError(SQLMeshError):
             self.location = Path(location) if isinstance(location, str) else location
 
 
-class MissingModelError(ConfigError):
+class BaseMissingReferenceError(ConfigError):
+    def __init__(self, ref: str) -> None:
+        self.ref = ref
+
+
+class MissingModelError(BaseMissingReferenceError):
     """Raised when a model that is referenced is missing."""
 
-    def __init__(self, model_name: str) -> None:
-        self.model_name = model_name
-        super().__init__(f"Model '{model_name}' was not found.")
+
+class MissingSourceError(BaseMissingReferenceError):
+    """Raised when a source that is referenced is missing."""
 
 
 class MissingDependencyError(SQLMeshError):

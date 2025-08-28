@@ -87,8 +87,15 @@ def test_load_invalid_ref_audit_constraints(
                                 "relationships": {
                                     "to": "ref('not_real_model')",
                                     "field": "cola",
-                                }
-                            }
+                                },
+                            },
+                            {
+                                # Reference a source that doesn't exist
+                                "relationships": {
+                                    "to": "source('not_real_source', 'not_real_table')",
+                                    "field": "cola",
+                                },
+                            },
                         ],
                     }
                 ],
@@ -132,6 +139,10 @@ def test_load_invalid_ref_audit_constraints(
     context = Context(paths=dbt_project_dir)
     assert (
         "Skipping audit 'relationships_full_model_cola__cola__ref_not_real_model_' because model 'not_real_model' is not a valid ref"
+        in caplog.text
+    )
+    assert (
+        "Skipping audit 'relationships_full_model_cola__cola__source_not_real_source_not_real_table_' because source 'not_real_source.not_real_table' is not a valid ref"
         in caplog.text
     )
     fqn = '"local"."main"."full_model"'
