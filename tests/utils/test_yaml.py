@@ -45,3 +45,37 @@ def test_yaml() -> None:
 
     decimal_value = Decimal(123.45)
     assert yaml.load(yaml.dump(decimal_value)) == str(decimal_value)
+
+
+def test_load_keep_last_duplicate_key() -> None:
+    input_str = """
+name: first_name
+name: second_name
+name: third_name
+
+foo: bar
+
+mapping:
+    key: first_value
+    key: second_value
+    key: third_value
+
+sequence:
+    - one
+    - two
+"""
+    # Default behavior of ruamel is to keep the first key encountered
+    assert yaml.load(input_str, allow_duplicate_keys=True) == {
+        "name": "first_name",
+        "foo": "bar",
+        "mapping": {"key": "first_value"},
+        "sequence": ["one", "two"],
+    }
+
+    # Test keeping last key
+    assert yaml.load(input_str, allow_duplicate_keys=True, keep_last_duplicate_key=True) == {
+        "name": "third_name",
+        "foo": "bar",
+        "mapping": {"key": "third_value"},
+        "sequence": ["one", "two"],
+    }
