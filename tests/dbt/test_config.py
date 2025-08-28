@@ -1090,3 +1090,60 @@ def test_sqlmesh_model_kwargs_columns_override():
         {"c": ColumnConfig(name="c", data_type="uinteger")},
     )
     assert kwargs.get("columns") == {"c": exp.DataType.build(exp.DataType.Type.UINT)}
+
+
+def test_empty_vars_config(tmp_path):
+    """Test that a dbt project can be loaded with an empty vars config."""
+    dbt_project_dir = tmp_path / "test_project"
+    dbt_project_dir.mkdir()
+
+    # Create a minimal dbt_project.yml with empty vars
+    dbt_project_yml = dbt_project_dir / "dbt_project.yml"
+    dbt_project_yml.write_text("""
+name: test_empty_vars
+
+version: "1.0.0"
+config-version: 2
+
+profile: test_empty_vars
+
+models:
+  +start: Jan 1 2022
+
+# Empty vars section - various ways to specify empty
+vars:
+    """)
+
+    # Create a minimal profiles.yml
+    profiles_yml = dbt_project_dir / "profiles.yml"
+    profiles_yml.write_text("""
+test_empty_vars:
+  outputs:
+    dev:
+      type: duckdb
+      schema: test
+  target: dev
+    """)
+
+    # Create a simple model
+    model = dbt_project_dir / "models" / "some_model.sql"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_text("SELECT 1 as id")
+
+    # Load the project
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.project import Project
+    from sqlmesh.core.config import Config
+
+    context = DbtContext(project_root=dbt_project_dir, sqlmesh_config=Config())
+
+    # This should not raise an error even with empty vars
+    project = Project.load(context)
+
+    # Verify the project loaded successfully
+    assert project.packages["test_empty_vars"] is not None
+    assert project.packages["test_empty_vars"].name == "test_empty_vars"
+
+    # Verify the variables are empty (not causing any issues)
+    assert project.packages["test_empty_vars"].variables == {}
+    assert project.context.variables == {}
