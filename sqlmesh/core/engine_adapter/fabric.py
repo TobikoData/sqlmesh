@@ -153,6 +153,12 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
 
         logger.info(f"Switching from catalog '{current_catalog}' to '{catalog_name}'")
 
+        # commit the transaction before closing the connection to help prevent errors like:
+        # > Snapshot isolation transaction failed in database because the object accessed by the statement has been modified by a
+        # > DDL statement in another concurrent transaction since the start of this transaction
+        # on subsequent queries in the new connection
+        self._connection_pool.commit()
+
         # note: we call close() on the connection pool instead of self.close() because self.close() calls close_all()
         # on the connection pool but we just want to close the connection for this thread
         self._connection_pool.close()

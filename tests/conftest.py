@@ -245,6 +245,51 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
             )
 
 
+def pytest_configure(config: pytest.Config):
+    # we need to adjust the hook order if pytest-retry is present because it:
+    # - also declares a `pytest_runtest_makereport` with `hookwrapper=True, tryfirst=True`
+    # - this supersedes our one because pytest always loads plugins first and they take precedence over user code
+    #
+    # but, we need our one to run first because it's capturing and ignoring certain errors that cause pytest-retry to fail
+    # and not retry. so we need to adjust the order the hooks are called which pytest does NOT make easy.
+    #
+    # we can't just unload the pytest-retry plugin, load our hook and reload the pytest-retry plugin either.
+    # this causes an error:
+    # > Hook 'pytest_set_excluded_exceptions' is already registered within namespace
+    # because unregister() apparently doesnt unregister plugins cleanly in such a way they can be re-registered
+    #
+    # so what we end up doing below is a small monkey-patch to adjust the call order of the hooks
+    pm = config.pluginmanager
+
+    from pluggy._hooks import HookCaller
+
+    hook_caller: HookCaller = pm.hook.pytest_runtest_makereport
+    hook_impls = hook_caller.get_hookimpls()
+
+    # find the index of our one
+    our_makereport_idx = next(
+        (i for i, v in enumerate(hook_impls) if v.plugin_name.endswith("tests/conftest.py")), None
+    )
+
+    # find the index of the pytest-retry one
+    pytest_retry_makereport_idx = next(
+        (i for i, v in enumerate(hook_impls) if v.plugin_name == "pytest-retry"), None
+    )
+
+    if (
+        pytest_retry_makereport_idx is not None
+        and our_makereport_idx is not None
+        and our_makereport_idx > pytest_retry_makereport_idx
+    ):
+        our_makereport_hook = hook_impls.pop(our_makereport_idx)
+
+        # inject our one to run before the pytest-retry one
+        hook_impls.insert(pytest_retry_makereport_idx, our_makereport_hook)
+
+        # HookCaller doesnt have a setter method for this.
+        hook_caller._hookimpls = hook_impls  # type: ignore
+
+
 # Ignore all local config files
 @pytest.fixture(scope="session", autouse=True)
 def ignore_local_config_files():
