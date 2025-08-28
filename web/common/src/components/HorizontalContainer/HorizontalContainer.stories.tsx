@@ -3,11 +3,6 @@ import { HorizontalContainer } from './HorizontalContainer'
 export default {
   title: 'Components/Containers/HorizontalContainer',
   component: HorizontalContainer,
-  argTypes: {
-    scroll: { control: 'boolean' },
-    className: { control: 'text' },
-    children: { control: false },
-  },
 }
 
 const content = Array.from({ length: 20 }, (_, i) => (

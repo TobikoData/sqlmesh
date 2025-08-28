@@ -1,32 +1,20 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import type { Size } from '@/types'
+import { Button, type ButtonVariant } from './Button'
+import { fn, expect, userEvent, within } from 'storybook/test'
 
-import { EnumSize } from '@/types/enums'
-import { Button } from './Button'
-import { EnumButtonVariant } from './help'
+const buttonVariants: ButtonVariant[] = [
+  'primary',
+  'secondary',
+  'alternative',
+  'destructive',
+  'danger',
+  'transparent',
+]
 
 const meta: Meta<typeof Button> = {
   title: 'Components/Button',
   component: Button,
-  tags: ['autodocs'],
-  argTypes: {
-    onClick: { action: 'clicked' },
-    variant: {
-      control: { type: 'select' },
-      options: Object.values(EnumButtonVariant),
-    },
-    size: {
-      control: { type: 'select' },
-      options: Object.values(EnumSize),
-    },
-    type: {
-      control: { type: 'select' },
-      options: ['button', 'submit', 'reset'],
-    },
-    disabled: {
-      control: 'boolean',
-    },
-  },
 }
 
 export default meta
@@ -46,7 +34,7 @@ export const Default: Story = {
 export const Variants: Story = {
   render: args => (
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-      {Object.values(EnumButtonVariant).map(variant => (
+      {Object.values(buttonVariants).map(variant => (
         <Button
           key={variant}
           {...args}
@@ -59,6 +47,8 @@ export const Variants: Story = {
   ),
 }
 
+const sizes: Size[] = ['2xs', 'xs', 's', 'm', 'l', 'xl', '2xl']
+
 export const Sizes: Story = {
   render: args => (
     <div
@@ -69,7 +59,7 @@ export const Sizes: Story = {
         alignItems: 'center',
       }}
     >
-      {Object.values(EnumSize).map(size => (
+      {sizes.map(size => (
         <Button
           key={size}
           {...args}
@@ -112,45 +102,18 @@ export const AsChild: Story = {
   },
 }
 
-export const Types: Story = {
-  render: args => (
-    <div style={{ display: 'flex', gap: 12 }}>
-      <Button
-        {...args}
-        type="button"
-      >
-        Button
-      </Button>
-      <Button
-        {...args}
-        type="submit"
-      >
-        Submit
-      </Button>
-      <Button
-        {...args}
-        type="reset"
-      >
-        Reset
-      </Button>
-    </div>
-  ),
-}
-
 export const InteractiveClick: Story = {
   args: {
     children: 'Click Me',
+    onClick: fn(),
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     const user = userEvent.setup()
-
     const button = canvas.getByRole('button')
     await expect(button).toBeInTheDocument()
-
     await user.click(button)
     await expect(args.onClick).toHaveBeenCalledTimes(1)
-
     await user.click(button)
     await expect(args.onClick).toHaveBeenCalledTimes(2)
   },

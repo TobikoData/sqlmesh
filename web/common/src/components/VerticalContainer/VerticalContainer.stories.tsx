@@ -3,11 +3,6 @@ import { VerticalContainer } from './VerticalContainer'
 export default {
   title: 'Components/Containers/VerticalContainer',
   component: VerticalContainer,
-  argTypes: {
-    scroll: { control: 'boolean' },
-    className: { control: 'text' },
-    children: { control: false },
-  },
 }
 
 const content = Array.from({ length: 20 }, (_, i) => (

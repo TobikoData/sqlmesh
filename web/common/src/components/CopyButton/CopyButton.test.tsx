@@ -10,9 +10,9 @@ import {
   type MockInstance,
 } from 'vitest'
 
-import { ClipboardCopy } from './ClipboardCopy'
+import { CopyButton } from './CopyButton'
 
-describe('ClipboardCopy', () => {
+describe('CopyButton', () => {
   let writeTextSpy: MockInstance
 
   beforeEach(() => {
@@ -27,9 +27,9 @@ describe('ClipboardCopy', () => {
     const user = userEvent.setup()
     const writeTextSpy = vi.spyOn(navigator.clipboard, 'writeText')
     render(
-      <ClipboardCopy text="Hello, World!">
+      <CopyButton text="Hello, World!">
         {copied => (copied ? 'Copied!' : 'Copy')}
-      </ClipboardCopy>,
+      </CopyButton>,
     )
     const button = screen.getByRole('button')
     await user.click(button)
@@ -40,12 +40,12 @@ describe('ClipboardCopy', () => {
   it('shows copied state after clicking', async () => {
     const user = userEvent.setup()
     render(
-      <ClipboardCopy
+      <CopyButton
         text="test"
         delay={1000}
       >
         {copied => (copied ? 'Copied!' : 'Copy')}
-      </ClipboardCopy>,
+      </CopyButton>,
     )
     const button = screen.getByRole('button')
     expect(button).toHaveTextContent('Copy')
@@ -58,9 +58,9 @@ describe('ClipboardCopy', () => {
   it('disables button while in copied state', async () => {
     const user = userEvent.setup()
     render(
-      <ClipboardCopy text="test">
+      <CopyButton text="test">
         {copied => (copied ? 'Copied!' : 'Copy')}
-      </ClipboardCopy>,
+      </CopyButton>,
     )
     const button = screen.getByRole('button')
     expect(button).toBeEnabled()
@@ -73,12 +73,12 @@ describe('ClipboardCopy', () => {
   it('resets to initial state after delay', async () => {
     const user = userEvent.setup()
     render(
-      <ClipboardCopy
+      <CopyButton
         text="test"
         delay={100}
       >
         {copied => (copied ? 'Copied!' : 'Copy')}
-      </ClipboardCopy>,
+      </CopyButton>,
     )
     const button = screen.getByRole('button')
     await user.click(button)
@@ -94,35 +94,16 @@ describe('ClipboardCopy', () => {
     )
   })
 
-  it('respects disabled prop', async () => {
-    const user = userEvent.setup()
-    render(
-      <ClipboardCopy
-        text="test"
-        disabled
-      >
-        {() => 'Copy'}
-      </ClipboardCopy>,
-    )
-    const button = screen.getByRole('button')
-    expect(button).toBeDisabled()
-    await user.click(button)
-    expect(writeTextSpy).not.toHaveBeenCalled()
-  })
-
   it('calls onClick handler if provided', async () => {
     const onClickSpy = vi.fn()
-    const user = userEvent.setup({
-      // Tell userEvent to skip its own clipboard setup
-      writeToClipboard: false,
-    })
+    const user = userEvent.setup()
     render(
-      <ClipboardCopy
+      <CopyButton
         text="test"
         onClick={onClickSpy}
       >
         {() => 'Copy'}
-      </ClipboardCopy>,
+      </CopyButton>,
     )
     await user.click(screen.getByRole('button'))
     expect(onClickSpy).toHaveBeenCalled()

@@ -5,15 +5,6 @@ import { ModelName } from './ModelName'
 const meta: Meta<typeof ModelName> = {
   title: 'Components/ModelName',
   component: ModelName,
-  tags: ['autodocs'],
-  argTypes: {
-    name: { control: 'text' },
-    hideCatalog: { control: 'boolean' },
-    hideSchema: { control: 'boolean' },
-    hideIcon: { control: 'boolean' },
-    showTooltip: { control: 'boolean' },
-    className: { control: 'text' },
-  },
 }
 
 export default meta

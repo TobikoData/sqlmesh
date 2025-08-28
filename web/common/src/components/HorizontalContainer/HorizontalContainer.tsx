@@ -1,7 +1,6 @@
 import React from 'react'
 
 import { cn } from '@/utils'
-import { EnumLayoutDirection } from '@/types/enums'
 import { ScrollContainer } from '../ScrollContainer/ScrollContainer'
 
 export interface HorizontalContainerProps
@@ -16,7 +15,7 @@ export const HorizontalContainer = React.forwardRef<
   return scroll ? (
     <ScrollContainer
       ref={ref}
-      direction={EnumLayoutDirection.HORIZONTAL}
+      direction="horizontal"
     >
       <HorizontalContainer
         {...props}

@@ -8,7 +8,7 @@ import {
 import React from 'react'
 
 import { cn } from '@/utils'
-import { EnumPosition, type Position } from '@/types/enums'
+import type { Position } from '@/types'
 
 import './Tooltip.css'
 
@@ -19,8 +19,8 @@ export function Tooltip({
   delayDuration = 200,
   sideOffset = 0,
   alignOffset = 0,
-  side = EnumPosition.RIGHT,
-  align = EnumPosition.CENTER,
+  side = 'right',
+  align = 'center',
   trigger,
   children,
   className,

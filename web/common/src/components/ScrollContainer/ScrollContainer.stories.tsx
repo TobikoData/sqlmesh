@@ -1,17 +1,8 @@
-import { EnumLayoutDirection } from '@/types/enums'
 import { ScrollContainer } from './ScrollContainer'
 
 export default {
   title: 'Components/Containers/ScrollContainer',
   component: ScrollContainer,
-  argTypes: {
-    direction: {
-      control: 'select',
-      options: Object.values(EnumLayoutDirection),
-    },
-    className: { control: 'text' },
-    children: { control: false },
-  },
 }
 
 const content = Array.from({ length: 30 }, (_, i) => (
@@ -27,7 +18,7 @@ export const VerticalScroll = (args: any) => (
   <div style={{ height: 200, width: 300, border: '1px solid #ccc' }}>
     <ScrollContainer
       {...args}
-      direction={EnumLayoutDirection.VERTICAL}
+      direction="vertical"
     >
       {content}
     </ScrollContainer>
@@ -38,7 +29,7 @@ export const HorizontalScroll = (args: any) => (
   <div style={{ width: 300, border: '1px solid #ccc', overflow: 'hidden' }}>
     <ScrollContainer
       {...args}
-      direction={EnumLayoutDirection.HORIZONTAL}
+      direction="horizontal"
     >
       <div style={{ display: 'flex' }}>
         {Array.from({ length: 10 }, (_, i) => (
@@ -63,7 +54,7 @@ export const BothDirectionsScroll = (args: any) => (
   <div style={{ height: 200, width: 300, border: '1px solid #ccc' }}>
     <ScrollContainer
       {...args}
-      direction={EnumLayoutDirection.BOTH}
+      direction="both"
     >
       <div style={{ width: 600 }}>
         {Array.from({ length: 30 }, (_, i) => (

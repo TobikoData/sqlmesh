@@ -1,13 +1,12 @@
 import { Box, Check, Copy } from 'lucide-react'
 import { useMemo } from 'react'
 
-import { ClipboardCopy } from '@/components/ClipboardCopy/ClipboardCopy'
-import { cn, isNilOrEmptyString, truncate, nonEmptyString } from '@/utils'
-import { EnumSize } from '@/types/enums'
+import { cn, truncate } from '@/utils'
 import { Tooltip } from '@/components/Tooltip/Tooltip'
 import React from 'react'
 
 import './ModelName.css'
+import { CopyButton } from '../CopyButton/CopyButton'
 
 export interface ModelNameProps extends React.HTMLAttributes<HTMLDivElement> {
   name: string
@@ -46,8 +45,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
     },
     ref,
   ) => {
-    if (isNilOrEmptyString(name))
-      throw new Error('Model name should not be empty')
+    if (!name) throw new Error('Model name should not be empty')
 
     const truncateMaxCharsModel = truncateMaxChars * 2
 
@@ -102,7 +100,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
       )
     }
 
-    console.assert(nonEmptyString(name), 'Model name should not be empty')
+    console.assert(name.length > 0, 'Model name should not be empty')
 
     function renderName() {
       return (
@@ -152,7 +150,6 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
     }
 
     function renderNameWithTooltip() {
-      console.log('withTooltip', withTooltip)
       return withTooltip ? renderTooltip() : renderName()
     }
 
@@ -193,8 +190,8 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
           renderNameWithTooltip()
         )}
         {showCopy && (
-          <ClipboardCopy
-            size={EnumSize.XXS}
+          <CopyButton
+            size="2xs"
             text={name}
             className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover"
           >
@@ -211,7 +208,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
                 />
               )
             }
-          </ClipboardCopy>
+          </CopyButton>
         )}
       </span>
     )

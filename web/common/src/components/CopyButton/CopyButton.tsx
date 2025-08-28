@@ -1,27 +1,22 @@
 import React, { useState } from 'react'
 
 import { Button, type ButtonProps } from '@/components/Button/Button'
-import { EnumButtonVariant } from '@/components/Button/help'
-import { EnumSize } from '@/types/enums'
-import { cn, notNil } from '@/utils'
-import type { Optional, TimerID } from '@/types'
+import { cn } from '@/utils'
+import type { TimerID } from '@/types'
 
-export interface ClipboardCopyProps extends Omit<ButtonProps, 'children'> {
+export interface CopyButtonProps extends Omit<ButtonProps, 'children'> {
   text: string
   delay?: number
   children: (copied: boolean) => React.ReactNode
 }
 
-export const ClipboardCopy = React.forwardRef<
-  HTMLButtonElement,
-  ClipboardCopyProps
->(
+export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
   (
     {
       text,
       title = 'Copy to clipboard',
-      variant = EnumButtonVariant.Transparent,
-      size = EnumSize.XS,
+      variant = 'secondary',
+      size = 'xs',
       delay = 2000,
       disabled = false,
       className,
@@ -31,7 +26,7 @@ export const ClipboardCopy = React.forwardRef<
     },
     ref,
   ) => {
-    const [copied, setCopied] = useState<Optional<TimerID>>(undefined)
+    const [copied, setCopied] = useState<TimerID | null>(null)
 
     const copy = (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
@@ -42,7 +37,7 @@ export const ClipboardCopy = React.forwardRef<
       }
 
       navigator.clipboard.writeText(text).then(() => {
-        setCopied(setTimeout(() => setCopied(undefined), delay))
+        setCopied(setTimeout(() => setCopied(null), delay))
       })
 
       onClick?.(e)
@@ -59,10 +54,9 @@ export const ClipboardCopy = React.forwardRef<
         {...props}
         className={cn(className, copied && 'pointer-events-none')}
       >
-        {children(notNil(copied))}
+        {children(copied != null)}
       </Button>
     )
   },
 )
-
-ClipboardCopy.displayName = 'ClipboardCopy'
+CopyButton.displayName = 'CopyButton'

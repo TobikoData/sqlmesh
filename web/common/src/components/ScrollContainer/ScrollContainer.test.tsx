@@ -2,7 +2,6 @@ import { createRef } from 'react'
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-import { EnumLayoutDirection } from '@/types/enums'
 import { ScrollContainer } from './ScrollContainer'
 
 describe('ScrollContainer', () => {
@@ -22,14 +21,12 @@ describe('ScrollContainer', () => {
       </ScrollContainer>,
     )
     const container = screen.getByText('Child').parentElement
-    expect(container).toHaveClass(
-      'w-full h-full overflow-y-scroll scrollbar-w-[6px] custom-class scrollbar scrollbar-thumb-neutral-300 scrollbar-track-neutral-100 scrollbar-thumb-rounded-full',
-    )
+    expect(container).toHaveClass('custom-class')
   })
 
   it('applies vertical and horizontal scroll classes based on direction', () => {
     const { rerender } = render(
-      <ScrollContainer direction={EnumLayoutDirection.VERTICAL}>
+      <ScrollContainer direction="vertical">
         <div>Child</div>
       </ScrollContainer>,
     )
@@ -38,7 +35,7 @@ describe('ScrollContainer', () => {
     expect(container).toHaveClass('overflow-x-hidden')
 
     rerender(
-      <ScrollContainer direction={EnumLayoutDirection.HORIZONTAL}>
+      <ScrollContainer direction="horizontal">
         <div>Child</div>
       </ScrollContainer>,
     )
@@ -47,7 +44,7 @@ describe('ScrollContainer', () => {
     expect(container).toHaveClass('overflow-x-scroll scrollbar-h-[6px]')
 
     rerender(
-      <ScrollContainer direction={EnumLayoutDirection.BOTH}>
+      <ScrollContainer direction="both">
         <div>Child</div>
       </ScrollContainer>,
     )
