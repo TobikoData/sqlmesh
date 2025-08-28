@@ -73,17 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dbt-version:
-          [
-            '1.3.0',
-            '1.4.0',
-            '1.5.0',
-            '1.6.0',
-            '1.7.0',
-            '1.8.0',
-            '1.9.0',
-            '1.10.0',
-          ]
+        dbt-version: ['1.3', '1.4', '1.5', '1.6', '1.7', '1.8', '1.9', '1.10']
     steps:
       - uses: actions/checkout@v5
       - name: Set up Python
@@ -96,18 +86,7 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          sed -i 's/"pydantic>=2.0.0"/"pydantic"/g' pyproject.toml
-          if [[ "${{ matrix.dbt-version }}" == "1.10.0" ]]; then
-            # For 1.10.0: only add version to dbt-core, remove versions from all adapter packages
-            sed -i -E 's/"(dbt-core)[^"]*"/"\1~=${{ matrix.dbt-version }}"/g' pyproject.toml
-            # Remove version constraints from all dbt adapter packages
-            sed -i -E 's/"(dbt-(bigquery|duckdb|snowflake|athena-community|clickhouse|databricks|redshift|trino))[^"]*"/"\1"/g' pyproject.toml
-          else
-            # For other versions: apply version to all dbt packages
-            sed -i -E 's/"(dbt-[^">=<~!]+)[^"]*"/"\1~=${{ matrix.dbt-version }}"/g' pyproject.toml
-          fi
-          UV=1 make install-dev
-          uv pip install pydantic>=2.0.0 --reinstall
+          UV=1 make install-dev-dbt-${{ matrix.dbt-version }}
       - name: Run dbt tests
         # We can't run slow tests across all engines due to tests requiring DuckDB and old versions
         # of DuckDB require a version of DuckDB we no longer support
