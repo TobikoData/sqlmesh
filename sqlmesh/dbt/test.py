@@ -83,7 +83,7 @@ class TestConfig(GeneralConfig):
     severity: Severity = Severity.ERROR
     store_failures: t.Optional[bool] = None
     where: t.Optional[str] = None
-    limit: t.Optional[str] = None
+    limit: t.Optional[int] = None
     fail_calc: str = "count(*)"
     warn_if: str = "!=0"
     error_if: str = "!=0"
