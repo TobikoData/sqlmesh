@@ -34,7 +34,11 @@ def test_manifest_helper(caplog):
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
         variables={"top_waiters:revenue", "top_waiters:limit"},
         model_attrs={"columns", "config"},
-        macros=[MacroReference(name="ref"), MacroReference(name="var")],
+        macros=[
+            MacroReference(name="get_top_waiters_limit"),
+            MacroReference(name="ref"),
+            MacroReference(name="var"),
+        ],
     )
     assert models["top_waiters"].materialized == "view"
     assert models["top_waiters"].dialect_ == "postgres"
@@ -181,7 +185,7 @@ def test_variable_override():
         profile.target,
         model_defaults=ModelDefaultsConfig(start="2020-01-01"),
     )
-    assert helper.models()["top_waiters"].limit_value == 10
+    assert helper.models()["top_waiters"].limit_value.strip() == "10"
 
     helper = ManifestHelper(
         project_path,

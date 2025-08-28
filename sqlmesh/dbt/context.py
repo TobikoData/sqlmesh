@@ -101,7 +101,10 @@ class DbtContext:
         self._jinja_environment = None
 
     def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
-        jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
+        package_macros = self.jinja_macros.copy(
+            update={"top_level_packages": [*self.jinja_macros.top_level_packages, package]}
+        )
+        jinja_environment = package_macros.build_environment(**self.jinja_globals)
 
         def _render_var(value: t.Any) -> t.Any:
             if isinstance(value, str):

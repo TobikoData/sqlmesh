@@ -39,7 +39,7 @@ sources:
     identifier: false
 
 vars:
-  top_waiters:limit: 10
+  top_waiters:limit: "{{ get_top_waiters_limit() }}"
   'top_waiters:revenue': "revenue"
 
   # The following are only used for testing purposes
