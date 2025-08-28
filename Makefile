@@ -6,6 +6,13 @@ else
     PIP := pip3
 endif
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    SED_INPLACE = sed -i ''
+else
+    SED_INPLACE = sed -i
+endif
+
 install-dev:
 	$(PIP) install -e ".[dev,web,slack,dlt,lsp]" ./examples/custom_materializations
 
@@ -14,6 +21,33 @@ install-doc:
 
 install-pre-commit:
 	pre-commit install
+
+install-dev-dbt-%:
+	@version="$*"; \
+	period_count=$$(echo "$$version" | tr -cd '.' | wc -c); \
+	if [ "$$period_count" -eq 0 ]; then \
+		version="$${version:0:1}.$${version:1}"; \
+	elif [ "$$period_count" -eq 1 ]; then \
+		version="$$version.0"; \
+	fi; \
+	echo "Installing dbt version: $$version"; \
+	cp pyproject.toml pyproject.toml.backup; \
+	$(SED_INPLACE) 's/"pydantic>=2.0.0"/"pydantic"/g' pyproject.toml; \
+	if [ "$$version" = "1.10.0" ]; then \
+		echo "Applying special handling for dbt 1.10.0"; \
+		$(SED_INPLACE) -E 's/"(dbt-core)[^"]*"/"\1~='"$$version"'"/g' pyproject.toml; \
+		$(SED_INPLACE) -E 's/"(dbt-(bigquery|duckdb|snowflake|athena-community|clickhouse|databricks|redshift|trino))[^"]*"/"\1"/g' pyproject.toml; \
+	else \
+		echo "Applying version $$version to all dbt packages"; \
+		$(SED_INPLACE) -E 's/"(dbt-[^"><=~!]+)[^"]*"/"\1~='"$$version"'"/g' pyproject.toml; \
+	fi; \
+	$(MAKE) install-dev; \
+	if [ "$$version" = "1.6.0" ]; then \
+		echo "Applying pydantic override for dbt 1.6.0"; \
+		$(PIP) install 'pydantic>=2.0.0' --reinstall; \
+	fi; \
+	mv pyproject.toml.backup pyproject.toml; \
+	echo "Restored original pyproject.toml"
 
 style:
 	pre-commit run --all-files
