@@ -32,9 +32,6 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 MAX_MODEL_DEFINITION_SIZE = 10000
 """Maximum number of characters in a model definition"""
 
-MIGRATED_DBT_PROJECT_NAME = "__dbt_project_name__"
-MIGRATED_DBT_PACKAGES = "__dbt_packages__"
-
 
 # The maximum number of fork processes, used for loading projects
 # None means default to process pool, 1 means don't fork, :N is number of processes

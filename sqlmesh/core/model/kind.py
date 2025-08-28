@@ -4,7 +4,7 @@ import typing as t
 from enum import Enum
 from typing_extensions import Self
 
-from pydantic import Field, BeforeValidator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -33,7 +33,6 @@ from sqlmesh.utils.pydantic import (
     field_validator,
     get_dialect,
     validate_string,
-    positive_int_validator,
     validate_expression,
 )
 
@@ -505,7 +504,7 @@ class IncrementalByUniqueKeyKind(_IncrementalBy):
     unique_key: SQLGlotListOfFields
     when_matched: t.Optional[exp.Whens] = None
     merge_filter: t.Optional[exp.Expression] = None
-    batch_concurrency: t.Annotated[t.Literal[1], BeforeValidator(positive_int_validator)] = 1
+    batch_concurrency: t.Literal[1] = 1
 
     @field_validator("when_matched", mode="before")
     def _when_matched_validator(

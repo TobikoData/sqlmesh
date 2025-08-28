@@ -37,11 +37,9 @@ def get_environment_objects(controller: GithubController, environment: str) -> t
 
 
 def get_num_days_loaded(controller: GithubController, environment: str, model: str) -> int:
-    return int(
-        controller._context.engine_adapter.fetchdf(
-            f"SELECT distinct event_date FROM sushi__{environment}.{model}"
-        ).count()
-    )
+    return controller._context.engine_adapter.fetchdf(
+        f"SELECT distinct event_date FROM sushi__{environment}.{model}"
+    ).shape[0]
 
 
 def get_columns(
