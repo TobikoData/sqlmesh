@@ -648,7 +648,9 @@ class ModelTest(unittest.TestCase):
             if partial:
                 columns = referenced_columns
 
-        return pd.DataFrame.from_records(rows, columns=columns)
+        return pd.DataFrame.from_records(
+            rows, columns=[str(c) for c in columns] if columns else None
+        )
 
     def _add_missing_columns(
         self, query: exp.Query, all_columns: t.Optional[t.Collection[str]] = None
