@@ -99,7 +99,7 @@ class Project:
             package = package_loader.load(path.parent)
             packages[package.name] = package
 
-        all_project_variables = {**project_yaml.get("vars", {}), **(variable_overrides or {})}
+        all_project_variables = {**(project_yaml.get("vars") or {}), **(variable_overrides or {})}
         for name, package in packages.items():
             package_vars = all_project_variables.get(name)
 
