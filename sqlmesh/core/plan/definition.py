@@ -70,6 +70,8 @@ class Plan(PydanticModel, frozen=True):
     execution_time_: t.Optional[TimeLike] = Field(default=None, alias="execution_time")
 
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
+    selected_models: t.Optional[t.Set[str]] = None
+    """Models that have been selected for this plan (used for dbt selected_resouces)"""
 
     @cached_property
     def start(self) -> TimeLike:
@@ -282,6 +284,7 @@ class Plan(PydanticModel, frozen=True):
             },
             environment_statements=self.context_diff.environment_statements,
             user_provided_flags=self.user_provided_flags,
+            selected_models=self.selected_models,
         )
 
     @cached_property
@@ -319,6 +322,7 @@ class EvaluatablePlan(PydanticModel):
     disabled_restatement_models: t.Set[str]
     environment_statements: t.Optional[t.List[EnvironmentStatements]] = None
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
+    selected_models: t.Optional[t.Set[str]] = None
 
     def is_selected_for_backfill(self, model_fqn: str) -> bool:
         return self.models_to_backfill is None or model_fqn in self.models_to_backfill

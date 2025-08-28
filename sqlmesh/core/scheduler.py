@@ -416,6 +416,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
+        selected_models: t.Optional[t.Set[str]] = None,
         allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         selected_snapshot_ids: t.Optional[t.Set[SnapshotId]] = None,
         run_environment_statements: bool = False,
@@ -472,6 +473,7 @@ class Scheduler:
                 start=start,
                 end=end,
                 execution_time=execution_time,
+                selected_models=selected_models,
             )
 
         # We only need to create physical tables if the snapshot is not representative or if it
@@ -533,6 +535,7 @@ class Scheduler:
                             allow_destructive_snapshots=allow_destructive_snapshots,
                             allow_additive_snapshots=allow_additive_snapshots,
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
+                            selected_models=selected_models,
                         )
 
                     evaluation_duration_ms = now_timestamp() - execution_start_ts
@@ -602,6 +605,7 @@ class Scheduler:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    selected_models=selected_models,
                 )
 
             self.state_sync.recycle()
@@ -808,6 +812,7 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
             auto_restatement_triggers=auto_restatement_triggers,
+            selected_models=selected_snapshots or {s.name for s in merged_intervals},
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS

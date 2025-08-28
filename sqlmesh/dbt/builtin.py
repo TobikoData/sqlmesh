@@ -545,7 +545,7 @@ def create_builtin_globals(
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
             "graph": adapter.graph,
-            "selected_resources": get_selected_resources(),
+            "selected_resources": adapter.selected_resources,
         }
     )
 
@@ -573,33 +573,3 @@ def _relation_info_to_relation(
         }
     )
     return relation_type.create(**relation_info, quote_policy=quote_policy)
-
-
-_selected_resources: t.List[str] = []
-
-
-def set_selected_resources(
-    models: t.Optional[t.Set[str]] = None,
-) -> None:
-    global _selected_resources
-    resources = []
-
-    if models:
-        for model in models:
-            resources.append(dbt_model_id(model))
-
-    _selected_resources = sorted(resources)
-
-
-def dbt_model_id(sqlmesh_model_name: str) -> str:
-    parts = [part.strip('"') for part in sqlmesh_model_name.split(".")]
-    return f"model.{parts[0]}.{parts[-1]}"
-
-
-def get_selected_resources() -> t.List[str]:
-    return _selected_resources
-
-
-def clear_selected_resources() -> None:
-    global _selected_resources
-    _selected_resources = []

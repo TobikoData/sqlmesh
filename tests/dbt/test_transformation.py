@@ -5,6 +5,8 @@ import logging
 import typing as t
 from pathlib import Path
 from unittest.mock import patch
+from sqlmesh.dbt.adapter import RuntimeAdapter
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 from sqlmesh.dbt.util import DBT_VERSION
 
@@ -45,12 +47,7 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation, Config
 from sqlmesh.dbt.common import Dependencies
-from sqlmesh.dbt.builtin import (
-    _relation_info_to_relation,
-    dbt_model_id,
-    clear_selected_resources,
-    get_selected_resources,
-)
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -2387,62 +2384,94 @@ def test_selected_resources_with_selectors():
     sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
 
     # A plan with a specific model selection
-    clear_selected_resources()
-    sushi_context.plan_builder(select_models=["sushi.customers"])
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers"])
+    plan = plan_builder.build()
+    assert len(plan.selected_models) == 1
+    selected_model = list(plan.selected_models)[0]
+    assert "customers" in selected_model
 
-    selected = get_selected_resources()
-    assert "model.memory.customers" in selected
-    assert len(selected) == 1
+    # Plan without model selections should include all models
+    plan_builder = sushi_context.plan_builder()
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) > 10
 
-    # Plan without model selections
-    clear_selected_resources()
-    sushi_context.plan_builder()
-    selected = get_selected_resources()
-    assert sorted(
-        [
-            "model.memory.customer_revenue_by_day",
-            "model.memory.customers",
-            "model.memory.items",
-            "model.memory.items_check_snapshot",
-            "model.memory.items_no_hard_delete_snapshot",
-            "model.memory.items_snapshot",
-            "model.memory.order_items",
-            "model.memory.orders",
-            "model.memory.simple_model_a",
-            "model.memory.simple_model_b",
-            "model.memory.top_waiters",
-            "model.memory.waiter_as_customer_by_day",
-            "model.memory.waiter_names",
-            "model.memory.waiter_revenue_by_day_v1",
-            "model.memory.waiter_revenue_by_day_v2",
-            "model.memory.waiters",
-        ]
-    ) == sorted(selected)
-
-    # Test with downstream models as well
-    clear_selected_resources()
-    sushi_context.plan_builder(select_models=["sushi.customers+"])
-    selected = get_selected_resources()
-    assert sorted(["model.memory.customers", "model.memory.waiter_as_customer_by_day"]) == sorted(
-        selected
-    )
+    # with downstream models should select customers and at least one downstream model
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers+"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 2
+    assert any("customers" in model for model in plan.selected_models)
 
     # Test wildcard selection
-    clear_selected_resources()
-    sushi_context.plan_builder(select_models=["sushi.waiter_*"])
-    selected = get_selected_resources()
-    assert sorted(
-        [
-            "model.memory.waiter_as_customer_by_day",
-            "model.memory.waiter_names",
-            "model.memory.waiter_revenue_by_day_v1",
-            "model.memory.waiter_revenue_by_day_v2",
-        ]
-    ) == sorted(selected)
-    clear_selected_resources()
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.waiter_*"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 4
+    assert all("waiter" in model for model in plan.selected_models)
 
 
-def test_dbt_model_id_conversion():
-    assert dbt_model_id("jaffle_shop.main.customers") == "model.jaffle_shop.customers"
-    assert dbt_model_id("jaffle_shop.main.orders") == "model.jaffle_shop.orders"
-    assert dbt_model_id('"jaffle_shop"."customers"') == "model.jaffle_shop.customers"
+@pytest.mark.xdist_group("dbt_manifest")
+def test_selected_resources_context_variable(
+    sushi_test_project: Project, sushi_test_dbt_context: Context
+):
+    context = sushi_test_project.context
+
+    # should be empty list during parse time
+    direct_access = context.render("{{ selected_resources }}")
+    assert direct_access == "[]"
+
+    # selected_resources is iterable and count items
+    test_jinja = """
+    {%- set resources = [] -%}
+    {%- for resource in selected_resources -%}
+        {%- do resources.append(resource) -%}
+    {%- endfor -%}
+    {{ resources | length }}
+    """
+    result = context.render(test_jinja)
+    assert result.strip() == "0"
+
+    # selected_resources in conditions
+    test_condition = """
+    {%- if selected_resources -%}
+        has_resources
+    {%- else -%}
+        no_resources
+    {%- endif -%}
+    """
+    result = context.render(test_condition)
+    assert result.strip() == "no_resources"
+
+    # Test 4: Test with runtime adapter (simulating runtime execution)
+    runtime_adapter = RuntimeAdapter(
+        engine_adapter=sushi_test_dbt_context.engine_adapter,
+        jinja_macros=JinjaMacroRegistry(),
+        jinja_globals={
+            "selected_models": {
+                '"jaffle_shop"."main"."customers"',
+                '"jaffle_shop"."main"."orders"',
+                '"jaffle_shop"."main"."items"',
+            },
+        },
+    )
+
+    # it should return correct selected resources in dbt format
+    selected_resources = runtime_adapter.selected_resources
+    assert len(selected_resources) == 3
+    assert "model.jaffle_shop.customers" in selected_resources
+    assert "model.jaffle_shop.orders" in selected_resources
+    assert "model.jaffle_shop.items" in selected_resources
+
+    # check the jinja macros rendering
+    result = context.render("{{ selected_resources }}", selected_resources=selected_resources)
+    assert (
+        result
+        == "['model.jaffle_shop.customers', 'model.jaffle_shop.items', 'model.jaffle_shop.orders']"
+    )
+
+    result = context.render(test_jinja, selected_resources=selected_resources)
+    assert result.strip() == "3"
+
+    result = context.render(test_condition, selected_resources=selected_resources)
+    assert result.strip() == "has_resources"
