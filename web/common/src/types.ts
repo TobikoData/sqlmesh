@@ -2,8 +2,6 @@ export declare const __brand: unique symbol
 
 export type Brand<B> = { [__brand]: B }
 export type Branded<T, B> = T & Brand<B>
-export type Nullable<T> = T | null
-export type TimerID = ReturnType<typeof setTimeout>
 
 export type Size = '2xs' | 'xs' | 's' | 'm' | 'l' | 'xl' | '2xl'
 export type HeadlineLevel = 1 | 2 | 3 | 4 | 5 | 6

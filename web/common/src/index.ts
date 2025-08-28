@@ -28,7 +28,6 @@ export { cn, truncate } from '@/utils'
 
 // Types
 export type {
-  TimerID,
   Brand,
   Branded,
   Size,

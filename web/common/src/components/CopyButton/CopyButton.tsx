@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 
 import { Button, type ButtonProps } from '@/components/Button/Button'
 import { cn } from '@/utils'
-import type { TimerID } from '@/types'
+
+type TimerID = ReturnType<typeof setTimeout>
 
 export interface CopyButtonProps extends Omit<ButtonProps, 'children'> {
   text: string
