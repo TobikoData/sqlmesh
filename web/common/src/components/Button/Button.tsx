@@ -19,6 +19,7 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: Size
+  shape?: Shape
   asChild?: boolean
 }
 
