@@ -8,6 +8,8 @@ from dbt.adapters.base import BaseRelation, Column
 from pytest_mock import MockerFixture
 
 from sqlglot import exp
+
+from sqlmesh import Context
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
@@ -360,7 +362,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
         "yet_another_var": 1,
-        "top_waiters:limit": 10,
+        "top_waiters:limit": "{{ get_top_waiters_limit() }}",
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
         "nested_vars": {
@@ -387,6 +389,11 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
+
+
+@pytest.mark.slow
+def test_jinja_in_dbt_variables(sushi_test_dbt_context: Context):
+    assert sushi_test_dbt_context.render("sushi.top_waiters").sql().endswith("LIMIT 10")
 
 
 @pytest.mark.slow
