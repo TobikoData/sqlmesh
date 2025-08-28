@@ -4681,12 +4681,12 @@ def test_plan_repairs_unrenderable_snapshot_state(
         f"name = '{target_snapshot.name}' AND identifier = '{target_snapshot.identifier}'",
     )
 
+    context.clear_caches()
+    target_snapshot_in_state = context.state_sync.get_snapshots([target_snapshot.snapshot_id])[
+        target_snapshot.snapshot_id
+    ]
+
     with pytest.raises(Exception):
-        context_copy = context.copy()
-        context_copy.clear_caches()
-        target_snapshot_in_state = context_copy.state_sync.get_snapshots(
-            [target_snapshot.snapshot_id]
-        )[target_snapshot.snapshot_id]
         target_snapshot_in_state.model.render_query_or_raise()
 
     # Repair the snapshot by creating a new version of it
@@ -4695,11 +4695,11 @@ def test_plan_repairs_unrenderable_snapshot_state(
 
     plan_builder = context.plan_builder("prod", forward_only=forward_only)
     plan = plan_builder.build()
-    assert plan.directly_modified == {target_snapshot.snapshot_id}
     if not forward_only:
         assert target_snapshot.snapshot_id in {i.snapshot_id for i in plan.missing_intervals}
-        plan_builder.set_choice(target_snapshot, SnapshotChangeCategory.NON_BREAKING)
-        plan = plan_builder.build()
+    assert plan.directly_modified == {target_snapshot.snapshot_id}
+    plan_builder.set_choice(target_snapshot, SnapshotChangeCategory.NON_BREAKING)
+    plan = plan_builder.build()
 
     context.apply(plan)
 

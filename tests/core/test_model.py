@@ -5732,7 +5732,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "1269513823"
+    HASH_WITH_CATALOG = "3443912775"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(

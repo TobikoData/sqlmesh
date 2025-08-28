@@ -62,6 +62,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
+    from sqlmesh.core.node import _Node
     from sqlmesh.core._typing import Self, TableName, SessionProperties
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
@@ -1278,6 +1279,7 @@ class SqlModel(_Model):
     source_type: t.Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    _is_metadata_only_change_cache: t.Dict[int, bool] = {}
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -1500,6 +1502,27 @@ class SqlModel(_Model):
 
         return False
 
+    def is_metadata_only_change(self, previous: _Node) -> bool:
+        if self._is_metadata_only_change_cache.get(id(previous), None) is not None:
+            return self._is_metadata_only_change_cache[id(previous)]
+
+        if (
+            not isinstance(previous, SqlModel)
+            or self.metadata_hash == previous.metadata_hash
+            or self._data_hash_values_no_query != previous._data_hash_values_no_query
+        ):
+            is_metadata_change = False
+        else:
+            # If the rendered queries are the same, then this is a metadata only change
+            this_rendered_query = self.render_query()
+            previous_rendered_query = previous.render_query()
+            is_metadata_change = (
+                this_rendered_query is not None and this_rendered_query == previous_rendered_query
+            )
+
+        self._is_metadata_only_change_cache[id(previous)] = is_metadata_change
+        return is_metadata_change
+
     @cached_property
     def _query_renderer(self) -> QueryRenderer:
         no_quote_identifiers = self.kind.is_view and self.dialect in ("trino", "spark")
@@ -1519,17 +1542,22 @@ class SqlModel(_Model):
         )
 
     @property
-    def _data_hash_values(self) -> t.List[str]:
-        data = super()._data_hash_values
+    def _data_hash_values_no_query(self) -> t.List[str]:
+        return [
+            *super()._data_hash_values,
+            *self.jinja_macros.data_hash_values,
+        ]
 
-        query = self.render_query() or self.query
-        data.append(gen(query))
-        data.extend(self.jinja_macros.data_hash_values)
-        return data
+    @property
+    def _data_hash_values(self) -> t.List[str]:
+        return [
+            *self._data_hash_values_no_query,
+            gen(self.query, comments=False),
+        ]
 
     @property
     def _additional_metadata(self) -> t.List[str]:
-        return [*super()._additional_metadata, gen(self.query)]
+        return [*super()._additional_metadata, gen(self.query, comments=True)]
 
     @property
     def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:

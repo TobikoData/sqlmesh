@@ -301,7 +301,7 @@ def test_select_change_schema(mocker: MockerFixture, make_snapshot):
     selector = Selector(state_reader_mock, local_models)
 
     selected = selector.select_models(["db.parent"], env_name)
-    assert selected[local_child.fqn].data_hash != child.data_hash
+    assert selected[local_child.fqn].render_query() != child.render_query()
 
     _assert_models_equal(
         selected,
