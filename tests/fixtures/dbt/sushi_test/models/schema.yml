@@ -52,3 +52,23 @@ sources:
     tables:
       - name: items
       - name: orders
+
+semantic_models:
+  - name: top_waiters
+    description: Some description
+    model: ref('top_waiters')
+    measures:
+      - name: total_waiters
+        agg: sum
+        expr: waiter
+    dimensions:
+      - name: waiter
+        type: categorical
+
+metrics:
+  - name: some_waiter_thing
+    description: Something
+    type: simple
+    label: testing
+    type_params:
+      measure: total_waiters
