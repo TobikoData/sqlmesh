@@ -39,7 +39,6 @@ SKIP_LOAD_COMMANDS = (
     "rollback",
     "run",
     "table_name",
-    "dbt",
 )
 SKIP_CONTEXT_COMMANDS = ("init", "ui")
 
@@ -1307,39 +1306,3 @@ def state_import(obj: Context, input_file: Path, replace: bool, no_confirm: bool
     """Import a state export file back into the state database"""
     confirm = not no_confirm
     obj.import_state(input_file=input_file, clear=replace, confirm=confirm)
-
-
-@cli.group(no_args_is_help=True, hidden=True)
-def dbt() -> None:
-    """Commands for doing dbt-specific things"""
-    pass
-
-
-@dbt.command("convert")
-@click.option(
-    "-i",
-    "--input-dir",
-    help="Path to the DBT project",
-    required=True,
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, path_type=Path),
-)
-@click.option(
-    "-o",
-    "--output-dir",
-    required=True,
-    help="Path to write out the converted SQLMesh project",
-    type=click.Path(exists=False, dir_okay=True, file_okay=False, readable=True, path_type=Path),
-)
-@click.option("--no-prompts", is_flag=True, help="Disable interactive prompts", default=False)
-@click.pass_obj
-@error_handler
-@cli_analytics
-def dbt_convert(obj: Context, input_dir: Path, output_dir: Path, no_prompts: bool) -> None:
-    """Convert a DBT project to a SQLMesh project"""
-    from sqlmesh.dbt.converter.convert import convert_project_files
-
-    convert_project_files(
-        input_dir.absolute(),
-        output_dir.absolute(),
-        no_prompts=no_prompts,
-    )
