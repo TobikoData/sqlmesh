@@ -247,7 +247,7 @@ class BaseModelConfig(GeneralConfig):
 
     def remove_tests_with_invalid_refs(self, context: DbtContext) -> None:
         """
-        Removes tests that reference models that do not exist in the context in order to match dbt behavior.
+        Removes tests that reference models or sources that do not exist in the context in order to match dbt behavior.
 
         Args:
             context: The dbt context this model resides within.
@@ -259,6 +259,7 @@ class BaseModelConfig(GeneralConfig):
             test
             for test in self.tests
             if all(ref in context.refs for ref in test.dependencies.refs)
+            and all(source in context.sources for source in test.dependencies.sources)
         ]
 
     def check_for_circular_test_refs(self, context: DbtContext) -> None:
