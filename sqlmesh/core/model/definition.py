@@ -2297,6 +2297,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
         variables=variables,
         inline_audits=inline_audits,
         blueprint_variables=blueprint_variables,
+        use_original_sql=True,
         **meta_fields,
     )
 
@@ -2519,6 +2520,7 @@ def _create_model(
     signal_definitions: t.Optional[SignalRegistry] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
     blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
+    use_original_sql: bool = False,
     **kwargs: t.Any,
 ) -> Model:
     validate_extra_and_required_fields(
@@ -2555,7 +2557,7 @@ def _create_model(
     if "query" in kwargs:
         statements.append(kwargs["query"])
         kwargs["query"] = ParsableSql.from_parsed_expression(
-            kwargs["query"], dialect, use_meta_sql=True
+            kwargs["query"], dialect, use_meta_sql=use_original_sql
         )
 
     # Merge default statements with model-specific statements
@@ -2569,7 +2571,7 @@ def _create_model(
             is_metadata = statement_field == "on_virtual_update"
             statements.extend((stmt, is_metadata) for stmt in kwargs[statement_field])
             kwargs[statement_field] = [
-                ParsableSql.from_parsed_expression(stmt, dialect, use_meta_sql=True)
+                ParsableSql.from_parsed_expression(stmt, dialect, use_meta_sql=use_original_sql)
                 for stmt in kwargs[statement_field]
             ]
 

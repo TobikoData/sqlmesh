@@ -11471,3 +11471,46 @@ def test_raw_jinja_raw_tag():
 
     model = load_sql_based_model(expressions)
     assert model.render_query().sql() == "SELECT '{{ foo }}' AS \"col\""
+
+
+def test_use_original_sql():
+    expressions = d.parse(
+        """
+        MODEL (name test);
+
+        CREATE TABLE pre (
+          a INT
+        );
+
+        SELECT
+          1,
+          2;
+
+        CREATE TABLE post (
+          b INT
+        );
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.query_.sql == "SELECT\n          1,\n          2"
+    assert model.pre_statements_[0].sql == "CREATE TABLE pre (\n          a INT\n        )"
+    assert model.post_statements_[0].sql == "CREATE TABLE post (\n          b INT\n        );"
+
+    # Now manually create the model and make sure that the original SQL is not used
+    model_query = d.parse_one("SELECT 1 AS one")
+    assert model_query.meta["sql"] == "SELECT 1 AS one"
+    model_query = model_query.select("2 AS two")
+
+    pre_statements = [d.parse_one("CREATE TABLE pre (\n          a INT\n        )")]
+    post_statements = [d.parse_one("CREATE TABLE post (\n          b INT\n        );")]
+
+    model = create_sql_model(
+        "test",
+        model_query,
+        pre_statements=pre_statements,
+        post_statements=post_statements,
+    )
+    assert model.query_.sql == "SELECT 1 AS one, 2 AS two"
+    assert model.pre_statements_[0].sql == "CREATE TABLE pre (a INT)"
+    assert model.post_statements_[0].sql == "CREATE TABLE post (b INT)"
