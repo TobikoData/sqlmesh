@@ -71,7 +71,7 @@ class Plan(PydanticModel, frozen=True):
 
     user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None
     selected_models: t.Optional[t.Set[str]] = None
-    """Models that have been selected for this plan (used for dbt selected_resouces)"""
+    """Models that have been selected for this plan (used for dbt selected_resources)"""
 
     @cached_property
     def start(self) -> TimeLike:

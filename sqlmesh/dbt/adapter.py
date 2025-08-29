@@ -507,5 +507,6 @@ class RuntimeAdapter(BaseAdapter):
         return normalized_table
 
     def _dbt_model_id(self, sqlmesh_model_name: str) -> str:
+        # Model prefix is needed to correspond to the key in the nodes within the dbt context variable
         parts = [part.strip('"') for part in sqlmesh_model_name.split(".")]
         return f"model.{parts[0]}.{parts[-1]}"
