@@ -651,7 +651,7 @@ class SnapshotEvaluator:
                 snapshot.snapshot_id,
                 wap_id,
             )
-            self._wap_publish_snapshot(snapshot, wap_id, deployability_index)
+            self.wap_publish_snapshot(snapshot, wap_id, deployability_index)
 
         return results
 
@@ -806,8 +806,10 @@ class SnapshotEvaluator:
             }
 
             wap_id: t.Optional[str] = None
-            if snapshot.is_materialized and (
-                model.wap_supported or adapter.wap_supported(target_table_name)
+            if (
+                snapshot.is_materialized
+                and target_table_exists
+                and (model.wap_supported or adapter.wap_supported(target_table_name))
             ):
                 wap_id = random_id()[0:8]
                 logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
@@ -823,6 +825,7 @@ class SnapshotEvaluator:
                 create_render_kwargs=create_render_kwargs,
                 rendered_physical_properties=rendered_physical_properties,
                 deployability_index=deployability_index,
+                target_table_name=target_table_name,
                 is_first_insert=is_first_insert,
                 batch_index=batch_index,
             )
@@ -896,6 +899,17 @@ class SnapshotEvaluator:
         if on_complete is not None:
             on_complete(snapshot)
 
+    def wap_publish_snapshot(
+        self,
+        snapshot: Snapshot,
+        wap_id: str,
+        deployability_index: t.Optional[DeployabilityIndex],
+    ) -> None:
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
+        adapter = self.get_adapter(snapshot.model_gateway)
+        adapter.wap_publish(table_name, wap_id)
+
     def _render_and_insert_snapshot(
         self,
         start: TimeLike,
@@ -907,6 +921,7 @@ class SnapshotEvaluator:
         create_render_kwargs: t.Dict[str, t.Any],
         rendered_physical_properties: t.Dict[str, exp.Expression],
         deployability_index: DeployabilityIndex,
+        target_table_name: str,
         is_first_insert: bool,
         batch_index: int,
     ) -> None:
@@ -916,7 +931,6 @@ class SnapshotEvaluator:
         logger.info("Inserting data for snapshot %s", snapshot.snapshot_id)
 
         model = snapshot.model
-        table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
         adapter = self.get_adapter(model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
 
@@ -930,7 +944,7 @@ class SnapshotEvaluator:
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
-                    table_name=table_name,
+                    table_name=target_table_name,
                     query_or_df=query_or_df,
                     model=snapshot.model,
                     snapshot=snapshot,
@@ -948,10 +962,10 @@ class SnapshotEvaluator:
                     "Inserting batch (%s, %s) into %s'",
                     time_like_to_str(start),
                     time_like_to_str(end),
-                    table_name,
+                    target_table_name,
                 )
                 evaluation_strategy.insert(
-                    table_name=table_name,
+                    table_name=target_table_name,
                     query_or_df=query_or_df,
                     is_first_insert=is_first_insert,
                     model=snapshot.model,
@@ -1277,17 +1291,6 @@ class SnapshotEvaluator:
 
             if on_complete is not None:
                 on_complete(table_name)
-
-    def _wap_publish_snapshot(
-        self,
-        snapshot: Snapshot,
-        wap_id: str,
-        deployability_index: t.Optional[DeployabilityIndex],
-    ) -> None:
-        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
-        adapter = self.get_adapter(snapshot.model_gateway)
-        adapter.wap_publish(table_name, wap_id)
 
     def _audit(
         self,
