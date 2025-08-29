@@ -79,7 +79,7 @@ def parent_model():
         name="parent.tbl",
         kind=dict(time_column="ds", name=ModelKindName.INCREMENTAL_BY_TIME_RANGE),
         dialect="spark",
-        query=parse_one("SELECT 1, ds"),
+        query="SELECT 1, ds",
     )
 
 
@@ -92,7 +92,7 @@ def model():
         dialect="spark",
         cron="1 0 * * *",
         start="2020-01-01",
-        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+        query="SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
     )
 
 
@@ -148,7 +148,9 @@ def test_json(snapshot: Snapshot):
             "project": "",
             "python_env": {},
             "owner": "owner",
-            "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
+            "query": {
+                "sql": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
+            },
             "jinja_macros": {
                 "create_builtins_module": "sqlmesh.utils.jinja",
                 "global_objs": {},
@@ -186,7 +188,7 @@ def test_json_custom_materialization(make_snapshot: t.Callable):
         dialect="spark",
         cron="1 0 * * *",
         start="2020-01-01",
-        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+        query="SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
     )
 
     snapshot = make_snapshot(

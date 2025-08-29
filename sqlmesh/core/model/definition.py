@@ -24,6 +24,7 @@ from sqlmesh.core.audit import Audit, ModelAudit
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import (
+    ParsableSql,
     expression_validator,
     make_python_env,
     parse_dependencies,
@@ -1275,9 +1276,10 @@ class SqlModel(_Model):
         on_virtual_update: The list of SQL statements to be executed after the virtual update.
     """
 
-    query: t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]
+    query_: ParsableSql = Field(alias="query")
     source_type: t.Literal["sql"] = "sql"
 
+    _query_validator = ParsableSql.validator()
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     _is_metadata_only_change_cache: t.Dict[int, bool] = {}
 
@@ -1299,6 +1301,11 @@ class SqlModel(_Model):
         if kwargs.get("update", {}).keys() & {"depends_on_", "query"}:
             model._full_depends_on = None
         return model
+
+    @property
+    def query(self) -> t.Union[exp.Query, d.JinjaQuery, d.MacroFunc]:
+        parsed_query = self.query_.parse(self.dialect)
+        return t.cast(t.Union[exp.Query, d.JinjaQuery, d.MacroFunc], parsed_query)
 
     def render_query(
         self,
@@ -2280,6 +2287,7 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
 def create_sql_model(
     name: TableName,
     query: t.Optional[exp.Expression],
+    dialect: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -2296,7 +2304,14 @@ def create_sql_model(
         )
         assert isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc))
 
-    return _create_model(SqlModel, name, query=query, **kwargs)
+    dialect = dialect or ""
+    return _create_model(
+        SqlModel,
+        name,
+        query=ParsableSql.from_parsed_expression(query, dialect, use_meta_sql=True),
+        dialect=dialect,
+        **kwargs,
+    )
 
 
 def create_seed_model(
@@ -2531,7 +2546,7 @@ def _create_model(
     if "pre_statements" in kwargs:
         statements.extend(kwargs["pre_statements"])
     if "query" in kwargs:
-        statements.append(kwargs["query"])
+        statements.append(kwargs["query"].parse(dialect))
     if "post_statements" in kwargs:
         statements.extend(kwargs["post_statements"])
 
