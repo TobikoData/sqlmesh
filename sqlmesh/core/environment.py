@@ -312,6 +312,7 @@ def execute_environment_statements(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
+    selected_models: t.Optional[t.Set[str]] = None,
 ) -> None:
     try:
         rendered_expressions = [
@@ -327,6 +328,7 @@ def execute_environment_statements(
                 execution_time=execution_time,
                 environment_naming_info=environment_naming_info,
                 engine_adapter=adapter,
+                selected_models=selected_models,
             )
         ]
     except Exception as e:

@@ -459,6 +459,7 @@ def create_builtin_globals(
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
             "graph": adapter.graph,
+            "selected_resources": adapter.selected_resources,
         }
     )
 

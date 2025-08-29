@@ -1676,6 +1676,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             end_override_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
+            selected_models=model_selector.expand_model_selections(select_models or "*"),
             explain=explain or False,
             ignore_cron=ignore_cron or False,
         )
