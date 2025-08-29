@@ -11,6 +11,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.dbt.project import Project
     from sqlmesh_dbt.console import DbtCliConsole
     from sqlmesh.core.model import Model
+    from sqlmesh.core.plan import Plan
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +36,20 @@ class DbtOperations:
 
     def run(
         self,
+        environment: t.Optional[str] = None,
         select: t.Optional[t.List[str]] = None,
         exclude: t.Optional[t.List[str]] = None,
         full_refresh: bool = False,
-    ) -> None:
-        select_models = None
-
-        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
-            select_models = [sqlmesh_selector]
-
-        self.context.plan(
-            select_models=select_models,
-            run=True,
-            no_diff=True,
-            no_prompts=True,
-            auto_apply=True,
+        empty: bool = False,
+    ) -> Plan:
+        return self.context.plan(
+            **self._plan_options(
+                environment=environment,
+                select=select,
+                exclude=exclude,
+                full_refresh=full_refresh,
+                empty=empty,
+            )
         )
 
     def _selected_models(
@@ -70,6 +70,86 @@ class DbtOperations:
             selected_models = dict(self.context.models)
 
         return selected_models
+
+    def _plan_options(
+        self,
+        environment: t.Optional[str] = None,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+        empty: bool = False,
+        full_refresh: bool = False,
+    ) -> t.Dict[str, t.Any]:
+        import sqlmesh.core.constants as c
+
+        # convert --select and --exclude to a selector expression for the SQLMesh selector engine
+        select_models = None
+        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+            select_models = [sqlmesh_selector]
+
+        is_dev = environment and environment != c.PROD
+        is_prod = not is_dev
+
+        options: t.Dict[str, t.Any] = {}
+
+        if is_prod or (is_dev and select_models):
+            # prod plans should "catch up" before applying the changes so that after the command finishes prod is the latest it can be
+            # dev plans *with* selectors should do the same as the user is saying "specifically update these models to the latest"
+            # dev plans *without* selectors should just have the defaults of never exceeding prod as the user is saying "just create this env" without focusing on any specific models
+            options.update(
+                dict(
+                    # always catch the data up to latest rather than only operating on what has been loaded before
+                    run=True,
+                    # don't taking cron schedules into account when deciding what models to run, do everything even if it just ran
+                    ignore_cron=True,
+                )
+            )
+
+        if is_dev:
+            options.update(
+                dict(
+                    # don't create views for all of prod in the dev environment
+                    include_unmodified=False,
+                    # always plan from scratch against prod. note that this is coupled with the `always_recreate_environment=True` setting in the default config file.
+                    # the result is that rather than planning against the previous state of an existing dev environment, the full scope of changes vs prod are always shown
+                    create_from=c.PROD,
+                    # Always enable dev previews for incremental / forward-only models.
+                    # Due to how DBT does incrementals (INCREMENTAL_UNMANAGED on the SQLMesh engine), this will result in the full model being refreshed
+                    # with the entire dataset, which can potentially be very large. If this is undesirable, users have two options:
+                    #  - work around this using jinja to conditionally add extra filters to the WHERE clause or a LIMIT to the model query
+                    #  - upgrade to SQLMesh's incremental models, where we have variables for the start/end date and inject leak guards to
+                    #    limit the amount of data backfilled
+                    #
+                    # Note: enable_preview=True is *different* behaviour to the `sqlmesh` CLI, which uses enable_preview=None.
+                    # This means the `sqlmesh` CLI will only enable dev previews for dbt projects if the target adapter supports cloning,
+                    # whereas we enable it unconditionally here
+                    enable_preview=True,
+                )
+            )
+
+        if empty:
+            # `dbt --empty` adds LIMIT 0 to the queries, resulting in empty tables. In addition, it happily clobbers existing tables regardless of if they are populated.
+            # This *partially* lines up with --skip-backfill in SQLMesh, which indicates to not populate tables if they happened to be created/updated as part of this plan.
+            # However, if a table already exists and has data in it, there is no change so SQLMesh will not recreate the table and thus it will not be cleared.
+            # So in order to fully replicate dbt's --empty, we also need --full-refresh semantics in order to replace existing tables
+            options["skip_backfill"] = True
+            full_refresh = True
+
+        if full_refresh:
+            # TODO: handling this requires some updates in the engine to enable restatements+changes in the same plan without affecting prod
+            # if the plan targets dev
+            pass
+
+        return dict(
+            environment=environment,
+            select_models=select_models,
+            # dont output a diff of model changes
+            no_diff=True,
+            # don't throw up any prompts like "set the effective date" - use defaults
+            no_prompts=True,
+            # start doing work immediately (since no_diff is set, there isnt really anything for the user to say yes/no to)
+            auto_apply=True,
+            **options,
+        )
 
     @property
     def console(self) -> DbtCliConsole:
@@ -102,6 +182,12 @@ def create(
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
+
+        # clear any existing handlers set up by click/rich as defaults so that once SQLMesh logging config is applied,
+        # we dont get duplicate messages logged from things like console.log_warning()
+        root_logger = logging.getLogger()
+        while root_logger.hasHandlers():
+            root_logger.removeHandler(root_logger.handlers[0])
 
         configure_logging(force_debug=debug)
         set_console(DbtCliConsole())

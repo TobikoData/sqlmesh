@@ -92,11 +92,24 @@ def dbt(
     "--full-refresh",
     help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
 )
+@click.option(
+    "--env",
+    "--environment",
+    help="Run against a specific Virtual Data Environment (VDE) instead of the main environment",
+)
+@click.option(
+    "--empty/--no-empty", default=False, help="If specified, limit input refs and sources"
+)
 @vars_option
 @click.pass_context
-def run(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:
+def run(
+    ctx: click.Context,
+    vars: t.Optional[t.Dict[str, t.Any]],
+    env: t.Optional[str] = None,
+    **kwargs: t.Any,
+) -> None:
     """Compile SQL and execute against the current target database."""
-    _get_dbt_operations(ctx, vars).run(**kwargs)
+    _get_dbt_operations(ctx, vars).run(environment=env, **kwargs)
 
 
 @dbt.command(name="list")

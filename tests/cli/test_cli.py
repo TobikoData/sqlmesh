@@ -260,10 +260,7 @@ def test_plan_skip_backfill(runner, tmp_path, flag):
     # plan for `prod` errors if `--skip-backfill` is passed without --no-gaps
     result = runner.invoke(cli, ["--log-file-dir", tmp_path, "--paths", tmp_path, "plan", flag])
     assert result.exit_code == 1
-    assert (
-        "Error: When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
-        in result.output
-    )
+    assert "Skipping the backfill stage for production can lead to unexpected" in result.output
 
     # plan executes virtual update without executing model batches
     # Input: `y` to perform virtual update
