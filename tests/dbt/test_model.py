@@ -75,7 +75,8 @@ def test_load_invalid_ref_audit_constraints(
     dbt_project_dir.mkdir()
     dbt_model_dir = dbt_project_dir / "models"
     dbt_model_dir.mkdir()
-    full_model_contents = "SELECT 1 as cola"
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    full_model_contents = """{{ config(tags=["blah"], tests=[{"blah": {"to": "ref('completely_ignored')", "field": "blah2"} }]) }} SELECT 1 as cola"""
     full_model_file = dbt_model_dir / "full_model.sql"
     with open(full_model_file, "w", encoding="utf-8") as f:
         f.write(full_model_contents)
