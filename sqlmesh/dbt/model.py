@@ -503,6 +503,7 @@ class ModelConfig(BaseModelConfig):
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
         query = d.jinja_query(self.sql_no_config)
+        kind = self.model_kind(context)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
         physical_properties: t.Dict[str, t.Any] = {}
@@ -521,7 +522,7 @@ class ModelConfig(BaseModelConfig):
                 partitioned_by.append(self._big_query_partition_by_expr(context))
             optional_kwargs["partitioned_by"] = partitioned_by
 
-        if self.cluster_by:
+        if self.cluster_by and not isinstance(kind, ViewKind):
             clustered_by = []
             for c in self.cluster_by:
                 try:
@@ -627,7 +628,6 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
-        kind = self.model_kind(context)
         allow_partials = model_kwargs.pop("allow_partials", None)
         if (
             allow_partials is None
