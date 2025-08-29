@@ -36,7 +36,9 @@ JINJA_ONLY = {
 
 def load_yaml(source: str | Path) -> t.Dict:
     try:
-        return load(source, render_jinja=False)
+        return load(
+            source, render_jinja=False, allow_duplicate_keys=True, keep_last_duplicate_key=True
+        )
     except DuplicateKeyError as ex:
         raise ConfigError(f"{source}: {ex}" if isinstance(source, Path) else f"{ex}")
 
