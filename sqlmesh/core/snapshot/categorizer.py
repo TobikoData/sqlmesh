@@ -47,11 +47,12 @@ def categorize_change(
     if type(new_model) != type(old_model):
         return default_category
 
-    if new.fingerprint.data_hash == old.fingerprint.data_hash:
-        if new.fingerprint.metadata_hash == old.fingerprint.metadata_hash:
-            raise SQLMeshError(
-                f"{new} is unmodified or indirectly modified and should not be categorized"
-            )
+    if new.fingerprint == old.fingerprint:
+        raise SQLMeshError(
+            f"{new} is unmodified or indirectly modified and should not be categorized"
+        )
+
+    if not new.is_directly_modified(old):
         if new.fingerprint.parent_data_hash == old.fingerprint.parent_data_hash:
             return SnapshotChangeCategory.NON_BREAKING
         return None

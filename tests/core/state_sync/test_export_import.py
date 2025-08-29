@@ -289,8 +289,8 @@ def test_export_local_state(
     full_model = next(s for s in snapshots if "full_model" in s["name"])
     new_model = next(s for s in snapshots if "new_model" in s["name"])
 
-    assert "'1' as modified" in full_model["node"]["query"]
-    assert "SELECT 1 as id" in new_model["node"]["query"]
+    assert "'1' as modified" in full_model["node"]["query"]["sql"]
+    assert "SELECT 1 as id" in new_model["node"]["query"]["sql"]
 
 
 def test_import_invalid_file(tmp_path: Path, state_sync: StateSync) -> None:

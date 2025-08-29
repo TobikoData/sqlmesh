@@ -252,6 +252,9 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot.model.render_pre_statements()
+
     assert f"RuntimeStage value: {RuntimeStage.LOADING.value}" in capsys.readouterr().out
 
     evaluator.create([snapshot], {})

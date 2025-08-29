@@ -29,6 +29,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import Model, SqlModel, load_sql_based_model, model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.test.definition import ModelTest, PythonModelTest, SqlModelTest
 from sqlmesh.core.test.result import ModelTextTestResult
 from sqlmesh.core.test.context import TestExecutionContext
@@ -1985,12 +1986,18 @@ def test_test_generation(tmp_path: Path) -> None:
     )
     context = Context(paths=tmp_path, config=config)
 
-    query = context.get_model("sqlmesh_example.full_model").render_query()
+    model = context.get_model("sqlmesh_example.full_model")
+    query = model.render_query()
     assert isinstance(query, exp.Query)
 
     context.upsert_model(
         "sqlmesh_example.full_model",
-        query=exp.select(*query.named_selects).from_("cte").with_("cte", as_=query),
+        query_=ParsableSql(
+            sql=exp.select(*query.named_selects)
+            .from_("cte")
+            .with_("cte", as_=query)
+            .sql(dialect=model.dialect)
+        ),
     )
 
     context.plan(auto_apply=True)

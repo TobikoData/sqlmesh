@@ -21,7 +21,7 @@ from sqlmesh.utils.metaprogramming import (
     prepare_env,
     serialize_env,
 )
-from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator
+from sqlmesh.utils.pydantic import PydanticModel, ValidationInfo, field_validator, get_dialect
 
 if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
@@ -616,11 +616,6 @@ def parse_strings_with_macro_refs(value: t.Any, dialect: DialectType) -> t.Any:
 
 
 expression_validator: t.Callable = field_validator(
-    "query",
-    "expressions_",
-    "pre_statements_",
-    "post_statements_",
-    "on_virtual_update_",
     "unique_key",
     mode="before",
     check_fields=False,
@@ -663,3 +658,65 @@ depends_on_validator: t.Callable = field_validator(
     mode="before",
     check_fields=False,
 )(depends_on)
+
+
+class ParsableSql(PydanticModel):
+    sql: str
+
+    _parsed: t.Optional[exp.Expression] = None
+    _parsed_dialect: t.Optional[str] = None
+
+    def parse(self, dialect: str) -> exp.Expression:
+        if self._parsed is None or self._parsed_dialect != dialect:
+            self._parsed = d.parse_one(self.sql, dialect=dialect)
+            self._parsed_dialect = dialect
+        return self._parsed
+
+    @classmethod
+    def from_parsed_expression(
+        cls, parsed_expression: exp.Expression, dialect: str, use_meta_sql: bool = False
+    ) -> ParsableSql:
+        sql = (
+            parsed_expression.meta.get("sql") or parsed_expression.sql(dialect=dialect)
+            if use_meta_sql
+            else parsed_expression.sql(dialect=dialect)
+        )
+        result = cls(sql=sql)
+        result._parsed = parsed_expression
+        result._parsed_dialect = dialect
+        return result
+
+    @classmethod
+    def validator(cls) -> classmethod:
+        def _validate_parsable_sql(
+            v: t.Any, info: ValidationInfo
+        ) -> t.Optional[t.Union[ParsableSql, t.List[ParsableSql]]]:
+            if v is None:
+                return v
+            if isinstance(v, str):
+                return ParsableSql(sql=v)
+            if isinstance(v, exp.Expression):
+                return ParsableSql.from_parsed_expression(
+                    v, get_dialect(info.data), use_meta_sql=False
+                )
+            if isinstance(v, list):
+                dialect = get_dialect(info.data)
+                return [
+                    ParsableSql(sql=s)
+                    if isinstance(s, str)
+                    else ParsableSql.from_parsed_expression(s, dialect, use_meta_sql=False)
+                    if isinstance(s, exp.Expression)
+                    else ParsableSql.parse_obj(s)
+                    for s in v
+                ]
+            return ParsableSql.parse_obj(v)
+
+        return field_validator(
+            "query_",
+            "expressions_",
+            "pre_statements_",
+            "post_statements_",
+            "on_virtual_update_",
+            mode="before",
+            check_fields=False,
+        )(_validate_parsable_sql)

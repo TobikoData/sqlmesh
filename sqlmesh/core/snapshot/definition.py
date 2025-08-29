@@ -1230,6 +1230,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             self.intervals = remove_interval(self.intervals, *pending_restatement_interval)
 
+    def is_directly_modified(self, other: Snapshot) -> bool:
+        """Returns whether or not this snapshot is directly modified in relation to the other snapshot."""
+        return self.node.is_data_change(other.node)
+
+    def is_indirectly_modified(self, other: Snapshot) -> bool:
+        """Returns whether or not this snapshot is indirectly modified in relation to the other snapshot."""
+        return (
+            self.fingerprint.parent_data_hash != other.fingerprint.parent_data_hash
+            and not self.node.is_data_change(other.node)
+        )
+
+    def is_metadata_updated(self, other: Snapshot) -> bool:
+        """Returns whether or not this snapshot contains metadata changes in relation to the other snapshot."""
+        return self.fingerprint.metadata_hash != other.fingerprint.metadata_hash
+
     @property
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:

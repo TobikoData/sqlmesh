@@ -435,7 +435,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return current.fingerprint.data_hash != previous.fingerprint.data_hash
+        return current.is_directly_modified(previous)
 
     def indirectly_modified(self, name: str) -> bool:
         """Returns whether or not a node was indirectly modified in this context.
@@ -451,10 +451,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return (
-            current.fingerprint.data_hash == previous.fingerprint.data_hash
-            and current.fingerprint.parent_data_hash != previous.fingerprint.parent_data_hash
-        )
+        return current.is_indirectly_modified(previous)
 
     def metadata_updated(self, name: str) -> bool:
         """Returns whether or not the given node's metadata has been updated.
@@ -470,7 +467,7 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[name]
-        return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
+        return current.is_metadata_updated(previous)
 
     def text_diff(self, name: str) -> str:
         """Finds the difference of a node between the current and remote environment.
