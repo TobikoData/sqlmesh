@@ -78,9 +78,14 @@ class AuditMixin(AuditCommonMetaMixin):
 
     @property
     def expressions(self) -> t.List[exp.Expression]:
-        if self.expressions_:
-            return [e.parse(self.dialect) for e in self.expressions_]
-        return []
+        if not self.expressions_:
+            return []
+        result = []
+        for e in self.expressions_:
+            parsed = e.parse(self.dialect)
+            if not isinstance(parsed, exp.Semicolon):
+                result.append(parsed)
+        return result
 
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
@@ -281,8 +286,8 @@ class StandaloneAudit(_Node, AuditMixin):
                 self.cron_tz.key if self.cron_tz else None,
             ]
 
-            query = self.render_audit_query() or self.query
-            data.append(gen(query))
+            data.append(self.query_.sql)
+            data.extend([e.sql for e in self.expressions_ or []])
             self._metadata_hash = hash_data(data)
         return self._metadata_hash
 

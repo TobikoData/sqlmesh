@@ -5733,7 +5733,7 @@ def test_default_catalog_sql(assert_exp_eq):
     The system is not designed to actually support having an engine that doesn't support default catalog
     to start supporting it or the reverse of that. If that did happen then bugs would occur.
     """
-    HASH_WITH_CATALOG = "3443912775"
+    HASH_WITH_CATALOG = "2768215345"
 
     # Test setting default catalog doesn't change hash if it matches existing logic
     expressions = d.parse(
@@ -8309,15 +8309,9 @@ def test_macro_func_hash(mocker: MockerFixture, metadata_only: bool):
     new_model = load_sql_based_model(
         expressions, path=Path("./examples/sushi/models/test_model.sql")
     )
-    if metadata_only:
-        assert "noop" not in new_model._data_hash_values[0]
-        assert "noop" in new_model._additional_metadata[0]
-        assert model.data_hash == new_model.data_hash
-        assert model.metadata_hash != new_model.metadata_hash
-    else:
-        assert "noop" in new_model._data_hash_values[0]
-        assert model.data_hash != new_model.data_hash
-        assert model.metadata_hash == new_model.metadata_hash
+    assert model.metadata_hash != new_model.metadata_hash
+    assert model.data_hash != new_model.data_hash
+    assert new_model.is_metadata_only_change(model) == metadata_only
 
     @macro(metadata_only=metadata_only)  # type: ignore
     def noop(evaluator) -> None:
@@ -8337,6 +8331,7 @@ def test_macro_func_hash(mocker: MockerFixture, metadata_only: bool):
         assert "print" in updated_model._data_hash_values[0]
         assert new_model.data_hash != updated_model.data_hash
         assert new_model.metadata_hash == updated_model.metadata_hash
+    assert updated_model.is_metadata_only_change(new_model) == metadata_only
 
 
 def test_managed_kind_sql():
@@ -10732,7 +10727,7 @@ def f():
         Context(paths=tmp_path, config=config)
 
 
-def test_semicolon_is_not_included_in_model_state(tmp_path, assert_exp_eq):
+def test_semicolon_is_metadata_only_change(tmp_path, assert_exp_eq):
     init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
 
     db_connection = DuckDBConnectionConfig(database=str(tmp_path / "db.db"))
@@ -10821,7 +10816,9 @@ SELECT
     ctx.load()
     plan = ctx.plan(no_prompts=True, auto_apply=True)
 
-    assert not plan.context_diff.modified_snapshots
+    assert len(plan.context_diff.modified_snapshots) == 1
+    assert len(plan.new_snapshots) == 1
+    assert plan.new_snapshots[0].is_metadata
 
 
 def test_invalid_audit_reference():

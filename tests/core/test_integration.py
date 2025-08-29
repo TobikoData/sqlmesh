@@ -6670,11 +6670,12 @@ def change_data_type(
     assert model is not None
 
     if isinstance(model, SqlModel):
-        data_types = model.query.find_all(DataType)
+        query = model.query.copy()
+        data_types = query.find_all(DataType)
         for data_type in data_types:
             if data_type.this == old_type:
                 data_type.set("this", new_type)
-        context.upsert_model(model_name, query_=model.query_)
+        context.upsert_model(model_name, query_=ParsableSql(sql=query.sql(dialect=model.dialect)))
     elif model.columns_to_types_ is not None:
         for k, v in model.columns_to_types_.items():
             if v.this == old_type:

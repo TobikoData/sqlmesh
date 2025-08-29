@@ -616,11 +616,6 @@ def parse_strings_with_macro_refs(value: t.Any, dialect: DialectType) -> t.Any:
 
 
 expression_validator: t.Callable = field_validator(
-    # "query",
-    # "expressions_",
-    "pre_statements_",
-    "post_statements_",
-    "on_virtual_update_",
     "unique_key",
     mode="before",
     check_fields=False,
@@ -719,9 +714,9 @@ class ParsableSql(PydanticModel):
         return field_validator(
             "query_",
             "expressions_",
-            # "pre_statements_",
-            # "post_statements_",
-            # "on_virtual_update_",
+            "pre_statements_",
+            "post_statements_",
+            "on_virtual_update_",
             mode="before",
             check_fields=False,
         )(_validate_parsable_sql)

@@ -25,7 +25,6 @@ from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import (
     ParsableSql,
-    expression_validator,
     make_python_env,
     parse_dependencies,
     parse_strings_with_macro_refs,
@@ -152,21 +151,17 @@ class _Model(ModelMeta, frozen=True):
     audit_definitions: t.Dict[str, ModelAudit] = {}
     mapping_schema: t.Dict[str, t.Any] = {}
     extract_dependencies_from_query: bool = True
-
-    _full_depends_on: t.Optional[t.Set[str]] = None
-    _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
-
-    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="pre_statements"
-    )
-    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="post_statements"
-    )
-    on_virtual_update_: t.Optional[t.List[exp.Expression]] = Field(
+    pre_statements_: t.Optional[t.List[ParsableSql]] = Field(default=None, alias="pre_statements")
+    post_statements_: t.Optional[t.List[ParsableSql]] = Field(default=None, alias="post_statements")
+    on_virtual_update_: t.Optional[t.List[ParsableSql]] = Field(
         default=None, alias="on_virtual_update"
     )
 
-    _expressions_validator = expression_validator
+    _full_depends_on: t.Optional[t.Set[str]] = None
+    _statement_renderer_cache: t.Dict[int, ExpressionRenderer] = {}
+    _is_metadata_only_change_cache: t.Dict[int, bool] = {}
+
+    _expressions_validator = ParsableSql.validator()
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -545,15 +540,15 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def pre_statements(self) -> t.List[exp.Expression]:
-        return self.pre_statements_ or []
+        return self._get_statements("pre_statements_")
 
     @property
     def post_statements(self) -> t.List[exp.Expression]:
-        return self.post_statements_ or []
+        return self._get_statements("post_statements_")
 
     @property
     def on_virtual_update(self) -> t.List[exp.Expression]:
-        return self.on_virtual_update_ or []
+        return self._get_statements("on_virtual_update_")
 
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
@@ -563,6 +558,17 @@ class _Model(ModelMeta, frozen=True):
             for s in self.pre_statements + self.post_statements + self.on_virtual_update
             if isinstance(s, d.MacroDef)
         ]
+
+    def _get_statements(self, attr_name: str) -> t.List[exp.Expression]:
+        value = getattr(self, attr_name)
+        if not value:
+            return []
+        result = []
+        for v in value:
+            parsed = v.parse(self.dialect)
+            if not isinstance(parsed, exp.Semicolon):
+                result.append(parsed)
+        return result
 
     def _render_statements(
         self,
@@ -1027,6 +1033,45 @@ class _Model(ModelMeta, frozen=True):
         """
         raise NotImplementedError
 
+    def is_metadata_only_change(self, other: _Node) -> bool:
+        if self._is_metadata_only_change_cache.get(id(other), None) is not None:
+            return self._is_metadata_only_change_cache[id(other)]
+
+        is_metadata_change = True
+        if (
+            not isinstance(other, _Model)
+            or self.metadata_hash == other.metadata_hash
+            or self._data_hash_values_no_sql != other._data_hash_values_no_sql
+        ):
+            is_metadata_change = False
+        else:
+            this_statements = [
+                s
+                for s in [*self.pre_statements, *self.post_statements]
+                if not self._is_metadata_statement(s)
+            ]
+            other_statements = [
+                s
+                for s in [*other.pre_statements, *other.post_statements]
+                if not other._is_metadata_statement(s)
+            ]
+            if len(this_statements) != len(other_statements):
+                is_metadata_change = False
+            else:
+                for this_statement, other_statement in zip(this_statements, other_statements):
+                    this_rendered = (
+                        self._statement_renderer(this_statement).render() or this_statement.sql
+                    )
+                    other_rendered = (
+                        other._statement_renderer(other_statement).render() or other_statement.sql
+                    )
+                    if this_rendered != other_rendered:
+                        is_metadata_change = False
+                        break
+
+        self._is_metadata_only_change_cache[id(other)] = is_metadata_change
+        return is_metadata_change
+
     @property
     def data_hash(self) -> str:
         """
@@ -1041,6 +1086,19 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def _data_hash_values(self) -> t.List[str]:
+        return self._data_hash_values_no_sql + self._data_hash_values_sql
+
+    @property
+    def _data_hash_values_sql(self) -> t.List[str]:
+        data = []
+
+        for statement in [*(self.pre_statements_ or []), *(self.post_statements_ or [])]:
+            data.append(statement.sql)
+
+        return data
+
+    @property
+    def _data_hash_values_no_sql(self) -> t.List[str]:
         data = [
             str(  # Exclude metadata only macro funcs
                 [(k, v) for k, v in self.sorted_python_env if not v.is_metadata]
@@ -1068,18 +1126,6 @@ class _Model(ModelMeta, frozen=True):
             data.append(key)
             data.append(gen(value))
 
-        for statement in (*self.pre_statements, *self.post_statements):
-            statement_exprs: t.List[exp.Expression] = []
-            if not isinstance(statement, d.MacroDef):
-                rendered = self._statement_renderer(statement).render()
-                if self._is_metadata_statement(statement):
-                    continue
-                if rendered:
-                    statement_exprs = rendered
-                else:
-                    statement_exprs = [statement]
-            data.extend(gen(e) for e in statement_exprs)
-
         return data  # type: ignore
 
     def _audit_metadata_hash_values(self) -> t.List[str]:
@@ -1095,13 +1141,9 @@ class _Model(ModelMeta, frozen=True):
                     metadata.append(gen(arg_value))
             else:
                 audit = self.audit_definitions[audit_name]
-                query = (
-                    self.render_audit_query(audit, **t.cast(t.Dict[str, t.Any], audit_args))
-                    or audit.query
-                )
                 metadata.extend(
                     [
-                        gen(query),
+                        audit.query_.sql,
                         audit.dialect,
                         str(audit.skip),
                         str(audit.blocking),
@@ -1172,12 +1214,9 @@ class _Model(ModelMeta, frozen=True):
         if metadata_only_macros:
             additional_metadata.append(str(metadata_only_macros))
 
-        for statement in (*self.pre_statements, *self.post_statements):
-            if self._is_metadata_statement(statement):
-                additional_metadata.append(gen(statement))
-
-        for statement in self.on_virtual_update:
-            additional_metadata.append(gen(statement))
+        for statements in [self.pre_statements_, self.post_statements_, self.on_virtual_update_]:
+            for statement in statements or []:
+                additional_metadata.append(statement.sql)
 
         return additional_metadata
 
@@ -1279,9 +1318,7 @@ class SqlModel(_Model):
     query_: ParsableSql = Field(alias="query")
     source_type: t.Literal["sql"] = "sql"
 
-    _query_validator = ParsableSql.validator()
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    _is_metadata_only_change_cache: t.Dict[int, bool] = {}
 
     def __getstate__(self) -> t.Dict[t.Any, t.Any]:
         state = super().__getstate__()
@@ -1513,19 +1550,16 @@ class SqlModel(_Model):
         if self._is_metadata_only_change_cache.get(id(previous), None) is not None:
             return self._is_metadata_only_change_cache[id(previous)]
 
-        if (
-            not isinstance(previous, SqlModel)
-            or self.metadata_hash == previous.metadata_hash
-            or self._data_hash_values_no_query != previous._data_hash_values_no_query
-        ):
-            is_metadata_change = False
-        else:
-            # If the rendered queries are the same, then this is a metadata only change
-            this_rendered_query = self.render_query()
-            previous_rendered_query = previous.render_query()
-            is_metadata_change = (
-                this_rendered_query is not None and this_rendered_query == previous_rendered_query
-            )
+        if not super().is_metadata_only_change(previous):
+            return False
+
+        if not isinstance(previous, SqlModel):
+            self._is_metadata_only_change_cache[id(previous)] = False
+            return False
+
+        this_rendered_query = self.render_query() or self.query
+        previous_rendered_query = previous.render_query() or previous.query
+        is_metadata_change = this_rendered_query == previous_rendered_query
 
         self._is_metadata_only_change_cache[id(previous)] = is_metadata_change
         return is_metadata_change
@@ -1549,22 +1583,22 @@ class SqlModel(_Model):
         )
 
     @property
-    def _data_hash_values_no_query(self) -> t.List[str]:
+    def _data_hash_values_no_sql(self) -> t.List[str]:
         return [
-            *super()._data_hash_values,
+            *super()._data_hash_values_no_sql,
             *self.jinja_macros.data_hash_values,
         ]
 
     @property
-    def _data_hash_values(self) -> t.List[str]:
+    def _data_hash_values_sql(self) -> t.List[str]:
         return [
-            *self._data_hash_values_no_query,
-            gen(self.query, comments=False),
+            *super()._data_hash_values_sql,
+            self.query_.sql,
         ]
 
     @property
     def _additional_metadata(self) -> t.List[str]:
-        return [*super()._additional_metadata, gen(self.query, comments=True)]
+        return [*super()._additional_metadata, self.query_.sql]
 
     @property
     def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
@@ -1788,8 +1822,8 @@ class SeedModel(_Model):
         return self.seed.reader(dialect=self.dialect, settings=self.kind.csv_settings)
 
     @property
-    def _data_hash_values(self) -> t.List[str]:
-        data = super()._data_hash_values
+    def _data_hash_values_no_sql(self) -> t.List[str]:
+        data = super()._data_hash_values_no_sql
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
@@ -1882,8 +1916,8 @@ class PythonModel(_Model):
         return None
 
     @property
-    def _data_hash_values(self) -> t.List[str]:
-        data = super()._data_hash_values
+    def _data_hash_values_no_sql(self) -> t.List[str]:
+        data = super()._data_hash_values_no_sql
         data.append(self.entrypoint)
         return data
 
@@ -2287,7 +2321,6 @@ Learn more at https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview
 def create_sql_model(
     name: TableName,
     query: t.Optional[exp.Expression],
-    dialect: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -2304,14 +2337,7 @@ def create_sql_model(
         )
         assert isinstance(query, (exp.Query, d.JinjaQuery, d.MacroFunc))
 
-    dialect = dialect or ""
-    return _create_model(
-        SqlModel,
-        name,
-        query=ParsableSql.from_parsed_expression(query, dialect, use_meta_sql=True),
-        dialect=dialect,
-        **kwargs,
-    )
+    return _create_model(SqlModel, name, query=query, **kwargs)
 
 
 def create_seed_model(
@@ -2525,34 +2551,26 @@ def _create_model(
 
     statements: t.List[t.Union[exp.Expression, t.Tuple[exp.Expression, bool]]] = []
 
-    # Merge default pre_statements with model-specific pre_statements
-    if "pre_statements" in defaults:
-        kwargs["pre_statements"] = [
-            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["pre_statements"]
-        ] + kwargs.get("pre_statements", [])
-
-    # Merge default post_statements with model-specific post_statements
-    if "post_statements" in defaults:
-        kwargs["post_statements"] = [
-            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["post_statements"]
-        ] + kwargs.get("post_statements", [])
-
-    # Merge default on_virtual_update with model-specific on_virtual_update
-    if "on_virtual_update" in defaults:
-        kwargs["on_virtual_update"] = [
-            exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults["on_virtual_update"]
-        ] + kwargs.get("on_virtual_update", [])
-
-    if "pre_statements" in kwargs:
-        statements.extend(kwargs["pre_statements"])
     if "query" in kwargs:
-        statements.append(kwargs["query"].parse(dialect))
-    if "post_statements" in kwargs:
-        statements.extend(kwargs["post_statements"])
+        statements.append(kwargs["query"])
+        kwargs["query"] = ParsableSql.from_parsed_expression(
+            kwargs["query"], dialect, use_meta_sql=True
+        )
 
-    # Macros extracted from these statements need to be treated as metadata only
-    if "on_virtual_update" in kwargs:
-        statements.extend((stmt, True) for stmt in kwargs["on_virtual_update"])
+    # Merge default statements with model-specific statements
+    for statement_field in ["pre_statements", "post_statements", "on_virtual_update"]:
+        if statement_field in defaults:
+            kwargs[statement_field] = [
+                exp.maybe_parse(stmt, dialect=dialect) for stmt in defaults[statement_field]
+            ] + kwargs.get(statement_field, [])
+        if statement_field in kwargs:
+            # Macros extracted from these statements need to be treated as metadata only
+            is_metadata = statement_field == "on_virtual_update"
+            statements.extend((stmt, is_metadata) for stmt in kwargs[statement_field])
+            kwargs[statement_field] = [
+                ParsableSql.from_parsed_expression(stmt, dialect, use_meta_sql=True)
+                for stmt in kwargs[statement_field]
+            ]
 
     # This is done to allow variables like @gateway to be used in these properties
     # since rendering shifted from load time to run time.

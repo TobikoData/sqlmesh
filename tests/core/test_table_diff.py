@@ -10,6 +10,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig, DuckDBConnectionConfig
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.table_diff import TableDiff, SchemaDiff
 import numpy as np  # noqa: TID253
 from sqlmesh.utils.errors import SQLMeshError
@@ -48,8 +49,14 @@ def capture_console_output(method_name: str, **kwargs) -> str:
 def test_data_diff(sushi_context_fixed_date, capsys, caplog):
     model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
-    model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y", copy=False)
-    sushi_context_fixed_date.upsert_model(model)
+    sushi_context_fixed_date.upsert_model(
+        model,
+        query_=ParsableSql(
+            sql=model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y").sql(
+                model.dialect
+            )
+        ),
+    )
 
     sushi_context_fixed_date.plan(
         "source_dev",
