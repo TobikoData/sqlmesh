@@ -16,6 +16,7 @@ from pytest import MonkeyPatch
 from pathlib import Path
 from sqlmesh.core.console import set_console, get_console, TerminalConsole
 from sqlmesh.core.config.naming import NameInferenceConfig
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 import time_machine
 from pytest_mock.plugin import MockerFixture
@@ -2023,7 +2024,7 @@ def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
     model = context.get_model("sushi.simple_model_a")
     context.upsert_model(
         model,
-        query=d.parse_one("SELECT 1 AS a, 2 AS b"),
+        query_=ParsableSql(sql="SELECT 1 AS a, 2 AS b"),
     )
 
     snapshot_a_id = context.get_snapshot("sushi.simple_model_a").snapshot_id  # type: ignore
@@ -2605,8 +2606,8 @@ def test_unaligned_start_snapshot_with_non_deployable_downstream(init_and_plan_c
     context.upsert_model(SqlModel.parse_obj(kwargs))
     context.upsert_model(
         downstream_model_name,
-        query=d.parse_one(
-            "SELECT customer_id, MAX(revenue) AS max_revenue FROM memory.sushi.customer_revenue_lifetime_new GROUP BY 1"
+        query_=ParsableSql(
+            sql="SELECT customer_id, MAX(revenue) AS max_revenue FROM memory.sushi.customer_revenue_lifetime_new GROUP BY 1"
         ),
     )
 
@@ -2637,7 +2638,13 @@ def test_virtual_environment_mode_dev_only(init_and_plan_context: t.Callable):
     # Make a change in dev
     original_model = context.get_model("sushi.waiter_revenue_by_day")
     original_fingerprint = context.get_snapshot(original_model.name).fingerprint
-    model = original_model.copy(update={"query": original_model.query.order_by("waiter_id")})
+    model = original_model.copy(
+        update={
+            "query_": ParsableSql(
+                sql=original_model.query.order_by("waiter_id").sql(dialect=original_model.dialect)
+            )
+        }
+    )
     model = add_projection_to_model(t.cast(SqlModel, model))
     context.upsert_model(model)
 
@@ -5383,7 +5390,10 @@ def test_auto_categorization(sushi_context: Context):
     ).fingerprint
 
     model = t.cast(SqlModel, sushi_context.get_model("sushi.customers", raise_if_missing=True))
-    sushi_context.upsert_model("sushi.customers", query=model.query.select("'foo' AS foo"))  # type: ignore
+    sushi_context.upsert_model(
+        "sushi.customers",
+        query_=ParsableSql(sql=model.query.select("'foo' AS foo").sql(dialect=model.dialect)),  # type: ignore
+    )
     apply_to_environment(sushi_context, environment)
 
     assert (
@@ -5447,7 +5457,13 @@ def test_multi(mocker):
 
     model = context.get_model("bronze.a")
     assert model.project == "repo_1"
-    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(sql=model.query.select("'c' AS c").sql(dialect=model.dialect))
+            }
+        )
+    )
     plan = context.plan_builder().build()
 
     assert set(snapshot.name for snapshot in plan.directly_modified) == {
@@ -5615,7 +5631,15 @@ def test_multi_virtual_layer(copy_to_temp_path):
 
     model = context.get_model("db_1.first_schema.model_one")
 
-    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'c' AS extra").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     plan = context.plan_builder().build()
     context.apply(plan)
 
@@ -5641,9 +5665,25 @@ def test_multi_virtual_layer(copy_to_temp_path):
 
     # Create dev environment with changed models
     model = context.get_model("db_2.second_schema.model_one")
-    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'d' AS extra").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     model = context.get_model("first_schema.model_two")
-    context.upsert_model(model.copy(update={"query": model.query.select("'d2' AS col")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'d2' AS col").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     plan = context.plan_builder("dev").build()
     context.apply(plan)
 
@@ -6634,7 +6674,7 @@ def change_data_type(
         for data_type in data_types:
             if data_type.this == old_type:
                 data_type.set("this", new_type)
-        context.upsert_model(model_name, query=model.query)
+        context.upsert_model(model_name, query_=model.query_)
     elif model.columns_to_types_ is not None:
         for k, v in model.columns_to_types_.items():
             if v.this == old_type:

@@ -11,6 +11,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
@@ -293,7 +294,13 @@ def test_select_change_schema(mocker: MockerFixture, make_snapshot):
     }
 
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-    local_parent = parent.copy(update={"query": parent.query.select("2 as b", append=False)})  # type: ignore
+    local_parent = parent.copy(
+        update={
+            "query_": ParsableSql(
+                sql=parent.query.select("2 as b", append=False).sql(dialect=parent.dialect)  # type: ignore
+            )
+        }
+    )
     local_models[local_parent.fqn] = local_parent
     local_child = child.copy(update={"mapping_schema": {'"db"': {'"parent"': {"b": "INT"}}}})
     local_models[local_child.fqn] = local_child

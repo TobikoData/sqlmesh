@@ -39,6 +39,7 @@ from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, Environ
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.core.model import load_sql_based_model, model, SqlModel, Model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.core.renderer import render_statements
 from sqlmesh.core.model.kind import ModelKindName
@@ -2303,7 +2304,10 @@ def test_prompt_if_uncategorized_snapshot(mocker: MockerFixture, tmp_path: Path)
     incremental_model = context.get_model("sqlmesh_example.incremental_model")
     incremental_model_query = incremental_model.render_query()
     new_incremental_model_query = t.cast(exp.Select, incremental_model_query).select("1 AS z")
-    context.upsert_model("sqlmesh_example.incremental_model", query=new_incremental_model_query)
+    context.upsert_model(
+        "sqlmesh_example.incremental_model",
+        query_=ParsableSql(sql=new_incremental_model_query.sql(dialect=incremental_model.dialect)),
+    )
 
     mock_console = mocker.Mock()
     spy_plan = mocker.spy(mock_console, "plan")

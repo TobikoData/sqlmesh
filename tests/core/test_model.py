@@ -22,6 +22,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.console import get_console
 from sqlmesh.core.audit import ModelAudit, load_audit
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
@@ -8874,7 +8875,9 @@ def test_column_description_metadata_change():
     context.upsert_model(model)
     context.plan(no_prompts=True, auto_apply=True)
 
-    context.upsert_model("db.test_model", query=parse_one("SELECT 1 AS id /* description 2 */"))
+    context.upsert_model(
+        "db.test_model", query_=ParsableSql(sql="SELECT 1 AS id /* description 2 */")
+    )
     plan = context.plan(no_prompts=True, auto_apply=True)
 
     snapshots = list(plan.snapshots.values())
