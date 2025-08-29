@@ -540,15 +540,15 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def pre_statements(self) -> t.List[exp.Expression]:
-        return self._get_statements("pre_statements_")
+        return self._get_parsed_statements("pre_statements_")
 
     @property
     def post_statements(self) -> t.List[exp.Expression]:
-        return self._get_statements("post_statements_")
+        return self._get_parsed_statements("post_statements_")
 
     @property
     def on_virtual_update(self) -> t.List[exp.Expression]:
-        return self._get_statements("on_virtual_update_")
+        return self._get_parsed_statements("on_virtual_update_")
 
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
@@ -559,7 +559,7 @@ class _Model(ModelMeta, frozen=True):
             if isinstance(s, d.MacroDef)
         ]
 
-    def _get_statements(self, attr_name: str) -> t.List[exp.Expression]:
+    def _get_parsed_statements(self, attr_name: str) -> t.List[exp.Expression]:
         value = getattr(self, attr_name)
         if not value:
             return []
@@ -1060,10 +1060,10 @@ class _Model(ModelMeta, frozen=True):
             else:
                 for this_statement, other_statement in zip(this_statements, other_statements):
                     this_rendered = (
-                        self._statement_renderer(this_statement).render() or this_statement.sql
+                        self._statement_renderer(this_statement).render() or this_statement
                     )
                     other_rendered = (
-                        other._statement_renderer(other_statement).render() or other_statement.sql
+                        other._statement_renderer(other_statement).render() or other_statement
                     )
                     if this_rendered != other_rendered:
                         is_metadata_change = False
@@ -1092,8 +1092,9 @@ class _Model(ModelMeta, frozen=True):
     def _data_hash_values_sql(self) -> t.List[str]:
         data = []
 
-        for statement in [*(self.pre_statements_ or []), *(self.post_statements_ or [])]:
-            data.append(statement.sql)
+        for statements in [self.pre_statements_, self.post_statements_]:
+            for statement in statements or []:
+                data.append(statement.sql)
 
         return data
 
