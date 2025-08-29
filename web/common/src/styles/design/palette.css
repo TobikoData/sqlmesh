@@ -194,6 +194,8 @@
   --color-gray-550: hsl(190, 8%, 42%);
   --color-gray-600: hsl(190, 8%, 38%);
   --color-gray-700: hsl(202, 8%, 26%);
+  --color-gray-725: hsl(202, 8%, 22%);
+  --color-gray-750: hsl(202, 8%, 20%);
   --color-gray-800: hsl(214, 8%, 14%);
   --color-gray-900: hsl(226, 8%, 4%);
 }

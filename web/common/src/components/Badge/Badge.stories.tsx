@@ -1,23 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 
-import { EnumShape, EnumSize } from '@/types/enums'
+import type { Shape, Size } from '@/types'
 import { Badge } from './Badge'
 
 const meta: Meta<typeof Badge> = {
   title: 'Components/Badge',
   component: Badge,
-  tags: ['autodocs'],
-  argTypes: {
-    size: {
-      control: { type: 'select' },
-      options: Object.values(EnumSize),
-    },
-    shape: {
-      control: { type: 'select' },
-      options: Object.values(EnumShape),
-    },
-    children: { control: 'text' },
-  },
 }
 
 export default meta
@@ -29,10 +17,13 @@ export const Default: Story = {
   },
 }
 
+const sizes: Size[] = ['2xs', 'xs', 's', 'm', 'l', 'xl', '2xl']
+const shapes: Shape[] = ['square', 'round', 'pill']
+
 export const Sizes: Story = {
   render: args => (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {Object.values(EnumSize).map(size => (
+      {sizes.map(size => (
         <Badge
           key={size}
           size={size}
@@ -51,7 +42,7 @@ export const Sizes: Story = {
 export const Shapes: Story = {
   render: args => (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {Object.values(EnumShape).map(shape => (
+      {shapes.map(shape => (
         <Badge
           key={shape}
           shape={shape}
@@ -78,32 +69,32 @@ export const Colors: Story = {
       }}
     >
       <Badge
-        size={EnumSize.S}
-        shape={EnumShape.Pill}
+        size="s"
+        shape="pill"
         className="bg-[red] text-light"
         {...args}
       >
         Primary Badge
       </Badge>
       <Badge
-        size={EnumSize.S}
-        shape={EnumShape.Pill}
+        size="s"
+        shape="pill"
         className="bg-[lightblue] text-prose"
         {...args}
       >
         Secondary Badge
       </Badge>
       <Badge
-        size={EnumSize.S}
-        shape={EnumShape.Round}
+        size="s"
+        shape="round"
         className="bg-[green] text-light"
         {...args}
       >
         Failed Badge
       </Badge>
       <Badge
-        size={EnumSize.XXS}
-        shape={EnumShape.Round}
+        size="2xs"
+        shape="round"
         className="bg-[orange] text-light"
         {...args}
       >

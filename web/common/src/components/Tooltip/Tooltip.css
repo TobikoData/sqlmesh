@@ -1,0 +1,4 @@
+:root {
+  --color-tooltip-background: var(--color-dark);
+  --color-tooltip-foreground: var(--color-light);
+}
