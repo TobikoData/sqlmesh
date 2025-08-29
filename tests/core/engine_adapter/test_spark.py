@@ -1080,3 +1080,19 @@ def test_table_format(adapter: SparkEngineAdapter, mocker: MockerFixture):
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` TIMESTAMP, `colb` STRING, `colc` STRING) USING ICEBERG",
         "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG TBLPROPERTIES ('write.format.default'='orc') AS SELECT CAST(`cola` AS TIMESTAMP) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT CAST(1 AS TIMESTAMP) AS `cola`, CAST(2 AS STRING) AS `colb`, 'foo' AS `colc`) AS `_subquery`",
     ]
+
+
+def test_get_data_object_wap_branch(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, patch_get_data_objects=False)
+    mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+
+    table = exp.to_table(
+        "`catalog`.`sqlmesh__test`.`test__test_view__630979748`.`branch_wap_472234d7`",
+        dialect="spark",
+    )
+    adapter.get_data_object(table)
+
+    adapter._get_data_objects.assert_called_once_with(
+        d.schema_("sqlmesh__test", "catalog"),
+        {"test__test_view__630979748"},
+    )
