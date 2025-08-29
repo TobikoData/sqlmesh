@@ -498,8 +498,11 @@ class SchemaDiffer(PydanticModel):
         columns = ensure_list(columns)
         operations: t.List[TableAlterColumnOperation] = []
         column_pos, column_kwarg = self._get_matching_kwarg(columns[-1].name, struct, pos)
-        assert column_pos is not None
-        assert column_kwarg
+        if column_pos is None or not column_kwarg:
+            raise SQLMeshError(
+                f"Cannot drop column '{columns[-1].name}' from table '{table_name}' - column not found. "
+                f"This may indicate a mismatch between the expected and actual table schemas."
+            )
         struct.expressions.pop(column_pos)
         operations.append(
             TableAlterDropColumnOperation(

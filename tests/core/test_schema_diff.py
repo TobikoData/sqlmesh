@@ -15,6 +15,7 @@ from sqlmesh.core.schema_diff import (
     TableAlterChangeColumnTypeOperation,
     NestedSupport,
 )
+from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_schema_diff_calculate():
@@ -2341,3 +2342,27 @@ def test_ignore_additive_array_operations():
         ignore_additive=True,
     )
     assert len(operations_ignore_additive) == 0
+
+
+def test_drop_operation_missing_column_error():
+    schema_differ = SchemaDiffer(
+        nested_support=NestedSupport.NONE,
+        support_positional_add=False,
+    )
+
+    # a struct that doesn't contain the column we're going to drop
+    current_struct = exp.DataType.build("STRUCT<id INT, name STRING>")
+
+    with pytest.raises(SQLMeshError) as error_message:
+        schema_differ._drop_operation(
+            columns=[TableAlterColumn.primitive("missing_column")],
+            struct=current_struct,
+            pos=0,
+            root_struct=current_struct,
+            table_name="test_table",
+        )
+
+    assert (
+        str(error_message.value)
+        == "Cannot drop column 'missing_column' from table 'test_table' - column not found. This may indicate a mismatch between the expected and actual table schemas."
+    )
