@@ -4,6 +4,7 @@ import typing as t
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
+import logging
 
 from pydantic import Field
 from sqlglot.helper import ensure_list
@@ -36,6 +37,9 @@ if t.TYPE_CHECKING:
 
 
 BMC = t.TypeVar("BMC", bound="BaseModelConfig")
+
+
+logger = logging.getLogger(__name__)
 
 
 class Materialization(str, Enum):
@@ -262,12 +266,11 @@ class BaseModelConfig(GeneralConfig):
             and all(source in context.sources for source in test.dependencies.sources)
         ]
 
-    def check_for_circular_test_refs(self, context: DbtContext) -> None:
+    def fix_circular_test_refs(self, context: DbtContext) -> None:
         """
-        Checks for direct circular references between two models and raises an exception if found.
-        This addresses the most common circular reference seen when importing a dbt project -
-        relationship tests in both directions. In the future, we may want to increase coverage by
-        checking for indirect circular references.
+        Checks for direct circular references between two models and moves the test to the downstream
+        model if found. This addresses the most common circular reference - relationship tests in both
+        directions. In the future, we may want to increase coverage by checking for indirect circular references.
 
         Args:
             context: The dbt context this model resides within.
@@ -275,24 +278,20 @@ class BaseModelConfig(GeneralConfig):
         Returns:
             None
         """
-        for test in self.tests:
+        for test in self.tests.copy():
             for ref in test.dependencies.refs:
-                model = context.refs[ref]
                 if ref == self.name or ref in self.dependencies.refs:
                     continue
-                elif self.name in model.dependencies.refs:
-                    raise ConfigError(
-                        f"Test '{test.name}' for model '{self.name}' depends on downstream model '{model.name}'."
-                        " Move the test to the downstream model to avoid circular references."
+                model = context.refs[ref]
+                if (
+                    self.name in model.dependencies.refs
+                    or self.name in model.tests_ref_source_dependencies.refs
+                ):
+                    logger.info(
+                        f"Moving test '{test.name}' from model '{self.name}' to '{model.name}' to avoid circular reference."
                     )
-                elif self.name in model.tests_ref_source_dependencies.refs:
-                    circular_test = next(
-                        test.name for test in model.tests if ref in test.dependencies.refs
-                    )
-                    raise ConfigError(
-                        f"Circular reference detected between tests for models '{self.name}' and '{model.name}':"
-                        f" '{test.name}' ({self.name}), '{circular_test}' ({model.name})."
-                    )
+                    model.tests.append(test)
+                    self.tests.remove(test)
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
@@ -313,7 +312,7 @@ class BaseModelConfig(GeneralConfig):
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.remove_tests_with_invalid_refs(context)
-        self.check_for_circular_test_refs(context)
+        self.fix_circular_test_refs(context)
 
         dependencies = self.dependencies.copy()
         if dependencies.has_dynamic_var_names:

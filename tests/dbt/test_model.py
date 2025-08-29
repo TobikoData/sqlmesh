@@ -8,7 +8,6 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.target import PostgresConfig
 from sqlmesh.dbt.test import TestConfig
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import YAML
 
 pytestmark = pytest.mark.dbt
@@ -30,25 +29,41 @@ def test_model_test_circular_references() -> None:
         sql="",
         dependencies=Dependencies(refs={"upstream", "downstream"}),
     )
-    downstream_model.tests = [downstream_test]
-    downstream_model.check_for_circular_test_refs(context)
 
+    # No circular reference
+    downstream_model.tests = [downstream_test]
+    downstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [downstream_test]
+
+    # Upstream model reference in downstream model
     downstream_model.tests = []
     upstream_model.tests = [upstream_test]
-    with pytest.raises(ConfigError, match="downstream model"):
-        upstream_model.check_for_circular_test_refs(context)
+    upstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [upstream_test]
 
+    upstream_model.tests = [upstream_test]
     downstream_model.tests = [downstream_test]
-    with pytest.raises(ConfigError, match="downstream model"):
-        upstream_model.check_for_circular_test_refs(context)
-    downstream_model.check_for_circular_test_refs(context)
+    upstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [downstream_test, upstream_test]
+
+    downstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [downstream_test, upstream_test]
 
     # Test only references
+    upstream_model.tests = [upstream_test]
+    downstream_model.tests = [downstream_test]
     downstream_model.dependencies = Dependencies()
-    with pytest.raises(ConfigError, match="between tests"):
-        upstream_model.check_for_circular_test_refs(context)
-    with pytest.raises(ConfigError, match="between tests"):
-        downstream_model.check_for_circular_test_refs(context)
+    upstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [downstream_test, upstream_test]
+
+    downstream_model.fix_circular_test_refs(context)
+    assert upstream_model.tests == []
+    assert downstream_model.tests == [downstream_test, upstream_test]
 
 
 @pytest.mark.slow
