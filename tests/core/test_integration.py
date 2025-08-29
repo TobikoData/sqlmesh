@@ -6961,7 +6961,15 @@ def test_destroy(copy_to_temp_path):
 
     model = context.get_model("db_1.first_schema.model_one")
 
-    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS extra")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'c' AS extra").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     plan = context.plan_builder().build()
     context.apply(plan)
 
@@ -6972,9 +6980,25 @@ def test_destroy(copy_to_temp_path):
 
     # Create dev environment with changed models
     model = context.get_model("db_2.second_schema.model_one")
-    context.upsert_model(model.copy(update={"query": model.query.select("'d' AS extra")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'d' AS extra").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     model = context.get_model("first_schema.model_two")
-    context.upsert_model(model.copy(update={"query": model.query.select("'d2' AS col")}))
+    context.upsert_model(
+        model.copy(
+            update={
+                "query_": ParsableSql(
+                    sql=model.query.select("'d2' AS col").sql(dialect=model.dialect)
+                )
+            }
+        )
+    )
     plan = context.plan_builder("dev").build()
     context.apply(plan)
 

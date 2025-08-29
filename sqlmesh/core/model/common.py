@@ -616,8 +616,8 @@ def parse_strings_with_macro_refs(value: t.Any, dialect: DialectType) -> t.Any:
 
 
 expression_validator: t.Callable = field_validator(
-    "query",
-    "expressions_",
+    # "query",
+    # "expressions_",
     "pre_statements_",
     "post_statements_",
     "on_virtual_update_",
@@ -693,18 +693,32 @@ class ParsableSql(PydanticModel):
 
     @classmethod
     def validator(cls) -> classmethod:
-        def _validate_parsable_sql(v: t.Any, info: ValidationInfo) -> ParsableSql:
+        def _validate_parsable_sql(
+            v: t.Any, info: ValidationInfo
+        ) -> t.Optional[t.Union[ParsableSql, t.List[ParsableSql]]]:
+            if v is None:
+                return v
             if isinstance(v, str):
                 return ParsableSql(sql=v)
             if isinstance(v, exp.Expression):
                 return ParsableSql.from_parsed_expression(
                     v, get_dialect(info.data), use_meta_sql=False
                 )
+            if isinstance(v, list):
+                dialect = get_dialect(info.data)
+                return [
+                    ParsableSql(sql=s)
+                    if isinstance(s, str)
+                    else ParsableSql.from_parsed_expression(s, dialect, use_meta_sql=False)
+                    if isinstance(s, exp.Expression)
+                    else ParsableSql.parse_obj(s)
+                    for s in v
+                ]
             return ParsableSql.parse_obj(v)
 
         return field_validator(
             "query_",
-            # "expressions_",
+            "expressions_",
             # "pre_statements_",
             # "post_statements_",
             # "on_virtual_update_",
