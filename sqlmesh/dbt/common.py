@@ -19,6 +19,7 @@ from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 T = t.TypeVar("T", bound="GeneralConfig")
 
 PROJECT_FILENAME = DBT_PROJECT_FILENAME
+DBT_ALL_MODEL_ATTRS = "__DBT_ALL_MODEL_ATTRS__"
 
 JINJA_ONLY = {
     "adapter",

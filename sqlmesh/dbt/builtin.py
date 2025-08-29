@@ -26,6 +26,13 @@ from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
 
+if t.TYPE_CHECKING:
+    from typing import Protocol
+
+    class Model(Protocol):
+        def __getattr__(self, key: str) -> t.Any: ...
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -301,6 +308,21 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
     return source
 
 
+def generate_model(model: AttributeDict, raw_code: str) -> Model:
+    class Model:
+        def __init__(self, model: AttributeDict) -> None:
+            self._model = model
+            self._raw_code_key = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
+
+        def __getattr__(self, key: str) -> t.Any:
+            if key == self._raw_code_key:
+                return raw_code
+
+            return getattr(self._model, key)
+
+    return Model(model)
+
+
 def return_val(val: t.Any) -> None:
     raise MacroReturnVal(val)
 
@@ -469,11 +491,15 @@ def create_builtin_globals(
             is_incremental &= snapshot_table_exists
     else:
         is_incremental = False
+
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
+
+    if (model := jinja_globals.pop("model", None)) is not None:
+        builtin_globals["model"] = generate_model(model, jinja_globals.pop("model", ""))
 
     if engine_adapter is not None:
         builtin_globals["flags"] = Flags(which="run")

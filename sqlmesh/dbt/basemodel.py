@@ -19,6 +19,7 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
 )
 from sqlmesh.dbt.common import (
+    DBT_ALL_MODEL_ATTRS,
     DbtConfig,
     Dependencies,
     GeneralConfig,
@@ -27,6 +28,7 @@ from sqlmesh.dbt.common import (
 )
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -375,15 +377,23 @@ class BaseModelConfig(GeneralConfig):
     def _model_jinja_context(
         self, context: DbtContext, dependencies: Dependencies
     ) -> t.Dict[str, t.Any]:
-        model_node: AttributeDict[str, t.Any] = AttributeDict(
-            {
-                k: v
-                for k, v in context._manifest._manifest.nodes[self.node_name].to_dict().items()
-                if k in dependencies.model_attrs
-            }
-            if context._manifest and self.node_name in context._manifest._manifest.nodes
-            else {}
-        )
+        if context._manifest and self.node_name in context._manifest._manifest.nodes:
+            attributes = context._manifest._manifest.nodes[self.node_name].to_dict()
+            if DBT_ALL_MODEL_ATTRS in dependencies.model_attrs:
+                model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
+            else:
+                model_node = AttributeDict(
+                    filter(lambda kv: kv[0] in dependencies.model_attrs, attributes.items())
+                )
+
+            raw_code_key = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
+
+            # We exclude the raw SQL code to reduce the payload size. It's still accessible through
+            # the JinjaQuery instance stored in the resulting SQLMesh model's `query` field.
+            model_node.pop(raw_code_key, None)
+        else:
+            model_node = AttributeDict({})
+
         return {
             "this": self.relation_info,
             "model": model_node,

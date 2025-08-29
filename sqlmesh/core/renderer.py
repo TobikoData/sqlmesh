@@ -188,30 +188,32 @@ class BaseExpressionRenderer:
         }
 
         variables = kwargs.pop("variables", {})
-        jinja_env_kwargs = {
-            **{
-                **render_kwargs,
-                **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
-                **variables,
-            },
-            "snapshots": snapshots or {},
-            "table_mapping": table_mapping,
-            "deployability_index": deployability_index,
-            "default_catalog": self._default_catalog,
-            "runtime_stage": runtime_stage.value,
-            "resolve_table": _resolve_table,
-        }
-        if this_model:
-            render_kwargs["this_model"] = this_model
-            jinja_env_kwargs["this_model"] = this_model.sql(
-                dialect=self._dialect, identify=True, comments=False
-            )
-
-        jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
         expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
             try:
+                jinja_env_kwargs = {
+                    **{
+                        **render_kwargs,
+                        **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
+                        **variables,
+                    },
+                    "snapshots": snapshots or {},
+                    "table_mapping": table_mapping,
+                    "deployability_index": deployability_index,
+                    "default_catalog": self._default_catalog,
+                    "runtime_stage": runtime_stage.value,
+                    "resolve_table": _resolve_table,
+                    "raw_code": self._expression.name,
+                }
+
+                if this_model:
+                    jinja_env_kwargs["this_model"] = this_model.sql(
+                        dialect=self._dialect, identify=True, comments=False
+                    )
+
+                jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
+
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
                 logger.debug(
@@ -228,6 +230,9 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+
+        if this_model:
+            render_kwargs["this_model"] = this_model
 
         macro_evaluator.locals.update(render_kwargs)
 

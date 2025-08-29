@@ -44,8 +44,8 @@ from dbt.tracking import do_not_track
 from sqlmesh.core import constants as c
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.config import ModelDefaultsConfig
-from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
+from sqlmesh.dbt.common import DBT_ALL_MODEL_ATTRS, Dependencies
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import HookConfig, MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -354,7 +354,9 @@ class ManifestHelper:
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)
                 )
-                dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
+                dependencies = dependencies.union(
+                    self._extra_dependencies(sql, node.package_name, track_all_model_attrs=True)
+                )
                 dependencies = dependencies.union(
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
@@ -552,15 +554,35 @@ class ManifestHelper:
             dependencies = dependencies.union(macro_dependencies)
         return dependencies
 
-    def _extra_dependencies(self, target: str, package: str) -> Dependencies:
-        # We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
-        # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
-        # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
+    def _extra_dependencies(
+        self,
+        target: str,
+        package: str,
+        track_all_model_attrs: bool = False,
+    ) -> Dependencies:
+        """
+        We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
+        This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
+        Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
+        """
         dependencies = Dependencies()
+
+        # Whether all `model` attributes (e.g., `model.config`) should be included in the dependencies
+        all_model_attrs = False
+
         for call_name, node in extract_call_names(target, cache=self._calls):
             if call_name[0] == "config":
                 continue
-            elif isinstance(node, jinja2.nodes.Getattr):
+
+            if (
+                track_all_model_attrs
+                and not all_model_attrs
+                and isinstance(node, jinja2.nodes.Call)
+                and any(isinstance(a, jinja2.nodes.Name) and a.name == "model" for a in node.args)
+            ):
+                all_model_attrs = True
+
+            if isinstance(node, jinja2.nodes.Getattr):
                 if call_name[0] == "model":
                     dependencies.model_attrs.add(call_name[1])
             elif call_name[0] == "source":
@@ -605,6 +627,14 @@ class ManifestHelper:
                     _macro_reference_if_not_overridden(
                         call_name[0], call_name[1], dependencies.macros.append
                     )
+
+        # When `model` is referenced as-is, e.g. it's passed as an argument to a macro call like
+        # `{{ foo(model) }}`, we can't easily track the attributes that are actually used, because
+        # it may be aliased and hence tracking actual uses of `model` requires a proper data flow
+        # analysis. We conservatively deal with this by including all of its supported attributes
+        # if a standalone reference is found.
+        if all_model_attrs:
+            dependencies.model_attrs = {DBT_ALL_MODEL_ATTRS}
 
         return dependencies
 
