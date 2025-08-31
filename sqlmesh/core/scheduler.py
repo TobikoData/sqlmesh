@@ -626,6 +626,9 @@ class Scheduler:
         dag = DAG[SchedulingUnit]()
 
         for snapshot_id in snapshot_dag:
+            if snapshot_id.name not in self.snapshots_by_name:
+                continue
+
             snapshot = self.snapshots_by_name[snapshot_id.name]
             intervals = intervals_per_snapshot.get(snapshot.name, [])
 

@@ -574,23 +574,32 @@ class PlanStagesBuilder:
     ) -> t.Dict[SnapshotId, Snapshot]:
         metadata_snapshots = []
         for snapshot in new_snapshots.values():
-            if not snapshot.is_metadata or not snapshot.is_model or not snapshot.evaluatable:
+            if (
+                not snapshot.is_metadata
+                or not snapshot.is_model
+                or not snapshot.evaluatable
+                or not snapshot.previous_version
+            ):
                 continue
 
             metadata_snapshots.append(snapshot)
 
+        previous_snapshot_ids = [
+            s.previous_version.snapshot_id(s.name) for s in metadata_snapshots if s.previous_version
+        ]
+
         # Bulk load all the previous snapshots
-        previous_snapshots = self.state_reader.get_snapshots(
-            [
-                s.previous_version.snapshot_id(s.name)
-                for s in metadata_snapshots
-                if s.previous_version
-            ]
-        ).values()
+        previous_snapshots = {
+            s.name: s for s in self.state_reader.get_snapshots(previous_snapshot_ids).values()
+        }
 
         # Check if any of the snapshots have modifications to the audits field by comparing the hashes
         audit_snapshots = {}
-        for snapshot, previous_snapshot in zip(metadata_snapshots, previous_snapshots):
+        for snapshot in metadata_snapshots:
+            if snapshot.name not in previous_snapshots:
+                continue
+
+            previous_snapshot = previous_snapshots[snapshot.name]
             new_audits_hash = snapshot.model.audit_metadata_hash()
             previous_audit_hash = previous_snapshot.model.audit_metadata_hash()
 
