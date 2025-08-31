@@ -584,11 +584,10 @@ class PlanStagesBuilder:
 
             metadata_snapshots.append(snapshot)
 
+        # Bulk load all the previous snapshots
         previous_snapshot_ids = [
             s.previous_version.snapshot_id(s.name) for s in metadata_snapshots if s.previous_version
         ]
-
-        # Bulk load all the previous snapshots
         previous_snapshots = {
             s.name: s for s in self.state_reader.get_snapshots(previous_snapshot_ids).values()
         }
