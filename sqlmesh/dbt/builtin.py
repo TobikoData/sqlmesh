@@ -164,16 +164,16 @@ class Var:
         return name in self.variables
 
 
-class ConfigObject:
+class Config:
     def __init__(self, config_dict: t.Dict[str, t.Any]) -> None:
-        self._config = config_dict or {}
+        self._config = config_dict
 
     def __call__(self, **kwargs: t.Any) -> str:
         self._config.update(**kwargs)
         return ""
 
     def set(self, name: str, value: t.Any) -> str:
-        self.__call__(**{name: value})
+        self._config.update({name: value})
         return ""
 
     def _validate(self, name: str, validator: t.Callable, value: t.Optional[t.Any] = None) -> None:
@@ -447,7 +447,7 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = Var(variables)
 
-    builtin_globals["config"] = ConfigObject(jinja_globals.pop("config", {}))
+    builtin_globals["config"] = Config(jinja_globals.pop("config", {}))
 
     deployability_index = (
         jinja_globals.get("deployability_index") or DeployabilityIndex.all_deployable()
