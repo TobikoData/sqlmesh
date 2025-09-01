@@ -132,6 +132,10 @@ class GeneralConfig(DbtConfig):
     def config_attribute_dict(self) -> AttributeDict[str, t.Any]:
         return AttributeDict(self.dict(exclude=EXCLUDED_CONFIG_ATTRIBUTE_KEYS))
 
+    def _get_field_value(self, field: str) -> t.Optional[t.Any]:
+        field_val = getattr(self, field, None)
+        return field_val if field_val is not None else self.meta.get(field, None)
+
     def replace(self, other: T) -> None:
         """
         Replace the contents of this instance with the passed in instance.
@@ -152,9 +156,7 @@ class GeneralConfig(DbtConfig):
         """
         kwargs = {}
         for field in self.sqlmesh_config_fields:
-            field_val = getattr(self, field, None)
-            if field_val is None:
-                field_val = self.meta.get(field, None)
+            field_val = self._get_field_value(field)
             if field_val is not None:
                 kwargs[field] = field_val
         return kwargs
