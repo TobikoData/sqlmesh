@@ -164,6 +164,58 @@ class Var:
         return name in self.variables
 
 
+class ConfigObject:
+    def __init__(self, config_dict: t.Dict[str, t.Any]) -> None:
+        self._config = config_dict or {}
+
+    def __call__(self, **kwargs: t.Any) -> str:
+        self._config.update(**kwargs)
+        return ""
+
+    def set(self, name: str, value: t.Any) -> str:
+        self.__call__(**{name: value})
+        return ""
+
+    def _validate(self, name: str, validator: t.Callable, value: t.Optional[t.Any] = None) -> None:
+        try:
+            validator(value)
+        except Exception as e:
+            raise ConfigError(f"Config validation failed for '{name}': {e}")
+
+    def require(self, name: str, validator: t.Optional[t.Callable] = None) -> t.Any:
+        if name not in self._config:
+            raise ConfigError(f"Missing required config: {name}")
+
+        value = self._config[name]
+
+        if validator is not None:
+            self._validate(name, validator, value)
+
+        return value
+
+    def get(
+        self, name: str, default: t.Any = None, validator: t.Optional[t.Callable] = None
+    ) -> t.Any:
+        value = self._config.get(name, default)
+
+        if validator is not None and value is not None:
+            self._validate(name, validator, value)
+
+        return value
+
+    def persist_relation_docs(self) -> bool:
+        persist_docs = self.get("persist_docs", default={})
+        if not isinstance(persist_docs, dict):
+            return False
+        return persist_docs.get("relation", False)
+
+    def persist_column_docs(self) -> bool:
+        persist_docs = self.get("persist_docs", default={})
+        if not isinstance(persist_docs, dict):
+            return False
+        return persist_docs.get("columns", False)
+
+
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
     if name not in os.environ and default is None:
         raise ConfigError(f"Missing environment variable '{name}'")
@@ -394,6 +446,8 @@ def create_builtin_globals(
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
         builtin_globals["var"] = Var(variables)
+
+    builtin_globals["config"] = ConfigObject(jinja_globals.pop("config", {}))
 
     deployability_index = (
         jinja_globals.get("deployability_index") or DeployabilityIndex.all_deployable()
