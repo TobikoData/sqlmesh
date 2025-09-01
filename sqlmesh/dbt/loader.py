@@ -19,6 +19,7 @@ from sqlmesh.core.signal import signal
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
@@ -137,6 +138,10 @@ class DbtLoader(Loader):
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
                 for model in package_models.values():
+                    if isinstance(model, ModelConfig) and not model.sql_no_config:
+                        logger.info(f"Skipping empty model '{model.name}' at path '{model.path}'.")
+                        continue
+
                     sqlmesh_model = cache.get_or_load_models(
                         model.path, loader=lambda: [_to_sqlmesh(model, package_context)]
                     )[0]
