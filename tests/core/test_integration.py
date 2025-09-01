@@ -6294,6 +6294,31 @@ def test_restatement_shouldnt_backfill_beyond_prod_intervals(init_and_plan_conte
         ].intervals[-1][1] == to_timestamp("2023-01-08 00:00:00 UTC")
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+@use_terminal_console
+def test_audit_only_metadata_change(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Add a new audit
+    model = context.get_model("sushi.waiter_revenue_by_day")
+    audits = model.audits.copy()
+    audits.append(("number_of_rows", {"threshold": exp.Literal.number(1)}))
+    model = model.copy(update={"audits": audits})
+    context.upsert_model(model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    assert len(plan.new_snapshots) == 2
+    assert all(s.change_category.is_metadata for s in plan.new_snapshots)
+    assert not plan.missing_intervals
+
+    with capture_output() as output:
+        context.apply(plan)
+
+    assert "Auditing models" in output.stdout
+    assert model.name in output.stdout
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
