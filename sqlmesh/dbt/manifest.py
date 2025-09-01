@@ -360,16 +360,20 @@ class ManifestHelper:
                 )
 
                 self._models_per_package[node.package_name][node_name] = ModelConfig(
-                    sql=sql,
-                    dependencies=dependencies,
-                    tests=tests,
-                    **node_config,
+                    **dict(
+                        node_config,
+                        sql=sql,
+                        dependencies=dependencies,
+                        tests=tests,
+                    )
                 )
             else:
                 self._seeds_per_package[node.package_name][node_name] = SeedConfig(
-                    dependencies=Dependencies(macros=macro_references),
-                    tests=tests,
-                    **node_config,
+                    **dict(
+                        node_config,
+                        dependencies=Dependencies(macros=macro_references),
+                        tests=tests,
+                    )
                 )
 
     def _load_on_run_start_end(self) -> None:
