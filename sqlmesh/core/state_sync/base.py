@@ -98,6 +98,24 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_snapshot_ids_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotId]:
+        """Return the snapshot id's for all versions of the specified snapshot names.
+
+        Args:
+            snapshot_names: Iterable of snapshot names to fetch all snapshot id's for
+            current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
+            exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
+
+        Returns:
+            A dictionary mapping snapshot names to a list of relevant snapshot id's
+        """
+
+    @abc.abstractmethod
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if multiple snapshots exist in the state sync.
 

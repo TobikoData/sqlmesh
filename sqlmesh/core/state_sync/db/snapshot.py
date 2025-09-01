@@ -308,6 +308,46 @@ class SnapshotState:
         """
         return self._get_snapshots(snapshot_ids)
 
+    def get_snapshot_ids_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotId]:
+        """Return the snapshot id's for all versions of the specified snapshot names.
+
+        Args:
+            snapshot_names: Iterable of snapshot names to fetch all snapshot id's for
+            current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
+            exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
+
+        Returns:
+            A dictionary mapping snapshot names to a list of relevant snapshot id's
+        """
+        if not snapshot_names:
+            return set()
+
+        if exclude_expired:
+            current_ts = current_ts or now_timestamp()
+            unexpired_expr = (exp.column("updated_ts") + exp.column("ttl_ms")) > current_ts
+        else:
+            unexpired_expr = None
+
+        return {
+            SnapshotId(name=name, identifier=identifier)
+            for where in snapshot_name_filter(
+                snapshot_names=snapshot_names,
+                batch_size=self.SNAPSHOT_BATCH_SIZE,
+            )
+            for name, identifier in fetchall(
+                self.engine_adapter,
+                exp.select("name", "identifier")
+                .from_(self.snapshots_table)
+                .where(where)
+                .and_(unexpired_expr),
+            )
+        }
+
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if snapshots exist.
 

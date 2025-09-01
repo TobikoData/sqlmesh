@@ -366,6 +366,16 @@ class EngineAdapterStateSync(StateSync):
         Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
         return snapshots
 
+    def get_snapshot_ids_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotId]:
+        return self.snapshot_state.get_snapshot_ids_by_names(
+            snapshot_names=snapshot_names, current_ts=current_ts, exclude_expired=exclude_expired
+        )
+
     @transactional()
     def add_interval(
         self,
