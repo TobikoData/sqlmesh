@@ -2076,7 +2076,7 @@ class TerminalConsole(Console):
             if text_diff:
                 self._print("")
                 self._print(Syntax(text_diff, "sql", word_wrap=True))
-                self._print(tree)
+            self._print(tree)
 
     def _show_missing_dates(self, plan: Plan, default_catalog: t.Optional[str]) -> None:
         """Displays the models with missing dates."""

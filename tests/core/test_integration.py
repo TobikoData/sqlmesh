@@ -2933,20 +2933,24 @@ def test_virtual_environment_mode_dev_only_seed_model_change(
 
     context.load()
     seed_model_snapshot = context.get_snapshot("sushi.waiter_names")
+    plan = context.plan_builder("dev").build()
+    assert plan.directly_modified == {seed_model_snapshot.snapshot_id}
+    assert len(plan.missing_intervals) == 2
+    context.apply(plan)
+
+    actual_seed_df_in_dev = context.fetchdf("SELECT * FROM sushi__dev.waiter_names WHERE id = 123")
+    assert actual_seed_df_in_dev.to_dict("records") == [{"id": 123, "name": "New Test Name"}]
+    actual_seed_df_in_prod = context.fetchdf("SELECT * FROM sushi.waiter_names WHERE id = 123")
+    assert actual_seed_df_in_prod.empty
+
     plan = context.plan_builder("prod").build()
     assert plan.directly_modified == {seed_model_snapshot.snapshot_id}
     assert len(plan.missing_intervals) == 1
     assert plan.missing_intervals[0].snapshot_id == seed_model_snapshot.snapshot_id
-
     context.apply(plan)
 
-    actual_seed_df = context.fetchdf("SELECT * FROM sushi.waiter_names WHERE id = 123")
-    assert actual_seed_df.to_dict("records") == [
-        {
-            "id": 123,
-            "name": "New Test Name",
-        }
-    ]
+    actual_seed_df_in_prod = context.fetchdf("SELECT * FROM sushi.waiter_names WHERE id = 123")
+    assert actual_seed_df_in_prod.to_dict("records") == [{"id": 123, "name": "New Test Name"}]
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
