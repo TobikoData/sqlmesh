@@ -80,6 +80,8 @@ def test_load(assert_exp_eq):
         col IS NULL
     """,
     )
+    assert audit.query_._parsed is not None
+    assert audit.query_._parsed_dialect == "spark"
 
 
 def test_load_standalone(assert_exp_eq):
@@ -121,6 +123,8 @@ def test_load_standalone(assert_exp_eq):
         col IS NULL
     """,
     )
+    assert audit.query_._parsed is not None
+    assert audit.query_._parsed_dialect == "spark"
 
 
 def test_load_standalone_default_catalog(assert_exp_eq):

@@ -308,16 +308,6 @@ class _Node(PydanticModel):
         return None
 
     @property
-    def data_hash(self) -> str:
-        """
-        Computes the data hash for the node.
-
-        Returns:
-            The data hash for the node.
-        """
-        raise NotImplementedError
-
-    @property
     def interval_unit(self) -> IntervalUnit:
         """Returns the interval unit using which data intervals are computed for this node."""
         if self.interval_unit_ is not None:
@@ -333,6 +323,16 @@ class _Node(PydanticModel):
         return self.name
 
     @property
+    def data_hash(self) -> str:
+        """
+        Computes the data hash for the node.
+
+        Returns:
+            The data hash for the node.
+        """
+        raise NotImplementedError
+
+    @property
     def metadata_hash(self) -> str:
         """
         Computes the metadata hash for the node.
@@ -341,6 +341,30 @@ class _Node(PydanticModel):
             The metadata hash for the node.
         """
         raise NotImplementedError
+
+    def is_metadata_only_change(self, previous: _Node) -> bool:
+        """Determines if this node is a metadata only change in relation to the `previous` node.
+
+        Args:
+            previous: The previous node to compare against.
+
+        Returns:
+            True if this node is a metadata only change, False otherwise.
+        """
+        return self.data_hash == previous.data_hash and self.metadata_hash != previous.metadata_hash
+
+    def is_data_change(self, previous: _Node) -> bool:
+        """Determines if this node is a data change in relation to the `previous` node.
+
+        Args:
+            previous: The previous node to compare against.
+
+        Returns:
+            True if this node is a data change, False otherwise.
+        """
+        return (
+            self.data_hash != previous.data_hash or self.metadata_hash != previous.metadata_hash
+        ) and not self.is_metadata_only_change(previous)
 
     def croniter(self, value: TimeLike) -> CroniterCache:
         if self._croniter is None:
