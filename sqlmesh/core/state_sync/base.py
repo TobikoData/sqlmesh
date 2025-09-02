@@ -292,7 +292,7 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_expired_snapshots(
-        self, current_ts: int, ignore_ttl: bool = False
+        self, current_ts: t.Optional[int] = None, ignore_ttl: bool = False
     ) -> t.List[SnapshotTableCleanupTask]:
         """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
 
@@ -341,7 +341,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
-    ) -> t.List[SnapshotTableCleanupTask]:
+    ) -> None:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
@@ -350,9 +350,6 @@ class StateSync(StateReader, abc.ABC):
         Args:
             ignore_ttl: Ignore the TTL on the snapshot when considering it expired. This has the effect of deleting
                 all snapshots that are not referenced in any environment
-
-        Returns:
-            The list of snapshot table cleanup tasks.
         """
 
     @abc.abstractmethod

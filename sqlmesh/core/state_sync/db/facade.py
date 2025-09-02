@@ -262,8 +262,9 @@ class EngineAdapterStateSync(StateSync):
         self.environment_state.invalidate_environment(name, protect_prod)
 
     def get_expired_snapshots(
-        self, current_ts: int, ignore_ttl: bool = False
+        self, current_ts: t.Optional[int] = None, ignore_ttl: bool = False
     ) -> t.List[SnapshotTableCleanupTask]:
+        current_ts = current_ts or now_timestamp()
         return self.snapshot_state.get_expired_snapshots(
             self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
         )
@@ -274,16 +275,13 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_snapshots(
         self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
-    ) -> t.List[SnapshotTableCleanupTask]:
+    ) -> None:
         current_ts = current_ts or now_timestamp()
-        expired_snapshot_ids, cleanup_targets = self.snapshot_state._get_expired_snapshots(
+        for expired_snapshot_ids, cleanup_targets in self.snapshot_state._get_expired_snapshots(
             self.environment_state.get_environments(), ignore_ttl=ignore_ttl, current_ts=current_ts
-        )
-
-        self.snapshot_state.delete_snapshots(expired_snapshot_ids)
-        self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
-
-        return cleanup_targets
+        ):
+            self.snapshot_state.delete_snapshots(expired_snapshot_ids)
+            self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
 
     @transactional()
     def delete_expired_environments(
