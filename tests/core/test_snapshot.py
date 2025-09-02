@@ -168,6 +168,7 @@ def test_json(snapshot: Snapshot):
             "enabled": True,
             "extract_dependencies_from_query": True,
             "virtual_environment_mode": "full",
+            "grants_target_layer": "all",
         },
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
@@ -179,6 +180,36 @@ def test_json(snapshot: Snapshot):
         "unrestorable": False,
         "forward_only": False,
     }
+
+
+def test_json_with_grants(make_snapshot: t.Callable):
+    from sqlmesh.core.model.meta import GrantsTargetLayer
+
+    model = SqlModel(
+        name="name",
+        kind=dict(time_column="ds", batch_size=30, name=ModelKindName.INCREMENTAL_BY_TIME_RANGE),
+        owner="owner",
+        dialect="spark",
+        cron="1 0 * * *",
+        start="2020-01-01",
+        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+        grants={"SELECT": ["role1", "role2"], "INSERT": ["role3"]},
+        grants_target_layer=GrantsTargetLayer.VIRTUAL,
+    )
+    snapshot = make_snapshot(model)
+
+    json_str = snapshot.json()
+    json_data = json.loads(json_str)
+    assert (
+        json_data["node"]["grants"]
+        == "('SELECT' = ARRAY('role1', 'role2'), 'INSERT' = ARRAY('role3'))"
+    )
+    assert json_data["node"]["grants_target_layer"] == "virtual"
+
+    reparsed_snapshot = Snapshot.model_validate_json(json_str)
+    assert isinstance(reparsed_snapshot.node, SqlModel)
+    assert reparsed_snapshot.node.grants == {"SELECT": ["role1", "role2"], "INSERT": ["role3"]}
+    assert reparsed_snapshot.node.grants_target_layer == GrantsTargetLayer.VIRTUAL
 
 
 def test_json_custom_materialization(make_snapshot: t.Callable):
@@ -954,7 +985,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="2406542604",
-        metadata_hash="3341445192",
+        metadata_hash="185287368",
     )
 
     assert fingerprint == original_fingerprint
@@ -1015,7 +1046,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="1586624913",
-        metadata_hash="2315134974",
+        metadata_hash="1817881990",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -1054,7 +1085,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="93332825",
-        metadata_hash="3341445192",
+        metadata_hash="185287368",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -1129,6 +1160,40 @@ def test_fingerprint_virtual_properties(model: Model, parent_model: Model):
     assert updated_fingerprint != fingerprint
     assert updated_fingerprint.metadata_hash != fingerprint.metadata_hash
     assert updated_fingerprint.data_hash == fingerprint.data_hash
+
+
+def test_fingerprint_grants(model: Model, parent_model: Model):
+    from sqlmesh.core.model.meta import GrantsTargetLayer
+
+    original_model = deepcopy(model)
+    fingerprint = fingerprint_from_node(model, nodes={})
+
+    updated_model = SqlModel(
+        **original_model.dict(),
+        grants={"SELECT": ["role1", "role2"]},
+    )
+    updated_fingerprint = fingerprint_from_node(updated_model, nodes={})
+
+    assert updated_fingerprint != fingerprint
+    assert updated_fingerprint.metadata_hash != fingerprint.metadata_hash
+    assert updated_fingerprint.data_hash == fingerprint.data_hash
+
+    different_grants_model = SqlModel(
+        **original_model.dict(),
+        grants={"SELECT": ["role3"], "INSERT": ["role4"]},
+    )
+    different_grants_fingerprint = fingerprint_from_node(different_grants_model, nodes={})
+
+    assert different_grants_fingerprint.metadata_hash != updated_fingerprint.metadata_hash
+    assert different_grants_fingerprint.metadata_hash != fingerprint.metadata_hash
+
+    target_layer_model = SqlModel(
+        **{**original_model.dict(), "grants_target_layer": GrantsTargetLayer.PHYSICAL},
+        grants={"SELECT": ["role1", "role2"]},
+    )
+    target_layer_fingerprint = fingerprint_from_node(target_layer_model, nodes={})
+
+    assert target_layer_fingerprint.metadata_hash != updated_fingerprint.metadata_hash
 
 
 def test_tableinfo_equality():
