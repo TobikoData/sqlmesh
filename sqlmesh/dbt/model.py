@@ -627,6 +627,9 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
+        if self.grants:
+            model_kwargs["grants"] = self.grants
+
         kind = self.model_kind(context)
         allow_partials = model_kwargs.pop("allow_partials", None)
         if (

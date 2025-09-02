@@ -40,8 +40,10 @@ from sqlmesh.core.model import (
     load_sql_based_model,
     ExternalModel,
     model,
+    create_sql_model,
 )
 from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind, OnAdditiveChange
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -54,7 +56,11 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import to_view_mapping
-from sqlmesh.core.snapshot.evaluator import CustomMaterialization, SnapshotCreationFailedError
+from sqlmesh.core.snapshot.evaluator import (
+    CustomMaterialization,
+    SnapshotCreationFailedError,
+    ViewStrategy,
+)
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import (
@@ -4584,3 +4590,100 @@ def test_wap_publish_failure(adapter_mock: Mock, make_snapshot: t.Callable[..., 
     # Execute audit with WAP ID and expect it to raise the exception
     with pytest.raises(Exception, match="WAP publish failed"):
         evaluator.audit(snapshot, snapshots={}, wap_id=wap_id)
+
+
+def test_grants(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    strategy = ViewStrategy(adapter)
+    model = create_sql_model(
+        "test_model", parse_one("SELECT 1 as id"), grants={"select": ["user1", "user2"]}
+    )
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+
+    sync_grants_mock.assert_called_once()
+
+
+def test_grants_no_config(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    strategy = ViewStrategy(adapter)
+    model = create_sql_model("test_model", parse_one("SELECT 1 as id"))
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+
+    sync_grants_mock.assert_not_called()
+
+
+def test_grants_unsupported_engine(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = False
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    strategy = ViewStrategy(adapter)
+    model = create_sql_model(
+        "test_model", parse_one("SELECT 1 as id"), grants={"select": ["user1"]}
+    )
+
+    with patch("sqlmesh.core.snapshot.evaluator.logger") as mock_logger:
+        strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+        mock_logger.warning.assert_called_once()
+
+    sync_grants_mock.assert_not_called()
+
+
+def test_grants_clears_grants(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    strategy = ViewStrategy(adapter)
+    model = create_sql_model("test_model", parse_one("SELECT 1 as id"), grants={})
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+
+    sync_grants_mock.assert_called_once()
+
+
+def test_grants_target_layer_all(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = True
+    strategy = ViewStrategy(adapter)
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    model = create_sql_model(
+        "test_model",
+        parse_one("SELECT 1 as id"),
+        grants={"select": ["user1"]},
+        grants_target_layer=GrantsTargetLayer.ALL,
+    )
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+    sync_grants_mock.assert_called()
+
+    sync_grants_mock.reset_mock()
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.VIRTUAL)
+    sync_grants_mock.assert_called()
+
+
+def test_grants_target_layer_physical(make_mocked_engine_adapter, mocker):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    strategy = ViewStrategy(adapter)
+
+    model = create_sql_model(
+        "test_model",
+        parse_one("SELECT 1 as id"),
+        grants={"select": ["user1"]},
+        grants_target_layer=GrantsTargetLayer.PHYSICAL,
+    )
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+    sync_grants_mock.assert_called()
+
+    sync_grants_mock.reset_mock()
+
+    strategy._apply_grants(model, "test_table", GrantsTargetLayer.VIRTUAL)
+    sync_grants_mock.assert_not_called()
