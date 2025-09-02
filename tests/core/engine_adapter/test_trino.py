@@ -70,8 +70,7 @@ def test_get_catalog_type(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
         return_value=f"system_{storage_type}",
     )
-    expected_current_type = storage_type
-    assert adapter.current_catalog_type == expected_current_type
+    assert adapter.current_catalog_type == storage_type
 
 
 def test_get_catalog_type_cached(
@@ -114,8 +113,7 @@ def test_partitioned_by_hive_delta(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
         return_value=f"datalake_{storage_type}",
     )
-    expected_type = storage_type
-    assert adapter.get_catalog_type(f"datalake_{storage_type}") == expected_type
+    assert adapter.get_catalog_type(f"datalake_{storage_type}") == storage_type
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),

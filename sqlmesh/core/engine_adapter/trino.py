@@ -128,7 +128,7 @@ class TrinoEngineAdapter(
         supports_replace_table_override: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> None:
-        catalog_type = self.get_catalog_type(self.get_catalog_type_from_table(table_name))
+        catalog_type = self.get_catalog_type_from_table(table_name)
         # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
         # Ex: `acme_iceberg` would be identified as an iceberg catalog and therefore supports replace table
         supports_replace_table_override = None
