@@ -2498,7 +2498,7 @@ class EngineAdapter:
         table: exp.Table,
         grant_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Grant]:
+    ) -> t.List[exp.Expression]:
         """Returns SQLGlot Grant expressions to apply grants to a table.
 
         Args:
@@ -2507,7 +2507,7 @@ class EngineAdapter:
             table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
 
         Returns:
-            List of SQLGlot Grant expressions.
+            List of SQLGlot expressions for grant operations.
 
         Raises:
             NotImplementedError: If the engine does not support grants.

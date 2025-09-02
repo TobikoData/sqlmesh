@@ -11893,6 +11893,13 @@ def test_grants_validation_no_grants():
     assert model.grants is None
 
 
+def test_grants_validation_empty_grantees():
+    model = create_sql_model(
+        "db.table", parse_one("SELECT 1 AS id"), kind="FULL", grants={"select": []}
+    )
+    assert model.grants == {"select": []}
+
+
 def test_grants_table_type_view():
     model = create_sql_model("test_view", parse_one("SELECT 1 as id"), kind="VIEW")
     assert model.grants_table_type == DataObjectType.VIEW

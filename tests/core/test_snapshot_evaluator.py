@@ -4900,15 +4900,20 @@ def test_grants_unsupported_engine(make_mocked_engine_adapter, mocker):
     sync_grants_mock.assert_not_called()
 
 
-def test_grants_clears_grants(make_mocked_engine_adapter, mocker):
+def test_grants_revokes_permissions(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
     sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
     strategy = ViewStrategy(adapter)
-    model = create_sql_model("test_model", parse_one("SELECT 1 as id"), grants={})
+    model = create_sql_model("test_model", parse_one("SELECT 1 as id"), grants={"select": []})
+    model2 = create_sql_model("test_model2", parse_one("SELECT 1 as id"), grants={})
 
     strategy._apply_grants(model, "test_table", GrantsTargetLayer.PHYSICAL)
+    sync_grants_mock.assert_called_once()
 
+    sync_grants_mock.reset_mock()
+
+    strategy._apply_grants(model2, "test_table", GrantsTargetLayer.PHYSICAL)
     sync_grants_mock.assert_called_once()
 
 

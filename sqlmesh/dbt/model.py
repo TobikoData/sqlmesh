@@ -651,6 +651,7 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
+        # A falsy grants config (None or {}) is considered as unmanaged per dbt semantics
         if self.grants:
             model_kwargs["grants"] = self.grants
 
