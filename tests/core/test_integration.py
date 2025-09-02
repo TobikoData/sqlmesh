@@ -2922,16 +2922,16 @@ def test_virtual_environment_mode_dev_only_model_kind_change_manual_categorizati
 def test_virtual_environment_mode_dev_only_seed_model_change(
     init_and_plan_context: t.Callable,
 ):
-    context, plan = init_and_plan_context(
+    context, _ = init_and_plan_context(
         "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
     )
-    context.apply(plan)
+    context.load()
+    context.plan("prod", auto_apply=True, no_prompts=True)
 
     seed_model = context.get_model("sushi.waiter_names")
     with open(seed_model.seed_path, "a") as fd:
         fd.write("\n123,New Test Name")
 
-    context.clear_caches()
     context.load()
     seed_model_snapshot = context.get_snapshot("sushi.waiter_names")
     plan = context.plan_builder("dev").build()
