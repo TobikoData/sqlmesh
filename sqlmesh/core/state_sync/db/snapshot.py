@@ -17,7 +17,6 @@ from sqlmesh.core.state_sync.db.utils import (
     fetchall,
     create_batches,
 )
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel, ModelKindName
 from sqlmesh.core.snapshot.cache import SnapshotCache
@@ -30,7 +29,6 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotFingerprint,
-    SnapshotChangeCategory,
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
@@ -46,6 +44,9 @@ logger = logging.getLogger(__name__)
 
 class SnapshotState:
     SNAPSHOT_BATCH_SIZE = 1000
+    # Use a smaller batch size for expired snapshots to account for fetching
+    # of all snapshots that share the same version.
+    EXPIRED_SNAPSHOT_BATCH_SIZE = 200
 
     def __init__(
         self,
@@ -63,6 +64,7 @@ class SnapshotState:
             "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build(index_type),
             "version": exp.DataType.build(index_type),
+            "dev_version": exp.DataType.build(index_type),
             "snapshot": exp.DataType.build(blob_type),
             "kind_name": exp.DataType.build("text"),
             "updated_ts": exp.DataType.build("bigint"),
@@ -70,6 +72,7 @@ class SnapshotState:
             "ttl_ms": exp.DataType.build("bigint"),
             "unrestorable": exp.DataType.build("boolean"),
             "forward_only": exp.DataType.build("boolean"),
+            "fingerprint": exp.DataType.build(blob_type),
         }
 
         self._auto_restatement_columns_to_types = {
@@ -175,19 +178,21 @@ class SnapshotState:
             The set of expired snapshot ids.
             The list of table cleanup tasks.
         """
-        _, cleanup_targets = self._get_expired_snapshots(
+        all_cleanup_targets = []
+        for _, cleanup_targets in self._get_expired_snapshots(
             environments=environments,
             current_ts=current_ts,
             ignore_ttl=ignore_ttl,
-        )
-        return cleanup_targets
+        ):
+            all_cleanup_targets.extend(cleanup_targets)
+        return all_cleanup_targets
 
     def _get_expired_snapshots(
         self,
         environments: t.Iterable[Environment],
         current_ts: int,
         ignore_ttl: bool = False,
-    ) -> t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]:
+    ) -> t.Iterator[t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]]:
         expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
 
         if not ignore_ttl:
@@ -202,7 +207,7 @@ class SnapshotState:
             for name, identifier, version in fetchall(self.engine_adapter, expired_query)
         }
         if not expired_candidates:
-            return set(), []
+            return
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -218,10 +223,8 @@ class SnapshotState:
 
         unique_expired_versions = unique(expired_candidates.values())
         version_batches = create_batches(
-            unique_expired_versions, batch_size=self.SNAPSHOT_BATCH_SIZE
+            unique_expired_versions, batch_size=self.EXPIRED_SNAPSHOT_BATCH_SIZE
         )
-        cleanup_targets = []
-        expired_snapshot_ids = set()
         for versions_batch in version_batches:
             snapshots = self._get_snapshots_with_same_version(versions_batch)
 
@@ -232,8 +235,9 @@ class SnapshotState:
                 snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
 
             expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
-            expired_snapshot_ids.update([s.snapshot_id for s in expired_snapshots])
+            all_expired_snapshot_ids = {s.snapshot_id for s in expired_snapshots}
 
+            cleanup_targets: t.List[t.Tuple[SnapshotId, bool]] = []
             for snapshot in expired_snapshots:
                 shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
                 shared_version_snapshots.discard(snapshot.snapshot_id)
@@ -244,14 +248,30 @@ class SnapshotState:
                 shared_dev_version_snapshots.discard(snapshot.snapshot_id)
 
                 if not shared_dev_version_snapshots:
-                    cleanup_targets.append(
-                        SnapshotTableCleanupTask(
-                            snapshot=snapshot.full_snapshot.table_info,
-                            dev_table_only=bool(shared_version_snapshots),
-                        )
-                    )
+                    dev_table_only = bool(shared_version_snapshots)
+                    cleanup_targets.append((snapshot.snapshot_id, dev_table_only))
 
-        return expired_snapshot_ids, cleanup_targets
+            snapshot_ids_to_cleanup = [snapshot_id for snapshot_id, _ in cleanup_targets]
+            for snapshot_id_batch in create_batches(
+                snapshot_ids_to_cleanup, batch_size=self.SNAPSHOT_BATCH_SIZE
+            ):
+                snapshot_id_batch_set = set(snapshot_id_batch)
+                full_snapshots = self._get_snapshots(snapshot_id_batch_set)
+                cleanup_tasks = [
+                    SnapshotTableCleanupTask(
+                        snapshot=full_snapshots[snapshot_id].table_info,
+                        dev_table_only=dev_table_only,
+                    )
+                    for snapshot_id, dev_table_only in cleanup_targets
+                    if snapshot_id in full_snapshots
+                ]
+                all_expired_snapshot_ids -= snapshot_id_batch_set
+                yield snapshot_id_batch_set, cleanup_tasks
+
+            if all_expired_snapshot_ids:
+                # Remaining expired snapshots for which there are no tables
+                # to cleanup
+                yield all_expired_snapshot_ids, []
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         """Deletes snapshots.
@@ -593,14 +613,11 @@ class SnapshotState:
         ):
             query = (
                 exp.select(
-                    "snapshot",
                     "name",
                     "identifier",
                     "version",
-                    "updated_ts",
-                    "unpaused_ts",
-                    "unrestorable",
-                    "forward_only",
+                    "dev_version",
+                    "fingerprint",
                 )
                 .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
                 .where(where)
@@ -611,17 +628,14 @@ class SnapshotState:
             snapshot_rows.extend(fetchall(self.engine_adapter, query))
 
         return [
-            SharedVersionSnapshot.from_snapshot_record(
+            SharedVersionSnapshot(
                 name=name,
                 identifier=identifier,
                 version=version,
-                updated_ts=updated_ts,
-                unpaused_ts=unpaused_ts,
-                unrestorable=unrestorable,
-                forward_only=forward_only,
-                snapshot=snapshot,
+                dev_version=dev_version,
+                fingerprint=SnapshotFingerprint.parse_raw(fingerprint),
             )
-            for snapshot, name, identifier, version, updated_ts, unpaused_ts, unrestorable, forward_only in snapshot_rows
+            for name, identifier, version, dev_version, fingerprint in snapshot_rows
         ]
 
 
@@ -676,6 +690,8 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "ttl_ms": snapshot.ttl_ms,
                 "unrestorable": snapshot.unrestorable,
                 "forward_only": snapshot.forward_only,
+                "dev_version": snapshot.dev_version,
+                "fingerprint": snapshot.fingerprint.json(),
             }
             for snapshot in snapshots
         ]
@@ -707,76 +723,11 @@ class SharedVersionSnapshot(PydanticModel):
     dev_version_: t.Optional[str] = Field(alias="dev_version")
     identifier: str
     fingerprint: SnapshotFingerprint
-    interval_unit: IntervalUnit
-    change_category: SnapshotChangeCategory
-    updated_ts: int
-    unpaused_ts: t.Optional[int]
-    unrestorable: bool
-    disable_restatement: bool
-    effective_from: t.Optional[TimeLike]
-    raw_snapshot: t.Dict[str, t.Any]
-    forward_only: bool
 
     @property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
 
     @property
-    def is_forward_only(self) -> bool:
-        return self.forward_only or self.change_category == SnapshotChangeCategory.FORWARD_ONLY
-
-    @property
-    def normalized_effective_from_ts(self) -> t.Optional[int]:
-        return (
-            to_timestamp(self.interval_unit.cron_floor(self.effective_from))
-            if self.effective_from
-            else None
-        )
-
-    @property
     def dev_version(self) -> str:
         return self.dev_version_ or self.fingerprint.to_version()
-
-    @property
-    def full_snapshot(self) -> Snapshot:
-        return Snapshot(
-            **{
-                **self.raw_snapshot,
-                "updated_ts": self.updated_ts,
-                "unpaused_ts": self.unpaused_ts,
-                "unrestorable": self.unrestorable,
-                "forward_only": self.forward_only,
-            }
-        )
-
-    @classmethod
-    def from_snapshot_record(
-        cls,
-        *,
-        name: str,
-        identifier: str,
-        version: str,
-        updated_ts: int,
-        unpaused_ts: t.Optional[int],
-        unrestorable: bool,
-        forward_only: bool,
-        snapshot: str,
-    ) -> SharedVersionSnapshot:
-        raw_snapshot = json.loads(snapshot)
-        raw_node = raw_snapshot["node"]
-        return SharedVersionSnapshot(
-            name=name,
-            version=version,
-            dev_version=raw_snapshot.get("dev_version"),
-            identifier=identifier,
-            fingerprint=raw_snapshot["fingerprint"],
-            interval_unit=raw_node.get("interval_unit", IntervalUnit.from_cron(raw_node["cron"])),
-            change_category=raw_snapshot["change_category"],
-            updated_ts=updated_ts,
-            unpaused_ts=unpaused_ts,
-            unrestorable=unrestorable,
-            disable_restatement=raw_node.get("kind", {}).get("disable_restatement", False),
-            effective_from=raw_snapshot.get("effective_from"),
-            raw_snapshot=raw_snapshot,
-            forward_only=forward_only,
-        )

@@ -1156,10 +1156,11 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         new_snapshot.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots()
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1186,9 +1187,10 @@ def test_delete_expired_snapshots_seed(
     state_sync.push_snapshots(all_snapshots)
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots()
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1226,10 +1228,11 @@ def test_delete_expired_snapshots_batching(
         snapshot_b.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
         SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots()
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1262,7 +1265,8 @@ def test_delete_expired_snapshots_promoted(
     state_sync.promote(env)
 
     all_snapshots = [snapshot]
-    assert not state_sync.delete_expired_snapshots()
+    assert not state_sync.get_expired_snapshots()
+    state_sync.delete_expired_snapshots()
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     env.snapshots_ = []
@@ -1271,9 +1275,10 @@ def test_delete_expired_snapshots_promoted(
     now_timestamp_mock = mocker.patch("sqlmesh.core.state_sync.db.facade.now_timestamp")
     now_timestamp_mock.return_value = now_timestamp() + 11000
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
     ]
+    state_sync.delete_expired_snapshots()
     assert not state_sync.get_snapshots(all_snapshots)
 
 
@@ -1310,9 +1315,10 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
         new_snapshot.snapshot_id,
     }
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
     ]
+    state_sync.delete_expired_snapshots()
 
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
@@ -1351,7 +1357,8 @@ def test_delete_expired_snapshots_shared_dev_table(
         new_snapshot.snapshot_id,
     }
 
-    assert not state_sync.delete_expired_snapshots()  # No dev table cleanup
+    assert not state_sync.get_expired_snapshots()  # No dev table cleanup
+    state_sync.delete_expired_snapshots()
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
@@ -1396,13 +1403,17 @@ def test_delete_expired_snapshots_ignore_ttl(
     state_sync.promote(env)
 
     # default TTL = 1 week, nothing to clean up yet if we take TTL into account
-    assert not state_sync.delete_expired_snapshots()
+    assert not state_sync.get_expired_snapshots()
+    state_sync.delete_expired_snapshots()
+    assert state_sync.snapshots_exist([snapshot_c.snapshot_id]) == {snapshot_c.snapshot_id}
 
     # If we ignore TTL, only snapshot_c should get cleaned up because snapshot_a and snapshot_b are part of an environment
     assert snapshot_a.table_info != snapshot_b.table_info != snapshot_c.table_info
-    assert state_sync.delete_expired_snapshots(ignore_ttl=True) == [
+    assert state_sync.get_expired_snapshots(ignore_ttl=True) == [
         SnapshotTableCleanupTask(snapshot=snapshot_c.table_info, dev_table_only=False)
     ]
+    state_sync.delete_expired_snapshots(ignore_ttl=True)
+    assert not state_sync.snapshots_exist([snapshot_c.snapshot_id])
 
 
 def test_delete_expired_snapshots_cleanup_intervals(
@@ -1465,10 +1476,11 @@ def test_delete_expired_snapshots_cleanup_intervals(
     ]
     assert not stored_new_snapshot.dev_intervals
 
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
+    state_sync.delete_expired_snapshots()
 
     assert not get_snapshot_intervals(snapshot)
 
@@ -1552,9 +1564,10 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     )
 
     # Delete the expired snapshot
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
     ]
+    state_sync.delete_expired_snapshots()
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -1671,7 +1684,8 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
     )
 
     # Delete the expired snapshot
-    assert state_sync.delete_expired_snapshots() == []
+    assert state_sync.get_expired_snapshots() == []
+    state_sync.delete_expired_snapshots()
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -1764,9 +1778,10 @@ def test_compact_intervals_after_cleanup(
     state_sync.add_interval(snapshot_c, "2023-01-07", "2023-01-09", is_dev=True)
 
     # Only the dev table of the original snapshot should be deleted
-    assert state_sync.delete_expired_snapshots() == [
+    assert state_sync.get_expired_snapshots() == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=True),
     ]
+    state_sync.delete_expired_snapshots()
 
     assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 5  # type: ignore
 
