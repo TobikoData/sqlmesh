@@ -253,6 +253,7 @@ class RedshiftEngineAdapter(
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         source_columns: t.Optional[t.List[str]] = None,
+        supports_replace_table_override: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> None:
         """

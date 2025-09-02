@@ -34,6 +34,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
+CATALOG_TYPES_SUPPORTING_REPLACE_TABLE = {"iceberg", "delta_lake"}
+
 
 @set_catalog()
 class TrinoEngineAdapter(
@@ -114,6 +116,37 @@ class TrinoEngineAdapter(
             yield
         finally:
             self.execute(f"RESET SESSION AUTHORIZATION")
+
+    def replace_query(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        table_description: t.Optional[str] = None,
+        column_descriptions: t.Optional[t.Dict[str, str]] = None,
+        source_columns: t.Optional[t.List[str]] = None,
+        supports_replace_table_override: t.Optional[bool] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        catalog_type = self.get_catalog_type(self.get_catalog_type_from_table(table_name))
+        # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
+        # Ex: `acme_iceberg` would be identified as an iceberg catalog and therefore supports replace table
+        supports_replace_table_override = None
+        for replace_table_catalog_type in CATALOG_TYPES_SUPPORTING_REPLACE_TABLE:
+            if replace_table_catalog_type in catalog_type:
+                supports_replace_table_override = True
+                break
+
+        super().replace_query(
+            table_name=table_name,
+            query_or_df=query_or_df,
+            target_columns_to_types=target_columns_to_types,
+            table_description=table_description,
+            column_descriptions=column_descriptions,
+            source_columns=source_columns,
+            supports_replace_table_override=supports_replace_table_override,
+            **kwargs,
+        )
 
     def _insert_overwrite_by_condition(
         self,
@@ -250,7 +283,7 @@ class TrinoEngineAdapter(
         expressions: t.Optional[t.List[exp.PrimaryKey]] = None,
         is_view: bool = False,
     ) -> exp.Schema:
-        if self.current_catalog_type == "delta_lake":
+        if "delta_lake" in self.get_catalog_type_from_table(table):
             target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._build_schema_exp(
@@ -277,7 +310,9 @@ class TrinoEngineAdapter(
         source_columns: t.Optional[t.List[str]] = None,
         **kwargs: t.Any,
     ) -> None:
-        if target_columns_to_types and self.current_catalog_type == "delta_lake":
+        if target_columns_to_types and "delta_lake" in self.get_catalog_type_from_table(
+            target_table
+        ):
             target_columns_to_types = self._to_delta_ts(target_columns_to_types)
 
         return super()._scd_type_2(
@@ -381,7 +416,7 @@ class TrinoEngineAdapter(
         else:
             table_name = table_name_or_schema
 
-        if self.current_catalog_type == "hive":
+        if "hive" in self.get_catalog_type_from_table(table_name):
             # the Trino Hive connector can take a few seconds for metadata changes to propagate to all internal threads
             # (even if metadata TTL is set to 0s)
             # Blocking until the table shows up means that subsequent code expecting it to exist immediately will not fail

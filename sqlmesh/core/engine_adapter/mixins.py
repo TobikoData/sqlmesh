@@ -228,7 +228,7 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
     def _truncate_comment(self, comment: str, length: t.Optional[int]) -> str:
         # iceberg and delta do not have a comment length limit
-        if self.current_catalog_type in ("iceberg", "delta"):
+        if self.current_catalog_type in ("iceberg", "delta_lake"):
             return comment
         return super()._truncate_comment(comment, length)
 
