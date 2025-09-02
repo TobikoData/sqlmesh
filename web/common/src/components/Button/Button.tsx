@@ -30,7 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         className={cn(
           buttonVariants({ variant, size, className }),
-          disabled && 'pointer-events-none bg-neutral-100 text-neutral-400',
+          disabled && 'pointer-events-none bg-neutral-150 text-prose',
         )}
         disabled={disabled}
         ref={ref}
