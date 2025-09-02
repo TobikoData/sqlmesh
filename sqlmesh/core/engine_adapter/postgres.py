@@ -145,7 +145,7 @@ class PostgresEngineAdapter(
         dcl_cmd: t.Type[DCL],
         relation: exp.Expression,
         grant_config: GrantsConfig,
-    ) -> t.Union[t.List[exp.Grant], t.List[exp.Revoke]]:
+    ) -> t.List[exp.Expression]:
         expressions = []
         for privilege, principals in grant_config.items():
             if not principals:
@@ -154,23 +154,20 @@ class PostgresEngineAdapter(
             grant = dcl_cmd(
                 privileges=[exp.GrantPrivilege(this=exp.Var(this=privilege))],
                 securable=relation,
-                principals=principals,  # use original strings so user can to choose quote or not
+                principals=principals,  # use original strings; no quoting
             )
             expressions.append(grant)
 
-        return expressions
+        return t.cast(t.List[exp.Expression], expressions)
 
     def _apply_grants_config_expr(
         self,
         table: exp.Table,
         grant_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Grant]:
+    ) -> t.List[exp.Expression]:
         # https://www.postgresql.org/docs/current/sql-grant.html
-        return t.cast(
-            t.List[exp.Grant],
-            self._dcl_grants_config_expr(exp.Grant, table, grant_config),
-        )
+        return self._dcl_grants_config_expr(exp.Grant, table, grant_config)
 
     def _revoke_grants_config_expr(
         self,
@@ -179,10 +176,7 @@ class PostgresEngineAdapter(
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         # https://www.postgresql.org/docs/current/sql-revoke.html
-        return t.cast(
-            t.List[exp.Expression],
-            self._dcl_grants_config_expr(exp.Revoke, table, grant_config),
-        )
+        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config)
 
     def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
         """Returns current grants for a Postgres table as a dictionary."""

@@ -165,7 +165,11 @@ class BaseModelConfig(GeneralConfig):
 
     @field_validator("grants", mode="before")
     @classmethod
-    def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
+    def _validate_grants(
+        cls, v: t.Optional[t.Dict[str, str]]
+    ) -> t.Optional[t.Dict[str, t.List[str]]]:
+        if v is None:
+            return None
         return {key: ensure_list(value) for key, value in v.items()}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
