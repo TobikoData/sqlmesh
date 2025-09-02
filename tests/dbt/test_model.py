@@ -9,6 +9,7 @@ from sqlmesh import Context
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
@@ -842,3 +843,283 @@ def test_jinja_config_no_query(create_empty_project):
 
     # loads without error and contains empty query (which will error at runtime)
     assert not context.snapshots['"local"."main"."comment_config_model"'].model.render_query()
+
+
+def test_model_grants_to_native_config() -> None:
+    """Test that dbt grants configuration is converted to SQLMesh native grants."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Create a model with grants configuration
+    grants_config = {
+        "select": ["user1", "user2"],
+        "insert": ["admin_user"],
+        "update": ["power_user"],
+    }
+    model_config = ModelConfig(
+        name="test_model",
+        sql="SELECT 1 as id",
+        grants=grants_config,
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    model_grants = sqlmesh_model.grants
+    assert model_grants == grants_config
+
+    assert sqlmesh_model.grants_target_layer == GrantsTargetLayer.default
+
+
+def test_model_grants_empty_permissions() -> None:
+    """Test that empty grants lists are filtered out in native grants."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Create a model with empty grants lists (should be filtered out)
+    model_config = ModelConfig(
+        name="test_model_empty",
+        sql="SELECT 1 as id",
+        grants={"select": [], "insert": ["admin_user"]},  # select empty, insert granted
+        path=Path("test_model_empty.sql"),
+    )
+
+    # Create minimal context for conversion with proper target setup
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    # Convert to SQLMesh model
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that only non-empty grants are preserved
+    model_grants = sqlmesh_model.grants
+    expected_grants = {"insert": ["admin_user"]}  # select should be filtered out
+    assert model_grants == expected_grants
+
+
+def test_model_no_grants() -> None:
+    """Test that models without grants don't generate grant post_statements."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Create a model without grants
+    model_config = ModelConfig(
+        name="test_model_no_grants",
+        sql="SELECT 1 as id",
+        grants={},  # No grants
+        path=Path("test_model_no_grants.sql"),
+    )
+
+    # Create minimal context for conversion with proper target setup
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    # Convert to SQLMesh model
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that no grants configuration is set
+    grants_config = sqlmesh_model.grants
+    assert grants_config is None
+
+
+def test_model_grants_valid_special_characters() -> None:
+    """Test that valid special characters in grantee names are accepted."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Test various valid grantee formats
+    valid_grantees = [
+        "user@domain.com",
+        "service-account@project.iam.gserviceaccount.com",
+        "group:analysts",
+        '"quoted user"',
+        "`backtick user`",
+        "user_with_underscores",
+        "user.with.dots",
+    ]
+
+    model_config = ModelConfig(
+        name="test_model_special_chars",
+        sql="SELECT 1 as id",
+        grants={"select": valid_grantees},
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    # Should not raise any errors
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that native grants configuration contains all grantees
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert "select" in grants_config
+    assert grants_config["select"] == valid_grantees
+
+
+def test_model_grants_engine_specific_bigquery() -> None:
+    """Test BigQuery-specific grant syntax."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import BigQueryConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    model_config = ModelConfig(
+        name="test_model_bigquery",
+        sql="SELECT 1 as id",
+        grants={"bigquery.dataviewer": ["user@domain.com"], "select": ["analyst@company.com"]},
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    # Create a BigQuery target
+    context.target = BigQueryConfig(
+        name="bigquery_target",
+        project="test-project",
+        dataset="test_dataset",
+        location="US",
+        database="test-project",
+        schema="test_dataset",
+    )
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that native grants configuration contains BigQuery permissions
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["bigquery.dataviewer"] == ["user@domain.com"]
+    assert grants_config["select"] == ["analyst@company.com"]
+
+
+def test_model_grants_engine_specific_snowflake() -> None:
+    """Test Snowflake-specific grant syntax."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import SnowflakeConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    model_config = ModelConfig(
+        name="test_model_snowflake",
+        sql="SELECT 1 as id",
+        grants={"select": ["role1"], "all": ["admin_role"]},
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    # Create a Snowflake target
+    context.target = SnowflakeConfig(
+        name="snowflake_target",
+        account="test_account",
+        warehouse="test_warehouse",
+        database="test_db",
+        schema="test_schema",
+        user="test_user",
+        password="test_password",  # Add required authentication
+    )
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that native grants configuration contains Snowflake permissions
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["select"] == ["role1"]
+    assert grants_config["all"] == ["admin_role"]
+
+
+def test_model_grants_project_level_inheritance() -> None:
+    """Test that grants from dbt_project.yml are inherited by models."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Test model with project-level grants inheritance
+    # Simulate what would happen when dbt processes grants from dbt_project.yml
+    model_config = ModelConfig(
+        name="test_model_inheritance",
+        sql="SELECT 1 as id",
+        # This simulates grants that come from dbt_project.yml (+grants) being merged
+        # with model-specific grants through SQLMesh's KEY_EXTEND strategy
+        grants={"select": ["project_user"], "insert": ["model_user"]},  # project + model merged
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify both project-level and model-level grants were processed in native grants
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["select"] == ["project_user"]
+    assert grants_config["insert"] == ["model_user"]
+
+
+def test_model_grants_additive_syntax() -> None:
+    """Test that additive grants (+prefix) work correctly."""
+    from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.target import DuckDbConfig
+    from sqlmesh.core.config.common import VirtualEnvironmentMode
+    from pathlib import Path
+
+    # Test model that would receive +grants from dbt_project.yml
+    # This simulates the result after dbt processes +grants syntax
+    model_config = ModelConfig(
+        name="test_model_additive",
+        sql="SELECT 1 as id",
+        # This simulates what the final grants dict looks like after dbt processes
+        # +grants from dbt_project.yml and merges with model grants
+        grants={
+            "select": ["base_user", "additional_user"],  # base + additive merged
+            "insert": ["admin_user"],  # model-specific
+        },
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    # Verify that native grants configuration contains all merged grants
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["select"] == ["base_user", "additional_user"]
+    assert grants_config["insert"] == ["admin_user"]

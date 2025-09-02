@@ -641,6 +641,7 @@ properties_validator: t.Callable = field_validator(
     "physical_properties_",
     "virtual_properties_",
     "materialization_properties_",
+    "grants_",
     mode="before",
     check_fields=False,
 )(parse_properties)

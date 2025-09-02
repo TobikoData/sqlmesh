@@ -1,6 +1,7 @@
 # ruff: noqa: F811
 import json
 import typing as t
+import re
 from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch, PropertyMock
@@ -14,7 +15,7 @@ from sqlglot.errors import ParseError
 from sqlglot.schema import MappingSchema
 from sqlmesh.cli.project_init import init_example_project, ProjectTemplate
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.model.kind import TimeColumn, ModelKindName
+from sqlmesh.core.model.kind import TimeColumn, ModelKindName, SeedKind
 
 from sqlmesh import CustomMaterialization, CustomKind
 from pydantic import model_validator, ValidationError
@@ -36,6 +37,7 @@ from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.engine_adapter.base import MERGE_SOURCE_ALIAS, MERGE_TARGET_ALIAS
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     CustomKind,
@@ -1922,7 +1924,8 @@ def test_render_definition_with_defaults():
             kind VIEW (
                 materialized FALSE
             ),
-            virtual_environment_mode 'full'
+            virtual_environment_mode 'full',
+            grants_target_layer 'all'
         );
 
         {query}
@@ -1933,6 +1936,115 @@ def test_render_definition_with_defaults():
     assert d.format_model_expressions(
         model.render_definition(include_python=False, include_defaults=True)
     ) == d.format_model_expressions(expected_expressions)
+
+
+def test_render_definition_with_grants():
+    from sqlmesh.core.model.meta import GrantsTargetLayer
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name test.grants_model,
+            kind FULL,
+            grants (
+                'select' = ['user1', 'user2'],
+                'insert' = ['admin'],
+                'roles/bigquery.dataViewer' = ['user:data_eng@mycompany.com']
+            ),
+            virtual_environment_mode dev_only,
+            grants_target_layer all,
+        );
+        SELECT 1 as id
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.grants_target_layer == GrantsTargetLayer.ALL
+    assert model.grants == {
+        "select": ["user1", "user2"],
+        "insert": ["admin"],
+        "roles/bigquery.dataViewer": ["user:data_eng@mycompany.com"],
+    }
+
+    rendered = model.render_definition(include_defaults=True)
+    rendered_text = d.format_model_expressions(rendered)
+    assert "grants_target_layer 'all'" in rendered_text
+    assert re.search(
+        r"grants\s*\("
+        r"\s*'select'\s*=\s*ARRAY\('user1',\s*'user2'\),"
+        r"\s*'insert'\s*=\s*ARRAY\('admin'\),"
+        r"\s*'roles/bigquery.dataViewer'\s*=\s*ARRAY\('user:data_eng@mycompany.com'\)"
+        r"\s*\)",
+        rendered_text,
+    )
+
+    model_with_grants = create_sql_model(
+        name="test_grants_programmatic",
+        query=d.parse_one("SELECT 1 as id"),
+        grants={"select": ["user1", "user2"], "insert": ["admin"]},
+        grants_target_layer=GrantsTargetLayer.ALL,
+    )
+    assert model_with_grants.grants == {"select": ["user1", "user2"], "insert": ["admin"]}
+    assert model_with_grants.grants_target_layer == GrantsTargetLayer.ALL
+    rendered_text = d.format_model_expressions(
+        model_with_grants.render_definition(include_defaults=True)
+    )
+    assert "grants_target_layer 'all'" in rendered_text
+    assert re.search(
+        r"grants\s*\("
+        r"\s*'select'\s*=\s*ARRAY\('user1',\s*'user2'\),"
+        r"\s*'insert'\s*=\s*ARRAY\('admin'\)"
+        r"\s*\)",
+        rendered_text,
+    )
+
+    virtual_expressions = d.parse(
+        """
+        MODEL (
+            name test.virtual_grants_model,
+            kind FULL,
+            grants_target_layer virtual
+        );
+        SELECT 1 as id
+        """
+    )
+    virtual_model = load_sql_based_model(virtual_expressions)
+    assert virtual_model.grants_target_layer == GrantsTargetLayer.VIRTUAL
+
+    default_expressions = d.parse(
+        """
+        MODEL (
+            name test.default_grants_model,
+            kind FULL
+        );
+        SELECT 1 as id
+        """
+    )
+    default_model = load_sql_based_model(default_expressions)
+    assert default_model.grants_target_layer == GrantsTargetLayer.ALL  # default value
+
+    # Test round-trip: parse model with grants_target_layer, render definition, parse back
+    original_expressions = d.parse(
+        """
+        MODEL (
+            name test.roundtrip_model,
+            kind FULL,
+            grants (
+                'select' = ['user1', 'user2'],
+                'insert' = ['admin']
+            ),
+            grants_target_layer 'virtual'
+        );
+        SELECT 1 as id
+        """
+    )
+    original_model = load_sql_based_model(original_expressions)
+    rendered_def = original_model.render_definition(include_defaults=True)
+    rendered_text = d.format_model_expressions(rendered_def)
+    reparsed_expressions = d.parse(rendered_text)
+    reparsed_model = load_sql_based_model(reparsed_expressions)
+
+    assert reparsed_model.grants_target_layer == GrantsTargetLayer.VIRTUAL
+    assert reparsed_model.grants == original_model.grants
 
 
 def test_render_definition_partitioned_by():
@@ -11717,3 +11829,85 @@ def my_macro(evaluator):
     model = context.get_model("test_model", raise_if_missing=True)
 
     assert model.render_query_or_raise().sql() == 'SELECT 3 AS "c"'
+
+
+def test_grants_validation_symbolic_model_error():
+    with pytest.raises(ValidationError, match=r".*grants cannot be set for EXTERNAL.*"):
+        create_sql_model(
+            "db.table",
+            parse_one("SELECT 1 AS id"),
+            kind="EXTERNAL",
+            grants={"select": ["user1", "user2"], "insert": ["admin_user"]},
+        )
+
+
+def test_grants_validation_embedded_model_error():
+    with pytest.raises(ValidationError, match=r".*grants cannot be set for EMBEDDED.*"):
+        create_sql_model(
+            "db.table",
+            parse_one("SELECT 1 AS id"),
+            kind="EMBEDDED",
+            grants={"select": ["user1"], "insert": ["admin_user"]},
+        )
+
+
+def test_grants_validation_valid_seed_model():
+    model = create_sql_model(
+        "db.table",
+        parse_one("SELECT 1 AS id"),
+        kind=SeedKind(path="test.csv"),
+        grants={"select": ["user1"], "insert": ["admin_user"]},
+    )
+    assert model.grants == {"select": ["user1"], "insert": ["admin_user"]}
+
+
+def test_grants_validation_valid_materialized_model():
+    model = create_sql_model(
+        "db.table",
+        parse_one("SELECT 1 AS id"),
+        kind="FULL",
+        grants={"select": ["user1", "user2"], "insert": ["admin_user"]},
+    )
+    assert model.grants == {"select": ["user1", "user2"], "insert": ["admin_user"]}
+
+
+def test_grants_validation_valid_view_model():
+    model = create_sql_model(
+        "db.table", parse_one("SELECT 1 AS id"), kind="VIEW", grants={"select": ["user1", "user2"]}
+    )
+    assert model.grants == {"select": ["user1", "user2"]}
+
+
+def test_grants_validation_valid_incremental_model():
+    model = create_sql_model(
+        "db.table",
+        parse_one("SELECT 1 AS id, CURRENT_TIMESTAMP AS ts"),
+        kind=IncrementalByTimeRangeKind(time_column="ts"),
+        grants={"select": ["user1"], "update": ["admin_user"]},
+    )
+    assert model.grants == {"select": ["user1"], "update": ["admin_user"]}
+
+
+def test_grants_validation_no_grants():
+    model = create_sql_model("db.table", parse_one("SELECT 1 AS id"), kind="FULL")
+    assert model.grants is None
+
+
+def test_grants_table_type_view():
+    model = create_sql_model("test_view", parse_one("SELECT 1 as id"), kind="VIEW")
+    assert model.grants_table_type == DataObjectType.VIEW
+
+    model = create_sql_model(
+        "test_mv", parse_one("SELECT 1 as id"), kind=ViewKind(materialized=True)
+    )
+    assert model.grants_table_type == DataObjectType.MATERIALIZED_VIEW
+
+
+def test_grants_table_type_table():
+    model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind="FULL")
+    assert model.grants_table_type == DataObjectType.TABLE
+
+
+def test_grants_table_type_managed():
+    model = create_sql_model("test_managed", parse_one("SELECT 1 as id"), kind="MANAGED")
+    assert model.grants_table_type == DataObjectType.MANAGED_TABLE
