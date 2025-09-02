@@ -548,8 +548,7 @@ class ModelMeta(_Node):
                     if grantee:  # skip empty strings
                         grantee_list.append(grantee)
 
-                if grantee_list:
-                    grants_dict[permission_name.strip()] = grantee_list
+                grants_dict[permission_name.strip()] = grantee_list
 
         return grants_dict
 
