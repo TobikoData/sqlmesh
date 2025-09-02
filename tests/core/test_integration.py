@@ -2931,6 +2931,7 @@ def test_virtual_environment_mode_dev_only_seed_model_change(
     with open(seed_model.seed_path, "a") as fd:
         fd.write("\n123,New Test Name")
 
+    context.clear_caches()
     context.load()
     seed_model_snapshot = context.get_snapshot("sushi.waiter_names")
     plan = context.plan_builder("dev").build()
