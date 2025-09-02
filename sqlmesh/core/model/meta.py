@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from enum import Enum
 from functools import cached_property
 from typing_extensions import Self
 
@@ -13,6 +14,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.utils import classproperty
 from sqlmesh.core.model.common import (
     bool_validator,
     default_catalog_validator,
@@ -46,8 +48,39 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import CustomMaterializationProperties, SessionProperties
+    from sqlmesh.core.engine_adapter._typing import GrantsConfig
 
 FunctionCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+
+
+class GrantsTargetLayer(str, Enum):
+    """Target layer(s) where grants should be applied."""
+
+    ALL = "all"
+    PHYSICAL = "physical"
+    VIRTUAL = "virtual"
+
+    @classproperty
+    def default(cls) -> "GrantsTargetLayer":
+        return GrantsTargetLayer.ALL
+
+    @property
+    def is_all(self) -> bool:
+        return self == GrantsTargetLayer.ALL
+
+    @property
+    def is_physical(self) -> bool:
+        return self == GrantsTargetLayer.PHYSICAL
+
+    @property
+    def is_virtual(self) -> bool:
+        return self == GrantsTargetLayer.VIRTUAL
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class ModelMeta(_Node):
@@ -85,6 +118,8 @@ class ModelMeta(_Node):
     )
     formatting: t.Optional[bool] = Field(default=None, exclude=True)
     virtual_environment_mode: VirtualEnvironmentMode = VirtualEnvironmentMode.default
+    grants_: t.Optional[exp.Tuple] = Field(default=None, alias="grants")
+    grants_target_layer: GrantsTargetLayer = GrantsTargetLayer.default
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
@@ -124,6 +159,14 @@ class ModelMeta(_Node):
         if isinstance(v, (list, tuple)):
             return [cls._validate_value_or_tuple(elm, data, normalize=normalize) for elm in v]
 
+        return v
+
+    @classmethod
+    def _validate_str_enum_value(cls, v: t.Any) -> t.Any:
+        if isinstance(v, exp.Identifier):
+            return v.this
+        if isinstance(v, exp.Literal) and v.is_string:
+            return v.this
         return v
 
     @field_validator("table_format", "storage_format", mode="before")
@@ -287,6 +330,14 @@ class ModelMeta(_Node):
     def ignored_rules_validator(cls, vs: t.Any) -> t.Any:
         return LinterConfig._validate_rules(vs)
 
+    @field_validator("grants_target_layer", mode="before")
+    def _grants_target_layer_validator(cls, v: t.Any) -> t.Any:
+        return cls._validate_str_enum_value(v)
+
+    @field_validator("virtual_environment_mode", mode="before")
+    def _virtual_environment_mode_validator(cls, v: t.Any) -> t.Any:
+        return cls._validate_str_enum_value(v)
+
     @field_validator("session_properties_", mode="before")
     def session_properties_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:
         # use the generic properties validator to parse the session properties
@@ -394,6 +445,13 @@ class ModelMeta(_Node):
                 f"Model {self.name} has `storage_format` set to a table format '{storage_format}' which is deprecated. Please use the `table_format` property instead."
             )
 
+        # Validate grants configuration for model kind support
+        if self.grants is not None:
+            if kind.is_symbolic:
+                raise ValueError(f"grants cannot be set for {kind.name} models")
+            elif not (kind.is_materialized or kind.is_view):
+                raise ValueError(f"grants field is not supported for {kind.name} models")
+
         return self
 
     @property
@@ -464,6 +522,36 @@ class ModelMeta(_Node):
         if isinstance(self.kind, CustomKind):
             return self.kind.materialization_properties
         return {}
+
+    @cached_property
+    def grants(self) -> t.Optional[GrantsConfig]:
+        """A dictionary of grants mapping permission names to lists of grantees."""
+
+        if not self.grants_:
+            return None
+
+        def parse_exp_to_str(e: exp.Expression) -> str:
+            if isinstance(e, exp.Literal) and e.is_string:
+                return e.this.strip()
+            if isinstance(e, exp.Identifier):
+                return e.name
+            return e.sql(dialect=self.dialect).strip()
+
+        grants_dict = {}
+        for eq_expr in self.grants_.expressions:
+            permission_name = parse_exp_to_str(eq_expr.this)  # left hand side
+            grantees_expr = eq_expr.expression  # right hand side
+            if isinstance(grantees_expr, exp.Array):
+                grantee_list = []
+                for grantee_expr in grantees_expr.expressions:
+                    grantee = parse_exp_to_str(grantee_expr)
+                    if grantee:  # skip empty strings
+                        grantee_list.append(grantee)
+
+                if grantee_list:
+                    grants_dict[permission_name.strip()] = grantee_list
+
+        return grants_dict
 
     @property
     def all_references(self) -> t.List[Reference]:
