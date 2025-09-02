@@ -521,9 +521,11 @@ class ModelConfig(BaseModelConfig):
                         raise ConfigError(
                             f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
                         ) from e
-            else:
+            elif isinstance(self.partition_by, dict) and context.target.dialect == "bigquery":
                 partitioned_by.append(self._big_query_partition_by_expr(context))
-            optional_kwargs["partitioned_by"] = partitioned_by
+
+            if partitioned_by:
+                optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
             if isinstance(kind, ViewKind):
