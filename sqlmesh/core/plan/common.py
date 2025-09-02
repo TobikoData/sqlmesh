@@ -5,7 +5,10 @@ from sqlmesh.core.snapshot import Snapshot
 
 def should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
     if new.is_view and new.is_indirect_non_breaking and not new.is_forward_only:
-        # View models always need to be rebuilt to reflect updated upstream dependencies.
+        # View models always need to be rebuilt to reflect updated upstream dependencies
+        return True
+    if new.is_seed:
+        # Seed models always need to be rebuilt to reflect changes in the seed file
         return True
     return is_breaking_kind_change(old, new)
 
