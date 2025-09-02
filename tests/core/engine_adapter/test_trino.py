@@ -24,8 +24,8 @@ def trino_mocked_engine_adapter(
     def mock_catalog_type(catalog_name):
         if "iceberg" in catalog_name:
             return "iceberg"
-        if "delta" in catalog_name:
-            return "delta"
+        if "delta_lake" in catalog_name:
+            return "delta_lake"
         return "hive"
 
     mocker.patch(
@@ -50,7 +50,7 @@ def test_set_current_catalog(trino_mocked_engine_adapter: TrinoEngineAdapter):
     ]
 
 
-@pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
+@pytest.mark.parametrize("storage_type", ["iceberg", "delta_lake"])
 def test_get_catalog_type(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
 ):
@@ -64,13 +64,14 @@ def test_get_catalog_type(
     assert adapter.get_catalog_type("foo") == TrinoEngineAdapter.DEFAULT_CATALOG_TYPE
     assert adapter.get_catalog_type("datalake_hive") == "hive"
     assert adapter.get_catalog_type("datalake_iceberg") == "iceberg"
-    assert adapter.get_catalog_type("datalake_delta") == "delta"
+    assert adapter.get_catalog_type("datalake_delta_lake") == "delta_lake"
 
     mocker.patch(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
         return_value=f"system_{storage_type}",
     )
-    assert adapter.current_catalog_type == storage_type
+    expected_current_type = storage_type
+    assert adapter.current_catalog_type == expected_current_type
 
 
 def test_get_catalog_type_cached(
@@ -103,7 +104,7 @@ def test_get_catalog_type_cached(
     assert fetchone_mock.call_count == 2
 
 
-@pytest.mark.parametrize("storage_type", ["hive", "delta"])
+@pytest.mark.parametrize("storage_type", ["hive", "delta_lake"])
 def test_partitioned_by_hive_delta(
     trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture, storage_type: str
 ):
@@ -113,7 +114,8 @@ def test_partitioned_by_hive_delta(
         "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_current_catalog",
         return_value=f"datalake_{storage_type}",
     )
-    assert adapter.get_catalog_type(f"datalake_{storage_type}") == storage_type
+    expected_type = storage_type
+    assert adapter.get_catalog_type(f"datalake_{storage_type}") == expected_type
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -314,7 +316,7 @@ def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Call
     ]
 
 
-@pytest.mark.parametrize("storage_type", ["iceberg", "delta"])
+@pytest.mark.parametrize("storage_type", ["iceberg", "delta_lake"])
 def test_comments_iceberg_delta(
     mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, storage_type: str
 ):
@@ -646,3 +648,40 @@ def test_session_authorization(trino_mocked_engine_adapter: TrinoEngineAdapter):
         "SELECT 1",
         "RESET SESSION AUTHORIZATION",
     ]
+
+
+@pytest.mark.parametrize(
+    "catalog_name,expected_replace",
+    [
+        ("hive_catalog", False),
+        ("iceberg_catalog", True),
+        ("delta_catalog", False),
+        ("acme_delta_lake", True),
+        ("acme_iceberg", True),
+        ("custom_delta_lake_something", True),
+        ("my_iceberg_store", True),
+        ("plain_catalog", False),
+    ],
+)
+def test_replace_table_catalog_support(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, catalog_name, expected_replace
+):
+    adapter = trino_mocked_engine_adapter
+
+    adapter.replace_query(
+        table_name=".".join([catalog_name, "schema", "test_table"]),
+        query_or_df=parse_one("SELECT 1 AS col"),
+    )
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 1
+    if expected_replace:
+        assert (
+            sql_calls[0]
+            == f'CREATE OR REPLACE TABLE "{catalog_name}"."schema"."test_table" AS SELECT 1 AS "col"'
+        )
+    else:
+        assert (
+            sql_calls[0]
+            == f'CREATE TABLE IF NOT EXISTS "{catalog_name}"."schema"."test_table" AS SELECT 1 AS "col"'
+        )

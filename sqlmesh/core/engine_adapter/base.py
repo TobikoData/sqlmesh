@@ -432,8 +432,16 @@ class EngineAdapter:
             )
         return self.DEFAULT_CATALOG_TYPE
 
+    def get_catalog_type_from_table(self, table: TableName) -> str:
+        """Get the catalog type from a table name if it has a catalog specified, otherwise return the current catalog type"""
+        catalog = exp.to_table(table).catalog or self.get_current_catalog()
+        return self.get_catalog_type(catalog)
+
     @property
     def current_catalog_type(self) -> str:
+        # `get_catalog_type_from_table` should be used over this property. Reason is that the table that is the target
+        # of the operation is what matters and not the catalog type of the connection.
+        # This still remains for legacy reasons and should be refactored out.
         return self.get_catalog_type(self.get_current_catalog())
 
     def replace_query(
@@ -444,6 +452,7 @@ class EngineAdapter:
         table_description: t.Optional[str] = None,
         column_descriptions: t.Optional[t.Dict[str, str]] = None,
         source_columns: t.Optional[t.List[str]] = None,
+        supports_replace_table_override: t.Optional[bool] = None,
         **kwargs: t.Any,
     ) -> None:
         """Replaces an existing table with a query.
@@ -494,12 +503,17 @@ class EngineAdapter:
             )
         # All engines support `CREATE TABLE AS` so we use that if the table doesn't already exist and we
         # use `CREATE OR REPLACE TABLE AS` if the engine supports it
-        if self.SUPPORTS_REPLACE_TABLE or not table_exists:
+        supports_replace_table = (
+            self.SUPPORTS_REPLACE_TABLE
+            if supports_replace_table_override is None
+            else supports_replace_table_override
+        )
+        if supports_replace_table or not table_exists:
             return self._create_table_from_source_queries(
                 target_table,
                 source_queries,
                 target_columns_to_types,
-                replace=self.SUPPORTS_REPLACE_TABLE,
+                replace=supports_replace_table,
                 table_description=table_description,
                 column_descriptions=column_descriptions,
                 **kwargs,
