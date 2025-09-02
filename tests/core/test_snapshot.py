@@ -679,6 +679,43 @@ def test_lookback(make_snapshot):
     assert snapshot.missing_intervals("2023-01-28", "2023-01-30", "2023-01-31 04:00:00") == []
 
 
+def test_lookback_custom_materialization(make_snapshot):
+    from sqlmesh import CustomMaterialization
+
+    class MyTestStrategy(CustomMaterialization):
+        pass
+
+    expressions = parse(
+        """
+        MODEL (
+            name name,
+            kind CUSTOM (
+                materialization 'MyTestStrategy',
+                lookback 2
+            ),
+            start '2023-01-01',
+            cron '0 5 * * *',
+        );
+
+        SELECT ds FROM parent.tbl
+        """
+    )
+
+    snapshot = make_snapshot(load_sql_based_model(expressions))
+
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-01") == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+    ]
+
+    snapshot.add_interval("2023-01-01", "2023-01-04")
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-04") == []
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-05") == [
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+
+
 def test_seed_intervals(make_snapshot):
     snapshot_a = make_snapshot(
         SeedModel(
