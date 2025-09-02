@@ -67,6 +67,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter.shared import DataObjectType
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
@@ -1186,6 +1187,8 @@ class _Model(ModelMeta, frozen=True):
                 gen(self.session_properties_) if self.session_properties_ else None,
                 *[gen(g) for g in self.grains],
                 *self._audit_metadata_hash_values(),
+                json.dumps(self.grants, sort_keys=True) if self.grants else None,
+                self.grants_target_layer,
             ]
 
             for key, value in (self.virtual_properties or {}).items():
@@ -1209,6 +1212,24 @@ class _Model(ModelMeta, frozen=True):
     def is_model(self) -> bool:
         """Return True if this is a model node"""
         return True
+
+    @property
+    def grants_table_type(self) -> DataObjectType:
+        """Get the table type for grants application (TABLE, VIEW, MATERIALIZED_VIEW).
+
+        Returns:
+            The DataObjectType that should be used when applying grants to this model.
+        """
+        from sqlmesh.core.engine_adapter.shared import DataObjectType
+
+        if self.kind.is_view:
+            if hasattr(self.kind, "materialized") and getattr(self.kind, "materialized", False):
+                return DataObjectType.MATERIALIZED_VIEW
+            return DataObjectType.VIEW
+        if self.kind.is_managed:
+            return DataObjectType.MANAGED_TABLE
+        # All other materialized models are tables
+        return DataObjectType.TABLE
 
     @property
     def _additional_metadata(self) -> t.List[str]:
@@ -3023,6 +3044,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "optimize_query": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
     "dbt_node_info_": lambda value: value.to_expression(),
+    "grants_": lambda value: value,
+    "grants_target_layer": lambda value: exp.Literal.string(value.value),
 }
 
 

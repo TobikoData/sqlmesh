@@ -4065,3 +4065,126 @@ def test_data_object_cache_cleared_on_create_table_like(
     assert result is not None
     assert result.name == "target_table"
     assert mock_get_data_objects.call_count == 2
+
+
+def test_diff_grants_configs():
+    new = {"SELECT": ["u1", "u2"], "INSERT": ["u1"]}
+    old = {"SELECT": ["u1", "u3"], "update": ["u1"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(new, old)
+
+    assert additions.get("SELECT") and set(additions["SELECT"]) == {"u2"}
+    assert removals.get("SELECT") and set(removals["SELECT"]) == {"u3"}
+
+    assert additions.get("INSERT") and set(additions["INSERT"]) == {"u1"}
+    assert removals.get("update") and set(removals["update"]) == {"u1"}
+
+    for perm, grantees in additions.items():
+        assert set(grantees).isdisjoint(set(old.get(perm, [])))
+    for perm, grantees in removals.items():
+        assert set(grantees).isdisjoint(set(new.get(perm, [])))
+
+
+def test_diff_grants_configs_empty_new():
+    new = {}
+    old = {"SELECT": ["u1", "u2"], "INSERT": ["u3"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(new, old)
+
+    assert additions == {}
+    assert removals == old
+
+
+def test_diff_grants_configs_empty_old():
+    new = {"SELECT": ["u1", "u2"], "INSERT": ["u3"]}
+    old = {}
+
+    additions, removals = EngineAdapter._diff_grants_configs(new, old)
+
+    assert additions == new
+    assert removals == {}
+
+
+def test_diff_grants_configs_identical():
+    grants = {"SELECT": ["u1", "u2"], "INSERT": ["u3"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(grants, grants)
+
+    assert additions == {}
+    assert removals == {}
+
+
+def test_diff_grants_configs_none_configs():
+    grants = {"SELECT": ["u1"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(grants, {})
+    assert additions == grants
+    assert removals == {}
+
+    additions, removals = EngineAdapter._diff_grants_configs({}, grants)
+    assert additions == {}
+    assert removals == grants
+
+    additions, removals = EngineAdapter._diff_grants_configs({}, {})
+    assert additions == {}
+    assert removals == {}
+
+
+def test_diff_grants_configs_duplicate_grantees():
+    new = {"SELECT": ["u1", "u2", "u1"]}
+    old = {"SELECT": ["u2", "u3", "u2"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(new, old)
+
+    assert additions["SELECT"] == ["u1", "u1"]
+    assert removals["SELECT"] == ["u3"]
+
+
+def test_diff_grants_configs_case_sensitive():
+    new = {"select": ["u1"], "SELECT": ["u2"]}
+    old = {"Select": ["u3"]}
+
+    additions, removals = EngineAdapter._diff_grants_configs(new, old)
+
+    assert set(additions.keys()) == {"select", "SELECT"}
+    assert set(removals.keys()) == {"Select"}
+    assert additions["select"] == ["u1"]
+    assert additions["SELECT"] == ["u2"]
+    assert removals["Select"] == ["u3"]
+
+
+def test_sync_grants_config_unsupported_engine(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.SUPPORTS_GRANTS = False
+
+    relation = exp.to_table("test_table")
+    grants_config = {"SELECT": ["user1"]}
+
+    with pytest.raises(NotImplementedError, match="Engine does not support grants"):
+        adapter._sync_grants_config(relation, grants_config)
+
+
+def test_apply_grants_config_expr_not_implemented(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    relation = exp.to_table("test_table")
+    grants_config = {"SELECT": ["user1"]}
+
+    with pytest.raises(NotImplementedError):
+        adapter._apply_grants_config_expr(relation, grants_config)
+
+
+def test_revoke_grants_config_expr_not_implemented(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    relation = exp.to_table("test_table")
+    grants_config = {"SELECT": ["user1"]}
+
+    with pytest.raises(NotImplementedError):
+        adapter._revoke_grants_config_expr(relation, grants_config)
+
+
+def test_get_current_grants_config_not_implemented(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    relation = exp.to_table("test_table")
+
+    with pytest.raises(NotImplementedError):
+        adapter._get_current_grants_config(relation)

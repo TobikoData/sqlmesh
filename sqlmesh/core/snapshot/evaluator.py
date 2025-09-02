@@ -39,6 +39,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObjectType, DataObject
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import (
     AuditResult,
@@ -1462,6 +1463,8 @@ class SnapshotEvaluator:
                 snapshot=snapshot, render_kwargs=create_render_kwargs
             )
 
+        evaluation_strategy._apply_grants(snapshot.model, table_name, GrantsTargetLayer.PHYSICAL)
+
     def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
         adapter = self.get_adapter(snapshot.model.gateway)
         return (
@@ -1780,6 +1783,53 @@ class EvaluationStrategy(abc.ABC):
             render_kwargs: Additional key-value arguments to pass when rendering the statements.
         """
 
+    def _apply_grants(
+        self,
+        model: Model,
+        table_name: str,
+        target_layer: GrantsTargetLayer,
+    ) -> None:
+        """Apply grants for a model if grants are configured.
+
+        This method provides consistent grants application across all evaluation strategies.
+        It ensures that whenever a physical database object (table, view, materialized view)
+        is created or modified, the appropriate grants are applied.
+
+        Args:
+            model: The SQLMesh model containing grants configuration
+            table_name: The target table/view name to apply grants to
+            target_layer: The grants application layer (physical or virtual)
+        """
+        grants_config = model.grants
+        if grants_config is None:
+            return
+
+        if not self.adapter.SUPPORTS_GRANTS:
+            logger.warning(
+                f"Engine {self.adapter.__class__.__name__} does not support grants. "
+                f"Skipping grants application for model {model.name}"
+            )
+            return
+
+        model_grants_target_layer = model.grants_target_layer
+        if not (model_grants_target_layer.is_all or model_grants_target_layer == target_layer):
+            logger.debug(
+                f"Skipping grants application for model {model.name} in {target_layer} layer"
+            )
+            return
+
+        logger.info(f"Applying grants for model {model.name} to table {table_name}")
+
+        try:
+            self.adapter._sync_grants_config(
+                exp.to_table(table_name, dialect=model.dialect),
+                grants_config,
+                model.grants_table_type,
+            )
+        except Exception:
+            # Log error but don't fail evaluation if grants fail
+            logger.error(f"Failed to apply grants for model {model.name}", exc_info=True)
+
 
 class SymbolicStrategy(EvaluationStrategy):
     def insert(
@@ -1889,6 +1939,9 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
             column_descriptions=model.column_descriptions if is_prod else None,
             view_properties=model.render_virtual_properties(**render_kwargs),
         )
+
+        # Apply grants to the virtual layer view
+        self._apply_grants(model, view_name, GrantsTargetLayer.VIRTUAL)
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         logger.info("Dropping view '%s'", view_name)
@@ -2496,6 +2549,9 @@ class ViewStrategy(PromotableStrategy):
             column_descriptions=model.column_descriptions,
         )
 
+        # Apply grants after view creation/replacement
+        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
+
     def append(
         self,
         table_name: str,
@@ -2566,6 +2622,9 @@ class ViewStrategy(PromotableStrategy):
             table_description=model.description,
             column_descriptions=model.column_descriptions,
         )
+
+        # Apply grants after view migration
+        self._apply_grants(snapshot.model, target_table_name, GrantsTargetLayer.PHYSICAL)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         cascade = kwargs.pop("cascade", False)
@@ -2870,6 +2929,9 @@ class EngineManagedStrategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 table_format=model.table_format,
             )
+
+            # Apply grants after managed table creation
+            self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
         elif not is_table_deployable:
             # Only create the dev preview table as a normal table.
             # For the main table, if the snapshot is cant be deployed to prod (eg upstream is forward-only) do nothing.
@@ -2908,6 +2970,9 @@ class EngineManagedStrategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 table_format=model.table_format,
             )
+
+            # Apply grants after managed table creation during first insert
+            self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead
             # If the snapshot was deployable, then data would have already been loaded in create() because a managed table would have been created

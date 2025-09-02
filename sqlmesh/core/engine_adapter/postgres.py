@@ -6,6 +6,7 @@ import typing as t
 from functools import cached_property, partial
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -17,7 +18,9 @@ from sqlmesh.core.engine_adapter.shared import set_catalog
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, GrantsConfig, QueryOrDF
+
+    DCL = t.TypeVar("DCL", exp.Grant, exp.Revoke)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class PostgresEngineAdapter(
     RowDiffMixin,
 ):
     DIALECT = "postgres"
+    SUPPORTS_GRANTS = True
     SUPPORTS_INDEXES = True
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
@@ -135,3 +139,80 @@ class PostgresEngineAdapter(
             if match:
                 return int(match.group(1)), int(match.group(2))
         return 0, 0
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        relation: exp.Expression,
+        grant_config: GrantsConfig,
+    ) -> t.Union[t.List[exp.Grant], t.List[exp.Revoke]]:
+        expressions = []
+        for privilege, principals in grant_config.items():
+            if not principals:
+                continue
+
+            grant = dcl_cmd(
+                privileges=[exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                securable=relation,
+                principals=principals,  # use original strings so user can to choose quote or not
+            )
+            expressions.append(grant)
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Grant]:
+        # https://www.postgresql.org/docs/current/sql-grant.html
+        return t.cast(
+            t.List[exp.Grant],
+            self._dcl_grants_config_expr(exp.Grant, table, grant_config),
+        )
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        # https://www.postgresql.org/docs/current/sql-revoke.html
+        return t.cast(
+            t.List[exp.Expression],
+            self._dcl_grants_config_expr(exp.Revoke, table, grant_config),
+        )
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        """Returns current grants for a Postgres table as a dictionary."""
+        table_schema = table.db or self.get_current_schema()
+        table_name = table.name
+
+        # https://www.postgresql.org/docs/current/infoschema-role-table-grants.html
+        grant_expr = (
+            exp.select("privilege_type", "grantee")
+            .from_(exp.table_("role_table_grants", db="information_schema"))
+            .where(
+                exp.and_(
+                    exp.column("table_schema").eq(exp.Literal.string(table_schema)),
+                    exp.column("table_name").eq(exp.Literal.string(table_name)),
+                    exp.column("grantor").eq(exp.column("current_role")),
+                    exp.column("grantee").neq(exp.column("current_role")),
+                )
+            )
+        )
+        results = self.fetchall(grant_expr)
+
+        grants_dict: t.Dict[str, t.List[str]] = {}
+        for row in results:
+            privilege = str(row[0])
+            grantee = str(row[1])
+
+            if privilege not in grants_dict:
+                grants_dict[privilege] = []
+
+            if grantee not in grants_dict[privilege]:
+                grants_dict[privilege].append(grantee)
+
+        return grants_dict
