@@ -38,6 +38,9 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+logger = logging.getLogger(__name__)
+
+
 INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite", "microbatch"])
 INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
@@ -521,8 +524,13 @@ class ModelConfig(BaseModelConfig):
                         raise ConfigError(
                             f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
                         ) from e
-            elif isinstance(self.partition_by, dict) and context.target.dialect == "bigquery":
-                partitioned_by.append(self._big_query_partition_by_expr(context))
+            elif isinstance(self.partition_by, dict):
+                if context.target.dialect == "bigquery":
+                    partitioned_by.append(self._big_query_partition_by_expr(context))
+                else:
+                    logger.warning(
+                        f"Ignoring partition_by config for model '{self.name}' targeting {context.target.dialect}; it is only supported for bigquery."
+                    )
 
             if partitioned_by:
                 optional_kwargs["partitioned_by"] = partitioned_by
