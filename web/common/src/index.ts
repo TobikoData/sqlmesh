@@ -1,6 +1,10 @@
 // Components
 export { Badge, type BadgeProps } from '@/components/Badge/Badge'
-export { Button, type ButtonProps } from '@/components/Button/Button'
+export {
+  Button,
+  type ButtonProps,
+  type ButtonVariant,
+} from '@/components/Button/Button'
 export {
   CopyButton,
   type CopyButtonProps,

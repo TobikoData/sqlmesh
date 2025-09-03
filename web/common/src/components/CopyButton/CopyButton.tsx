@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 
 import { Button, type ButtonProps } from '@/components/Button/Button'
-import { cn } from '@/utils'
 
 type TimerID = ReturnType<typeof setTimeout>
 
@@ -20,7 +19,6 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
       size = 'xs',
       delay = 2000,
       disabled = false,
-      className,
       children,
       onClick,
       ...props
@@ -53,7 +51,6 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
         onClick={copy}
         disabled={disabled || !!copied}
         {...props}
-        className={cn(className, copied && 'pointer-events-none')}
       >
         {children(copied != null)}
       </Button>
