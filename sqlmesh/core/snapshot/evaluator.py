@@ -1821,7 +1821,7 @@ class EvaluationStrategy(abc.ABC):
         logger.info(f"Applying grants for model {model.name} to table {table_name}")
 
         try:
-            self.adapter._sync_grants_config(
+            self.adapter.sync_grants_config(
                 exp.to_table(table_name, dialect=model.dialect),
                 grants_config,
                 model.grants_table_type,

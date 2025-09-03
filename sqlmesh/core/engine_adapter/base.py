@@ -2506,7 +2506,7 @@ class EngineAdapter:
             raise NotImplementedError(f"Engine does not support grants: {type(self)}")
         raise NotImplementedError("Subclass must implement get_current_grants")
 
-    def _sync_grants_config(
+    def sync_grants_config(
         self,
         table: exp.Table,
         grants_config: GrantsConfig,
@@ -2532,45 +2532,6 @@ class EngineAdapter:
 
         if dcl_exprs:
             self.execute(dcl_exprs)
-
-    def _apply_grants_config(
-        self,
-        table: exp.Table,
-        grants_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> None:
-        """Applies grants to a table.
-
-        Args:
-            table: The table/view to grant permissions on.
-            grants_config: Dictionary mapping privileges to lists of grantees.
-            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
-
-        Raises:
-            NotImplementedError: If the engine does not support grants.
-        """
-
-        if grants := self._apply_grants_config_expr(table, grants_config, table_type):
-            self.execute(grants)
-
-    def _revoke_grants_config(
-        self,
-        table: exp.Table,
-        grants_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> None:
-        """Revokes grants from a table.
-
-        Args:
-            table: The table/view to revoke privileges from.
-            grants_config: Dictionary mapping privileges to lists of grantees.
-            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
-
-        Raises:
-            NotImplementedError: If the engine does not support grants.
-        """
-        if revokes := self._revoke_grants_config_expr(table, grants_config, table_type):
-            self.execute(revokes)
 
     def _apply_grants_config_expr(
         self,
