@@ -7,7 +7,6 @@ from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.engine_adapter import PostgresEngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -180,34 +179,6 @@ def test_server_version(make_mocked_engine_adapter: t.Callable, mocker: MockerFi
     assert adapter.server_version == (15, 13)
 
 
-def test_apply_grants_config(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
-    relation = exp.to_table("test_table", dialect="postgres")
-    grants_config = {"SELECT": ["user1", "user2"], "INSERT": ["admin_user"]}
-
-    adapter._apply_grants_config(relation, grants_config, DataObjectType.TABLE)
-
-    sql_calls = to_sql_calls(adapter)
-
-    assert len(sql_calls) == 2
-    assert 'GRANT SELECT ON "test_table" TO user1, user2' in sql_calls
-    assert 'GRANT INSERT ON "test_table" TO admin_user' in sql_calls
-
-
-def test_revoke_grants_config(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
-    relation = exp.to_table("test_table", dialect="postgres")
-    grants_config = {"SELECT": ["old_user"], "INSERT": ["removed_role"]}
-
-    adapter._revoke_grants_config(relation, grants_config, DataObjectType.TABLE)
-
-    sql_calls = to_sql_calls(adapter)
-
-    assert len(sql_calls) == 2
-    assert 'REVOKE SELECT ON "test_table" FROM old_user' in sql_calls
-    assert 'REVOKE INSERT ON "test_table" FROM removed_role' in sql_calls
-
-
 def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
     relation = exp.to_table("test_schema.test_table", dialect="postgres")
@@ -216,7 +187,7 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     current_grants = [("SELECT", "old_user"), ("UPDATE", "admin_user")]
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
 
-    adapter._sync_grants_config(relation, new_grants_config)
+    adapter.sync_grants_config(relation, new_grants_config)
 
     fetchall_mock.assert_called_once()
     executed_query = fetchall_mock.call_args[0][0]
@@ -252,7 +223,7 @@ def test_sync_grants_config_with_overlaps(
     ]
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
 
-    adapter._sync_grants_config(relation, new_grants_config)
+    adapter.sync_grants_config(relation, new_grants_config)
 
     fetchall_mock.assert_called_once()
     executed_query = fetchall_mock.call_args[0][0]
@@ -298,7 +269,7 @@ def test_sync_grants_config_with_default_schema(
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=currrent_grants)
     get_schema_mock = mocker.patch.object(adapter, "get_current_schema", return_value="public")
 
-    adapter._sync_grants_config(relation, new_grants_config)
+    adapter.sync_grants_config(relation, new_grants_config)
 
     get_schema_mock.assert_called_once()
 
