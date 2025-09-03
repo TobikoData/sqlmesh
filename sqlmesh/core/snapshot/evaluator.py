@@ -2102,21 +2102,18 @@ class SeedStrategy(MaterializableStrategy):
             return
 
         super().create(table_name, model, is_table_deployable, render_kwargs, **kwargs)
-        if is_table_deployable:
-            # For seeds we insert data at the time of table creation.
-            try:
-                for index, df in enumerate(model.render_seed()):
-                    if index == 0:
-                        self._replace_query_for_model(
-                            model, table_name, df, render_kwargs, **kwargs
-                        )
-                    else:
-                        self.adapter.insert_append(
-                            table_name, df, target_columns_to_types=model.columns_to_types
-                        )
-            except Exception:
-                self.adapter.drop_table(table_name)
-                raise
+        # For seeds we insert data at the time of table creation.
+        try:
+            for index, df in enumerate(model.render_seed()):
+                if index == 0:
+                    self._replace_query_for_model(model, table_name, df, render_kwargs, **kwargs)
+                else:
+                    self.adapter.insert_append(
+                        table_name, df, target_columns_to_types=model.columns_to_types
+                    )
+        except Exception:
+            self.adapter.drop_table(table_name)
+            raise
 
     def insert(
         self,
