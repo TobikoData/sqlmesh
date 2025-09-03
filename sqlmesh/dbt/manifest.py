@@ -45,7 +45,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
-from sqlmesh.dbt.common import DBT_ALL_MODEL_ATTRS, Dependencies
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import HookConfig, MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -584,7 +584,7 @@ class ManifestHelper:
 
             if isinstance(node, jinja2.nodes.Getattr):
                 if call_name[0] == "model":
-                    dependencies.model_attrs.add(call_name[1])
+                    dependencies.model_attrs.attrs.add(call_name[1])
             elif call_name[0] == "source":
                 args = [jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
@@ -634,7 +634,7 @@ class ManifestHelper:
         # analysis. We conservatively deal with this by including all of its supported attributes
         # if a standalone reference is found.
         if all_model_attrs:
-            dependencies.model_attrs = {DBT_ALL_MODEL_ATTRS}
+            dependencies.model_attrs.all_attrs = True
 
         return dependencies
 

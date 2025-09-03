@@ -19,7 +19,6 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
 )
 from sqlmesh.dbt.common import (
-    DBT_ALL_MODEL_ATTRS,
     DbtConfig,
     Dependencies,
     GeneralConfig,
@@ -379,11 +378,11 @@ class BaseModelConfig(GeneralConfig):
     ) -> t.Dict[str, t.Any]:
         if context._manifest and self.node_name in context._manifest._manifest.nodes:
             attributes = context._manifest._manifest.nodes[self.node_name].to_dict()
-            if DBT_ALL_MODEL_ATTRS in dependencies.model_attrs:
+            if dependencies.model_attrs.all_attrs:
                 model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
             else:
                 model_node = AttributeDict(
-                    filter(lambda kv: kv[0] in dependencies.model_attrs, attributes.items())
+                    filter(lambda kv: kv[0] in dependencies.model_attrs.attrs, attributes.items())
                 )
 
             raw_code_key = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore

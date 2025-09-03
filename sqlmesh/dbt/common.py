@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import typing as t
+from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml.constructor import DuplicateKeyError
@@ -19,7 +20,6 @@ from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 T = t.TypeVar("T", bound="GeneralConfig")
 
 PROJECT_FILENAME = DBT_PROJECT_FILENAME
-DBT_ALL_MODEL_ATTRS = "__DBT_ALL_MODEL_ATTRS__"
 
 JINJA_ONLY = {
     "adapter",
@@ -173,6 +173,12 @@ class GeneralConfig(DbtConfig):
         return set()
 
 
+@dataclass
+class ModelAttrs:
+    attrs: t.Set[str]
+    all_attrs: bool = False
+
+
 class Dependencies(PydanticModel):
     """
     DBT dependencies for a model, macro, etc.
@@ -187,7 +193,7 @@ class Dependencies(PydanticModel):
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
     variables: t.Set[str] = set()
-    model_attrs: t.Set[str] = set()
+    model_attrs: ModelAttrs = ModelAttrs(attrs=set())
 
     has_dynamic_var_names: bool = False
 
@@ -197,7 +203,10 @@ class Dependencies(PydanticModel):
             sources=self.sources | other.sources,
             refs=self.refs | other.refs,
             variables=self.variables | other.variables,
-            model_attrs=self.model_attrs | other.model_attrs,
+            model_attrs=ModelAttrs(
+                attrs=self.model_attrs.attrs | other.model_attrs.attrs,
+                all_attrs=self.model_attrs.all_attrs or other.model_attrs.all_attrs,
+            ),
             has_dynamic_var_names=self.has_dynamic_var_names or other.has_dynamic_var_names,
         )
 
