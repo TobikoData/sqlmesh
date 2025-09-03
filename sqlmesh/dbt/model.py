@@ -529,7 +529,9 @@ class ModelConfig(BaseModelConfig):
                     partitioned_by.append(self._big_query_partition_by_expr(context))
                 else:
                     logger.warning(
-                        "Ignoring partition_by config for model '%s' targeting %s; it is only supported for BigQuery.", self.name, context.target.dialect
+                        "Ignoring partition_by config for model '%s' targeting %s. The format of the config field is only supported for BigQuery.",
+                        self.name,
+                        context.target.dialect,
                     )
 
             if partitioned_by:
@@ -538,7 +540,8 @@ class ModelConfig(BaseModelConfig):
         if self.cluster_by:
             if isinstance(kind, ViewKind):
                 logger.warning(
-                    f"Ignoring cluster_by config for model '{self.name}'; cluster_by is not supported for views."
+                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for views.",
+                    self.name,
                 )
             else:
                 clustered_by = []
