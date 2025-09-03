@@ -806,6 +806,58 @@ def test_seed_partial_column_inference(tmp_path):
     assert list(seed_df.columns) == list(sqlmesh_seed.columns_to_types.keys())
 
 
+def test_seed_delimiter(tmp_path):
+    seed_csv = tmp_path / "seed_with_delimiter.csv"
+
+    with open(seed_csv, "w", encoding="utf-8") as fd:
+        fd.writelines("\n".join(["id|name|city", "0|Ayrton|SP", "1|Max|MC", "2|Niki|VIE"]))
+
+    seed = SeedConfig(
+        name="test_model_pipe",
+        package="package",
+        path=Path(seed_csv),
+        delimiter="|",
+    )
+
+    context = DbtContext()
+    context.project_name = "TestProject"
+    context.target = DuckDbConfig(name="target", schema="test")
+    sqlmesh_seed = seed.to_sqlmesh(context)
+
+    # Verify columns are correct with the custom pipe (|) delimiter
+    expected_columns = {"id", "name", "city"}
+    assert set(sqlmesh_seed.columns_to_types.keys()) == expected_columns
+
+    seed_df = next(sqlmesh_seed.render_seed())
+    assert list(seed_df.columns) == list(sqlmesh_seed.columns_to_types.keys())
+    assert len(seed_df) == 3
+
+    assert seed_df.iloc[0]["name"] == "Ayrton"
+    assert seed_df.iloc[0]["city"] == "SP"
+    assert seed_df.iloc[1]["name"] == "Max"
+    assert seed_df.iloc[1]["city"] == "MC"
+
+    # test with semicolon delimiter
+    seed_csv_semicolon = tmp_path / "seed_with_semicolon.csv"
+    with open(seed_csv_semicolon, "w", encoding="utf-8") as fd:
+        fd.writelines("\n".join(["id;value;status", "1;100;active", "2;200;inactive"]))
+
+    seed_semicolon = SeedConfig(
+        name="test_model_semicolon",
+        package="package",
+        path=Path(seed_csv_semicolon),
+        delimiter=";",
+    )
+
+    sqlmesh_seed_semicolon = seed_semicolon.to_sqlmesh(context)
+    expected_columns_semicolon = {"id", "value", "status"}
+    assert set(sqlmesh_seed_semicolon.columns_to_types.keys()) == expected_columns_semicolon
+
+    seed_df_semicolon = next(sqlmesh_seed_semicolon.render_seed())
+    assert seed_df_semicolon.iloc[0]["value"] == 100
+    assert seed_df_semicolon.iloc[0]["status"] == "active"
+
+
 def test_seed_column_order(tmp_path):
     seed_csv = tmp_path / "seed.csv"
 
@@ -908,6 +960,45 @@ def test_hooks(sushi_test_dbt_context: Context, model_fqn: str):
             )
         )
     assert "post-hook" in mock_logger.call_args[0][0]
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_seed_delimiter_integration(sushi_test_dbt_context: Context):
+    seed_fqn = '"memory"."sushi"."waiter_revenue_semicolon"'
+    assert seed_fqn in sushi_test_dbt_context.models
+
+    seed_model = sushi_test_dbt_context.models[seed_fqn]
+    assert seed_model.columns_to_types is not None
+
+    # this should be loaded with semicolon delimiter otherwise it'd resylt in an one column table
+    assert set(seed_model.columns_to_types.keys()) == {"waiter_id", "revenue", "quarter"}
+
+    # columns_to_types values are correct types as well
+    assert seed_model.columns_to_types == {
+        "waiter_id": exp.DataType.build("int"),
+        "revenue": exp.DataType.build("double"),
+        "quarter": exp.DataType.build("text"),
+    }
+
+    df = sushi_test_dbt_context.fetchdf(f"SELECT * FROM {seed_fqn}")
+
+    assert len(df) == 6
+    waiter_ids = set(df["waiter_id"].tolist())
+    quarters = set(df["quarter"].tolist())
+    assert waiter_ids == {1, 2, 3}
+    assert quarters == {"Q1", "Q2"}
+
+    q1_w1_rows = df[(df["waiter_id"] == 1) & (df["quarter"] == "Q1")]
+    assert len(q1_w1_rows) == 1
+    assert float(q1_w1_rows.iloc[0]["revenue"]) == 100.50
+
+    q2_w2_rows = df[(df["waiter_id"] == 2) & (df["quarter"] == "Q2")]
+    assert len(q2_w2_rows) == 1
+    assert float(q2_w2_rows.iloc[0]["revenue"]) == 225.50
+
+    q2_w3_rows = df[(df["waiter_id"] == 3) & (df["quarter"] == "Q2")]
+    assert len(q2_w3_rows) == 1
+    assert float(q2_w3_rows.iloc[0]["revenue"]) == 175.75
 
 
 @pytest.mark.xdist_group("dbt_manifest")

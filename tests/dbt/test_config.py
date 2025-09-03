@@ -444,7 +444,7 @@ def test_source_config(sushi_test_project: Project):
 @pytest.mark.slow
 def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     seed_configs = sushi_test_project.packages["sushi"].seeds
-    assert set(seed_configs) == {"waiter_names"}
+    assert set(seed_configs) == {"waiter_names", "waiter_revenue_semicolon"}
     raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
@@ -464,6 +464,25 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
         raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
         == '"MEMORY"."SUSHI"."WAITER_NAMES"'
     )
+
+    waiter_revenue_semicolon_seed = seed_configs["waiter_revenue_semicolon"]
+
+    expected_config_semicolon = {
+        "path": Path(sushi_test_project.context.project_root, "seeds/waiter_revenue_semicolon.csv"),
+        "schema_": "sushi",
+        "delimiter": ";",
+    }
+    actual_config_semicolon = {
+        k: getattr(waiter_revenue_semicolon_seed, k) for k, v in expected_config_semicolon.items()
+    }
+    assert actual_config_semicolon == expected_config_semicolon
+
+    assert waiter_revenue_semicolon_seed.canonical_name(context) == "sushi.waiter_revenue_semicolon"
+    assert (
+        waiter_revenue_semicolon_seed.to_sqlmesh(context).name == "sushi.waiter_revenue_semicolon"
+    )
+    assert waiter_revenue_semicolon_seed.delimiter == ";"
+    assert set(waiter_revenue_semicolon_seed.columns.keys()) == {"waiter_id", "revenue", "quarter"}
 
 
 def test_quoting():
