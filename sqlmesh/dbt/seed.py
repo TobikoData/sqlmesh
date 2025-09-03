@@ -79,7 +79,11 @@ class SeedConfig(BaseModelConfig):
         kwargs["columns"] = new_columns
 
         # dbt treats single whitespace as a null value
-        csv_settings = CsvSettings(na_values=[" "], keep_default_na=True)
+        csv_settings = CsvSettings(
+            delimiter=self.delimiter,
+            na_values=[" "],
+            keep_default_na=True,
+        )
 
         return create_seed_model(
             self.canonical_name(context),
