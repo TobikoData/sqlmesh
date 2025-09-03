@@ -61,7 +61,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
-from sqlmesh.core.model.kind import ModelKindName, _model_kind_validator
+from sqlmesh.core.model.kind import _ModelKind, ModelKindName, _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node, DbtNodeInfo
 from sqlmesh.core.signal import signal
@@ -11831,61 +11831,41 @@ def my_macro(evaluator):
     assert model.render_query_or_raise().sql() == 'SELECT 3 AS "c"'
 
 
-def test_grants_validation_symbolic_model_error():
-    with pytest.raises(ValidationError, match=r".*grants cannot be set for EXTERNAL.*"):
-        create_sql_model(
-            "db.table",
-            parse_one("SELECT 1 AS id"),
-            kind="EXTERNAL",
-            grants={"select": ["user1", "user2"], "insert": ["admin_user"]},
-        )
-
-
-def test_grants_validation_embedded_model_error():
-    with pytest.raises(ValidationError, match=r".*grants cannot be set for EMBEDDED.*"):
-        create_sql_model(
-            "db.table",
-            parse_one("SELECT 1 AS id"),
-            kind="EMBEDDED",
-            grants={"select": ["user1"], "insert": ["admin_user"]},
-        )
-
-
-def test_grants_validation_valid_seed_model():
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "FULL",
+        "VIEW",
+        SeedKind(path="test.csv"),
+        IncrementalByTimeRangeKind(time_column="ds"),
+        IncrementalByUniqueKeyKind(unique_key="id"),
+    ],
+)
+def test_grants_valid_model_kinds(kind: t.Union[str, _ModelKind]):
     model = create_sql_model(
         "db.table",
         parse_one("SELECT 1 AS id"),
-        kind=SeedKind(path="test.csv"),
-        grants={"select": ["user1"], "insert": ["admin_user"]},
-    )
-    assert model.grants == {"select": ["user1"], "insert": ["admin_user"]}
-
-
-def test_grants_validation_valid_materialized_model():
-    model = create_sql_model(
-        "db.table",
-        parse_one("SELECT 1 AS id"),
-        kind="FULL",
+        kind=kind,
         grants={"select": ["user1", "user2"], "insert": ["admin_user"]},
     )
     assert model.grants == {"select": ["user1", "user2"], "insert": ["admin_user"]}
 
 
-def test_grants_validation_valid_view_model():
-    model = create_sql_model(
-        "db.table", parse_one("SELECT 1 AS id"), kind="VIEW", grants={"select": ["user1", "user2"]}
-    )
-    assert model.grants == {"select": ["user1", "user2"]}
-
-
-def test_grants_validation_valid_incremental_model():
-    model = create_sql_model(
-        "db.table",
-        parse_one("SELECT 1 AS id, CURRENT_TIMESTAMP AS ts"),
-        kind=IncrementalByTimeRangeKind(time_column="ts"),
-        grants={"select": ["user1"], "update": ["admin_user"]},
-    )
-    assert model.grants == {"select": ["user1"], "update": ["admin_user"]}
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "EXTERNAL",
+        "EMBEDDED",
+    ],
+)
+def test_grants_invalid_model_kind_errors(kind: str):
+    with pytest.raises(ValidationError, match=rf".*grants cannot be set for {kind}.*"):
+        create_sql_model(
+            "db.table",
+            parse_one("SELECT 1 AS id"),
+            kind=kind,
+            grants={"select": ["user1"], "insert": ["admin_user"]},
+        )
 
 
 def test_grants_validation_no_grants():
@@ -11900,21 +11880,186 @@ def test_grants_validation_empty_grantees():
     assert model.grants == {"select": []}
 
 
-def test_grants_table_type_view():
-    model = create_sql_model("test_view", parse_one("SELECT 1 as id"), kind="VIEW")
-    assert model.grants_table_type == DataObjectType.VIEW
+def test_grants_single_value_conversions():
+    expressions = d.parse(f"""
+        MODEL (
+            name test.nested_arrays,
+            kind FULL,
+            grants (
+                'select' = "user1", update = user2
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(expressions)
+    assert model.grants == {"select": ["user1"], "update": ["user2"]}
 
     model = create_sql_model(
-        "test_mv", parse_one("SELECT 1 as id"), kind=ViewKind(materialized=True)
+        "db.table",
+        parse_one("SELECT 1 AS id"),
+        kind="FULL",
+        grants={"select": "user1", "insert": 123},
     )
-    assert model.grants_table_type == DataObjectType.MATERIALIZED_VIEW
+    assert model.grants == {"select": ["user1"], "insert": ["123"]}
 
 
-def test_grants_table_type_table():
-    model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind="FULL")
-    assert model.grants_table_type == DataObjectType.TABLE
+@pytest.mark.parametrize(
+    "grantees",
+    [
+        "('user1', ('user2', 'user3'), 'user4')",
+        "('user1', ['user2', 'user3'], user4)",
+        "['user1', ['user2', user3], 'user4']",
+        "[user1, ('user2', \"user3\"), 'user4']",
+    ],
+)
+def test_grants_array_flattening(grantees: str):
+    expressions = d.parse(f"""
+        MODEL (
+            name test.nested_arrays,
+            kind FULL,
+            grants (
+                'select' = {grantees}
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(expressions)
+    assert model.grants == {"select": ["user1", "user2", "user3", "user4"]}
 
 
-def test_grants_table_type_managed():
-    model = create_sql_model("test_managed", parse_one("SELECT 1 as id"), kind="MANAGED")
-    assert model.grants_table_type == DataObjectType.MANAGED_TABLE
+def test_grants_macro_var_resolved():
+    expressions = d.parse("""
+        MODEL (
+            name test.macro_grants,
+            kind FULL,
+            grants (
+                'select' = @VAR('readers'),
+                'insert' = @VAR('writers')
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(
+        expressions, variables={"readers": ["user1", "user2"], "writers": "admin"}
+    )
+    assert model.grants == {
+        "select": ["user1", "user2"],
+        "insert": ["admin"],
+    }
+
+
+def test_grants_macro_var_in_array_flattening():
+    expressions = d.parse("""
+        MODEL (
+            name test.macro_in_array,
+            kind FULL,
+            grants (
+                'select' = ['user1', @VAR('admins'), 'user3']
+            )
+        );
+        SELECT 1 as id
+    """)
+
+    model = load_sql_based_model(expressions, variables={"admins": ["admin1", "admin2"]})
+    assert model.grants == {"select": ["user1", "admin1", "admin2", "user3"]}
+
+    model2 = load_sql_based_model(expressions, variables={"admins": "super_admin"})
+    assert model2.grants == {"select": ["user1", "super_admin", "user3"]}
+
+
+def test_grants_dynamic_permission_names():
+    expressions = d.parse("""
+        MODEL (
+            name test.dynamic_keys,
+            kind FULL,
+            grants (
+                @VAR('read_perm') = ['user1', 'user2'],
+                @VAR('write_perm') = ['admin']
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(
+        expressions, variables={"read_perm": "select", "write_perm": "insert"}
+    )
+    assert model.grants == {"select": ["user1", "user2"], "insert": ["admin"]}
+
+
+def test_grants_unresolved_macro_errors():
+    expressions1 = d.parse("""
+        MODEL (name test.bad1, kind FULL, grants ('select' = @VAR('undefined')));
+        SELECT 1 as id
+    """)
+    with pytest.raises(ConfigError, match=r"Invalid grants configuration for 'select': NULL value"):
+        load_sql_based_model(expressions1)
+
+    expressions2 = d.parse("""
+        MODEL (name test.bad2, kind FULL, grants (@VAR('undefined') = ['user']));
+        SELECT 1 as id
+    """)
+    with pytest.raises(ConfigError, match=r"Invalid grants configuration.*NULL value"):
+        load_sql_based_model(expressions2)
+
+    expressions3 = d.parse("""
+        MODEL (name test.bad3, kind FULL, grants ('select' = ['user', @VAR('undefined')]));
+        SELECT 1 as id
+    """)
+    with pytest.raises(ConfigError, match=r"Invalid grants configuration for 'select': NULL value"):
+        load_sql_based_model(expressions3)
+
+
+def test_grants_mixed_types_conversion():
+    expressions = d.parse("""
+        MODEL (
+            name test.mixed_types,
+            kind FULL,
+            grants (
+                'select' = ['user1', 123, admin_role, 'user2']
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(expressions)
+    assert model.grants == {"select": ["user1", "123", "admin_role", "user2"]}
+
+
+def test_grants_empty_values():
+    model1 = create_sql_model(
+        "db.table", parse_one("SELECT 1 AS id"), kind="FULL", grants={"select": []}
+    )
+    assert model1.grants == {"select": []}
+
+    model2 = create_sql_model("db.table", parse_one("SELECT 1 AS id"), kind="FULL")
+    assert model2.grants is None
+
+
+def test_grants_backward_compatibility():
+    model = create_sql_model(
+        "db.table",
+        parse_one("SELECT 1 AS id"),
+        kind="FULL",
+        grants={
+            "select": ["user1", "user2"],
+            "insert": ["admin"],
+            "roles/bigquery.dataViewer": ["user:data_eng@company.com"],
+        },
+    )
+    assert model.grants == {
+        "select": ["user1", "user2"],
+        "insert": ["admin"],
+        "roles/bigquery.dataViewer": ["user:data_eng@company.com"],
+    }
+
+
+@pytest.mark.parametrize(
+    "kind, expected",
+    [
+        ("VIEW", DataObjectType.VIEW),
+        ("FULL", DataObjectType.TABLE),
+        ("MANAGED", DataObjectType.MANAGED_TABLE),
+        (ViewKind(materialized=True), DataObjectType.MATERIALIZED_VIEW),
+    ],
+)
+def test_grants_table_type(kind: t.Union[str, _ModelKind], expected: DataObjectType):
+    model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind=kind)
+    assert model.grants_table_type == expected

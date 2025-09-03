@@ -527,30 +527,62 @@ class ModelMeta(_Node):
     def grants(self) -> t.Optional[GrantsConfig]:
         """A dictionary of grants mapping permission names to lists of grantees."""
 
-        if not self.grants_:
+        if self.grants_ is None:
             return None
 
-        def parse_exp_to_str(e: exp.Expression) -> str:
-            if isinstance(e, exp.Literal) and e.is_string:
-                return e.this.strip()
-            if isinstance(e, exp.Identifier):
-                return e.name
-            return e.sql(dialect=self.dialect).strip()
+        if not self.grants_.expressions:
+            return {}
+
+        def expr_to_string(expr: exp.Expression, context: str) -> str:
+            if isinstance(expr, (d.MacroFunc, d.MacroVar)):
+                raise ConfigError(
+                    f"Unresolved macro in {context}: {expr.sql(dialect=self.dialect)}"
+                )
+
+            if isinstance(expr, exp.Null):
+                raise ConfigError(f"NULL value in {context}")
+
+            if isinstance(expr, exp.Literal):
+                return str(expr.this).strip()
+            if isinstance(expr, exp.Identifier):
+                return expr.name
+            if isinstance(expr, exp.Column):
+                return expr.name
+            return expr.sql(dialect=self.dialect).strip()
+
+        def normalize_to_string_list(value_expr: exp.Expression) -> t.List[str]:
+            result = []
+
+            def process_expression(expr: exp.Expression) -> None:
+                if isinstance(expr, exp.Array):
+                    for elem in expr.expressions:
+                        process_expression(elem)
+
+                elif isinstance(expr, (exp.Tuple, exp.Paren)):
+                    expressions = (
+                        [expr.unnest()] if isinstance(expr, exp.Paren) else expr.expressions
+                    )
+                    for elem in expressions:
+                        process_expression(elem)
+                else:
+                    result.append(expr_to_string(expr, "grant value"))
+
+            process_expression(value_expr)
+            return result
 
         grants_dict = {}
         for eq_expr in self.grants_.expressions:
-            permission_name = parse_exp_to_str(eq_expr.this)  # left hand side
-            grantees_expr = eq_expr.expression  # right hand side
-            if isinstance(grantees_expr, exp.Array):
-                grantee_list = []
-                for grantee_expr in grantees_expr.expressions:
-                    grantee = parse_exp_to_str(grantee_expr)
-                    if grantee:  # skip empty strings
-                        grantee_list.append(grantee)
+            try:
+                permission_name = expr_to_string(eq_expr.left, "permission name")
+                grantee_list = normalize_to_string_list(eq_expr.expression)
+                grants_dict[permission_name] = grantee_list
+            except ConfigError as e:
+                permission_name = (
+                    eq_expr.left.name if hasattr(eq_expr.left, "name") else str(eq_expr.left)
+                )
+                raise ConfigError(f"Invalid grants configuration for '{permission_name}': {e}")
 
-                grants_dict[permission_name.strip()] = grantee_list
-
-        return grants_dict
+        return grants_dict if grants_dict else None
 
     @property
     def all_references(self) -> t.List[Reference]:
