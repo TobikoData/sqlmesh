@@ -1,4 +1,5 @@
 import typing as t
+from contextlib import contextmanager
 import pytest
 from pytest import FixtureRequest
 from pathlib import Path
@@ -12,6 +13,7 @@ from sqlglot import exp
 from sqlmesh.core.context import Context
 from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
 from sqlmesh.core.snapshot.definition import SnapshotId
+from sqlmesh.utils import random_id
 
 from tests.core.engine_adapter.integration import (
     TestContext,
@@ -20,6 +22,87 @@ from tests.core.engine_adapter.integration import (
     IntegrationTestEngine,
     TEST_SCHEMA,
 )
+
+
+def _cleanup_user(engine_adapter: PostgresEngineAdapter, user_name: str) -> None:
+    """Helper function to clean up a PostgreSQL user and all their dependencies."""
+    try:
+        engine_adapter.execute(f"""
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE usename = '{user_name}' AND pid <> pg_backend_pid()
+        """)
+        engine_adapter.execute(f'DROP OWNED BY "{user_name}"')
+        engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
+    except Exception:
+        pass
+
+
+@contextmanager
+def create_users(
+    engine_adapter: PostgresEngineAdapter, *role_names: str
+) -> t.Iterator[t.Dict[str, t.Dict[str, str]]]:
+    """Create a set of Postgres users and yield their credentials."""
+    created_users = []
+    roles = {}
+
+    try:
+        for role_name in role_names:
+            user_name = f"test_{role_name}"
+            _cleanup_user(engine_adapter, user_name)
+
+        for role_name in role_names:
+            user_name = f"test_{role_name}"
+            password = random_id()
+            engine_adapter.execute(f"CREATE USER \"{user_name}\" WITH PASSWORD '{password}'")
+            engine_adapter.execute(f'GRANT USAGE ON SCHEMA public TO "{user_name}"')
+            created_users.append(user_name)
+            roles[role_name] = {"username": user_name, "password": password}
+
+        yield roles
+
+    finally:
+        for user_name in created_users:
+            _cleanup_user(engine_adapter, user_name)
+
+
+def create_engine_adapter_for_role(
+    role_credentials: t.Dict[str, str], ctx: TestContext, config: Config
+) -> PostgresEngineAdapter:
+    """Create a PostgreSQL adapter for a specific role to test authentication and permissions."""
+    from sqlmesh.core.config import PostgresConnectionConfig
+
+    gateway = ctx.gateway
+    assert gateway in config.gateways
+    connection_config = config.gateways[gateway].connection
+    assert isinstance(connection_config, PostgresConnectionConfig)
+
+    role_connection_config = PostgresConnectionConfig(
+        host=connection_config.host,
+        port=connection_config.port,
+        database=connection_config.database,
+        user=role_credentials["username"],
+        password=role_credentials["password"],
+        keepalives_idle=connection_config.keepalives_idle,
+        connect_timeout=connection_config.connect_timeout,
+        role=connection_config.role,
+        sslmode=connection_config.sslmode,
+        application_name=connection_config.application_name,
+    )
+
+    return t.cast(PostgresEngineAdapter, role_connection_config.create_engine_adapter())
+
+
+@contextmanager
+def engine_adapter_for_role(
+    role_credentials: t.Dict[str, str], ctx: TestContext, config: Config
+) -> t.Iterator[PostgresEngineAdapter]:
+    """Context manager that yields a PostgresEngineAdapter and ensures it is closed."""
+    adapter = create_engine_adapter_for_role(role_credentials, ctx, config)
+    try:
+        yield adapter
+    finally:
+        adapter.close()
 
 
 @pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["postgres"])))
@@ -286,3 +369,249 @@ def test_janitor_drop_cascade(ctx: TestContext, tmp_path: Path) -> None:
         assert after_objects.views == [
             exp.to_table(model_b_prod_snapshot.table_name()).text("this")
         ]
+
+
+# Grants Integration Tests
+
+
+def test_grants_apply_on_table(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "reader", "writer", "admin") as roles:
+        table = ctx.table("grants_test_table")
+        engine_adapter.create_table(
+            table, {"id": exp.DataType.build("INT"), "name": exp.DataType.build("VARCHAR(50)")}
+        )
+
+        engine_adapter.execute(f"INSERT INTO {table} VALUES (1, 'test')")
+
+        grants_config = {
+            "SELECT": [roles["reader"]["username"], roles["admin"]["username"]],
+            "INSERT": [roles["writer"]["username"], roles["admin"]["username"]],
+            "DELETE": [roles["admin"]["username"]],
+        }
+
+        engine_adapter._apply_grants_config(table, grants_config)
+
+        schema_name = table.db
+        for role_data in roles.values():
+            engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{schema_name}" TO "{role_data["username"]}"'
+            )
+
+        current_grants = engine_adapter._get_current_grants_config(table)
+
+        assert "SELECT" in current_grants
+        assert roles["reader"]["username"] in current_grants["SELECT"]
+        assert roles["admin"]["username"] in current_grants["SELECT"]
+
+        assert "INSERT" in current_grants
+        assert roles["writer"]["username"] in current_grants["INSERT"]
+        assert roles["admin"]["username"] in current_grants["INSERT"]
+
+        assert "DELETE" in current_grants
+        assert roles["admin"]["username"] in current_grants["DELETE"]
+
+        # Reader should be able to SELECT but not INSERT
+        with engine_adapter_for_role(roles["reader"], ctx, config) as reader_adapter:
+            result = reader_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+            assert result == (1,), "Reader should be able to SELECT from table"
+
+        with engine_adapter_for_role(roles["reader"], ctx, config) as reader_adapter:
+            with pytest.raises(Exception):
+                reader_adapter.execute(f"INSERT INTO {table} VALUES (2, 'test2')")
+
+        # Writer should be able to INSERT but not SELECT
+        with engine_adapter_for_role(roles["writer"], ctx, config) as writer_adapter:
+            writer_adapter.execute(f"INSERT INTO {table} VALUES (3, 'test3')")
+
+        with engine_adapter_for_role(roles["writer"], ctx, config) as writer_adapter:
+            with pytest.raises(Exception):
+                writer_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+
+        # Admin should be able to SELECT, INSERT, and DELETE
+        with engine_adapter_for_role(roles["admin"], ctx, config) as admin_adapter:
+            result = admin_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+            assert result == (2,), "Admin should be able to SELECT from table"
+
+            admin_adapter.execute(f"INSERT INTO {table} VALUES (4, 'test4')")
+            admin_adapter.execute(f"DELETE FROM {table} WHERE id = 4")
+
+
+def test_grants_apply_on_view(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "reader", "admin") as roles:
+        base_table = ctx.table("grants_base_table")
+        engine_adapter.create_table(
+            base_table,
+            {"id": exp.DataType.build("INT"), "value": exp.DataType.build("VARCHAR(50)")},
+        )
+
+        view_table = ctx.table("grants_test_view")
+        engine_adapter.create_view(view_table, exp.select().from_(base_table))
+
+        # Grant schema access for authentication tests
+        test_schema = view_table.db
+        for role_credentials in roles.values():
+            engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials["username"]}"'
+            )
+
+        grants_config = {"SELECT": [roles["reader"]["username"], roles["admin"]["username"]]}
+
+        engine_adapter._apply_grants_config(view_table, grants_config)
+
+        current_grants = engine_adapter._get_current_grants_config(view_table)
+        assert "SELECT" in current_grants
+        assert roles["reader"]["username"] in current_grants["SELECT"]
+        assert roles["admin"]["username"] in current_grants["SELECT"]
+
+        # Test actual authentication - reader should be able to SELECT from view
+        with engine_adapter_for_role(roles["reader"], ctx, config) as reader_adapter:
+            reader_adapter.fetchone(f"SELECT COUNT(*) FROM {view_table}")
+
+
+def test_grants_revoke(engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config):
+    with create_users(engine_adapter, "reader", "writer") as roles:
+        table = ctx.table("grants_revoke_test")
+        engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+        engine_adapter.execute(f"INSERT INTO {table} VALUES (1)")
+
+        # Grant schema access for authentication tests
+        test_schema = table.db
+        for role_credentials in roles.values():
+            engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials["username"]}"'
+            )
+
+        initial_grants = {
+            "SELECT": [roles["reader"]["username"], roles["writer"]["username"]],
+            "INSERT": [roles["writer"]["username"]],
+        }
+        engine_adapter._apply_grants_config(table, initial_grants)
+
+        initial_current_grants = engine_adapter._get_current_grants_config(table)
+        assert roles["reader"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["writer"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["writer"]["username"] in initial_current_grants.get("INSERT", [])
+
+        # Verify reader can SELECT before revoke
+        with engine_adapter_for_role(roles["reader"], ctx, config) as reader_adapter:
+            reader_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+
+        revoke_grants = {
+            "SELECT": [roles["reader"]["username"]],
+            "INSERT": [roles["writer"]["username"]],
+        }
+        engine_adapter._revoke_grants_config(table, revoke_grants)
+
+        current_grants_after = engine_adapter._get_current_grants_config(table)
+
+        assert roles["reader"]["username"] not in current_grants_after.get("SELECT", [])
+        assert roles["writer"]["username"] in current_grants_after.get("SELECT", [])
+        assert roles["writer"]["username"] not in current_grants_after.get("INSERT", [])
+
+        # Verify reader can NO LONGER SELECT after revoke
+        with engine_adapter_for_role(roles["reader"], ctx, config) as reader_adapter:
+            with pytest.raises(Exception):
+                reader_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+
+        # Verify writer can still SELECT but not INSERT after revoke
+        with engine_adapter_for_role(roles["writer"], ctx, config) as writer_adapter:
+            result = writer_adapter.fetchone(f"SELECT COUNT(*) FROM {table}")
+            assert result is not None
+            assert result[0] == 1
+        with engine_adapter_for_role(roles["writer"], ctx, config) as writer_adapter:
+            with pytest.raises(Exception):
+                writer_adapter.execute(f"INSERT INTO {table} VALUES (2)")
+
+
+def test_grants_sync(engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config):
+    with create_users(engine_adapter, "user1", "user2", "user3") as roles:
+        table = ctx.table("grants_sync_test")
+        engine_adapter.create_table(
+            table, {"id": exp.DataType.build("INT"), "data": exp.DataType.build("TEXT")}
+        )
+
+        initial_grants = {
+            "SELECT": [roles["user1"]["username"], roles["user2"]["username"]],
+            "INSERT": [roles["user1"]["username"]],
+        }
+        engine_adapter._apply_grants_config(table, initial_grants)
+
+        initial_current_grants = engine_adapter._get_current_grants_config(table)
+        assert roles["user1"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user2"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user1"]["username"] in initial_current_grants.get("INSERT", [])
+
+        target_grants = {
+            "SELECT": [roles["user2"]["username"], roles["user3"]["username"]],
+            "UPDATE": [roles["user3"]["username"]],
+        }
+        engine_adapter._sync_grants_config(table, target_grants)
+
+        final_grants = engine_adapter._get_current_grants_config(table)
+
+        assert set(final_grants.get("SELECT", [])) == {
+            roles["user2"]["username"],
+            roles["user3"]["username"],
+        }
+        assert set(final_grants.get("UPDATE", [])) == {roles["user3"]["username"]}
+        assert final_grants.get("INSERT", []) == []
+
+
+def test_grants_sync_empty_config(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "user") as roles:
+        table = ctx.table("grants_empty_test")
+        engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        initial_grants = {
+            "SELECT": [roles["user"]["username"]],
+            "INSERT": [roles["user"]["username"]],
+        }
+        engine_adapter._apply_grants_config(table, initial_grants)
+
+        initial_current_grants = engine_adapter._get_current_grants_config(table)
+        assert roles["user"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user"]["username"] in initial_current_grants.get("INSERT", [])
+
+        engine_adapter._sync_grants_config(table, {})
+
+        final_grants = engine_adapter._get_current_grants_config(table)
+        assert final_grants == {}
+
+
+def test_grants_case_insensitive_grantees(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "test_reader", "test_writer") as roles:
+        table = ctx.table("grants_quoted_test")
+        engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        test_schema = table.db
+        for role_credentials in roles.values():
+            engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials["username"]}"'
+            )
+
+        reader = roles["test_reader"]["username"]
+        writer = roles["test_writer"]["username"]
+
+        grants_config = {"SELECT": [reader, writer.upper()]}
+        engine_adapter._apply_grants_config(table, grants_config)
+
+        # Grantees are still in lowercase
+        current_grants = engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer in current_grants.get("SELECT", [])
+
+        # Revoke writer
+        grants_config = {"SELECT": [reader.upper()]}
+        engine_adapter._sync_grants_config(table, grants_config)
+
+        current_grants = engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer not in current_grants.get("SELECT", [])
