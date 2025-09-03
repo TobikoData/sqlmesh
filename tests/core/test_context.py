@@ -1534,8 +1534,8 @@ def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: 
     assert sushi_dbt_context._plan_preview_enabled
 
 
-def test_raw_code_missing_from_model_attributes(sushi_dbt_context: Context):
-    customers_model = sushi_dbt_context.models['"memory"."sushi"."customers"']
+def test_raw_code_missing_from_model_attributes(sushi_test_dbt_context: Context):
+    customers_model = sushi_test_dbt_context.models['"memory"."sushi"."simple_model_a"']
     assert "raw_code" not in customers_model.jinja_macros.global_objs["model"]  # type: ignore
 
 
