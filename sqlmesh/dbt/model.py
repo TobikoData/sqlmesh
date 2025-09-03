@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import typing as t
+import logging
 
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
@@ -33,6 +34,8 @@ from sqlmesh.utils.pydantic import field_validator
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
+
+logger = logging.getLogger(__name__)
 
 
 INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite", "microbatch"])
@@ -522,16 +525,21 @@ class ModelConfig(BaseModelConfig):
                 partitioned_by.append(self._big_query_partition_by_expr(context))
             optional_kwargs["partitioned_by"] = partitioned_by
 
-        if self.cluster_by and not isinstance(kind, ViewKind):
-            clustered_by = []
-            for c in self.cluster_by:
-                try:
-                    clustered_by.append(d.parse_one(c, dialect=model_dialect))
-                except SqlglotError as e:
-                    raise ConfigError(
-                        f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
-                    ) from e
-            optional_kwargs["clustered_by"] = clustered_by
+        if self.cluster_by:
+            if isinstance(kind, ViewKind):
+                logger.warning(
+                    f"Ignoring cluster_by config for model '{self.name}'; cluster_by is not supported for views."
+                )
+            else:
+                clustered_by = []
+                for c in self.cluster_by:
+                    try:
+                        clustered_by.append(d.parse_one(c, dialect=model_dialect))
+                    except SqlglotError as e:
+                        raise ConfigError(
+                            f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
+                        ) from e
+                optional_kwargs["clustered_by"] = clustered_by
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
