@@ -2955,6 +2955,45 @@ def test_virtual_environment_mode_dev_only_seed_model_change(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_change_downstream_of_seed(
+    init_and_plan_context: t.Callable,
+):
+    """This test covers a scenario when a model downstream of a seed model is modified and explicitly selected
+    causing an (unhydrated) seed model to sourced from the state. If SQLMesh attempts to create
+    a table for the unchanged seed model, it will fail because the seed model is not hydrated.
+    """
+    context, _ = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.load()
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+    # Make sure that a different version of the seed model is loaded
+    seed_model = context.get_model("sushi.waiter_names")
+    seed_model = seed_model.copy(update={"stamp": "force new version"})
+    context.upsert_model(seed_model)
+
+    # Make a change to the downstream model
+    model = context.get_model("sushi.waiter_as_customer_by_day")
+    model = model.copy(update={"stamp": "force new version"})
+    context.upsert_model(model)
+
+    # It is important to clear the cache so that the hydrated seed model is not sourced from the cache
+    context.clear_caches()
+
+    # Make sure to use the selector so that the seed model is sourced from the state
+    plan = context.plan_builder("dev", select_models=[model.name]).build()
+    assert len(plan.directly_modified) == 1
+    assert list(plan.directly_modified)[0].name == model.fqn
+    assert len(plan.missing_intervals) == 1
+    assert plan.missing_intervals[0].snapshot_id.name == model.fqn
+
+    # Make sure there's no error when applying the plan
+    context.apply(plan)
+    context.plan("prod", auto_apply=True, no_prompts=True)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)

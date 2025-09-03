@@ -474,10 +474,17 @@ class Scheduler:
                 execution_time=execution_time,
             )
 
+        # We only need to create physical tables if the snapshot is not representative or if it
+        # needs backfill
+        snapshots_to_create_candidates = [
+            s
+            for s in selected_snapshots
+            if not deployability_index.is_representative(s) or s in batched_intervals
+        ]
         snapshots_to_create = {
             s.snapshot_id
             for s in self.snapshot_evaluator.get_snapshots_to_create(
-                selected_snapshots, deployability_index
+                snapshots_to_create_candidates, deployability_index
             )
         }
 
