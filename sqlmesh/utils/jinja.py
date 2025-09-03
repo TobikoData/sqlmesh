@@ -330,13 +330,16 @@ class JinjaMacroRegistry(PydanticModel):
                 if macro.is_top_level and macro_name not in root_macros:
                     root_macros[macro_name] = macro_wrapper
 
+        top_level_packages = self.top_level_packages.copy()
+
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
+            top_level_packages.append(self.root_package_name)
 
         env = environment()
 
         builtin_globals = self._create_builtin_globals(kwargs)
-        for top_level_package_name in self.top_level_packages:
+        for top_level_package_name in top_level_packages:
             # Make sure that the top-level package doesn't fully override the same builtin package.
             package_macros[top_level_package_name] = AttributeDict(
                 {
