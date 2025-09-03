@@ -3791,25 +3791,7 @@ def test_sync_grants_config_unsupported_engine(make_mocked_engine_adapter: t.Cal
     grants_config = {"SELECT": ["user1"]}
 
     with pytest.raises(NotImplementedError, match="Engine does not support grants"):
-        adapter._sync_grants_config(relation, grants_config)
-
-
-def test_apply_grants_config_expr_not_implemented(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(EngineAdapter)
-    relation = exp.to_table("test_table")
-    grants_config = {"SELECT": ["user1"]}
-
-    with pytest.raises(NotImplementedError):
-        adapter._apply_grants_config_expr(relation, grants_config)
-
-
-def test_revoke_grants_config_expr_not_implemented(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(EngineAdapter)
-    relation = exp.to_table("test_table")
-    grants_config = {"SELECT": ["user1"]}
-
-    with pytest.raises(NotImplementedError):
-        adapter._revoke_grants_config_expr(relation, grants_config)
+        adapter.sync_grants_config(relation, grants_config)
 
 
 def test_get_current_grants_config_not_implemented(make_mocked_engine_adapter: t.Callable):
