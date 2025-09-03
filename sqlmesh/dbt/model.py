@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange, OnAdditiveChange
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
-from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
+from sqlmesh.dbt.common import SqlStr, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
@@ -137,10 +137,6 @@ class ModelConfig(BaseModelConfig):
     query_settings: t.Optional[t.Dict[str, t.Any]] = None
     inserts_only: t.Optional[bool] = None
     incremental_predicates: t.Optional[t.List[str]] = None
-
-    # Private fields
-    _sql_embedded_config: t.Optional[SqlStr] = None
-    _sql_no_config: t.Optional[SqlStr] = None
 
     _sql_validator = sql_str_validator
 
@@ -432,25 +428,6 @@ class ModelConfig(BaseModelConfig):
 
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
-    @property
-    def sql_no_config(self) -> SqlStr:
-        if self._sql_no_config is None:
-            self._sql_no_config = SqlStr("")
-            self._extract_sql_config()
-        return self._sql_no_config
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        if self._sql_embedded_config is None:
-            self._sql_embedded_config = SqlStr("")
-            self._extract_sql_config()
-        return self._sql_embedded_config
-
-    def _extract_sql_config(self) -> None:
-        no_config, embedded_config = extract_jinja_config(self.sql)
-        self._sql_no_config = SqlStr(no_config)
-        self._sql_embedded_config = SqlStr(embedded_config)
-
     def _big_query_partition_by_expr(self, context: DbtContext) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
@@ -508,7 +485,7 @@ class ModelConfig(BaseModelConfig):
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_dialect = self.dialect(context)
-        query = d.jinja_query(self.sql_no_config)
+        query = d.jinja_query(self.sql)
         kind = self.model_kind(context)
 
         optional_kwargs: t.Dict[str, t.Any] = {}

@@ -276,42 +276,6 @@ def test_singular_test_to_standalone_audit(dbt_dummy_postgres_config: PostgresCo
     assert standalone_audit.dialect == "bigquery"
 
 
-def test_model_config_sql_no_config():
-    assert (
-        ModelConfig(
-            sql="""{{
-  config(
-    materialized='table',
-    incremental_strategy='delete+"insert'
-  )
-}}
-query"""
-        ).sql_no_config.strip()
-        == "query"
-    )
-
-    assert (
-        ModelConfig(
-            sql="""{{
-  config(
-    materialized='table',
-    incremental_strategy='delete+insert',
-    post_hook=" '{{ var('new') }}' "
-  )
-}}
-query"""
-        ).sql_no_config.strip()
-        == "query"
-    )
-
-    assert (
-        ModelConfig(
-            sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
-        ).sql_no_config.strip()
-        == "before  after"
-    )
-
-
 @pytest.mark.slow
 def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
@@ -350,7 +314,6 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
-    model_config._sql_no_config = None
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 

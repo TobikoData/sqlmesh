@@ -169,14 +169,6 @@ class BaseModelConfig(GeneralConfig):
     }
 
     @property
-    def sql_no_config(self) -> SqlStr:
-        return SqlStr("")
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        return SqlStr("")
-
-    @property
     def table_schema(self) -> str:
         """
         Get the full schema name
