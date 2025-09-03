@@ -1469,6 +1469,9 @@ def test_partition_by(sushi_test_project: Project):
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
+    context.target = DuckDbConfig(name="target", schema="foo")
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_partition_by_none(sushi_test_project: Project):
