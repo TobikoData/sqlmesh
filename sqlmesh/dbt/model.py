@@ -529,7 +529,7 @@ class ModelConfig(BaseModelConfig):
                     partitioned_by.append(self._big_query_partition_by_expr(context))
                 else:
                     logger.warning(
-                        f"Ignoring partition_by config for model '{self.name}' targeting {context.target.dialect}; it is only supported for bigquery."
+                        "Ignoring partition_by config for model '%s' targeting %s; it is only supported for BigQuery.", self.name, context.target.dialect
                     )
 
             if partitioned_by:
