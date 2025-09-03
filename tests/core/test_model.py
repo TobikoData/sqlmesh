@@ -7686,6 +7686,75 @@ lookback 3
     )
 
 
+def test_custom_kind_lookback_property():
+    """Test that CustomKind's lookback property is correctly accessed via ModelMeta.lookback.
+
+    This test verifies the fix for issue #5268 where CustomKind models were not respecting
+    the lookback parameter because the isinstance check for _IncrementalBy failed.
+    """
+
+    # Test 1: CustomKind with lookback = 3
+    class MyTestStrategy(CustomMaterialization):
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.custom_table,
+            kind CUSTOM (
+                materialization 'MyTestStrategy',
+                lookback 3
+            )
+        );
+        SELECT a, b FROM upstream
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.kind.is_custom
+
+    # Verify that the kind itself has lookback = 3
+    kind = t.cast(CustomKind, model.kind)
+    assert kind.lookback == 3
+
+    # The bug: model.lookback should return 3, but with the old implementation
+    # using isinstance(self.kind, _IncrementalBy), it would return 0
+    assert model.lookback == 3, "CustomKind lookback not accessible via model.lookback property"
+
+    # Test 2: CustomKind without lookback (should default to 0)
+    expressions_no_lookback = d.parse(
+        """
+        MODEL (
+            name db.custom_table_no_lookback,
+            kind CUSTOM (
+                materialization 'MyTestStrategy'
+            )
+        );
+        SELECT a, b FROM upstream
+        """
+    )
+
+    model_no_lookback = load_sql_based_model(expressions_no_lookback)
+    assert model_no_lookback.lookback == 0
+
+    # Test 3: Ensure IncrementalByTimeRangeKind still works correctly
+    incremental_expressions = d.parse(
+        """
+        MODEL (
+            name db.incremental_table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column ds,
+                lookback 5
+            )
+        );
+        SELECT ds, a, b FROM upstream
+        """
+    )
+
+    incremental_model = load_sql_based_model(incremental_expressions)
+    assert incremental_model.lookback == 5
+
+
 def test_time_column_format_in_custom_kind():
     class TimeColumnCustomKind(CustomKind):  # type: ignore[no-untyped-def]
         _time_column: TimeColumn

@@ -29,7 +29,6 @@ from sqlmesh.core.model.kind import (
     SCDType2ByTimeKind,
     TimeColumn,
     ViewKind,
-    _IncrementalBy,
     model_kind_validator,
     OnAdditiveChange,
 )
@@ -414,7 +413,7 @@ class ModelMeta(_Node):
     @property
     def lookback(self) -> int:
         """The incremental lookback window."""
-        return (self.kind.lookback if isinstance(self.kind, _IncrementalBy) else 0) or 0
+        return getattr(self.kind, "lookback", 0) or 0
 
     def lookback_start(self, start: TimeLike) -> TimeLike:
         if self.lookback == 0:
