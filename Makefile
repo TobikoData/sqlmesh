@@ -188,7 +188,7 @@ postgres-test: engine-postgres-up
 	pytest -n auto -m "postgres" --retries 3 --junitxml=test-results/junit-postgres.xml
 
 spark-test: engine-spark-up
-	pytest -n auto -m "spark" --retries 3 --junitxml=test-results/junit-spark.xml
+	pytest -n auto -m "spark" --retries 3 --junitxml=test-results/junit-spark.xml && pytest -n auto -m "pyspark" --retries 3 --junitxml=test-results/junit-pyspark.xml
 
 trino-test: engine-trino-up
 	pytest -n auto -m "trino" --retries 3 --junitxml=test-results/junit-trino.xml

@@ -4,7 +4,10 @@ from pyspark.sql import SparkSession
 from sqlmesh.engines.spark.db_api import errors
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
 
-pytestmark = [pytest.mark.slow, pytest.mark.spark]
+# note: this is deliberately not marked with 'spark' so that it
+# can run separately from the spark integration tests.
+# running them at the same time mutates some global state in the SparkSession which breaks these tests
+pytestmark = [pytest.mark.slow, pytest.mark.pyspark]
 
 
 def test_spark_session_cursor(spark_session: SparkSession):

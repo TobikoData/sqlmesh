@@ -264,6 +264,7 @@ markers = [
     "redshift: test for Redshift",
     "snowflake: test for Snowflake",
     "spark: test for Spark",
+    "pyspark: test for PySpark that need to run separately from the other spark tests",
     "trino: test for Trino (all connectors)",
     "risingwave: test for Risingwave",
 
