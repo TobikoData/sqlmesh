@@ -265,7 +265,11 @@ markers = [
     "snowflake: test for Snowflake",
     "spark: test for Spark",
     "trino: test for Trino (all connectors)",
-    "risingwave: test for Risingwave"
+    "risingwave: test for Risingwave",
+
+    # Other
+    "set_default_connection",
+    "registry_isolation"
 ]
 addopts = "-n 0 --dist=loadgroup"
 asyncio_default_fixture_loop_scope = "session"

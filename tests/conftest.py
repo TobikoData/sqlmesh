@@ -222,10 +222,6 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     # note: the hook always has to yield
     outcome = yield
 
-    # we only care about tests that used the tmp_path fixture
-    if "tmp_path" not in getattr(item, "fixturenames", []):
-        return
-
     result: pytest.TestReport = outcome.get_result()
 
     if result.when != "teardown":

@@ -61,6 +61,10 @@ class TestConfig(GeneralConfig):
         error_if: Conditional expression (default "!=0") to detect if error condition met (Not supported).
     """
 
+    __test__ = (
+        False  # prevent pytest trying to collect this as a test class when it's imported in a test
+    )
+
     # SQLMesh fields
     path: Path = Path()
     name: str

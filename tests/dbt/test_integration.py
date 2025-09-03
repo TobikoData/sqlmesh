@@ -27,6 +27,8 @@ pytestmark = [pytest.mark.dbt, pytest.mark.slow, pytest.mark.cicdonly]
 
 
 class TestType(str, Enum):
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     DBT_RUNTIME = "dbt_runtime"
     DBT_ADAPTER = "dbt_adapter"
     SQLMESH = "sqlmesh"
@@ -53,6 +55,8 @@ class TestType(str, Enum):
 
 
 class TestStrategy(str, Enum):
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     CHECK = "check"
     TIMESTAMP = "timestamp"
 

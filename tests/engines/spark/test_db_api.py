@@ -4,10 +4,7 @@ from pyspark.sql import SparkSession
 from sqlmesh.engines.spark.db_api import errors
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
 
-pytestmark = [
-    pytest.mark.slow,
-    pytest.mark.spark_pyspark,
-]
+pytestmark = [pytest.mark.slow, pytest.mark.spark]
 
 
 def test_spark_session_cursor(spark_session: SparkSession):
