@@ -18,6 +18,7 @@ from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.common import RAW_CODE_KEY
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
@@ -308,21 +309,6 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
     return source
 
 
-def generate_model(model: AttributeDict, raw_code: str) -> Model:
-    class Model:
-        def __init__(self, model: AttributeDict) -> None:
-            self._model = model
-            self._raw_code_key = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
-
-        def __getattr__(self, key: str) -> t.Any:
-            if key == self._raw_code_key:
-                return raw_code
-
-            return getattr(self._model, key)
-
-    return Model(model)
-
-
 def return_val(val: t.Any) -> None:
     raise MacroReturnVal(val)
 
@@ -499,7 +485,8 @@ def create_builtin_globals(
     )
 
     if (model := jinja_globals.pop("model", None)) is not None:
-        builtin_globals["model"] = generate_model(model, jinja_globals.pop("model", ""))
+        raw_code = jinja_globals.pop("raw_code", "")
+        builtin_globals["model"] = AttributeDict({**model, RAW_CODE_KEY: raw_code})
 
     if engine_adapter is not None:
         builtin_globals["flags"] = Flags(which="run")

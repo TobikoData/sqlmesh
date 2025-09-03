@@ -8,18 +8,20 @@ from pathlib import Path
 from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 from sqlmesh.utils.yaml import load
-from sqlmesh.core.config.common import DBT_PROJECT_FILENAME
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
 PROJECT_FILENAME = DBT_PROJECT_FILENAME
+RAW_CODE_KEY = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
 
 JINJA_ONLY = {
     "adapter",

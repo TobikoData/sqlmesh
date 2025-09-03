@@ -22,12 +22,12 @@ from sqlmesh.dbt.common import (
     DbtConfig,
     Dependencies,
     GeneralConfig,
+    RAW_CODE_KEY,
     SqlStr,
     sql_str_validator,
 )
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
-from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -385,11 +385,9 @@ class BaseModelConfig(GeneralConfig):
                     filter(lambda kv: kv[0] in dependencies.model_attrs.attrs, attributes.items())
                 )
 
-            raw_code_key = "raw_code" if DBT_VERSION >= (1, 3, 0) else "raw_sql"  # type: ignore
-
             # We exclude the raw SQL code to reduce the payload size. It's still accessible through
             # the JinjaQuery instance stored in the resulting SQLMesh model's `query` field.
-            model_node.pop(raw_code_key, None)
+            model_node.pop(RAW_CODE_KEY, None)
         else:
             model_node = AttributeDict({})
 
