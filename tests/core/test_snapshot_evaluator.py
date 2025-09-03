@@ -4595,7 +4595,7 @@ def test_wap_publish_failure(adapter_mock: Mock, make_snapshot: t.Callable[..., 
 def test_grants(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     strategy = ViewStrategy(adapter)
     model = create_sql_model(
         "test_model", parse_one("SELECT 1 as id"), grants={"select": ["user1", "user2"]}
@@ -4609,7 +4609,7 @@ def test_grants(make_mocked_engine_adapter, mocker):
 def test_grants_no_config(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     strategy = ViewStrategy(adapter)
     model = create_sql_model("test_model", parse_one("SELECT 1 as id"))
 
@@ -4621,7 +4621,7 @@ def test_grants_no_config(make_mocked_engine_adapter, mocker):
 def test_grants_unsupported_engine(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = False
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     strategy = ViewStrategy(adapter)
     model = create_sql_model(
         "test_model", parse_one("SELECT 1 as id"), grants={"select": ["user1"]}
@@ -4637,7 +4637,7 @@ def test_grants_unsupported_engine(make_mocked_engine_adapter, mocker):
 def test_grants_revokes_permissions(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     strategy = ViewStrategy(adapter)
     model = create_sql_model("test_model", parse_one("SELECT 1 as id"), grants={"select": []})
     model2 = create_sql_model("test_model2", parse_one("SELECT 1 as id"), grants={})
@@ -4655,7 +4655,7 @@ def test_grants_target_layer_all(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
     strategy = ViewStrategy(adapter)
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     model = create_sql_model(
         "test_model",
         parse_one("SELECT 1 as id"),
@@ -4675,7 +4675,7 @@ def test_grants_target_layer_all(make_mocked_engine_adapter, mocker):
 def test_grants_target_layer_physical(make_mocked_engine_adapter, mocker):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_GRANTS = True
-    sync_grants_mock = mocker.patch.object(adapter, "_sync_grants_config")
+    sync_grants_mock = mocker.patch.object(adapter, "sync_grants_config")
     strategy = ViewStrategy(adapter)
 
     model = create_sql_model(
