@@ -460,7 +460,7 @@ def test_load_microbatch_with_ref(
         "sources": [
             {
                 "name": "my_source",
-                "tables": [{"name": "my_table", "config": {"event_time": "ds"}}],
+                "tables": [{"name": "my_table", "config": {"event_time": "ds_source"}}],
             }
         ],
     }
@@ -479,7 +479,7 @@ def test_load_microbatch_with_ref(
         )
     }}
 
-    SELECT cola, ds FROM {{ source('my_source', 'my_table') }}
+    SELECT cola, ds_source as ds FROM {{ source('my_source', 'my_table') }}
     """
     microbatch_model_file = model_dir / "microbatch.sql"
     with open(microbatch_model_file, "w", encoding="utf-8") as f:
@@ -507,11 +507,11 @@ def test_load_microbatch_with_ref(
     context = Context(paths=project_dir)
     assert (
         context.render(microbatch_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
-        == 'SELECT "cola" AS "cola", "ds" AS "ds" FROM (SELECT * FROM "local"."my_source"."my_table" AS "my_table" WHERE "ds" BETWEEN \'2025-01-01 00:00:00+00:00\' AND \'2025-01-10 23:59:59.999999+00:00\') AS "_q_0"'
+        == 'SELECT "cola" AS "cola", "ds_source" AS "ds" FROM (SELECT * FROM "local"."my_source"."my_table" AS "my_table" WHERE "ds_source" >= \'2025-01-01 00:00:00+00:00\' AND "ds_source" < \'2025-01-11 00:00:00+00:00\') AS "_q_0"'
     )
     assert (
         context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
-        == 'SELECT "_q_0"."cola" AS "cola", "_q_0"."ds" AS "ds" FROM (SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch" WHERE "microbatch"."ds" <= \'2025-01-10 23:59:59.999999+00:00\' AND "microbatch"."ds" >= \'2025-01-01 00:00:00+00:00\') AS "_q_0"'
+        == 'SELECT "_q_0"."cola" AS "cola", "_q_0"."ds" AS "ds" FROM (SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch" WHERE "microbatch"."ds" < \'2025-01-11 00:00:00+00:00\' AND "microbatch"."ds" >= \'2025-01-01 00:00:00+00:00\') AS "_q_0"'
     )
 
 
