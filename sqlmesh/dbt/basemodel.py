@@ -28,6 +28,7 @@ from sqlmesh.dbt.common import (
 )
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -130,6 +131,7 @@ class BaseModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
+    event_time: t.Optional[str] = None
 
     version: t.Optional[int] = None
     latest_version: t.Optional[int] = None
@@ -222,6 +224,12 @@ class BaseModelConfig(GeneralConfig):
         else:
             relation_type = RelationType.Table
 
+        extras = {}
+        if DBT_VERSION >= (1, 9, 0) and self.event_time:
+            extras["event_time_filter"] = {
+                "field_name": self.event_time,
+            }
+
         return AttributeDict(
             {
                 "database": self.database,
@@ -229,6 +237,7 @@ class BaseModelConfig(GeneralConfig):
                 "identifier": self.table_name,
                 "type": relation_type.value,
                 "quote_policy": AttributeDict(self.quoting),
+                **extras,
             }
         )
 

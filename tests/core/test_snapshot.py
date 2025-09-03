@@ -1079,7 +1079,9 @@ def test_fingerprint_jinja_macros_global_objs(model: Model, global_obj_key: str)
     )
     fingerprint = fingerprint_from_node(model, nodes={})
     model = model.copy()
-    model.jinja_macros.global_objs[global_obj_key] = AttributeDict({"test": "test"})
+    model.jinja_macros.global_objs[global_obj_key] = AttributeDict(
+        {"test": AttributeDict({"test": "test"})}
+    )
     updated_fingerprint = fingerprint_from_node(model, nodes={})
     assert updated_fingerprint.data_hash != fingerprint.data_hash
     assert updated_fingerprint.metadata_hash == fingerprint.metadata_hash

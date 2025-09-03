@@ -214,6 +214,13 @@ class BaseExpressionRenderer:
                         dialect=self._dialect, identify=True, comments=False
                     )
 
+                all_refs = list(self._jinja_macro_registry.global_objs.get("sources", {}).values()) + list(  # type: ignore
+                    self._jinja_macro_registry.global_objs.get("refs", {}).values()  # type: ignore
+                )
+                for ref in all_refs:
+                    if ref.event_time_filter:
+                        ref.event_time_filter["start"] = render_kwargs["start_tstz"]
+                        ref.event_time_filter["end"] = render_kwargs["end_tstz"]
                 jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
                 expressions = []
