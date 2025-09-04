@@ -137,6 +137,7 @@ def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
     assert model.dialect == "postgres"
     assert model.owner == "Sally"
     assert model.tags == ["test", "incremental"]
+    assert model.allow_partials
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
     assert kind.batch_size == 5
     assert kind.lookback == 3
