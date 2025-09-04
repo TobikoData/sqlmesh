@@ -219,6 +219,7 @@ def test_load_microbatch_all_defined(
         column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
     )
     assert model.kind.batch_size == 1
+    assert model.depends_on_self is False
 
 
 @pytest.mark.slow
@@ -259,7 +260,8 @@ def test_load_microbatch_all_defined_diff_values(
     assert model.kind.time_column == TimeColumn(
         column=exp.to_column("blah", quoted=True), format="%Y-%m-%d"
     )
-    assert model.kind.batch_size is None
+    assert model.kind.batch_size == 1
+    assert model.depends_on_self is True
 
 
 @pytest.mark.slow
@@ -297,4 +299,5 @@ def test_load_microbatch_required_only(
     assert model.kind.time_column == TimeColumn(
         column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
     )
-    assert model.kind.batch_size is None
+    assert model.kind.batch_size == 1
+    assert model.depends_on_self is False
