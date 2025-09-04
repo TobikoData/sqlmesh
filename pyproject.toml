@@ -85,7 +85,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-mock",
-    "pytest-retry",
+    "pytest-rerunfailures",
     "pytest-xdist",
     "pytz",
     "redshift_connector",
@@ -280,7 +280,7 @@ log_cli_level = "INFO"
 filterwarnings = [
     "ignore:The localize method is no longer necessary, as this time zone supports the fold attribute"
 ]
-retry_delay = 10
+reruns_delay = 10
 
 [tool.ruff]
 line-length = 100
