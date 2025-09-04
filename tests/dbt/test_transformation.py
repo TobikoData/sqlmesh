@@ -2110,11 +2110,11 @@ def test_allow_partials_by_default():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.allow_partials is None
+    assert model.allow_partials
     assert model.to_sqlmesh(context).allow_partials
 
     model.materialized = Materialization.INCREMENTAL.value
-    assert model.allow_partials is None
+    assert model.allow_partials
     assert model.to_sqlmesh(context).allow_partials
 
     model.allow_partials = True
