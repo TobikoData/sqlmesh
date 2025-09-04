@@ -31,6 +31,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     from sqlmesh.core.linter.rule import Rule
+    from sqlmesh.core.model.definition import _Model
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 
@@ -50,10 +51,9 @@ class BaseExpressionRenderer:
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         default_catalog: t.Optional[str] = None,
         quote_identifiers: bool = True,
-        model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
-        raw_code: t.Optional[str] = None,
+        model: t.Optional[_Model] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -67,9 +67,9 @@ class BaseExpressionRenderer:
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
-        self._model_fqn = model_fqn
+        self._model_fqn = model.fqn if model else None
         self._optimize_query_flag = optimize_query is not False
-        self._raw_code = raw_code
+        self._model = model
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -206,7 +206,7 @@ class BaseExpressionRenderer:
                     "default_catalog": self._default_catalog,
                     "runtime_stage": runtime_stage.value,
                     "resolve_table": _resolve_table,
-                    "raw_code": self._raw_code,
+                    "model_instance": self._model,
                 }
 
                 if this_model:

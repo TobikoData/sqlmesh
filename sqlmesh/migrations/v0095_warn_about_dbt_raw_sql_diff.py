@@ -25,12 +25,12 @@ def migrate(state_sync, **kwargs):  # type: ignore
         snapshots_table = f"{schema}.{snapshots_table}"
 
     warning = (
-        "SQLMesh now includes dbt's {{ config(...) }} blocks in the model's raw SQL when "
-        "processing dbt models. This change ensures that all model attributes referenced "
-        "in macros are properly tracked for fingerprinting. As a result, you may see diffs "
-        "for existing dbt models even though the actual SQL logic hasn't changed. This is "
-        "a one-time diff that will be resolved after applying a plan. Run 'sqlmesh diff prod' "
-        "to review any changes, then apply a plan if the diffs look expected."
+        "SQLMesh detected that it may not be able to fully migrate the state database. This should not impact "
+        "the migration process, but may result in unexpected changes being reported by the next `sqlmesh plan` "
+        "command. Please run `sqlmesh diff prod` after the migration has completed, before making any new "
+        "changes. If any unexpected changes are reported, consider running a forward-only plan to apply these "
+        "changes and avoid unnecessary backfills: sqlmesh plan prod --forward-only. "
+        "See https://sqlmesh.readthedocs.io/en/stable/concepts/plans/#forward-only-plans for more details.\n"
     )
 
     for (snapshot,) in engine_adapter.fetchall(

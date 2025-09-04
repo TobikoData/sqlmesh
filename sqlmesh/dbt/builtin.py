@@ -16,6 +16,7 @@ from sqlglot import Dialect
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.common import RAW_CODE_KEY
@@ -26,13 +27,6 @@ from sqlmesh.utils import AttributeDict, debug_mode_enabled, yaml
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
-
-if t.TYPE_CHECKING:
-    from typing import Protocol
-
-    class Model(Protocol):
-        def __getattr__(self, key: str) -> t.Any: ...
-
 
 logger = logging.getLogger(__name__)
 
@@ -485,8 +479,12 @@ def create_builtin_globals(
     )
 
     if (model := jinja_globals.pop("model", None)) is not None:
-        raw_code = jinja_globals.pop("raw_code", "")
-        builtin_globals["model"] = AttributeDict({**model, RAW_CODE_KEY: raw_code})
+        if isinstance(model_instance := jinja_globals.pop("model_instance", None), SqlModel):
+            builtin_globals["model"] = AttributeDict(
+                {**model, RAW_CODE_KEY: model_instance.query.name}
+            )
+        else:
+            builtin_globals["model"] = AttributeDict(model.copy())
 
     if engine_adapter is not None:
         builtin_globals["flags"] = Flags(which="run")

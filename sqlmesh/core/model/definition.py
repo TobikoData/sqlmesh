@@ -594,8 +594,7 @@ class _Model(ModelMeta, frozen=True):
                 python_env=self.python_env,
                 only_execution_time=False,
                 default_catalog=self.default_catalog,
-                model_fqn=self.fqn,
-                raw_code=self._raw_code,
+                model=self,
             )
         return self._statement_renderer_cache[expression_key]
 
@@ -1306,10 +1305,6 @@ class _Model(ModelMeta, frozen=True):
     def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
         return {}
 
-    @property
-    def _raw_code(self) -> t.Optional[str]:
-        return None
-
 
 class SqlModel(_Model):
     """The model definition which relies on a SQL query to fetch the data.
@@ -1578,7 +1573,6 @@ class SqlModel(_Model):
             self.dialect,
             self.macro_definitions,
             schema=self.mapping_schema,
-            model_fqn=self.fqn,
             path=self._path,
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
@@ -1586,7 +1580,7 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
-            raw_code=self._raw_code,
+            model=self,
         )
 
     @property
@@ -1611,11 +1605,6 @@ class SqlModel(_Model):
     def violated_rules_for_query(self) -> t.Dict[type[Rule], t.Any]:
         self.render_query()
         return self._query_renderer._violated_rules
-
-    @property
-    def _raw_code(self) -> t.Optional[str]:
-        query = self.query
-        return query.name if isinstance(query, d.JinjaQuery) else None
 
 
 class SeedModel(_Model):
