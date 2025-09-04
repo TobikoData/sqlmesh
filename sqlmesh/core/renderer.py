@@ -31,6 +31,7 @@ if t.TYPE_CHECKING:
     from sqlglot.dialects.dialect import DialectType
 
     from sqlmesh.core.linter.rule import Rule
+    from sqlmesh.core.model.definition import _Model
     from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 
@@ -50,9 +51,9 @@ class BaseExpressionRenderer:
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         default_catalog: t.Optional[str] = None,
         quote_identifiers: bool = True,
-        model_fqn: t.Optional[str] = None,
         normalize_identifiers: bool = True,
         optimize_query: t.Optional[bool] = True,
+        model: t.Optional[_Model] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -66,8 +67,9 @@ class BaseExpressionRenderer:
         self._quote_identifiers = quote_identifiers
         self.update_schema({} if schema is None else schema)
         self._cache: t.List[t.Optional[exp.Expression]] = []
-        self._model_fqn = model_fqn
+        self._model_fqn = model.fqn if model else None
         self._optimize_query_flag = optimize_query is not False
+        self._model = model
 
     def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
         self.schema = d.normalize_mapping_schema(schema, dialect=self._dialect)
@@ -188,30 +190,32 @@ class BaseExpressionRenderer:
         }
 
         variables = kwargs.pop("variables", {})
-        jinja_env_kwargs = {
-            **{
-                **render_kwargs,
-                **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
-                **variables,
-            },
-            "snapshots": snapshots or {},
-            "table_mapping": table_mapping,
-            "deployability_index": deployability_index,
-            "default_catalog": self._default_catalog,
-            "runtime_stage": runtime_stage.value,
-            "resolve_table": _resolve_table,
-        }
-        if this_model:
-            render_kwargs["this_model"] = this_model
-            jinja_env_kwargs["this_model"] = this_model.sql(
-                dialect=self._dialect, identify=True, comments=False
-            )
-
-        jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
         expressions = [self._expression]
         if isinstance(self._expression, d.Jinja):
             try:
+                jinja_env_kwargs = {
+                    **{
+                        **render_kwargs,
+                        **_prepare_python_env_for_jinja(macro_evaluator, self._python_env),
+                        **variables,
+                    },
+                    "snapshots": snapshots or {},
+                    "table_mapping": table_mapping,
+                    "deployability_index": deployability_index,
+                    "default_catalog": self._default_catalog,
+                    "runtime_stage": runtime_stage.value,
+                    "resolve_table": _resolve_table,
+                    "model_instance": self._model,
+                }
+
+                if this_model:
+                    jinja_env_kwargs["this_model"] = this_model.sql(
+                        dialect=self._dialect, identify=True, comments=False
+                    )
+
+                jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
+
                 expressions = []
                 rendered_expression = jinja_env.from_string(self._expression.name).render()
                 logger.debug(
@@ -228,6 +232,9 @@ class BaseExpressionRenderer:
                 raise ConfigError(
                     f"Could not render or parse jinja at '{self._path}'.\n{ex}"
                 ) from ex
+
+        if this_model:
+            render_kwargs["this_model"] = this_model
 
         macro_evaluator.locals.update(render_kwargs)
 

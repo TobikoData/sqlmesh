@@ -594,7 +594,7 @@ class _Model(ModelMeta, frozen=True):
                 python_env=self.python_env,
                 only_execution_time=False,
                 default_catalog=self.default_catalog,
-                model_fqn=self.fqn,
+                model=self,
             )
         return self._statement_renderer_cache[expression_key]
 
@@ -1573,7 +1573,6 @@ class SqlModel(_Model):
             self.dialect,
             self.macro_definitions,
             schema=self.mapping_schema,
-            model_fqn=self.fqn,
             path=self._path,
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
@@ -1581,6 +1580,7 @@ class SqlModel(_Model):
             default_catalog=self.default_catalog,
             quote_identifiers=not no_quote_identifiers,
             optimize_query=self.optimize_query,
+            model=self,
         )
 
     @property

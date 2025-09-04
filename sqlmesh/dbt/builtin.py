@@ -16,8 +16,10 @@ from sqlglot import Dialect
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.common import RAW_CODE_KEY
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
@@ -469,11 +471,20 @@ def create_builtin_globals(
             is_incremental &= snapshot_table_exists
     else:
         is_incremental = False
+
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
+
+    if (model := jinja_globals.pop("model", None)) is not None:
+        if isinstance(model_instance := jinja_globals.pop("model_instance", None), SqlModel):
+            builtin_globals["model"] = AttributeDict(
+                {**model, RAW_CODE_KEY: model_instance.query.name}
+            )
+        else:
+            builtin_globals["model"] = AttributeDict(model.copy())
 
     if engine_adapter is not None:
         builtin_globals["flags"] = Flags(which="run")

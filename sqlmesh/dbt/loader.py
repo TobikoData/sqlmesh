@@ -138,7 +138,7 @@ class DbtLoader(Loader):
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
                 for model in package_models.values():
-                    if isinstance(model, ModelConfig) and not model.sql_no_config:
+                    if isinstance(model, ModelConfig) and not model.sql.strip():
                         logger.info(f"Skipping empty model '{model.name}' at path '{model.path}'.")
                         continue
 

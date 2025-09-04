@@ -22,6 +22,7 @@ from sqlmesh.dbt.common import (
     DbtConfig,
     Dependencies,
     GeneralConfig,
+    RAW_CODE_KEY,
     SqlStr,
     sql_str_validator,
 )
@@ -166,14 +167,6 @@ class BaseModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
-
-    @property
-    def sql_no_config(self) -> SqlStr:
-        return SqlStr("")
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        return SqlStr("")
 
     @property
     def table_schema(self) -> str:
@@ -375,15 +368,21 @@ class BaseModelConfig(GeneralConfig):
     def _model_jinja_context(
         self, context: DbtContext, dependencies: Dependencies
     ) -> t.Dict[str, t.Any]:
-        model_node: AttributeDict[str, t.Any] = AttributeDict(
-            {
-                k: v
-                for k, v in context._manifest._manifest.nodes[self.node_name].to_dict().items()
-                if k in dependencies.model_attrs
-            }
-            if context._manifest and self.node_name in context._manifest._manifest.nodes
-            else {}
-        )
+        if context._manifest and self.node_name in context._manifest._manifest.nodes:
+            attributes = context._manifest._manifest.nodes[self.node_name].to_dict()
+            if dependencies.model_attrs.all_attrs:
+                model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
+            else:
+                model_node = AttributeDict(
+                    filter(lambda kv: kv[0] in dependencies.model_attrs.attrs, attributes.items())
+                )
+
+            # We exclude the raw SQL code to reduce the payload size. It's still accessible through
+            # the JinjaQuery instance stored in the resulting SQLMesh model's `query` field.
+            model_node.pop(RAW_CODE_KEY, None)
+        else:
+            model_node = AttributeDict({})
+
         return {
             "this": self.relation_info,
             "model": model_node,
