@@ -83,7 +83,7 @@ class ModelConfig(BaseModelConfig):
     batch_concurrency: t.Optional[int] = None
     forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
-    allow_partials: t.Optional[bool] = None
+    allow_partials: bool = True
     physical_version: t.Optional[str] = None
     auto_restatement_cron: t.Optional[str] = None
     auto_restatement_intervals: t.Optional[int] = None
@@ -620,11 +620,7 @@ class ModelConfig(BaseModelConfig):
                 model_kwargs["physical_properties"] = physical_properties
 
         allow_partials = model_kwargs.pop("allow_partials", None)
-        if (
-            allow_partials is None
-            and kind.is_materialized
-            and not kind.is_incremental_by_time_range
-        ):
+        if allow_partials is None:
             # Set allow_partials to True for dbt models to preserve the original semantics.
             allow_partials = True
 
