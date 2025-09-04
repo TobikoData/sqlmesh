@@ -2483,29 +2483,6 @@ class EngineAdapter:
         """
         raise NotImplementedError(f"Engine does not support WAP: {type(self)}")
 
-    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
-        """Returns current grants for a table as a dictionary.
-
-        This method queries the database and returns the current grants/permissions
-        for the given table, parsed into a dictionary format. The it handles
-        case-insensitive comparison between these current grants and the desired
-        grants from model configuration.
-
-        Args:
-            table: The table/view to query grants for.
-
-        Returns:
-            Dictionary mapping permissions to lists of grantees. Permission names
-            should be returned as the database provides them (typically uppercase
-            for standard SQL permissions, but engine-specific roles may vary).
-
-        Raises:
-            NotImplementedError: If the engine does not support grants.
-        """
-        if not self.SUPPORTS_GRANTS:
-            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
-        raise NotImplementedError("Subclass must implement get_current_grants")
-
     def sync_grants_config(
         self,
         table: exp.Table,
@@ -2532,104 +2509,6 @@ class EngineAdapter:
 
         if dcl_exprs:
             self.execute(dcl_exprs)
-
-    def _apply_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        """Returns SQLGlot Grant expressions to apply grants to a table.
-
-        Args:
-            table: The table/view to grant permissions on.
-            grant_config: Dictionary mapping permissions to lists of grantees.
-            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
-
-        Returns:
-            List of SQLGlot expressions for grant operations.
-
-        Raises:
-            NotImplementedError: If the engine does not support grants.
-        """
-        if not self.SUPPORTS_GRANTS:
-            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
-        raise NotImplementedError("Subclass must implement _apply_grants_config_expr")
-
-    def _revoke_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        """Returns SQLGlot expressions to revoke grants from a table.
-
-        Note: SQLGlot doesn't yet have a Revoke expression type, so implementations
-        may return other expression types or handle revokes as strings.
-
-        Args:
-            table: The table/view to revoke permissions from.
-            grant_config: Dictionary mapping permissions to lists of grantees.
-            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
-
-        Returns:
-            List of SQLGlot expressions for revoke operations.
-
-        Raises:
-            NotImplementedError: If the engine does not support grants.
-        """
-        if not self.SUPPORTS_GRANTS:
-            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
-        raise NotImplementedError("Subclass must implement _revoke_grants_config_expr")
-
-    @classmethod
-    def _diff_grants_configs(
-        cls, new_config: GrantsConfig, old_config: GrantsConfig
-    ) -> t.Tuple[GrantsConfig, GrantsConfig]:
-        """Compute additions and removals between two grants configurations.
-
-        This method compares new (desired) and old (current) GrantsConfigs case-insensitively
-        for both privilege keys and grantees, while preserving original casing
-        in the output GrantsConfigs.
-
-        Args:
-            new_config: Desired grants configuration (specified by the user).
-            old_config: Current grants configuration (returned by the database).
-
-        Returns:
-            A tuple of (additions, removals) GrantsConfig where:
-            - additions contains privileges/grantees present in new_config but not in old_config
-            - additions uses keys and grantee strings from new_config (user-specified casing)
-            - removals contains privileges/grantees present in old_config but not in new_config
-            - removals uses keys and grantee strings from old_config (database-returned casing)
-
-        Notes:
-            - Comparison is case-insensitive using casefold(); original casing is preserved in results.
-            - Overlapping grantees (case-insensitive) are excluded from the results.
-        """
-
-        def _diffs(config1: GrantsConfig, config2: GrantsConfig) -> GrantsConfig:
-            diffs: GrantsConfig = {}
-            cf_config2 = {k.casefold(): {g.casefold() for g in v} for k, v in config2.items()}
-            for key, grantees in config1.items():
-                cf_key = key.casefold()
-
-                # Missing key (add all grantees)
-                if cf_key not in cf_config2:
-                    diffs[key] = grantees.copy()
-                    continue
-
-                # Include only grantees not in config2
-                cf_grantees2 = cf_config2[cf_key]
-                diff_grantees = []
-                for grantee in grantees:
-                    if grantee.casefold() not in cf_grantees2:
-                        diff_grantees.append(grantee)
-                if diff_grantees:
-                    diffs[key] = diff_grantees
-            return diffs
-
-        return _diffs(new_config, old_config), _diffs(old_config, new_config)
 
     @contextlib.contextmanager
     def transaction(
@@ -3181,6 +3060,127 @@ class EngineAdapter:
 
     def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
         raise NotImplementedError()
+
+    @classmethod
+    def _diff_grants_configs(
+        cls, new_config: GrantsConfig, old_config: GrantsConfig
+    ) -> t.Tuple[GrantsConfig, GrantsConfig]:
+        """Compute additions and removals between two grants configurations.
+
+        This method compares new (desired) and old (current) GrantsConfigs case-insensitively
+        for both privilege keys and grantees, while preserving original casing
+        in the output GrantsConfigs.
+
+        Args:
+            new_config: Desired grants configuration (specified by the user).
+            old_config: Current grants configuration (returned by the database).
+
+        Returns:
+            A tuple of (additions, removals) GrantsConfig where:
+            - additions contains privileges/grantees present in new_config but not in old_config
+            - additions uses keys and grantee strings from new_config (user-specified casing)
+            - removals contains privileges/grantees present in old_config but not in new_config
+            - removals uses keys and grantee strings from old_config (database-returned casing)
+
+        Notes:
+            - Comparison is case-insensitive using casefold(); original casing is preserved in results.
+            - Overlapping grantees (case-insensitive) are excluded from the results.
+        """
+
+        def _diffs(config1: GrantsConfig, config2: GrantsConfig) -> GrantsConfig:
+            diffs: GrantsConfig = {}
+            cf_config2 = {k.casefold(): {g.casefold() for g in v} for k, v in config2.items()}
+            for key, grantees in config1.items():
+                cf_key = key.casefold()
+
+                # Missing key (add all grantees)
+                if cf_key not in cf_config2:
+                    diffs[key] = grantees.copy()
+                    continue
+
+                # Include only grantees not in config2
+                cf_grantees2 = cf_config2[cf_key]
+                diff_grantees = []
+                for grantee in grantees:
+                    if grantee.casefold() not in cf_grantees2:
+                        diff_grantees.append(grantee)
+                if diff_grantees:
+                    diffs[key] = diff_grantees
+            return diffs
+
+        return _diffs(new_config, old_config), _diffs(old_config, new_config)
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        """Returns current grants for a table as a dictionary.
+
+        This method queries the database and returns the current grants/permissions
+        for the given table, parsed into a dictionary format. The it handles
+        case-insensitive comparison between these current grants and the desired
+        grants from model configuration.
+
+        Args:
+            table: The table/view to query grants for.
+
+        Returns:
+            Dictionary mapping permissions to lists of grantees. Permission names
+            should be returned as the database provides them (typically uppercase
+            for standard SQL permissions, but engine-specific roles may vary).
+
+        Raises:
+            NotImplementedError: If the engine does not support grants.
+        """
+        if not self.SUPPORTS_GRANTS:
+            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
+        raise NotImplementedError("Subclass must implement get_current_grants")
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        """Returns SQLGlot Grant expressions to apply grants to a table.
+
+        Args:
+            table: The table/view to grant permissions on.
+            grant_config: Dictionary mapping permissions to lists of grantees.
+            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
+
+        Returns:
+            List of SQLGlot expressions for grant operations.
+
+        Raises:
+            NotImplementedError: If the engine does not support grants.
+        """
+        if not self.SUPPORTS_GRANTS:
+            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
+        raise NotImplementedError("Subclass must implement _apply_grants_config_expr")
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        """Returns SQLGlot expressions to revoke grants from a table.
+
+        Note: SQLGlot doesn't yet have a Revoke expression type, so implementations
+        may return other expression types or handle revokes as strings.
+
+        Args:
+            table: The table/view to revoke permissions from.
+            grant_config: Dictionary mapping permissions to lists of grantees.
+            table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
+
+        Returns:
+            List of SQLGlot expressions for revoke operations.
+
+        Raises:
+            NotImplementedError: If the engine does not support grants.
+        """
+        if not self.SUPPORTS_GRANTS:
+            raise NotImplementedError(f"Engine does not support grants: {type(self)}")
+        raise NotImplementedError("Subclass must implement _revoke_grants_config_expr")
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
