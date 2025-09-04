@@ -225,20 +225,16 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     result: pytest.TestReport = outcome.get_result()
 
     if result.when != "teardown":
-        return
+        return result
 
     # If we specifically failed with a StashKey error in teardown, mark the test as passed
-    if result.failed:
-        exception = call.excinfo
-        if (
-            exception
-            and isinstance(exception.value, KeyError)
-            and "_pytest.stash.StashKey" in repr(exception)
-        ):
-            result.outcome = "passed"
-            item.add_report_section(
-                "teardown", "stderr", f"Ignored tmp_path teardown error: {exception}"
-            )
+    if (exception := call.excinfo) and "_pytest.stash.StashKey" in repr(exception):
+        call.excinfo = None
+        result.outcome = "passed"
+        item.add_report_section(
+            "teardown", "stderr", f"Ignored tmp_path teardown error: {exception}"
+        )
+        return result
 
 
 def pytest_configure(config: pytest.Config):
