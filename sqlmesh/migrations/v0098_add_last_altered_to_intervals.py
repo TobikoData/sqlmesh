@@ -3,7 +3,7 @@
 from sqlglot import exp
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     intervals_table = "_intervals"

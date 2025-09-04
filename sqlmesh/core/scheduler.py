@@ -267,14 +267,6 @@ class Scheduler:
 
         snapshots = parent_snapshots_by_name(snapshot, self.snapshots)
 
-        if not is_restatement_plan and self.can_skip_evaluation(snapshot, snapshots):
-            logger.info(f"""
-            Skipping evaluation for snapshot {snapshot.name} as it depends on external models 
-            that have not been updated since the last run.
-            """)
-
-            return []
-
         is_deployable = deployability_index.is_deployable(snapshot)
 
         wap_id = self.snapshot_evaluator.evaluate(
@@ -388,6 +380,7 @@ class Scheduler:
         deployability_index: t.Optional[DeployabilityIndex],
         environment_naming_info: EnvironmentNamingInfo,
         dag: t.Optional[DAG[SnapshotId]] = None,
+        is_restatement_plan: bool = False,
     ) -> t.Dict[Snapshot, Intervals]:
         dag = dag or snapshots_to_dag(merged_intervals)
 
@@ -427,6 +420,7 @@ class Scheduler:
                 intervals,
                 context,
                 environment_naming_info,
+                is_restatement_plan=is_restatement_plan,
             )
             unready -= set(intervals)
 
@@ -509,9 +503,12 @@ class Scheduler:
         snapshot_dag = full_dag.subdag(*selected_snapshot_ids_set)
 
         batched_intervals = self.batch_intervals(
-            merged_intervals, deployability_index, environment_naming_info, dag=snapshot_dag
+            merged_intervals,
+            deployability_index,
+            environment_naming_info,
+            dag=snapshot_dag,
+            is_restatement_plan=is_restatement_plan,
         )
-
         self.console.start_evaluation_progress(
             batched_intervals,
             environment_naming_info,
@@ -970,6 +967,7 @@ class Scheduler:
         intervals: Intervals,
         context: ExecutionContext,
         environment_naming_info: EnvironmentNamingInfo,
+        is_restatement_plan: bool = False,
     ) -> Intervals:
         """Checks if the intervals are ready for evaluation for the given snapshot.
 
@@ -991,6 +989,17 @@ class Scheduler:
         if not (signals and signals.signals_to_kwargs):
             return intervals
 
+        signal_names = signals.signals_to_kwargs.keys()
+
+        if (
+            is_restatement_plan
+            and len(signal_names) == 1
+            and next(iter(signal_names)) == "freshness"
+        ):
+            # Freshness signal is not checked for restatement plans to allow users
+            # for an escape hatch in reevaluating models
+            return intervals
+
         self.console.start_signal_progress(
             snapshot,
             self.default_catalog,
@@ -998,6 +1007,9 @@ class Scheduler:
         )
 
         for signal_idx, (signal_name, kwargs) in enumerate(signals.signals_to_kwargs.items()):
+            if is_restatement_plan and signal_name == "freshness":
+                continue
+
             # Capture intervals before signal check for display
             intervals_to_check = merge_intervals(intervals)
 
@@ -1011,6 +1023,7 @@ class Scheduler:
                     python_env=signals.python_env,
                     dialect=snapshot.model.dialect,
                     path=snapshot.model._path,
+                    snapshot=snapshot,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:

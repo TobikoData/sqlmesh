@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, date
 from unittest import mock
 from unittest.mock import patch
 import logging
+from IPython.utils.capture import capture_output
+
 
 import time_machine
 from pytest_mock.plugin import MockerFixture
@@ -3846,36 +3848,45 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
     if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
         pytest.skip("This test only runs for engines that support external model freshness")
 
-    def _run_plan(
-        sqlmesh_context: Context, restate_models: t.Optional[t.List[str]] = None
-    ) -> PlanResults:
-        plan: Plan = sqlmesh_context.plan(
-            auto_apply=True, no_prompts=True, restate_models=restate_models
+    def _assert_snapshot_last_altered_ts(context: Context, snapshot_id: str, timestamp: datetime):
+        from sqlmesh.utils.date import to_datetime
+
+        snapshot = context.state_sync.get_snapshots([snapshot_id])[snapshot_id]
+        assert to_datetime(snapshot.last_altered_ts).replace(microsecond=0) == timestamp.replace(
+            microsecond=0
         )
-        return PlanResults.create(plan, ctx, schema)
 
     import sqlmesh
 
     spy = mocker.spy(sqlmesh.core.snapshot.evaluator.SnapshotEvaluator, "evaluate")
 
     def _assert_model_evaluation(lambda_func, was_evaluated, day_delta=0):
-        call_count_before = spy.call_count
-        logger = logging.getLogger("sqlmesh.core.scheduler")
+        spy.reset_mock()
+        timestamp = now(minute_floor=False) + timedelta(days=day_delta)
+        with time_machine.travel(timestamp, tick=False):
+            with capture_output() as output:
+                plan_or_run_result = lambda_func()
 
-        with time_machine.travel(now(minute_floor=False) + timedelta(days=day_delta)):
-            with mock.patch.object(logger, "info") as mock_logger:
-                lambda_func()
+        evaluate_function_called = spy.call_count == 1
+        signal_was_checked = "Checking signals for" in output.stdout
+        restatement_plan = isinstance(plan_or_run_result, Plan) and plan_or_run_result.restatements
+        if restatement_plan:
+            # Restatement plans exclude this signal so we expect the actual evaluation
+            # to happen but not through the signal
+            assert evaluate_function_called
+            assert not signal_was_checked
+            return
 
-        evaluation_skipped_log = any(
-            "Skipping evaluation for snapshot" in call[0][0] for call in mock_logger.call_args_list
-        )
-
+        # All other cases (e.g normal plans or runs) will check the freshness signal
+        assert signal_was_checked
         if was_evaluated:
-            assert not evaluation_skipped_log
-            assert spy.call_count == call_count_before + 1
+            assert "All ready" in output.stdout
+            assert evaluate_function_called
         else:
-            assert evaluation_skipped_log
-            assert spy.call_count == call_count_before
+            assert "None ready" in output.stdout
+            assert not evaluate_function_called
+
+        return timestamp, plan_or_run_result
 
     # Create & initialize schema
     schema = ctx.add_test_suffix(TEST_SCHEMA)
@@ -3912,7 +3923,10 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
         MODEL (
             name {model_name},
             start '2024-01-01',
-            kind FULL
+            kind FULL,
+            signals (
+                freshness(),
+            )
         );
 
          SELECT col1 * col2 AS col FROM {external_table1}, {external_table2};
@@ -3924,23 +3938,47 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
 
     context = ctx.create_context(path=tmp_path, config_mutator=_set_config)
 
-    # Case 1: Model is evaluated on first insertion
-    _assert_model_evaluation(lambda: _run_plan(context), was_evaluated=True)
-
-    # Case 2: Model is NOT evaluated on run if external models are not fresh
-    _assert_model_evaluation(lambda: context.run(), was_evaluated=False, day_delta=2)
-
-    # Case 3: Model is evaluated on run if any external model is fresh
-    adapter.execute(f"INSERT INTO {external_table2} (col2) VALUES (3)", quote_identifiers=False)
-
-    _assert_model_evaluation(lambda: context.run(), was_evaluated=True, day_delta=2)
-
-    # Case 4: Model is evaluated on a restatement plan even if the external model is not fresh
-    _assert_model_evaluation(
-        lambda: _run_plan(context, restate_models=[model_name]), was_evaluated=True, day_delta=3
+    # Case 1: Model is evaluated for the first plan
+    prod_plan_ts, prod_plan = _assert_model_evaluation(
+        lambda: context.plan(auto_apply=True, no_prompts=True), was_evaluated=True
     )
 
-    # Case 5: Model is evaluated if changed even if the external model is not fresh
+    prod_snapshot_id = next(iter(prod_plan.context_diff.new_snapshots))
+    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, prod_plan_ts)
+
+    # Case 2: Model is NOT evaluated on run if external models are not fresh
+    _assert_model_evaluation(lambda: context.run(), was_evaluated=False, day_delta=1)
+
+    # Case 3: Differentiate last_altered_ts between snapshots with shared version
+    # For instance, creating a FORWARD_ONLY change in dev (reusing the version but creating a dev preview) should not cause
+    # the prod snapshot's last_altered_ts to be updated when fetched from the state sync
     model_path.write_text(model_path.read_text().replace("col1 * col2", "col1 + col2"))
     context.load()
-    _assert_model_evaluation(lambda: _run_plan(context), was_evaluated=True, day_delta=2)
+    dev_plan_ts = now(minute_floor=False) + timedelta(days=2)
+    with time_machine.travel(dev_plan_ts, tick=False):
+        dev_plan = context.plan(
+            environment="dev", forward_only=True, auto_apply=True, no_prompts=True
+        )
+
+    context.state_sync.clear_cache()
+    dev_snapshot_id = next(iter(dev_plan.context_diff.new_snapshots))
+    _assert_snapshot_last_altered_ts(context, dev_snapshot_id, dev_plan_ts)
+    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, prod_plan_ts)
+
+    # Case 4: Model is evaluated on run if any external model is fresh
+    adapter.execute(f"INSERT INTO {external_table2} (col2) VALUES (3)", quote_identifiers=False)
+    _assert_model_evaluation(lambda: context.run(), was_evaluated=True, day_delta=2)
+
+    # Case 5: Model is evaluated if changed (case 3) even if the external model is not fresh
+    model_path.write_text(model_path.read_text().replace("col1 + col2", "col1 * col2 * 5"))
+    context.load()
+    _assert_model_evaluation(
+        lambda: context.plan(auto_apply=True, no_prompts=True), was_evaluated=True, day_delta=3
+    )
+
+    # Case 6: Model is evaluated on a restatement plan even if the external model is not fresh
+    _assert_model_evaluation(
+        lambda: context.plan(restate_models=[model_name], auto_apply=True, no_prompts=True),
+        was_evaluated=True,
+        day_delta=4,
+    )

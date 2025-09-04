@@ -756,7 +756,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             for interval in snapshot_intervals:
                 snapshot.merge_intervals(interval)
 
-                if interval.last_altered_ts:
+                # Differentiate last_altered_ts between snapshots with shared version but
+                # different dev versions e.g prod vs FORWARD_ONLY dev
+                if snapshot.dev_version == interval.dev_version and interval.last_altered_ts:
                     snapshot.last_altered_ts = max(
                         snapshot.last_altered_ts or -1, interval.last_altered_ts
                     )
@@ -1091,6 +1093,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     python_env=signals.python_env,
                     dialect=self.model.dialect,
                     path=self.model._path,
+                    snapshot=self,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:
@@ -2431,6 +2434,7 @@ def check_ready_intervals(
     python_env: t.Dict[str, Executable],
     dialect: DialectType = None,
     path: t.Optional[Path] = None,
+    snapshot: t.Optional[Snapshot] = None,
     kwargs: t.Optional[t.Dict] = None,
 ) -> Intervals:
     checked_intervals: Intervals = []
@@ -2446,6 +2450,7 @@ def check_ready_intervals(
                 provided_args=(batch,),
                 provided_kwargs=(kwargs or {}),
                 context=context,
+                snapshot=snapshot,
             )
         except Exception as ex:
             raise SignalEvalError(format_evaluated_code_exception(ex, python_env))
