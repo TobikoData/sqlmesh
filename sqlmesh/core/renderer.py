@@ -549,6 +549,11 @@ class QueryRenderer(BaseExpressionRenderer):
             expressions = [e for e in expressions if not isinstance(e, exp.Semicolon)]
 
             if not expressions:
+                # We assume that if there are no expressions, then the model contains dynamic Jinja SQL
+                # and we thus treat it similar to models with adapter calls to match dbt's behavior.
+                if isinstance(self._expression, d.JinjaQuery):
+                    return None
+
                 raise ConfigError(f"Failed to render query at '{self._path}':\n{self._expression}")
 
             if len(expressions) > 1:
