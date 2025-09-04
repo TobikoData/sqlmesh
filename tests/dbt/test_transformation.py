@@ -1075,13 +1075,21 @@ def test_config_dict_syntax():
         config3({"materialized": "table"}, alias="mixed")
         assert False, "Should have raised ConfigError"
     except Exception as e:
-        assert "Invalid config usage" in str(e)
+        assert "cannot mix positional and keyword arguments" in str(e)
 
     # Test nested dicts
     config4 = Config({})
     config4({"meta": {"owner": "data_team", "priority": 1}, "tags": ["daily", "critical"]})
     assert config4._config["meta"]["owner"] == "data_team"
     assert config4._config["tags"] == ["daily", "critical"]
+
+    # Test multiple positional arguments are rejected
+    config4 = Config({})
+    try:
+        config4({"materialized": "table"}, {"alias": "test"})
+        assert False
+    except Exception as e:
+        assert "expected a single dictionary, got 2 arguments" in str(e)
 
 
 def test_config_dict_in_jinja():

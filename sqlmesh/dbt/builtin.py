@@ -171,16 +171,23 @@ class Config:
         self._config = config_dict
 
     def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
-        if args and not kwargs and len(args) == 1 and isinstance(args[0], dict):
-            # Single dict argument: config({"materialized": "table"})
-            self._config.update(args[0])
-        elif not args and kwargs:
+        if args and kwargs:
+            raise ConfigError(
+                "Invalid inline model config: cannot mix positional and keyword arguments"
+            )
+
+        if args:
+            if len(args) == 1 and isinstance(args[0], dict):
+                # Single dict argument: config({"materialized": "table"})
+                self._config.update(args[0])
+            else:
+                raise ConfigError(
+                    f"Invalid inline model config: expected a single dictionary, got {len(args)} arguments"
+                )
+        elif kwargs:
             # Keyword arguments: config(materialized="table")
             self._config.update(kwargs)
-        elif args:
-            raise ConfigError(
-                f"Invalid config usage: expected either a single dict or keyword arguments"
-            )
+
         return ""
 
     def set(self, name: str, value: t.Any) -> str:
