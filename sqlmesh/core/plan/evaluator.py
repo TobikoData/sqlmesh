@@ -137,6 +137,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             execution_time=plan.execution_time,
+            selected_models=plan.selected_models,
         )
 
     def visit_after_all_stage(self, stage: stages.AfterAllStage, plan: EvaluatablePlan) -> None:
@@ -150,6 +151,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             start=plan.start,
             end=plan.end,
             execution_time=plan.execution_time,
+            selected_models=plan.selected_models,
         )
 
     def visit_create_snapshot_records_stage(
@@ -257,6 +259,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             allow_destructive_snapshots=plan.allow_destructive_models,
             allow_additive_snapshots=plan.allow_additive_models,
             selected_snapshot_ids=stage.selected_snapshot_ids,
+            selected_models=plan.selected_models,
         )
         if errors:
             raise PlanError("Plan application failed.")
