@@ -337,15 +337,8 @@ class ModelConfig(BaseModelConfig):
                         raise ConfigError(
                             f"{self.canonical_name(context)}: 'event_time' is required for microbatch incremental strategy."
                         )
-                    concurrent_batches = self._get_field_value("concurrent_batches")
-                    if concurrent_batches is True:
-                        if incremental_by_kind_kwargs.get("batch_size"):
-                            get_console().log_warning(
-                                f"'concurrent_batches' is set to True and 'batch_size' are defined in '{self.canonical_name(context)}'. The batch size will be set to the value of `batch_size`."
-                            )
-                        incremental_by_kind_kwargs["batch_size"] = incremental_by_kind_kwargs.get(
-                            "batch_size", 1
-                        )
+                    # dbt microbatch always processes batches in a size of 1
+                    incremental_by_kind_kwargs["batch_size"] = 1
                 else:
                     if not self.time_column:
                         raise ConfigError(
@@ -674,6 +667,11 @@ class ModelConfig(BaseModelConfig):
                     )
                 else:
                     model_kwargs["start"] = begin
+            # If user explicitly disables concurrent batches then we want to set depends on past to true which we
+            # will do by including the model in the depends_on
+            if self.concurrent_batches is not None and self.concurrent_batches is False:
+                depends_on = model_kwargs.get("depends_on", set())
+                depends_on.add(self.canonical_name(context))
 
         model_kwargs["start"] = model_kwargs.get(
             "start", context.sqlmesh_config.model_defaults.start
