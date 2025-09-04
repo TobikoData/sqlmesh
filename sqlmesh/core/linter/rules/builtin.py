@@ -3,29 +3,31 @@
 from __future__ import annotations
 
 import typing as t
+from pathlib import Path
 
+from ruamel.yaml import YAML
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
 from sqlmesh.core.constants import EXTERNAL_MODELS_YAML
 from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
     get_range_of_model_block,
     read_range_from_string,
 )
 from sqlmesh.core.linter.rule import (
+    CreateFile,
+    Fix,
+    Position,
+    Range,
     Rule,
     RuleViolation,
-    Range,
-    Fix,
     TextEdit,
-    Position,
-    CreateFile,
 )
-from sqlmesh.core.linter.definition import RuleSet
-from sqlmesh.core.model import Model, SqlModel, ExternalModel
-from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
+from sqlmesh.core.model import ExternalModel, Model, SqlModel
+from sqlmesh.utils.lineage import ExternalModelReference, extract_references_from_query
 
 
 class NoSelectStar(Rule):
@@ -127,6 +129,40 @@ class NoMissingAudits(Rule):
             return self.violation()
         except Exception:
             return self.violation()
+
+
+class NoMissingUnitTest(Rule):
+    """All models must have a unit test found in the test/ directory yaml files"""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        #  External models cannot have unit tests
+        if isinstance(model, ExternalModel):
+            return None
+
+        test_dir = Path("tests")
+        found_test = False
+
+        yaml_parser = YAML(typ="safe")
+        for test_file in test_dir.rglob("*.yaml"):
+            try:
+                test_data = yaml_parser.load(test_file) or {}
+            except Exception:
+                # Skip files with Jinja templating or other parse errors
+                continue
+
+            for _, test_config in test_data.items():
+                print(f"Test_Config: {test_config}")
+                if test_config.get("model") == model.name:
+                    found_test = True
+                    break
+            if found_test:
+                break
+
+        if not found_test:
+            return self.violation(
+                violation_msg=f"Model {model.name} is missing unit test(s). Please add in the tests/ directory."
+            )
+        return None
 
 
 class NoMissingExternalModels(Rule):
