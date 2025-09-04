@@ -18,6 +18,8 @@ class TestExecutionContext(ExecutionContext):
         models: All upstream models to use for expansion and mapping of physical locations.
     """
 
+    __test__ = False  # prevent pytest trying to collect this as a test class
+
     def __init__(
         self,
         engine_adapter: EngineAdapter,
