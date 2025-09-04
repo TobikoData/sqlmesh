@@ -11737,6 +11737,45 @@ def test_use_original_sql():
     assert model.post_statements_[0].sql == "CREATE TABLE post (b INT)"
 
 
+def test_grants():
+    expressions = d.parse("""
+        MODEL (
+            name test.table,
+            kind FULL,
+            grants (
+                'select' = ['user1', 123, admin_role, 'user2'],
+                'insert' = 'admin',
+                'roles/bigquery.dataViewer' = ["group:data_eng@company.com", 'user:someone@company.com'],
+                'update' = 'admin'
+            )
+        );
+        SELECT 1 as id
+    """)
+    model = load_sql_based_model(expressions)
+    assert model.grants == {
+        "select": ["user1", "123", "admin_role", "user2"],
+        "insert": ["admin"],
+        "roles/bigquery.dataViewer": ["group:data_eng@company.com", "user:someone@company.com"],
+        "update": ["admin"],
+    }
+
+    model = create_sql_model(
+        "db.table",
+        parse_one("SELECT 1 AS id"),
+        kind="FULL",
+        grants={
+            "select": ["user1", "user2"],
+            "insert": ["admin"],
+            "roles/bigquery.dataViewer": "user:data_eng@company.com",
+        },
+    )
+    assert model.grants == {
+        "select": ["user1", "user2"],
+        "insert": ["admin"],
+        "roles/bigquery.dataViewer": ["user:data_eng@company.com"],
+    }
+
+
 @pytest.mark.parametrize(
     "kind",
     [
@@ -11914,21 +11953,6 @@ def test_grants_unresolved_macro_errors():
         load_sql_based_model(expressions3)
 
 
-def test_grants_mixed_types_conversion():
-    expressions = d.parse("""
-        MODEL (
-            name test.mixed_types,
-            kind FULL,
-            grants (
-                'select' = ['user1', 123, admin_role, 'user2']
-            )
-        );
-        SELECT 1 as id
-    """)
-    model = load_sql_based_model(expressions)
-    assert model.grants == {"select": ["user1", "123", "admin_role", "user2"]}
-
-
 def test_grants_empty_values():
     model1 = create_sql_model(
         "db.table", parse_one("SELECT 1 AS id"), kind="FULL", grants={"select": []}
@@ -11937,24 +11961,6 @@ def test_grants_empty_values():
 
     model2 = create_sql_model("db.table", parse_one("SELECT 1 AS id"), kind="FULL")
     assert model2.grants is None
-
-
-def test_grants_backward_compatibility():
-    model = create_sql_model(
-        "db.table",
-        parse_one("SELECT 1 AS id"),
-        kind="FULL",
-        grants={
-            "select": ["user1", "user2"],
-            "insert": ["admin"],
-            "roles/bigquery.dataViewer": ["user:data_eng@company.com"],
-        },
-    )
-    assert model.grants == {
-        "select": ["user1", "user2"],
-        "insert": ["admin"],
-        "roles/bigquery.dataViewer": ["user:data_eng@company.com"],
-    }
 
 
 @pytest.mark.parametrize(
