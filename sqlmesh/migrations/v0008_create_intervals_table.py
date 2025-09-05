@@ -5,7 +5,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_ddl(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     intervals_table = "_intervals"
     if state_sync.schema:
@@ -36,3 +36,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter.create_index(
         intervals_table, "name_identifier_idx", ("name", "identifier", "created_ts")
     )
+
+
+def migrate_dml(state_sync, **kwargs):  # type: ignore
+    pass

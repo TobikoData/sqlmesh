@@ -587,6 +587,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._state_sync = self._new_state_sync()
 
             if self._state_sync.get_versions(validate=False).schema_version == 0:
+                self.console.log_status_update("Initializing new project state...")
                 self._state_sync.migrate(default_catalog=self.default_catalog)
             self._state_sync.get_versions()
             self._state_sync = CachingStateSync(self._state_sync)  # type: ignore

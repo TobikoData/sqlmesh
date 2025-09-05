@@ -5,7 +5,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import blob_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_ddl(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     if engine_adapter.dialect != "mysql":
         return
@@ -43,3 +43,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         )
 
         engine_adapter.execute(alter_table_exp)
+
+
+def migrate_dml(state_sync, **kwargs):  # type: ignore
+    pass

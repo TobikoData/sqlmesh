@@ -24,7 +24,11 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.console import get_console
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_ddl(state_sync, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_dml(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"

@@ -12,7 +12,11 @@ def _hash(data):  # type: ignore
     return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_ddl(state_sync, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_dml(state_sync, **kwargs):  # type: ignore
     import pandas as pd
 
     engine_adapter = state_sync.engine_adapter

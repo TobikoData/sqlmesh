@@ -10,7 +10,11 @@ from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.migration import index_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_ddl(state_sync, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_dml(state_sync, **kwargs):  # type: ignore
     import pandas as pd
 
     engine_adapter = state_sync.engine_adapter
