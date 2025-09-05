@@ -7,6 +7,7 @@ from sqlmesh.utils.migration import blob_text_type
 
 
 def migrate_ddl(state_sync, **kwargs):  # type: ignore
+    schema = state_sync.schema
     engine_adapter = state_sync.engine_adapter
     if not engine_adapter.SUPPORTS_INDEXES:
         return
