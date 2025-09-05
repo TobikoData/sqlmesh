@@ -177,10 +177,10 @@ class StateMigrator:
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
-            migration.migrate_ddl(state_sync, default_catalog=default_catalog)
+            migration.migrate_schemas(state_sync, default_catalog=default_catalog)
             if state_table_exist:
                 # No need to run DML for the initial migration since all tables are empty
-                migration.migrate_dml(state_sync, default_catalog=default_catalog)
+                migration.migrate_rows(state_sync, default_catalog=default_catalog)
 
         snapshot_count_after = self.snapshot_state.count()
 

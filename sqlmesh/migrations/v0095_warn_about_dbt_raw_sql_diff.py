@@ -17,11 +17,11 @@ from sqlmesh.core.console import get_console
 SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"
 
 
-def migrate_ddl(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     pass
 
 
-def migrate_dml(state_sync, **kwargs):  # type: ignore
+def migrate_rows(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"

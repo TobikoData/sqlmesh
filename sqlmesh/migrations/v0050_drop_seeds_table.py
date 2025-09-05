@@ -1,7 +1,7 @@
 """Drop the seeds table."""
 
 
-def migrate_ddl(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
 
     seeds_table = "_seeds"
@@ -11,5 +11,5 @@ def migrate_ddl(state_sync, **kwargs):  # type: ignore
     engine_adapter.drop_table(seeds_table)
 
 
-def migrate_dml(state_sync, **kwargs):  # type: ignore
+def migrate_rows(state_sync, **kwargs):  # type: ignore
     pass

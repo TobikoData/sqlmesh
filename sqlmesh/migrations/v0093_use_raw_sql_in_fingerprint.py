@@ -1,9 +1,9 @@
 """Use the raw SQL when computing the model fingerprint."""
 
 
-def migrate_ddl(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     pass
 
 
-def migrate_dml(state_sync, **kwargs):  # type: ignore
+def migrate_rows(state_sync, **kwargs):  # type: ignore
     pass

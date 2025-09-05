@@ -9,7 +9,7 @@ from sqlmesh.utils.migration import index_text_type
 from sqlmesh.utils.migration import blob_text_type
 
 
-def migrate_ddl(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     snapshots_table = "_snapshots"
@@ -29,7 +29,7 @@ def migrate_ddl(state_sync, **kwargs):  # type: ignore
     engine_adapter.execute(alter_table_exp)
 
 
-def migrate_dml(state_sync, **kwargs):  # type: ignore
+def migrate_rows(state_sync, **kwargs):  # type: ignore
     import pandas as pd
 
     engine_adapter = state_sync.engine_adapter
