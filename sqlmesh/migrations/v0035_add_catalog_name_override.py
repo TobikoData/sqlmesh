@@ -3,7 +3,7 @@
 from sqlglot import exp
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     environments_table = "_environments"
     if state_sync.schema:
@@ -20,3 +20,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
         ],
     )
     engine_adapter.execute(alter_table_exp)
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
+    pass

@@ -5,7 +5,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     versions_table = "_versions"
     if state_sync.schema:
@@ -23,3 +23,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     )
 
     engine_adapter.execute(alter_table_exp)
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
+    pass

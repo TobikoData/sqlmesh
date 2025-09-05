@@ -173,9 +173,14 @@ class StateMigrator:
 
         snapshot_count_before = self.snapshot_state.count() if versions.schema_version else None
 
+        state_table_exist = any(self.engine_adapter.table_exists(t) for t in self._state_tables)
+
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
-            migration.migrate(state_sync, default_catalog=default_catalog)
+            migration.migrate_schemas(state_sync, default_catalog=default_catalog)
+            if state_table_exist:
+                # No need to run DML for the initial migration since all tables are empty
+                migration.migrate_rows(state_sync, default_catalog=default_catalog)
 
         snapshot_count_after = self.snapshot_state.count()
 

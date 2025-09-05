@@ -6,7 +6,7 @@ from sqlmesh.utils.migration import index_text_type
 from sqlmesh.utils.migration import blob_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     schema = state_sync.schema
     engine_adapter = state_sync.engine_adapter
     if not engine_adapter.SUPPORTS_INDEXES:
@@ -116,3 +116,7 @@ def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter.rename_table(new_snapshots_table, snapshots_table)
     engine_adapter.rename_table(new_environments_table, environments_table)
     engine_adapter.rename_table(new_intervals_table, intervals_table)
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
+    pass

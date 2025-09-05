@@ -8,14 +8,12 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     intervals_table = "_intervals"
-    snapshots_table = "_snapshots"
     if schema:
         intervals_table = f"{schema}.{intervals_table}"
-        snapshots_table = f"{schema}.{snapshots_table}"
 
     index_type = index_text_type(engine_adapter.dialect)
     alter_table_exp = exp.Alter(
@@ -29,6 +27,16 @@ def migrate(state_sync, **kwargs):  # type: ignore
         ],
     )
     engine_adapter.execute(alter_table_exp)
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
+    engine_adapter = state_sync.engine_adapter
+    schema = state_sync.schema
+    intervals_table = "_intervals"
+    snapshots_table = "_snapshots"
+    if schema:
+        intervals_table = f"{schema}.{intervals_table}"
+        snapshots_table = f"{schema}.{snapshots_table}"
 
     used_dev_versions: t.Set[t.Tuple[str, str]] = set()
     used_versions: t.Set[t.Tuple[str, str]] = set()
