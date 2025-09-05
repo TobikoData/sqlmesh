@@ -354,7 +354,10 @@ def test_load_incremental_time_range_strategy_all_defined(
         config(
             materialized='incremental',
             incremental_strategy='incremental_by_time_range',
-            time_column='ds',
+            time_column={
+                'column': 'ds',
+                'format': '%Y%m%d'
+            },
             auto_restatement_intervals=3,
             partition_by_time_column=false,
             lookback=5,
@@ -393,7 +396,7 @@ def test_load_incremental_time_range_strategy_all_defined(
     assert model.kind.partition_by_time_column is False
     assert model.kind.lookback == 5
     assert model.kind.time_column == TimeColumn(
-        column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
+        column=exp.to_column("ds", quoted=True), format="%Y%m%d"
     )
     assert model.kind.batch_size == 3
     assert model.kind.batch_concurrency == 2

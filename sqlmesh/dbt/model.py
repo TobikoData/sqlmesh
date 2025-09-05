@@ -31,6 +31,7 @@ from sqlmesh.core.model.kind import (
     OnAdditiveChange,
     on_destructive_change_validator,
     on_additive_change_validator,
+    TimeColumn,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, sql_str_validator
@@ -85,7 +86,7 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column: t.Optional[str] = None
+    time_column: t.Optional[TimeColumn] = None
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
     batch_concurrency: t.Optional[int] = None
@@ -152,6 +153,7 @@ class ModelConfig(BaseModelConfig):
     _sql_validator = sql_str_validator
     _on_destructive_change_validator = on_destructive_change_validator
     _on_additive_change_validator = on_additive_change_validator
+    _time_column_validator = TimeColumn.validator()
 
     @field_validator(
         "unique_key",
@@ -243,17 +245,6 @@ class ModelConfig(BaseModelConfig):
     def table_schema(self) -> str:
         return self.target_schema or super().table_schema
 
-    def _get_overlapping_field_value(
-        self, context: DbtContext, dbt_field_name: str, sqlmesh_field_name: str
-    ) -> t.Optional[t.Any]:
-        dbt_field = self._get_field_value(dbt_field_name)
-        sqlmesh_field = getattr(self, sqlmesh_field_name, None)
-        if dbt_field is not None and sqlmesh_field is not None:
-            get_console().log_warning(
-                f"Both '{dbt_field_name}' and '{sqlmesh_field_name}' are set for model '{self.canonical_name(context)}'. '{sqlmesh_field_name}' will be used."
-            )
-        return sqlmesh_field if sqlmesh_field is not None else dbt_field
-
     def model_kind(self, context: DbtContext) -> ModelKind:
         """
         Get the sqlmesh ModelKind
@@ -342,16 +333,18 @@ class ModelConfig(BaseModelConfig):
                         f"Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_RANGE_STRATEGIES)}."
                     )
 
-                if self.time_column and strategy not in {"incremental_by_time_range", "microbatch"}:
+                if self.time_column and strategy != "incremental_by_time_range":
                     get_console().log_warning(
                         f"Using `time_column` on a model with incremental_strategy '{strategy}' has been deprecated. "
                         f"Please use `incremental_by_time_range` instead in model '{self.canonical_name(context)}'."
                     )
 
                 if strategy == "microbatch":
-                    time_column = self._get_overlapping_field_value(
-                        context, "event_time", "time_column"
-                    )
+                    if self.time_column:
+                        raise ConfigError(
+                            f"{self.canonical_name(context)}: 'time_column' cannot be used with 'microbatch' incremental strategy. Use 'event_time' instead."
+                        )
+                    time_column = self._get_field_value("event_time")
                     if not time_column:
                         raise ConfigError(
                             f"{self.canonical_name(context)}: 'event_time' is required for microbatch incremental strategy."
