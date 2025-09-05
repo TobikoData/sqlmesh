@@ -105,10 +105,10 @@ class StateReader(abc.ABC):
         current_ts: t.Optional[int] = None,
         exclude_expired: bool = True,
     ) -> t.Set[MinimalSnapshot]:
-        """Return the snapshot id's for all versions of the specified snapshot names.
+        """Return the snapshot records for all versions of the specified snapshot names.
 
         Args:
-            snapshot_names: Iterable of snapshot names to fetch all snapshot for
+            snapshot_names: Iterable of snapshot names to fetch all snapshot records for
             current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
             exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
 

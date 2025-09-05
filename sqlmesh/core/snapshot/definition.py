@@ -1487,9 +1487,9 @@ class SnapshotTableCleanupTask(PydanticModel):
     dev_table_only: bool
 
 
-SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
+SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, MinimalSnapshot, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
-SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
+SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, MinimalSnapshot, Snapshot]
 
 
 class DeployabilityIndex(PydanticModel, frozen=True):
