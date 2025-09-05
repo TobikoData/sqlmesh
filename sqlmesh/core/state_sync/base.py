@@ -23,6 +23,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
     SnapshotNameVersion,
+    MinimalSnapshot,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
@@ -98,21 +99,21 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_snapshot_ids_by_names(
+    def get_snapshots_by_names(
         self,
         snapshot_names: t.Iterable[str],
         current_ts: t.Optional[int] = None,
         exclude_expired: bool = True,
-    ) -> t.Set[SnapshotId]:
+    ) -> t.Set[MinimalSnapshot]:
         """Return the snapshot id's for all versions of the specified snapshot names.
 
         Args:
-            snapshot_names: Iterable of snapshot names to fetch all snapshot id's for
+            snapshot_names: Iterable of snapshot names to fetch all snapshot for
             current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
             exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
 
         Returns:
-            A dictionary mapping snapshot names to a list of relevant snapshot id's
+            A set containing all the matched snapshot records. To fetch full snapshots, pass it into StateSync.get_snapshots()
         """
 
     @abc.abstractmethod

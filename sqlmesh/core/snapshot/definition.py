@@ -588,6 +588,30 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return SnapshotNameVersion(name=self.name, version=self.version)
 
 
+class MinimalSnapshot(PydanticModel):
+    """A stripped down version of a snapshot that is used in situations where we want to fetch the main fields of the snapshots table
+    without the overhead of parsing the full snapshot payload and fetching intervals.
+    """
+
+    name: str
+    version: str
+    dev_version_: t.Optional[str] = Field(alias="dev_version")
+    identifier: str
+    fingerprint: SnapshotFingerprint
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
+
+
 class Snapshot(PydanticModel, SnapshotInfoMixin):
     """A snapshot represents a node at a certain point in time.
 

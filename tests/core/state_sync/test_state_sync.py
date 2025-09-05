@@ -3571,10 +3571,10 @@ def test_update_environment_statements(state_sync: EngineAdapterStateSync):
     ]
 
 
-def test_get_snapshot_ids_by_names(
+def test_get_snapshots_by_names(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
 ):
-    assert state_sync.get_snapshot_ids_by_names(snapshot_names=[]) == set()
+    assert state_sync.get_snapshots_by_names(snapshot_names=[]) == set()
 
     snap_a_v1, snap_a_v2 = (
         make_snapshot(
@@ -3597,18 +3597,20 @@ def test_get_snapshot_ids_by_names(
 
     state_sync.push_snapshots([snap_a_v1, snap_a_v2, snap_b])
 
-    assert state_sync.get_snapshot_ids_by_names(snapshot_names=['"a"']) == {
+    assert {s.snapshot_id for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'])} == {
         snap_a_v1.snapshot_id,
         snap_a_v2.snapshot_id,
     }
-    assert state_sync.get_snapshot_ids_by_names(snapshot_names=['"a"', '"b"']) == {
+    assert {
+        s.snapshot_id for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"', '"b"'])
+    } == {
         snap_a_v1.snapshot_id,
         snap_a_v2.snapshot_id,
         snap_b.snapshot_id,
     }
 
 
-def test_get_snapshot_ids_by_names_include_expired(
+def test_get_snapshots_by_names_include_expired(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable[..., Snapshot]
 ):
     now_ts = now_timestamp()
@@ -3635,15 +3637,22 @@ def test_get_snapshot_ids_by_names_include_expired(
 
     state_sync.push_snapshots([normal_a, expired_a])
 
-    assert state_sync.get_snapshot_ids_by_names(snapshot_names=['"a"'], current_ts=now_ts) == {
-        normal_a.snapshot_id
-    }
-    assert state_sync.get_snapshot_ids_by_names(snapshot_names=['"a"'], exclude_expired=False) == {
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'], current_ts=now_ts)
+    } == {normal_a.snapshot_id}
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(snapshot_names=['"a"'], exclude_expired=False)
+    } == {
         normal_a.snapshot_id,
         expired_a.snapshot_id,
     }
 
     # wind back time to 10 seconds ago (before the expired snapshot is expired - it expired 5 seconds ago) to test it stil shows in a normal query
-    assert state_sync.get_snapshot_ids_by_names(
-        snapshot_names=['"a"'], current_ts=(now_ts - (10 * 1000))
-    ) == {normal_a.snapshot_id, expired_a.snapshot_id}
+    assert {
+        s.snapshot_id
+        for s in state_sync.get_snapshots_by_names(
+            snapshot_names=['"a"'], current_ts=(now_ts - (10 * 1000))
+        )
+    } == {normal_a.snapshot_id, expired_a.snapshot_id}
