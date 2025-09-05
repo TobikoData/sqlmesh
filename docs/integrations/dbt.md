@@ -219,7 +219,7 @@ This section describes how to adapt dbt's incremental models to run on sqlmesh a
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads:
 
 * Using merge (with the sqlmesh [`INCREMENTAL_BY_UNIQUE_KEY` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key))
-* Using insert-overwrite/delete+insert (with the sqlmesh [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
+* Using [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range)
 
 #### Incremental by unique key
 
@@ -233,28 +233,22 @@ To enable incremental_by_unique_key incrementality, the model configuration shou
 
 #### Incremental by time range
 
-To enable incremental_by_time_range incrementality, the model configuration should contain:
+To enable incremental_by_time_range incrementality, the model configuration must contain:
 
-* The `time_column` key with the model's time column field name as the value (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
 * The `materialized` key with value `'incremental'`
-* Either:
-    * The `incremental_strategy` key with value `'insert_overwrite'` or
-    * The `incremental_strategy` key with value `'delete+insert'`
-    * Note: in this context, these two strategies are synonyms. Regardless of which one is specified SQLMesh will use the [`best incremental strategy`](../concepts/models/model_kinds.md#materialization-strategy) for the target engine.
+* The `incremental_strategy` key with the value `incremental_by_time_range`
+* The `time_column` key with the model's time column field name as the value (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
 
 ### Incremental logic
 
-SQLMesh requires a new jinja block gated by `{% if sqlmesh_incremental is defined %}`. The new block should supersede the existing `{% if is_incremental() %}` block and contain the `WHERE` clause selecting the time interval.
+Unlike dbt incremental strategies, SQLMesh does not require the use of `is_incremental` jinja blocks to implement incremental logic. 
+Instead, SQLMesh provides predefined time macro variables that can be used in the model's SQL to filter data based on the time column.
 
 For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja block gated by `{% if sqlmesh_incremental is defined %}` as follows:
 
 ```bash
-> {% if sqlmesh_incremental is defined %}
 >   WHERE
 >     ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
-> {% elif is_incremental() %}
->   ; < your existing is_incremental block >
-> {% endif %}
 ```
 
 `{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalents of SQLMesh's `@start_ds` and `@end_ds` predefined time macro variables. See all [predefined time variables](../concepts/macros/macro_variables.md) available in jinja.
@@ -263,13 +257,11 @@ For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja blo
 
 SQLMesh provides configuration parameters that enable control over how incremental computations occur. These parameters are set in the model's `config` block.
 
-The [`batch_size` parameter](../concepts/models/overview.md#batch_size) determines the maximum number of time intervals to run in a single job.
-
-The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to capture late arriving data. It sets the number of units of late arriving data the model should expect and must be a positive integer.
+See [Incremental Model Properties](../concepts/models/overview.md#incremental-model-properties) for the full list of incremental model configuration parameters.
 
 **Note:** By default, all incremental dbt models are configured to be [forward-only](../concepts/plans.md#forward-only-plans). However, you can change this behavior by setting the `forward_only: false` setting either in the configuration of an individual model or globally for all models in the `dbt_project.yaml` file. The [forward-only](../concepts/plans.md#forward-only-plans) mode aligns more closely with the typical operation of dbt and therefore better meets user's expectations.
 
-Similarly, the [allow_partials](../concepts/models/overview.md#allow_partials) parameter is set to `true` by default for incremental dbt models unless the time column is specified, or the `allow_partials` parameter is explicitly set to `false` in the model configuration.
+Similarly, the [allow_partials](../concepts/models/overview.md#allow_partials) parameter is set to `true` by default unless the `allow_partials` parameter is explicitly set to `false` in the model configuration.
 
 #### on_schema_change
 

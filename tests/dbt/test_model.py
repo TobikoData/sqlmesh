@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlglot import exp
 from sqlmesh import Context
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
@@ -301,3 +302,145 @@ def test_load_microbatch_required_only(
     )
     assert model.kind.batch_size == 1
     assert model.depends_on_self is False
+
+
+@pytest.mark.slow
+def test_load_incremental_time_range_strategy_required_only(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
+) -> None:
+    project_dir, model_dir = create_empty_project()
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    incremental_time_range_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='incremental_by_time_range',
+            time_column='ds',
+        )
+    }}
+
+    SELECT 1 as cola, '2021-01-01' as ds
+    """
+    incremental_time_range_model_file = model_dir / "incremental_time_range.sql"
+    with open(incremental_time_range_model_file, "w", encoding="utf-8") as f:
+        f.write(incremental_time_range_contents)
+
+    snapshot_fqn = '"local"."main"."incremental_time_range"'
+    context = Context(paths=project_dir)
+    model = context.snapshots[snapshot_fqn].model
+    # Validate model-level attributes
+    assert model.start == "2025-01-01"
+    assert model.interval_unit.is_day
+    # Validate model kind attributes
+    assert isinstance(model.kind, IncrementalByTimeRangeKind)
+    assert model.kind.lookback == 1
+    assert model.kind.time_column == TimeColumn(
+        column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
+    )
+    assert model.kind.batch_size is None
+    assert model.depends_on_self is False
+    assert model.kind.auto_restatement_intervals is None
+    assert model.kind.partition_by_time_column is True
+
+
+@pytest.mark.slow
+def test_load_incremental_time_range_strategy_all_defined(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
+) -> None:
+    project_dir, model_dir = create_empty_project()
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    incremental_time_range_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='incremental_by_time_range',
+            time_column='ds',
+            auto_restatement_intervals=3,
+            partition_by_time_column=false,
+            lookback=5,
+            batch_size=3,
+            batch_concurrency=2,
+            forward_only=true,
+            disable_restatement=true,
+            on_destructive_change='allow',
+            on_additive_change='error',
+            auto_restatement_cron='@hourly',
+            on_schema_change='ignore'
+        )
+    }}
+
+    SELECT 1 as cola, '2021-01-01' as ds
+    """
+    incremental_time_range_model_file = model_dir / "incremental_time_range.sql"
+    with open(incremental_time_range_model_file, "w", encoding="utf-8") as f:
+        f.write(incremental_time_range_contents)
+
+    snapshot_fqn = '"local"."main"."incremental_time_range"'
+    context = Context(paths=project_dir)
+    model = context.snapshots[snapshot_fqn].model
+    # Validate model-level attributes
+    assert model.start == "2025-01-01"
+    assert model.interval_unit.is_day
+    # Validate model kind attributes
+    assert isinstance(model.kind, IncrementalByTimeRangeKind)
+    # `on_schema_change` is ignored since the user explicitly overrode the values
+    assert model.kind.on_destructive_change == OnDestructiveChange.ALLOW
+    assert model.kind.on_additive_change == OnAdditiveChange.ERROR
+    assert model.kind.forward_only is True
+    assert model.kind.disable_restatement is True
+    assert model.kind.auto_restatement_cron == "@hourly"
+    assert model.kind.auto_restatement_intervals == 3
+    assert model.kind.partition_by_time_column is False
+    assert model.kind.lookback == 5
+    assert model.kind.time_column == TimeColumn(
+        column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
+    )
+    assert model.kind.batch_size == 3
+    assert model.kind.batch_concurrency == 2
+    assert model.depends_on_self is False
+
+
+@pytest.mark.slow
+def test_load_deprecated_incremental_time_column(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
+) -> None:
+    project_dir, model_dir = create_empty_project()
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    incremental_time_range_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='delete+insert',
+            time_column='ds'
+        )
+    }}
+
+    SELECT 1 as cola, '2021-01-01' as ds
+    """
+    incremental_time_range_model_file = model_dir / "incremental_time_range.sql"
+    with open(incremental_time_range_model_file, "w", encoding="utf-8") as f:
+        f.write(incremental_time_range_contents)
+
+    snapshot_fqn = '"local"."main"."incremental_time_range"'
+    context = Context(paths=project_dir)
+    model = context.snapshots[snapshot_fqn].model
+    # Validate model-level attributes
+    assert model.start == "2025-01-01"
+    assert model.interval_unit.is_day
+    # Validate model-level attributes
+    assert model.start == "2025-01-01"
+    assert model.interval_unit.is_day
+    # Validate model kind attributes
+    assert isinstance(model.kind, IncrementalByTimeRangeKind)
+    assert model.kind.lookback == 1
+    assert model.kind.time_column == TimeColumn(
+        column=exp.to_column("ds", quoted=True), format="%Y-%m-%d"
+    )
+    assert model.kind.batch_size is None
+    assert model.depends_on_self is False
+    assert model.kind.auto_restatement_intervals is None
+    assert model.kind.partition_by_time_column is True
+    assert (
+        "Using `time_column` on a model with incremental_strategy 'delete+insert' has been deprecated. Please use `incremental_by_time_range` instead in model 'main.incremental_time_range'."
+        in caplog.text
+    )
