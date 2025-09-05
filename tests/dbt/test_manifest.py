@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.core.config import ModelDefaultsConfig
+from sqlmesh.core.model import TimeColumn
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.common import ModelAttrs
 from sqlmesh.dbt.context import DbtContext
@@ -83,7 +84,7 @@ def test_manifest_helper(caplog):
     assert waiter_as_customer_by_day_config.materialized == "incremental"
     assert waiter_as_customer_by_day_config.incremental_strategy == "delete+insert"
     assert waiter_as_customer_by_day_config.cluster_by == ["ds"]
-    assert waiter_as_customer_by_day_config.time_column == "ds"
+    assert waiter_as_customer_by_day_config.time_column == TimeColumn.create("ds", "duckdb")
 
     if DBT_VERSION >= (1, 5, 0):
         waiter_revenue_by_day_config = models["waiter_revenue_by_day_v2"]
@@ -105,7 +106,7 @@ def test_manifest_helper(caplog):
     assert waiter_revenue_by_day_config.materialized == "incremental"
     assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"
     assert waiter_revenue_by_day_config.cluster_by == ["ds"]
-    assert waiter_revenue_by_day_config.time_column == "ds"
+    assert waiter_revenue_by_day_config.time_column == TimeColumn.create("ds", "duckdb")
     assert waiter_revenue_by_day_config.dialect_ == "bigquery"
 
     assert helper.models("customers")["customers"].dependencies == Dependencies(

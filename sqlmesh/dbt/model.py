@@ -25,7 +25,14 @@ from sqlmesh.core.model import (
     ManagedKind,
     create_sql_model,
 )
-from sqlmesh.core.model.kind import SCDType2ByTimeKind, OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.model.kind import (
+    SCDType2ByTimeKind,
+    OnDestructiveChange,
+    OnAdditiveChange,
+    on_destructive_change_validator,
+    on_additive_change_validator,
+    TimeColumn,
+)
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, sql_str_validator
 from sqlmesh.utils.errors import ConfigError
@@ -41,7 +48,9 @@ logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
 
 
-INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite", "microbatch"])
+INCREMENTAL_BY_TIME_RANGE_STRATEGIES = set(
+    ["delete+insert", "insert_overwrite", "microbatch", "incremental_by_time_range"]
+)
 INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
@@ -77,7 +86,7 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column: t.Optional[str] = None
+    time_column: t.Optional[TimeColumn] = None
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
     batch_concurrency: t.Optional[int] = None
@@ -87,6 +96,9 @@ class ModelConfig(BaseModelConfig):
     physical_version: t.Optional[str] = None
     auto_restatement_cron: t.Optional[str] = None
     auto_restatement_intervals: t.Optional[int] = None
+    partition_by_time_column: t.Optional[bool] = None
+    on_destructive_change: t.Optional[OnDestructiveChange] = None
+    on_additive_change: t.Optional[OnAdditiveChange] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -139,6 +151,9 @@ class ModelConfig(BaseModelConfig):
     incremental_predicates: t.Optional[t.List[str]] = None
 
     _sql_validator = sql_str_validator
+    _on_destructive_change_validator = on_destructive_change_validator
+    _on_additive_change_validator = on_additive_change_validator
+    _time_column_validator = TimeColumn.validator()
 
     @field_validator(
         "unique_key",
@@ -230,17 +245,6 @@ class ModelConfig(BaseModelConfig):
     def table_schema(self) -> str:
         return self.target_schema or super().table_schema
 
-    def _get_overlapping_field_value(
-        self, context: DbtContext, dbt_field_name: str, sqlmesh_field_name: str
-    ) -> t.Optional[t.Any]:
-        dbt_field = self._get_field_value(dbt_field_name)
-        sqlmesh_field = getattr(self, sqlmesh_field_name, None)
-        if dbt_field is not None and sqlmesh_field is not None:
-            get_console().log_warning(
-                f"Both '{dbt_field_name}' and '{sqlmesh_field_name}' are set for model '{self.canonical_name(context)}'. '{sqlmesh_field_name}' will be used."
-            )
-        return sqlmesh_field if sqlmesh_field is not None else dbt_field
-
     def model_kind(self, context: DbtContext) -> ModelKind:
         """
         Get the sqlmesh ModelKind
@@ -275,8 +279,12 @@ class ModelConfig(BaseModelConfig):
                 "Valid values are 'ignore', 'fail', 'append_new_columns', 'sync_all_columns'."
             )
 
-        incremental_kind_kwargs["on_destructive_change"] = on_destructive_change
-        incremental_kind_kwargs["on_additive_change"] = on_additive_change
+        incremental_kind_kwargs["on_destructive_change"] = (
+            self._get_field_value("on_destructive_change") or on_destructive_change
+        )
+        incremental_kind_kwargs["on_additive_change"] = (
+            self._get_field_value("on_additive_change") or on_additive_change
+        )
         auto_restatement_cron_value = self._get_field_value("auto_restatement_cron")
         if auto_restatement_cron_value is not None:
             incremental_kind_kwargs["auto_restatement_cron"] = auto_restatement_cron_value
@@ -292,7 +300,8 @@ class ModelConfig(BaseModelConfig):
                 incremental_kind_kwargs["forward_only"] = forward_only_value
 
             is_incremental_by_time_range = self.time_column or (
-                self.incremental_strategy and self.incremental_strategy == "microbatch"
+                self.incremental_strategy
+                and self.incremental_strategy in {"microbatch", "incremental_by_time_range"}
             )
             # Get shared incremental by kwargs
             for field in ("batch_size", "batch_concurrency", "lookback"):
@@ -313,22 +322,29 @@ class ModelConfig(BaseModelConfig):
                     )
             incremental_by_kind_kwargs["disable_restatement"] = disable_restatement
 
-            # Incremental by time range which includes microbatch
             if is_incremental_by_time_range:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByTimeRangeKind
                 )
 
-                if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
+                if strategy not in INCREMENTAL_BY_TIME_RANGE_STRATEGIES:
                     get_console().log_warning(
                         f"SQLMesh incremental by time strategy is not compatible with '{strategy}' incremental strategy in model '{self.canonical_name(context)}'. "
-                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
+                        f"Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_RANGE_STRATEGIES)}."
+                    )
+
+                if self.time_column and strategy != "incremental_by_time_range":
+                    get_console().log_warning(
+                        f"Using `time_column` on a model with incremental_strategy '{strategy}' has been deprecated. "
+                        f"Please use `incremental_by_time_range` instead in model '{self.canonical_name(context)}'."
                     )
 
                 if strategy == "microbatch":
-                    time_column = self._get_overlapping_field_value(
-                        context, "event_time", "time_column"
-                    )
+                    if self.time_column:
+                        raise ConfigError(
+                            f"{self.canonical_name(context)}: 'time_column' cannot be used with 'microbatch' incremental strategy. Use 'event_time' instead."
+                        )
+                    time_column = self._get_field_value("event_time")
                     if not time_column:
                         raise ConfigError(
                             f"{self.canonical_name(context)}: 'event_time' is required for microbatch incremental strategy."
@@ -342,11 +358,22 @@ class ModelConfig(BaseModelConfig):
                         )
                     time_column = self.time_column
 
+                incremental_by_time_range_kwargs = {
+                    "time_column": time_column,
+                }
+                if self.auto_restatement_intervals:
+                    incremental_by_time_range_kwargs["auto_restatement_intervals"] = (
+                        self.auto_restatement_intervals
+                    )
+                if self.partition_by_time_column is not None:
+                    incremental_by_time_range_kwargs["partition_by_time_column"] = (
+                        self.partition_by_time_column
+                    )
+
                 return IncrementalByTimeRangeKind(
-                    time_column=time_column,
-                    auto_restatement_intervals=self.auto_restatement_intervals,
                     **incremental_kind_kwargs,
                     **incremental_by_kind_kwargs,
+                    **incremental_by_time_range_kwargs,
                 )
 
             if self.unique_key:
@@ -384,7 +411,7 @@ class ModelConfig(BaseModelConfig):
                 IncrementalUnmanagedKind
             )
             return IncrementalUnmanagedKind(
-                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
+                insert_overwrite=strategy in INCREMENTAL_BY_TIME_RANGE_STRATEGIES,
                 disable_restatement=incremental_by_kind_kwargs["disable_restatement"],
                 **incremental_kind_kwargs,
             )
