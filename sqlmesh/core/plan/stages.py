@@ -3,9 +3,7 @@ import typing as t
 from dataclasses import dataclass
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import EnvironmentStatements, EnvironmentNamingInfo, Environment
-from sqlmesh.core.plan.common import (
-    should_force_rebuild,
-)
+from sqlmesh.core.plan.common import should_force_rebuild
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.scheduler import merged_missing_intervals, SnapshotToIntervals
@@ -103,9 +101,9 @@ class RestatementStage:
 
     This stage is effectively a "marker" stage to trigger the plan evaluator to perform the "clear intervals" logic after the BackfillStage has completed.
     The "clear intervals" logic is executed just-in-time using the latest state available in order to pick up new snapshots that may have
-    been created while the BackfillState was running, which is why we do not build a list of snapshots to clear at plan time.
+    been created while the BackfillStage was running, which is why we do not build a list of snapshots to clear at plan time and defer to evaluation time.
 
-    Note that this stage is only present on `prod` plans, because dev plans do not need to worry about clearing intervals in other environments.
+    Note that this stage is only present on `prod` plans because dev plans do not need to worry about clearing intervals in other environments.
 
     Args:
         all_snapshots: All snapshots in the plan by name. Note that this does not include the snapshots from other environments that will get their

@@ -2270,7 +2270,6 @@ class TerminalConsole(Console):
                     dialect=self.dialect,
                 )
                 current_branch = tree.add(display_name)
-                restated_snapshot.table_name()
                 current_branch.add(f"restated version: '{restated_snapshot.version}'")
                 current_branch.add(f"currently active version: '{updated_snapshot.version}'")
 

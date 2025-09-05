@@ -284,11 +284,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def visit_restatement_stage(
         self, stage: stages.RestatementStage, plan: EvaluatablePlan
     ) -> None:
-        # Restating intervals on prod plans means that once the data for the intervals being restated has been refreshed
+        # Restating intervals on prod plans means that once the data for the intervals being restated has been backfilled
         # (which happens in the backfill stage) then we need to clear those intervals *from state* across all other environments.
         #
-        # This ensures that work done in dev environments can still be promoted to prod
-        # by forcing dev environments to re-run intervals that changed in prod (because after this stage runs they show as missing)
+        # This ensures that work done in dev environments can still be promoted to prod by forcing dev environments to
+        # re-run intervals that changed in prod (because after this stage runs they are cleared from state and thus show as missing)
         #
         # It also means that any new dev environments created while this restatement plan was running also get the
         # correct intervals cleared because we look up matching snapshots as at right now and not as at the time the plan
@@ -313,8 +313,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             remove_shared_versions=plan.is_prod,
         )
 
-        # While the restatements were being processed, did any of the snapshots
-        # being restated get new versions deployed? If they did, they will not reflect the data that just got restated
+        # While the restatements were being processed, did any of the snapshots being restated get new versions deployed?
+        # If they did, they will not reflect the data that just got restated, so we need to notify the user
         if deployed_env := self.state_sync.get_environment(plan.environment.name):
             promoted_snapshots_by_name = {s.name: s for s in deployed_env.snapshots}
 
