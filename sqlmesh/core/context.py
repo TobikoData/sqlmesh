@@ -81,7 +81,7 @@ from sqlmesh.core.linter.definition import AnnotatedRuleViolation, Linter
 from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
-from sqlmesh.core.model import Model, update_model_schemas
+from sqlmesh.core.model import Model, SqlModel, update_model_schemas
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -681,10 +681,13 @@ class GenericContext(BaseContext, t.Generic[C]):
                 cache_dir=self.cache_dir,
             )
 
-            models = self.models.values()
-            for model in models:
-                # The model definition can be validated correctly only after the schema is set.
-                model.validate_definition()
+            # The model definition can be validated correctly only after the schema is set.
+            for model in self.models.values():
+                if isinstance(model, SqlModel):
+                    # Validates only the model metadata; SQL validations are handled by the linter
+                    super(SqlModel, model).validate_definition()  # type: ignore
+                else:
+                    model.validate_definition()
 
         duplicates = set(self._models) & set(self._standalone_audits)
         if duplicates:

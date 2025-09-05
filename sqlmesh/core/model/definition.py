@@ -1417,12 +1417,20 @@ class SqlModel(_Model):
 
             unknown = exp.DataType.build("unknown")
 
-            self._columns_to_types = {
+            columns_to_types = {}
+            for select in query.selects:
+                output_name = select.output_name
+
+                # If model validation is disabled, we cannot assume that projections
+                # will have inferrable output names or even that they will be unique
+                if not output_name or output_name in columns_to_types:
+                    return None
+
                 # copy data type because it is used in the engine to build CTAS and other queries
                 # this can change the parent which will mess up the diffing algo
-                select.output_name: (select.type or unknown).copy()
-                for select in query.selects
-            }
+                columns_to_types[output_name] = (select.type or unknown).copy()
+
+            self._columns_to_types = columns_to_types
 
         if "*" in self._columns_to_types:
             return None
@@ -1846,8 +1854,9 @@ class PythonModel(_Model):
         super().validate_definition()
 
         if self.kind and not self.kind.supports_python_models:
-            raise SQLMeshError(
-                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesn't support Python models"
+            raise_config_error(
+                f"Cannot create Python model '{self.name}' as the '{self.kind.name}' kind doesn't support Python models",
+                self._path,
             )
 
     def render(
