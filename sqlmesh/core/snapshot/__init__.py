@@ -4,6 +4,7 @@ from sqlmesh.core.snapshot.definition import (
     Node as Node,
     QualifiedViewName as QualifiedViewName,
     Snapshot as Snapshot,
+    MinimalSnapshot as MinimalSnapshot,
     SnapshotChangeCategory as SnapshotChangeCategory,
     SnapshotDataVersion as SnapshotDataVersion,
     SnapshotFingerprint as SnapshotFingerprint,

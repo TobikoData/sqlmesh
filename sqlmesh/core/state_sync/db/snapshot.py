@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from collections import defaultdict
 from sqlglot import exp
-from pydantic import Field
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
@@ -27,12 +26,12 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotInfoLike,
     Snapshot,
+    MinimalSnapshot,
     SnapshotId,
     SnapshotFingerprint,
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
-from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
 if t.TYPE_CHECKING:
@@ -215,7 +214,7 @@ class SnapshotState:
             for snapshot in environment.snapshots
         }
 
-        def _is_snapshot_used(snapshot: SharedVersionSnapshot) -> bool:
+        def _is_snapshot_used(snapshot: MinimalSnapshot) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or snapshot.snapshot_id not in expired_candidates
@@ -308,12 +307,12 @@ class SnapshotState:
         """
         return self._get_snapshots(snapshot_ids)
 
-    def get_snapshot_ids_by_names(
+    def get_snapshots_by_names(
         self,
         snapshot_names: t.Iterable[str],
         current_ts: t.Optional[int] = None,
         exclude_expired: bool = True,
-    ) -> t.Set[SnapshotId]:
+    ) -> t.Set[MinimalSnapshot]:
         """Return the snapshot id's for all versions of the specified snapshot names.
 
         Args:
@@ -334,14 +333,20 @@ class SnapshotState:
             unexpired_expr = None
 
         return {
-            SnapshotId(name=name, identifier=identifier)
+            MinimalSnapshot(
+                name=name,
+                identifier=identifier,
+                version=version,
+                dev_version=dev_version,
+                fingerprint=SnapshotFingerprint.parse_raw(fingerprint),
+            )
             for where in snapshot_name_filter(
                 snapshot_names=snapshot_names,
                 batch_size=self.SNAPSHOT_BATCH_SIZE,
             )
-            for name, identifier in fetchall(
+            for name, identifier, version, dev_version, fingerprint in fetchall(
                 self.engine_adapter,
-                exp.select("name", "identifier")
+                exp.select("name", "identifier", "version", "dev_version", "fingerprint")
                 .from_(self.snapshots_table)
                 .where(where)
                 .and_(unexpired_expr),
@@ -631,7 +636,7 @@ class SnapshotState:
         self,
         snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
-    ) -> t.List[SharedVersionSnapshot]:
+    ) -> t.List[MinimalSnapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified identifiers.
@@ -668,7 +673,7 @@ class SnapshotState:
             snapshot_rows.extend(fetchall(self.engine_adapter, query))
 
         return [
-            SharedVersionSnapshot(
+            MinimalSnapshot(
                 name=name,
                 identifier=identifier,
                 version=version,
@@ -751,23 +756,3 @@ def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]
             for name_version, ts in auto_restatements.items()
         ]
     )
-
-
-class SharedVersionSnapshot(PydanticModel):
-    """A stripped down version of a snapshot that is used for fetching snapshots that share the same version
-    with a significantly reduced parsing overhead.
-    """
-
-    name: str
-    version: str
-    dev_version_: t.Optional[str] = Field(alias="dev_version")
-    identifier: str
-    fingerprint: SnapshotFingerprint
-
-    @property
-    def snapshot_id(self) -> SnapshotId:
-        return SnapshotId(name=self.name, identifier=self.identifier)
-
-    @property
-    def dev_version(self) -> str:
-        return self.dev_version_ or self.fingerprint.to_version()
