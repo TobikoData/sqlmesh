@@ -27,6 +27,8 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync.base import (
     MIGRATIONS,
+    MIN_SCHEMA_VERSION,
+    MIN_SQLMESH_VERSION,
 )
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
@@ -41,7 +43,7 @@ from sqlmesh.core.state_sync.db.utils import (
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now_timestamp
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, StateMigrationError
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,6 @@ class StateMigrator:
         snapshot_state: SnapshotState,
         environment_state: EnvironmentState,
         interval_state: IntervalState,
-        plan_dags_table: TableName,
         console: t.Optional[Console] = None,
     ):
         self.engine_adapter = engine_adapter
@@ -70,7 +71,6 @@ class StateMigrator:
         self.snapshot_state = snapshot_state
         self.environment_state = environment_state
         self.interval_state = interval_state
-        self.plan_dags_table = plan_dags_table
 
         self._state_tables = [
             self.snapshot_state.snapshots_table,
@@ -79,7 +79,6 @@ class StateMigrator:
         ]
         self._optional_state_tables = [
             self.interval_state.intervals_table,
-            self.plan_dags_table,
             self.snapshot_state.auto_restatements_table,
             self.environment_state.environment_statements_table,
         ]
@@ -87,7 +86,6 @@ class StateMigrator:
     def migrate(
         self,
         state_sync: StateSync,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:
@@ -96,15 +94,13 @@ class StateMigrator:
         migration_start_ts = time.perf_counter()
 
         try:
-            migrate_rows = self._apply_migrations(state_sync, default_catalog, skip_backup)
+            migrate_rows = self._apply_migrations(state_sync, skip_backup)
 
             if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
                 return
 
             if migrate_rows:
                 self._migrate_rows(promoted_snapshots_only)
-                # Cleanup plan DAGs since we currently don't migrate snapshot records that are in there.
-                self.engine_adapter.delete_from(self.plan_dags_table, "TRUE")
             self.version_state.update_versions()
 
             analytics.collector.on_migration_end(
@@ -126,6 +122,8 @@ class StateMigrator:
             )
 
             self.console.log_migration_status(success=False)
+            if isinstance(e, StateMigrationError):
+                raise
             raise SQLMeshError("SQLMesh migration failed.") from e
 
         self.console.log_migration_status()
@@ -156,11 +154,20 @@ class StateMigrator:
     def _apply_migrations(
         self,
         state_sync: StateSync,
-        default_catalog: t.Optional[str],
         skip_backup: bool,
     ) -> bool:
         versions = self.version_state.get_versions()
-        migrations = MIGRATIONS[versions.schema_version :]
+        first_script_index = 0
+        if versions.schema_version and versions.schema_version < MIN_SCHEMA_VERSION:
+            raise StateMigrationError(
+                "The current state belongs to an old version of SQLMesh that is no longer supported. "
+                f"Please upgrade to {MIN_SQLMESH_VERSION} first before upgrading to {SQLMESH_VERSION}."
+            )
+        elif versions.schema_version > 0:
+            # -1 to skip the baseline migration script
+            first_script_index = versions.schema_version - (MIN_SCHEMA_VERSION - 1)
+
+        migrations = MIGRATIONS[first_script_index:]
         should_backup = any(
             [
                 migrations,
@@ -177,10 +184,10 @@ class StateMigrator:
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
-            migration.migrate_schemas(state_sync, default_catalog=default_catalog)
+            migration.migrate_schemas(state_sync)
             if state_table_exist:
                 # No need to run DML for the initial migration since all tables are empty
-                migration.migrate_rows(state_sync, default_catalog=default_catalog)
+                migration.migrate_rows(state_sync)
 
         snapshot_count_after = self.snapshot_state.count()
 

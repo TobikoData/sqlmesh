@@ -22,7 +22,6 @@ import typing as t
 from pathlib import Path
 from datetime import datetime
 
-from sqlglot import exp
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -90,7 +89,6 @@ class EngineAdapterStateSync(StateSync):
         console: t.Optional[Console] = None,
         cache_dir: Path = Path(),
     ):
-        self.plan_dags_table = exp.table_("_plan_dags", db=schema)
         self.interval_state = IntervalState(engine_adapter, schema=schema)
         self.environment_state = EnvironmentState(engine_adapter, schema=schema)
         self.snapshot_state = SnapshotState(engine_adapter, schema=schema, cache_dir=cache_dir)
@@ -101,7 +99,6 @@ class EngineAdapterStateSync(StateSync):
             snapshot_state=self.snapshot_state,
             environment_state=self.environment_state,
             interval_state=self.interval_state,
-            plan_dags_table=self.plan_dags_table,
             console=console,
         )
         # Make sure that if an empty string is provided that we treat it as None
@@ -308,7 +305,6 @@ class EngineAdapterStateSync(StateSync):
             self.environment_state.environments_table,
             self.environment_state.environment_statements_table,
             self.interval_state.intervals_table,
-            self.plan_dags_table,
             self.version_state.versions_table,
         ):
             self.engine_adapter.drop_table(table)
@@ -453,14 +449,12 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def migrate(
         self,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         self.migrator.migrate(
             self,
-            default_catalog,
             skip_backup=skip_backup,
             promoted_snapshots_only=promoted_snapshots_only,
         )

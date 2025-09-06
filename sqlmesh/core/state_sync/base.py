@@ -61,11 +61,14 @@ class Versions(PydanticModel):
         return 0 if v is None else int(v)
 
 
+MIN_SCHEMA_VERSION = 60
+MIN_SQLMESH_VERSION = "0.134.0"
 MIGRATIONS = [
     importlib.import_module(f"sqlmesh.migrations.{migration}")
     for migration in sorted(info.name for info in pkgutil.iter_modules(migrations.__path__))
 ]
-SCHEMA_VERSION: int = len(MIGRATIONS)
+# -1 to account for the baseline script
+SCHEMA_VERSION: int = MIN_SCHEMA_VERSION + len(MIGRATIONS) - 1
 
 
 class PromotionResult(PydanticModel):
@@ -469,7 +472,6 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def migrate(
         self,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:

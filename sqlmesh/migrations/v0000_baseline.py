@@ -1,31 +1,27 @@
-"""Readds indexes and primary keys in case tables were restored from a backup."""
+"""The baseline migration script that sets up the initial state tables."""
 
 from sqlglot import exp
-from sqlmesh.utils import random_id
-from sqlmesh.utils.migration import index_text_type
-from sqlmesh.utils.migration import blob_text_type
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
 def migrate_schemas(state_sync, **kwargs):  # type: ignore
     schema = state_sync.schema
     engine_adapter = state_sync.engine_adapter
-    if not engine_adapter.SUPPORTS_INDEXES:
-        return
 
     intervals_table = "_intervals"
     snapshots_table = "_snapshots"
     environments_table = "_environments"
+    versions_table = "_versions"
     if state_sync.schema:
+        engine_adapter.create_schema(schema)
         intervals_table = f"{schema}.{intervals_table}"
         snapshots_table = f"{schema}.{snapshots_table}"
         environments_table = f"{schema}.{environments_table}"
-
-    table_suffix = random_id(short=True)
+        versions_table = f"{schema}.{versions_table}"
 
     index_type = index_text_type(engine_adapter.dialect)
     blob_type = blob_text_type(engine_adapter.dialect)
 
-    new_snapshots_table = f"{snapshots_table}__{table_suffix}"
     snapshots_columns_to_types = {
         "name": exp.DataType.build(index_type),
         "identifier": exp.DataType.build(index_type),
@@ -38,7 +34,6 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
         "unrestorable": exp.DataType.build("boolean"),
     }
 
-    new_environments_table = f"{environments_table}__{table_suffix}"
     environments_columns_to_types = {
         "name": exp.DataType.build(index_type),
         "snapshots": exp.DataType.build(blob_type),
@@ -53,9 +48,9 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
         "catalog_name_override": exp.DataType.build("text"),
         "previous_finalized_snapshots": exp.DataType.build(blob_type),
         "normalize_name": exp.DataType.build("boolean"),
+        "requirements": exp.DataType.build(blob_type),
     }
 
-    new_intervals_table = f"{intervals_table}__{table_suffix}"
     intervals_columns_to_types = {
         "id": exp.DataType.build(index_type),
         "created_ts": exp.DataType.build("bigint"),
@@ -69,53 +64,34 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
         "is_compacted": exp.DataType.build("boolean"),
     }
 
-    # Recreate the snapshots table and its indexes.
-    engine_adapter.create_table(
-        new_snapshots_table, snapshots_columns_to_types, primary_key=("name", "identifier")
+    versions_columns_to_types = {
+        "schema_version": exp.DataType.build("int"),
+        "sqlglot_version": exp.DataType.build(index_type),
+        "sqlmesh_version": exp.DataType.build(index_type),
+    }
+
+    # Create the versions table.
+    engine_adapter.create_state_table(versions_table, versions_columns_to_types)
+
+    # Create the snapshots table and its indexes.
+    engine_adapter.create_state_table(
+        snapshots_table, snapshots_columns_to_types, primary_key=("name", "identifier")
+    )
+    engine_adapter.create_index(snapshots_table, "_snapshots_name_version_idx", ("name", "version"))
+
+    # Create the environments table and its indexes.
+    engine_adapter.create_state_table(
+        environments_table, environments_columns_to_types, primary_key=("name",)
+    )
+
+    # Create the intervals table and its indexes.
+    engine_adapter.create_state_table(
+        intervals_table, intervals_columns_to_types, primary_key=("id",)
     )
     engine_adapter.create_index(
-        new_snapshots_table, "_snapshots_name_version_idx", ("name", "version")
+        intervals_table, "_intervals_name_identifier_idx", ("name", "identifier")
     )
-    engine_adapter.insert_append(
-        new_snapshots_table,
-        exp.select("*").from_(snapshots_table),
-        target_columns_to_types=snapshots_columns_to_types,
-    )
-
-    # Recreate the environments table and its indexes.
-    engine_adapter.create_table(
-        new_environments_table, environments_columns_to_types, primary_key=("name",)
-    )
-    engine_adapter.insert_append(
-        new_environments_table,
-        exp.select("*").from_(environments_table),
-        target_columns_to_types=environments_columns_to_types,
-    )
-
-    # Recreate the intervals table and its indexes.
-    engine_adapter.create_table(
-        new_intervals_table, intervals_columns_to_types, primary_key=("id",)
-    )
-    engine_adapter.create_index(
-        new_intervals_table, "_intervals_name_identifier_idx", ("name", "identifier")
-    )
-    engine_adapter.create_index(
-        new_intervals_table, "_intervals_name_version_idx", ("name", "version")
-    )
-    engine_adapter.insert_append(
-        new_intervals_table,
-        exp.select("*").from_(intervals_table),
-        target_columns_to_types=intervals_columns_to_types,
-    )
-
-    # Drop old tables.
-    for table in (snapshots_table, environments_table, intervals_table):
-        engine_adapter.drop_table(table)
-
-    # Replace old tables with new ones.
-    engine_adapter.rename_table(new_snapshots_table, snapshots_table)
-    engine_adapter.rename_table(new_environments_table, environments_table)
-    engine_adapter.rename_table(new_intervals_table, intervals_table)
+    engine_adapter.create_index(intervals_table, "_intervals_name_version_idx", ("name", "version"))
 
 
 def migrate_rows(state_sync, **kwargs):  # type: ignore

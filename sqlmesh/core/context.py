@@ -588,7 +588,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self.console.log_status_update("Initializing new project state...")
-                self._state_sync.migrate(default_catalog=self.default_catalog)
+                self._state_sync.migrate()
             self._state_sync.get_versions()
             self._state_sync = CachingStateSync(self._state_sync)  # type: ignore
         return self._state_sync
@@ -2356,7 +2356,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._load_materializations()
         try:
             self._new_state_sync().migrate(
-                default_catalog=self.default_catalog,
                 promoted_snapshots_only=self.config.migration.promoted_snapshots_only,
             )
         except Exception as e:
