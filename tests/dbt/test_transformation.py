@@ -1436,6 +1436,13 @@ def test_flags(sushi_test_project: Project):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_context_namespace(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ context.flags.FULL_REFRESH }}") == "None"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
 
