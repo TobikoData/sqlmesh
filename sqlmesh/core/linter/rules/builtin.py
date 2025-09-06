@@ -25,6 +25,7 @@ from sqlmesh.core.linter.rule import (
 )
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
 
 
@@ -272,6 +273,24 @@ class NoMissingExternalModels(Rule):
                 )
             ],
         )
+
+
+class ValidateModelDefinition(Rule):
+    """
+    Checks whether a model satisfies certain properties, such as (but not limited to):
+
+    - If SQL-based, it contains at least one projection & projection names are unique
+    - Its kind is configured correctly (e.g., the VIEW kind is not supported for Python models)
+    - Other metadata properties are well-formed (e.g., incremental-by-time models require a time column)
+    """
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        try:
+            model.validate_definition()
+        except ConfigError as ex:
+            return self.violation(str(ex))
+
+        return None
 
 
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))
