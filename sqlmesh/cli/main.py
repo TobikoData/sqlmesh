@@ -1079,50 +1079,6 @@ def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
     )
 
 
-@cli.command("prompt")
-@click.argument("prompt")
-@click.option(
-    "-e",
-    "--evaluate",
-    is_flag=True,
-    help="Evaluate the generated SQL query and display the results.",
-)
-@click.option(
-    "-t",
-    "--temperature",
-    type=float,
-    help="Sampling temperature. 0.0 - precise and predictable, 0.5 - balanced, 1.0 - creative. Default: 0.7",
-    default=0.7,
-)
-@opt.verbose
-@click.pass_context
-@error_handler
-@cli_analytics
-def prompt(
-    ctx: click.Context,
-    prompt: str,
-    evaluate: bool,
-    temperature: float,
-    verbose: int,
-) -> None:
-    """Uses LLM to generate a SQL query from a prompt."""
-    from sqlmesh.integrations.llm import LLMIntegration
-
-    context = ctx.obj
-
-    llm_integration = LLMIntegration(
-        context.models.values(),
-        context.engine_adapter.dialect,
-        temperature=temperature,
-        verbosity=Verbosity(verbose),
-    )
-    query = llm_integration.query(prompt)
-
-    context.console.log_status_update(query)
-    if evaluate:
-        context.console.log_success(context.fetchdf(query))
-
-
 @cli.command("clean")
 @click.pass_obj
 @error_handler

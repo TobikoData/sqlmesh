@@ -107,7 +107,6 @@ duckdb = []
 fabric = ["pyodbc>=5.0.0"]
 gcppostgres = ["cloud-sql-python-connector[pg8000]>=1.8.0"]
 github = ["PyGithub>=2.6.0"]
-llm = ["langchain", "openai"]
 motherduck = ["duckdb>=1.2.0"]
 mssql = ["pymssql"]
 mssql-odbc = ["pyodbc>=5.0.0"]
@@ -213,7 +212,6 @@ module = [
     "pymssql.*",
     "pyodbc.*",
     "psycopg2.*",
-    "langchain.*",
     "pytest_lazyfixture.*",
     "dbt.adapters.*",
     "slack_sdk.*",
