@@ -23,7 +23,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
     SnapshotNameVersion,
-    MinimalSnapshot,
+    SnapshotIdAndVersion,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
@@ -104,7 +104,7 @@ class StateReader(abc.ABC):
         snapshot_names: t.Iterable[str],
         current_ts: t.Optional[int] = None,
         exclude_expired: bool = True,
-    ) -> t.Set[MinimalSnapshot]:
+    ) -> t.Set[SnapshotIdAndVersion]:
         """Return the snapshot records for all versions of the specified snapshot names.
 
         Args:

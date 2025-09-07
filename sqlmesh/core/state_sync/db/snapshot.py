@@ -26,7 +26,7 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotInfoLike,
     Snapshot,
-    MinimalSnapshot,
+    SnapshotIdAndVersion,
     SnapshotId,
     SnapshotFingerprint,
 )
@@ -214,7 +214,7 @@ class SnapshotState:
             for snapshot in environment.snapshots
         }
 
-        def _is_snapshot_used(snapshot: MinimalSnapshot) -> bool:
+        def _is_snapshot_used(snapshot: SnapshotIdAndVersion) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or snapshot.snapshot_id not in expired_candidates
@@ -312,7 +312,7 @@ class SnapshotState:
         snapshot_names: t.Iterable[str],
         current_ts: t.Optional[int] = None,
         exclude_expired: bool = True,
-    ) -> t.Set[MinimalSnapshot]:
+    ) -> t.Set[SnapshotIdAndVersion]:
         """Return the snapshot records for all versions of the specified snapshot names.
 
         Args:
@@ -333,12 +333,12 @@ class SnapshotState:
             unexpired_expr = None
 
         return {
-            MinimalSnapshot(
+            SnapshotIdAndVersion(
                 name=name,
                 identifier=identifier,
                 version=version,
                 dev_version=dev_version,
-                fingerprint=SnapshotFingerprint.parse_raw(fingerprint),
+                fingerprint=fingerprint,
             )
             for where in snapshot_name_filter(
                 snapshot_names=snapshot_names,
@@ -636,7 +636,7 @@ class SnapshotState:
         self,
         snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
-    ) -> t.List[MinimalSnapshot]:
+    ) -> t.List[SnapshotIdAndVersion]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified identifiers.
@@ -673,7 +673,7 @@ class SnapshotState:
             snapshot_rows.extend(fetchall(self.engine_adapter, query))
 
         return [
-            MinimalSnapshot(
+            SnapshotIdAndVersion(
                 name=name,
                 identifier=identifier,
                 version=version,
