@@ -61,7 +61,9 @@ dev = [
     "dbt-bigquery",
     "dbt-core",
     "dbt-duckdb>=1.7.1",
-    # version 1.10.1 of dbt-snowflake has an incorrect constraint on the version of dbt-adapters it's compatible with
+    # version 1.10.1 of dbt-snowflake declares that it's compatible with dbt-adapters>=1.16 but in reality
+    # it depends on the 'InvalidCatalogIntegrationConfigError' class that only exists as of dbt-adapters==1.16.6
+    # so we exclude it to prevent failures and hope that upstream releases a new version with the correct constraint
     "dbt-snowflake!=1.10.1",
     "dbt-athena-community",
     "dbt-clickhouse",
