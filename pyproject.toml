@@ -61,7 +61,8 @@ dev = [
     "dbt-bigquery",
     "dbt-core",
     "dbt-duckdb>=1.7.1",
-    "dbt-snowflake",
+    # version 1.10.1 of dbt-snowflake has an incorrect constraint on the version of dbt-adapters it's compatible with
+    "dbt-snowflake!=1.10.1",
     "dbt-athena-community",
     "dbt-clickhouse",
     "dbt-databricks",
