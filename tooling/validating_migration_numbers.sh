@@ -14,7 +14,9 @@ numbers=()
 for file in "${migration_files[@]}"; do
   if [[ $file =~ ^v0*([0-9]+)_ ]]; then
     num=${BASH_REMATCH[1]}
-    numbers+=("$num")
+    if [[ "$num" -gt 0 ]]; then
+      numbers+=("$num")
+    fi
   fi
 done
 

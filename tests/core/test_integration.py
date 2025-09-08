@@ -6158,7 +6158,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         {
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
-            "physical.sqlmesh._plan_dags",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -6178,7 +6177,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         {
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
-            "physical.sqlmesh._plan_dags",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -6198,7 +6196,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         {
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
-            "physical.sqlmesh._plan_dags",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -6219,7 +6216,6 @@ def test_environment_catalog_mapping(init_and_plan_context: t.Callable):
         {
             "physical.sqlmesh._environments",
             "physical.sqlmesh._intervals",
-            "physical.sqlmesh._plan_dags",
             "physical.sqlmesh._snapshots",
             "physical.sqlmesh._versions",
         }
@@ -6611,7 +6607,6 @@ def test_before_all_after_all_execution_order(tmp_path: Path, mocker: MockerFixt
             "_intervals",
             "_auto_restatements",
             "_environment_statements",
-            "_plan_dags",
         ]
 
         # to ignore the state queries
@@ -7098,7 +7093,6 @@ def test_destroy(copy_to_temp_path):
         "_auto_restatements",
         "_environment_statements",
         "_intervals",
-        "_plan_dags",
         "_versions",
     }
     for table_name in state_tables:
