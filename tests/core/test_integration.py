@@ -4238,6 +4238,180 @@ def test_prod_restatement_plan_missing_model_in_dev(
     )
 
 
+def test_prod_restatement_plan_includes_related_unpromoted_snapshots(tmp_path: Path):
+    """
+    Scenario:
+        - I have models A <- B in prod
+        - I have models A <- B <- C in dev
+        - Both B and C have gone through a few iterations in dev so multiple snapshot versions exist
+          for them but not all of them are promoted / active
+        - I restate A in prod
+
+    Outcome:
+        - Intervals should be cleared for all of the versions of B and C, regardless
+          of if they are active in any particular environment, in case they ever get made
+          active
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    (models_dir / "a.sql").write_text("""
+    MODEL (
+        name test.a,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select 1 as a, now() as ts;
+    """)
+
+    (models_dir / "b.sql").write_text("""
+    MODEL (
+        name test.b,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select a, ts from test.a
+    """)
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"))
+    ctx = Context(paths=[tmp_path], config=config)
+
+    def _all_snapshots() -> t.Dict[SnapshotId, Snapshot]:
+        all_snapshot_ids = [
+            SnapshotId(name=name, identifier=identifier)
+            for (name, identifier) in ctx.state_sync.state_sync.engine_adapter.fetchall(  # type: ignore
+                "select name, identifier from sqlmesh._snapshots"
+            )
+        ]
+        return ctx.state_sync.get_snapshots(all_snapshot_ids)
+
+    # plan + apply prod
+    ctx.plan(environment="prod", auto_apply=True)
+    assert len(_all_snapshots()) == 2
+
+    # create dev with new version of B
+    (models_dir / "b.sql").write_text("""
+    MODEL (
+        name test.b,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select a, ts, 'b dev 1' as change from test.a
+    """)
+
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+    assert len(_all_snapshots()) == 3
+
+    # update B (new version) and create C
+    (models_dir / "b.sql").write_text("""
+    MODEL (
+        name test.b,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column "ts"
+        ),
+        start '2024-01-01 00:00:00',
+        cron '@daily'
+    );
+
+    select a, ts, 'b dev 2' as change from test.a
+    """)
+
+    (models_dir / "c.sql").write_text("""
+    MODEL (
+        name test.c,
+        kind FULL,
+        cron '@daily'
+    );
+
+    select *, 'c initial' as val from test.b
+    """)
+
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+    assert len(_all_snapshots()) == 5
+
+    # update C (new version), create D (unrelated)
+    (models_dir / "c.sql").write_text("""
+    MODEL (
+        name test.c,
+        kind FULL,
+        cron '@daily'
+    );
+
+    select *, 'c updated' as val from test.b
+    """)
+
+    (models_dir / "d.sql").write_text("""
+    MODEL (
+        name test.d,
+        cron '@daily'
+    );
+
+    select 1 as unrelated
+    """)
+
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+    all_snapshots_prior_to_restatement = _all_snapshots()
+    assert len(all_snapshots_prior_to_restatement) == 7
+
+    def _snapshot_instances(lst: t.Dict[SnapshotId, Snapshot], name_match: str) -> t.List[Snapshot]:
+        return [s for s_id, s in lst.items() if name_match in s_id.name]
+
+    # verify initial state
+
+    # 1 instance of A (prod)
+    assert len(_snapshot_instances(all_snapshots_prior_to_restatement, '"a"')) == 1
+
+    # 3 instances of B (original in prod + 2 updates in dev)
+    assert len(_snapshot_instances(all_snapshots_prior_to_restatement, '"b"')) == 3
+
+    # 2 instances of C (initial + update in dev)
+    assert len(_snapshot_instances(all_snapshots_prior_to_restatement, '"c"')) == 2
+
+    # 1 instance of D (initial - dev)
+    assert len(_snapshot_instances(all_snapshots_prior_to_restatement, '"d"')) == 1
+
+    # restate A in prod
+    ctx.plan(environment="prod", restate_models=['"memory"."test"."a"'], auto_apply=True)
+
+    all_snapshots_after_restatement = _all_snapshots()
+
+    # All versions of B and C in dev should have had intervals cleared
+    # D in dev should not be touched and A + B in prod shoud also not be touched
+    a = _snapshot_instances(all_snapshots_after_restatement, '"a"')
+    assert len(a) == 1
+
+    b = _snapshot_instances(all_snapshots_after_restatement, '"b"')
+    # the 1 B instance in prod should be populated and 2 in dev (1 active) should be cleared
+    assert len(b) == 3
+    assert len([s for s in b if not s.intervals]) == 2
+
+    c = _snapshot_instances(all_snapshots_after_restatement, '"c"')
+    # the 2 instances of C in dev (1 active) should be cleared
+    assert len(c) == 2
+    assert len([s for s in c if not s.intervals]) == 2
+
+    d = _snapshot_instances(all_snapshots_after_restatement, '"d"')
+    # D should not be touched since it's in no way downstream of A in prod
+    assert len(d) == 1
+    assert d[0].intervals
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_dev_restatement_of_prod_model(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")

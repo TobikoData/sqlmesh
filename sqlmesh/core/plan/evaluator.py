@@ -22,7 +22,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.snapshot.definition import Interval, to_view_mapping
+from sqlmesh.core.snapshot.definition import to_view_mapping
 from sqlmesh.core.plan import stages
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
@@ -33,17 +33,15 @@ from sqlmesh.core.snapshot import (
     SnapshotIntervals,
     SnapshotId,
     SnapshotInfoLike,
-    SnapshotTableInfo,
     SnapshotCreationFailedError,
-    SnapshotNameVersion,
 )
 from sqlmesh.utils import to_snake_case
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.plan.common import identify_restatement_intervals_across_snapshot_versions
 from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import PlanError, SQLMeshError
-from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import now
+from sqlmesh.utils.date import now, to_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -298,11 +296,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         #
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
         snapshot_intervals_to_restate.update(
-            self._restatement_intervals_across_all_environments(
-                prod_restatements=plan.restatements,
-                disable_restatement_models=plan.disabled_restatement_models,
-                loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
-            )
+            {
+                (s.table_info, s.interval)
+                for s in identify_restatement_intervals_across_snapshot_versions(
+                    state_reader=self.state_sync,
+                    prod_restatements=plan.restatements,
+                    disable_restatement_models=plan.disabled_restatement_models,
+                    loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
+                    current_ts=to_timestamp(plan.execution_time or now()),
+                ).values()
+            }
         )
 
         self.state_sync.remove_intervals(
@@ -421,97 +424,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             deployability_index=deployability_index,
             on_complete=on_complete,
         )
-
-    def _restatement_intervals_across_all_environments(
-        self,
-        prod_restatements: t.Dict[str, Interval],
-        disable_restatement_models: t.Set[str],
-        loaded_snapshots: t.Dict[SnapshotId, Snapshot],
-    ) -> t.Set[t.Tuple[SnapshotTableInfo, Interval]]:
-        """
-        Given a map of snapshot names + intervals to restate in prod:
-         - Look up matching snapshots across all environments (match based on name - regardless of version)
-         - For each match, also match downstream snapshots while filtering out models that have restatement disabled
-         - Return all matches mapped to the intervals of the prod snapshot being restated
-
-        The goal here is to produce a list of intervals to invalidate across all environments so that a cadence
-        run in those environments causes the intervals to be repopulated
-        """
-        if not prod_restatements:
-            return set()
-
-        prod_name_versions: t.Set[SnapshotNameVersion] = {
-            s.name_version for s in loaded_snapshots.values()
-        }
-
-        snapshots_to_restate: t.Dict[SnapshotId, t.Tuple[SnapshotTableInfo, Interval]] = {}
-
-        for env_summary in self.state_sync.get_environments_summary():
-            # Fetch the full environment object one at a time to avoid loading all environments into memory at once
-            env = self.state_sync.get_environment(env_summary.name)
-            if not env:
-                logger.warning("Environment %s not found", env_summary.name)
-                continue
-
-            keyed_snapshots = {s.name: s.table_info for s in env.snapshots}
-
-            # We dont just restate matching snapshots, we also have to restate anything downstream of them
-            # so that if A gets restated in prod and dev has A <- B <- C, B and C get restated in dev
-            env_dag = DAG({s.name: {p.name for p in s.parents} for s in env.snapshots})
-
-            for restatement, intervals in prod_restatements.items():
-                if restatement not in keyed_snapshots:
-                    continue
-                affected_snapshot_names = [
-                    x
-                    for x in ([restatement] + env_dag.downstream(restatement))
-                    if x not in disable_restatement_models
-                ]
-                snapshots_to_restate.update(
-                    {
-                        keyed_snapshots[a].snapshot_id: (keyed_snapshots[a], intervals)
-                        for a in affected_snapshot_names
-                        # Don't restate a snapshot if it shares the version with a snapshot in prod
-                        if keyed_snapshots[a].name_version not in prod_name_versions
-                    }
-                )
-
-        # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
-        # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
-        # so we only do it if necessary
-        full_history_restatement_snapshot_ids = [
-            # FIXME: full_history_restatement_only is just one indicator that the snapshot can only be fully refreshed, the other one is Model.depends_on_self
-            # however, to figure out depends_on_self, we have to render all the model queries which, alongside having to fetch full snapshots from state,
-            # is problematic in secure environments that are deliberately isolated from arbitrary user code (since rendering a query may require user macros to be present)
-            # So for now, these are not considered
-            s_id
-            for s_id, s in snapshots_to_restate.items()
-            if s[0].full_history_restatement_only
-        ]
-        if full_history_restatement_snapshot_ids:
-            # only load full snapshot records that we havent already loaded
-            additional_snapshots = self.state_sync.get_snapshots(
-                [
-                    s.snapshot_id
-                    for s in full_history_restatement_snapshot_ids
-                    if s.snapshot_id not in loaded_snapshots
-                ]
-            )
-
-            all_snapshots = loaded_snapshots | additional_snapshots
-
-            for full_snapshot_id in full_history_restatement_snapshot_ids:
-                full_snapshot = all_snapshots[full_snapshot_id]
-                _, original_intervals = snapshots_to_restate[full_snapshot_id]
-                original_start, original_end = original_intervals
-
-                # get_removal_interval() widens intervals if necessary
-                new_intervals = full_snapshot.get_removal_interval(
-                    start=original_start, end=original_end
-                )
-                snapshots_to_restate[full_snapshot_id] = (full_snapshot.table_info, new_intervals)
-
-        return set(snapshots_to_restate.values())
 
     def _update_intervals_for_new_snapshots(self, snapshots: t.Collection[Snapshot]) -> None:
         snapshots_intervals: t.List[SnapshotIntervals] = []
