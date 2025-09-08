@@ -3743,6 +3743,14 @@ def test_janitor(
         assert not md.tables
         assert not md.managed_tables
 
+    if ctx.dialect == "fabric":
+        # TestContext is using a different EngineAdapter instance / connection pool instance to the SQLMesh context
+        # When the SQLMesh context drops :snapshot_schema using its EngineAdapter, connections in TestContext are unaware
+        # and still have their threadlocal "target_catalog" attribute pointing to a catalog that no longer exists
+        # Trying to establish a connection to a nonexistant catalog produces an error, so we close all connections here
+        # to clear the threadlocal attributes
+        ctx.engine_adapter.close()
+
     md = ctx.get_metadata_results(snapshot_schema)
     assert not md.views
     assert not md.managed_tables

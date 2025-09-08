@@ -227,7 +227,8 @@ class ThreadLocalConnectionPool(_ThreadLocalBase):
                     self._thread_connections.pop(thread_id)
                     self._thread_cursors.pop(thread_id, None)
                     self._discard_transaction(thread_id)
-                self._thread_attributes.pop(thread_id, None)
+
+            self._thread_attributes.clear()
 
 
 class ThreadLocalSharedConnectionPool(_ThreadLocalBase):
