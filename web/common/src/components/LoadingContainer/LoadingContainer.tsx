@@ -1,0 +1,44 @@
+import type { Side } from '@/types'
+import { cn } from '@/utils'
+import React from 'react'
+import { LoadingIcon } from './LoadingIcon'
+
+export interface LoadingContainerProps
+  extends React.HTMLAttributes<HTMLDivElement> {
+  isLoading?: boolean
+  message?: string
+  side?: Side
+  className?: string
+}
+
+export const LoadingContainer = React.forwardRef<
+  HTMLDivElement,
+  LoadingContainerProps
+>(
+  ({
+    isLoading = true,
+    side = 'left',
+    message,
+    children,
+    className,
+  }: LoadingContainerProps) => {
+    function renderLoading() {
+      return (
+        <>
+          <LoadingIcon />
+          {message && <span className="text-sm">{message}</span>}
+        </>
+      )
+    }
+
+    return isLoading ? (
+      <div className={cn('flex items-center justify-center gap-2', className)}>
+        {(side === 'left' || side === 'both') && renderLoading()}
+        {children}
+        {(side === 'right' || side === 'both') && renderLoading()}
+      </div>
+    ) : (
+      children
+    )
+  },
+)

@@ -36,6 +36,22 @@ module.exports = {
           800: 'var(--color-neutral-800)',
           900: 'var(--color-neutral-900)',
         },
+        typography: {
+          heading: 'var(--color-typography-heading)',
+          tagline: 'var(--color-typography-tagline)',
+          description: 'var(--color-typography-description)',
+          info: 'var(--color-typography-info)',
+        },
+        message: {
+          lucid: 'var(--color-message-lucid)',
+        },
+        error: {
+          DEFAULT: 'var(--color-error)',
+          lucid: 'var(--color-error-lucid)',
+          foreground: 'var(--color-error-foreground)',
+          hover: 'var(--color-error-hover)',
+          active: 'var(--color-error-active)',
+        },
         link: {
           underline: 'var(--color-link-underline)',
           hover: 'var(--color-link-hover)',

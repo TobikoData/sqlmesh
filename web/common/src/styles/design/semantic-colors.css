@@ -42,6 +42,13 @@
   --color-destructive-hover: var(--color-scarlet-525);
   --color-destructive-active: var(--color-scarlet-550);
 
+  /* Error */
+  --color-error: var(--color-scarlet-500);
+  --color-error-lucid: var(--color-scarlet-5);
+  --color-error-foreground: var(--color-scarlet-600);
+  --color-error-hover: var(--color-scarlet-525);
+  --color-error-active: var(--color-scarlet-550);
+
   /* Success */
   --color-success: var(--color-emerald-500);
 
@@ -62,4 +69,13 @@
   --color-link-active: var(--color-action-active);
   --color-link-visited: var(--color-purple-600);
   --color-link-underline: var(--color-deep-blue-125);
+
+  /* Typography */
+  --color-typography-heading: var(--color-neutral-800);
+  --color-typography-tagline: var(--color-neutral-500);
+  --color-typography-description: var(--color-neutral-400);
+  --color-typography-info: var(--color-neutral-600);
+
+  /* Message */
+  --color-message-lucid: var(--color-neutral-3);
 }
