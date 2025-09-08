@@ -3117,3 +3117,20 @@ def test_plan_no_start_configured():
         match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
     ):
         context.plan("dev", execution_time="1999-01-05")
+
+
+def test_lint_model_projections(tmp_path: Path):
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(paths=tmp_path)
+    context.upsert_model(
+        load_sql_based_model(
+            parse("""MODEL(name sqlmesh_example.m); SELECT 1 AS x, 2 AS x"""),
+            default_catalog="db",
+        )
+    )
+
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
+    with pytest.raises(LinterError, match=config_err):
+        prod_plan = context.plan(no_prompts=True, auto_apply=True)

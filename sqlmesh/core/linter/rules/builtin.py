@@ -275,7 +275,7 @@ class NoMissingExternalModels(Rule):
 
 
 class NoAmbiguousProjections(Rule):
-    """All projections in a model must have unique, inferrable names or explicit aliases."""
+    """All projections in a model must have unique & inferrable names or explicit aliases."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
         query = model.render_query()
