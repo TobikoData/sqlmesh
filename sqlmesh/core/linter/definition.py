@@ -1,15 +1,15 @@
 from __future__ import annotations
-import typing as t
-from sqlmesh.core.config.linter import LinterConfig
-from sqlmesh.core.model import Model
-from sqlmesh.utils.errors import raise_config_error
-from sqlmesh.core.console import LinterConsole, get_console
+
 import operator as op
+import typing as t
 from collections.abc import Iterator, Iterable, Set, Mapping, Callable
 from functools import reduce
-from sqlmesh.core.model import Model
-from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix
+
+from sqlmesh.core.config.linter import LinterConfig
 from sqlmesh.core.console import LinterConsole, get_console
+from sqlmesh.core.linter.rule import Rule, RuleViolation, Range, Fix
+from sqlmesh.core.model import Model
+from sqlmesh.utils.errors import raise_config_error
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
@@ -38,6 +38,12 @@ class Linter:
         self.rules = rules
         self.warn_rules = warn_rules
 
+        if overlapping := rules.intersection(warn_rules):
+            overlapping_rules = ", ".join(rule for rule in overlapping)
+            raise_config_error(
+                f"Rules cannot simultaneously warn and raise an error: [{overlapping_rules}]"
+            )
+
     @classmethod
     def from_rules(cls, all_rules: RuleSet, config: LinterConfig) -> Linter:
         ignored_rules = select_rules(all_rules, config.ignored_rules)
@@ -45,12 +51,6 @@ class Linter:
 
         rules = select_rules(included_rules, config.rules)
         warn_rules = select_rules(included_rules, config.warn_rules)
-
-        if overlapping := rules.intersection(warn_rules):
-            overlapping_rules = ", ".join(rule for rule in overlapping)
-            raise_config_error(
-                f"Rules cannot simultaneously warn and raise an error: [{overlapping_rules}]"
-            )
 
         return Linter(config.enabled, all_rules, rules, warn_rules)
 

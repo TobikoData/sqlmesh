@@ -274,4 +274,33 @@ class NoMissingExternalModels(Rule):
         )
 
 
+class NoAmbiguousProjections(Rule):
+    """All projections in a model must have unique & inferrable names or explicit aliases."""
+
+    def check_model(self, model: Model) -> t.Optional[RuleViolation]:
+        query = model.render_query()
+        if query is None:
+            return None
+
+        name_counts: t.Dict[str, int] = {}
+        projection_list = query.selects
+        for expression in projection_list:
+            alias = expression.output_name
+            if alias == "*":
+                continue
+
+            if not alias:
+                return self.violation(
+                    f"Outer projection '{expression.sql(dialect=model.dialect)}' must have inferrable names or explicit aliases."
+                )
+
+            name_counts[alias] = name_counts.get(alias, 0) + 1
+
+        for name, count in name_counts.items():
+            if count > 1:
+                return self.violation(f"Found duplicate outer select name '{name}'")
+
+        return None
+
+
 BUILTIN_RULES = RuleSet(subclasses(__name__, Rule, (Rule,)))

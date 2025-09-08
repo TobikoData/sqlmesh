@@ -3130,7 +3130,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         found_error = False
 
         model_list = (
-            list(self.get_model(model) for model in models) if models else self.models.values()
+            list(self.get_model(model, raise_if_missing=True) for model in models)
+            if models
+            else self.models.values()
         )
         all_violations = []
         for model in model_list:

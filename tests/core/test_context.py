@@ -1554,6 +1554,38 @@ def test_raw_code_handling(sushi_test_dbt_context: Context):
     )
 
 
+@pytest.mark.slow
+def test_dbt_models_are_not_validated(sushi_test_dbt_context: Context):
+    model = sushi_test_dbt_context.models['"memory"."sushi"."non_validated_model"']
+
+    assert model.render_query_or_raise().sql(comments=False) == 'SELECT 1 AS "c", 2 AS "c"'
+    assert sushi_test_dbt_context.fetchdf(
+        'SELECT * FROM "memory"."sushi"."non_validated_model"'
+    ).to_dict() == {"c": {0: 1}, "c_1": {0: 2}}
+
+    # Write a new incremental model file that should fail validation
+    models_dir = sushi_test_dbt_context.path / "models"
+    incremental_model_path = models_dir / "invalid_incremental.sql"
+    incremental_model_content = """{{
+  config(
+    materialized='incremental',
+    incremental_strategy='delete+insert',
+  )
+}}
+
+SELECT
+  1 AS c"""
+
+    incremental_model_path.write_text(incremental_model_content)
+
+    # Reload the context - this should raise a validation error for the incremental model
+    with pytest.raises(
+        ConfigError,
+        match="Unmanaged incremental models with insert / overwrite enabled must specify the partitioned_by field",
+    ):
+        Context(paths=sushi_test_dbt_context.path, config="test_config")
+
+
 def test_catalog_name_needs_to_be_quoted():
     config = Config(
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
@@ -3085,3 +3117,20 @@ def test_plan_no_start_configured():
         match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
     ):
         context.plan("dev", execution_time="1999-01-05")
+
+
+def test_lint_model_projections(tmp_path: Path):
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(paths=tmp_path)
+    context.upsert_model(
+        load_sql_based_model(
+            parse("""MODEL(name sqlmesh_example.m); SELECT 1 AS x, 2 AS x"""),
+            default_catalog="db",
+        )
+    )
+
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
+    with pytest.raises(LinterError, match=config_err):
+        prod_plan = context.plan(no_prompts=True, auto_apply=True)

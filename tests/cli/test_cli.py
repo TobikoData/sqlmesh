@@ -982,6 +982,7 @@ WHERE
         "  rules:\n"
         "    - ambiguousorinvalidcolumn\n"
         "    - invalidselectstarexpansion\n"
+        "    - noambiguousprojections\n"
     )
 
     with open(config_path) as file:
@@ -1048,6 +1049,7 @@ linter:
   rules:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
+    - noambiguousprojections
 """
 
     with open(tmp_path / "config.yaml") as file:
@@ -1990,6 +1992,7 @@ linter:
   rules:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
+    - noambiguousprojections
 """
 
         with open(tmp_path / "config.yaml") as file:
