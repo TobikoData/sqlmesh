@@ -1,5 +1,6 @@
 from __future__ import annotations
 import typing as t
+
 from typing_extensions import Self
 from unittest.mock import call, patch, Mock
 import re
@@ -2062,7 +2063,7 @@ def test_create_scd_type_2_by_time(adapter_mock, make_snapshot):
     )
 
 
-def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
+def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot, mocker):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -2073,7 +2074,8 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
                     unique_key id,
                     time_data_type TIMESTAMPTZ,
                     invalidate_hard_deletes false
-                )
+                ),
+                partitioned_by cola
             );
 
             SELECT * FROM tbl;
@@ -2086,6 +2088,7 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
 
     evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
 
+    source_query = parse_one('SELECT * FROM "tbl" AS "tbl"')
     query = parse_one(
         """SELECT *, CAST(NULL AS TIMESTAMPTZ) AS valid_from, CAST(NULL AS TIMESTAMPTZ) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0"""
     )
@@ -2094,7 +2097,9 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
     common_kwargs = dict(
         table_format=None,
         storage_format=None,
-        partitioned_by=[],
+        partitioned_by=[
+            exp.to_column("cola", quoted=True),
+        ],
         partition_interval_unit=None,
         clustered_by=[],
         table_properties={},
@@ -2108,6 +2113,38 @@ def test_create_ctas_scd_type_2_by_time(adapter_mock, make_snapshot):
                 query,
                 None,
                 column_descriptions=None,
+                **common_kwargs,
+            ),
+        ]
+    )
+
+    adapter_mock.reset_mock()
+
+    evaluator.evaluate(
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+        deployability_index=DeployabilityIndex.none_deployable(),
+    )
+
+    adapter_mock.scd_type_2_by_time.assert_has_calls(
+        [
+            call(
+                column_descriptions={},
+                execution_time="2020-01-02",
+                invalidate_hard_deletes=False,
+                source_columns=None,
+                source_table=source_query,
+                target_columns_to_types=mocker.ANY,
+                target_table=snapshot.table_name(is_deployable=False),
+                truncate=True,
+                unique_key=[exp.to_column("id", quoted=True)],
+                updated_at_as_valid_from=False,
+                updated_at_col=exp.column("updated_at", quoted=True),
+                valid_from_col=exp.column("valid_from", quoted=True),
+                valid_to_col=exp.column("valid_to", quoted=True),
                 **common_kwargs,
             ),
         ]
@@ -2178,6 +2215,11 @@ def test_insert_into_scd_type_2_by_time(
         updated_at_as_valid_from=False,
         truncate=truncate,
         source_columns=None,
+        clustered_by=[],
+        partition_interval_unit=None,
+        partitioned_by=[],
+        storage_format=None,
+        table_properties={},
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 
@@ -2347,6 +2389,11 @@ def test_insert_into_scd_type_2_by_column(
         column_descriptions={},
         truncate=truncate,
         source_columns=None,
+        clustered_by=[],
+        partition_interval_unit=None,
+        partitioned_by=[],
+        storage_format=None,
+        table_properties={},
     )
     adapter_mock.columns.assert_called_once_with(snapshot.table_name())
 

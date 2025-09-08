@@ -2241,6 +2241,11 @@ class SCDType2Strategy(IncrementalStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 source_columns=source_columns,
+                storage_format=model.storage_format,
+                partitioned_by=model.partitioned_by,
+                partition_interval_unit=model.partition_interval_unit,
+                clustered_by=model.clustered_by,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
             )
         elif isinstance(model.kind, SCDType2ByColumnKind):
             self.adapter.scd_type_2_by_column(
@@ -2259,6 +2264,11 @@ class SCDType2Strategy(IncrementalStrategy):
                 column_descriptions=model.column_descriptions,
                 truncate=is_first_insert,
                 source_columns=source_columns,
+                storage_format=model.storage_format,
+                partitioned_by=model.partitioned_by,
+                partition_interval_unit=model.partition_interval_unit,
+                clustered_by=model.clustered_by,
+                table_properties=kwargs.get("physical_properties", model.physical_properties),
             )
         else:
             raise SQLMeshError(
@@ -2273,51 +2283,14 @@ class SCDType2Strategy(IncrementalStrategy):
         render_kwargs: t.Dict[str, t.Any],
         **kwargs: t.Any,
     ) -> None:
-        # Source columns from the underlying table to prevent unintentional table schema changes during restatement of incremental models.
-        columns_to_types, source_columns = self._get_target_and_source_columns(
-            model,
+        return self.insert(
             table_name,
+            query_or_df,
+            model,
+            is_first_insert=False,
             render_kwargs=render_kwargs,
-            force_get_columns_from_target=True,
+            **kwargs,
         )
-        if isinstance(model.kind, SCDType2ByTimeKind):
-            self.adapter.scd_type_2_by_time(
-                target_table=table_name,
-                source_table=query_or_df,
-                unique_key=model.unique_key,
-                valid_from_col=model.kind.valid_from_name,
-                valid_to_col=model.kind.valid_to_name,
-                updated_at_col=model.kind.updated_at_name,
-                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
-                updated_at_as_valid_from=model.kind.updated_at_as_valid_from,
-                target_columns_to_types=columns_to_types,
-                table_format=model.table_format,
-                table_description=model.description,
-                column_descriptions=model.column_descriptions,
-                source_columns=source_columns,
-                **kwargs,
-            )
-        elif isinstance(model.kind, SCDType2ByColumnKind):
-            self.adapter.scd_type_2_by_column(
-                target_table=table_name,
-                source_table=query_or_df,
-                unique_key=model.unique_key,
-                valid_from_col=model.kind.valid_from_name,
-                valid_to_col=model.kind.valid_to_name,
-                check_columns=model.kind.columns,
-                target_columns_to_types=columns_to_types,
-                table_format=model.table_format,
-                invalidate_hard_deletes=model.kind.invalidate_hard_deletes,
-                execution_time_as_valid_from=model.kind.execution_time_as_valid_from,
-                table_description=model.description,
-                column_descriptions=model.column_descriptions,
-                source_columns=source_columns,
-                **kwargs,
-            )
-        else:
-            raise SQLMeshError(
-                f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
-            )
 
 
 class ViewStrategy(PromotableStrategy):
