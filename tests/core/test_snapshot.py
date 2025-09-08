@@ -44,6 +44,7 @@ from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
     SnapshotId,
+    SnapshotIdAndVersion,
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotIntervals,
@@ -3532,3 +3533,35 @@ def test_table_name_virtual_environment_mode(
             assert table_name_result.endswith(snapshot.version)
         else:
             assert table_name_result.endswith(f"{snapshot.dev_version}__dev")
+
+
+def test_snapshot_id_and_version_fingerprint_lazy_init():
+    snapshot = SnapshotIdAndVersion(
+        name="a",
+        identifier="1234",
+        version="2345",
+        dev_version=None,
+        fingerprint='{"data_hash":"1","metadata_hash":"2","parent_data_hash":"3","parent_metadata_hash":"4"}',
+    )
+
+    # starts off as a string in the private property
+    assert isinstance(snapshot.fingerprint_, str)
+
+    # gets parsed into SnapshotFingerprint on first access of public property
+    fingerprint = snapshot.fingerprint
+    assert isinstance(fingerprint, SnapshotFingerprint)
+    assert isinstance(snapshot.fingerprint_, SnapshotFingerprint)
+
+    assert fingerprint.data_hash == "1"
+    assert fingerprint.metadata_hash == "2"
+    assert fingerprint.parent_data_hash == "3"
+    assert fingerprint.parent_metadata_hash == "4"
+    assert snapshot.dev_version is not None  # dev version uses fingerprint
+
+    # can also be supplied as a SnapshotFingerprint to begin with instead of a str
+    snapshot = SnapshotIdAndVersion(
+        name="a", identifier="1234", version="2345", dev_version=None, fingerprint=fingerprint
+    )
+
+    assert isinstance(snapshot.fingerprint_, SnapshotFingerprint)
+    assert snapshot.fingerprint == fingerprint

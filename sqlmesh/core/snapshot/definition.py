@@ -588,6 +588,37 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return SnapshotNameVersion(name=self.name, version=self.version)
 
 
+class SnapshotIdAndVersion(PydanticModel):
+    """A stripped down version of a snapshot that is used in situations where we want to fetch the main fields of the snapshots table
+    without the overhead of parsing the full snapshot payload and fetching intervals.
+    """
+
+    name: str
+    version: str
+    dev_version_: t.Optional[str] = Field(alias="dev_version")
+    identifier: str
+    fingerprint_: t.Union[str, SnapshotFingerprint] = Field(alias="fingerprint")
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def fingerprint(self) -> SnapshotFingerprint:
+        value = self.fingerprint_
+        if isinstance(value, str):
+            self.fingerprint_ = value = SnapshotFingerprint.parse_raw(value)
+        return value
+
+    @property
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
+
+
 class Snapshot(PydanticModel, SnapshotInfoMixin):
     """A snapshot represents a node at a certain point in time.
 
@@ -1463,9 +1494,11 @@ class SnapshotTableCleanupTask(PydanticModel):
     dev_table_only: bool
 
 
-SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
+SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, SnapshotIdAndVersion, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
-SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
+SnapshotNameVersionLike = t.Union[
+    SnapshotNameVersion, SnapshotTableInfo, SnapshotIdAndVersion, Snapshot
+]
 
 
 class DeployabilityIndex(PydanticModel, frozen=True):

@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from collections import defaultdict
 from sqlglot import exp
-from pydantic import Field
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.state_sync.db.utils import (
@@ -27,12 +26,12 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersion,
     SnapshotInfoLike,
     Snapshot,
+    SnapshotIdAndVersion,
     SnapshotId,
     SnapshotFingerprint,
 )
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
-from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils import unique
 
 if t.TYPE_CHECKING:
@@ -215,7 +214,7 @@ class SnapshotState:
             for snapshot in environment.snapshots
         }
 
-        def _is_snapshot_used(snapshot: SharedVersionSnapshot) -> bool:
+        def _is_snapshot_used(snapshot: SnapshotIdAndVersion) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or snapshot.snapshot_id not in expired_candidates
@@ -307,6 +306,52 @@ class SnapshotState:
             A dictionary of snapshot IDs to snapshots.
         """
         return self._get_snapshots(snapshot_ids)
+
+    def get_snapshots_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotIdAndVersion]:
+        """Return the snapshot records for all versions of the specified snapshot names.
+
+        Args:
+            snapshot_names: Iterable of snapshot names to fetch all snapshot records for
+            current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
+            exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
+
+        Returns:
+            A set containing all the matched snapshot records. To fetch full snapshots, pass it into StateSync.get_snapshots()
+        """
+        if not snapshot_names:
+            return set()
+
+        if exclude_expired:
+            current_ts = current_ts or now_timestamp()
+            unexpired_expr = (exp.column("updated_ts") + exp.column("ttl_ms")) > current_ts
+        else:
+            unexpired_expr = None
+
+        return {
+            SnapshotIdAndVersion(
+                name=name,
+                identifier=identifier,
+                version=version,
+                dev_version=dev_version,
+                fingerprint=fingerprint,
+            )
+            for where in snapshot_name_filter(
+                snapshot_names=snapshot_names,
+                batch_size=self.SNAPSHOT_BATCH_SIZE,
+            )
+            for name, identifier, version, dev_version, fingerprint in fetchall(
+                self.engine_adapter,
+                exp.select("name", "identifier", "version", "dev_version", "fingerprint")
+                .from_(self.snapshots_table)
+                .where(where)
+                .and_(unexpired_expr),
+            )
+        }
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if snapshots exist.
@@ -591,7 +636,7 @@ class SnapshotState:
         self,
         snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
-    ) -> t.List[SharedVersionSnapshot]:
+    ) -> t.List[SnapshotIdAndVersion]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified identifiers.
@@ -628,7 +673,7 @@ class SnapshotState:
             snapshot_rows.extend(fetchall(self.engine_adapter, query))
 
         return [
-            SharedVersionSnapshot(
+            SnapshotIdAndVersion(
                 name=name,
                 identifier=identifier,
                 version=version,
@@ -711,23 +756,3 @@ def _auto_restatements_to_df(auto_restatements: t.Dict[SnapshotNameVersion, int]
             for name_version, ts in auto_restatements.items()
         ]
     )
-
-
-class SharedVersionSnapshot(PydanticModel):
-    """A stripped down version of a snapshot that is used for fetching snapshots that share the same version
-    with a significantly reduced parsing overhead.
-    """
-
-    name: str
-    version: str
-    dev_version_: t.Optional[str] = Field(alias="dev_version")
-    identifier: str
-    fingerprint: SnapshotFingerprint
-
-    @property
-    def snapshot_id(self) -> SnapshotId:
-        return SnapshotId(name=self.name, identifier=self.identifier)
-
-    @property
-    def dev_version(self) -> str:
-        return self.dev_version_ or self.fingerprint.to_version()
