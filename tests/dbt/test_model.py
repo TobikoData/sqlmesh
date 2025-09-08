@@ -447,3 +447,135 @@ def test_load_deprecated_incremental_time_column(
         "Using `time_column` on a model with incremental_strategy 'delete+insert' has been deprecated. Please use `incremental_by_time_range` instead in model 'main.incremental_time_range'."
         in caplog.text
     )
+
+
+@pytest.mark.slow
+def test_load_microbatch_with_ref(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
+) -> None:
+    yaml = YAML()
+    project_dir, model_dir = create_empty_project()
+    source_schema = {
+        "version": 2,
+        "sources": [
+            {
+                "name": "my_source",
+                "tables": [{"name": "my_table", "config": {"event_time": "ds_source"}}],
+            }
+        ],
+    }
+    source_schema_file = model_dir / "source_schema.yml"
+    with open(source_schema_file, "w", encoding="utf-8") as f:
+        yaml.dump(source_schema, f)
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    microbatch_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='microbatch',
+            event_time='ds',
+            begin='2020-01-01',
+            batch_size='day'
+        )
+    }}
+
+    SELECT cola, ds_source as ds FROM {{ source('my_source', 'my_table') }}
+    """
+    microbatch_model_file = model_dir / "microbatch.sql"
+    with open(microbatch_model_file, "w", encoding="utf-8") as f:
+        f.write(microbatch_contents)
+
+    microbatch_two_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='microbatch',
+            event_time='ds',
+            begin='2020-01-05',
+            batch_size='day'
+        )
+    }}
+
+    SELECT cola, ds FROM {{ ref('microbatch') }}
+    """
+    microbatch_two_model_file = model_dir / "microbatch_two.sql"
+    with open(microbatch_two_model_file, "w", encoding="utf-8") as f:
+        f.write(microbatch_two_contents)
+
+    microbatch_snapshot_fqn = '"local"."main"."microbatch"'
+    microbatch_two_snapshot_fqn = '"local"."main"."microbatch_two"'
+    context = Context(paths=project_dir)
+    assert (
+        context.render(microbatch_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
+        == 'SELECT "cola" AS "cola", "ds_source" AS "ds" FROM (SELECT * FROM "local"."my_source"."my_table" AS "my_table" WHERE "ds_source" >= \'2025-01-01 00:00:00+00:00\' AND "ds_source" < \'2025-01-11 00:00:00+00:00\') AS "_q_0"'
+    )
+    assert (
+        context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
+        == 'SELECT "_q_0"."cola" AS "cola", "_q_0"."ds" AS "ds" FROM (SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch" WHERE "microbatch"."ds" < \'2025-01-11 00:00:00+00:00\' AND "microbatch"."ds" >= \'2025-01-01 00:00:00+00:00\') AS "_q_0"'
+    )
+
+
+@pytest.mark.slow
+def test_load_microbatch_with_ref_no_filter(
+    tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
+) -> None:
+    yaml = YAML()
+    project_dir, model_dir = create_empty_project()
+    source_schema = {
+        "version": 2,
+        "sources": [
+            {
+                "name": "my_source",
+                "tables": [{"name": "my_table", "config": {"event_time": "ds"}}],
+            }
+        ],
+    }
+    source_schema_file = model_dir / "source_schema.yml"
+    with open(source_schema_file, "w", encoding="utf-8") as f:
+        yaml.dump(source_schema, f)
+    # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
+    microbatch_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='microbatch',
+            event_time='ds',
+            begin='2020-01-01',
+            batch_size='day'
+        )
+    }}
+
+    SELECT cola, ds FROM {{ source('my_source', 'my_table').render() }}
+    """
+    microbatch_model_file = model_dir / "microbatch.sql"
+    with open(microbatch_model_file, "w", encoding="utf-8") as f:
+        f.write(microbatch_contents)
+
+    microbatch_two_contents = """
+    {{
+        config(
+            materialized='incremental',
+            incremental_strategy='microbatch',
+            event_time='ds',
+            begin='2020-01-01',
+            batch_size='day'
+        )
+    }}
+
+    SELECT cola, ds FROM {{ ref('microbatch').render() }}
+    """
+    microbatch_two_model_file = model_dir / "microbatch_two.sql"
+    with open(microbatch_two_model_file, "w", encoding="utf-8") as f:
+        f.write(microbatch_two_contents)
+
+    microbatch_snapshot_fqn = '"local"."main"."microbatch"'
+    microbatch_two_snapshot_fqn = '"local"."main"."microbatch_two"'
+    context = Context(paths=project_dir)
+    assert (
+        context.render(microbatch_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
+        == 'SELECT "cola" AS "cola", "ds" AS "ds" FROM "local"."my_source"."my_table" AS "my_table"'
+    )
+    assert (
+        context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
+        == 'SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch"'
+    )

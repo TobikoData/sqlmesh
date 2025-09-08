@@ -16,7 +16,14 @@ from sqlglot.optimizer.simplify import simplify
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
-from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
+from sqlmesh.utils.date import (
+    TimeLike,
+    date_dict,
+    make_inclusive,
+    to_datetime,
+    make_ts_exclusive,
+    to_tstz,
+)
 from sqlmesh.utils.errors import (
     ConfigError,
     ParsetimeAdapterCallError,
@@ -214,6 +221,17 @@ class BaseExpressionRenderer:
                         dialect=self._dialect, identify=True, comments=False
                     )
 
+                all_refs = list(
+                    self._jinja_macro_registry.global_objs.get("sources", {}).values()  # type: ignore
+                ) + list(
+                    self._jinja_macro_registry.global_objs.get("refs", {}).values()  # type: ignore
+                )
+                for ref in all_refs:
+                    if ref.event_time_filter:
+                        ref.event_time_filter["start"] = render_kwargs["start_tstz"]
+                        ref.event_time_filter["end"] = to_tstz(
+                            make_ts_exclusive(render_kwargs["end_tstz"], dialect=self._dialect)
+                        )
                 jinja_env = self._jinja_macro_registry.build_environment(**jinja_env_kwargs)
 
                 expressions = []
