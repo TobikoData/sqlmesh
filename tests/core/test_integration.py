@@ -2045,6 +2045,7 @@ def test_dbt_is_incremental_table_is_missing(sushi_test_dbt_context: Context):
     model = context.get_model("sushi.waiter_revenue_by_day_v2")
     model = model.copy(update={"kind": IncrementalUnmanagedKind(), "start": "2023-01-01"})
     context.upsert_model(model)
+    context._standalone_audits["test_top_waiters"].start = "2023-01-01"
 
     context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
 
