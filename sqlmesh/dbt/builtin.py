@@ -545,6 +545,7 @@ def create_builtin_globals(
 
     builtin_globals["run_started_at"] = jinja_globals.get("execution_dt") or now()
     builtin_globals["dbt"] = AttributeDict(builtin_globals)
+    builtin_globals["context"] = builtin_globals["dbt"]
 
     return {**builtin_globals, **jinja_globals}
 
