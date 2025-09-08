@@ -121,9 +121,18 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
         warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+        current_catalog = self.get_current_catalog()
 
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
         self.api_client.delete_warehouse(warehouse_name)
+
+        if warehouse_name == current_catalog:
+            # Somewhere around 2025-09-08, Fabric started validating the "Database=" connection argument and throwing 'Authentication failed' if the database doesnt exist
+            # In addition, set_current_catalog() is implemented using a threadlocal variable "target_catalog"
+            # So, when we drop a warehouse, and there are still threads with "target_catalog" set to reference it, any operations on those threads
+            # that use an either use an existing connection pointing to this warehouse or trigger a new connection
+            # will fail with an 'Authentication Failed' error unless we close all connections here, which also clears all the threadlocal data
+            self.close()
 
     def set_current_catalog(self, catalog_name: str) -> None:
         """
