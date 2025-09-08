@@ -689,6 +689,7 @@ class ModelConfig(BaseModelConfig):
             extract_dependencies_from_query=False,
             allow_partials=allow_partials,
             virtual_environment_mode=virtual_environment_mode,
+            node_name=self.node_name,
             **optional_kwargs,
             **model_kwargs,
         )

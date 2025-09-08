@@ -812,7 +812,7 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
             auto_restatement_triggers=auto_restatement_triggers,
-            selected_models=selected_snapshots or {s.name for s in merged_intervals},
+            selected_models={s.node.node_name for s in merged_intervals if s.node.node_name},
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS

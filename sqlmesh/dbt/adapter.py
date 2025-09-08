@@ -181,10 +181,6 @@ class BaseAdapter(abc.ABC):
             }
         )
 
-    @property
-    def selected_resources(self) -> t.List[str]:
-        return []
-
 
 class ParsetimeAdapter(BaseAdapter):
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -505,8 +501,3 @@ class RuntimeAdapter(BaseAdapter):
             normalized_table.set("db", normalized_table.this)
             normalized_table.set("this", None)
         return normalized_table
-
-    def _dbt_model_id(self, sqlmesh_model_name: str) -> str:
-        # Model prefix is needed to correspond to the key in the nodes within the dbt context variable
-        parts = [part.strip('"') for part in sqlmesh_model_name.split(".")]
-        return f"model.{parts[0]}.{parts[-1]}"

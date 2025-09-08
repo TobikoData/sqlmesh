@@ -5,8 +5,6 @@ import logging
 import typing as t
 from pathlib import Path
 from unittest.mock import patch
-from sqlmesh.dbt.adapter import RuntimeAdapter
-from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 from sqlmesh.dbt.util import DBT_VERSION
 
@@ -2417,7 +2415,7 @@ def test_selected_resources_context_variable(
 ):
     context = sushi_test_project.context
 
-    # should be empty list during parse time
+    # empty selected resources
     direct_access = context.render("{{ selected_resources }}")
     assert direct_access == "[]"
 
@@ -2443,32 +2441,16 @@ def test_selected_resources_context_variable(
     result = context.render(test_condition)
     assert result.strip() == "no_resources"
 
-    # Test 4: Test with runtime adapter (simulating runtime execution)
-    runtime_adapter = RuntimeAdapter(
-        engine_adapter=sushi_test_dbt_context.engine_adapter,
-        jinja_macros=JinjaMacroRegistry(),
-        jinja_globals={
-            "selected_models": {
-                '"jaffle_shop"."main"."customers"',
-                '"jaffle_shop"."main"."orders"',
-                '"jaffle_shop"."main"."items"',
-            },
-        },
-    )
-
-    # it should return correct selected resources in dbt format
-    selected_resources = runtime_adapter.selected_resources
-    assert len(selected_resources) == 3
-    assert "model.jaffle_shop.customers" in selected_resources
-    assert "model.jaffle_shop.orders" in selected_resources
-    assert "model.jaffle_shop.items" in selected_resources
+    #  selected resources in dbt format
+    selected_resources = [
+        "model.jaffle_shop.customers",
+        "model.jaffle_shop.items",
+        "model.jaffle_shop.orders",
+    ]
 
     # check the jinja macros rendering
     result = context.render("{{ selected_resources }}", selected_resources=selected_resources)
-    assert (
-        result
-        == "['model.jaffle_shop.customers', 'model.jaffle_shop.items', 'model.jaffle_shop.orders']"
-    )
+    assert result == selected_resources.__repr__()
 
     result = context.render(test_jinja, selected_resources=selected_resources)
     assert result.strip() == "3"

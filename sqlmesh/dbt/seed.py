@@ -92,6 +92,7 @@ class SeedConfig(BaseModelConfig):
             audit_definitions=audit_definitions,
             virtual_environment_mode=virtual_environment_mode,
             start=self.start or context.sqlmesh_config.model_defaults.start,
+            node_name=self.node_name,
             **kwargs,
         )
 
