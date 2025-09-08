@@ -520,6 +520,10 @@ def test_build_plan_stages_restatement_prod_only(
         snapshot_a.snapshot_id: snapshot_a,
         snapshot_b.snapshot_id: snapshot_b,
     }
+    state_reader.get_snapshots_by_names.return_value = {
+        snapshot_a.id_and_version,
+        snapshot_b.id_and_version,
+    }
 
     existing_environment = Environment(
         name="prod",
@@ -661,7 +665,7 @@ def test_build_plan_stages_restatement_prod_identifies_dev_intervals(
         }
 
     state_reader.get_snapshots.side_effect = _get_snapshots
-    state_reader.get_snapshot_ids_by_names.return_value = set()
+    state_reader.get_snapshots_by_names.return_value = set()
 
     existing_prod_environment = Environment(
         name="prod",
