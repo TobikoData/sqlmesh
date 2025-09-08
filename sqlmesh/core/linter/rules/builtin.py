@@ -25,7 +25,6 @@ from sqlmesh.core.linter.rule import (
 )
 from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.model import Model, SqlModel, ExternalModel
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
 
 
@@ -275,20 +274,31 @@ class NoMissingExternalModels(Rule):
         )
 
 
-class ValidateModelDefinition(Rule):
-    """
-    Checks whether a model satisfies certain properties, such as (but not limited to):
-
-    - If SQL-based, it contains at least one projection & projection names are unique
-    - Its kind is configured correctly (e.g., the VIEW kind is not supported for Python models)
-    - Other metadata properties are well-formed (e.g., incremental-by-time models require a time column)
-    """
+class NoAmbiguousProjections(Rule):
+    """All projections in a model must have unique, inferrable names or explicit aliases."""
 
     def check_model(self, model: Model) -> t.Optional[RuleViolation]:
-        try:
-            model.validate_definition()
-        except ConfigError as ex:
-            return self.violation(str(ex))
+        query = model.render_query()
+        if query is None:
+            return None
+
+        name_counts: t.Dict[str, int] = {}
+        projection_list = query.selects
+        for expression in projection_list:
+            alias = expression.output_name
+            if alias == "*":
+                continue
+
+            if not alias:
+                return self.violation(
+                    f"Outer projection '{expression.sql(dialect=model.dialect)}' must have inferrable names or explicit aliases."
+                )
+
+            name_counts[alias] = name_counts.get(alias, 0) + 1
+
+        for name, count in name_counts.items():
+            if count > 1:
+                return self.violation(f"Found duplicate outer select name '{name}'")
 
         return None
 
