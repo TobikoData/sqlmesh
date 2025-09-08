@@ -1435,6 +1435,14 @@ def test_flags(sushi_test_project: Project):
     assert context.render("{{ flags.WHICH }}") == "parse"
 
 
+def test_invocation_args_dict(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ invocation_args_dict['full_refresh'] }}") == "None"
+    assert context.render("{{ invocation_args_dict['store_failures'] }}") == "None"
+    assert context.render("{{ invocation_args_dict['which'] }}") == "parse"
+
+
 @pytest.mark.xdist_group("dbt_manifest")
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
