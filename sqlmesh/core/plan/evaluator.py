@@ -22,7 +22,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo, execute_environment_statements
 from sqlmesh.core.macros import RuntimeStage
-from sqlmesh.core.snapshot.definition import to_view_mapping
+from sqlmesh.core.snapshot.definition import to_view_mapping, SnapshotTableInfo
 from sqlmesh.core.plan import stages
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.scheduler import Scheduler
@@ -287,33 +287,61 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def visit_restatement_stage(
         self, stage: stages.RestatementStage, plan: EvaluatablePlan
     ) -> None:
-        snapshot_intervals_to_restate = {
-            (s.id_and_version, i) for s, i in stage.snapshot_intervals.items()
-        }
-
-        # Restating intervals on prod plans should mean that the intervals are cleared across
-        # all environments, not just the version currently in prod
-        # This ensures that work done in dev environments can still be promoted to prod
-        # by forcing dev environments to re-run intervals that changed in prod
+        # Restating intervals on prod plans means that once the data for the intervals being restated has been backfilled
+        # (which happens in the backfill stage) then we need to clear those intervals *from state* across all other environments.
+        #
+        # This ensures that work done in dev environments can still be promoted to prod by forcing dev environments to
+        # re-run intervals that changed in prod (because after this stage runs they are cleared from state and thus show as missing)
+        #
+        # It also means that any new dev environments created while this restatement plan was running also get the
+        # correct intervals cleared because we look up matching snapshots as at right now and not as at the time the plan
+        # was created, which could have been several hours ago if there was a lot of data to restate.
         #
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
-        snapshot_intervals_to_restate.update(
-            {
-                (s.snapshot, s.interval)
-                for s in identify_restatement_intervals_across_snapshot_versions(
-                    state_reader=self.state_sync,
-                    prod_restatements=plan.restatements,
-                    disable_restatement_models=plan.disabled_restatement_models,
-                    loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
-                    current_ts=to_timestamp(plan.execution_time or now()),
-                ).values()
-            }
+
+        intervals_to_clear = identify_restatement_intervals_across_snapshot_versions(
+            state_reader=self.state_sync,
+            prod_restatements=plan.restatements,
+            disable_restatement_models=plan.disabled_restatement_models,
+            loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
+            current_ts=to_timestamp(plan.execution_time or now()),
         )
 
+        if not intervals_to_clear:
+            # Nothing to do
+            return
+
         self.state_sync.remove_intervals(
-            snapshot_intervals=list(snapshot_intervals_to_restate),
+            snapshot_intervals=[(s.table_info, s.interval) for s in intervals_to_clear.values()],
             remove_shared_versions=plan.is_prod,
         )
+
+        # While the restatements were being processed, did any of the snapshots being restated get new versions deployed?
+        # If they did, they will not reflect the data that just got restated, so we need to notify the user
+        if deployed_env := self.state_sync.get_environment(plan.environment.name):
+            promoted_snapshots_by_name = {s.name: s for s in deployed_env.snapshots}
+
+            deployed_during_restatement: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]] = []
+
+            for name in plan.restatements:
+                snapshot = stage.all_snapshots[name]
+                version = snapshot.table_info.version
+                if (
+                    prod_snapshot := promoted_snapshots_by_name.get(name)
+                ) and prod_snapshot.version != version:
+                    deployed_during_restatement.append(
+                        (snapshot.table_info, prod_snapshot.table_info)
+                    )
+
+            if deployed_during_restatement:
+                self.console.log_models_updated_during_restatement(
+                    deployed_during_restatement,
+                    deployed_env.summary,
+                    plan.environment.naming_info,
+                    self.default_catalog,
+                )
+                # note: the plan will automatically fail at the promotion stage with a ConflictingPlanError because the environment was changed by another plan
+                # so there is no need to explicitly fail the plan here
 
     def visit_environment_record_update_stage(
         self, stage: stages.EnvironmentRecordUpdateStage, plan: EvaluatablePlan

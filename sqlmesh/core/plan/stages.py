@@ -12,7 +12,6 @@ from sqlmesh.core.snapshot.definition import (
     Snapshot,
     SnapshotTableInfo,
     SnapshotId,
-    Interval,
 )
 
 
@@ -98,14 +97,19 @@ class AuditOnlyRunStage:
 
 @dataclass
 class RestatementStage:
-    """Restate intervals for given snapshots.
+    """Clear intervals from state for snapshots in *other* environments, when restatements are requested in prod.
+
+    This stage is effectively a "marker" stage to trigger the plan evaluator to perform the "clear intervals" logic after the BackfillStage has completed.
+    The "clear intervals" logic is executed just-in-time using the latest state available in order to pick up new snapshots that may have
+    been created while the BackfillStage was running, which is why we do not build a list of snapshots to clear at plan time and defer to evaluation time.
+
+    Note that this stage is only present on `prod` plans because dev plans do not need to worry about clearing intervals in other environments.
 
     Args:
-        snapshot_intervals: Intervals to restate.
-        all_snapshots: All snapshots in the plan by name.
+        all_snapshots: All snapshots in the plan by name. Note that this does not include the snapshots from other environments that will get their
+            intervals cleared, it's included here as an optimization to prevent having to re-fetch the current plan's snapshots
     """
 
-    snapshot_intervals: t.Dict[SnapshotTableInfo, Interval]
     all_snapshots: t.Dict[str, Snapshot]
 
 
@@ -321,10 +325,6 @@ class PlanStagesBuilder:
         if audit_only_snapshots:
             stages.append(AuditOnlyRunStage(snapshots=list(audit_only_snapshots.values())))
 
-        restatement_stage = self._get_restatement_stage(plan, snapshots_by_name)
-        if restatement_stage:
-            stages.append(restatement_stage)
-
         if missing_intervals_before_promote:
             stages.append(
                 BackfillStage(
@@ -348,6 +348,15 @@ class PlanStagesBuilder:
                     deployability_index=deployability_index,
                 )
             )
+
+        # note: "restatement stage" (which is clearing intervals in state - not actually performing the restatements, that's the backfill stage)
+        # needs to come *after* the backfill stage so that at no time do other plans / runs see empty prod intervals and compete with this plan to try to fill them.
+        # in addition, when we update intervals in state, we only clear intervals from dev snapshots to force dev models to be backfilled based on the new prod data.
+        # we can leave prod intervals alone because by the time this plan finishes, the intervals in state have not actually changed, since restatement replaces
+        # data for existing intervals and does not produce new ones
+        restatement_stage = self._get_restatement_stage(plan, snapshots_by_name)
+        if restatement_stage:
+            stages.append(restatement_stage)
 
         stages.append(
             EnvironmentRecordUpdateStage(
@@ -443,15 +452,12 @@ class PlanStagesBuilder:
     def _get_restatement_stage(
         self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]
     ) -> t.Optional[RestatementStage]:
-        snapshot_intervals_to_restate = {}
-        for name, interval in plan.restatements.items():
-            restated_snapshot = snapshots_by_name[name]
-            restated_snapshot.remove_interval(interval)
-            snapshot_intervals_to_restate[restated_snapshot.table_info] = interval
-        if not snapshot_intervals_to_restate or plan.is_dev:
+        if not plan.restatements or plan.is_dev:
+            # The RestatementStage to clear intervals from state across all environments is not needed for plans against dev, only prod
             return None
+
         return RestatementStage(
-            snapshot_intervals=snapshot_intervals_to_restate, all_snapshots=snapshots_by_name
+            all_snapshots=snapshots_by_name,
         )
 
     def _get_physical_layer_update_stage(
