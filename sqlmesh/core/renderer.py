@@ -5,6 +5,11 @@ import typing as t
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
+import re
+from sys import exc_info
+from traceback import walk_tb
+from jinja2 import UndefinedError
+from jinja2.runtime import Macro
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
