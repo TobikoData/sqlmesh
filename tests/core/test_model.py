@@ -2925,7 +2925,8 @@ def test_python_model_decorator_col_descriptions() -> None:
 
     assert py_model.columns_to_types.keys() == py_model.column_descriptions.keys()
 
-    # error: `columns` and `column_descriptions` column names are different cases, quoting preserves case
+    # warning: `columns` and `column_descriptions` column names are quoted and different cases,
+    #   so column not present in model
     @model(
         "col_descriptions_quoted",
         columns={'"col"': "int"},
@@ -2934,11 +2935,13 @@ def test_python_model_decorator_col_descriptions() -> None:
     def b_model(context):
         pass
 
-    with pytest.raises(ConfigError, match="a description is provided for column 'COL'"):
+    with patch.object(get_console(), "log_warning") as mock_logger:
         py_model = model.get_registry()["col_descriptions_quoted"].model(
             module_path=Path("."),
             path=Path("."),
         )
+        assert mock_logger.call_count == 1
+        assert "a description is provided for column 'COL'" in mock_logger.call_args[0][0]
 
 
 def test_python_model_unsupported_kind() -> None:
