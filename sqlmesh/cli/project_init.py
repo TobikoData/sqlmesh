@@ -216,7 +216,7 @@ GROUP BY item_id
   name {incremental_model_name},
   kind INCREMENTAL_BY_TIME_RANGE (
     time_column event_date
-    {"partition_by_time_column false" if dialect == "doris" else ""}
+    {",partition_by_time_column false" if dialect == "doris" else ""}
   ),
   start '2020-01-01',
   cron '@daily',

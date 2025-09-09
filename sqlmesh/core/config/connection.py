@@ -2316,7 +2316,7 @@ class DorisConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
-    port: t.Optional[int] = 9030  # Default Doris FE port
+    port: t.Optional[int] = 9030
     database: t.Optional[str] = None
     charset: t.Optional[str] = None
     collation: t.Optional[str] = None
@@ -2330,7 +2330,7 @@ class DorisConnectionConfig(ConnectionConfig):
     type_: t.Literal["doris"] = Field(alias="type", default="doris")
     DIALECT: t.ClassVar[t.Literal["doris"]] = "doris"
     DISPLAY_NAME: t.ClassVar[t.Literal["Apache Doris"]] = "Apache Doris"
-    DISPLAY_ORDER: t.ClassVar[t.Literal[17]] = 17
+    DISPLAY_ORDER: t.ClassVar[t.Literal[18]] = 18
 
     _engine_import_validator = _get_engine_import_validator("pymysql", "doris")
 

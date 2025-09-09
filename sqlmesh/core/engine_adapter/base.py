@@ -2820,7 +2820,7 @@ class EngineAdapter:
         """
         table_obj = exp.to_table(table)
         return f"__temp_{table_obj.name}_{random_id(short=True)}"
-    
+
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:

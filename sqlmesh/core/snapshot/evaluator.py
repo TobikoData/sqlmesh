@@ -2039,7 +2039,9 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         ):
             physical_properties = dict(physical_properties)
             physical_properties["unique_key"] = (
-                model.unique_key[0] if len(model.unique_key) == 1 else exp.Tuple(expressions=model.unique_key)
+                model.unique_key[0]
+                if len(model.unique_key) == 1
+                else exp.Tuple(expressions=model.unique_key)
             )
 
         logger.info("Creating table '%s'", table_name)
