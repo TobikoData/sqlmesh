@@ -5,6 +5,7 @@ import pytest
 from pathlib import Path
 
 from sqlglot import exp
+from sqlglot.errors import SchemaError
 from sqlmesh import Context
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
@@ -579,3 +580,40 @@ def test_load_microbatch_with_ref_no_filter(
         context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
         == 'SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch"'
     )
+
+
+def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
+    project_dir, model_dir = create_empty_project()
+
+    macros_dir = project_dir / "macros"
+    macros_dir.mkdir()
+
+    # the execute guard in the macro is so that dbt won't fail on the manifest loading earlier
+    macro_file = macros_dir / "my_macro.sql"
+    macro_file.write_text("""
+{%- macro select_columns(table_name) -%}
+  {% if execute %}
+    {%- if target.name == 'production' -%}
+        {%- set columns = run_query('SELECT column_name FROM information_schema.columns WHERE table_name = \'' ~ table_name ~ '\'') -%}
+    {%- endif -%}
+    SELECT {{ columns.rows[0][0] }} FROM {{ table_name }}
+  {%- endif -%}
+{%- endmacro -%}
+""")
+
+    model_file = model_dir / "my_model.sql"
+    model_file.write_text("""
+{{ config(
+    materialized='table'
+) }}
+
+{{ select_columns('users') }}
+""")
+
+    with pytest.raises(SchemaError) as exc_info:
+        Context(paths=project_dir)
+
+    error_message = str(exc_info.value)
+    assert "Failed to update model schemas" in error_message
+    assert "Could not render or parse jinja for" in error_message
+    assert "Undefined macro/variable: 'columns' in macro: select_columns" in error_message

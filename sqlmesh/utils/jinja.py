@@ -7,8 +7,11 @@ import typing as t
 import zlib
 from collections import defaultdict
 from enum import Enum
+from sys import exc_info
+from traceback import walk_tb
 
-from jinja2 import Environment, Template, nodes
+from jinja2 import Environment, Template, nodes, UndefinedError
+from jinja2.runtime import Macro
 from sqlglot import Dialect, Expression, Parser, TokenType
 
 from sqlmesh.core import constants as c
@@ -664,3 +667,24 @@ def make_jinja_registry(
     jinja_registry = jinja_registry.trim(jinja_references)
 
     return jinja_registry
+
+
+def extract_error_details(ex: Exception) -> str:
+    """Extracts a readable message from a Jinja2 error, to include missing name and macro."""
+
+    error_details = ""
+    if isinstance(ex, UndefinedError):
+        if match := re.search(r"'(\w+)'", str(ex)):
+            error_details += f"\nUndefined macro/variable: '{match.group(1)}'"
+        try:
+            _, _, exc_traceback = exc_info()
+            for frame, _ in walk_tb(exc_traceback):
+                if frame.f_code.co_name == "_invoke":
+                    macro = frame.f_locals.get("self")
+                    if isinstance(macro, Macro):
+                        error_details += f" in macro: {macro.name}\n"
+                        break
+        except:
+            # to fall back to the generic error message if frame analysis fails
+            pass
+    return error_details or str(ex)

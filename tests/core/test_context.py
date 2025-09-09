@@ -631,6 +631,49 @@ def test_env_and_default_schema_normalization(mocker: MockerFixture):
     assert list(context.fetchdf('select c from "DEFAULT__DEV"."X"')["c"])[0] == 1
 
 
+def test_jinja_macro_undefined_variable_error(tmp_path: pathlib.Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True)
+    macros_dir = tmp_path / "macros"
+    macros_dir.mkdir(parents=True)
+
+    macro_file = macros_dir / "my_macros.sql"
+    macro_file.write_text("""
+{%- macro generate_select(table_name) -%}
+  {%- if target.name == 'production' -%}
+    {%- set results = run_query('SELECT 1') -%}
+  {%- endif -%}
+  SELECT {{ results.columns[0].values()[0] }} FROM {{ table_name }}
+{%- endmacro -%}
+""")
+
+    model_file = models_dir / "my_model.sql"
+    model_file.write_text("""
+MODEL (
+    name my_schema.my_model,
+    kind FULL
+);
+
+JINJA_QUERY_BEGIN;
+{{ generate_select('users') }}
+JINJA_END;
+""")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+model_defaults:
+  dialect: duckdb
+""")
+
+    with pytest.raises(ConfigError) as exc_info:
+        Context(paths=str(tmp_path))
+
+    error_message = str(exc_info.value)
+    assert "Failed to load model" in error_message
+    assert "Could not render or parse jinja for" in error_message
+    assert "Undefined macro/variable: 'target' in macro: generate_select" in error_message
+
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 
@@ -2497,7 +2540,7 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@daily'
-    );                        
+    );
 
     select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2510,9 +2553,9 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@weekly'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                        
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     (tmp_path / "models" / "monthly_model.sql").write_text("""
@@ -2523,9 +2566,9 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@monthly'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                         
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     (tmp_path / "models" / "ended_daily_model.sql").write_text("""
@@ -2537,9 +2580,9 @@ def test_plan_min_intervals(tmp_path: Path):
       start '2020-01-01',
       end '2020-01-18',
       cron '@daily'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                 
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     context.load()
@@ -2672,7 +2715,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@hourly'
-    );                        
+    );
 
     select @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2681,11 +2724,11 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
     MODEL (
       name sqlmesh_example.two_hourly_model,
       kind INCREMENTAL_BY_TIME_RANGE (
-        time_column start_dt        
+        time_column start_dt
       ),
       start '2020-01-01',
       cron '0 */2 * * *'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
     """)
@@ -2694,11 +2737,11 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
     MODEL (
       name sqlmesh_example.unrelated_monthly_model,
       kind INCREMENTAL_BY_TIME_RANGE (
-        time_column start_dt        
+        time_column start_dt
       ),
       start '2020-01-01',
       cron '@monthly'
-    );                        
+    );
 
     select @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2711,7 +2754,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@daily'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
     """)
@@ -2724,7 +2767,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@weekly'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.daily_model where start_dt between @start_dt and @end_dt;
     """)

@@ -5,11 +5,6 @@ import typing as t
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
-import re
-from sys import exc_info
-from traceback import walk_tb
-from jinja2 import UndefinedError
-from jinja2.runtime import Macro
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
@@ -35,7 +30,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     raise_config_error,
 )
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_error_details
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
@@ -247,7 +242,8 @@ class BaseExpressionRenderer:
             except ParsetimeAdapterCallError:
                 raise
             except Exception as ex:
-                raise ConfigError(f"Could not render jinja at '{self._path}'.\n{ex}") from ex
+                error_msg = f"Could not render jinja for '{self._path}'.\n" + extract_error_details(ex)
+                raise ConfigError(error_msg) from ex
 
             if rendered_expression.strip():
                 try:
