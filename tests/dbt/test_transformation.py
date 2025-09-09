@@ -6,6 +6,7 @@ import typing as t
 from pathlib import Path
 from unittest.mock import patch
 
+from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.dbt.util import DBT_VERSION
 
 import pytest
@@ -43,7 +44,7 @@ from sqlmesh.core.model.kind import (
     OnAdditiveChange,
 )
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
-from sqlmesh.dbt.builtin import _relation_info_to_relation, Config
+from sqlmesh.dbt.builtin import _relation_info_to_relation, Config, create_builtin_globals
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -64,7 +65,7 @@ from sqlmesh.dbt.target import (
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
-from sqlmesh.utils.jinja import MacroReference
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
 
@@ -2352,3 +2353,47 @@ def test_dynamic_var_names_in_macro(sushi_test_project: Project):
     )
     converted_model = model_config.to_sqlmesh(context)
     assert "dynamic_test_var" in converted_model.jinja_macros.global_objs["vars"]  # type: ignore
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_execute_variable_parse_vs_runtime(sushi_test_dbt_context: Context):
+    execute_model = sushi_test_dbt_context.get_model('"memory"."sushi"."execute_test_model"')
+    parse_time_query = execute_model.render_query()
+    if parse_time_query:
+        parse_sql = parse_time_query.sql()
+        # should contain parse-time placeholders
+        assert "parse_time_placeholder" in parse_sql or "parse_time_context" in parse_sql
+
+    runtime_query = execute_model.render_query_or_raise(
+        engine_adapter=sushi_test_dbt_context.engine_adapter
+    )
+    runtime_sql = runtime_query.sql()
+    # At runtime, the macro should have executed the query and returned the result
+    assert "1" in runtime_sql or "runtime_context" in runtime_sql
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_execute_globals(mocker: MockerFixture):
+    # No engine adapter shoulde create parse adapter
+    parse_time_globals = create_builtin_globals(
+        jinja_macros=JinjaMacroRegistry(),
+        jinja_globals={},
+        engine_adapter=None,
+    )
+
+    assert parse_time_globals["execute"] is False
+    assert parse_time_globals["flags"].WHICH == "parse"
+    assert isinstance(parse_time_globals["adapter"], ParsetimeAdapter)
+
+    mock_engine_adapter = mocker.Mock()
+
+    # Runtime globals should have execute=True and RuntimeAdapter
+    runtime_globals = create_builtin_globals(
+        jinja_macros=JinjaMacroRegistry(),
+        jinja_globals={},
+        engine_adapter=mock_engine_adapter,
+    )
+
+    assert runtime_globals["execute"] is True
+    assert runtime_globals["flags"].WHICH == "run"
+    assert isinstance(runtime_globals["adapter"], RuntimeAdapter)

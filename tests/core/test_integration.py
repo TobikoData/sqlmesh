@@ -2068,6 +2068,7 @@ def test_dbt_is_incremental_table_is_missing(sushi_test_dbt_context: Context):
     assert context.engine_adapter.table_exists(snapshot.table_name())
 
 
+@pytest.mark.xdist_group("dbt_manifest")
 def test_model_attr(sushi_test_dbt_context: Context, assert_exp_eq):
     context = sushi_test_dbt_context
     model = context.get_model("sushi.top_waiters")
@@ -2075,14 +2076,14 @@ def test_model_attr(sushi_test_dbt_context: Context, assert_exp_eq):
         model.render_query(),
         """
         SELECT
-          CAST("waiter_id" AS INT) AS "waiter_id",
-          CAST("revenue" AS DOUBLE) AS "revenue",
+          CAST("waiter_revenue_by_day_v2"."waiter_id" AS INT) AS "waiter_id",
+          CAST("waiter_revenue_by_day_v2"."revenue" AS DOUBLE) AS "revenue",
           3 AS "model_columns"
         FROM "memory"."sushi"."waiter_revenue_by_day_v2" AS "waiter_revenue_by_day_v2"
         WHERE
-          "ds" = (
+          "waiter_revenue_by_day_v2"."ds" = (
              SELECT
-               MAX("ds")
+               MAX("waiter_revenue_by_day_v2"."ds")  AS "_col_0"
              FROM "memory"."sushi"."waiter_revenue_by_day_v2" AS "waiter_revenue_by_day_v2"
            )
         ORDER BY

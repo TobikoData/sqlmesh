@@ -533,7 +533,7 @@ def create_builtin_globals(
     builtin_globals.update(
         {
             "adapter": adapter,
-            "execute": True,
+            "execute": isinstance(adapter, RuntimeAdapter),
             "load_relation": adapter.load_relation,
             "store_result": sql_execution.store_result,
             "load_result": sql_execution.load_result,
