@@ -129,6 +129,7 @@ class PlanBuilder:
         end_override_per_model: t.Optional[t.Dict[str, datetime]] = None,
         console: t.Optional[PlanBuilderConsole] = None,
         user_provided_flags: t.Optional[t.Dict[str, UserProvidedFlags]] = None,
+        selected_models: t.Optional[t.Set[str]] = None,
     ):
         self._context_diff = context_diff
         self._no_gaps = no_gaps
@@ -169,6 +170,7 @@ class PlanBuilder:
         self._console = console or get_console()
         self._choices: t.Dict[SnapshotId, SnapshotChangeCategory] = {}
         self._user_provided_flags = user_provided_flags
+        self._selected_models = selected_models
         self._explain = explain
 
         self._start = start
@@ -347,6 +349,7 @@ class PlanBuilder:
             ensure_finalized_snapshots=self._ensure_finalized_snapshots,
             ignore_cron=self._ignore_cron,
             user_provided_flags=self._user_provided_flags,
+            selected_models=self._selected_models,
         )
         self._latest_plan = plan
         return plan

@@ -1677,6 +1677,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             end_override_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
+            selected_models={
+                dbt_name
+                for model in model_selector.expand_model_selections(select_models or "*")
+                if (dbt_name := snapshots[model].node.dbt_name)
+            },
             explain=explain or False,
             ignore_cron=ignore_cron or False,
         )

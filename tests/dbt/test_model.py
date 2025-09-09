@@ -201,7 +201,7 @@ def test_load_microbatch_all_defined(
             concurrent_batches=true
         )
     }}
-    
+
     SELECT 1 as cola, '2025-01-01' as ds
     """
     microbatch_model_file = model_dir / "microbatch.sql"
@@ -633,3 +633,80 @@ def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
     assert "Failed to update model schemas" in error_message
     assert "Could not render jinja for" in error_message
     assert "Undefined macro/variable: 'columns' in macro: 'select_columns'" in error_message
+
+
+@pytest.mark.slow
+def test_node_name_populated_for_dbt_models(dbt_dummy_postgres_config: PostgresConfig) -> None:
+    model_config = ModelConfig(
+        name="test_model",
+        package_name="test_package",
+        sql="SELECT 1 as id",
+        database="test_db",
+        schema_="test_schema",
+        alias="test_model",
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = dbt_dummy_postgres_config
+
+    # check after convert to SQLMesh model that node_name is populated correctly
+    sqlmesh_model = model_config.to_sqlmesh(context)
+    assert sqlmesh_model.dbt_name == "model.test_package.test_model"
+
+
+@pytest.mark.slow
+def test_load_model_dbt_node_name(tmp_path: Path) -> None:
+    yaml = YAML()
+    dbt_project_dir = tmp_path / "dbt"
+    dbt_project_dir.mkdir()
+    dbt_model_dir = dbt_project_dir / "models"
+    dbt_model_dir.mkdir()
+
+    model_contents = "SELECT 1 as id, 'test' as name"
+    model_file = dbt_model_dir / "simple_model.sql"
+    with open(model_file, "w", encoding="utf-8") as f:
+        f.write(model_contents)
+
+    dbt_project_config = {
+        "name": "test_project",
+        "version": "1.0.0",
+        "config-version": 2,
+        "profile": "test",
+        "model-paths": ["models"],
+    }
+    dbt_project_file = dbt_project_dir / "dbt_project.yml"
+    with open(dbt_project_file, "w", encoding="utf-8") as f:
+        yaml.dump(dbt_project_config, f)
+
+    sqlmesh_config = {
+        "model_defaults": {
+            "start": "2025-01-01",
+        }
+    }
+    sqlmesh_config_file = dbt_project_dir / "sqlmesh.yaml"
+    with open(sqlmesh_config_file, "w", encoding="utf-8") as f:
+        yaml.dump(sqlmesh_config, f)
+
+    dbt_data_dir = tmp_path / "dbt_data"
+    dbt_data_dir.mkdir()
+    dbt_data_file = dbt_data_dir / "local.db"
+    dbt_profile_config = {
+        "test": {
+            "outputs": {"duckdb": {"type": "duckdb", "path": str(dbt_data_file)}},
+            "target": "duckdb",
+        }
+    }
+    db_profile_file = dbt_project_dir / "profiles.yml"
+    with open(db_profile_file, "w", encoding="utf-8") as f:
+        yaml.dump(dbt_profile_config, f)
+
+    context = Context(paths=dbt_project_dir)
+
+    # find the model by its sqlmesh fully qualified name
+    model_fqn = '"local"."main"."simple_model"'
+    assert model_fqn in context.snapshots
+
+    # Verify that node_name is the equivalent dbt one
+    model = context.snapshots[model_fqn].model
+    assert model.dbt_name == "model.test_project.simple_model"

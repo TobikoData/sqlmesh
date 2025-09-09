@@ -45,6 +45,7 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation, Config
 from sqlmesh.dbt.common import Dependencies
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -2375,3 +2376,84 @@ def test_dynamic_var_names_in_macro(sushi_test_project: Project):
     )
     converted_model = model_config.to_sqlmesh(context)
     assert "dynamic_test_var" in converted_model.jinja_macros.global_objs["vars"]  # type: ignore
+
+
+def test_selected_resources_with_selectors():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+
+    # A plan with a specific model selection
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers"])
+    plan = plan_builder.build()
+    assert len(plan.selected_models) == 1
+    selected_model = list(plan.selected_models)[0]
+    assert "customers" in selected_model
+
+    # Plan without model selections should include all models
+    plan_builder = sushi_context.plan_builder()
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) > 10
+
+    # with downstream models should select customers and at least one downstream model
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers+"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 2
+    assert any("customers" in model for model in plan.selected_models)
+
+    # Test wildcard selection
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.waiter_*"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 4
+    assert all("waiter" in model for model in plan.selected_models)
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_selected_resources_context_variable(
+    sushi_test_project: Project, sushi_test_dbt_context: Context
+):
+    context = sushi_test_project.context
+
+    # empty selected resources
+    direct_access = context.render("{{ selected_resources }}")
+    assert direct_access == "[]"
+
+    # selected_resources is iterable and count items
+    test_jinja = """
+    {%- set resources = [] -%}
+    {%- for resource in selected_resources -%}
+        {%- do resources.append(resource) -%}
+    {%- endfor -%}
+    {{ resources | length }}
+    """
+    result = context.render(test_jinja)
+    assert result.strip() == "0"
+
+    # selected_resources in conditions
+    test_condition = """
+    {%- if selected_resources -%}
+        has_resources
+    {%- else -%}
+        no_resources
+    {%- endif -%}
+    """
+    result = context.render(test_condition)
+    assert result.strip() == "no_resources"
+
+    #  selected resources in dbt format
+    selected_resources = [
+        "model.jaffle_shop.customers",
+        "model.jaffle_shop.items",
+        "model.jaffle_shop.orders",
+    ]
+
+    # check the jinja macros rendering
+    result = context.render("{{ selected_resources }}", selected_resources=selected_resources)
+    assert result == selected_resources.__repr__()
+
+    result = context.render(test_jinja, selected_resources=selected_resources)
+    assert result.strip() == "3"
+
+    result = context.render(test_condition, selected_resources=selected_resources)
+    assert result.strip() == "has_resources"
