@@ -30,7 +30,7 @@ from sqlmesh.utils.errors import (
     SQLMeshError,
     raise_config_error,
 )
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_error_details
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
@@ -242,7 +242,9 @@ class BaseExpressionRenderer:
             except ParsetimeAdapterCallError:
                 raise
             except Exception as ex:
-                raise ConfigError(f"Could not render jinja at '{self._path}'.\n{ex}") from ex
+                raise ConfigError(
+                    f"Could not render jinja for '{self._path}'.\n" + extract_error_details(ex)
+                ) from ex
 
             if rendered_expression.strip():
                 try:
