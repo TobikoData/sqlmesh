@@ -37,7 +37,7 @@ module.exports = {
           900: 'var(--color-neutral-900)',
         },
         typography: {
-          heading: 'var(--color-typography-heading)',
+          heading: 'var(--color-typography-headline)',
           tagline: 'var(--color-typography-tagline)',
           description: 'var(--color-typography-description)',
           info: 'var(--color-typography-info)',

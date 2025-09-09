@@ -20,7 +20,7 @@ export function Headline({
       data-component="Headline"
       className={cn(
         getHeadlineTextSize(level),
-        'truncate text-typography-heading',
+        'truncate text-typography-headline',
         className,
       )}
       {...props}
