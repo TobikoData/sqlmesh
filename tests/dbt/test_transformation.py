@@ -2197,7 +2197,7 @@ def test_on_run_start_end():
         runtime_stage=RuntimeStage.BEFORE_ALL,
     )
 
-    rendered_after_all = render_statements(
+    runtime_rendered_after_all = render_statements(
         root_environment_statements.after_all,
         dialect=sushi_context.default_dialect,
         python_env=root_environment_statements.python_env,
@@ -2207,6 +2207,22 @@ def test_on_run_start_end():
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
         engine_adapter=sushi_context.engine_adapter,
     )
+
+    # not passing engine adapter simulates "parse-time" rendering
+    parse_time_rendered_after_all = render_statements(
+        root_environment_statements.after_all,
+        dialect=sushi_context.default_dialect,
+        python_env=root_environment_statements.python_env,
+        jinja_macros=root_environment_statements.jinja_macros,
+        snapshots=sushi_context.snapshots,
+        runtime_stage=RuntimeStage.AFTER_ALL,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    # validate that the graph_table statement is the same between parse-time and runtime rendering
+    assert sorted(parse_time_rendered_after_all) == sorted(runtime_rendered_after_all)
+    graph_table_stmt = runtime_rendered_after_all[-1]
+    assert graph_table_stmt == parse_time_rendered_after_all[-1]
 
     assert rendered_before_all == [
         "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
@@ -2220,10 +2236,9 @@ def test_on_run_start_end():
         "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
         "DROP TABLE to_be_executed_last",
     ]
-    assert sorted(rendered_after_all[:-1]) == sorted(expected_statements)
+    assert sorted(runtime_rendered_after_all[:-1]) == sorted(expected_statements)
 
     # Assert the models with their materialisations are present in the rendered graph_table statement
-    graph_table_stmt = rendered_after_all[-1]
     assert "'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized" in graph_table_stmt
     assert "'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized" in graph_table_stmt
     assert "'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized" in graph_table_stmt

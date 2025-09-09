@@ -168,7 +168,8 @@ class BaseAdapter(abc.ABC):
 
     @property
     def graph(self) -> t.Any:
-        return AttributeDict(
+        flat_graph = self.jinja_globals.get("flat_graph", None)
+        return flat_graph or AttributeDict(
             {
                 "exposures": {},
                 "groups": {},
@@ -275,10 +276,6 @@ class RuntimeAdapter(BaseAdapter):
             **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
         }
-
-    @property
-    def graph(self) -> t.Any:
-        return self.jinja_globals.get("flat_graph", super().graph)
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
