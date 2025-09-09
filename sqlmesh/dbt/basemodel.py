@@ -30,6 +30,7 @@ from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.dag import find_path_with_dfs
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
@@ -270,9 +271,10 @@ class BaseModelConfig(GeneralConfig):
 
     def fix_circular_test_refs(self, context: DbtContext) -> None:
         """
-        Checks for direct circular references between two models and moves the test to the downstream
-        model if found. This addresses the most common circular reference - relationship tests in both
-        directions. In the future, we may want to increase coverage by checking for indirect circular references.
+        Checks for circular references between models and moves tests to break cycles.
+        This handles both direct circular references (A -> B -> A) and indirect circular
+        references (A -> B -> C -> A). Tests are moved to the model that appears latest
+        in the dependency chain to ensure the cycle is broken.
 
         Args:
             context: The dbt context this model resides within.
@@ -284,16 +286,91 @@ class BaseModelConfig(GeneralConfig):
             for ref in test.dependencies.refs:
                 if ref == self.name or ref in self.dependencies.refs:
                     continue
-                model = context.refs[ref]
-                if (
-                    self.name in model.dependencies.refs
-                    or self.name in model.tests_ref_source_dependencies.refs
-                ):
+
+                # Check if moving this test would create or maintain a cycle
+                cycle_path = self._find_circular_path(ref, context, set())
+                if cycle_path:
+                    # Find the model in the cycle that should receive the test
+                    # We want to move to the model that appears latest in the dependency chain
+                    target_model_name = self._select_target_model_for_test(cycle_path, context)
+                    target_model = context.refs[target_model_name]
+
                     logger.info(
-                        f"Moving test '{test.name}' from model '{self.name}' to '{model.name}' to avoid circular reference."
+                        f"Moving test '{test.name}' from model '{self.name}' to '{target_model_name}' "
+                        f"to avoid circular reference through path: {' -> '.join(cycle_path)}"
                     )
-                    model.tests.append(test)
+                    target_model.tests.append(test)
                     self.tests.remove(test)
+                    break
+
+    def _find_circular_path(
+        self, ref: str, context: DbtContext, visited: t.Set[str]
+    ) -> t.Optional[t.List[str]]:
+        """
+        Find if there's a circular dependency path from ref back to this model.
+
+        Args:
+            ref: The model name to start searching from
+            context: The dbt context
+            visited: Set of model names already visited in this path
+
+        Returns:
+            List of model names forming the circular path, or None if no cycle exists
+        """
+        # Build a graph of all models and their dependencies from the context
+        graph: t.Dict[str, t.Set[str]] = {}
+
+        def build_graph_from_node(node_name: str, current_visited: t.Set[str]) -> None:
+            if node_name in current_visited or node_name in graph:
+                return
+            current_visited.add(node_name)
+
+            model = context.refs[node_name]
+            # Include both direct model dependencies and test dependencies
+            all_refs = model.dependencies.refs | model.tests_ref_source_dependencies.refs
+            graph[node_name] = all_refs.copy()
+
+            # Recursively build graph for dependencies
+            for dep in all_refs:
+                build_graph_from_node(dep, current_visited)
+
+        # Build the graph starting from the ref, including visited nodes to avoid infinite recursion
+        build_graph_from_node(ref, visited.copy())
+
+        # Add self.name to the graph if it's not already there
+        if self.name not in graph:
+            graph[self.name] = set()
+
+        # Use the shared DFS function to find path from ref to self.name
+        return find_path_with_dfs(graph, start_node=ref, target_node=self.name)
+
+    def _select_target_model_for_test(self, cycle_path: t.List[str], context: DbtContext) -> str:
+        """
+        Select which model in the cycle should receive the test.
+        We select the model that has the most downstream dependencies in the cycle
+
+        Args:
+            cycle_path: List of model names in the circular dependency path
+            context: The dbt context
+
+        Returns:
+            Name of the model that should receive the test
+        """
+        # Count how many other models in the cycle each model depends on
+        dependency_counts = {}
+
+        for model_name in cycle_path:
+            model = context.refs[model_name]
+            all_refs = model.dependencies.refs | model.tests_ref_source_dependencies.refs
+            count = len([ref for ref in all_refs if ref in cycle_path])
+            dependency_counts[model_name] = count
+
+        # Return the model with the fewest dependencies within the cycle
+        # (i.e., the most downstream model in the cycle)
+        if dependency_counts:
+            return min(dependency_counts, key=dependency_counts.get)  # type: ignore
+        # Fallback to the last model in the path
+        return cycle_path[-1]
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:

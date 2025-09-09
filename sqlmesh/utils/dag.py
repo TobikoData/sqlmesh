@@ -15,6 +15,82 @@ from sqlmesh.utils.errors import SQLMeshError
 T = t.TypeVar("T", bound=t.Hashable)
 
 
+def find_path_with_dfs(
+    graph: t.Dict[T, t.Set[T]],
+    start_node: t.Optional[T] = None,
+    target_node: t.Optional[T] = None,
+) -> t.Optional[t.List[T]]:
+    """
+    Find a path in a graph using depth-first search.
+
+    This function can be used for two main purposes:
+    1. Find any cycle in a cyclic subgraph (when target_node is None)
+    2. Find a specific path from start_node to target_node
+
+    Args:
+        graph: Dictionary mapping nodes to their dependencies/neighbors
+        start_node: Optional specific node to start the search from
+        target_node: Optional target node to search for. If None, finds any cycle
+
+    Returns:
+        List of nodes forming the path, or None if no path/cycle found
+    """
+    if not graph:
+        return None
+
+    visited: t.Set[T] = set()
+    rec_stack: t.Set[T] = set()
+    path: t.List[T] = []
+
+    def dfs(node: T) -> t.Optional[t.List[T]]:
+        if target_node is None:
+            # Cycle detection mode: look for any node in recursion stack
+            if node in rec_stack:
+                cycle_start = path.index(node)
+                return path[cycle_start:] + [node]
+        else:
+            # Target search mode: look for specific target
+            if node == target_node:
+                return [node]
+
+        if node in visited:
+            return None
+
+        visited.add(node)
+        rec_stack.add(node)
+        path.append(node)
+
+        # Follow edges to neighbors
+        for neighbor in graph.get(node, set()):
+            if neighbor in graph:  # Only follow edges to nodes in our subgraph
+                result = dfs(neighbor)
+                if result:
+                    if target_node is None:
+                        # Cycle detection: return the cycle as-is
+                        return result
+                    # Target search: prepend current node to path
+                    return [node] + result
+
+        rec_stack.remove(node)
+        path.pop()
+        return None
+
+    # Determine which nodes to try as starting points
+    start_nodes = [start_node] if start_node is not None else list(graph.keys())
+
+    for node in start_nodes:
+        if node not in visited and node in graph:
+            result = dfs(node)
+            if result:
+                if target_node is None:
+                    # Cycle detection: remove duplicate node at end
+                    return result[:-1] if len(result) > 1 and result[0] == result[-1] else result
+                # Target search: return path as-is
+                return result
+
+    return None
+
+
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
         self._dag: t.Dict[T, t.Set[T]] = {}
@@ -99,6 +175,17 @@ class DAG(t.Generic[T]):
 
         return self._upstream[node]
 
+    def _find_cycle_path(self, nodes_in_cycle: t.Dict[T, t.Set[T]]) -> t.Optional[t.List[T]]:
+        """Find the exact cycle path using DFS when a cycle is detected.
+
+        Args:
+            nodes_in_cycle: Dictionary of nodes that are part of the cycle and their dependencies
+
+        Returns:
+            List of nodes forming the cycle path, or None if no cycle found
+        """
+        return find_path_with_dfs(nodes_in_cycle)
+
     @property
     def roots(self) -> t.Set[T]:
         """Returns all nodes in the graph without any upstream dependencies."""
@@ -125,23 +212,28 @@ class DAG(t.Generic[T]):
                 next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
                 if not next_nodes:
-                    # Sort cycle candidates to make the order deterministic
-                    cycle_candidates_msg = (
-                        "\nPossible candidates to check for circular references: "
-                        + ", ".join(str(node) for node in sorted(cycle_candidates))
-                    )
+                    # A cycle was detected - find the exact cycle path
+                    cycle_path = self._find_cycle_path(unprocessed_nodes)
 
-                    if last_processed_nodes:
-                        last_processed_msg = "\nLast nodes added to the DAG: " + ", ".join(
-                            str(node) for node in last_processed_nodes
-                        )
+                    last_processed_msg = ""
+                    if cycle_path:
+                        cycle_msg = f"\nCycle: {' -> '.join(str(node) for node in cycle_path)} -> {cycle_path[0]}"
                     else:
-                        last_processed_msg = ""
+                        # Fallback message in case a cycle can't be found
+                        cycle_candidates_msg = (
+                            "\nPossible candidates to check for circular references: "
+                            + ", ".join(str(node) for node in sorted(cycle_candidates))
+                        )
+                        cycle_msg = cycle_candidates_msg
+                        if last_processed_nodes:
+                            last_processed_msg = "\nLast nodes added to the DAG: " + ", ".join(
+                                str(node) for node in last_processed_nodes
+                            )
 
                     raise SQLMeshError(
                         "Detected a cycle in the DAG. "
                         "Please make sure there are no circular references between nodes."
-                        f"{last_processed_msg}{cycle_candidates_msg}"
+                        f"{last_processed_msg}{cycle_msg}"
                     )
 
                 for node in next_nodes:

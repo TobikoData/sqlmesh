@@ -57,8 +57,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
-        "Last nodes added to the DAG: c\n"
-        "Possible candidates to check for circular references: d, e"
+        "Cycle: d -> e -> d"
     )
 
     assert expected_error_message == str(ex.value)
@@ -70,7 +69,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
-        "Possible candidates to check for circular references: a, b, c"
+        "Cycle: a -> b -> c -> a"
     )
 
     assert expected_error_message == str(ex.value)
@@ -81,11 +80,11 @@ def test_sorted_with_cycles():
         dag.sorted
 
     expected_error_message = (
-        "Last nodes added to the DAG: c\n"
-        + "Possible candidates to check for circular references: b, d"
+        "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
+        + "Cycle: b -> d -> b"
     )
 
-    assert expected_error_message in str(ex.value)
+    assert expected_error_message == str(ex.value)
 
 
 def test_reversed_graph():
