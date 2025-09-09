@@ -631,5 +631,5 @@ def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
 
     error_message = str(exc_info.value)
     assert "Failed to update model schemas" in error_message
-    assert "Could not render or parse jinja for" in error_message
+    assert "Could not render jinja for" in error_message
     assert "Undefined macro/variable: 'columns' in macro: 'select_columns'" in error_message
