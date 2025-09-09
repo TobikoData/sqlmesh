@@ -42,13 +42,6 @@
   --color-destructive-hover: var(--color-scarlet-525);
   --color-destructive-active: var(--color-scarlet-550);
 
-  /* Error */
-  --color-error: var(--color-scarlet-500);
-  --color-error-lucid: var(--color-scarlet-5);
-  --color-error-foreground: var(--color-scarlet-600);
-  --color-error-hover: var(--color-scarlet-525);
-  --color-error-active: var(--color-scarlet-550);
-
   /* Success */
   --color-success: var(--color-emerald-500);
 

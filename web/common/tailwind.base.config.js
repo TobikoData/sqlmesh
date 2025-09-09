@@ -45,13 +45,6 @@ module.exports = {
         message: {
           lucid: 'var(--color-message-lucid)',
         },
-        error: {
-          DEFAULT: 'var(--color-error)',
-          lucid: 'var(--color-error-lucid)',
-          foreground: 'var(--color-error-foreground)',
-          hover: 'var(--color-error-hover)',
-          active: 'var(--color-error-active)',
-        },
         link: {
           underline: 'var(--color-link-underline)',
           hover: 'var(--color-link-hover)',

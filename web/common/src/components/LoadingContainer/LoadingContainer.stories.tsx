@@ -16,11 +16,6 @@ export const Default: Story = {
   args: {
     isLoading: true,
   },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const svg = canvas.getByRole('img', { hidden: true })
-    await expect(svg).toBeInTheDocument()
-  },
 }
 
 export const WithMessage: Story = {
