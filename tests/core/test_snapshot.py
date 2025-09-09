@@ -3567,3 +3567,28 @@ def test_snapshot_id_and_version_fingerprint_lazy_init():
 
     assert isinstance(snapshot.fingerprint_, SnapshotFingerprint)
     assert snapshot.fingerprint == fingerprint
+
+
+def test_snapshot_id_and_version_optional_kind_name():
+    snapshot = SnapshotIdAndVersion(
+        name="a",
+        identifier="1234",
+        version="2345",
+        dev_version=None,
+        fingerprint="",
+    )
+
+    assert snapshot.kind_name is None
+
+    snapshot = SnapshotIdAndVersion(
+        name="a",
+        identifier="1234",
+        version="2345",
+        kind_name="INCREMENTAL_UNMANAGED",
+        dev_version=None,
+        fingerprint="",
+    )
+
+    assert snapshot.kind_name
+    assert snapshot.kind_name.is_incremental_unmanaged
+    assert snapshot.kind_name.full_history_restatement_only

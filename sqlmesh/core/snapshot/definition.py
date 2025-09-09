@@ -587,6 +587,17 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         """Returns the name and version of the snapshot."""
         return SnapshotNameVersion(name=self.name, version=self.version)
 
+    @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return SnapshotIdAndVersion(
+            name=self.name,
+            kind_name=self.kind_name,
+            identifier=self.identifier,
+            version=self.version,
+            dev_version=self.dev_version,
+            fingerprint=self.fingerprint,
+        )
+
 
 class SnapshotIdAndVersion(PydanticModel):
     """A stripped down version of a snapshot that is used in situations where we want to fetch the main fields of the snapshots table
@@ -595,6 +606,7 @@ class SnapshotIdAndVersion(PydanticModel):
 
     name: str
     version: str
+    kind_name: t.Optional[ModelKindName] = None
     dev_version_: t.Optional[str] = Field(alias="dev_version")
     identifier: str
     fingerprint_: t.Union[str, SnapshotFingerprint] = Field(alias="fingerprint")
@@ -602,6 +614,10 @@ class SnapshotIdAndVersion(PydanticModel):
     @property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return self
 
     @property
     def name_version(self) -> SnapshotNameVersion:
@@ -1425,6 +1441,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return SnapshotNameVersion(name=self.name, version=self.version)
 
     @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return self.table_info.id_and_version
+
+    @property
     def disable_restatement(self) -> bool:
         """Is restatement disabled for the node"""
         return self.is_model and self.model.disable_restatement
@@ -1494,7 +1514,8 @@ class SnapshotTableCleanupTask(PydanticModel):
     dev_table_only: bool
 
 
-SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, SnapshotIdAndVersion, Snapshot]
+SnapshotIdLike = t.Union[SnapshotId, SnapshotIdAndVersion, SnapshotTableInfo, Snapshot]
+SnapshotIdAndVersionLike = t.Union[SnapshotIdAndVersion, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[
     SnapshotNameVersion, SnapshotTableInfo, SnapshotIdAndVersion, Snapshot

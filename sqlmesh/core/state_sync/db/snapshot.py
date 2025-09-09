@@ -337,6 +337,7 @@ class SnapshotState:
                 name=name,
                 identifier=identifier,
                 version=version,
+                kind_name=kind_name or None,
                 dev_version=dev_version,
                 fingerprint=fingerprint,
             )
@@ -344,9 +345,11 @@ class SnapshotState:
                 snapshot_names=snapshot_names,
                 batch_size=self.SNAPSHOT_BATCH_SIZE,
             )
-            for name, identifier, version, dev_version, fingerprint in fetchall(
+            for name, identifier, version, kind_name, dev_version, fingerprint in fetchall(
                 self.engine_adapter,
-                exp.select("name", "identifier", "version", "dev_version", "fingerprint")
+                exp.select(
+                    "name", "identifier", "version", "kind_name", "dev_version", "fingerprint"
+                )
                 .from_(self.snapshots_table)
                 .where(where)
                 .and_(unexpired_expr),
@@ -661,6 +664,7 @@ class SnapshotState:
                     "name",
                     "identifier",
                     "version",
+                    "kind_name",
                     "dev_version",
                     "fingerprint",
                 )
@@ -677,10 +681,11 @@ class SnapshotState:
                 name=name,
                 identifier=identifier,
                 version=version,
+                kind_name=kind_name or None,
                 dev_version=dev_version,
                 fingerprint=SnapshotFingerprint.parse_raw(fingerprint),
             )
-            for name, identifier, version, dev_version, fingerprint in snapshot_rows
+            for name, identifier, version, kind_name, dev_version, fingerprint in snapshot_rows
         ]
 
 

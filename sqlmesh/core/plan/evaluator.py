@@ -287,7 +287,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def visit_restatement_stage(
         self, stage: stages.RestatementStage, plan: EvaluatablePlan
     ) -> None:
-        snapshot_intervals_to_restate = {(s, i) for s, i in stage.snapshot_intervals.items()}
+        snapshot_intervals_to_restate = {
+            (s.id_and_version, i) for s, i in stage.snapshot_intervals.items()
+        }
 
         # Restating intervals on prod plans should mean that the intervals are cleared across
         # all environments, not just the version currently in prod
@@ -297,7 +299,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         # Without this rule, its possible that promoting a dev table to prod will introduce old data to prod
         snapshot_intervals_to_restate.update(
             {
-                (s.table_info, s.interval)
+                (s.snapshot, s.interval)
                 for s in identify_restatement_intervals_across_snapshot_versions(
                     state_reader=self.state_sync,
                     prod_restatements=plan.restatements,

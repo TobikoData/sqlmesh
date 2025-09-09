@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo, SnapshotNameVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdAndVersion, SnapshotNameVersion
 from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now_timestamp
@@ -41,7 +41,7 @@ def is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
 @dataclass
 class SnapshotIntervalClearRequest:
     # affected snapshot
-    table_info: SnapshotTableInfo
+    snapshot: SnapshotIdAndVersion
 
     # which interval to clear
     interval: Interval
@@ -53,7 +53,7 @@ class SnapshotIntervalClearRequest:
 
     @property
     def snapshot_id(self) -> SnapshotId:
-        return self.table_info.snapshot_id
+        return self.snapshot.snapshot_id
 
     @property
     def sorted_environment_names(self) -> t.List[str]:
@@ -122,7 +122,7 @@ def identify_restatement_intervals_across_snapshot_versions(
                 clear_request = snapshot_intervals_to_clear.get(affected_snapshot.snapshot_id)
                 if not clear_request:
                     clear_request = SnapshotIntervalClearRequest(
-                        table_info=affected_snapshot, interval=interval
+                        snapshot=affected_snapshot.id_and_version, interval=interval
                     )
                     snapshot_intervals_to_clear[affected_snapshot.snapshot_id] = clear_request
 
@@ -164,18 +164,12 @@ def identify_restatement_intervals_across_snapshot_versions(
 
             snapshot_name_to_widest_interval[s_id.name] = (next_start, next_end)
 
-        # we need to fetch full Snapshot's to get access to the SnapshotTableInfo objects
-        # required by StateSync.remove_intervals()
-        # but at this point we have minimized the list by excluding the ones that are already present in prod
-        # and also excluding the ones we have already matched earlier while traversing the environment DAGs
-        remaining_snapshots = state_reader.get_snapshots(snapshot_ids=remaining_snapshot_ids)
-        for remaining_snapshot_id, remaining_snapshot in remaining_snapshots.items():
+        for remaining_snapshot_id in remaining_snapshot_ids:
+            remaining_snapshot = all_matching_non_prod_snapshots[remaining_snapshot_id]
             snapshot_intervals_to_clear[remaining_snapshot_id] = SnapshotIntervalClearRequest(
-                table_info=remaining_snapshot.table_info,
+                snapshot=remaining_snapshot,
                 interval=snapshot_name_to_widest_interval[remaining_snapshot_id.name],
             )
-
-        loaded_snapshots.update(remaining_snapshots)
 
     # for any affected full_history_restatement_only snapshots, we need to widen the intervals being restated to
     # include the whole time range for that snapshot. This requires a call to state to load the full snapshot record,
@@ -187,7 +181,7 @@ def identify_restatement_intervals_across_snapshot_versions(
         # So for now, these are not considered
         s_id
         for s_id, s in snapshot_intervals_to_clear.items()
-        if s.table_info.full_history_restatement_only
+        if s.snapshot.kind_name and s.snapshot.kind_name.full_history_restatement_only
     ]
     if full_history_restatement_snapshot_ids:
         # only load full snapshot records that we havent already loaded
