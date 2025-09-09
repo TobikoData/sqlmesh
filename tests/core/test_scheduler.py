@@ -32,6 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotChangeCategory,
     DeployabilityIndex,
+    snapshots_to_dag,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp, DatetimeRanges, TimeLike
 from sqlmesh.utils.errors import CircuitBreakerError, NodeAuditsErrors
@@ -1019,3 +1020,109 @@ def test_before_all_environment_statements_called_first(mocker: MockerFixture, m
     execute_env_idx = call_order.index("execute_environment_statements")
     snapshots_to_create_idx = call_order.index("get_snapshots_to_create")
     assert env_statements_idx < execute_env_idx < snapshots_to_create_idx
+
+
+def test_dag_transitive_deps(mocker: MockerFixture, make_snapshot):
+    # Create a simple dependency chain: A <- B <- C
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1 as id")))
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT * FROM a")))
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT * FROM b")))
+
+    snapshot_b = snapshot_b.model_copy(update={"parents": (snapshot_a.snapshot_id,)})
+    snapshot_c = snapshot_c.model_copy(update={"parents": (snapshot_b.snapshot_id,)})
+
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    scheduler = Scheduler(
+        snapshots=[snapshot_a, snapshot_b, snapshot_c],
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    # Test scenario: select only A and C (skip B)
+    merged_intervals = {
+        snapshot_a: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshot_c: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    deployability_index = DeployabilityIndex.create([snapshot_a, snapshot_b, snapshot_c])
+
+    full_dag = snapshots_to_dag([snapshot_a, snapshot_b, snapshot_c])
+
+    dag = scheduler._dag(merged_intervals, snapshot_dag=full_dag)
+    assert dag.graph == {
+        EvaluateNode(
+            snapshot_name='"a"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): set(),
+        EvaluateNode(
+            snapshot_name='"c"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): {
+            EvaluateNode(
+                snapshot_name='"a"',
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            )
+        },
+    }
+
+
+def test_dag_multiple_chain_transitive_deps(mocker: MockerFixture, make_snapshot):
+    # Create a more complex dependency graph:
+    # A <- B <- D <- E
+    # A <- C <- D <- E
+    # Select A and E only
+    snapshots = {}
+    for name in ["a", "b", "c", "d", "e"]:
+        snapshots[name] = make_snapshot(SqlModel(name=name, query=parse_one("SELECT 1 as id")))
+        snapshots[name].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Set up dependencies
+    snapshots["b"] = snapshots["b"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["c"] = snapshots["c"].model_copy(update={"parents": (snapshots["a"].snapshot_id,)})
+    snapshots["d"] = snapshots["d"].model_copy(
+        update={"parents": (snapshots["b"].snapshot_id, snapshots["c"].snapshot_id)}
+    )
+    snapshots["e"] = snapshots["e"].model_copy(update={"parents": (snapshots["d"].snapshot_id,)})
+
+    scheduler = Scheduler(
+        snapshots=list(snapshots.values()),
+        snapshot_evaluator=mocker.Mock(),
+        state_sync=mocker.Mock(),
+        default_catalog=None,
+    )
+
+    # Only provide intervals for A and E
+    batched_intervals = {
+        snapshots["a"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+        snapshots["e"]: [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))],
+    }
+
+    # Create subdag including transitive dependencies
+    full_dag = snapshots_to_dag(snapshots.values())
+
+    dag = scheduler._dag(batched_intervals, snapshot_dag=full_dag)
+    assert dag.graph == {
+        EvaluateNode(
+            snapshot_name='"a"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): set(),
+        EvaluateNode(
+            snapshot_name='"e"',
+            interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            batch_index=0,
+        ): {
+            EvaluateNode(
+                snapshot_name='"a"',
+                interval=(to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                batch_index=0,
+            )
+        },
+    }

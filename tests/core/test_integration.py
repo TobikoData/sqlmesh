@@ -1673,6 +1673,83 @@ def test_plan_ignore_cron(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_run_respects_excluded_transitive_dependencies(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Graph: C <- B <- A
+    # B is a transitive dependency linking A and C
+    # Note that the alphabetical ordering of the model names is intentional and helps
+    # surface the problem
+    expressions_a = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_model_c,
+            kind FULL,
+            allow_partials true,
+            cron '@hourly',
+        );
+
+        SELECT @execution_ts AS execution_ts
+        """
+    )
+    model_c = load_sql_based_model(expressions_a)
+    context.upsert_model(model_c)
+
+    # A VIEW model with no partials allowed and a daily cron instead of hourly.
+    expressions_b = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_model_b,
+            kind VIEW,
+            allow_partials false,
+            cron '@daily',
+        );
+
+        SELECT * FROM memory.sushi.test_model_c
+        """
+    )
+    model_b = load_sql_based_model(expressions_b)
+    context.upsert_model(model_b)
+
+    expressions_a = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_model_a,
+            kind FULL,
+            allow_partials true,
+            cron '@hourly',
+        );
+
+        SELECT * FROM memory.sushi.test_model_b
+        """
+    )
+    model_a = load_sql_based_model(expressions_a)
+    context.upsert_model(model_a)
+
+    context.plan("prod", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert (
+        context.fetchdf("SELECT execution_ts FROM memory.sushi.test_model_c")["execution_ts"].iloc[
+            0
+        ]
+        == "2023-01-08 15:00:00"
+    )
+
+    with time_machine.travel("2023-01-08 17:00:00 UTC", tick=False):
+        context.run(
+            "prod",
+            select_models=["*test_model_c", "*test_model_a"],
+            no_auto_upstream=True,
+            ignore_cron=True,
+        )
+        assert (
+            context.fetchdf("SELECT execution_ts FROM memory.sushi.test_model_a")[
+                "execution_ts"
+            ].iloc[0]
+            == "2023-01-08 17:00:00"
+        )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_run_with_select_models_no_auto_upstream(
     init_and_plan_context: t.Callable,
 ):
