@@ -409,7 +409,7 @@ class PlanBuilder:
                 continue
 
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
-            # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
+            # the graph we just have to check are immediate parents in the graph and not the whole upstream graph.
             restating_parents = [
                 self._context_diff.snapshots[s] for s in snapshot.parents if s in restatements
             ]
