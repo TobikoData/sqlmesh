@@ -502,8 +502,14 @@ def create_builtin_globals(
         else:
             builtin_globals["model"] = AttributeDict(model.copy())
 
+    builtin_globals["flags"] = (
+        Flags(which="run") if engine_adapter is not None else Flags(which="parse")
+    )
+    builtin_globals["invocation_args_dict"] = {
+        k.lower(): v for k, v in builtin_globals["flags"].__dict__.items()
+    }
+
     if engine_adapter is not None:
-        builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
@@ -521,7 +527,6 @@ def create_builtin_globals(
             project_dialect=project_dialect,
         )
     else:
-        builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
