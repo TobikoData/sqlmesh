@@ -652,7 +652,7 @@ def test_node_name_populated_for_dbt_models(dbt_dummy_postgres_config: PostgresC
 
     # check after convert to SQLMesh model that node_name is populated correctly
     sqlmesh_model = model_config.to_sqlmesh(context)
-    assert sqlmesh_model.node_name == "model.test_package.test_model"
+    assert sqlmesh_model.dbt_name == "model.test_package.test_model"
 
 
 @pytest.mark.slow
@@ -709,4 +709,4 @@ def test_load_model_dbt_node_name(tmp_path: Path) -> None:
 
     # Verify that node_name is the equivalent dbt one
     model = context.snapshots[model_fqn].model
-    assert model.node_name == "model.test_project.simple_model"
+    assert model.dbt_name == "model.test_project.simple_model"

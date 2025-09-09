@@ -1678,9 +1678,9 @@ class GenericContext(BaseContext, t.Generic[C]):
             console=self.console,
             user_provided_flags=user_provided_flags,
             selected_models={
-                node_name
+                dbt_name
                 for model in model_selector.expand_model_selections(select_models or "*")
-                if (node_name := snapshots[model].node.node_name)
+                if (dbt_name := snapshots[model].node.dbt_name)
             },
             explain=explain or False,
             ignore_cron=ignore_cron or False,
