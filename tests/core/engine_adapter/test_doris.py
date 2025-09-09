@@ -280,7 +280,7 @@ def test_create_table_with_partitioned_by(
     adapter.create_table(
         "test_table",
         target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("DATE")},
-        partitioned_by=[exp.to_column("b")],
+        partitioned_by=[exp.Literal.string("RANGE(b)")],
         table_properties={
             "partitions": exp.Literal.string(
                 "FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR"
@@ -291,6 +291,168 @@ def test_create_table_with_partitioned_by(
     assert to_sql_calls(adapter) == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` DATE) PARTITION BY RANGE (`b`) (FROM ('2000-11-14') TO ('2021-11-14') INTERVAL 2 YEAR)",
     ]
+
+
+def test_create_table_with_range_partitioned_by_with_partitions(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_table(
+        "test_table",
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "waiter_id": exp.DataType.build("INT"),
+            "customer_id": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("DATETIME"),
+        },
+        partitioned_by=[exp.Literal.string("RANGE(ds)")],
+        table_properties={
+            "partitions": exp.Tuple(
+                expressions=[
+                    exp.Literal.string('PARTITION `p2023` VALUES [("2023-01-01"), ("2024-01-01"))'),
+                    exp.Literal.string('PARTITION `p2024` VALUES [("2024-01-01"), ("2025-01-01"))'),
+                    exp.Literal.string('PARTITION `p2025` VALUES [("2025-01-01"), ("2026-01-01"))'),
+                    exp.Literal.string("PARTITION `other` VALUES LESS THAN MAXVALUE"),
+                ]
+            ),
+            "distributed_by": exp.Tuple(
+                expressions=[
+                    exp.EQ(
+                        this=exp.Column(this=exp.Identifier(this="kind", quoted=True)),
+                        expression=exp.Literal.string("HASH"),
+                    ),
+                    exp.EQ(
+                        this=exp.Column(this=exp.Identifier(this="expressions", quoted=True)),
+                        expression=exp.Column(this=exp.Identifier(this="id", quoted=True)),
+                    ),
+                    exp.EQ(
+                        this=exp.Column(this=exp.Identifier(this="buckets", quoted=True)),
+                        expression=exp.Literal.number(10),
+                    ),
+                ]
+            ),
+            "replication_allocation": exp.Literal.string("tag.location.default: 3"),
+            "in_memory": exp.Literal.string("false"),
+            "storage_format": exp.Literal.string("V2"),
+            "disable_auto_compaction": exp.Literal.string("false"),
+        },
+    )
+
+    expected_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_table` "
+        "(`id` INT, `waiter_id` INT, `customer_id` INT, `ds` DATETIME) "
+        "PARTITION BY RANGE (`ds`) "
+        '(PARTITION `p2023` VALUES [("2023-01-01"), ("2024-01-01")), '
+        'PARTITION `p2024` VALUES [("2024-01-01"), ("2025-01-01")), '
+        'PARTITION `p2025` VALUES [("2025-01-01"), ("2026-01-01")), '
+        "PARTITION `other` VALUES LESS THAN MAXVALUE) "
+        "DISTRIBUTED BY HASH (`id`) BUCKETS 10 "
+        "PROPERTIES ("
+        "'replication_allocation'='tag.location.default: 3', "
+        "'in_memory'='false', "
+        "'storage_format'='V2', "
+        "'disable_auto_compaction'='false')"
+    )
+
+    assert to_sql_calls(adapter) == [expected_sql]
+
+
+def test_create_table_with_list_partitioned_by(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_table(
+        "test_table",
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "status": exp.DataType.build("VARCHAR(10)"),
+        },
+        partitioned_by=[exp.Literal.string("LIST(status)")],
+        table_properties={
+            "partitions": exp.Tuple(
+                expressions=[
+                    exp.Literal.string('PARTITION `active` VALUES IN ("active", "pending")'),
+                    exp.Literal.string('PARTITION `inactive` VALUES IN ("inactive", "disabled")'),
+                ]
+            ),
+        },
+    )
+
+    expected_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_table` "
+        "(`id` INT, `status` VARCHAR(10)) "
+        "PARTITION BY LIST (`status`) "
+        '(PARTITION `active` VALUES IN ("active", "pending"), '
+        'PARTITION `inactive` VALUES IN ("inactive", "disabled"))'
+    )
+
+    assert to_sql_calls(adapter) == [expected_sql]
+
+
+def test_create_table_with_range_partitioned_by_anonymous_function(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    """Test that RANGE(ds) function call syntax generates correct SQL without duplicate RANGE."""
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_table(
+        "test_table",
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("DATETIME"),
+        },
+        # This simulates how partitioned_by RANGE(ds) gets parsed from model definition
+        partitioned_by=[exp.Anonymous(this="RANGE", expressions=[exp.to_column("ds")])],
+        table_properties={
+            "partitions": exp.Literal.string(
+                'FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 1 MONTH'
+            )
+        },
+    )
+
+    expected_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_table` "
+        "(`id` INT, `ds` DATETIME) "
+        "PARTITION BY RANGE (`ds`) "
+        '(FROM ("2000-11-14") TO ("2099-11-14") INTERVAL 1 MONTH)'
+    )
+
+    assert to_sql_calls(adapter) == [expected_sql]
+
+
+def test_create_materialized_view_with_duplicate_key(
+    make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter],
+):
+    adapter = make_mocked_engine_adapter(DorisEngineAdapter)
+    adapter.create_view(
+        "test_mv",
+        parse_one("SELECT id, status, COUNT(*) as cnt FROM orders GROUP BY id, status"),
+        materialized=True,
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "status": exp.DataType.build("VARCHAR(10)"),
+            "cnt": exp.DataType.build("BIGINT"),
+        },
+        view_properties={
+            "duplicate_key": exp.Tuple(
+                expressions=[
+                    exp.to_column("id"),
+                    exp.to_column("status"),
+                ]
+            ),
+        },
+    )
+
+    expected_sqls = [
+        "DROP MATERIALIZED VIEW IF EXISTS `test_mv`",
+        (
+            "CREATE MATERIALIZED VIEW `test_mv` "
+            "(`id`, `status`, `cnt`) "
+            "DUPLICATE KEY (`id`, `status`) "
+            "AS SELECT `id`, `status`, COUNT(*) AS `cnt` FROM `orders` GROUP BY `id`, `status`"
+        ),
+    ]
+
+    assert to_sql_calls(adapter) == expected_sqls
 
 
 def test_create_full_materialized_view(

@@ -486,6 +486,51 @@ class DorisEngineAdapter(
             **kwargs,
         )
 
+    def _parse_partition_expressions(
+        self, partitioned_by: t.List[exp.Expression]
+    ) -> t.Tuple[t.List[exp.Expression], t.Optional[str]]:
+        """Parse partition expressions and extract partition kind and normalized columns.
+
+        Returns:
+            Tuple of (normalized_partitioned_by, partition_kind)
+        """
+        parsed_partitioned_by: t.List[exp.Expression] = []
+        partition_kind: t.Optional[str] = None
+
+        for expr in partitioned_by:
+            try:
+                # Handle Anonymous function calls like RANGE(col) or LIST(col)
+                if isinstance(expr, exp.Anonymous) and expr.this:
+                    func_name = str(expr.this).upper()
+                    if func_name in ("RANGE", "LIST"):
+                        partition_kind = func_name
+                        # Extract column expressions from function arguments
+                        for arg in expr.expressions:
+                            if isinstance(arg, exp.Column):
+                                parsed_partitioned_by.append(arg)
+                            else:
+                                # Convert other expressions to columns if possible
+                                parsed_partitioned_by.append(exp.to_column(str(arg)))
+                        continue
+
+                # Handle literal strings like "RANGE(col)" or "LIST(col)"
+                if isinstance(expr, exp.Literal) and getattr(expr, "is_string", False):
+                    text = str(expr.this)
+                    match = re.match(r"^\s*(RANGE|LIST)\s*\((.*?)\)\s*$", text, flags=re.IGNORECASE)
+                    if match:
+                        partition_kind = match.group(1).upper()
+                        inner = match.group(2)
+                        inner_cols = [c.strip().strip("`") for c in inner.split(",") if c.strip()]
+                        for col in inner_cols:
+                            parsed_partitioned_by.append(exp.to_column(col))
+                        continue
+            except Exception:
+                # If anything goes wrong, keep the original expr
+                pass
+            parsed_partitioned_by.append(expr)
+
+        return parsed_partitioned_by, partition_kind
+
     def _build_partitioned_by_exp(
         self,
         partitioned_by: t.List[exp.Expression],
@@ -494,8 +539,21 @@ class DorisEngineAdapter(
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         catalog_name: t.Optional[str] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[t.Union[exp.PartitionedByProperty, exp.PartitionByRangeProperty, exp.Property]]:
-        """Doris supports range and list partition, but sqlglot only supports range partition."""
+    ) -> t.Optional[
+        t.Union[
+            exp.PartitionedByProperty,
+            exp.PartitionByRangeProperty,
+            exp.PartitionByListProperty,
+            exp.Property,
+        ]
+    ]:
+        """Build Doris partitioning expression.
+
+        Supports both RANGE and LIST partition syntaxes using sqlglot's doris dialect nodes.
+        The partition kind is chosen by:
+        - inferred from partitioned_by expressions like 'RANGE(col)' or 'LIST(col)'
+        - otherwise inferred from the provided 'partitions' strings: if any contains 'VALUES IN' -> LIST; else RANGE.
+        """
         partitions = kwargs.get("partitions")
         create_expressions = None
 
@@ -512,6 +570,9 @@ class DorisEngineAdapter(
             # Fallback: return as is
             return expr
 
+        # Parse partition kind and columns from partitioned_by expressions
+        partitioned_by, partition_kind = self._parse_partition_expressions(partitioned_by)
+
         if partitions:
             if isinstance(partitions, exp.Tuple):
                 create_expressions = [
@@ -525,10 +586,40 @@ class DorisEngineAdapter(
             else:
                 create_expressions = [to_raw_sql(partitions)]
 
-        return exp.PartitionByRangeProperty(
-            partition_expressions=partitioned_by,
-            create_expressions=create_expressions,
-        )
+        # Infer partition kind from partitions text if not explicitly provided
+        inferred_list = False
+        if partition_kind is None and create_expressions:
+            try:
+                texts = [getattr(e, "this", "").upper() for e in create_expressions]
+                inferred_list = any("VALUES IN" in t for t in texts)
+            except Exception:
+                inferred_list = False
+        if partition_kind:
+            kind_upper = str(partition_kind).upper()
+            is_list = kind_upper == "LIST"
+        else:
+            is_list = inferred_list
+
+        try:
+            if is_list:
+                return exp.PartitionByListProperty(
+                    partition_expressions=partitioned_by,
+                    create_expressions=create_expressions,
+                )
+            return exp.PartitionByRangeProperty(
+                partition_expressions=partitioned_by,
+                create_expressions=create_expressions,
+            )
+        except TypeError:
+            if is_list:
+                return exp.PartitionByListProperty(
+                    partition_expressions=partitioned_by,
+                    create_expressions=create_expressions,
+                )
+            return exp.PartitionByRangeProperty(
+                partition_expressions=partitioned_by,
+                create_expressions=create_expressions,
+            )
 
     def _build_table_properties_exp(
         self,
@@ -757,46 +848,43 @@ class DorisEngineAdapter(
                     )
 
         # Handle duplicate_key - only handle Tuple expressions or single Column expressions
+        # Both tables and materialized views support duplicate keys in Doris
         duplicate_key = table_properties_copy.pop("duplicate_key", None)
         if duplicate_key is not None:
-            if not is_materialized_view:
-                if isinstance(duplicate_key, exp.Tuple):
-                    # Extract column names from Tuple expressions
-                    column_names = []
-                    for expr in duplicate_key.expressions:
-                        if (
-                            isinstance(expr, exp.Column)
-                            and hasattr(expr, "this")
-                            and hasattr(expr.this, "this")
-                        ):
-                            column_names.append(str(expr.this.this))
-                        elif hasattr(expr, "this"):
-                            column_names.append(str(expr.this))
-                        else:
-                            column_names.append(str(expr))
-                    properties.append(
-                        exp.DuplicateKeyProperty(
-                            expressions=[exp.to_column(k) for k in column_names]
-                        )
-                    )
-                elif isinstance(duplicate_key, exp.Column):
-                    # Handle as single column
-                    if hasattr(duplicate_key, "this") and hasattr(duplicate_key.this, "this"):
-                        column_name = str(duplicate_key.this.this)
+            if isinstance(duplicate_key, exp.Tuple):
+                # Extract column names from Tuple expressions
+                column_names = []
+                for expr in duplicate_key.expressions:
+                    if (
+                        isinstance(expr, exp.Column)
+                        and hasattr(expr, "this")
+                        and hasattr(expr.this, "this")
+                    ):
+                        column_names.append(str(expr.this.this))
+                    elif hasattr(expr, "this"):
+                        column_names.append(str(expr.this))
                     else:
-                        column_name = str(duplicate_key.this)
-                    properties.append(
-                        exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)])
-                    )
-                elif isinstance(duplicate_key, exp.Literal):
-                    properties.append(
-                        exp.DuplicateKeyProperty(expressions=[exp.to_column(duplicate_key.this)])
-                    )
-                elif isinstance(duplicate_key, str):
-                    properties.append(
-                        exp.DuplicateKeyProperty(expressions=[exp.to_column(duplicate_key)])
-                    )
-            # Note: Materialized views don't typically use duplicate_key, so we skip it
+                        column_names.append(str(expr))
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(k) for k in column_names])
+                )
+            elif isinstance(duplicate_key, exp.Column):
+                # Handle as single column
+                if hasattr(duplicate_key, "this") and hasattr(duplicate_key.this, "this"):
+                    column_name = str(duplicate_key.this.this)
+                else:
+                    column_name = str(duplicate_key.this)
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(column_name)])
+                )
+            elif isinstance(duplicate_key, exp.Literal):
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(duplicate_key.this)])
+                )
+            elif isinstance(duplicate_key, str):
+                properties.append(
+                    exp.DuplicateKeyProperty(expressions=[exp.to_column(duplicate_key)])
+                )
 
         if table_description:
             properties.append(
@@ -808,30 +896,8 @@ class DorisEngineAdapter(
         # Handle partitioning
         add_partition = True
         if partitioned_by:
-            normalized_partitioned_by: t.List[exp.Expression] = []
-            for expr in partitioned_by:
-                try:
-                    # Handle literal strings like "RANGE(col)" or "LIST(col)"
-                    if isinstance(expr, exp.Literal) and getattr(expr, "is_string", False):
-                        text = str(expr.this)
-                        match = re.match(
-                            r"^\s*(RANGE|LIST)\s*\((.*?)\)\s*$", text, flags=re.IGNORECASE
-                        )
-                        if match:
-                            inner = match.group(2)
-                            inner_cols = [
-                                c.strip().strip("`") for c in inner.split(",") if c.strip()
-                            ]
-                            for col in inner_cols:
-                                normalized_partitioned_by.append(exp.to_column(col))
-                            continue
-                except Exception:
-                    # If anything goes wrong, keep the original expr
-                    pass
-                normalized_partitioned_by.append(expr)
-
-            # Replace with normalized expressions
-            partitioned_by = normalized_partitioned_by
+            # Parse and normalize partition expressions
+            partitioned_by, _ = self._parse_partition_expressions(partitioned_by)
             # For tables, check if partitioned_by columns are in unique_key; for materialized views, allow regardless
             if unique_key is not None and not is_materialized_view:
                 # Extract key column names from unique_key (only Tuple or Column expressions)
