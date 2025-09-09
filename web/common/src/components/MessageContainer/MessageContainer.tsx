@@ -15,6 +15,7 @@ export default function MessageContainer({
 }) {
   return (
     <HorizontalContainer
+      data-component="MessageContainer"
       className={cn(
         'h-auto justify-center items-center p-4 bg-message-lucid rounded-2xl',
         className,

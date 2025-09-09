@@ -71,11 +71,18 @@
   --color-link-underline: var(--color-deep-blue-125);
 
   /* Typography */
-  --color-typography-heading: var(--color-neutral-800);
-  --color-typography-tagline: var(--color-neutral-500);
-  --color-typography-description: var(--color-neutral-400);
-  --color-typography-info: var(--color-neutral-600);
+  --color-typography-heading: var(--color-prose);
+  --color-typography-tagline: var(--color-neutral-600);
+  --color-typography-description: var(--color-neutral-500);
+  --color-typography-info: var(--color-typography-tagline);
 
   /* Message */
   --color-message-lucid: var(--color-neutral-3);
+
+  /* Input */
+  --color-input-background: var(--color-light);
+  --color-input-background-lucid: var(--color-neutral-5);
+  --color-input-foreground: var(--color-prose);
+  --color-input-placeholder: var(--color-neutral-400);
+  --color-input-border: var(--color-neutral-300);
 }

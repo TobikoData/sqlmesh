@@ -4,13 +4,12 @@ import type { HeadlineLevel } from '@/types'
 import { cn } from '@/utils'
 
 export function Headline({
-  id,
   level = 1,
   children,
   className,
+  ...props
 }: {
-  id?: string
-  level?: HeadlineLevel
+  level: HeadlineLevel
   children: React.ReactNode
   className?: string
 }) {
@@ -18,12 +17,13 @@ export function Headline({
 
   return (
     <Tag
-      id={id}
+      data-component="Headline"
       className={cn(
         getHeadlineTextSize(level),
         'truncate text-typography-heading',
         className,
       )}
+      {...props}
     >
       {children}
     </Tag>

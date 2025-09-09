@@ -6,9 +6,7 @@ import { Button } from '../Button/Button'
 import { ScrollContainer } from '../ScrollContainer/ScrollContainer'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 
-export function VirtualList<
-  TItem extends Record<string, any> = Record<string, any>,
->({
+export function VirtualList<TItem>({
   items,
   estimatedListItemHeight,
   renderListItem,
@@ -88,7 +86,7 @@ export function VirtualList<
     >
       {shouldShowReturnButton && (
         <Button
-          className="absolute left-[50%] translate-x-[-50%] z-10 shadow-md top-1 bg-light"
+          className="absolute left-[50%] translate-x-[-50%] z-10 shadow-md top-1"
           onClick={() => scrollToItem({ itemIndex: activeItemIndex })}
           size="2xs"
           variant="alternative"

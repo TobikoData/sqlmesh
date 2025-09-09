@@ -45,6 +45,7 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
     return (
       <Button
         ref={ref}
+        data-component="CopyButton"
         title={title}
         size={size}
         variant={variant}

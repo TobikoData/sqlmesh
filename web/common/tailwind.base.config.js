@@ -79,6 +79,13 @@ module.exports = {
           background: 'var(--color-badge-background)',
           foreground: 'var(--color-badge-foreground)',
         },
+        input: {
+          'background-lucid': 'var(--color-input-background-lucid)',
+          background: 'var(--color-input-background)',
+          foreground: 'var(--color-input-foreground)',
+          placeholder: 'var(--color-input-placeholder)',
+          border: 'var(--color-input-border)',
+        },
         button: {
           primary: {
             background: 'var(--color-button-primary-background)',

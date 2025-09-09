@@ -26,20 +26,26 @@ export function Tooltip({
   className,
 }: {
   trigger: React.ReactNode
+  children: React.ReactNode
   side?: TooltipSide
   align?: TooltipAlign
   delayDuration?: number
   sideOffset?: number
   alignOffset?: number
-  children: React.ReactNode
   className?: string
 }) {
   return (
     <TooltipProvider delayDuration={delayDuration}>
       <TooltipRoot>
-        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        <TooltipTrigger
+          data-component="TooltipTrigger"
+          asChild
+        >
+          {trigger}
+        </TooltipTrigger>
         <TooltipPortal>
           <TooltipContent
+            data-component="TooltipContent"
             className={cn(
               'max-w-md break-words rounded-lg bg-tooltip-background text-tooltip-foreground px-4 py-2 shadow-[hsl(206_22%_7%_/_35%)_0px_10px_38px_-10px,_hsl(206_22%_7%_/_20%)_0px_10px_20px_-15px] will-change-[transform,opacity] data-[state=delayed-open]:data-[side=bottom]:animate-slideUpAndFade data-[state=delayed-open]:data-[side=left]:animate-slideRightAndFade data-[state=delayed-open]:data-[side=right]:animate-slideLeftAndFade data-[state=delayed-open]:data-[side=top]:animate-slideDownAndFade z-10',
               className,

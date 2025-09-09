@@ -1,16 +1,14 @@
 import Fuse, { type IFuseOptions } from 'fuse.js'
 import React from 'react'
 
-import { Input } from '../extra/input'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 import { Badge } from '../Badge/Badge'
 import { cn } from '@/utils'
 import MessageContainer from '../MessageContainer/MessageContainer'
+import { Input } from '../Input/Input'
 
-export function FilterableList<
-  TItem extends Record<string, any> = Record<string, any>,
->({
+export function FilterableList<TItem>({
   items,
   disabled,
   placeholder,
@@ -18,18 +16,14 @@ export function FilterableList<
   filterOptions,
   className,
   children,
-  beforeInput,
-  afterInput,
 }: {
   items: TItem[]
-  filterOptions?: IFuseOptions<any>
+  filterOptions?: IFuseOptions<TItem>
   disabled?: boolean
   placeholder?: string
   autoFocus?: boolean
   className?: string
   children: (options: TItem[], resetSearch: () => void) => React.ReactNode
-  beforeInput?: (options: TItem[]) => React.ReactNode
-  afterInput?: (options: TItem[]) => React.ReactNode
 }) {
   const [search, setSearch] = React.useState('')
 
@@ -48,8 +42,7 @@ export function FilterableList<
       data-component="FilterableList"
       className={cn('p-1', className)}
     >
-      <HorizontalContainer className="shrink-0 gap-2 h-auto items-center">
-        {beforeInput?.(filteredItems)}
+      <HorizontalContainer className="shrink-0 gap-2 h-auto items-center overflow-visible">
         <Input
           type="search"
           disabled={disabled}
@@ -59,14 +52,19 @@ export function FilterableList<
           onInput={(e: React.ChangeEvent<HTMLInputElement>) =>
             setSearch(e.target.value)
           }
-          className={cn(
-            'w-full md:text-xs text-xs h-6 text-prose px-2 rounded-sm',
-            disabled && 'bg-neutral-100',
-          )}
+          inputSize="xs"
+          className="w-full"
         />
-        {afterInput?.(filteredItems)}
+        <Counter
+          itemsLength={items.length}
+          filteredItemsLength={filteredItems.length}
+        />
       </HorizontalContainer>
-      {children(filteredItems, resetSearch)}
+      {filteredItems.length > 0 ? (
+        children(filteredItems, resetSearch)
+      ) : (
+        <EmptyMessage message="No results found" />
+      )}
     </VerticalContainer>
   )
 }
@@ -83,7 +81,7 @@ function Counter({
   return (
     <Badge
       size="2xs"
-      className={cn('flex items-center gap-1', className)}
+      className={cn('flex items-center gap-1 h-full', className)}
     >
       {itemsLength !== filteredItemsLength && (
         <>
@@ -102,11 +100,8 @@ function EmptyMessage({
   message?: React.ReactNode
 }) {
   return (
-    <MessageContainer className="w-full rounded-sm text-xs mt-2">
+    <MessageContainer className="w-full h-full rounded-sm text-xs mt-2">
       {message}
     </MessageContainer>
   )
 }
-
-FilterableList.Counter = Counter
-FilterableList.EmptyMessage = EmptyMessage

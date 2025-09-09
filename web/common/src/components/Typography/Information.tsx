@@ -21,6 +21,7 @@ export function Information({
       size={16}
     />
   ),
+  ...props
 }: {
   children?: React.ReactNode
   className?: string
@@ -34,7 +35,9 @@ export function Information({
 }) {
   return (
     <div
+      data-component="Information"
       className={cn('flex items-center gap-2 text-typography-info', className)}
+      {...props}
     >
       {children}
       <Tooltip

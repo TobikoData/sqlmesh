@@ -5,13 +5,12 @@ import { getHeadlineTextSize, getTextSize } from './help'
 describe('Typography Utils', () => {
   test('getHeadlineTextSize', () => {
     expect(getHeadlineTextSize(1)).toBe('text-4xl font-bold')
-    expect(getHeadlineTextSize(2)).toBe('text-3xl font-semibold')
-    expect(getHeadlineTextSize(3)).toBe('text-2xl font-medium')
-    expect(getHeadlineTextSize(4)).toBe('text-l font-medium')
-    expect(getHeadlineTextSize(5)).toBe('text-m font-medium')
-    expect(getHeadlineTextSize(6)).toBe('text-s font-medium')
+    expect(getHeadlineTextSize(2)).toBe('text-3xl font-bold')
+    expect(getHeadlineTextSize(3)).toBe('text-2xl font-bold')
+    expect(getHeadlineTextSize(4)).toBe('text-l font-semibold')
+    expect(getHeadlineTextSize(5)).toBe('text-s font-semibold')
+    expect(getHeadlineTextSize(6)).toBe('text-xs font-semibold')
   })
-
   test('getTextSize', () => {
     expect(getTextSize('s')).toBe('text-sm')
     expect(getTextSize('m')).toBe('text-base')

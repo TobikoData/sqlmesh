@@ -17,6 +17,7 @@ export const LoadingIcon = React.forwardRef<
     return (
       <svg
         ref={ref}
+        data-component="LoadingIcon"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 100 100"
         className={cn('h-4 w-4', className)}

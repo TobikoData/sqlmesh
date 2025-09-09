@@ -1,17 +1,20 @@
 import { cn } from '@/utils'
-import React from 'react'
 
-export const Text = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
+export function Text({
+  className,
+  children,
+  ...props
+}: {
+  className?: string
+  children?: React.ReactNode
+}) {
   return (
     <div
-      ref={ref}
-      className={cn('whitespace-wrap text-prose', className)}
+      data-component="Text"
+      className={cn('whitespace-wrap text-prose text-sm mb-1', className)}
       {...props}
     >
       {children}
     </div>
   )
-})
+}

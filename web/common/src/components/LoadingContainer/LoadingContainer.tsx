@@ -32,7 +32,10 @@ export const LoadingContainer = React.forwardRef<
     }
 
     return isLoading ? (
-      <div className={cn('flex items-center justify-center gap-2', className)}>
+      <div
+        data-component="LoadingContainer"
+        className={cn('flex items-center justify-center gap-2', className)}
+      >
         {(side === 'left' || side === 'both') && renderLoading()}
         {children}
         {(side === 'right' || side === 'both') && renderLoading()}

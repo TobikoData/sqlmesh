@@ -18,9 +18,9 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
     const Comp = asChild ? Slot : 'span'
     return (
       <Comp
+        data-component="Badge"
         className={cn(badgeVariants({ size, shape, className }))}
         ref={ref}
-        data-component="Badge"
         {...props}
       />
     )

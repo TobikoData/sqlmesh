@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import MessageContainer from './MessageContainer'
 
 const meta = {
-  title: 'Components/MessageContainer',
+  title: 'Components/Containers/MessageContainer',
   component: MessageContainer,
 } satisfies Meta<typeof MessageContainer>
 

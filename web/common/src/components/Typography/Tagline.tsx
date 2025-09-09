@@ -1,21 +1,20 @@
-import React from 'react'
-
 import { cn } from '@/utils'
 
-export const Tagline = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
+export function Tagline({
+  className,
+  children,
+  ...props
+}: {
+  className?: string
+  children?: React.ReactNode
+}) {
   return (
     <div
-      ref={ref}
-      className={cn(
-        'text-typography-tagline text-xs whitespace-nowrap overflow-hidden text-ellipsis',
-        className,
-      )}
+      data-component="Tagline"
+      className={cn('text-typography-tagline text-xs truncate', className)}
       {...props}
     >
       {children}
     </div>
   )
-})
+}

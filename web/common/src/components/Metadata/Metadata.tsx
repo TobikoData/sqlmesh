@@ -3,8 +3,8 @@ import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 import { cn } from '@/utils'
 
 export interface MetadataProps extends React.HTMLAttributes<HTMLDivElement> {
-  label?: React.ReactNode
-  value?: React.ReactNode
+  label: React.ReactNode
+  value: React.ReactNode
 }
 
 export const Metadata = React.forwardRef<HTMLDivElement, MetadataProps>(
