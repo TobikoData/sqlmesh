@@ -445,7 +445,13 @@ class Scheduler:
         if not selected_snapshots:
             selected_snapshots = list(merged_intervals)
 
-        snapshot_dag = snapshots_to_dag(selected_snapshots)
+        # Build the full DAG from all snapshots to preserve transitive dependencies
+        full_dag = snapshots_to_dag(self.snapshots.values())
+
+        # Create a subdag that includes the selected snapshots and all their upstream dependencies
+        # This ensures that transitive dependencies are preserved even when intermediate nodes are not selected
+        selected_snapshot_ids_set = {s.snapshot_id for s in selected_snapshots}
+        snapshot_dag = full_dag.subdag(*selected_snapshot_ids_set)
 
         batched_intervals = self.batch_intervals(
             merged_intervals, deployability_index, environment_naming_info, dag=snapshot_dag
@@ -642,20 +648,11 @@ class Scheduler:
             upstream_dependencies: t.List[SchedulingUnit] = []
 
             for p_sid in snapshot.parents:
-                if p_sid in self.snapshots:
-                    p_intervals = intervals_per_snapshot.get(p_sid.name, [])
-
-                    if not p_intervals and p_sid in original_snapshots_to_create:
-                        upstream_dependencies.append(CreateNode(snapshot_name=p_sid.name))
-                    elif len(p_intervals) > 1:
-                        upstream_dependencies.append(DummyNode(snapshot_name=p_sid.name))
-                    else:
-                        for i, interval in enumerate(p_intervals):
-                            upstream_dependencies.append(
-                                EvaluateNode(
-                                    snapshot_name=p_sid.name, interval=interval, batch_index=i
-                                )
-                            )
+                upstream_dependencies.extend(
+                    self._find_upstream_dependencies(
+                        p_sid, intervals_per_snapshot, original_snapshots_to_create
+                    )
+                )
 
             batch_concurrency = snapshot.node.batch_concurrency
             batch_size = snapshot.node.batch_size
@@ -698,6 +695,36 @@ class Scheduler:
                         ],
                     )
         return dag
+
+    def _find_upstream_dependencies(
+        self,
+        parent_sid: SnapshotId,
+        intervals_per_snapshot: t.Dict[str, Intervals],
+        snapshots_to_create: t.Set[SnapshotId],
+    ) -> t.List[SchedulingUnit]:
+        if parent_sid not in self.snapshots:
+            return []
+
+        p_intervals = intervals_per_snapshot.get(parent_sid.name, [])
+
+        if p_intervals:
+            if len(p_intervals) > 1:
+                return [DummyNode(snapshot_name=parent_sid.name)]
+            interval = p_intervals[0]
+            return [EvaluateNode(snapshot_name=parent_sid.name, interval=interval, batch_index=0)]
+        if parent_sid in snapshots_to_create:
+            return [CreateNode(snapshot_name=parent_sid.name)]
+        # This snapshot has no intervals and doesn't need creation which means
+        # that it can be a transitive dependency
+        transitive_deps: t.List[SchedulingUnit] = []
+        parent_snapshot = self.snapshots[parent_sid]
+        for grandparent_sid in parent_snapshot.parents:
+            transitive_deps.extend(
+                self._find_upstream_dependencies(
+                    grandparent_sid, intervals_per_snapshot, snapshots_to_create
+                )
+            )
+        return transitive_deps
 
     def _run_or_audit(
         self,
