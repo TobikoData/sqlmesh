@@ -582,8 +582,24 @@ def test_load_microbatch_with_ref_no_filter(
     )
 
 
+@pytest.mark.slow
 def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
     project_dir, model_dir = create_empty_project()
+
+    dbt_profile_config = {
+        "test": {
+            "outputs": {
+                "duckdb": {
+                    "type": "duckdb",
+                    "path": str(project_dir.parent / "dbt_data" / "main.db"),
+                }
+            },
+            "target": "duckdb",
+        }
+    }
+    db_profile_file = project_dir / "profiles.yml"
+    with open(db_profile_file, "w", encoding="utf-8") as f:
+        YAML().dump(dbt_profile_config, f)
 
     macros_dir = project_dir / "macros"
     macros_dir.mkdir()
@@ -616,4 +632,4 @@ def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
     error_message = str(exc_info.value)
     assert "Failed to update model schemas" in error_message
     assert "Could not render or parse jinja for" in error_message
-    assert "Undefined macro/variable: 'columns' in macro: select_columns" in error_message
+    assert "Undefined macro/variable: 'columns' in macro: 'select_columns'" in error_message

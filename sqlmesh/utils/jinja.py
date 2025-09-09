@@ -682,7 +682,7 @@ def extract_error_details(ex: Exception) -> str:
                 if frame.f_code.co_name == "_invoke":
                     macro = frame.f_locals.get("self")
                     if isinstance(macro, Macro):
-                        error_details += f" in macro: {macro.name}\n"
+                        error_details += f" in macro: '{macro.name}'\n"
                         break
         except:
             # to fall back to the generic error message if frame analysis fails

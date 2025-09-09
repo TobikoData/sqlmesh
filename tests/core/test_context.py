@@ -671,7 +671,7 @@ model_defaults:
     error_message = str(exc_info.value)
     assert "Failed to load model" in error_message
     assert "Could not render or parse jinja for" in error_message
-    assert "Undefined macro/variable: 'target' in macro: generate_select" in error_message
+    assert "Undefined macro/variable: 'target' in macro: 'generate_select'" in error_message
 
 
 def test_clear_caches(tmp_path: pathlib.Path):
