@@ -31,7 +31,6 @@ from sqlmesh.core.model.kind import (
     OnAdditiveChange,
     on_destructive_change_validator,
     on_additive_change_validator,
-    TimeColumn,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, sql_str_validator
@@ -86,7 +85,7 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column: t.Optional[TimeColumn] = None
+    time_column: t.Optional[t.Union[str, t.Dict[str, str]]] = None
     cron: t.Optional[str] = None
     interval_unit: t.Optional[str] = None
     batch_concurrency: t.Optional[int] = None
@@ -153,7 +152,6 @@ class ModelConfig(BaseModelConfig):
     _sql_validator = sql_str_validator
     _on_destructive_change_validator = on_destructive_change_validator
     _on_additive_change_validator = on_additive_change_validator
-    _time_column_validator = TimeColumn.validator()
 
     @field_validator(
         "unique_key",
