@@ -242,10 +242,9 @@ class BaseExpressionRenderer:
             except ParsetimeAdapterCallError:
                 raise
             except Exception as ex:
-                error_msg = f"Could not render jinja for '{self._path}'.\n" + extract_error_details(
-                    ex
-                )
-                raise ConfigError(error_msg) from ex
+                raise ConfigError(
+                    f"Could not render jinja for '{self._path}'.\n" + extract_error_details(ex)
+                ) from ex
 
             if rendered_expression.strip():
                 try:
