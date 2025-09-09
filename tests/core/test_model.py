@@ -53,6 +53,8 @@ from sqlmesh.core.model import (
     TimeColumn,
     ExternalKind,
     ViewKind,
+    EmbeddedKind,
+    SCDType2ByTimeKind,
     create_external_model,
     create_seed_model,
     create_sql_model,
@@ -11905,6 +11907,17 @@ def test_grants_invalid_model_kind_errors(kind: str):
             kind=kind,
             grants={"select": ["user1"], "insert": ["admin_user"]},
         )
+
+
+def test_model_kind_supports_grants():
+    assert FullKind().supports_grants is True
+    assert ViewKind().supports_grants is True
+    assert IncrementalByTimeRangeKind(time_column="ds").supports_grants is True
+    assert IncrementalByUniqueKeyKind(unique_key=["id"]).supports_grants is True
+    assert SCDType2ByTimeKind(unique_key=["id"]).supports_grants is True
+
+    assert EmbeddedKind().supports_grants is False
+    assert ExternalKind().supports_grants is False
 
 
 def test_grants_validation_no_grants():

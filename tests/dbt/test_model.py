@@ -1006,3 +1006,34 @@ def test_model_grants_engine_specific_bigquery() -> None:
     assert grants_config is not None
     assert grants_config["bigquery.dataviewer"] == ["user@domain.com"]
     assert grants_config["select"] == ["analyst@company.com"]
+
+
+def test_ephemeral_model_with_global_grants(create_empty_project):
+    dbt_project_dir, dbt_model_dir = create_empty_project()
+
+    yaml = YAML()
+    dbt_project_config = {
+        "name": "test_project",
+        "version": "1.0.0",
+        "config-version": 2,
+        "profile": "test",
+        "model-paths": ["models"],
+        "models": {"test_project": {"grants": {"select": ["reporter", "analyst"]}}},
+    }
+    dbt_project_file = dbt_project_dir / "dbt_project.yml"
+    with open(dbt_project_file, "w", encoding="utf-8") as f:
+        yaml.dump(dbt_project_config, f)
+
+    ephemeral_model_sql = """
+        {{ config(materialized='ephemeral') }}
+        SELECT 1 as id
+    """
+    ephemeral_model_file = dbt_model_dir / "ephemeral_model.sql"
+    with open(ephemeral_model_file, "w", encoding="utf-8") as f:
+        f.write(ephemeral_model_sql)
+
+    context = Context(paths=dbt_project_dir)
+    model = context.get_model('"local"."main"."ephemeral_model"')
+
+    assert model.kind.is_embedded
+    assert model.grants is None  # grants config is skipped for ephemeral / embedded models
