@@ -50,7 +50,7 @@ from sqlmesh.core.model import (
     CustomKind,
 )
 from sqlmesh.core.model.kind import _Incremental
-from sqlmesh.utils import CompletionStatus
+from sqlmesh.utils import CompletionStatus, columns_to_types_all_known
 from sqlmesh.core.schema_diff import (
     has_drop_alteration,
     TableAlterOperation,
@@ -747,6 +747,11 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
+                columns_to_types_provided = (
+                    model.kind.is_materialized
+                    and model.columns_to_types_
+                    and columns_to_types_all_known(model.columns_to_types_)
+                )
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
@@ -759,7 +764,7 @@ class SnapshotEvaluator:
                     )
                     runtime_stage = RuntimeStage.EVALUATING
                     target_table_exists = True
-                elif model.annotated or model.is_seed or model.kind.is_scd_type_2:
+                elif columns_to_types_provided or model.is_seed or model.kind.is_scd_type_2:
                     self._execute_create(
                         snapshot=snapshot,
                         table_name=target_table_name,

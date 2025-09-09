@@ -646,7 +646,7 @@ def test_evaluate_materialized_view(
     )
 
     # Ensure that the materialized view is recreated even if it exists
-    assert adapter_mock.create_view.assert_called
+    assert adapter_mock.create_view.call_count == 1
 
 
 def test_evaluate_materialized_view_with_partitioned_by_cluster_by(
