@@ -250,8 +250,6 @@ class BaseExpressionRenderer:
 
                     if not expressions:
                         raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
-                except ParsetimeAdapterCallError:
-                    raise
                 except Exception as ex:
                     raise ConfigError(f"Could not parse jinja at '{self._path}'.\n{ex}") from ex
 
