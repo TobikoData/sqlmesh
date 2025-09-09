@@ -8588,6 +8588,23 @@ def test_comments_in_jinja_query():
         model.render_query()
 
 
+def test_jinja_render_parse_error():
+    expressions = d.parse(
+        """
+        MODEL (name db.test_model);
+
+        JINJA_QUERY_BEGIN;
+        {{ unknown_macro() }}
+        JINJA_END;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    with pytest.raises(ConfigError, match=r"Could not render jinja"):
+        model.render_query()
+
+
 def test_jinja_render_debug_logging(caplog):
     """Test that rendered Jinja expressions are logged for debugging."""
     import logging
@@ -8609,7 +8626,7 @@ def test_jinja_render_debug_logging(caplog):
     model = load_sql_based_model(expressions)
 
     # Attempt to render - this should fail due to invalid SQL syntax
-    with pytest.raises(ConfigError, match=r"Could not render or parse jinja"):
+    with pytest.raises(ConfigError, match=r"Could not parse the rendered jinja"):
         model.render_query()
 
     # Check that the rendered Jinja was logged

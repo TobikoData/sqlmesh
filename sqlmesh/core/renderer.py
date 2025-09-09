@@ -239,17 +239,21 @@ class BaseExpressionRenderer:
                 logger.debug(
                     f"Rendered Jinja expression for model '{self._model_fqn}' at '{self._path}': '{rendered_expression}'"
                 )
-                if rendered_expression.strip():
+            except ParsetimeAdapterCallError:
+                raise
+            except Exception as ex:
+                raise ConfigError(f"Could not render jinja at '{self._path}'.\n{ex}") from ex
+
+            if rendered_expression.strip():
+                try:
                     expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
 
                     if not expressions:
                         raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
-            except ParsetimeAdapterCallError:
-                raise
-            except Exception as ex:
-                raise ConfigError(
-                    f"Could not render or parse jinja at '{self._path}'.\n{ex}"
-                ) from ex
+                except Exception as ex:
+                    raise ConfigError(
+                        f"Could not parse the rendered jinja at '{self._path}'.\n{ex}"
+                    ) from ex
 
         if this_model:
             render_kwargs["this_model"] = this_model
