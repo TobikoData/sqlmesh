@@ -1056,6 +1056,7 @@ class SnapshotEvaluator:
                 allow_additive_snapshots=allow_additive_snapshots,
                 run_pre_post_statements=run_pre_post_statements,
             )
+
         except Exception:
             adapter.drop_table(target_table_name)
             raise
@@ -1156,6 +1157,7 @@ class SnapshotEvaluator:
                 rendered_physical_properties=rendered_physical_properties,
                 dry_run=False,
                 run_pre_post_statements=run_pre_post_statements,
+                skip_grants=True,  # skip grants for tmp table
             )
         try:
             evaluation_strategy = _evaluation_strategy(snapshot, adapter)
@@ -1421,6 +1423,7 @@ class SnapshotEvaluator:
         rendered_physical_properties: t.Dict[str, exp.Expression],
         dry_run: bool,
         run_pre_post_statements: bool = True,
+        skip_grants: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
         evaluation_strategy = _evaluation_strategy(snapshot, adapter)
@@ -1444,11 +1447,10 @@ class SnapshotEvaluator:
             is_snapshot_representative=is_snapshot_representative,
             dry_run=dry_run,
             physical_properties=rendered_physical_properties,
+            skip_grants=skip_grants,
         )
         if run_pre_post_statements:
             adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
-
-        evaluation_strategy._apply_grants(snapshot.model, table_name, GrantsTargetLayer.PHYSICAL)
 
     def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
         adapter = self.get_adapter(snapshot.model.gateway)
@@ -1718,16 +1720,11 @@ class EvaluationStrategy(abc.ABC):
             return
 
         logger.info(f"Applying grants for model {model.name} to table {table_name}")
-
-        try:
-            self.adapter.sync_grants_config(
-                exp.to_table(table_name, dialect=model.dialect),
-                grants_config,
-                model.grants_table_type,
-            )
-        except Exception:
-            # Log error but don't fail evaluation if grants fail
-            logger.error(f"Failed to apply grants for model {model.name}", exc_info=True)
+        self.adapter.sync_grants_config(
+            exp.to_table(table_name, dialect=self.adapter.dialect),
+            grants_config,
+            model.grants_table_type,
+        )
 
 
 class SymbolicStrategy(EvaluationStrategy):
@@ -1892,6 +1889,10 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
                 column_descriptions=model.column_descriptions if is_table_deployable else None,
             )
 
+        # Apply grants after table creation (unless explicitly skipped by caller)
+        if not kwargs.get("skip_grants", False):
+            self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
+
     def migrate(
         self,
         target_table_name: str,
@@ -1916,6 +1917,9 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             snapshot, alter_operations, kwargs["allow_additive_snapshots"]
         )
         self.adapter.alter_table(alter_operations)
+
+        # Apply grants after schema migration
+        self._apply_grants(snapshot.model, target_table_name, GrantsTargetLayer.PHYSICAL)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         _check_table_db_is_physical_schema(name, kwargs["physical_schema"])
@@ -1963,6 +1967,10 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
             target_columns_to_types=columns_to_types,
             source_columns=source_columns,
         )
+
+        # Apply grants after table replacement (unless explicitly skipped by caller)
+        if not kwargs.get("skip_grants", False):
+            self._apply_grants(model, name, GrantsTargetLayer.PHYSICAL)
 
     def _get_target_and_source_columns(
         self,
@@ -2224,12 +2232,18 @@ class SeedStrategy(MaterializableStrategy):
             )
             return
 
-        super().create(table_name, model, is_table_deployable, render_kwargs, **kwargs)
+        # Skip grants in parent create call since we'll apply them after data insertion
+        kwargs_no_grants = {**kwargs}
+        kwargs_no_grants["skip_grants"] = True
+
+        super().create(table_name, model, is_table_deployable, render_kwargs, **kwargs_no_grants)
         # For seeds we insert data at the time of table creation.
         try:
             for index, df in enumerate(model.render_seed()):
                 if index == 0:
-                    self._replace_query_for_model(model, table_name, df, render_kwargs, **kwargs)
+                    self._replace_query_for_model(
+                        model, table_name, df, render_kwargs, **kwargs_no_grants
+                    )
                 else:
                     self.adapter.insert_append(
                         table_name, df, target_columns_to_types=model.columns_to_types
@@ -2312,6 +2326,9 @@ class SCDType2Strategy(IncrementalStrategy):
                 render_kwargs,
                 **kwargs,
             )
+
+        # Apply grants after SCD Type 2 table creation
+        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
 
     def insert(
         self,
@@ -2436,7 +2453,7 @@ class ViewStrategy(PromotableStrategy):
             column_descriptions=model.column_descriptions,
         )
 
-        # Apply grants after view creation/replacement
+        # Apply grants after view creation / replacement
         self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
 
     def append(
@@ -2461,6 +2478,8 @@ class ViewStrategy(PromotableStrategy):
             # Make sure we don't recreate the view to prevent deletion of downstream views in engines with no late
             # binding support (because of DROP CASCADE).
             logger.info("View '%s' already exists", table_name)
+            # Always apply grants when present, even if view exists, to handle grants updates
+            self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
             return
 
         logger.info("Creating view '%s'", table_name)
@@ -2483,6 +2502,9 @@ class ViewStrategy(PromotableStrategy):
             table_description=model.description if is_table_deployable else None,
             column_descriptions=model.column_descriptions if is_table_deployable else None,
         )
+
+        # Apply grants after view creation
+        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
 
     def migrate(
         self,
@@ -2664,7 +2686,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
 
         if is_table_deployable and is_snapshot_deployable:
-            # We could deploy this to prod; create a proper managed table
+            # We cloud deploy this to prod; create a proper managed table
             logger.info("Creating managed table: %s", table_name)
             self.adapter.create_managed_table(
                 table_name=table_name,
@@ -2680,17 +2702,23 @@ class EngineManagedStrategy(MaterializableStrategy):
 
             # Apply grants after managed table creation
             self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
+
         elif not is_table_deployable:
             # Only create the dev preview table as a normal table.
             # For the main table, if the snapshot is cant be deployed to prod (eg upstream is forward-only) do nothing.
             # Any downstream models that reference it will be updated to point to the dev preview table.
             # If the user eventually tries to deploy it, the logic in insert() will see it doesnt exist and create it
+
+            # Create preview table but don't apply grants here since the table is not deployable
+            # Grants will be applied later when the table becomes deployable
+            kwargs_no_grants = {**kwargs}
+            kwargs_no_grants["skip_grants"] = True
             super().create(
                 table_name=table_name,
                 model=model,
                 is_table_deployable=is_table_deployable,
                 render_kwargs=render_kwargs,
-                **kwargs,
+                **kwargs_no_grants,
             )
 
     def insert(
@@ -2705,7 +2733,6 @@ class EngineManagedStrategy(MaterializableStrategy):
         deployability_index: DeployabilityIndex = kwargs["deployability_index"]
         snapshot: Snapshot = kwargs["snapshot"]
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
-
         if is_first_insert and is_snapshot_deployable and not self.adapter.table_exists(table_name):
             self.adapter.create_managed_table(
                 table_name=table_name,
@@ -2718,9 +2745,6 @@ class EngineManagedStrategy(MaterializableStrategy):
                 column_descriptions=model.column_descriptions,
                 table_format=model.table_format,
             )
-
-            # Apply grants after managed table creation during first insert
-            self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
         elif not is_snapshot_deployable:
             # Snapshot isnt deployable; update the preview table instead
             # If the snapshot was deployable, then data would have already been loaded in create() because a managed table would have been created
@@ -2768,6 +2792,10 @@ class EngineManagedStrategy(MaterializableStrategy):
             raise MigrationNotSupportedError(
                 f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
             )
+
+        # Apply grants after verifying no schema changes
+        # This ensures metadata-only changes (grants) are applied
+        self._apply_grants(snapshot.model, target_table_name, GrantsTargetLayer.PHYSICAL)
 
     def delete(self, name: str, **kwargs: t.Any) -> None:
         # a dev preview table is created as a normal table, so it needs to be dropped as a normal table
