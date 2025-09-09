@@ -9,6 +9,7 @@ from sqlglot.errors import SchemaError
 from sqlmesh import Context
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
@@ -328,7 +329,8 @@ def test_load_incremental_time_range_strategy_required_only(
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
     context = Context(paths=project_dir)
-    model = context.snapshots[snapshot_fqn].model
+    snapshot = context.snapshots[snapshot_fqn]
+    model = snapshot.model
     # Validate model-level attributes
     assert model.start == "2025-01-01"
     assert model.interval_unit.is_day
@@ -342,6 +344,8 @@ def test_load_incremental_time_range_strategy_required_only(
     assert model.depends_on_self is False
     assert model.kind.auto_restatement_intervals is None
     assert model.kind.partition_by_time_column is True
+    # make sure the snapshot can be serialized to json
+    assert isinstance(_snapshot_to_json(snapshot), str)
 
 
 @pytest.mark.slow
@@ -381,7 +385,8 @@ def test_load_incremental_time_range_strategy_all_defined(
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
     context = Context(paths=project_dir)
-    model = context.snapshots[snapshot_fqn].model
+    snapshot = context.snapshots[snapshot_fqn]
+    model = snapshot.model
     # Validate model-level attributes
     assert model.start == "2025-01-01"
     assert model.interval_unit.is_day
@@ -402,6 +407,8 @@ def test_load_incremental_time_range_strategy_all_defined(
     assert model.kind.batch_size == 3
     assert model.kind.batch_concurrency == 2
     assert model.depends_on_self is False
+    # make sure the snapshot can be serialized to json
+    assert isinstance(_snapshot_to_json(snapshot), str)
 
 
 @pytest.mark.slow
