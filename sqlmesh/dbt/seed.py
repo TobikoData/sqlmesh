@@ -125,4 +125,5 @@ if DBT_VERSION >= (1, 7, 0):
 
     agate_helper.Integer = Integer  # type: ignore
 
+else:
     AGATE_TYPE_MAPPING[agate_helper.Integer] = exp.DataType.build("int")
