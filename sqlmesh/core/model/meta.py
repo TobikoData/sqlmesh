@@ -446,11 +446,8 @@ class ModelMeta(_Node):
             )
 
         # Validate grants configuration for model kind support
-        if self.grants is not None:
-            if kind.is_symbolic:
-                raise ValueError(f"grants cannot be set for {kind.name} models")
-            elif not (kind.is_materialized or kind.is_view):
-                raise ValueError(f"grants field is not supported for {kind.name} models")
+        if self.grants is not None and not kind.supports_grants:
+            raise ValueError(f"grants cannot be set for {kind.name} models")
 
         return self
 
