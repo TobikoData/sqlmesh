@@ -1347,6 +1347,46 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     )
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_changes_downstream_of_indirect_non_breaking_snapshot_without_intervals(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    # Make a breaking change first but don't backfill it
+    model = context.get_model("sushi.orders")
+    model = model.copy(update={"stamp": "force new version"})
+    context.upsert_model(model)
+    plan_builder = context.plan_builder(
+        "dev", skip_backfill=True, skip_tests=True, no_auto_categorization=True
+    )
+    plan_builder.set_choice(context.get_snapshot(model), SnapshotChangeCategory.BREAKING)
+    context.apply(plan_builder.build())
+
+    # Now make a non-breaking change to the same snapshot.
+    model = model.copy(update={"stamp": "force another new version"})
+    context.upsert_model(model)
+    plan_builder = context.plan_builder(
+        "dev", skip_backfill=True, skip_tests=True, no_auto_categorization=True
+    )
+    plan_builder.set_choice(context.get_snapshot(model), SnapshotChangeCategory.NON_BREAKING)
+    context.apply(plan_builder.build())
+
+    # Now make a change to a model downstream of the above model.
+    downstream_model = context.get_model("sushi.top_waiters")
+    downstream_model = downstream_model.copy(update={"stamp": "yet another new version"})
+    context.upsert_model(downstream_model)
+    plan = context.plan_builder("dev", skip_tests=True).build()
+
+    # If the parent is not representative then the child cannot be deployable
+    deployability_index = plan.deployability_index
+    assert not deployability_index.is_representative(
+        context.get_snapshot("sushi.waiter_revenue_by_day")
+    )
+    assert not deployability_index.is_deployable(context.get_snapshot("sushi.top_waiters"))
+
+
 @time_machine.travel("2023-01-08 15:00:00 UTC", tick=True)
 def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
