@@ -181,7 +181,7 @@ def identify_restatement_intervals_across_snapshot_versions(
         # So for now, these are not considered
         s_id
         for s_id, s in snapshot_intervals_to_clear.items()
-        if s.snapshot.kind_name and s.snapshot.kind_name.full_history_restatement_only
+        if s.snapshot.full_history_restatement_only
     ]
     if full_history_restatement_snapshot_ids:
         # only load full snapshot records that we havent already loaded

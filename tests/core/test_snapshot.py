@@ -3578,7 +3578,7 @@ def test_snapshot_id_and_version_optional_kind_name():
         fingerprint="",
     )
 
-    assert snapshot.kind_name is None
+    assert snapshot.model_kind_name is None
 
     snapshot = SnapshotIdAndVersion(
         name="a",
@@ -3589,6 +3589,6 @@ def test_snapshot_id_and_version_optional_kind_name():
         fingerprint="",
     )
 
-    assert snapshot.kind_name
-    assert snapshot.kind_name.is_incremental_unmanaged
-    assert snapshot.kind_name.full_history_restatement_only
+    assert snapshot.model_kind_name
+    assert snapshot.is_incremental_unmanaged
+    assert snapshot.full_history_restatement_only

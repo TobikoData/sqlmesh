@@ -599,14 +599,14 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         )
 
 
-class SnapshotIdAndVersion(PydanticModel):
+class SnapshotIdAndVersion(PydanticModel, ModelKindMixin):
     """A stripped down version of a snapshot that is used in situations where we want to fetch the main fields of the snapshots table
     without the overhead of parsing the full snapshot payload and fetching intervals.
     """
 
     name: str
     version: str
-    kind_name: t.Optional[ModelKindName] = None
+    kind_name_: t.Optional[ModelKindName] = Field(default=None, alias="kind_name")
     dev_version_: t.Optional[str] = Field(alias="dev_version")
     identifier: str
     fingerprint_: t.Union[str, SnapshotFingerprint] = Field(alias="fingerprint")
@@ -633,6 +633,10 @@ class SnapshotIdAndVersion(PydanticModel):
     @property
     def dev_version(self) -> str:
         return self.dev_version_ or self.fingerprint.to_version()
+
+    @property
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
+        return self.kind_name_
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
