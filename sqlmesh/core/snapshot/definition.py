@@ -1644,6 +1644,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     snapshot.is_valid_start(start, snapshot_start) if start is not None else True
                 )
 
+                children_deployable = is_valid_start and not has_auto_restatement
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
@@ -1660,15 +1661,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     ):
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
-
-                # A child can still be deployable even if its parent is not
-                children_deployable = (
-                    is_valid_start
-                    and not (
-                        snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
-                    )
-                    and not has_auto_restatement
-                )
+                    else:
+                        # If the parent is not representative then its children can't be deployable.
+                        children_deployable = False
             else:
                 children_deployable = False
                 if not snapshots[node].is_paused:
