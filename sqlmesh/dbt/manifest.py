@@ -338,10 +338,12 @@ class ManifestHelper:
                 continue
 
             macro_references = _macro_references(self._manifest, node)
-            tests = (
+            all_tests = (
                 self._tests_by_owner[node.name]
                 + self._tests_by_owner[f"{node.package_name}.{node.name}"]
             )
+            # Only include non-standalone tests (tests that don't reference other models)
+            tests = [test for test in all_tests if not test.is_standalone]
             node_config = _node_base_config(node)
 
             node_name = node.name

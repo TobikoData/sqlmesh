@@ -126,6 +126,7 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
     operations.context.console = console
 
     plan = operations.run()
+    standalone_audit_name = "relationships_orders_customer_id__customer_id__ref_customers_"
     assert plan.environment.name == "prod"
     assert console.no_prompts is True
     assert console.no_diff is True
@@ -149,7 +150,9 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
         '"jaffle_shop"."main"."orders"',
         '"jaffle_shop"."main"."stg_orders"',
     }
-    assert {s.name for s in plan.snapshots} == plan.selected_models_to_backfill
+    assert {s.name for s in plan.snapshots} == (
+        plan.selected_models_to_backfill | {standalone_audit_name}
+    )
 
     plan = operations.run(select=["main.stg_orders+"], exclude=["main.customers"])
     assert plan.environment.name == "prod"
@@ -163,7 +166,9 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
         '"jaffle_shop"."main"."orders"',
         '"jaffle_shop"."main"."stg_orders"',
     }
-    assert {s.name for s in plan.snapshots} == plan.selected_models_to_backfill
+    assert {s.name for s in plan.snapshots} == (
+        plan.selected_models_to_backfill | {standalone_audit_name}
+    )
 
     plan = operations.run(exclude=["main.customers"])
     assert plan.environment.name == "prod"
@@ -175,8 +180,10 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
     assert plan.skip_backfill is False
     assert plan.selected_models_to_backfill == {k for k in operations.context.snapshots} - {
         '"jaffle_shop"."main"."customers"'
-    }
-    assert {s.name for s in plan.snapshots} == plan.selected_models_to_backfill
+    } - {standalone_audit_name}
+    assert {s.name for s in plan.snapshots} == (
+        plan.selected_models_to_backfill | {standalone_audit_name}
+    )
 
     plan = operations.run(empty=True)
     assert plan.environment.name == "prod"

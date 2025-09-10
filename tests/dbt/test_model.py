@@ -63,57 +63,201 @@ def create_empty_project(tmp_path: Path) -> t.Callable[[], t.Tuple[Path, Path]]:
     return _create_empty_project
 
 
-def test_model_test_circular_references() -> None:
-    upstream_model = ModelConfig(name="upstream")
-    downstream_model = ModelConfig(name="downstream", dependencies=Dependencies(refs={"upstream"}))
-    context = DbtContext(_refs={"upstream": upstream_model, "downstream": downstream_model})
+def test_test_config_is_standalone_behavior() -> None:
+    """Test that TestConfig.is_standalone correctly identifies tests with cross-model references"""
 
-    # Test and downstream model references
-    downstream_test = TestConfig(
-        name="downstream_with_upstream",
-        sql="",
-        dependencies=Dependencies(refs={"upstream", "downstream"}),
+    # Test with no model_name (should be standalone)
+    standalone_test = TestConfig(
+        name="standalone_test",
+        sql="SELECT 1",
+        model_name=None,
+        dependencies=Dependencies(refs={"some_model"}),
     )
-    upstream_test = TestConfig(
-        name="upstream_with_downstream",
-        sql="",
-        dependencies=Dependencies(refs={"upstream", "downstream"}),
+    assert standalone_test.is_standalone is True
+
+    # Test with only self-reference (should not be standalone)
+    self_ref_test = TestConfig(
+        name="self_ref_test",
+        sql="SELECT * FROM {{ this }}",
+        model_name="my_model",
+        dependencies=Dependencies(refs={"my_model"}),
+    )
+    assert self_ref_test.is_standalone is False
+
+    # Test with no references (should not be standalone)
+    no_ref_test = TestConfig(
+        name="no_ref_test",
+        sql="SELECT 1",
+        model_name="my_model",
+        dependencies=Dependencies(),
+    )
+    assert no_ref_test.is_standalone is False
+
+    # Test with references to other models (should be standalone)
+    cross_ref_test = TestConfig(
+        name="cross_ref_test",
+        sql="SELECT * FROM {{ ref('other_model') }}",
+        model_name="my_model",
+        dependencies=Dependencies(refs={"my_model", "other_model"}),
+    )
+    assert cross_ref_test.is_standalone is True
+
+    # Test with only references to other models, no self-reference (should be standalone)
+    other_only_test = TestConfig(
+        name="other_only_test",
+        sql="SELECT * FROM {{ ref('other_model') }}",
+        model_name="my_model",
+        dependencies=Dependencies(refs={"other_model"}),
+    )
+    assert other_only_test.is_standalone is True
+
+
+def test_test_to_sqlmesh_creates_correct_audit_type(
+    dbt_dummy_postgres_config: PostgresConfig,
+) -> None:
+    """Test that TestConfig.to_sqlmesh creates the correct audit type based on is_standalone"""
+    from sqlmesh.core.audit.definition import StandaloneAudit, ModelAudit
+
+    # Set up models in context
+    my_model = ModelConfig(
+        name="my_model", sql="SELECT 1", schema="test_schema", database="test_db", alias="my_model"
+    )
+    other_model = ModelConfig(
+        name="other_model",
+        sql="SELECT 2",
+        schema="test_schema",
+        database="test_db",
+        alias="other_model",
+    )
+    context = DbtContext(
+        _refs={"my_model": my_model, "other_model": other_model},
+        _target=dbt_dummy_postgres_config,
     )
 
-    # No circular reference
-    downstream_model.tests = [downstream_test]
-    downstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [downstream_test]
+    # Test with only self-reference (should create ModelAudit)
+    self_ref_test = TestConfig(
+        name="self_ref_test",
+        sql="SELECT * FROM {{ this }}",
+        model_name="my_model",
+        dependencies=Dependencies(refs={"my_model"}),
+    )
+    audit = self_ref_test.to_sqlmesh(context)
+    assert isinstance(audit, ModelAudit)
+    assert audit.name == "self_ref_test"
 
-    # Upstream model reference in downstream model
-    downstream_model.tests = []
-    upstream_model.tests = [upstream_test]
-    upstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [upstream_test]
+    # Test with references to other models (should create StandaloneAudit)
+    cross_ref_test = TestConfig(
+        name="cross_ref_test",
+        sql="SELECT * FROM {{ ref('other_model') }}",
+        model_name="my_model",
+        dependencies=Dependencies(refs={"my_model", "other_model"}),
+    )
+    audit = cross_ref_test.to_sqlmesh(context)
+    assert isinstance(audit, StandaloneAudit)
+    assert audit.name == "cross_ref_test"
 
-    upstream_model.tests = [upstream_test]
-    downstream_model.tests = [downstream_test]
-    upstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [downstream_test, upstream_test]
+    # Test with no model_name (should create StandaloneAudit)
+    standalone_test = TestConfig(
+        name="standalone_test",
+        sql="SELECT 1",
+        model_name=None,
+        dependencies=Dependencies(),
+    )
+    audit = standalone_test.to_sqlmesh(context)
+    assert isinstance(audit, StandaloneAudit)
+    assert audit.name == "standalone_test"
 
-    downstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [downstream_test, upstream_test]
 
-    # Test only references
-    upstream_model.tests = [upstream_test]
-    downstream_model.tests = [downstream_test]
-    downstream_model.dependencies = Dependencies()
-    upstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [downstream_test, upstream_test]
+@pytest.mark.slow
+def test_manifest_filters_standalone_tests_from_models(
+    tmp_path: Path, create_empty_project
+) -> None:
+    """Integration test that verifies models only contain non-standalone tests after manifest loading."""
+    yaml = YAML()
+    project_dir, model_dir = create_empty_project()
 
-    downstream_model.fix_circular_test_refs(context)
-    assert upstream_model.tests == []
-    assert downstream_model.tests == [downstream_test, upstream_test]
+    # Create two models
+    model1_contents = "SELECT 1 as id"
+    model1_file = model_dir / "model1.sql"
+    with open(model1_file, "w", encoding="utf-8") as f:
+        f.write(model1_contents)
+
+    model2_contents = "SELECT 2 as id"
+    model2_file = model_dir / "model2.sql"
+    with open(model2_file, "w", encoding="utf-8") as f:
+        f.write(model2_contents)
+
+    # Create schema with both standalone and non-standalone tests
+    schema_yaml = {
+        "version": 2,
+        "models": [
+            {
+                "name": "model1",
+                "columns": [
+                    {
+                        "name": "id",
+                        "tests": [
+                            "not_null",  # Non-standalone test - only references model1
+                            {
+                                "relationships": {  # Standalone test - references model2
+                                    "to": "ref('model2')",
+                                    "field": "id",
+                                }
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "name": "model2",
+                "columns": [
+                    {"name": "id", "tests": ["not_null"]}  # Non-standalone test
+                ],
+            },
+        ],
+    }
+
+    schema_file = model_dir / "schema.yml"
+    with open(schema_file, "w", encoding="utf-8") as f:
+        yaml.dump(schema_yaml, f)
+
+    # Load the project through SQLMesh Context
+    from sqlmesh.core.context import Context
+
+    context = Context(paths=project_dir)
+
+    model1_snapshot = context.snapshots['"local"."main"."model1"']
+    model2_snapshot = context.snapshots['"local"."main"."model2"']
+
+    # Verify model1 only has non-standalone test in its audits
+    # Should only have "not_null" test, not the "relationships" test
+    model1_audit_names = [audit[0] for audit in model1_snapshot.model.audits]
+    assert len(model1_audit_names) == 1
+    assert model1_audit_names[0] == "not_null_model1_id"
+
+    # Verify model2 has its non-standalone test
+    model2_audit_names = [audit[0] for audit in model2_snapshot.model.audits]
+    assert len(model2_audit_names) == 1
+    assert model2_audit_names[0] == "not_null_model2_id"
+
+    # Verify the standalone test (relationships) exists as a StandaloneAudit
+    all_non_standalone_audits = [name for name in context._audits]
+    assert sorted(all_non_standalone_audits) == [
+        "not_null_model1_id",
+        "not_null_model2_id",
+    ]
+
+    standalone_audits = [name for name in context._standalone_audits]
+    assert len(standalone_audits) == 1
+    assert standalone_audits[0] == "relationships_model1_id__id__ref_model2_"
+
+    plan_builder = context.plan_builder()
+    dag = plan_builder._build_dag()
+    assert [x.name for x in dag.sorted] == [
+        '"local"."main"."model1"',
+        '"local"."main"."model2"',
+        "relationships_model1_id__id__ref_model2_",
+    ]
 
 
 @pytest.mark.slow
