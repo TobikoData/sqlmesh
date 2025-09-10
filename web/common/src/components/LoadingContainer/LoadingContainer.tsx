@@ -6,7 +6,7 @@ import { LoadingIcon } from './LoadingIcon'
 export interface LoadingContainerProps
   extends React.HTMLAttributes<HTMLDivElement> {
   isLoading?: boolean
-  message?: string
+  message?: React.ReactNode
   side?: Side
   className?: string
 }
