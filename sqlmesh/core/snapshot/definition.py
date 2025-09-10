@@ -1788,7 +1788,19 @@ def display_name(
     """
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
-    view_name = exp.to_table(snapshot_info_like.name)
+
+    return model_display_name(
+        snapshot_info_like.name, environment_naming_info, default_catalog, dialect
+    )
+
+
+def model_display_name(
+    node_name: str,
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str],
+    dialect: DialectType = None,
+) -> str:
+    view_name = exp.to_table(node_name)
 
     catalog = (
         None

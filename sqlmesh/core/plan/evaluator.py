@@ -40,7 +40,7 @@ from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.plan.common import identify_restatement_intervals_across_snapshot_versions
 from sqlmesh.utils import CorrelationId
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
-from sqlmesh.utils.errors import PlanError, SQLMeshError
+from sqlmesh.utils.errors import PlanError, ConflictingPlanError, SQLMeshError
 from sqlmesh.utils.date import now, to_timestamp
 
 logger = logging.getLogger(__name__)
@@ -311,17 +311,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             # Nothing to do
             return
 
-        self.state_sync.remove_intervals(
-            snapshot_intervals=[(s.table_info, s.interval) for s in intervals_to_clear.values()],
-            remove_shared_versions=plan.is_prod,
-        )
-
         # While the restatements were being processed, did any of the snapshots being restated get new versions deployed?
         # If they did, they will not reflect the data that just got restated, so we need to notify the user
+        deployed_during_restatement: t.Dict[
+            str, t.Tuple[SnapshotTableInfo, SnapshotTableInfo]
+        ] = {}  # tuple of (restated_snapshot, current_prod_snapshot)
+
         if deployed_env := self.state_sync.get_environment(plan.environment.name):
             promoted_snapshots_by_name = {s.name: s for s in deployed_env.snapshots}
-
-            deployed_during_restatement: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]] = []
 
             for name in plan.restatements:
                 snapshot = stage.all_snapshots[name]
@@ -329,19 +326,38 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 if (
                     prod_snapshot := promoted_snapshots_by_name.get(name)
                 ) and prod_snapshot.version != version:
-                    deployed_during_restatement.append(
-                        (snapshot.table_info, prod_snapshot.table_info)
+                    deployed_during_restatement[name] = (
+                        snapshot.table_info,
+                        prod_snapshot.table_info,
                     )
 
-            if deployed_during_restatement:
-                self.console.log_models_updated_during_restatement(
-                    deployed_during_restatement,
-                    deployed_env.summary,
-                    plan.environment.naming_info,
-                    self.default_catalog,
-                )
-                # note: the plan will automatically fail at the promotion stage with a ConflictingPlanError because the environment was changed by another plan
-                # so there is no need to explicitly fail the plan here
+        # we need to *not* clear the intervals on the snapshots where new versions were deployed while the restatement was running in order to prevent
+        # subsequent plans from having unexpected intervals to backfill.
+        # we instead list the affected models and abort the plan with an error so the user can decide what to do
+        # (either re-attempt the restatement plan or leave things as they are)
+        filtered_intervals_to_clear = [
+            (s.snapshot, s.interval)
+            for s in intervals_to_clear.values()
+            if s.snapshot.name not in deployed_during_restatement
+        ]
+
+        if filtered_intervals_to_clear:
+            # We still clear intervals in other envs for models that were successfully restated without having new versions promoted during restatement
+            self.state_sync.remove_intervals(
+                snapshot_intervals=filtered_intervals_to_clear,
+                remove_shared_versions=plan.is_prod,
+            )
+
+        if deployed_env and deployed_during_restatement:
+            self.console.log_models_updated_during_restatement(
+                list(deployed_during_restatement.values()),
+                plan.environment.naming_info,
+                self.default_catalog,
+            )
+            raise ConflictingPlanError(
+                f"Another plan ({deployed_env.summary.plan_id}) deployed new versions of {len(deployed_during_restatement)} models in the target environment '{plan.environment.name}' while they were being restated by this plan.\n"
+                "Please re-apply your plan if these new versions should be restated."
+            )
 
     def visit_environment_record_update_stage(
         self, stage: stages.EnvironmentRecordUpdateStage, plan: EvaluatablePlan

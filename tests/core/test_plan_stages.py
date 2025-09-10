@@ -612,9 +612,6 @@ def test_build_plan_stages_restatement_prod_only(
         restatement_stage, state_reader, plan
     )
     assert not restatement_stage.snapshot_intervals_to_clear
-    assert (
-        restatement_stage.deployability_index == DeployabilityIndex.all_deployable()
-    )  # default index
 
     # Verify EnvironmentRecordUpdateStage
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
@@ -774,12 +771,11 @@ def test_build_plan_stages_restatement_prod_identifies_dev_intervals(
     # note: we only clear the intervals from state for "a" in dev, we leave prod alone
     assert restatement_stage.snapshot_intervals_to_clear
     assert len(restatement_stage.snapshot_intervals_to_clear) == 1
-    assert restatement_stage.deployability_index is not None
     snapshot_name, clear_request = list(restatement_stage.snapshot_intervals_to_clear.items())[0]
     assert isinstance(clear_request, SnapshotIntervalClearRequest)
     assert snapshot_name == '"a"'
     assert clear_request.snapshot_id == snapshot_a_dev.snapshot_id
-    assert clear_request.table_info == snapshot_a_dev.table_info
+    assert clear_request.snapshot == snapshot_a_dev.id_and_version
     assert clear_request.interval == (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
 
     # Verify EnvironmentRecordUpdateStage

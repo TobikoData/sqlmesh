@@ -11,7 +11,7 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, TerminalConsole, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.snapshot.definition import DeployabilityIndex
+from sqlmesh.core.snapshot.definition import model_display_name
 from sqlmesh.core.plan.common import (
     SnapshotIntervalClearRequest,
     identify_restatement_intervals_across_snapshot_versions,
@@ -22,9 +22,7 @@ from sqlmesh.core.plan.evaluator import (
     PlanEvaluator,
 )
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.snapshot.definition import (
-    SnapshotInfoMixin,
-)
+from sqlmesh.core.snapshot.definition import SnapshotInfoMixin, SnapshotNameVersionLike
 from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -81,10 +79,6 @@ class ExplainableRestatementStage(stages.RestatementStage):
     snapshot_intervals_to_clear: t.Dict[str, SnapshotIntervalClearRequest]
     """Which snapshots from other environments would have intervals cleared as part of restatement, keyed by name"""
 
-    deployability_index: DeployabilityIndex
-    """Deployability of those snapshots (which arent necessarily present in the current plan so we cant use the
-    plan deployability index), used for outputting physical table names"""
-
     @classmethod
     def from_restatement_stage(
         cls: t.Type[ExplainableRestatementStage],
@@ -99,29 +93,10 @@ class ExplainableRestatementStage(stages.RestatementStage):
             loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
         )
 
-        snapshot_intervals_to_clear = {}
-        deployability_index = DeployabilityIndex.all_deployable()
-
-        if all_restatement_intervals:
-            snapshot_intervals_to_clear = {
-                s_id.name: r for s_id, r in all_restatement_intervals.items()
-            }
-
-            # creating a deployability index over the "snapshot intervals to clear"
-            # allows us to print the physical names of the tables affected in the console output
-            # note that we can't use the DeployabilityIndex on the plan because it only includes
-            # snapshots for the current environment, not across all environments
-            deployability_index = DeployabilityIndex.create(
-                snapshots=state_reader.get_snapshots(
-                    [s.snapshot_id for s in snapshot_intervals_to_clear.values()]
-                ),
-                start=plan.start,
-                start_override_per_model=plan.start_override_per_model,
-            )
-
         return cls(
-            snapshot_intervals_to_clear=snapshot_intervals_to_clear,
-            deployability_index=deployability_index,
+            snapshot_intervals_to_clear={
+                s.snapshot.name: s for s in all_restatement_intervals.values()
+            },
             all_snapshots=stage.all_snapshots,
         )
 
@@ -230,7 +205,7 @@ class RichExplainerConsole(ExplainerConsole):
             snapshot_intervals := stage.snapshot_intervals_to_clear
         ):
             for clear_request in snapshot_intervals.values():
-                display_name = self._display_name(clear_request.table_info)
+                display_name = self._display_name(clear_request.snapshot)
                 interval = clear_request.interval
                 tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
 
@@ -348,14 +323,21 @@ class RichExplainerConsole(ExplainerConsole):
 
     def _display_name(
         self,
-        snapshot: SnapshotInfoMixin,
+        snapshot: t.Union[SnapshotInfoMixin, SnapshotNameVersionLike],
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
     ) -> str:
-        return snapshot.display_name(
-            environment_naming_info or self.environment_naming_info,
-            self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+        naming_kwargs: t.Any = dict(
+            environment_naming_info=environment_naming_info or self.environment_naming_info,
+            default_catalog=self.default_catalog
+            if self.verbosity < Verbosity.VERY_VERBOSE
+            else None,
             dialect=self.dialect,
         )
+
+        if isinstance(snapshot, SnapshotInfoMixin):
+            return snapshot.display_name(**naming_kwargs)
+
+        return model_display_name(node_name=snapshot.name, **naming_kwargs)
 
     def _limit_tree(self, tree: Tree) -> Tree:
         tree_length = len(tree.children)

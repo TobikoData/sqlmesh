@@ -10440,8 +10440,9 @@ def test_restatement_plan_detects_prod_deployment_during_restatement(tmp_path: P
         - During restatement, someone else deploys A(dev) to prod, replacing the model that is currently being restated.
 
     Outcome:
-        - The deployment plan for dev -> prod should succeed in deploying the new version
+        - The deployment plan for dev -> prod should succeed in deploying the new version of A
         - The prod restatement plan should fail with a ConflictingPlanError and warn about the model that got updated while undergoing restatement
+        - The new version of A should have no intervals cleared. The user needs to rerun the restatement if the intervals should still be cleared
     """
     orig_console = get_console()
     console = CaptureTerminalConsole()
@@ -10514,6 +10515,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     ctx.load()
     plan = ctx.plan(environment="dev", auto_apply=True)
     assert len(plan.modified_snapshots) == 1
+    new_model_a_snapshot_id = list(plan.modified_snapshots)[0]
 
     # now, trigger a prod restatement plan in a different thread and block it to simulate a long restatement
     def _run_restatement_plan(tmp_path: Path, config: Config, q: queue.Queue):
@@ -10572,12 +10574,20 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
 
     plan_error = restatement_plan_future.result()
     assert isinstance(plan_error, ConflictingPlanError)
+    assert "please re-apply your plan" in repr(plan_error).lower()
 
     output = " ".join(re.split("\s+", console.captured_output, flags=re.UNICODE))
     assert (
-        f"The following models had new versions deployed in plan '{new_prod.plan_id}' while data was being restated: └── test.model_a"
+        f"The following models had new versions deployed while data was being restated: └── test.model_a"
         in output
     )
-    assert "please re-run this restatement plan" in output
+
+    # check that no intervals have been cleared from the model_a currently in prod
+    model_a = ctx.state_sync.get_snapshots(snapshot_ids=[new_model_a_snapshot_id])[
+        new_model_a_snapshot_id
+    ]
+    assert isinstance(model_a.node, SqlModel)
+    assert model_a.node.render_query_or_raise().sql() == 'SELECT 1 AS "changed"'
+    assert len(model_a.intervals)
 
     set_console(orig_console)

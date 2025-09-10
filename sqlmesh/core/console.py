@@ -555,7 +555,6 @@ class Console(
     def log_models_updated_during_restatement(
         self,
         snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
-        environment: EnvironmentSummary,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -791,7 +790,6 @@ class NoopConsole(Console):
     def log_models_updated_during_restatement(
         self,
         snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
-        environment: EnvironmentSummary,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str],
     ) -> None:
@@ -2254,13 +2252,12 @@ class TerminalConsole(Console):
     def log_models_updated_during_restatement(
         self,
         snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
-        environment: EnvironmentSummary,
         environment_naming_info: EnvironmentNamingInfo,
         default_catalog: t.Optional[str] = None,
     ) -> None:
         if snapshots:
             tree = Tree(
-                f"[yellow]The following models had new versions deployed in plan '{environment.plan_id}' while data was being restated:[/yellow]"
+                f"[yellow]The following models had new versions deployed while data was being restated:[/yellow]"
             )
 
             for restated_snapshot, updated_snapshot in snapshots:
@@ -2274,13 +2271,7 @@ class TerminalConsole(Console):
                 current_branch.add(f"currently active version: '{updated_snapshot.version}'")
 
             self._print(tree)
-
-            self.log_warning(
-                f"\nThe '{environment.name}' environment currently points to [bold]different[/bold] versions of these models, not the versions that just got restated."
-            )
-            self._print(
-                "[yellow]If this is undesirable, please re-run this restatement plan which will apply it to the most recent versions of these models.[/yellow]\n"
-            )
+            self._print("")  # newline spacer
 
     def log_destructive_change(
         self,
