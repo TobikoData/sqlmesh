@@ -2630,6 +2630,10 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
     assert context.default_dialect == "duckdb"
 
     schema = ctx.schema(TEST_SCHEMA)
+    seed_columns_to_types = {
+        "item_id": exp.DataType.build("integer"),
+        "event_date": exp.DataType.build("date"),
+    }
     seed_query = ctx.input_data(
         pd.DataFrame(
             [
@@ -2643,13 +2647,15 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
             ],
             columns=["item_id", "event_date"],
         ),
-        columns_to_types={
-            "item_id": exp.DataType.build("integer"),
-            "event_date": exp.DataType.build("date"),
-        },
+        columns_to_types=seed_columns_to_types,
     )
     context.upsert_model(
-        create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
+        create_sql_model(
+            name=f"{schema}.seed_model",
+            query=seed_query,
+            kind="FULL",
+            columns=seed_columns_to_types,
+        )
     )
 
     table_format = ""
