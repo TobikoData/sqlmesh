@@ -1,4 +1,4 @@
 :root {
   --scrollbar-thumb: var(--color-neutral-300);
-  --scrollbar-track: var(--color-neutral-100);
+  --scrollbar-track: var(--color-transparent);
 }

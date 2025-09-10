@@ -76,7 +76,7 @@ export const Grayscale: Story = {
 export const Link: Story = {
   args: {
     name: 'catalog.schema.model',
-    link: 'https://www.google.com',
+    renderLink: modelName => <a href="https://www.google.com">{modelName}</a>,
     grayscale: false,
     showCopy: true,
   },
@@ -85,7 +85,7 @@ export const Link: Story = {
 export const LinkGrayscale: Story = {
   args: {
     name: 'catalog.schema.model',
-    link: 'https://www.google.com',
+    renderLink: modelName => <a href="https://www.google.com">{modelName}</a>,
     grayscale: true,
     showCopy: true,
   },
