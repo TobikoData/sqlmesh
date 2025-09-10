@@ -2,17 +2,19 @@ import { cn } from '@/utils'
 import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 
-export default function MessageContainer({
-  children,
-  className,
-  wrap = false,
-  isLoading = false,
-}: {
+export interface MessageContainerProps {
   children: React.ReactNode
   className?: string
   wrap?: boolean
   isLoading?: boolean
-}) {
+}
+
+export function MessageContainer({
+  children,
+  className,
+  wrap = false,
+  isLoading = false,
+}: MessageContainerProps) {
   return (
     <HorizontalContainer
       data-component="MessageContainer"

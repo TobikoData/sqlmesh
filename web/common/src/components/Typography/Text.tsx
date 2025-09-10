@@ -1,13 +1,11 @@
 import { cn } from '@/utils'
 
-export function Text({
-  className,
-  children,
-  ...props
-}: {
+export interface TextProps {
   className?: string
   children?: React.ReactNode
-}) {
+}
+
+export function Text({ className, children, ...props }: TextProps) {
   return (
     <div
       data-component="Text"
