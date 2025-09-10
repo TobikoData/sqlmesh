@@ -19,7 +19,7 @@ export interface ModelNameProps extends React.HTMLAttributes<HTMLDivElement> {
   truncateLimitBefore?: number
   truncateLimitAfter?: number
   grayscale?: boolean
-  link?: string
+  renderLink?: (modelName: React.ReactNode) => React.ReactNode
   className?: string
 }
 
@@ -39,7 +39,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
       truncateLimitBefore = 5,
       truncateLimitAfter = 7,
       grayscale = false,
-      link,
+      renderLink,
       className,
       ...props
     },
@@ -94,7 +94,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
             grayscale
               ? 'text-model-name-grayscale-model'
               : 'text-model-name-model',
-            link && '-mt-[4px]',
+            renderLink && '-mt-[4px]',
           )}
         />
       )
@@ -174,9 +174,8 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
         {...props}
       >
         {!hideIcon && renderIcon()}
-        {link ? (
-          <a
-            href={link}
+        {renderLink ? (
+          <span
             className={cn(
               'flex cursor-pointer border-b -mt-0.5 text-inherit',
               grayscale
@@ -184,8 +183,8 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
                 : 'border-model-name-link-underline hover:border-model-name-link-underline-hover',
             )}
           >
-            {renderNameWithTooltip()}
-          </a>
+            {renderLink(renderNameWithTooltip())}
+          </span>
         ) : (
           renderNameWithTooltip()
         )}
