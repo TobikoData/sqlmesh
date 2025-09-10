@@ -15,82 +15,6 @@ from sqlmesh.utils.errors import SQLMeshError
 T = t.TypeVar("T", bound=t.Hashable)
 
 
-def find_path_with_dfs(
-    graph: t.Dict[T, t.Set[T]],
-    start_node: t.Optional[T] = None,
-    target_node: t.Optional[T] = None,
-) -> t.Optional[t.List[T]]:
-    """
-    Find a path in a graph using depth-first search.
-
-    This function can be used for two main purposes:
-    1. Find any cycle in a cyclic subgraph (when target_node is None)
-    2. Find a specific path from start_node to target_node
-
-    Args:
-        graph: Dictionary mapping nodes to their dependencies/neighbors
-        start_node: Optional specific node to start the search from
-        target_node: Optional target node to search for. If None, finds any cycle
-
-    Returns:
-        List of nodes forming the path, or None if no path/cycle found
-    """
-    if not graph:
-        return None
-
-    visited: t.Set[T] = set()
-    rec_stack: t.Set[T] = set()
-    path: t.List[T] = []
-
-    def dfs(node: T) -> t.Optional[t.List[T]]:
-        if target_node is None:
-            # Cycle detection mode: look for any node in recursion stack
-            if node in rec_stack:
-                cycle_start = path.index(node)
-                return path[cycle_start:] + [node]
-        else:
-            # Target search mode: look for specific target
-            if node == target_node:
-                return [node]
-
-        if node in visited:
-            return None
-
-        visited.add(node)
-        rec_stack.add(node)
-        path.append(node)
-
-        # Follow edges to neighbors
-        for neighbor in graph.get(node, set()):
-            if neighbor in graph:  # Only follow edges to nodes in our subgraph
-                result = dfs(neighbor)
-                if result:
-                    if target_node is None:
-                        # Cycle detection: return the cycle as-is
-                        return result
-                    # Target search: prepend current node to path
-                    return [node] + result
-
-        rec_stack.remove(node)
-        path.pop()
-        return None
-
-    # Determine which nodes to try as starting points
-    start_nodes = [start_node] if start_node is not None else list(graph.keys())
-
-    for node in start_nodes:
-        if node not in visited and node in graph:
-            result = dfs(node)
-            if result:
-                if target_node is None:
-                    # Cycle detection: remove duplicate node at end
-                    return result[:-1] if len(result) > 1 and result[0] == result[-1] else result
-                # Target search: return path as-is
-                return result
-
-    return None
-
-
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
         self._dag: t.Dict[T, t.Set[T]] = {}
@@ -184,7 +108,46 @@ class DAG(t.Generic[T]):
         Returns:
             List of nodes forming the cycle path, or None if no cycle found
         """
-        return find_path_with_dfs(nodes_in_cycle)
+        if not nodes_in_cycle:
+            return None
+
+        # Use DFS to find a cycle path
+        visited: t.Set[T] = set()
+        rec_stack: t.Set[T] = set()
+        path: t.List[T] = []
+
+        def dfs(node: T) -> t.Optional[t.List[T]]:
+            if node in rec_stack:
+                # Found a cycle - extract the cycle path
+                cycle_start = path.index(node)
+                return path[cycle_start:] + [node]
+
+            if node in visited:
+                return None
+
+            visited.add(node)
+            rec_stack.add(node)
+            path.append(node)
+
+            # Only follow edges to nodes that are still in the unprocessed set
+            for neighbor in nodes_in_cycle.get(node, set()):
+                if neighbor in nodes_in_cycle:
+                    cycle = dfs(neighbor)
+                    if cycle:
+                        return cycle
+
+            rec_stack.remove(node)
+            path.pop()
+            return None
+
+        # Try starting DFS from each unvisited node
+        for start_node in nodes_in_cycle:
+            if start_node not in visited:
+                cycle = dfs(start_node)
+                if cycle:
+                    return cycle[:-1]  # Remove the duplicate node at the end
+
+        return None
 
     @property
     def roots(self) -> t.Set[T]:
