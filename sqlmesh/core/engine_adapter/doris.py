@@ -122,8 +122,7 @@ class DorisEngineAdapter(
             query = query.where(exp.func("LOWER", exp.column("table_name")).isin(*lowered_names))
 
         result = []
-        rows = self.fetchall(query)
-        for schema_name, table_name, table_type in rows:
+        for schema_name, table_name, table_type in self.fetchall(query):
             try:
                 schema = str(schema_name) if schema_name is not None else str(schema_name)
                 name = str(table_name) if table_name is not None else "unknown"
@@ -175,7 +174,7 @@ class DorisEngineAdapter(
                 view_name,
                 query_or_df,
                 target_columns_to_types,
-                replace=False,  # Already dropped if needed
+                replace=False,
                 materialized=False,
                 materialized_properties=materialized_properties,
                 table_description=table_description,
@@ -270,15 +269,15 @@ class DorisEngineAdapter(
                 table_kind="MATERIALIZED_VIEW",
             )
 
-            create_exp = exp.Create(
-                this=schema,
-                kind="VIEW",
-                replace=False,
-                expression=query,
-                properties=properties_exp,
+            self.execute(
+                exp.Create(
+                    this=schema,
+                    kind="VIEW",
+                    replace=False,
+                    expression=query,
+                    properties=properties_exp,
+                )
             )
-
-            self.execute(create_exp)
 
     def drop_view(
         self,
