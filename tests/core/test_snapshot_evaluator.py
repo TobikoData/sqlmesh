@@ -4913,6 +4913,14 @@ def _create_grants_test_model(grants=None, kind="FULL", grants_target_layer=None
     if grants_target_layer is not None:
         kwargs["grants_target_layer"] = grants_target_layer
 
+    # Add column annotations for non-SEED models to ensure table creation
+    if kind != "SEED":
+        kwargs["columns"] = {
+            "id": "INT",
+            "ds": "DATE",
+            "updated_at": "TIMESTAMP",
+        }
+
     # Add required fields for specific model kinds
     if kind == "INCREMENTAL_BY_TIME_RANGE":
         kwargs["kind"] = {"name": "INCREMENTAL_BY_TIME_RANGE", "time_column": "ds"}
