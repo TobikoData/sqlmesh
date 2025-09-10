@@ -57,7 +57,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
-        "Cycle: d -> e -> d"
+        "Cycle:\nd ->\ne ->\nd"
     )
 
     assert expected_error_message == str(ex.value)
@@ -69,7 +69,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
-        "Cycle: a -> b -> c -> a"
+        "Cycle:\na ->\nb ->\nc ->\na"
     )
 
     assert expected_error_message == str(ex.value)
@@ -81,7 +81,7 @@ def test_sorted_with_cycles():
 
     expected_error_message = (
         "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
-        + "Cycle: b -> d -> b"
+        + "Cycle:\nb ->\nd ->\nb"
     )
 
     assert expected_error_message == str(ex.value)

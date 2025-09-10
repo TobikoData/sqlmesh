@@ -113,11 +113,10 @@ class DAG(t.Generic[T]):
 
         # Use DFS to find a cycle path
         visited: t.Set[T] = set()
-        rec_stack: t.Set[T] = set()
         path: t.List[T] = []
 
         def dfs(node: T) -> t.Optional[t.List[T]]:
-            if node in rec_stack:
+            if node in path:
                 # Found a cycle - extract the cycle path
                 cycle_start = path.index(node)
                 return path[cycle_start:] + [node]
@@ -126,7 +125,6 @@ class DAG(t.Generic[T]):
                 return None
 
             visited.add(node)
-            rec_stack.add(node)
             path.append(node)
 
             # Only follow edges to nodes that are still in the unprocessed set
@@ -136,7 +134,6 @@ class DAG(t.Generic[T]):
                     if cycle:
                         return cycle
 
-            rec_stack.remove(node)
             path.pop()
             return None
 
@@ -180,7 +177,10 @@ class DAG(t.Generic[T]):
 
                     last_processed_msg = ""
                     if cycle_path:
-                        cycle_msg = f"\nCycle: {' -> '.join(str(node) for node in cycle_path)} -> {cycle_path[0]}"
+                        node_output = " ->\n".join(
+                            str(node) for node in (cycle_path + [cycle_path[0]])
+                        )
+                        cycle_msg = f"\nCycle:\n{node_output}"
                     else:
                         # Fallback message in case a cycle can't be found
                         cycle_candidates_msg = (
