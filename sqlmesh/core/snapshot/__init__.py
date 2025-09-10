@@ -11,6 +11,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotId as SnapshotId,
     SnapshotIdBatch as SnapshotIdBatch,
     SnapshotIdLike as SnapshotIdLike,
+    SnapshotIdAndVersionLike as SnapshotIdAndVersionLike,
     SnapshotInfoLike as SnapshotInfoLike,
     SnapshotIntervals as SnapshotIntervals,
     SnapshotNameVersion as SnapshotNameVersion,

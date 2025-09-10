@@ -31,6 +31,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdAndVersion,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersion,
@@ -407,7 +408,7 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         self.interval_state.remove_intervals(snapshot_intervals, remove_shared_versions)

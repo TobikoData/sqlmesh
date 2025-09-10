@@ -7,6 +7,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
@@ -128,7 +129,7 @@ class CachingStateSync(DelegatingStateSync):
 
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         for s, _ in snapshot_intervals:

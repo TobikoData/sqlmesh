@@ -19,6 +19,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
@@ -390,7 +391,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.

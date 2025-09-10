@@ -15,10 +15,10 @@ from sqlmesh.core.state_sync.db.utils import (
 from sqlmesh.core.snapshot import (
     SnapshotIntervals,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotNameVersionLike,
     SnapshotTableCleanupTask,
     SnapshotNameVersion,
-    SnapshotInfoLike,
     Snapshot,
 )
 from sqlmesh.core.snapshot.definition import Interval
@@ -68,11 +68,11 @@ class IntervalState:
 
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         intervals_to_remove: t.Sequence[
-            t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]
+            t.Tuple[t.Union[SnapshotIdAndVersionLike, SnapshotIntervals], Interval]
         ] = snapshot_intervals
         if remove_shared_versions:
             name_version_mapping = {s.name_version: interval for s, interval in snapshot_intervals}
@@ -431,7 +431,9 @@ class IntervalState:
 
 
 def _intervals_to_df(
-    snapshot_intervals: t.Sequence[t.Tuple[t.Union[SnapshotInfoLike, SnapshotIntervals], Interval]],
+    snapshot_intervals: t.Sequence[
+        t.Tuple[t.Union[SnapshotIdAndVersionLike, SnapshotIntervals], Interval]
+    ],
     is_dev: bool,
     is_removed: bool,
 ) -> pd.DataFrame:
@@ -451,7 +453,7 @@ def _intervals_to_df(
 
 
 def _interval_to_df(
-    snapshot: t.Union[SnapshotInfoLike, SnapshotIntervals],
+    snapshot: t.Union[SnapshotIdAndVersionLike, SnapshotIntervals],
     start_ts: int,
     end_ts: int,
     is_dev: bool = False,
