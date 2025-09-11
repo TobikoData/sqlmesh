@@ -747,11 +747,8 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
-                columns_to_types_provided = (
-                    model.kind.is_materialized
-                    and model.columns_to_types_
-                    and columns_to_types_all_known(model.columns_to_types_)
-                )
+                columns_to_types_provided = model.kind.is_materialized and model.annotated
+
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
