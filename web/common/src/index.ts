@@ -56,6 +56,9 @@ export {
 export { Tagline, type TaglineProps } from '@/components/Typography/Tagline'
 export { Text, type TextProps } from '@/components/Typography/Text'
 
+// Hooks
+export { useCopyClipboard } from '@/hooks/useCopyClipboard'
+
 // Utils
 export { cn, truncate } from '@/utils'
 
