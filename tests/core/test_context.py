@@ -3192,7 +3192,6 @@ def test_grants_through_plan_apply(sushi_context, mocker):
         update={
             "grants": {"select": ["analyst", "reporter"]},
             "grants_target_layer": GrantsTargetLayer.ALL,
-            "stamp": "add initial grants",
         }
     )
     sushi_context.upsert_model(model_with_grants)
@@ -3219,5 +3218,6 @@ def test_grants_through_plan_apply(sushi_context, mocker):
     sushi_context.plan("dev", no_prompts=True, auto_apply=True)
 
     assert sync_grants_mock.call_count == 2
+
     expected_grants = {"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]}
     assert all(call[0][1] == expected_grants for call in sync_grants_mock.call_args_list)
