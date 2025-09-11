@@ -128,21 +128,15 @@ def _macro_str_replace(text: str) -> str:
     return f"self.template({text}, locals())"
 
 
-class CaseInsensitiveMapping(dict):
+class CaseInsensitiveMapping(t.Dict[str, t.Any]):
     def __init__(self, data: t.Dict[str, t.Any]) -> None:
         super().__init__(data)
 
-        self._lower = {k.lower(): v for k, v in data.items()}
-
     def __getitem__(self, key: str) -> t.Any:
-        if key in self:
-            return super().__getitem__(key)
-        return self._lower[key.lower()]
+        return super().__getitem__(key.lower())
 
-    def get(self, key: str, default: t.Any = None) -> t.Any:
-        if key in self:
-            return super().get(key, default)
-        return self._lower.get(key.lower(), default)
+    def get(self, key: str, default: t.Any = None, /) -> t.Any:
+        return super().get(key.lower(), default)
 
 
 class MacroDialect(Python):
@@ -335,7 +329,7 @@ class MacroEvaluator:
         # We try to convert all variables into sqlglot expressions because they're going to be converted
         # into strings; in sql we don't convert strings because that would result in adding quotes
         base_mapping = {
-            k: convert_sql(v, self.dialect)
+            k.lower(): convert_sql(v, self.dialect)
             for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
         }
         return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
