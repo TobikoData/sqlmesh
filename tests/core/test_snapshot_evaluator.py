@@ -5005,17 +5005,15 @@ def test_grants_create_model_kind(
 
 
 @pytest.mark.parametrize(
-    "target_layer,apply_on_create,apply_on_promote",
+    "target_layer",
     [
-        (GrantsTargetLayer.PHYSICAL, True, False),
-        (GrantsTargetLayer.VIRTUAL, False, True),
-        (GrantsTargetLayer.ALL, True, True),
+        GrantsTargetLayer.PHYSICAL,
+        GrantsTargetLayer.VIRTUAL,
+        GrantsTargetLayer.ALL,
     ],
 )
 def test_grants_target_layer(
     target_layer: GrantsTargetLayer,
-    apply_on_create: bool,
-    apply_on_promote: bool,
     adapter_mock: Mock,
     mocker: MockerFixture,
     make_snapshot: t.Callable[..., Snapshot],
@@ -5037,19 +5035,17 @@ def test_grants_target_layer(
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.create([snapshot], {})
-    if apply_on_create:
-        sync_grants_mock.assert_called_once()
-        assert sync_grants_mock.call_args[0][1] == grants
+    if target_layer == GrantsTargetLayer.VIRTUAL:
+        assert sync_grants_mock.call_count == 0
     else:
-        sync_grants_mock.assert_not_called()
-
+        assert sync_grants_mock.call_count == 1
+        assert sync_grants_mock.call_args[0][1] == grants
     sync_grants_mock.reset_mock()
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="prod"))
-    if apply_on_promote:
-        sync_grants_mock.assert_called_once()
-        assert sync_grants_mock.call_args[0][1] == grants
+    if target_layer == GrantsTargetLayer.ALL:
+        assert sync_grants_mock.call_count == 2
     else:
-        sync_grants_mock.assert_not_called()
+        assert sync_grants_mock.call_count == 1
 
 
 def test_grants_update(
