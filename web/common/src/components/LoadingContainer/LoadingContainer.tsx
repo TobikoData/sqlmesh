@@ -15,13 +15,16 @@ export const LoadingContainer = React.forwardRef<
   HTMLDivElement,
   LoadingContainerProps
 >(
-  ({
-    isLoading = true,
-    side = 'left',
-    message,
-    children,
-    className,
-  }: LoadingContainerProps) => {
+  (
+    {
+      isLoading = true,
+      side = 'left',
+      message,
+      children,
+      className,
+    }: LoadingContainerProps,
+    ref,
+  ) => {
     function renderLoading() {
       return (
         <>
@@ -33,6 +36,7 @@ export const LoadingContainer = React.forwardRef<
 
     return isLoading ? (
       <div
+        ref={ref}
         data-component="LoadingContainer"
         className={cn('flex items-center justify-center gap-2', className)}
       >
