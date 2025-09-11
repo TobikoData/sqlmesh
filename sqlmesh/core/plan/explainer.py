@@ -11,7 +11,6 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, TerminalConsole, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.snapshot.definition import model_display_name
 from sqlmesh.core.plan.common import (
     SnapshotIntervalClearRequest,
     identify_restatement_intervals_across_snapshot_versions,
@@ -22,7 +21,7 @@ from sqlmesh.core.plan.evaluator import (
     PlanEvaluator,
 )
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.snapshot.definition import SnapshotInfoMixin, SnapshotNameVersionLike
+from sqlmesh.core.snapshot.definition import SnapshotInfoMixin, SnapshotIdAndVersion
 from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -323,21 +322,16 @@ class RichExplainerConsole(ExplainerConsole):
 
     def _display_name(
         self,
-        snapshot: t.Union[SnapshotInfoMixin, SnapshotNameVersionLike],
+        snapshot: t.Union[SnapshotInfoMixin, SnapshotIdAndVersion],
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
     ) -> str:
-        naming_kwargs: t.Any = dict(
+        return snapshot.display_name(
             environment_naming_info=environment_naming_info or self.environment_naming_info,
             default_catalog=self.default_catalog
             if self.verbosity < Verbosity.VERY_VERBOSE
             else None,
             dialect=self.dialect,
         )
-
-        if isinstance(snapshot, SnapshotInfoMixin):
-            return snapshot.display_name(**naming_kwargs)
-
-        return model_display_name(node_name=snapshot.name, **naming_kwargs)
 
     def _limit_tree(self, tree: Tree) -> Tree:
         tree_length = len(tree.children)

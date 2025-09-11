@@ -638,6 +638,16 @@ class SnapshotIdAndVersion(PydanticModel, ModelKindMixin):
     def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.kind_name_
 
+    def display_name(
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        dialect: DialectType = None,
+    ) -> str:
+        return model_display_name(
+            self.name, environment_naming_info, default_catalog, dialect=dialect
+        )
+
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
     """A snapshot represents a node at a certain point in time.
