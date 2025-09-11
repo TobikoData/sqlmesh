@@ -1755,13 +1755,14 @@ class AuditOnlyStrategy(SymbolicStrategy):
             full_render_kwargs["engine_adapter"] = self.adapter
 
         query = model.render_query(**full_render_kwargs)
-        
+
         if query is None:
             raise RuntimeError(f"AUDIT_ONLY model '{model.fqn}' rendered to None query")
 
         # Count the rows returned by the validation query
         count_query = select("COUNT(*)").from_(query.subquery("audit_only"))
-        count, *_ = self.adapter.fetchone(count_query, quote_identifiers=True)
+        result = self.adapter.fetchone(count_query, quote_identifiers=True)
+        count = result[0] if result else 0
 
         if count > 0:
             # Fetch sample failing rows for the error message
