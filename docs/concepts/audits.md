@@ -722,3 +722,104 @@ MODEL (
   )
 );
 ```
+
+### AUDIT_ONLY Models
+
+In addition to traditional audits, SQLMesh provides a special model kind called `AUDIT_ONLY` for validating data relationships across multiple tables without materializing any results.
+
+#### When to Use AUDIT_ONLY Models
+
+Use `AUDIT_ONLY` models when you need to:
+- Validate relationships between multiple tables (e.g., referential integrity)
+- Run complex validation queries that don't belong to a single model
+- Create validation logic that participates in the model DAG with proper dependencies
+- Avoid creating unnecessary materialized tables just for validation
+
+Unlike traditional audits that are scoped to a single model, `AUDIT_ONLY` models can depend on multiple models and validate relationships between them.
+
+#### Creating AUDIT_ONLY Models
+
+AUDIT_ONLY models are defined like regular models but with `kind AUDIT_ONLY`:
+
+```sql
+MODEL (
+    name data_quality.order_validation,
+    kind AUDIT_ONLY (
+        blocking TRUE,         -- Fail pipeline if validation fails (default)
+        max_failing_rows 20   -- Number of sample rows to show in error (default: 10)
+    ),
+    depends_on [orders, customers],
+    cron '@daily',
+    owner 'data_quality_team'
+);
+
+-- Query should return 0 rows for success
+-- Any returned rows indicate validation failures
+SELECT 
+    o.order_id,
+    o.customer_id,
+    'Missing customer record' as issue_type
+FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+WHERE c.customer_id IS NULL;
+```
+
+#### Key Differences from Regular Audits
+
+| Feature | Traditional Audits | AUDIT_ONLY Models |
+|---------|-------------------|-------------------|
+| **Scope** | Single model | Multiple models |
+| **Dependencies** | Implicit (via @this_model) | Explicit (via depends_on) |
+| **Materialization** | N/A | Never materializes |
+| **Location** | `audits/` directory or inline | `models/` directory |
+| **Scheduling** | With parent model | Independent cron schedule |
+| **DAG Participation** | Attached to model | Full model in DAG |
+
+#### Configuration Options
+
+AUDIT_ONLY models support these configuration options:
+
+- **`blocking`** (default: `TRUE`): Whether validation failures should stop the pipeline
+- **`max_failing_rows`** (default: `10`): Maximum number of failing rows to show in error messages
+
+Example with non-blocking configuration:
+
+```sql
+MODEL (
+    name data_quality.revenue_anomalies,
+    kind AUDIT_ONLY (
+        blocking FALSE,        -- Log warnings but don't stop pipeline
+        max_failing_rows 50   -- Show up to 50 failing rows
+    ),
+    depends_on [revenue_by_day]
+);
+
+-- Detect revenue anomalies
+WITH stats AS (
+    SELECT AVG(revenue) as avg_rev, STDDEV(revenue) as stddev_rev
+    FROM revenue_by_day
+)
+SELECT 
+    day,
+    revenue,
+    'Anomaly: >3 standard deviations' as issue
+FROM revenue_by_day
+CROSS JOIN stats
+WHERE revenue > avg_rev + (3 * stddev_rev)
+   OR revenue < 0;
+```
+
+#### How AUDIT_ONLY Models Work
+
+1. **No Table Creation**: The model's query executes but doesn't create or update any tables
+2. **Validation Logic**: The model fails if the query returns any rows (similar to audits)
+3. **Error Reporting**: Shows a sample of failing rows in the error message
+4. **Pipeline Integration**: Participates in plan/apply workflow with proper dependency ordering
+
+#### Best Practices
+
+1. **Use descriptive names**: Name your AUDIT_ONLY models clearly (e.g., `audit_order_integrity`, `validate_user_consistency`)
+2. **Set appropriate blocking**: Use `blocking TRUE` for critical validations, `FALSE` for warnings
+3. **Include context in output**: Return columns that help identify and debug issues
+4. **Group related validations**: Consider combining related checks in a single AUDIT_ONLY model
+5. **Document validation logic**: Use model descriptions to explain what's being validated and why

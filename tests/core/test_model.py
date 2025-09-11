@@ -11623,3 +11623,162 @@ def test_use_original_sql():
     assert model.query_.sql == "SELECT 1 AS one, 2 AS two"
     assert model.pre_statements_[0].sql == "CREATE TABLE pre (a INT)"
     assert model.post_statements_[0].sql == "CREATE TABLE post (b INT)"
+
+
+def test_audit_only_kind():
+    """Test AUDIT_ONLY model kind parsing and properties."""
+    expressions = d.parse(
+        """
+        MODEL (
+            name data_quality.order_validation,
+            kind AUDIT_ONLY,
+            depends_on [orders, customers]
+        );
+        
+        SELECT o.* FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.customer_id
+        WHERE c.customer_id IS NULL
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    # Check model properties
+    assert model.kind.name == ModelKindName.AUDIT_ONLY
+    assert model.kind.is_symbolic is True
+    assert model.kind.blocking is True  # Default should be blocking
+    assert model.kind.is_audit_only is True
+    assert model.kind.is_symbolic is True
+    assert model.kind.is_materialized is False
+
+    # Check dependencies are correctly parsed
+    assert '"orders"' in model.depends_on or "orders" in model.depends_on
+    assert '"customers"' in model.depends_on or "customers" in model.depends_on
+
+
+def test_audit_only_kind_with_blocking_config():
+    """Test AUDIT_ONLY model kind with explicit blocking configuration."""
+    expressions = d.parse(
+        """
+        MODEL (
+            name data_quality.validation,
+            kind AUDIT_ONLY (
+                blocking FALSE
+            )
+        );
+        
+        SELECT 1 WHERE 1=0
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.kind.name == ModelKindName.AUDIT_ONLY
+    assert model.kind.blocking is False
+
+
+def test_audit_only_kind_with_max_failing_rows():
+    """Test AUDIT_ONLY model kind with max_failing_rows configuration."""
+    expressions = d.parse(
+        """
+        MODEL (
+            name data_quality.validation,
+            kind AUDIT_ONLY (
+                max_failing_rows 20
+            )
+        );
+        
+        SELECT 1 WHERE 1=0
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.kind.name == ModelKindName.AUDIT_ONLY
+    assert model.kind.max_failing_rows == 20
+
+
+def test_audit_only_python_model():
+    """Test that AUDIT_ONLY kind works with Python models."""
+
+    @model("test_audit_only_python", kind="audit_only", columns={"issue": "string"})
+    def execute(
+        context: ExecutionContext,
+        start: datetime,
+        end: datetime,
+        execution_time: datetime,
+        **kwargs: t.Any,
+    ) -> pd.DataFrame:
+        # This would normally check data quality and return issues
+        return pd.DataFrame({"issue": []})
+
+    m = model.get_registry()["test_audit_only_python"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert m.kind.name == ModelKindName.AUDIT_ONLY
+    assert m.kind.is_symbolic is True
+    assert m.kind.is_audit_only is True
+
+
+def test_audit_only_full_config():
+    """Test AUDIT_ONLY model kind with all configuration options."""
+    expressions = d.parse(
+        """
+        MODEL (
+            name data_quality.comprehensive_validation,
+            kind AUDIT_ONLY (
+                blocking TRUE,
+                max_failing_rows 50
+            ),
+            depends_on [table_a, table_b, table_c],
+            cron '@daily',
+            owner 'data_quality_team',
+            tags ['validation', 'critical']
+        );
+        
+        SELECT * FROM table_a
+        WHERE NOT EXISTS (SELECT 1 FROM table_b WHERE table_b.id = table_a.id)
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.kind.name == ModelKindName.AUDIT_ONLY
+    assert model.kind.blocking is True
+    assert model.kind.max_failing_rows == 50
+    assert model.cron == "@daily"
+    assert model.owner == "data_quality_team"
+    assert "validation" in model.tags
+    assert "critical" in model.tags
+
+
+def test_audit_only_serialization():
+    """Test that AUDIT_ONLY models serialize and deserialize correctly."""
+    expressions = d.parse(
+        """
+        MODEL (
+            name test.audit_model,
+            kind AUDIT_ONLY (
+                blocking FALSE,
+                max_failing_rows 25
+            )
+        );
+        
+        SELECT 1
+        """
+    )
+
+    original_model = load_sql_based_model(expressions)
+
+    # Serialize to dict
+    model_dict = original_model.dict()
+
+    # Recreate from dict
+    recreated_model = SqlModel.model_validate(model_dict)
+
+    assert recreated_model.kind.name == ModelKindName.AUDIT_ONLY
+    assert recreated_model.kind.blocking is False
+    assert recreated_model.kind.max_failing_rows == 25
+    assert recreated_model.kind.is_audit_only is True

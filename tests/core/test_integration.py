@@ -6711,7 +6711,9 @@ def test_audit_only_metadata_change(init_and_plan_context: t.Callable):
     context.upsert_model(model)
 
     plan = context.plan_builder("prod", skip_tests=True).build()
-    assert len(plan.new_snapshots) == 2
+    assert (
+        len(plan.new_snapshots) == 3
+    )  # waiter_revenue_by_day, top_waiters, and audit_waiter_revenue_anomalies
     assert all(s.change_category.is_metadata for s in plan.new_snapshots)
     assert not plan.missing_intervals
 
@@ -10181,3 +10183,266 @@ test_test_model:
         assert test_result.testsRun == len(test_result.successes)
 
     context.close()
+
+
+def test_audit_only_model_validation_success(init_and_plan_context: t.Callable):
+    """Test that audit-only models execute without materializing tables when validation passes."""
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Create source tables for testing
+    orders_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.orders, kind FULL);
+            SELECT 1 as order_id, 1 as customer_id UNION ALL SELECT 2, 2
+        """)
+    )
+    context.upsert_model(orders_model)
+
+    customers_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.customers, kind FULL);
+            SELECT 1 as customer_id, 'Alice' as name UNION ALL SELECT 2, 'Bob'
+        """)
+    )
+    context.upsert_model(customers_model)
+
+    # Create audit-only model that validates referential integrity (should pass)
+    audit_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.order_validation,
+                kind AUDIT_ONLY,
+                depends_on [memory.test.orders, memory.test.customers]
+            );
+            
+            SELECT o.* FROM memory.test.orders o
+            LEFT JOIN memory.test.customers c ON o.customer_id = c.customer_id
+            WHERE c.customer_id IS NULL
+        """)
+    )
+    context.upsert_model(audit_model)
+
+    # Plan and apply - should succeed since all orders have valid customers
+    plan = context.plan(auto_apply=True, skip_tests=True)
+
+    # Verify that no table was created for the audit-only model
+    # DuckDB doesn't have sqlite_master, check using information_schema
+    tables = context.engine_adapter.fetchdf(
+        "SELECT table_name FROM information_schema.tables WHERE table_name LIKE '%order_validation%'"
+    )
+    assert tables.empty, "Audit-only model should not create a table"
+
+
+def test_audit_only_model_validation_failure(init_and_plan_context: t.Callable):
+    """Test that audit-only models raise AuditError when validation fails."""
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Create source tables with invalid data
+    orders_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.orders, kind FULL);
+            SELECT 1 as order_id, 999 as customer_id  -- Invalid customer
+        """)
+    )
+    context.upsert_model(orders_model)
+
+    customers_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.customers, kind FULL);
+            SELECT 1 as customer_id, 'Alice' as name  -- Only customer 1 exists
+        """)
+    )
+    context.upsert_model(customers_model)
+
+    # Create audit-only model that validates referential integrity (should fail)
+    audit_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.order_validation,
+                kind AUDIT_ONLY (
+                    blocking TRUE,
+                    max_failing_rows 5
+                ),
+                depends_on [memory.test.orders, memory.test.customers]
+            );
+            
+            SELECT o.* FROM memory.test.orders o
+            LEFT JOIN memory.test.customers c ON o.customer_id = c.customer_id
+            WHERE c.customer_id IS NULL
+        """)
+    )
+    context.upsert_model(audit_model)
+
+    # Plan should succeed but apply should fail with PlanError during evaluation
+    from sqlmesh.utils.errors import PlanError
+
+    plan = context.plan(skip_tests=True)
+
+    # Apply the plan - this should trigger audit-only evaluation and fail
+    with pytest.raises(PlanError) as exc_info:
+        context.apply(plan)
+
+    # The PlanError wraps the underlying validation failure
+    assert "Plan application failed" in str(exc_info.value)
+
+
+def test_audit_only_model_non_blocking(init_and_plan_context: t.Callable):
+    """Test that non-blocking audit-only models don't stop pipeline execution."""
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Create source tables with invalid data
+    orders_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.orders, kind FULL);
+            SELECT 1 as order_id, 999 as customer_id
+        """)
+    )
+    context.upsert_model(orders_model)
+
+    customers_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.customers, kind FULL);
+            SELECT 1 as customer_id
+        """)
+    )
+    context.upsert_model(customers_model)
+
+    # Create non-blocking audit-only model
+    audit_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.order_validation,
+                kind AUDIT_ONLY (
+                    blocking FALSE
+                ),
+                depends_on [memory.test.orders, memory.test.customers]
+            );
+            
+            SELECT o.* FROM memory.test.orders o
+            LEFT JOIN memory.test.customers c ON o.customer_id = c.customer_id
+            WHERE c.customer_id IS NULL
+        """)
+    )
+    context.upsert_model(audit_model)
+
+    # Create a downstream model that depends on orders (not the audit)
+    downstream_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.summary,
+                kind FULL,
+                depends_on [memory.test.orders]
+            );
+            
+            SELECT COUNT(*) as total FROM memory.test.orders
+        """)
+    )
+    context.upsert_model(downstream_model)
+
+    # Plan and apply should succeed despite validation failure (non-blocking)
+    plan = context.plan(auto_apply=True, skip_tests=True)
+
+    # Verify downstream model was created
+    # The table will be created with the full qualified name
+    summary_df = context.engine_adapter.fetchdf("SELECT * FROM memory.test.summary")
+    assert len(summary_df) == 1
+    assert summary_df.iloc[0]["total"] == 1
+
+
+def test_audit_only_model_dependencies(init_and_plan_context: t.Callable):
+    """Test that audit-only models properly track dependencies and execution order."""
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Create base tables
+    table_a_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.table_a, kind FULL);
+            SELECT 1 as id, 'A' as type
+        """)
+    )
+    context.upsert_model(table_a_model)
+
+    table_b_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.table_b, kind FULL);
+            SELECT 1 as id, 'B' as type
+        """)
+    )
+    context.upsert_model(table_b_model)
+
+    table_c_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.table_c, kind FULL);
+            SELECT 1 as id, 'C' as type
+        """)
+    )
+    context.upsert_model(table_c_model)
+
+    # Create audit-only model with multiple dependencies
+    audit_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.multi_table_validation,
+                kind AUDIT_ONLY,
+                depends_on [memory.test.table_a, memory.test.table_b, memory.test.table_c]
+            );
+            
+            SELECT a.id FROM memory.test.table_a a
+            INNER JOIN memory.test.table_b b ON a.id = b.id
+            INNER JOIN memory.test.table_c c ON a.id = c.id
+            WHERE a.type != 'A' OR b.type != 'B' OR c.type != 'C'
+        """)
+    )
+    context.upsert_model(audit_model)
+
+    # Plan and apply should succeed since validation passes
+    plan = context.plan(auto_apply=True, skip_tests=True)
+
+    # Verify dependencies are tracked
+    model = context.get_model("memory.test.multi_table_validation")
+    assert (
+        '"memory"."test"."table_a"' in model.depends_on or "memory.test.table_a" in model.depends_on
+    )
+    assert (
+        '"memory"."test"."table_b"' in model.depends_on or "memory.test.table_b" in model.depends_on
+    )
+    assert (
+        '"memory"."test"."table_c"' in model.depends_on or "memory.test.table_c" in model.depends_on
+    )
+
+
+def test_audit_only_model_with_cron_schedule(init_and_plan_context: t.Callable):
+    """Test that audit-only models can be scheduled with cron."""
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Create source table with recent date (no validation errors)
+    events_model = load_sql_based_model(
+        d.parse("""
+            MODEL (name memory.test.events, kind FULL);
+            SELECT 1 as event_id, CURRENT_DATE as event_date
+        """)
+    )
+    context.upsert_model(events_model)
+
+    # Create scheduled audit-only model
+    audit_model = load_sql_based_model(
+        d.parse("""
+            MODEL (
+                name memory.test.daily_validation,
+                kind AUDIT_ONLY,
+                cron '@daily',
+                depends_on [memory.test.events]
+            );
+            
+            SELECT * FROM memory.test.events
+            WHERE CAST(event_date AS DATE) < CURRENT_DATE - INTERVAL '30 days'
+        """)
+    )
+    context.upsert_model(audit_model)
+
+    # Plan and apply should succeed
+    plan = context.plan(auto_apply=True, skip_tests=True)
+
+    # Verify cron is set
+    model = context.get_model("memory.test.daily_validation")
+    assert model.cron == "@daily"

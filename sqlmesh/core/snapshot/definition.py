@@ -960,7 +960,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def evaluatable(self) -> bool:
         """Whether or not a snapshot should be evaluated and have intervals."""
-        return bool(not self.is_symbolic or self.model.audits)
+        return bool(not self.is_symbolic or self.model.audits or self.is_audit_only)
 
     def missing_intervals(
         self,
