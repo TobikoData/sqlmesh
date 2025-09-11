@@ -100,8 +100,11 @@ class ModelTest(unittest.TestCase):
         self._validate_and_normalize_test()
 
         if self.engine_adapter.default_catalog:
-            self._fixture_catalog: t.Optional[exp.Identifier] = exp.parse_identifier(
-                self.engine_adapter.default_catalog, dialect=self._test_adapter_dialect
+            self._fixture_catalog: t.Optional[exp.Identifier] = normalize_identifiers(
+                exp.parse_identifier(
+                    self.engine_adapter.default_catalog, dialect=self._test_adapter_dialect
+                ),
+                dialect=self._test_adapter_dialect,
             )
         else:
             self._fixture_catalog = None
