@@ -1112,7 +1112,9 @@ def test_macro_with_spaces():
 
     for sql, expected in (
         ("@x", '"a b"'),
+        ("@X", '"a b"'),
         ("@{x}", '"a b"'),
+        ("@{X}", '"a b"'),
         ("a_@x", '"a_a b"'),
         ("a.@x", 'a."a b"'),
         ("@y", "'a b'"),
@@ -1121,6 +1123,7 @@ def test_macro_with_spaces():
         ("a.@{y}", 'a."a b"'),
         ("@z", 'a."b c"'),
         ("d.@z", 'd.a."b c"'),
+        ("@'test_@{X}_suffix'", "'test_a b_suffix'"),
     ):
         assert evaluator.transform(parse_one(sql)).sql() == expected
 
