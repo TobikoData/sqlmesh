@@ -80,7 +80,7 @@ jobs:
       - checkout
       - run:
           name: Install OpenJDK
-          command: sudo apt-get update && sudo apt-get install default-jdk
+          command: sudo apt-get update --fix-missing && sudo apt-get install default-jdk
       - run:
           name: Install ODBC
           command: sudo apt-get install unixodbc-dev
