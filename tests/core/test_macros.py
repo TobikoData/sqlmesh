@@ -293,6 +293,16 @@ def test_ast_correctness(macro_evaluator):
             {"y": "c"},
         ),
         (
+            """select @each(['a'], x -> @X)""",
+            "SELECT 'a'",
+            {},
+        ),
+        (
+            """select @each(['a'], X -> @x)""",
+            "SELECT 'a'",
+            {},
+        ),
+        (
             '"is_@{x}"',
             '"is_b"',
             {"x": "b"},
