@@ -174,6 +174,7 @@ def _parse_id_var(
 
     while (
         identifier
+        and not identifier.args.get("quoted")
         and self._is_connected()
         and (
             self._match_texts(("{", SQLMESH_MACRO_PREFIX))
