@@ -4,6 +4,7 @@ import abc
 import typing as t
 import logging
 from dataclasses import dataclass
+from collections import defaultdict
 
 from rich.console import Console as RichConsole
 from rich.tree import Tree
@@ -21,7 +22,11 @@ from sqlmesh.core.plan.evaluator import (
     PlanEvaluator,
 )
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.snapshot.definition import SnapshotInfoMixin, SnapshotIdAndVersion
+from sqlmesh.core.snapshot.definition import (
+    SnapshotInfoMixin,
+    SnapshotIdAndVersion,
+    model_display_name,
+)
 from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -75,8 +80,8 @@ class ExplainableRestatementStage(stages.RestatementStage):
     of what might happen when they ask for the plan to be explained
     """
 
-    snapshot_intervals_to_clear: t.Dict[str, SnapshotIntervalClearRequest]
-    """Which snapshots from other environments would have intervals cleared as part of restatement, keyed by name"""
+    snapshot_intervals_to_clear: t.Dict[str, t.List[SnapshotIntervalClearRequest]]
+    """Which snapshots from other environments would have intervals cleared as part of restatement, grouped by name."""
 
     @classmethod
     def from_restatement_stage(
@@ -92,10 +97,13 @@ class ExplainableRestatementStage(stages.RestatementStage):
             loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
         )
 
+        # Group the interval clear requests by snapshot name to make them easier to write to the console
+        snapshot_intervals_to_clear = defaultdict(list)
+        for clear_request in all_restatement_intervals.values():
+            snapshot_intervals_to_clear[clear_request.snapshot.name].append(clear_request)
+
         return cls(
-            snapshot_intervals_to_clear={
-                s.snapshot.name: s for s in all_restatement_intervals.values()
-            },
+            snapshot_intervals_to_clear=snapshot_intervals_to_clear,
             all_snapshots=stage.all_snapshots,
         )
 
@@ -198,15 +206,30 @@ class RichExplainerConsole(ExplainerConsole):
     def visit_restatement_stage(
         self, stage: t.Union[ExplainableRestatementStage, stages.RestatementStage]
     ) -> Tree:
-        tree = Tree("[bold]Invalidate data intervals as part of restatement[/bold]")
+        tree = Tree(
+            "[bold]Invalidate data intervals in state for development environments to prevent old data from being promoted[/bold]\n"
+            "This only affects state and will not clear physical data from the tables until the next plan for each environment"
+        )
 
         if isinstance(stage, ExplainableRestatementStage) and (
             snapshot_intervals := stage.snapshot_intervals_to_clear
         ):
-            for clear_request in snapshot_intervals.values():
-                display_name = self._display_name(clear_request.snapshot)
-                interval = clear_request.interval
-                tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
+            for name, clear_requests in snapshot_intervals.items():
+                display_name = model_display_name(
+                    name, self.environment_naming_info, self.default_catalog, self.dialect
+                )
+                interval_start = min(cr.interval[0] for cr in clear_requests)
+                interval_end = max(cr.interval[1] for cr in clear_requests)
+
+                if not interval_start or not interval_end:
+                    continue
+
+                node = tree.add(f"{display_name} [{to_ts(interval_start)} - {to_ts(interval_end)}]")
+
+                all_environment_names = sorted(
+                    set(env_name for cr in clear_requests for env_name in cr.environment_names)
+                )
+                node.add("in environments: " + ", ".join(all_environment_names))
 
         return tree
 

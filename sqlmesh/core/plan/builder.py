@@ -338,6 +338,7 @@ class PlanBuilder:
             directly_modified=directly_modified,
             indirectly_modified=indirectly_modified,
             deployability_index=deployability_index,
+            selected_models_to_restate=self._restate_models,
             restatements=restatements,
             start_override_per_model=self._start_override_per_model,
             end_override_per_model=end_override_per_model,
