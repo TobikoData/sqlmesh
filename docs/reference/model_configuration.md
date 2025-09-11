@@ -306,6 +306,17 @@ Configuration options for [`SCD_TYPE_2_BY_COLUMN` models](../concepts/models/mod
 
 Python model kind `name` enum value: [ModelKindName.SCD_TYPE_2_BY_COLUMN](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
 
+### `AUDIT_ONLY` models
+
+Configuration options for [`AUDIT_ONLY` models](../concepts/models/model_kinds.md#audit_only) (in addition to [general model properties](#general-model-properties)).
+
+| Option              | Description                                                                                                                                                       | Type | Required |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
+| `blocking`          | If set to true, the pipeline will fail when the validation query returns any rows. If false, only warnings are logged. (Default: `True`)                        | bool |    N     |
+| `max_failing_rows`  | Maximum number of failing rows to display in error messages when a validation fails. (Default: `10`)                                                             | int  |    N     |
+
+Python model kind `name` enum value: [ModelKindName.AUDIT_ONLY](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ModelKindName)
+
 ### `SEED` models
 
 Configuration options for [`SEED` models](../concepts/models/model_kinds.md#seed). `SEED` models do not support all the general properties supported by other models; they only support the properties listed in this table.

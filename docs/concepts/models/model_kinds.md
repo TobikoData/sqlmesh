@@ -860,6 +860,115 @@ SELECT DISTINCT
 FROM db.employees;
 ```
 
+## AUDIT_ONLY
+
+The `AUDIT_ONLY` model kind is designed for data validation across multiple tables without materializing any results. These models execute validation queries and fail if any rows are returned, similar to [audits](../audits.md#audit_only-models) but with the ability to participate as full models in the DAG.
+
+### Purpose
+
+`AUDIT_ONLY` models are ideal for:
+- Validating referential integrity between multiple tables
+- Detecting data quality issues across different models
+- Running complex validation queries that don't belong to a single model
+- Avoiding unnecessary table materialization for validation purposes
+
+### Configuration
+
+The `AUDIT_ONLY` kind supports two configuration parameters:
+
+- **`blocking`** (default: `TRUE`): Determines whether validation failures stop the pipeline
+- **`max_failing_rows`** (default: `10`): Maximum number of failing rows to display in error messages
+
+### Example: Referential Integrity Check
+
+This example validates that all orders reference existing customers:
+
+```sql linenums="1"
+MODEL (
+  name data_quality.order_integrity,
+  kind AUDIT_ONLY (
+    blocking TRUE,
+    max_failing_rows 20
+  ),
+  depends_on [orders, customers],
+  cron '@daily',
+  owner 'data_quality_team'
+);
+
+-- Query should return 0 rows for validation to pass
+SELECT 
+  o.order_id,
+  o.customer_id,
+  o.order_date,
+  'Missing customer record' as issue_type
+FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+WHERE c.customer_id IS NULL;
+```
+
+### Example: Non-Blocking Anomaly Detection
+
+This example detects revenue anomalies but doesn't stop the pipeline:
+
+```sql linenums="1"
+MODEL (
+  name data_quality.revenue_anomalies,
+  kind AUDIT_ONLY (
+    blocking FALSE,        -- Log warnings but continue
+    max_failing_rows 100
+  ),
+  depends_on [daily_revenue],
+  cron '@hourly'
+);
+
+WITH stats AS (
+  SELECT 
+    AVG(revenue) as avg_revenue,
+    STDDEV(revenue) as stddev_revenue
+  FROM daily_revenue
+  WHERE revenue > 0
+)
+SELECT 
+  date,
+  revenue,
+  CASE 
+    WHEN revenue < 0 THEN 'Negative revenue'
+    WHEN revenue > avg_revenue + (5 * stddev_revenue) THEN 'Extreme outlier'
+  END as anomaly_type
+FROM daily_revenue
+CROSS JOIN stats
+WHERE revenue < 0 
+   OR revenue > avg_revenue + (5 * stddev_revenue);
+```
+
+### Behavior
+
+1. **No Materialization**: AUDIT_ONLY models never create or update tables
+2. **Validation Logic**: The model succeeds if the query returns 0 rows, fails otherwise
+3. **Error Reporting**: When validation fails, shows a sample of failing rows (up to `max_failing_rows`)
+4. **DAG Integration**: Fully participates in the model DAG with proper dependency tracking
+5. **Scheduling**: Can be scheduled independently using cron expressions
+
+### Best Practices
+
+- **Naming Convention**: Use descriptive names like `audit_*` or `validate_*` to clearly indicate the model's purpose
+- **Include Context**: Add columns that describe what validation failed for easier debugging
+- **Optimize Performance**: These queries run during every plan/apply, so ensure they're efficient
+- **Set Appropriate Blocking**: Use `blocking TRUE` for critical validations, `FALSE` for monitoring
+- **Document Purpose**: Use the `description` field to explain what the validation checks
+
+### Comparison with Traditional Audits
+
+While both AUDIT_ONLY models and traditional audits validate data, they serve different purposes:
+
+| Aspect | Traditional Audits | AUDIT_ONLY Models |
+|--------|-------------------|-------------------|
+| **Scope** | Single model | Multiple models |
+| **Location** | `audits/` directory or inline | `models/` directory |
+| **Dependencies** | Implicit via parent model | Explicit via `depends_on` |
+| **Scheduling** | With parent model | Independent cron |
+| **Use Case** | Validate model output | Validate cross-model relationships |
+
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 

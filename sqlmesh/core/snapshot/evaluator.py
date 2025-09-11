@@ -1487,6 +1487,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
     klass: t.Type
     if snapshot.is_embedded:
         klass = EmbeddedStrategy
+    elif snapshot.is_audit_only:
+        klass = AuditOnlyStrategy
     elif snapshot.is_symbolic or snapshot.is_audit:
         klass = SymbolicStrategy
     elif snapshot.is_full:
@@ -1704,6 +1706,92 @@ class SymbolicStrategy(EvaluationStrategy):
 
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         pass
+
+
+class AuditOnlyStrategy(SymbolicStrategy):
+    def insert(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        """Override insert to perform validation instead of data insertion."""
+        self._validate(model, render_kwargs, **kwargs)
+
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        """Override append to perform validation instead of data insertion."""
+        self._validate(model, render_kwargs, **kwargs)
+
+    def _validate(
+        self,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        """Execute audit-only model and raise AuditError if validation fails."""
+        from sqlmesh.utils.errors import AuditError
+
+        if not model:
+            raise SQLMeshError(f"No model found for validation")
+
+        # Ensure we have the necessary keys in render_kwargs
+        full_render_kwargs = {
+            **render_kwargs,
+            **kwargs,
+        }
+
+        # Add engine_adapter if not present
+        if "engine_adapter" not in full_render_kwargs:
+            full_render_kwargs["engine_adapter"] = self.adapter
+
+        query = model.render_query(**full_render_kwargs)
+        
+        if query is None:
+            raise RuntimeError(f"AUDIT_ONLY model '{model.fqn}' rendered to None query")
+
+        # Count the rows returned by the validation query
+        count_query = select("COUNT(*)").from_(query.subquery("audit_only"))
+        count, *_ = self.adapter.fetchone(count_query, quote_identifiers=True)
+
+        if count > 0:
+            # Fetch sample failing rows for the error message
+            max_rows = (
+                model.kind.max_failing_rows if hasattr(model.kind, "max_failing_rows") else 10
+            )
+            sample_query = select("*").from_(query.subquery("audit_only")).limit(max_rows)
+            failing_rows = self.adapter.fetchdf(sample_query, quote_identifiers=True)
+
+            # Check if this is a blocking audit
+            is_blocking = model.kind.blocking if hasattr(model.kind, "blocking") else True
+
+            error_msg = (
+                f"AUDIT_ONLY model '{model.fqn}' failed with {count} validation error(s).\n"
+                f"Sample failing rows:\n{failing_rows.to_string() if not failing_rows.empty else 'No data'}"
+            )
+
+            if is_blocking:
+                # Create a proper AuditError with required parameters
+                raise AuditError(
+                    audit_name=f"{model.fqn}_validation",
+                    audit_args={},
+                    count=int(count),
+                    query=query,
+                    model=model,
+                    adapter_dialect=self.adapter.dialect,
+                )
+            else:
+                # Non-blocking: just log the error
+                logger.warning(error_msg)
 
 
 class EmbeddedStrategy(SymbolicStrategy):

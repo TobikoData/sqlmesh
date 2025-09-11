@@ -120,9 +120,17 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.MANAGED
 
     @property
+    def is_audit_only(self) -> bool:
+        return self.model_kind_name == ModelKindName.AUDIT_ONLY
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
-        return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
+        return self.model_kind_name in (
+            ModelKindName.EMBEDDED,
+            ModelKindName.EXTERNAL,
+            ModelKindName.AUDIT_ONLY,
+        )
 
     @property
     def is_materialized(self) -> bool:
@@ -170,6 +178,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EXTERNAL = "EXTERNAL"
     CUSTOM = "CUSTOM"
     MANAGED = "MANAGED"
+    AUDIT_ONLY = "AUDIT_ONLY"
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -977,6 +986,32 @@ class CustomKind(_ModelKind):
         )
 
 
+class AuditOnlyKind(_ModelKind):
+    name: t.Literal[ModelKindName.AUDIT_ONLY] = ModelKindName.AUDIT_ONLY
+    blocking: SQLGlotBool = True
+    max_failing_rows: SQLGlotPositiveInt = 10
+
+    @property
+    def is_symbolic(self) -> bool:
+        """Audit-only models don't materialize tables."""
+        return True
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "blocking": self.blocking,
+                        "max_failing_rows": self.max_failing_rows,
+                    }
+                ),
+            ],
+        )
+
+
 ModelKind = t.Annotated[
     t.Union[
         EmbeddedKind,
@@ -992,6 +1027,7 @@ ModelKind = t.Annotated[
         SCDType2ByColumnKind,
         CustomKind,
         ManagedKind,
+        AuditOnlyKind,
     ],
     Field(discriminator="name"),
 ]
@@ -1011,6 +1047,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
     ModelKindName.CUSTOM: CustomKind,
     ModelKindName.MANAGED: ManagedKind,
+    ModelKindName.AUDIT_ONLY: AuditOnlyKind,
 }
 
 
