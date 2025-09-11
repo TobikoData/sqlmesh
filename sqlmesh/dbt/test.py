@@ -108,7 +108,15 @@ class TestConfig(GeneralConfig):
 
     @property
     def is_standalone(self) -> bool:
-        return not self.model_name
+        # A test is standalone if:
+        # 1. It has no model_name (already standalone), OR
+        # 2. It references other models besides its own model
+        if not self.model_name:
+            return True
+
+        # Check if test has references to other models
+        other_refs = {ref for ref in self.dependencies.refs if ref != self.model_name}
+        return bool(other_refs)
 
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
