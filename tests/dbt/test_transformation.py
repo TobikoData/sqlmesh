@@ -1683,6 +1683,18 @@ def test_partition_by(sushi_test_project: Project):
     context.target = DuckDbConfig(name="target", schema="foo")
     assert model_config.to_sqlmesh(context).partitioned_by == []
 
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized=Materialization.VIEW.value,
+        unique_key="ds",
+        partition_by={"field": "ds", "granularity": "month"},
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_partition_by_none(sushi_test_project: Project):
