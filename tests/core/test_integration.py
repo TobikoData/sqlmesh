@@ -112,7 +112,7 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
 
     plan_builder = context.plan_builder("dev", skip_tests=True, forward_only=True)
     plan = plan_builder.build()
-    assert len(plan.new_snapshots) == 2
+    assert len(plan.new_snapshots) == 3  # waiter_revenue_by_day, top_waiters, and audit_waiter_revenue_anomalies
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
