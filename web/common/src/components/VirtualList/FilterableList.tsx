@@ -5,8 +5,18 @@ import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 import { Badge } from '../Badge/Badge'
 import { cn } from '@/utils'
-import MessageContainer from '../MessageContainer/MessageContainer'
+import { MessageContainer } from '../MessageContainer/MessageContainer'
 import { Input } from '../Input/Input'
+
+export interface FilterableListProps<TItem> {
+  items: TItem[]
+  filterOptions?: IFuseOptions<TItem>
+  disabled?: boolean
+  placeholder?: string
+  autoFocus?: boolean
+  className?: string
+  children: (options: TItem[], resetSearch: () => void) => React.ReactNode
+}
 
 export function FilterableList<TItem>({
   items,
@@ -16,15 +26,7 @@ export function FilterableList<TItem>({
   filterOptions,
   className,
   children,
-}: {
-  items: TItem[]
-  filterOptions?: IFuseOptions<TItem>
-  disabled?: boolean
-  placeholder?: string
-  autoFocus?: boolean
-  className?: string
-  children: (options: TItem[], resetSearch: () => void) => React.ReactNode
-}) {
+}: FilterableListProps<TItem>) {
   const [search, setSearch] = React.useState('')
 
   const fuse = new Fuse(items, filterOptions)

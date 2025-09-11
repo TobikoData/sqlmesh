@@ -106,7 +106,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
       return (
         <span
           data-testid="model-name"
-          className="overflow-hidden"
+          className="flex overflow-hidden"
         >
           {catalog && (
             <>
@@ -138,6 +138,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
           )}
           <span
             className={cn(
+              'truncate',
               grayscale
                 ? 'text-model-name-grayscale-model'
                 : 'text-model-name-model',

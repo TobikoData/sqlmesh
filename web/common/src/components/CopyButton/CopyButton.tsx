@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
+import React from 'react'
 
 import { Button, type ButtonProps } from '@/components/Button/Button'
-
-type TimerID = ReturnType<typeof setTimeout>
+import { useCopyClipboard } from '@/hooks/useCopyClipboard'
 
 export interface CopyButtonProps extends Omit<ButtonProps, 'children'> {
   text: string
@@ -25,22 +24,7 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
     },
     ref,
   ) => {
-    const [copied, setCopied] = useState<TimerID | null>(null)
-
-    const copy = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (copied) {
-        clearTimeout(copied)
-      }
-
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(setTimeout(() => setCopied(null), delay))
-      })
-
-      onClick?.(e)
-    }
+    const [copyToClipboard, isCopied] = useCopyClipboard(delay)
 
     return (
       <Button
@@ -49,11 +33,14 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
         title={title}
         size={size}
         variant={variant}
-        onClick={copy}
-        disabled={disabled || !!copied}
+        onClick={e => {
+          e.stopPropagation()
+          copyToClipboard(text)
+        }}
+        disabled={disabled || !!isCopied}
         {...props}
       >
-        {children(copied != null)}
+        {children(isCopied != null)}
       </Button>
     )
   },

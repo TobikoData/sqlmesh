@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import MessageContainer from './MessageContainer'
+import { MessageContainer } from './MessageContainer'
 
 const meta = {
   title: 'Components/Containers/MessageContainer',
