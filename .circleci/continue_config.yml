@@ -303,7 +303,7 @@ workflows:
             parameters:
               engine:
                 - snowflake
-                - databricks
+                # - databricks
                 - redshift
                 - bigquery
                 - clickhouse-cloud

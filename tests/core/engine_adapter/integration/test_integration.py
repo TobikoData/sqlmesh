@@ -403,10 +403,10 @@ def test_materialized_view(ctx_query_and_df: TestContext):
     ctx = ctx_query_and_df
     if not ctx.engine_adapter.SUPPORTS_MATERIALIZED_VIEWS:
         pytest.skip(f"Engine adapter {ctx.engine_adapter} doesn't support materialized views")
-    if ctx.engine_adapter.dialect == "databricks":
-        pytest.skip(
-            "Databricks requires DBSQL Serverless or Pro warehouse to test materialized views which we do not have setup"
-        )
+    # if ctx.engine_adapter.dialect == "databricks":
+    #     pytest.skip(
+    #         "Databricks requires DBSQL Serverless or Pro warehouse to test materialized views which we do not have setup"
+    #     )
     if ctx.engine_adapter.dialect == "snowflake":
         pytest.skip("Snowflake requires enterprise edition which we do not have setup")
     input_data = pd.DataFrame(
