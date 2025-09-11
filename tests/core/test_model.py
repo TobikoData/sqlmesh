@@ -2934,10 +2934,15 @@ def test_python_model_decorator_col_descriptions() -> None:
     def b_model(context):
         pass
 
-    with pytest.raises(ConfigError, match="a description is provided for column 'COL'"):
+    with patch.object(get_console(), "log_warning") as mock_logger:
         py_model = model.get_registry()["col_descriptions_quoted"].model(
             module_path=Path("."),
             path=Path("."),
+        )
+        assert '"COL"' not in py_model.column_descriptions
+        assert (
+            mock_logger.mock_calls[0].args[0]
+            == "In model 'col_descriptions_quoted', a description is provided for column 'COL' but it is not a column in the model."
         )
 
 
