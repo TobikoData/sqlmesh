@@ -233,7 +233,7 @@ class MacroEvaluator:
                         for var_name, var_value in value.items()
                     }
 
-                self.locals[k.lower()] = value
+                self.locals[k] = value
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
@@ -342,7 +342,9 @@ class MacroEvaluator:
                     args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                 )
             else:
+                # Make variables defined through `@DEF` case-insensitive
                 self.locals[node.name.lower()] = self.transform(node.expression)
+
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
@@ -645,7 +647,7 @@ def _norm_var_arg_lambda(
     ) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, (exp.Identifier, exp.Var)):
             if not isinstance(node.parent, exp.Column):
-                name = node.name
+                name = node.name.lower()
                 if name in args:
                     return args[name].copy()
                 if name in evaluator.locals:
@@ -678,7 +680,7 @@ def _norm_var_arg_lambda(
         return expressions, lambda args: func.this.transform(
             substitute,
             {
-                expression.name: arg
+                expression.name.lower(): arg
                 for expression, arg in zip(
                     func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
                 )
