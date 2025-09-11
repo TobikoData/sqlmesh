@@ -242,6 +242,7 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
     assert renderer("{{ adapter.dispatch('current_engine', 'customers')() }}") == "duckdb"
     assert renderer("{{ adapter.dispatch('current_timestamp')() }}") == "now()"
     assert renderer("{{ adapter.dispatch('current_timestamp', 'dbt')() }}") == "now()"
+    assert renderer("{{ adapter.dispatch('select_distinct', 'customers')() }}") == "distinct"
 
     # test with keyword arguments
     assert (

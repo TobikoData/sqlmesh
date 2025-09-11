@@ -139,10 +139,11 @@ class BaseAdapter(abc.ABC):
             return name_score, package_score
 
         jinja_env = self.jinja_macros.build_environment(**self.jinja_globals).globals
-        packages_to_check: t.List[t.Optional[str]] = [
+        packages_to_check: t.Set[t.Optional[str]] = {
             macro_namespace,
+            # self.jinja_macros.root_package_name,
             *(k for k in jinja_env if k.startswith("dbt")),
-        ]
+        }
         candidates = {}
         for macro_package in packages_to_check:
             macros = jinja_env.get(macro_package, {}) if macro_package else jinja_env
