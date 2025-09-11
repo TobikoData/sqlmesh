@@ -53,7 +53,9 @@ def create_empty_project(tmp_path: Path) -> t.Callable[[], t.Tuple[Path, Path]]:
         dbt_data_file = dbt_data_dir / "local.db"
         dbt_profile_config = {
             "test": {
-                "outputs": {"duckdb": {"type": "duckdb", "path": str(dbt_data_file)}},
+                "outputs": {
+                    "duckdb": {"type": "duckdb", "path": str(dbt_data_file), "database": "local"}
+                },
                 "target": "duckdb",
             }
         }
