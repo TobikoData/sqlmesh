@@ -8,7 +8,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from tests.core.engine_adapter import to_sql_calls
 
@@ -219,3 +219,73 @@ def test_create_table_clustered_by(mocker: MockFixture, make_mocked_engine_adapt
     assert sql_calls == [
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) CLUSTER BY (`cola`)",
     ]
+
+
+def test_get_data_objects_distinguishes_view_types(mocker):
+    adapter = DatabricksEngineAdapter(lambda: None, default_catalog="test_catalog")
+
+    # (Databricks requires DBSQL Serverless or Pro warehouse to test materialized views which we do not have setup)
+    # so this mocks the fetchdf call to simulate the response we would expect from the correct SQL query
+    mock_df = pd.DataFrame(
+        [
+            {
+                "name": "regular_view",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "view",
+            },
+            {
+                "name": "mat_view",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "materialized_view",
+            },
+            {
+                "name": "regular_table",
+                "schema": "test_schema",
+                "catalog": "test_catalog",
+                "type": "table",
+            },
+        ]
+    )
+
+    mocker.patch.object(adapter, "fetchdf", return_value=mock_df)
+
+    data_objects = adapter._get_data_objects(
+        schema_name=exp.Table(db="test_schema", catalog="test_catalog")
+    )
+
+    adapter.fetchdf.assert_called_once()
+    call_args = adapter.fetchdf.call_args
+    sql_query_exp = call_args[0][0]
+
+    # _get_data_objects query should distinguish between VIEW and MATERIALIZED_VIEW types
+    sql_query = sql_query_exp.sql(dialect="databricks")
+    assert (
+        "CASE table_type WHEN 'VIEW' THEN 'view' WHEN 'MATERIALIZED_VIEW' THEN 'materialized_view' ELSE 'table' END AS type"
+        in sql_query
+    )
+
+    objects_by_name = {obj.name: obj for obj in data_objects}
+    assert objects_by_name["regular_view"].type == DataObjectType.VIEW
+    assert objects_by_name["mat_view"].type == DataObjectType.MATERIALIZED_VIEW
+    assert objects_by_name["regular_table"].type == DataObjectType.TABLE
+
+
+def test_drop_data_object_materialized_view_calls_correct_drop(mocker: MockFixture):
+    adapter = DatabricksEngineAdapter(lambda: None, default_catalog="test_catalog")
+
+    mv_data_object = DataObject(
+        catalog="test_catalog",
+        schema="test_schema",
+        name="test_mv",
+        type=DataObjectType.MATERIALIZED_VIEW,
+    )
+
+    drop_view_mock = mocker.patch.object(adapter, "drop_view")
+    adapter.drop_data_object(mv_data_object)
+
+    # Ensure drop_view is called with materialized=True
+    drop_view_mock.assert_called_once_with(
+        mv_data_object.to_table(), ignore_if_not_exists=True, materialized=True
+    )

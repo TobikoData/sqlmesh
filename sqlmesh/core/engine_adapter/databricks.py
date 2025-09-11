@@ -266,7 +266,9 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 exp.column("table_catalog").as_("catalog"),
                 exp.case(exp.column("table_type"))
                 .when(exp.Literal.string("VIEW"), exp.Literal.string("view"))
-                .when(exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("view"))
+                .when(
+                    exp.Literal.string("MATERIALIZED_VIEW"), exp.Literal.string("materialized_view")
+                )
                 .else_(exp.Literal.string("table"))
                 .as_("type"),
             )
