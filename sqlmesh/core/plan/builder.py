@@ -267,7 +267,6 @@ class PlanBuilder:
         self._ensure_no_new_snapshots_with_restatements()
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range()
-        self._ensure_no_forward_only_revert()
         self._ensure_no_broken_references()
 
         self._apply_effective_from()
@@ -793,27 +792,6 @@ class PlanBuilder:
             if to_datetime(end) > to_datetime(self.execution_time):
                 raise PlanError(
                     f"Plan end date: '{time_like_to_str(end)}' cannot be in the future (execution time: '{time_like_to_str(self.execution_time)}')"
-                )
-
-    def _ensure_no_forward_only_revert(self) -> None:
-        """Ensures that a previously superseded breaking / non-breaking snapshot is not being
-        used again to replace an existing forward-only snapshot with the same version.
-
-        In other words there is no going back to the original non-forward-only snapshot with
-        the same version once a forward-only change for that version has been introduced.
-        """
-        for name, (candidate, promoted) in self._context_diff.modified_snapshots.items():
-            if (
-                candidate.snapshot_id not in self._context_diff.new_snapshots
-                and candidate.is_model
-                and not candidate.model.forward_only
-                and promoted.is_forward_only
-                and not promoted.is_paused
-                and not candidate.is_no_rebuild
-                and promoted.version == candidate.version
-            ):
-                raise PlanError(
-                    f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
     def _ensure_no_broken_references(self) -> None:
