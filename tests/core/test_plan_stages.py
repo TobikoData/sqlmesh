@@ -6,6 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import SqlModel, ModelKindName
+from sqlmesh.core.plan.common import SnapshotIntervalClearRequest
 from sqlmesh.core.plan.definition import EvaluatablePlan
 from sqlmesh.core.plan.stages import (
     build_plan_stages,
@@ -23,11 +24,13 @@ from sqlmesh.core.plan.stages import (
     FinalizeEnvironmentStage,
     UnpauseStage,
 )
+from sqlmesh.core.plan.explainer import ExplainableRestatementStage
 from sqlmesh.core.snapshot.definition import (
     SnapshotChangeCategory,
     DeployabilityIndex,
     Snapshot,
     SnapshotId,
+    SnapshotIdLike,
 )
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.core.environment import Environment, EnvironmentStatements
@@ -499,15 +502,29 @@ def test_build_plan_stages_basic_no_backfill(
     assert isinstance(stages[7], FinalizeEnvironmentStage)
 
 
-def test_build_plan_stages_restatement(
+def test_build_plan_stages_restatement_prod_only(
     snapshot_a: Snapshot, snapshot_b: Snapshot, mocker: MockerFixture
 ) -> None:
+    """
+    Scenario:
+        - Prod restatement triggered in a project with no dev environments
+
+    Expected Outcome:
+        - Plan still contains a RestatementStage in case a dev environment was
+          created during restatement
+    """
+
     # Mock state reader to return existing snapshots and environment
     state_reader = mocker.Mock(spec=StateReader)
     state_reader.get_snapshots.return_value = {
         snapshot_a.snapshot_id: snapshot_a,
         snapshot_b.snapshot_id: snapshot_b,
     }
+    state_reader.get_snapshots_by_names.return_value = {
+        snapshot_a.id_and_version,
+        snapshot_b.id_and_version,
+    }
+
     existing_environment = Environment(
         name="prod",
         snapshots=[snapshot_a.table_info, snapshot_b.table_info],
@@ -518,7 +535,9 @@ def test_build_plan_stages_restatement(
         promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
         finalized_ts=to_timestamp("2023-01-02"),
     )
+
     state_reader.get_environment.return_value = existing_environment
+    state_reader.get_environments_summary.return_value = [existing_environment.summary]
 
     environment = Environment(
         name="prod",
@@ -577,17 +596,8 @@ def test_build_plan_stages_restatement(
         snapshot_b.snapshot_id,
     }
 
-    # Verify RestatementStage
-    restatement_stage = stages[1]
-    assert isinstance(restatement_stage, RestatementStage)
-    assert len(restatement_stage.snapshot_intervals) == 2
-    expected_interval = (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
-    for snapshot_info, interval in restatement_stage.snapshot_intervals.items():
-        assert interval == expected_interval
-        assert snapshot_info.name in ('"a"', '"b"')
-
     # Verify BackfillStage
-    backfill_stage = stages[2]
+    backfill_stage = stages[1]
     assert isinstance(backfill_stage, BackfillStage)
     assert len(backfill_stage.snapshot_to_intervals) == 2
     assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
@@ -595,8 +605,330 @@ def test_build_plan_stages_restatement(
     for intervals in backfill_stage.snapshot_to_intervals.values():
         assert intervals == expected_backfill_interval
 
+    # Verify RestatementStage exists but is empty
+    restatement_stage = stages[2]
+    assert isinstance(restatement_stage, RestatementStage)
+    restatement_stage = ExplainableRestatementStage.from_restatement_stage(
+        restatement_stage, state_reader, plan
+    )
+    assert not restatement_stage.snapshot_intervals_to_clear
+
     # Verify EnvironmentRecordUpdateStage
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
+
+    # Verify FinalizeEnvironmentStage
+    assert isinstance(stages[4], FinalizeEnvironmentStage)
+
+
+def test_build_plan_stages_restatement_prod_identifies_dev_intervals(
+    snapshot_a: Snapshot,
+    snapshot_b: Snapshot,
+    make_snapshot: t.Callable[..., Snapshot],
+    mocker: MockerFixture,
+) -> None:
+    """
+    Scenario:
+        - Prod restatement triggered in a project with a dev environment
+        - The dev environment contains a different physical version of the affected model
+
+    Expected Outcome:
+        - Plan contains a RestatementStage that highlights the affected dev version
+    """
+    # Dev version of snapshot_a, same name but different version
+    snapshot_a_dev = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, changed, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    snapshot_a_dev.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot_a_dev.snapshot_id != snapshot_a.snapshot_id
+    assert snapshot_a_dev.table_info != snapshot_a.table_info
+
+    # Mock state reader to return existing snapshots and environment
+    state_reader = mocker.Mock(spec=StateReader)
+    snapshots_in_state = {
+        snapshot_a.snapshot_id: snapshot_a,
+        snapshot_b.snapshot_id: snapshot_b,
+        snapshot_a_dev.snapshot_id: snapshot_a_dev,
+    }
+
+    def _get_snapshots(snapshot_ids: t.Iterable[SnapshotIdLike]):
+        return {
+            k: v
+            for k, v in snapshots_in_state.items()
+            if k in {s.snapshot_id for s in snapshot_ids}
+        }
+
+    state_reader.get_snapshots.side_effect = _get_snapshots
+    state_reader.get_snapshots_by_names.return_value = set()
+
+    existing_prod_environment = Environment(
+        name="prod",
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+
+    # dev has new version of snapshot_a but same version of snapshot_b
+    existing_dev_environment = Environment(
+        name="dev",
+        snapshots=[snapshot_a_dev.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a_dev.snapshot_id, snapshot_b.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+
+    state_reader.get_environment.side_effect = (
+        lambda name: existing_dev_environment if name == "dev" else existing_prod_environment
+    )
+    state_reader.get_environments_summary.return_value = [
+        existing_prod_environment.summary,
+        existing_dev_environment.summary,
+    ]
+
+    environment = Environment(
+        name="prod",
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id="previous_plan",
+        promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+    )
+
+    # Create evaluatable plan with restatements
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[],  # No new snapshots
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={
+            '"a"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            '"b"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        },
+        is_dev=False,
+        allow_destructive_models=set(),
+        allow_additive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        ignore_cron=False,
+        directly_modified_snapshots=[],  # No changes
+        indirectly_modified_snapshots={},  # No changes
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
+
+    # Verify stages
+    assert len(stages) == 5
+
+    # Verify PhysicalLayerSchemaCreationStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
+    assert len(physical_stage.snapshots) == 2
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
+
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 2
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
+    expected_backfill_interval = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+    for intervals in backfill_stage.snapshot_to_intervals.values():
+        assert intervals == expected_backfill_interval
+
+    # Verify RestatementStage
+    restatement_stage = stages[2]
+    assert isinstance(restatement_stage, RestatementStage)
+    restatement_stage = ExplainableRestatementStage.from_restatement_stage(
+        restatement_stage, state_reader, plan
+    )
+
+    # note: we only clear the intervals from state for "a" in dev, we leave prod alone
+    assert restatement_stage.snapshot_intervals_to_clear
+    assert len(restatement_stage.snapshot_intervals_to_clear) == 1
+    snapshot_name, clear_request = list(restatement_stage.snapshot_intervals_to_clear.items())[0]
+    assert isinstance(clear_request, SnapshotIntervalClearRequest)
+    assert snapshot_name == '"a"'
+    assert clear_request.snapshot_id == snapshot_a_dev.snapshot_id
+    assert clear_request.snapshot == snapshot_a_dev.id_and_version
+    assert clear_request.interval == (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
+
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[3], EnvironmentRecordUpdateStage)
+
+    # Verify FinalizeEnvironmentStage
+    assert isinstance(stages[4], FinalizeEnvironmentStage)
+
+
+def test_build_plan_stages_restatement_dev_does_not_clear_intervals(
+    snapshot_a: Snapshot,
+    snapshot_b: Snapshot,
+    make_snapshot: t.Callable[..., Snapshot],
+    mocker: MockerFixture,
+) -> None:
+    """
+    Scenario:
+        - Restatement triggered against the dev environment
+
+    Expected Outcome:
+        - BackfillStage only touches models in that dev environment
+        - Plan does not contain a RestatementStage because making changes in dev doesnt mean we need
+          to clear intervals from other environments
+    """
+    # Dev version of snapshot_a, same name but different version
+    snapshot_a_dev = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, changed, ds"),
+            kind=dict(name=ModelKindName.INCREMENTAL_BY_TIME_RANGE, time_column="ds"),
+        )
+    )
+    snapshot_a_dev.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot_a_dev.snapshot_id != snapshot_a.snapshot_id
+    assert snapshot_a_dev.table_info != snapshot_a.table_info
+
+    # Mock state reader to return existing snapshots and environment
+    state_reader = mocker.Mock(spec=StateReader)
+    snapshots_in_state = {
+        snapshot_a.snapshot_id: snapshot_a,
+        snapshot_b.snapshot_id: snapshot_b,
+        snapshot_a_dev.snapshot_id: snapshot_a_dev,
+    }
+    state_reader.get_snapshots.side_effect = lambda snapshot_info_like: {
+        k: v
+        for k, v in snapshots_in_state.items()
+        if k in [sil.snapshot_id for sil in snapshot_info_like]
+    }
+
+    # prod has snapshot_a, snapshot_b
+    existing_prod_environment = Environment(
+        name="prod",
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_prod_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a.snapshot_id, snapshot_b.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+
+    # dev has new version of snapshot_a
+    existing_dev_environment = Environment(
+        name="dev",
+        snapshots=[snapshot_a_dev.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="previous_dev_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_a_dev.snapshot_id],
+        finalized_ts=to_timestamp("2023-01-02"),
+    )
+
+    state_reader.get_environment.side_effect = (
+        lambda name: existing_dev_environment if name == "dev" else existing_prod_environment
+    )
+    state_reader.get_environments_summary.return_value = [
+        existing_prod_environment.summary,
+        existing_dev_environment.summary,
+    ]
+
+    environment = Environment(
+        name="dev",
+        snapshots=[snapshot_a_dev.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id="previous_dev_plan",
+        promoted_snapshot_ids=[snapshot_a_dev.snapshot_id],
+    )
+
+    # Create evaluatable plan with restatements
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[],  # No new snapshots
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=False,
+        empty_backfill=False,
+        restatements={
+            '"a"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        },
+        is_dev=True,
+        allow_destructive_models=set(),
+        allow_additive_models=set(),
+        forward_only=False,
+        end_bounded=False,
+        ensure_finalized_snapshots=False,
+        ignore_cron=False,
+        directly_modified_snapshots=[],  # No changes
+        indirectly_modified_snapshots={},  # No changes
+        metadata_updated_snapshots=[],
+        removed_snapshots=[],
+        requires_backfill=True,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    # Build plan stages
+    stages = build_plan_stages(plan, state_reader, None)
+
+    # Verify stages
+    assert len(stages) == 5
+
+    # Verify no RestatementStage
+    assert not any(s for s in stages if isinstance(s, RestatementStage))
+
+    # Verify PhysicalLayerSchemaCreationStage
+    physical_stage = stages[0]
+    assert isinstance(physical_stage, PhysicalLayerSchemaCreationStage)
+    assert len(physical_stage.snapshots) == 1
+    assert {s.snapshot_id for s in physical_stage.snapshots} == {
+        snapshot_a_dev.snapshot_id,
+    }
+
+    # Verify BackfillStage
+    backfill_stage = stages[1]
+    assert isinstance(backfill_stage, BackfillStage)
+    assert len(backfill_stage.snapshot_to_intervals) == 1
+    assert backfill_stage.deployability_index == DeployabilityIndex.all_deployable()
+    backfill_snapshot, backfill_intervals = list(backfill_stage.snapshot_to_intervals.items())[0]
+    assert backfill_snapshot.snapshot_id == snapshot_a_dev.snapshot_id
+    assert backfill_intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+    # Verify EnvironmentRecordUpdateStage
+    assert isinstance(stages[2], EnvironmentRecordUpdateStage)
+
+    # Verify VirtualLayerUpdateStage (all non-prod plans get this regardless)
+    assert isinstance(stages[3], VirtualLayerUpdateStage)
 
     # Verify FinalizeEnvironmentStage
     assert isinstance(stages[4], FinalizeEnvironmentStage)
@@ -1686,6 +2018,7 @@ def test_adjust_intervals_restatement_removal(
     state_reader.refresh_snapshot_intervals = mocker.Mock()
     state_reader.get_snapshots.return_value = {}
     state_reader.get_environment.return_value = None
+    state_reader.get_environments_summary.return_value = []
 
     environment = Environment(
         snapshots=[snapshot_a.table_info, snapshot_b.table_info],
@@ -1738,8 +2071,6 @@ def test_adjust_intervals_restatement_removal(
 
     restatement_stages = [stage for stage in stages if isinstance(stage, RestatementStage)]
     assert len(restatement_stages) == 1
-    restatement_stage = restatement_stages[0]
-    assert len(restatement_stage.snapshot_intervals) == 2
 
     backfill_stages = [stage for stage in stages if isinstance(stage, BackfillStage)]
     assert len(backfill_stages) == 1

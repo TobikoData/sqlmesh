@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import abc
 import typing as t
 import logging
+from dataclasses import dataclass
 
 from rich.console import Console as RichConsole
 from rich.tree import Tree
@@ -8,15 +11,17 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, TerminalConsole, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.plan.common import (
+    SnapshotIntervalClearRequest,
+    identify_restatement_intervals_across_snapshot_versions,
+)
 from sqlmesh.core.plan.definition import EvaluatablePlan, SnapshotIntervals
 from sqlmesh.core.plan import stages
 from sqlmesh.core.plan.evaluator import (
     PlanEvaluator,
 )
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.core.snapshot.definition import (
-    SnapshotInfoMixin,
-)
+from sqlmesh.core.snapshot.definition import SnapshotInfoMixin, SnapshotIdAndVersion
 from sqlmesh.utils import Verbosity, rich as srich, to_snake_case
 from sqlmesh.utils.date import to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -45,6 +50,15 @@ class PlanExplainer(PlanEvaluator):
         explainer_console = _get_explainer_console(
             self.console, plan.environment, self.default_catalog
         )
+
+        # add extra metadata that's only needed at this point for better --explain output
+        plan_stages = [
+            ExplainableRestatementStage.from_restatement_stage(stage, self.state_reader, plan)
+            if isinstance(stage, stages.RestatementStage)
+            else stage
+            for stage in plan_stages
+        ]
+
         explainer_console.explain(plan_stages)
 
 
@@ -52,6 +66,38 @@ class ExplainerConsole(abc.ABC):
     @abc.abstractmethod
     def explain(self, stages: t.List[stages.PlanStage]) -> None:
         pass
+
+
+@dataclass
+class ExplainableRestatementStage(stages.RestatementStage):
+    """
+    This brings forward some calculations that would usually be done in the evaluator so the user can be given a better indication
+    of what might happen when they ask for the plan to be explained
+    """
+
+    snapshot_intervals_to_clear: t.Dict[str, SnapshotIntervalClearRequest]
+    """Which snapshots from other environments would have intervals cleared as part of restatement, keyed by name"""
+
+    @classmethod
+    def from_restatement_stage(
+        cls: t.Type[ExplainableRestatementStage],
+        stage: stages.RestatementStage,
+        state_reader: StateReader,
+        plan: EvaluatablePlan,
+    ) -> ExplainableRestatementStage:
+        all_restatement_intervals = identify_restatement_intervals_across_snapshot_versions(
+            state_reader=state_reader,
+            prod_restatements=plan.restatements,
+            disable_restatement_models=plan.disabled_restatement_models,
+            loaded_snapshots={s.snapshot_id: s for s in stage.all_snapshots.values()},
+        )
+
+        return cls(
+            snapshot_intervals_to_clear={
+                s.snapshot.name: s for s in all_restatement_intervals.values()
+            },
+            all_snapshots=stage.all_snapshots,
+        )
 
 
 MAX_TREE_LENGTH = 10
@@ -146,11 +192,22 @@ class RichExplainerConsole(ExplainerConsole):
             tree.add(display_name)
         return tree
 
-    def visit_restatement_stage(self, stage: stages.RestatementStage) -> Tree:
+    def visit_explainable_restatement_stage(self, stage: ExplainableRestatementStage) -> Tree:
+        return self.visit_restatement_stage(stage)
+
+    def visit_restatement_stage(
+        self, stage: t.Union[ExplainableRestatementStage, stages.RestatementStage]
+    ) -> Tree:
         tree = Tree("[bold]Invalidate data intervals as part of restatement[/bold]")
-        for snapshot_table_info, interval in stage.snapshot_intervals.items():
-            display_name = self._display_name(snapshot_table_info)
-            tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
+
+        if isinstance(stage, ExplainableRestatementStage) and (
+            snapshot_intervals := stage.snapshot_intervals_to_clear
+        ):
+            for clear_request in snapshot_intervals.values():
+                display_name = self._display_name(clear_request.snapshot)
+                interval = clear_request.interval
+                tree.add(f"{display_name} [{to_ts(interval[0])} - {to_ts(interval[1])}]")
+
         return tree
 
     def visit_backfill_stage(self, stage: stages.BackfillStage) -> Tree:
@@ -265,12 +322,14 @@ class RichExplainerConsole(ExplainerConsole):
 
     def _display_name(
         self,
-        snapshot: SnapshotInfoMixin,
+        snapshot: t.Union[SnapshotInfoMixin, SnapshotIdAndVersion],
         environment_naming_info: t.Optional[EnvironmentNamingInfo] = None,
     ) -> str:
         return snapshot.display_name(
-            environment_naming_info or self.environment_naming_info,
-            self.default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+            environment_naming_info=environment_naming_info or self.environment_naming_info,
+            default_catalog=self.default_catalog
+            if self.verbosity < Verbosity.VERY_VERBOSE
+            else None,
             dialect=self.dialect,
         )
 

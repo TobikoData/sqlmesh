@@ -552,6 +552,22 @@ class Console(
         """Display list of models that failed during evaluation to the user."""
 
     @abc.abstractmethod
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        """Display a list of models where new versions got deployed to the specified :environment while we were restating data the old versions
+
+        Args:
+            snapshots: a list of (snapshot_we_restated, snapshot_it_got_replaced_with_during_restatement) tuples
+            environment: which environment got updated while we were restating models
+            environment_naming_info: how snapshots are named in that :environment (for display name purposes)
+            default_catalog: the configured default catalog (for display name purposes)
+        """
+
+    @abc.abstractmethod
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
         """Starts loading and returns a unique ID that can be used to stop the loading. Optionally can display a message."""
 
@@ -769,6 +785,14 @@ class NoopConsole(Console):
         pass
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         pass
 
     def log_destructive_change(
@@ -2224,6 +2248,30 @@ class TerminalConsole(Console):
 
             for node_name, msg in error_messages.items():
                 self._print(f"  [red]{node_name}[/red]\n\n{msg}")
+
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
+        if snapshots:
+            tree = Tree(
+                f"[yellow]The following models had new versions deployed while data was being restated:[/yellow]"
+            )
+
+            for restated_snapshot, updated_snapshot in snapshots:
+                display_name = restated_snapshot.display_name(
+                    environment_naming_info,
+                    default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
+                )
+                current_branch = tree.add(display_name)
+                current_branch.add(f"restated version: '{restated_snapshot.version}'")
+                current_branch.add(f"currently active version: '{updated_snapshot.version}'")
+
+            self._print(tree)
+            self._print("")  # newline spacer
 
     def log_destructive_change(
         self,
