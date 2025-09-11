@@ -1937,6 +1937,9 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
             view_properties=model.render_virtual_properties(**render_kwargs),
         )
 
+        # Apply grants to the physical layer table
+        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL)
+
         # Apply grants to the virtual layer view
         self._apply_grants(model, view_name, GrantsTargetLayer.VIRTUAL)
 
