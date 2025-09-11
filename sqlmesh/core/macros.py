@@ -128,6 +128,23 @@ def _macro_str_replace(text: str) -> str:
     return f"self.template({text}, locals())"
 
 
+class CaseInsensitiveMapping(dict):
+    def __init__(self, data: t.Dict[str, t.Any]) -> None:
+        super().__init__(data)
+
+        self._lower = {k.lower(): v for k, v in data.items()}
+
+    def __getitem__(self, key: str) -> t.Any:
+        if key in self:
+            return super().__getitem__(key)
+        return self._lower[key.lower()]
+
+    def get(self, key: str, default: t.Any = None) -> t.Any:
+        if key in self:
+            return super().get(key, default)
+        return self._lower.get(key.lower(), default)
+
+
 class MacroDialect(Python):
     class Generator(Python.Generator):
         TRANSFORMS = {
@@ -222,7 +239,7 @@ class MacroEvaluator:
                         for var_name, var_value in value.items()
                     }
 
-                self.locals[k] = value
+                self.locals[k.lower()] = value
 
     def send(
         self, name: str, *args: t.Any, **kwargs: t.Any
@@ -256,14 +273,18 @@ class MacroEvaluator:
                 changed = True
                 variables = self.variables
 
-                if node.name not in self.locals and node.name.lower() not in variables:
+                # This makes all variables case-insensitive, e.g. @X is the same as @x. We do this
+                # for consistency, since `variables` and `blueprint_variables` are normalized.
+                var_name = node.name.lower()
+
+                if var_name not in self.locals and var_name not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
                 # Precedence order is locals (e.g. @DEF) > blueprint variables > config variables
-                value = self.locals.get(node.name, variables.get(node.name.lower()))
+                value = self.locals.get(var_name, variables.get(var_name))
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(
@@ -313,11 +334,11 @@ class MacroEvaluator:
         """
         # We try to convert all variables into sqlglot expressions because they're going to be converted
         # into strings; in sql we don't convert strings because that would result in adding quotes
-        mapping = {
+        base_mapping = {
             k: convert_sql(v, self.dialect)
             for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
         }
-        return MacroStrTemplate(str(text)).safe_substitute(mapping)
+        return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
@@ -327,7 +348,7 @@ class MacroEvaluator:
                     args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                 )
             else:
-                self.locals[node.name] = self.transform(node.expression)
+                self.locals[node.name.lower()] = self.transform(node.expression)
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
