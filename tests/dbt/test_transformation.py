@@ -1014,6 +1014,18 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.path }}") == "None"
     assert context.render("{{ target.profile_name }}") == "None"
 
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+        warehouse="warehouse",
+    )
+    assert context.render("{{ target.warehouse }}") == "warehouse"
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_project_name_jinja(sushi_test_project: Project):
