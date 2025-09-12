@@ -85,6 +85,11 @@ if t.TYPE_CHECKING:
 pytestmark = pytest.mark.slow
 
 
+def count_non_symbolic_snapshots(plan):
+    """Count only non-symbolic snapshots (excludes AUDIT_ONLY models)."""
+    return len([s for s in plan.new_snapshots if not (s.is_model and s.model.kind.is_symbolic)])
+
+
 @pytest.fixture(autouse=True)
 def mock_choices(mocker: MockerFixture):
     mocker.patch("sqlmesh.core.console.TerminalConsole._get_snapshot_change_category")
@@ -238,7 +243,7 @@ def test_forward_only_model_regular_plan(init_and_plan_context: t.Callable):
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -347,7 +352,7 @@ def test_forward_only_model_regular_plan_preview_enabled(init_and_plan_context: 
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -477,7 +482,7 @@ def test_full_history_restatement_model_regular_plan_preview_enabled(
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
 
-    assert len(plan.new_snapshots) == 6
+    assert count_non_symbolic_snapshots(plan) == 6
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -524,7 +529,7 @@ def test_metadata_changed_regular_plan_preview_enabled(init_and_plan_context: t.
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=True).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.METADATA
@@ -887,7 +892,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -910,7 +915,7 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("prod", skip_tests=True, enable_preview=False).build()
-    assert len(plan.new_snapshots) == 1
+    assert count_non_symbolic_snapshots(plan) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -952,7 +957,7 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(init_and_plan_context
 
     plan_builder = context.plan_builder("dev", skip_tests=True)
     plan = plan_builder.build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -1100,7 +1105,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, forward_only=True).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -1133,7 +1138,7 @@ def test_non_breaking_change_after_forward_only_in_dev(
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True).build()
-    assert len(plan.new_snapshots) == 1
+    assert count_non_symbolic_snapshots(plan) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -1232,7 +1237,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
-    assert len(plan.new_snapshots) == 1
+    assert count_non_symbolic_snapshots(plan) == 1
     assert (
         plan.context_diff.snapshots[top_waiters_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -1265,7 +1270,7 @@ def test_indirect_non_breaking_change_after_forward_only_in_dev(init_and_plan_co
     top_waiters_snapshot = context.get_snapshot("sushi.top_waiters", raise_if_missing=True)
 
     plan = context.plan_builder("dev", skip_tests=True, enable_preview=False).build()
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert (
         plan.context_diff.snapshots[waiter_revenue_by_day_snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -1383,14 +1388,14 @@ def test_metadata_change_after_forward_only_results_in_migration(init_and_plan_c
     model = add_projection_to_model(t.cast(SqlModel, model))
     context.upsert_model(model)
     plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert all(s.is_forward_only for s in plan.new_snapshots)
 
     # Follow-up with a metadata change in the same environment
     model = model.copy(update={"owner": "new_owner"})
     context.upsert_model(model)
     plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
-    assert len(plan.new_snapshots) == 2
+    assert count_non_symbolic_snapshots(plan) == 2
     assert all(s.change_category == SnapshotChangeCategory.METADATA for s in plan.new_snapshots)
 
     # Deploy the latest change to prod
@@ -1581,7 +1586,10 @@ def test_run_with_select_models(
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
         # Only waiter_revenue_by_day and its parents should be backfilled up to 2023-01-09.
-        assert {s.name: s.intervals[0][1] for s in snapshots.values() if s.intervals} == {
+        # Filter out AUDIT_ONLY models (but keep external models which also have is_symbolic=True)
+        non_audit_snapshots = {s.name: s.intervals[0][1] for s in snapshots.values() 
+                               if s.intervals and not (s.is_model and s.model.kind.is_audit_only)}
+        assert non_audit_snapshots == {
             '"memory"."sushi"."waiter_revenue_by_day"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."order_items"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."orders"': to_timestamp("2023-01-09"),
@@ -1621,7 +1629,10 @@ def test_plan_with_run(
         context.apply(plan)
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
-        assert {s.name: s.intervals[0][1] for s in snapshots.values() if s.intervals} == {
+        # Filter out AUDIT_ONLY models (but keep external models which also have is_symbolic=True)
+        non_audit_snapshots = {s.name: s.intervals[0][1] for s in snapshots.values() 
+                               if s.intervals and not (s.is_model and s.model.kind.is_audit_only)}
+        assert non_audit_snapshots == {
             '"memory"."sushi"."waiter_revenue_by_day"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."order_items"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."orders"': to_timestamp("2023-01-09"),
@@ -1791,7 +1802,10 @@ def test_run_with_select_models_no_auto_upstream(
 
         snapshots = context.state_sync.state_sync.get_snapshots(context.snapshots.values())
         # Only waiter_revenue_by_day should be backfilled up to 2023-01-09.
-        assert {s.name: s.intervals[0][1] for s in snapshots.values() if s.intervals} == {
+        # Filter out AUDIT_ONLY models (but keep external models which also have is_symbolic=True)
+        non_audit_snapshots = {s.name: s.intervals[0][1] for s in snapshots.values() 
+                               if s.intervals and not (s.is_model and s.model.kind.is_audit_only)}
+        assert non_audit_snapshots == {
             '"memory"."sushi"."waiter_revenue_by_day"': to_timestamp("2023-01-09"),
             '"memory"."sushi"."order_items"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."orders"': to_timestamp("2023-01-08"),
@@ -5249,7 +5263,7 @@ def test_plan_explain(init_and_plan_context: t.Callable):
         assert plan.has_changes
         assert plan.missing_intervals
         assert plan.directly_modified == {waiter_revenue_by_day_snapshot.snapshot_id}
-        assert len(plan.new_snapshots) == 2
+        assert count_non_symbolic_snapshots(plan) == 2
         assert {s.snapshot_id for s in plan.new_snapshots} == {
             waiter_revenue_by_day_snapshot.snapshot_id,
             top_waiters_snapshot.snapshot_id,
@@ -5787,7 +5801,7 @@ def test_multi(mocker):
     )
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 5
+    assert count_non_symbolic_snapshots(plan) == 5
     context.apply(plan)
 
     # Ensure before_all, after_all statements for multiple repos have executed
@@ -5957,7 +5971,7 @@ def test_multi_virtual_layer(copy_to_temp_path):
     )
 
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 4
+    assert count_non_symbolic_snapshots(plan) == 4
     context.apply(plan)
 
     # Validate the tables that source from the first tables are correct as well with evaluate
@@ -6100,7 +6114,7 @@ def test_multi_dbt(mocker):
     context = Context(paths=["examples/multi_dbt/bronze", "examples/multi_dbt/silver"])
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 4
+    assert count_non_symbolic_snapshots(plan) == 4
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots.values())
 
@@ -6130,7 +6144,7 @@ def test_multi_hybrid(mocker):
     context._new_state_sync().reset(default_catalog=context.default_catalog)
     plan = context.plan_builder().build()
 
-    assert len(plan.new_snapshots) == 5
+    assert count_non_symbolic_snapshots(plan) == 5
     assert context.dag.roots == {'"memory"."dbt_repo"."e"'}
     assert context.dag.graph['"memory"."dbt_repo"."c"'] == {'"memory"."sqlmesh_repo"."b"'}
     assert context.dag.graph['"memory"."sqlmesh_repo"."b"'] == {'"memory"."sqlmesh_repo"."a"'}
@@ -7106,6 +7120,9 @@ def validate_tables(
         is_deployable = deployability_index.is_representative(snapshot)
         if not snapshot.is_model or snapshot.is_external:
             continue
+        # AUDIT_ONLY models are symbolic and don't create tables
+        if snapshot.model.kind.is_symbolic:
+            continue
         table_should_exist = not snapshot.is_embedded
         assert adapter.table_exists(snapshot.table_name(is_deployable)) == table_should_exist
         if table_should_exist:
@@ -7301,7 +7318,7 @@ def test_destroy(copy_to_temp_path):
 
     context = Context(paths=paths, config=config)
     plan = context.plan_builder().build()
-    assert len(plan.new_snapshots) == 4
+    assert count_non_symbolic_snapshots(plan) == 4
     context.apply(plan)
 
     # Confirm cache exists

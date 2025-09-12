@@ -187,7 +187,7 @@ class Plan(PydanticModel, frozen=True):
                 end_bounded=self.end_bounded,
                 ignore_cron=self.ignore_cron,
             ).items()
-            if snapshot.is_model and missing
+            if snapshot.is_model and missing and not snapshot.model.kind.is_symbolic
         ]
         return sorted(intervals, key=lambda i: i.snapshot_id)
 
