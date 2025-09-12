@@ -247,7 +247,7 @@ def test_plan_restate_model(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert_duckdb_test(result)
-    assert "Restating models" in result.output
+    assert "Models selected for restatement" in result.output
     assert "sqlmesh_example.full_model   [full refresh" in result.output
     assert_model_batches_executed(result)
     assert "Virtual layer updated" not in result.output

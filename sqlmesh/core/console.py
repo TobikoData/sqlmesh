@@ -2022,7 +2022,34 @@ class TerminalConsole(Console):
         plan = plan_builder.build()
 
         if plan.restatements:
-            self._print("\n[bold]Restating models\n")
+            # A plan can have restatements for the following reasons:
+            # - The user specifically called `sqlmesh plan` with --restate-model.
+            #   This creates a "restatement plan" which disallows all other changes and simply force-backfills
+            #   the selected models and their downstream dependencies using the versions of the models stored in state.
+            # - There are no specific restatements (so changes are allowed) AND dev previews need to be computed.
+            #   The "restatements" feature is currently reused for dev previews.
+            if plan.selected_models_to_restate:
+                # There were legitimate restatements, no dev previews
+                tree = Tree(
+                    "[bold]Models selected for restatement:[/bold]\n"
+                    "This causes backfill of the model itself as well as affected downstream models"
+                )
+                model_fqn_to_snapshot = {s.name: s for s in plan.snapshots.values()}
+                for model_fqn in plan.selected_models_to_restate:
+                    snapshot = model_fqn_to_snapshot[model_fqn]
+                    display_name = snapshot.display_name(
+                        plan.environment_naming_info,
+                        default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                        dialect=self.dialect,
+                    )
+                    tree.add(
+                        display_name
+                    )  # note: we deliberately dont show any intervals here; they get shown in the backfill section
+                self._print(tree)
+            else:
+                # We are computing dev previews, do not confuse the user by printing out something to do
+                # with restatements. Dev previews are already highlighted in the backfill step
+                pass
         else:
             self.show_environment_difference_summary(
                 plan.context_diff,
