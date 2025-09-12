@@ -5,6 +5,7 @@ import sys
 import typing as t
 import sqlmesh.core.dialect as d
 from pathlib import Path
+from collections import defaultdict
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -137,16 +138,22 @@ class DbtLoader(Loader):
                 package_context.set_and_render_variables(package.variables, package.name)
                 package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
+                package_models_by_path: t.Dict[Path, t.List[BaseModelConfig]] = defaultdict(list)
                 for model in package_models.values():
                     if isinstance(model, ModelConfig) and not model.sql.strip():
                         logger.info(f"Skipping empty model '{model.name}' at path '{model.path}'.")
                         continue
+                    package_models_by_path[model.path].append(model)
 
-                    sqlmesh_model = cache.get_or_load_models(
-                        model.path, loader=lambda: [_to_sqlmesh(model, package_context)]
-                    )[0]
-
-                    models[sqlmesh_model.fqn] = sqlmesh_model
+                for path, path_models in package_models_by_path.items():
+                    sqlmesh_models = cache.get_or_load_models(
+                        path,
+                        loader=lambda: [
+                            _to_sqlmesh(model, package_context) for model in path_models
+                        ],
+                    )
+                    for sqlmesh_model in sqlmesh_models:
+                        models[sqlmesh_model.fqn] = sqlmesh_model
 
             models.update(self._load_external_models(audits, cache))
 
