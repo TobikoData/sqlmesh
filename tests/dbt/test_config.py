@@ -343,15 +343,26 @@ def test_variables(assert_exp_eq, sushi_test_project):
             "customers:customer_id": "customer_id",
             "some_var": ["foo", "bar"],
         },
+        "some_var": "should be overridden in customers package",
     }
     expected_customer_variables = {
-        "some_var": ["foo", "bar"],
+        "some_var": ["foo", "bar"],  # Takes precedence over the root project variable
         "some_other_var": 5,
-        "yet_another_var": 5,
         "customers:bla": False,
         "customers:customer_id": "customer_id",
+        "yet_another_var": 1,  # Make sure that the project variable takes precedence
+        "top_waiters:limit": "{{ get_top_waiters_limit() }}",
+        "top_waiters:revenue": "revenue",
+        "customers:boo": ["a", "b"],
+        "nested_vars": {
+            "some_nested_var": 2,
+        },
+        "dynamic_test_var": 3,
+        "list_var": [
+            {"name": "item1", "value": 1},
+            {"name": "item2", "value": 2},
+        ],
     }
-
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
 
