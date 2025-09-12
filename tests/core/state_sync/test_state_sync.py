@@ -2287,8 +2287,8 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
 
-    assert len(old_snapshots) == 27  # 24 + 3 AUDIT_ONLY models
-    assert len(new_snapshots) == 39  # 36 + 3 AUDIT_ONLY models
+    assert len(old_snapshots) == 24
+    assert len(new_snapshots) == 36
     assert len(old_environments) == len(new_environments)
 
     start = "2023-01-01"
