@@ -1110,7 +1110,10 @@ class SnapshotEvaluator:
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
-        tmp_table_name = f"{target_table_name}_schema_tmp"
+        target_table = exp.to_table(target_table_name)
+        target_table.this.set("this", f"{target_table.name}_schema_tmp")
+
+        tmp_table_name = target_table.sql()
         if snapshot.is_materialized:
             self._execute_create(
                 snapshot=snapshot,

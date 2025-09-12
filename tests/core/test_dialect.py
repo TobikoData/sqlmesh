@@ -717,3 +717,8 @@ def test_sqlglot_extended_correctly(dialect: str) -> None:
     assert isinstance(value, exp.Table)
     assert value.sql() == "foo"
     assert ast.sql(dialect=dialect) == "MODEL (\nname foo\n)"
+
+
+def test_connected_identifier():
+    ast = d.parse_one("""SELECT ("x"at time zone 'utc')::timestamp as x""", "redshift")
+    assert ast.sql("redshift") == """SELECT CAST(("x" AT TIME ZONE 'utc') AS TIMESTAMP) AS x"""
