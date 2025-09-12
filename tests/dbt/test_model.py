@@ -884,6 +884,11 @@ def test_jinja_config_no_query(tmp_path, create_empty_project):
     with open(model_file, "w", encoding="utf-8") as f:
         f.write(model_contents)
 
+    schema_yaml = {"version": 2, "models": [{"name": "comment_config_model"}]}
+    schema_file = model_dir / "schema.yml"
+    with open(schema_file, "w", encoding="utf-8") as f:
+        YAML().dump(schema_yaml, f)
+
     context = Context(paths=project_dir)
 
     # loads without error and contains empty query (which will error at runtime)
