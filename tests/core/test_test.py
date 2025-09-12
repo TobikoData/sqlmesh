@@ -770,6 +770,42 @@ test_foo:
         ).run()
     )
 
+    #  - output df must differ if sorted by (id, event_date) vs. (event_date, id)
+    #  - output partial must be true
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    sushi.items:
+      - id: 9876
+        event_date: 2020-01-01
+      - id: 1234
+        name: hello
+        event_date: 2020-01-02
+  outputs:
+    partial: true
+    query:
+      - event_date: 2020-01-01
+        id: 9876
+      - event_date: 2020-01-02
+        id: 1234
+        name: hello
+                """
+            ),
+            test_name="test_foo",
+            model=sushi_context.upsert_model(
+                _create_model(
+                    "SELECT id, name, price, event_date FROM sushi.items",
+                    default_catalog=sushi_context.default_catalog,
+                )
+            ),
+            context=sushi_context,
+        ).run()
+    )
+
 
 def test_partial_data_missing_schemas(sushi_context: Context) -> None:
     _check_successful_or_raise(
