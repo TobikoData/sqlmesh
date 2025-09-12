@@ -112,7 +112,9 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
 
     plan_builder = context.plan_builder("dev", skip_tests=True, forward_only=True)
     plan = plan_builder.build()
-    assert len(plan.new_snapshots) == 3  # waiter_revenue_by_day, top_waiters, and audit_waiter_revenue_anomalies
+    assert (
+        len(plan.new_snapshots) == 3
+    )  # waiter_revenue_by_day, top_waiters, and audit_waiter_revenue_anomalies
     assert (
         plan.context_diff.snapshots[snapshot.snapshot_id].change_category
         == SnapshotChangeCategory.NON_BREAKING
@@ -140,16 +142,18 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
-    
+
     expected_snapshot_ids = {top_waiters_snapshot.snapshot_id, snapshot.snapshot_id}
     # Also include audit_waiter_revenue_anomalies if it exists
     if context.get_snapshot("sushi.audit_waiter_revenue_anomalies", raise_if_missing=False):
-        audit_snapshot = context.get_snapshot("sushi.audit_waiter_revenue_anomalies", raise_if_missing=True)
+        audit_snapshot = context.get_snapshot(
+            "sushi.audit_waiter_revenue_anomalies", raise_if_missing=True
+        )
         expected_snapshot_ids.add(audit_snapshot.snapshot_id)
-    
+
     actual_snapshot_ids = {si.snapshot_id for si in plan.missing_intervals}
     assert actual_snapshot_ids == expected_snapshot_ids
-    
+
     # Check that all have the same intervals
     for si in plan.missing_intervals:
         assert si.intervals == expected_intervals
@@ -160,10 +164,10 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
         (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
-    
+
     actual_snapshot_ids = {si.snapshot_id for si in plan.missing_intervals}
     assert actual_snapshot_ids == expected_snapshot_ids
-    
+
     # Check that all have the same intervals
     for si in plan.missing_intervals:
         assert si.intervals == expected_intervals_2
@@ -171,10 +175,10 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     plan = plan_builder.set_effective_from("2023-01-04").build()
     # Start should remain unchanged
     assert plan.start == "2023-01-06"
-    
+
     actual_snapshot_ids = {si.snapshot_id for si in plan.missing_intervals}
     assert actual_snapshot_ids == expected_snapshot_ids
-    
+
     # Check that all have the same intervals (should still be intervals_2)
     for si in plan.missing_intervals:
         assert si.intervals == expected_intervals_2
@@ -192,17 +196,17 @@ def test_forward_only_plan_with_effective_date(context_fixture: Context, request
     prod_plan = context.plan_builder(skip_tests=True).build()
     # Make sure that the previously set effective_from is respected
     assert prod_plan.start == to_timestamp("2023-01-04")
-    
+
     expected_prod_intervals = [
         (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
         (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
         (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
         (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
     ]
-    
+
     actual_prod_snapshot_ids = {si.snapshot_id for si in prod_plan.missing_intervals}
     assert actual_prod_snapshot_ids == expected_snapshot_ids
-    
+
     # Check that all have the same intervals
     for si in prod_plan.missing_intervals:
         assert si.intervals == expected_prod_intervals
