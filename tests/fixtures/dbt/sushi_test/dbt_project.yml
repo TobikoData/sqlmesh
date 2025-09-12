@@ -50,6 +50,7 @@ vars:
 
   yet_another_var: 1
   dynamic_test_var: 3
+  some_var: 'should be overridden in customers package'
 
   customers:
     some_var: ["foo", "bar"]

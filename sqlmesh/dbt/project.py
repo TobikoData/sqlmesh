@@ -99,17 +99,20 @@ class Project:
             package = package_loader.load(path.parent)
             packages[package.name] = package
 
+        # Variable resolution precedence:
+        # 1. Variable overrides
+        # 2. Package-scoped variables in the root project's dbt_project.yml
+        # 3. Global project variables in the root project's dbt_project.yml
+        # 4. Variables in the package's dbt_project.yml
         all_project_variables = {**(project_yaml.get("vars") or {}), **(variable_overrides or {})}
         for name, package in packages.items():
-            package_vars = all_project_variables.get(name)
-
-            if isinstance(package_vars, dict):
-                package.variables.update(package_vars)
-
-            if name == context.project_name:
-                package.variables.update(all_project_variables)
+            if isinstance(all_project_variables.get(name), dict):
+                project_vars_copy = all_project_variables.copy()
+                package_scoped_vars = project_vars_copy.pop(name)
+                package.variables.update(project_vars_copy)
+                package.variables.update(package_scoped_vars)
             else:
-                package.variables.update(variable_overrides)
+                package.variables.update(all_project_variables)
 
         return Project(context, profile, packages)
 
