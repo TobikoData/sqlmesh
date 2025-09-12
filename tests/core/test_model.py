@@ -9377,9 +9377,9 @@ def test_model_blueprinting(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
-    blueprint_sql = tmp_path / "macros" / "identity_macro.py"
-    blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
-    blueprint_sql.write_text(
+    identity_macro = tmp_path / "macros" / "identity_macro.py"
+    identity_macro.parent.mkdir(parents=True, exist_ok=True)
+    identity_macro.write_text(
         """from sqlmesh import macro
 
 @macro()
@@ -11623,3 +11623,40 @@ def test_use_original_sql():
     assert model.query_.sql == "SELECT 1 AS one, 2 AS two"
     assert model.pre_statements_[0].sql == "CREATE TABLE pre (a INT)"
     assert model.post_statements_[0].sql == "CREATE TABLE post (b INT)"
+
+
+def test_case_sensitive_macro_locals(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+
+    config = Config(
+        gateways={"gw": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    macro_file = tmp_path / "macros" / "some_macro_with_globals.py"
+    macro_file.parent.mkdir(parents=True, exist_ok=True)
+    macro_file.write_text(
+        """from sqlmesh import macro
+
+x = 1
+X = 2
+
+@macro()
+def my_macro(evaluator):
+    assert evaluator.locals.get("x") == 1
+    assert evaluator.locals.get("X") == 2
+
+    return x + X
+"""
+    )
+    test_model = tmp_path / "models" / "test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text("MODEL (name test_model, kind FULL); SELECT @my_macro() AS c")
+
+    context = Context(paths=tmp_path, config=config)
+    model = context.get_model("test_model", raise_if_missing=True)
+
+    assert model.render_query_or_raise().sql() == 'SELECT 3 AS "c"'
