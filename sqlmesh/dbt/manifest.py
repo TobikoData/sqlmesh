@@ -661,7 +661,7 @@ def _macro_references(
         return result
 
     for macro_node_id in node.depends_on.macros:
-        if not macro_node_id:
+        if not macro_node_id or macro_node_id == "None":
             continue
 
         macro_node = manifest.macros[macro_node_id]

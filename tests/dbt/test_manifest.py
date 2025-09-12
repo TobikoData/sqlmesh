@@ -304,3 +304,23 @@ def test_convert_jinja_test_to_macro():
 {%- endmacro -%}"""
 
     assert _convert_jinja_test_to_macro(macro_input) == macro_input
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_macro_depenency_none_str():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
+    )
+    node = helper._manifest.nodes["model.customers.customer_revenue_by_day"]
+    node.depends_on.macros.append("None")
+
+    from sqlmesh.dbt.manifest import _macro_references
+
+    # "None" macro shouldn't raise a KeyError
+    _macro_references(helper._manifest, node)
