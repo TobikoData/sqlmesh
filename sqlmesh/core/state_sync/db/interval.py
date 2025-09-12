@@ -60,6 +60,7 @@ class IntervalState:
             "is_removed": exp.DataType.build("boolean"),
             "is_compacted": exp.DataType.build("boolean"),
             "is_pending_restatement": exp.DataType.build("boolean"),
+            "last_altered_ts": exp.DataType.build("bigint"),
         }
 
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:
@@ -215,13 +216,23 @@ class IntervalState:
             for start_ts, end_ts in snapshot.intervals:
                 new_intervals.append(
                     _interval_to_df(
-                        snapshot, start_ts, end_ts, is_dev=False, is_compacted=is_compacted
+                        snapshot,
+                        start_ts,
+                        end_ts,
+                        is_dev=False,
+                        is_compacted=is_compacted,
+                        last_altered_ts=snapshot.last_altered_ts,
                     )
                 )
             for start_ts, end_ts in snapshot.dev_intervals:
                 new_intervals.append(
                     _interval_to_df(
-                        snapshot, start_ts, end_ts, is_dev=True, is_compacted=is_compacted
+                        snapshot,
+                        start_ts,
+                        end_ts,
+                        is_dev=True,
+                        is_compacted=is_compacted,
+                        last_altered_ts=snapshot.last_altered_ts,
                     )
                 )
 
@@ -236,6 +247,7 @@ class IntervalState:
                         is_dev=False,
                         is_compacted=is_compacted,
                         is_pending_restatement=True,
+                        last_altered_ts=snapshot.last_altered_ts,
                     )
                 )
 
@@ -284,6 +296,7 @@ class IntervalState:
                 is_dev,
                 is_removed,
                 is_pending_restatement,
+                last_altered_ts,
             ) in rows:
                 interval_ids.add(interval_id)
                 merge_key = (name, version, dev_version, identifier)
@@ -296,6 +309,12 @@ class IntervalState:
                         identifier=identifier,
                         version=version,
                         dev_version=dev_version,
+                        last_altered_ts=last_altered_ts,
+                    )
+
+                if last_altered_ts:
+                    intervals[merge_key].last_altered_ts = max(
+                        intervals[merge_key].last_altered_ts or 0, last_altered_ts
                     )
 
                 if pending_restatement_interval_merge_key not in intervals:
@@ -340,6 +359,7 @@ class IntervalState:
                 "is_dev",
                 "is_removed",
                 "is_pending_restatement",
+                "last_altered_ts",
             )
             .from_(exp.to_table(self.intervals_table).as_("intervals"))
             .order_by(
@@ -460,6 +480,7 @@ def _interval_to_df(
     is_removed: bool = False,
     is_compacted: bool = False,
     is_pending_restatement: bool = False,
+    last_altered_ts: t.Optional[int] = None,
 ) -> t.Dict[str, t.Any]:
     return {
         "id": random_id(),
@@ -474,4 +495,5 @@ def _interval_to_df(
         "is_removed": is_removed,
         "is_compacted": is_compacted,
         "is_pending_restatement": is_pending_restatement,
+        "last_altered_ts": last_altered_ts,
     }

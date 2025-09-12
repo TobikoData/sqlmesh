@@ -185,6 +185,7 @@ class SnapshotIntervals(PydanticModel):
     intervals: Intervals = []
     dev_intervals: Intervals = []
     pending_restatement_intervals: Intervals = []
+    last_altered_ts: t.Optional[int] = None
 
     @property
     def snapshot_id(self) -> t.Optional[SnapshotId]:
@@ -713,6 +714,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     dev_table_suffix: str = "dev"
     table_naming_convention: TableNamingConvention = TableNamingConvention.default
     forward_only: bool = False
+    # Physical table last modified timestamp, not to be confused with the "updated_ts" field
+    # which is for the snapshot record itself
+    last_altered_ts: t.Optional[int] = None
 
     @field_validator("ttl")
     @classmethod
@@ -751,6 +755,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             for interval in snapshot_intervals:
                 snapshot.merge_intervals(interval)
+
+                # Differentiate last_altered_ts between snapshots with shared version but
+                # different dev versions e.g prod vs FORWARD_ONLY dev
+                if snapshot.dev_version == interval.dev_version and interval.last_altered_ts:
+                    snapshot.last_altered_ts = max(
+                        snapshot.last_altered_ts or -1, interval.last_altered_ts
+                    )
+
             result.append(snapshot)
 
         return result
@@ -1081,6 +1093,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     python_env=signals.python_env,
                     dialect=self.model.dialect,
                     path=self.model._path,
+                    snapshot=self,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:
@@ -2421,6 +2434,7 @@ def check_ready_intervals(
     python_env: t.Dict[str, Executable],
     dialect: DialectType = None,
     path: t.Optional[Path] = None,
+    snapshot: t.Optional[Snapshot] = None,
     kwargs: t.Optional[t.Dict] = None,
 ) -> Intervals:
     checked_intervals: Intervals = []
@@ -2436,6 +2450,7 @@ def check_ready_intervals(
                 provided_args=(batch,),
                 provided_kwargs=(kwargs or {}),
                 context=context,
+                snapshot=snapshot,
             )
         except Exception as ex:
             raise SignalEvalError(format_evaluated_code_exception(ex, python_env))
