@@ -873,7 +873,6 @@ class SnapshotEvaluator:
                     deployability_index=deployability_index,
                     create_render_kwargs=create_render_kwargs,
                     rendered_physical_properties=rendered_physical_properties,
-                    skip_grants=True,
                     dry_run=True,
                 )
 
@@ -1429,7 +1428,7 @@ class SnapshotEvaluator:
             and snapshot.is_materialized
             and bool(snapshot.previous_versions)
             and adapter.SUPPORTS_CLONING
-            # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
+            # managed models cannot have their schema mutated because they're based on queries, so clone + alter won't work
             and not snapshot.is_managed
             # If the deployable table is missing we can't clone it
             and not deployability_index.is_deployable(snapshot)
