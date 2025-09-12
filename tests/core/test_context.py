@@ -3185,6 +3185,7 @@ def test_grants_through_plan_apply(sushi_context, mocker):
     from sqlmesh.core.model.meta import GrantsTargetLayer
 
     model = sushi_context.get_model("sushi.waiter_revenue_by_day")
+
     mocker.patch.object(DuckDBEngineAdapter, "SUPPORTS_GRANTS", True)
     sync_grants_mock = mocker.patch.object(DuckDBEngineAdapter, "sync_grants_config")
 
@@ -3206,10 +3207,11 @@ def test_grants_through_plan_apply(sushi_context, mocker):
 
     sync_grants_mock.reset_mock()
 
+    new_grants = ({"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]},)
     model_updated = model_with_grants.copy(
         update={
             "query": parse_one(model.query.sql() + " LIMIT 1000"),
-            "grants": {"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]},
+            "grants": new_grants,
             "stamp": "update model and grants",
         }
     )
@@ -3217,7 +3219,8 @@ def test_grants_through_plan_apply(sushi_context, mocker):
 
     sushi_context.plan("dev", no_prompts=True, auto_apply=True)
 
-    assert sync_grants_mock.call_count == 2
-
-    expected_grants = {"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]}
-    assert all(call[0][1] == expected_grants for call in sync_grants_mock.call_args_list)
+    # Applies grants 3 times:
+    #   2 x physical (duplicated): create, promote (will diff but won't apply since it's the same grants)
+    #   1 x virtual
+    assert sync_grants_mock.call_count == 3
+    assert all(call[0][1] == new_grants for call in sync_grants_mock.call_args_list)
