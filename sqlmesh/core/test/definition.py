@@ -649,7 +649,7 @@ class ModelTest(unittest.TestCase):
             _raise_if_unexpected_columns(columns, referenced_columns)
 
             if partial:
-                columns = referenced_columns
+                columns = [str(c) for c in columns if str(c) in referenced_columns]
 
         return pd.DataFrame.from_records(
             rows, columns=[str(c) for c in columns] if columns else None
