@@ -138,6 +138,12 @@ dmypy.json
 *~
 *#
 
+# Vim
+*.swp
+*.swo
+.null-ls*
+
+
 *.duckdb
 *.duckdb.wal
 
@@ -158,3 +164,4 @@ spark-warehouse/
 
 # claude
 .claude/
+

@@ -10,10 +10,12 @@ from sqlmesh import Context
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
+from sqlmesh.core.config.common import VirtualEnvironmentMode
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.target import PostgresConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, PostgresConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.yaml import YAML
 
@@ -51,7 +53,9 @@ def create_empty_project(tmp_path: Path) -> t.Callable[[], t.Tuple[Path, Path]]:
         dbt_data_file = dbt_data_dir / "local.db"
         dbt_profile_config = {
             "test": {
-                "outputs": {"duckdb": {"type": "duckdb", "path": str(dbt_data_file)}},
+                "outputs": {
+                    "duckdb": {"type": "duckdb", "path": str(dbt_data_file), "database": "local"}
+                },
                 "target": "duckdb",
             }
         }
@@ -873,3 +877,185 @@ def test_load_model_dbt_node_name(tmp_path: Path) -> None:
     # Verify that node_name is the equivalent dbt one
     model = context.snapshots[model_fqn].model
     assert model.dbt_name == "model.test_project.simple_model"
+
+
+def test_model_grants_to_sqlmesh_grants_config() -> None:
+    grants_config = {
+        "select": ["user1", "user2"],
+        "insert": ["admin_user"],
+        "update": ["power_user"],
+    }
+    model_config = ModelConfig(
+        name="test_model",
+        sql="SELECT 1 as id",
+        grants=grants_config,
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    model_grants = sqlmesh_model.grants
+    assert model_grants == grants_config
+
+    assert sqlmesh_model.grants_target_layer == GrantsTargetLayer.default
+
+
+def test_model_grants_empty_permissions() -> None:
+    model_config = ModelConfig(
+        name="test_model_empty",
+        sql="SELECT 1 as id",
+        grants={"select": [], "insert": ["admin_user"]},
+        path=Path("test_model_empty.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    model_grants = sqlmesh_model.grants
+    expected_grants = {"select": [], "insert": ["admin_user"]}
+    assert model_grants == expected_grants
+
+
+def test_model_no_grants() -> None:
+    model_config = ModelConfig(
+        name="test_model_no_grants",
+        sql="SELECT 1 as id",
+        path=Path("test_model_no_grants.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is None
+
+
+def test_model_empty_grants() -> None:
+    model_config = ModelConfig(
+        name="test_model_empty_grants",
+        sql="SELECT 1 as id",
+        grants={},
+        path=Path("test_model_empty_grants.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is None
+
+
+def test_model_grants_valid_special_characters() -> None:
+    valid_grantees = [
+        "user@domain.com",
+        "service-account@project.iam.gserviceaccount.com",
+        "group:analysts",
+        '"quoted user"',
+        "`backtick user`",
+        "user_with_underscores",
+        "user.with.dots",
+    ]
+
+    model_config = ModelConfig(
+        name="test_model_special_chars",
+        sql="SELECT 1 as id",
+        grants={"select": valid_grantees},
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert "select" in grants_config
+    assert grants_config["select"] == valid_grantees
+
+
+def test_model_grants_engine_specific_bigquery() -> None:
+    model_config = ModelConfig(
+        name="test_model_bigquery",
+        sql="SELECT 1 as id",
+        grants={
+            "bigquery.dataviewer": ["user@domain.com"],
+            "select": ["analyst@company.com"],
+        },
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = BigQueryConfig(
+        name="bigquery_target",
+        project="test-project",
+        dataset="test_dataset",
+        location="US",
+        database="test-project",
+        schema="test_dataset",
+    )
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["bigquery.dataviewer"] == ["user@domain.com"]
+    assert grants_config["select"] == ["analyst@company.com"]
+
+
+def test_ephemeral_model_with_global_grants(create_empty_project):
+    dbt_project_dir, dbt_model_dir = create_empty_project()
+
+    yaml = YAML()
+    dbt_project_config = {
+        "name": "test_project",
+        "version": "1.0.0",
+        "config-version": 2,
+        "profile": "test",
+        "model-paths": ["models"],
+        "models": {"test_project": {"grants": {"select": ["reporter", "analyst"]}}},
+    }
+    dbt_project_file = dbt_project_dir / "dbt_project.yml"
+    with open(dbt_project_file, "w", encoding="utf-8") as f:
+        yaml.dump(dbt_project_config, f)
+
+    ephemeral_model_sql = """
+        {{ config(materialized='ephemeral') }}
+        SELECT 1 as id
+    """
+    ephemeral_model_file = dbt_model_dir / "ephemeral_model.sql"
+    with open(ephemeral_model_file, "w", encoding="utf-8") as f:
+        f.write(ephemeral_model_sql)
+
+    context = Context(paths=dbt_project_dir)
+    model = context.get_model('"local"."main"."ephemeral_model"')
+
+    assert model.kind.is_embedded
+    assert model.grants is None  # grants config is skipped for ephemeral / embedded models

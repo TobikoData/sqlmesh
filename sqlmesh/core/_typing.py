@@ -11,6 +11,7 @@ if t.TYPE_CHECKING:
     SessionProperties = t.Dict[str, t.Union[exp.Expression, str, int, float, bool]]
     CustomMaterializationProperties = t.Dict[str, t.Union[exp.Expression, str, int, float, bool]]
 
+
 if sys.version_info >= (3, 11):
     from typing import Self as Self
 else:

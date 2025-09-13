@@ -1,4 +1,5 @@
 import typing as t
+from contextlib import contextmanager
 import pytest
 from pytest import FixtureRequest
 from pathlib import Path
@@ -12,6 +13,7 @@ from sqlglot import exp
 from sqlmesh.core.context import Context
 from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
 from sqlmesh.core.snapshot.definition import SnapshotId
+from sqlmesh.utils import random_id
 
 from tests.core.engine_adapter.integration import (
     TestContext,
@@ -20,6 +22,87 @@ from tests.core.engine_adapter.integration import (
     IntegrationTestEngine,
     TEST_SCHEMA,
 )
+
+
+def _cleanup_user(engine_adapter: PostgresEngineAdapter, user_name: str) -> None:
+    """Helper function to clean up a PostgreSQL user and all their dependencies."""
+    try:
+        engine_adapter.execute(f"""
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE usename = '{user_name}' AND pid <> pg_backend_pid()
+        """)
+        engine_adapter.execute(f'DROP OWNED BY "{user_name}"')
+        engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
+    except Exception:
+        pass
+
+
+@contextmanager
+def create_users(
+    engine_adapter: PostgresEngineAdapter, *role_names: str
+) -> t.Iterator[t.Dict[str, t.Dict[str, str]]]:
+    """Create a set of Postgres users and yield their credentials."""
+    created_users = []
+    roles = {}
+
+    try:
+        for role_name in role_names:
+            user_name = f"test_{role_name}"
+            _cleanup_user(engine_adapter, user_name)
+
+        for role_name in role_names:
+            user_name = f"test_{role_name}"
+            password = random_id()
+            engine_adapter.execute(f"CREATE USER \"{user_name}\" WITH PASSWORD '{password}'")
+            engine_adapter.execute(f'GRANT USAGE ON SCHEMA public TO "{user_name}"')
+            created_users.append(user_name)
+            roles[role_name] = {"username": user_name, "password": password}
+
+        yield roles
+
+    finally:
+        for user_name in created_users:
+            _cleanup_user(engine_adapter, user_name)
+
+
+def create_engine_adapter_for_role(
+    role_credentials: t.Dict[str, str], ctx: TestContext, config: Config
+) -> PostgresEngineAdapter:
+    """Create a PostgreSQL adapter for a specific role to test authentication and permissions."""
+    from sqlmesh.core.config import PostgresConnectionConfig
+
+    gateway = ctx.gateway
+    assert gateway in config.gateways
+    connection_config = config.gateways[gateway].connection
+    assert isinstance(connection_config, PostgresConnectionConfig)
+
+    role_connection_config = PostgresConnectionConfig(
+        host=connection_config.host,
+        port=connection_config.port,
+        database=connection_config.database,
+        user=role_credentials["username"],
+        password=role_credentials["password"],
+        keepalives_idle=connection_config.keepalives_idle,
+        connect_timeout=connection_config.connect_timeout,
+        role=connection_config.role,
+        sslmode=connection_config.sslmode,
+        application_name=connection_config.application_name,
+    )
+
+    return t.cast(PostgresEngineAdapter, role_connection_config.create_engine_adapter())
+
+
+@contextmanager
+def engine_adapter_for_role(
+    role_credentials: t.Dict[str, str], ctx: TestContext, config: Config
+) -> t.Iterator[PostgresEngineAdapter]:
+    """Context manager that yields a PostgresEngineAdapter and ensures it is closed."""
+    adapter = create_engine_adapter_for_role(role_credentials, ctx, config)
+    try:
+        yield adapter
+    finally:
+        adapter.close()
 
 
 @pytest.fixture(params=list(generate_pytest_params(ENGINES_BY_NAME["postgres"])))
@@ -286,3 +369,503 @@ def test_janitor_drop_cascade(ctx: TestContext, tmp_path: Path) -> None:
         assert after_objects.views == [
             exp.to_table(model_b_prod_snapshot.table_name()).text("this")
         ]
+
+
+# Grants Integration Tests
+
+
+def test_grants_sync(engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config):
+    with create_users(engine_adapter, "user1", "user2", "user3") as roles:
+        table = ctx.table("grants_sync_test")
+        engine_adapter.create_table(
+            table, {"id": exp.DataType.build("INT"), "data": exp.DataType.build("TEXT")}
+        )
+
+        initial_grants = {
+            "SELECT": [roles["user1"]["username"], roles["user2"]["username"]],
+            "INSERT": [roles["user1"]["username"]],
+        }
+        engine_adapter.sync_grants_config(table, initial_grants)
+
+        initial_current_grants = engine_adapter._get_current_grants_config(table)
+        assert roles["user1"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user2"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user1"]["username"] in initial_current_grants.get("INSERT", [])
+
+        target_grants = {
+            "SELECT": [roles["user2"]["username"], roles["user3"]["username"]],
+            "UPDATE": [roles["user3"]["username"]],
+        }
+        engine_adapter.sync_grants_config(table, target_grants)
+
+        final_grants = engine_adapter._get_current_grants_config(table)
+
+        assert set(final_grants.get("SELECT", [])) == {
+            roles["user2"]["username"],
+            roles["user3"]["username"],
+        }
+        assert set(final_grants.get("UPDATE", [])) == {roles["user3"]["username"]}
+        assert final_grants.get("INSERT", []) == []
+
+
+def test_grants_sync_empty_config(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "user") as roles:
+        table = ctx.table("grants_empty_test")
+        engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        initial_grants = {
+            "SELECT": [roles["user"]["username"]],
+            "INSERT": [roles["user"]["username"]],
+        }
+        engine_adapter.sync_grants_config(table, initial_grants)
+
+        initial_current_grants = engine_adapter._get_current_grants_config(table)
+        assert roles["user"]["username"] in initial_current_grants.get("SELECT", [])
+        assert roles["user"]["username"] in initial_current_grants.get("INSERT", [])
+
+        engine_adapter.sync_grants_config(table, {})
+
+        final_grants = engine_adapter._get_current_grants_config(table)
+        assert final_grants == {}
+
+
+def test_grants_case_insensitive_grantees(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, config: Config
+):
+    with create_users(engine_adapter, "test_reader", "test_writer") as roles:
+        table = ctx.table("grants_quoted_test")
+        engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        test_schema = table.db
+        for role_credentials in roles.values():
+            engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials["username"]}"'
+            )
+
+        reader = roles["test_reader"]["username"]
+        writer = roles["test_writer"]["username"]
+
+        grants_config = {"SELECT": [reader, writer.upper()]}
+        engine_adapter.sync_grants_config(table, grants_config)
+
+        # Grantees are still in lowercase
+        current_grants = engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer in current_grants.get("SELECT", [])
+
+        # Revoke writer
+        grants_config = {"SELECT": [reader.upper()]}
+        engine_adapter.sync_grants_config(table, grants_config)
+
+        current_grants = engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer not in current_grants.get("SELECT", [])
+
+
+def test_grants_plan(engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path):
+    with create_users(engine_adapter, "analyst", "etl_user") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = """
+        MODEL (
+            name test_schema.grant_model,
+            kind FULL,
+            grants (
+                'select' = ['test_analyst']
+            )
+        );
+        SELECT 1 as id, CURRENT_DATE as created_date
+        """
+
+        (tmp_path / "models" / "grant_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        plan_result = context.plan(auto_apply=True, no_prompts=True)
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+
+        # Physical layer w/ grants
+        table_name = snapshot.table_name()
+        current_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert current_grants == {"SELECT": [roles["analyst"]["username"]]}
+
+        # Virtual layer (view) w/ grants
+        virtual_view_name = f"test_schema.grant_model"
+        virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert virtual_grants == {"SELECT": [roles["analyst"]["username"]]}
+
+        # Update model with query change and new grants
+        updated_model_def = """
+        MODEL (
+            name test_schema.grant_model,
+            kind FULL,
+            grants (
+                'select' = ['test_analyst', 'test_etl_user'],
+                'insert' = ['test_etl_user']
+            )
+        );
+        SELECT 1 as id, CURRENT_DATE as created_date, 'v2' as version
+        """
+
+        (tmp_path / "models" / "grant_model.sql").write_text(updated_model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        plan_result = context.plan(auto_apply=True, no_prompts=True)
+        assert len(plan_result.directly_modified) == 1
+
+        modified_snapshot_id = next(iter(plan_result.directly_modified))
+        new_snapshot = context.get_snapshot(modified_snapshot_id.name)
+        assert new_snapshot is not None
+
+        new_table_name = new_snapshot.table_name()
+        final_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(new_table_name, dialect=engine_adapter.dialect)
+        )
+        expected_final_grants = {
+            "SELECT": [roles["analyst"]["username"], roles["etl_user"]["username"]],
+            "INSERT": [roles["etl_user"]["username"]],
+        }
+        assert set(final_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert final_grants.get("INSERT", []) == expected_final_grants["INSERT"]
+
+        # Virtual layer should also have the updated grants
+        updated_virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert updated_virtual_grants.get("INSERT", []) == expected_final_grants["INSERT"]
+
+
+def test_grants_plan_target_layer_physical_only(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "reader") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = """
+        MODEL (
+            name test_schema.physical_grants_model,
+            kind FULL,
+            grants (
+                'select' = ['test_reader']
+            ),
+            grants_target_layer 'physical'
+        );
+        SELECT 1 as id, 'physical_only' as layer
+        """
+
+        (tmp_path / "models" / "physical_grants_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        plan_result = context.plan(auto_apply=True, no_prompts=True)
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+        physical_table_name = snapshot.table_name()
+
+        physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
+        assert physical_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Virtual layer should have no grants
+        virtual_view_name = f"test_schema.physical_grants_model"
+        virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert virtual_grants == {}
+
+
+def test_grants_plan_target_layer_virtual_only(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "viewer") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = """
+        MODEL (
+            name test_schema.virtual_grants_model,
+            kind FULL,
+            grants (
+                'select' = ['test_viewer']
+            ),
+            grants_target_layer 'virtual'
+        );
+        SELECT 1 as id, 'virtual_only' as layer
+        """
+
+        (tmp_path / "models" / "virtual_grants_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        plan_result = context.plan(auto_apply=True, no_prompts=True)
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+        physical_table_name = snapshot.table_name()
+
+        physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
+        # Physical table should have no grants
+        assert physical_grants == {}
+
+        virtual_view_name = f"test_schema.virtual_grants_model"
+        virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert virtual_grants == {"SELECT": [roles["viewer"]["username"]]}
+
+
+def test_grants_plan_full_refresh_model_via_replace(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "reader") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+        (tmp_path / "models" / "full_refresh_model.sql").write_text(
+            f"""
+            MODEL (
+                name test_schema.full_refresh_model,
+                kind FULL,
+                grants (
+                    'SELECT' = ['{roles["reader"]["username"]}']
+                )
+            );
+            SELECT 1 as id, 'test_data' as status
+            """
+        )
+
+        context = ctx.create_context(path=tmp_path)
+
+        plan_result = context.plan(
+            "dev",  # this triggers _replace_query_for_model for FULL models
+            auto_apply=True,
+            no_prompts=True,
+        )
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+        table_name = snapshot.table_name()
+
+        # Physical table
+        grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Virtual view
+        dev_view_name = "test_schema__dev.full_refresh_model"
+        dev_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(dev_view_name, dialect=engine_adapter.dialect)
+        )
+        assert dev_grants == {"SELECT": [roles["reader"]["username"]]}
+
+
+def test_grants_plan_incremental_model_first_insert(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "reader") as roles:
+        # Create an incremental model with grants
+        (tmp_path / "models").mkdir(exist_ok=True)
+        (tmp_path / "models" / "incremental_model.sql").write_text(
+            f"""
+            MODEL (
+                name test_schema.incremental_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ts
+                ),
+                grants (
+                    'SELECT' = ['{roles["reader"]["username"]}']
+                )
+            );
+
+            SELECT 1 as id, @start_ds::timestamp as ts, 'data' as value
+            """
+        )
+
+        context = ctx.create_context(path=tmp_path)
+
+        # First run - this will create the table via _replace_query_for_model
+        plan_result = context.plan(
+            "dev", start="2020-01-01", end="2020-01-01", auto_apply=True, no_prompts=True
+        )
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+        table_name = snapshot.table_name()
+
+        # Physical table
+        physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert physical_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Virtual view
+        dev_view_name = "test_schema__dev.incremental_model"
+        view_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(dev_view_name, dialect=engine_adapter.dialect)
+        )
+        assert view_grants == physical_grants
+
+
+def test_grants_plan_clone_environment(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "reader") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+        (tmp_path / "models" / "clone_model.sql").write_text(
+            f"""
+            MODEL (
+                name test_schema.clone_model,
+                kind FULL,
+                grants (
+                    'SELECT' = ['{roles["reader"]["username"]}']
+                )
+            );
+
+            SELECT 1 as id, 'data' as value
+            """
+        )
+
+        context = ctx.create_context(path=tmp_path)
+        prod_plan_result = context.plan("prod", auto_apply=True, no_prompts=True)
+
+        assert len(prod_plan_result.new_snapshots) == 1
+        prod_snapshot = prod_plan_result.new_snapshots[0]
+        prod_table_name = prod_snapshot.table_name()
+
+        # Prod physical table grants
+        prod_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(prod_table_name, dialect=engine_adapter.dialect)
+        )
+        assert prod_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Prod virtual view grants
+        prod_view_name = f"test_schema.clone_model"
+        prod_view_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(prod_view_name, dialect=engine_adapter.dialect)
+        )
+        assert prod_view_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Create dev environment (cloned from prod)
+        context.plan("dev", auto_apply=True, no_prompts=True, include_unmodified=True)
+
+        # Physical table grants should remain unchanged
+        prod_grants_after_clone = engine_adapter._get_current_grants_config(
+            exp.to_table(prod_table_name, dialect=engine_adapter.dialect)
+        )
+        assert prod_grants_after_clone == prod_grants
+
+        # Dev virtual view should have the same grants as prod
+        dev_view_name = f"test_schema__dev.clone_model"
+        dev_view_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(dev_view_name, dialect=engine_adapter.dialect)
+        )
+        assert dev_view_grants == prod_grants
+
+
+def test_grants_metadata_only_changes(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "reader", "writer", "admin") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        initial_model_def = f"""
+        MODEL (
+            name test_schema.metadata_grants_model,
+            kind FULL,
+            grants (
+                'select' = ['{roles["reader"]["username"]}']
+            )
+        );
+        SELECT 1 as id, 'unchanged_query' as data
+        """
+
+        (tmp_path / "models" / "metadata_grants_model.sql").write_text(initial_model_def)
+
+        # Create initial model with grants
+        context = ctx.create_context(path=tmp_path)
+        initial_plan_result = context.plan(auto_apply=True, no_prompts=True)
+
+        assert len(initial_plan_result.new_snapshots) == 1
+        initial_snapshot = initial_plan_result.new_snapshots[0]
+
+        physical_table_name = initial_snapshot.table_name()
+        initial_physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
+        assert initial_physical_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        virtual_view_name = f"test_schema.metadata_grants_model"
+        initial_virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert initial_virtual_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        # Update grants ONLY (same SQL query, replace SELECT with writer and admin, add admin to INSERT)
+        updated_model_def = f"""
+        MODEL (
+            name test_schema.metadata_grants_model,
+            kind FULL,
+            grants (
+                'select' = ['{roles["writer"]["username"]}', '{roles["admin"]["username"]}'],
+                'insert' = ['{roles["admin"]["username"]}']
+            )
+        );
+        SELECT 1 as id, 'unchanged_query' as data
+        """
+
+        (tmp_path / "models" / "metadata_grants_model.sql").write_text(updated_model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        context.plan(auto_apply=True, no_prompts=True)
+
+        # Grants should be updated regardless of how the change is categorized
+        updated_physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
+        expected_grants = {
+            "SELECT": [roles["writer"]["username"], roles["admin"]["username"]],
+            "INSERT": [roles["admin"]["username"]],
+        }
+        assert set(updated_physical_grants.get("SELECT", [])) == set(expected_grants["SELECT"])
+        assert updated_physical_grants.get("INSERT", []) == expected_grants["INSERT"]
+
+        updated_virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_grants["SELECT"])
+        assert updated_virtual_grants.get("INSERT", []) == expected_grants["INSERT"]
+
+        # Test removing grants (remove INSERT, replace SELECT with reader)
+        minimal_grants_model_def = f"""
+        MODEL (
+            name test_schema.metadata_grants_model,
+            kind FULL,
+            grants (
+                'select' = ['{roles["reader"]["username"]}']
+            )
+        );
+        SELECT 1 as id, 'unchanged_query' as data
+        """
+
+        (tmp_path / "models" / "metadata_grants_model.sql").write_text(minimal_grants_model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        context.plan(auto_apply=True, no_prompts=True)
+
+        final_physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
+        assert final_physical_grants == {"SELECT": [roles["reader"]["username"]]}
+
+        final_virtual_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
+        )
+        assert final_virtual_grants == {"SELECT": [roles["reader"]["username"]]}

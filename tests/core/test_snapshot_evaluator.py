@@ -41,8 +41,10 @@ from sqlmesh.core.model import (
     load_sql_based_model,
     ExternalModel,
     model,
+    create_sql_model,
 )
 from sqlmesh.core.model.kind import OnDestructiveChange, ExternalKind, OnAdditiveChange
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
@@ -55,7 +57,20 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.definition import to_view_mapping
-from sqlmesh.core.snapshot.evaluator import CustomMaterialization, SnapshotCreationFailedError
+from sqlmesh.core.snapshot.evaluator import (
+    CustomMaterialization,
+    EngineManagedStrategy,
+    FullRefreshStrategy,
+    IncrementalByPartitionStrategy,
+    IncrementalByTimeRangeStrategy,
+    IncrementalByUniqueKeyStrategy,
+    IncrementalUnmanagedStrategy,
+    MaterializableStrategy,
+    SCDType2Strategy,
+    SeedStrategy,
+    SnapshotCreationFailedError,
+    ViewStrategy,
+)
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import (
@@ -4627,3 +4642,459 @@ def test_wap_publish_failure(adapter_mock: Mock, make_snapshot: t.Callable[..., 
     # Execute audit with WAP ID and expect it to raise the exception
     with pytest.raises(Exception, match="WAP publish failed"):
         evaluator.audit(snapshot, snapshots={}, wap_id=wap_id)
+
+
+def _create_grants_test_model(grants=None, kind="FULL", grants_target_layer=None):
+    if kind == "SEED":
+        from sqlmesh.core.model.definition import create_seed_model
+        from sqlmesh.core.model.kind import SeedKind
+        import tempfile
+        import os
+
+        # Create a temporary CSV file for the test
+        temp_csv = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+        temp_csv.write("id,name\n1,test\n2,test2\n")
+        temp_csv.flush()
+        temp_csv.close()
+
+        seed_kind_config = {"name": "SEED", "path": temp_csv.name}
+        seed_kind = SeedKind(**seed_kind_config)
+
+        kwargs = {}
+        if grants is not None:
+            kwargs["grants"] = grants
+        if grants_target_layer is not None:
+            kwargs["grants_target_layer"] = grants_target_layer
+
+        model = create_seed_model("test_model", seed_kind, **kwargs)
+
+        # Clean up the temporary file
+        os.unlink(temp_csv.name)
+
+        return model
+
+    # Handle regular SQL models
+    kwargs = {
+        "kind": kind,
+    }
+    if grants is not None:
+        kwargs["grants"] = grants
+    if grants_target_layer is not None:
+        kwargs["grants_target_layer"] = grants_target_layer
+
+    # Add column annotations for non-SEED models to ensure table creation
+    if kind != "SEED":
+        kwargs["columns"] = {
+            "id": "INT",
+            "ds": "DATE",
+            "updated_at": "TIMESTAMP",
+        }
+
+    # Add required fields for specific model kinds
+    if kind == "INCREMENTAL_BY_TIME_RANGE":
+        kwargs["kind"] = {"name": "INCREMENTAL_BY_TIME_RANGE", "time_column": "ds"}
+    elif kind == "INCREMENTAL_BY_PARTITION":
+        kwargs["kind"] = {"name": "INCREMENTAL_BY_PARTITION"}
+        kwargs["partitioned_by"] = ["ds"]  # This goes on the model, not the kind
+    elif kind == "INCREMENTAL_BY_UNIQUE_KEY":
+        kwargs["kind"] = {"name": "INCREMENTAL_BY_UNIQUE_KEY", "unique_key": ["id"]}
+    elif kind == "INCREMENTAL_UNMANAGED":
+        kwargs["kind"] = {"name": "INCREMENTAL_UNMANAGED"}
+    elif kind == "SCD_TYPE_2":
+        kwargs["kind"] = {
+            "name": "SCD_TYPE_2",
+            "unique_key": ["id"],
+            "updated_at_name": "updated_at",
+        }
+
+    return create_sql_model(
+        "test_model",
+        parse_one("SELECT 1 as id, CURRENT_DATE as ds, CURRENT_TIMESTAMP as updated_at"),
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize(
+    "target_layer,apply_layer,expected_call_count",
+    [
+        (GrantsTargetLayer.ALL, GrantsTargetLayer.PHYSICAL, 1),
+        (GrantsTargetLayer.ALL, GrantsTargetLayer.VIRTUAL, 1),
+        (GrantsTargetLayer.PHYSICAL, GrantsTargetLayer.PHYSICAL, 1),
+        (GrantsTargetLayer.PHYSICAL, GrantsTargetLayer.VIRTUAL, 0),
+        (GrantsTargetLayer.VIRTUAL, GrantsTargetLayer.PHYSICAL, 0),
+        (GrantsTargetLayer.VIRTUAL, GrantsTargetLayer.VIRTUAL, 1),
+    ],
+)
+def test_apply_grants_target_layer(
+    target_layer: GrantsTargetLayer,
+    apply_layer: GrantsTargetLayer,
+    expected_call_count: int,
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+    strategy = ViewStrategy(adapter_mock)
+
+    model = _create_grants_test_model(
+        grants={"select": ["user1"]}, grants_target_layer=target_layer
+    )
+
+    strategy._apply_grants(model, "test_table", apply_layer)
+
+    if expected_call_count > 0:
+        assert sync_grants_mock.call_count == expected_call_count
+    else:
+        sync_grants_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "model_kind_name",
+    [
+        "FULL",
+        "INCREMENTAL_BY_TIME_RANGE",
+        "SEED",
+        "MANAGED",
+        "SCD_TYPE_2",
+        "VIEW",
+    ],
+)
+def test_grants_create_model_kind(
+    model_kind_name: str,
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    grants = {"select": ["user1"]}
+    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    snapshot = make_snapshot(model)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot], {})
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == grants
+
+
+@pytest.mark.parametrize(
+    "target_layer",
+    [
+        GrantsTargetLayer.PHYSICAL,
+        GrantsTargetLayer.VIRTUAL,
+        GrantsTargetLayer.ALL,
+    ],
+)
+def test_grants_target_layer(
+    target_layer: GrantsTargetLayer,
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    grants = {"select": ["user1"]}
+    model = create_sql_model(
+        "test_schema.test_model",
+        parse_one("SELECT 1 as id"),
+        kind="FULL",
+        grants=grants,
+        grants_target_layer=target_layer,
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+    if target_layer == GrantsTargetLayer.VIRTUAL:
+        assert sync_grants_mock.call_count == 0
+    else:
+        assert sync_grants_mock.call_count == 1
+        assert sync_grants_mock.call_args[0][1] == grants
+    sync_grants_mock.reset_mock()
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="prod"))
+    if target_layer == GrantsTargetLayer.ALL:
+        assert sync_grants_mock.call_count == 2
+    else:
+        assert sync_grants_mock.call_count == 1
+
+
+def test_grants_update(
+    adapter_mock: Mock, mocker: MockerFixture, make_snapshot: t.Callable[..., Snapshot]
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = create_sql_model(
+        "test_schema.test_model",
+        parse_one("SELECT 1 as id"),
+        kind="FULL",
+        grants={"select": ["user1"]},
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot], {})
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == {"select": ["user1"]}
+
+    # Update model query AND change grants
+    updated_model_dict = model.dict()
+    updated_model_dict["query"] = parse_one("SELECT 1 as id, 2 as value")
+    updated_model_dict["grants"] = {"select": ["user2", "user3"], "insert": ["admin"]}
+    updated_model = SqlModel.parse_obj(updated_model_dict)
+
+    new_snapshot = make_snapshot(updated_model)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    sync_grants_mock.reset_mock()
+    evaluator.create([new_snapshot], {})
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == {"select": ["user2", "user3"], "insert": ["admin"]}
+
+    # Update model query AND remove grants
+    updated_model_dict = model.dict()
+    updated_model_dict["query"] = parse_one("SELECT 1 as id, 'updated' as status")
+    updated_model_dict["grants"] = {}
+    updated_model = SqlModel.parse_obj(updated_model_dict)
+
+    new_snapshot = make_snapshot(updated_model)
+    new_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    sync_grants_mock.reset_mock()
+    evaluator.create([new_snapshot], {})
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == {}
+
+
+def test_grants_create_and_evaluate(
+    adapter_mock: Mock, mocker: MockerFixture, make_snapshot: t.Callable[..., Snapshot]
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (time_column ds),
+                grants (
+                    'select' = ['reader1', 'reader2'],
+                    'insert' = ['writer']
+                )
+            );
+            SELECT ds::DATE, value::INT FROM source WHERE ds BETWEEN @start_ds AND @end_ds;
+        """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == {
+        "select": ["reader1", "reader2"],
+        "insert": ["writer"],
+    }
+
+    sync_grants_mock.reset_mock()
+    evaluator.evaluate(
+        snapshot, start="2020-01-01", end="2020-01-02", execution_time="2020-01-02", snapshots={}
+    )
+    # Evaluate should not reapply grants
+    sync_grants_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "strategy_class",
+    [
+        EngineManagedStrategy,
+        FullRefreshStrategy,
+        IncrementalByTimeRangeStrategy,
+        IncrementalByPartitionStrategy,
+        IncrementalUnmanagedStrategy,
+        IncrementalByUniqueKeyStrategy,
+        SCDType2Strategy,
+        SeedStrategy,
+    ],
+)
+def test_grants_materializable_strategy_migrate(
+    strategy_class: t.Type[MaterializableStrategy],
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    adapter_mock.get_alter_operations.return_value = []
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+    strategy = strategy_class(adapter_mock)
+    grants = {"select": ["user1"]}
+    model = _create_grants_test_model(grants=grants)
+    snapshot = make_snapshot(model)
+
+    strategy.migrate(
+        "target_table",
+        "source_table",
+        snapshot,
+        ignore_destructive=False,
+        ignore_additive=False,
+        allow_destructive_snapshots=set(),
+        allow_additive_snapshots=set(),
+    )
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == grants
+
+
+def test_grants_clone_snapshot_in_dev(
+    adapter_mock: Mock, mocker: MockerFixture, make_snapshot: t.Callable[..., Snapshot]
+):
+    adapter_mock.SUPPORTS_CLONING = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    grants = {"select": ["user1", "user2"]}
+    model = _create_grants_test_model(grants=grants)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator._clone_snapshot_in_dev(
+        snapshot, {}, DeployabilityIndex.all_deployable(), {}, {}, set(), set()
+    )
+
+    sync_grants_mock.assert_called_once()
+    assert (
+        sync_grants_mock.call_args[0][0].sql()
+        == f"sqlmesh__default.test_model__{snapshot.version}__dev"
+    )
+    assert sync_grants_mock.call_args[0][1] == grants
+
+
+@pytest.mark.parametrize(
+    "model_kind_name",
+    [
+        "INCREMENTAL_BY_TIME_RANGE",
+        "SEED",
+    ],
+)
+def test_grants_evaluator_insert_without_replace_query_for_model(
+    model_kind_name: str,
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    adapter_mock.table_exists.return_value = False  # Table doesn't exist
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    grants = {"select": ["reader1", "reader2"]}
+    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        start="2023-01-01",
+        end="2023-01-01",
+        execution_time="2023-01-01",
+        snapshots={},
+    )
+
+    # Grants are applied during the table creation phase, not during insert
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == grants
+
+    sync_grants_mock.reset_mock()
+    adapter_mock.table_exists.return_value = True
+    snapshot.add_interval("2023-01-01", "2023-01-01")
+    evaluator.evaluate(
+        snapshot,
+        start="2023-01-02",  # Different date from existing interval
+        end="2023-01-02",
+        execution_time="2023-01-02",
+        snapshots={},
+    )
+
+    # Should not apply grants since it's not the first insert
+    sync_grants_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "model_kind_name",
+    [
+        "INCREMENTAL_BY_PARTITION",
+        "INCREMENTAL_BY_UNIQUE_KEY",
+        "INCREMENTAL_UNMANAGED",
+        "FULL",
+    ],
+)
+def test_grants_evaluator_insert_with_replace_query_for_model(
+    model_kind_name: str,
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+    adapter_mock.table_exists.return_value = False  # Table doesn't exist
+    adapter_mock.columns.return_value = {
+        "id": exp.DataType.build("int"),
+        "ds": exp.DataType.build("date"),
+    }
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    grants = {"select": ["user1"]}
+    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Now evaluate the snapshot (this should apply grants during first insert)
+    evaluator.evaluate(
+        snapshot,
+        start="2023-01-01",
+        end="2023-01-01",
+        execution_time="2023-01-01",
+        snapshots={},
+    )
+
+    # Should be called twice more during evaluate: once creating table,
+    # once during first insert with _replace_query_for_model()
+    assert sync_grants_mock.call_count == 2
+    assert sync_grants_mock.call_args[0][1] == grants
+
+    sync_grants_mock.reset_mock()
+    adapter_mock.table_exists.return_value = True
+    snapshot.add_interval("2023-01-01", "2023-01-01")
+    evaluator.evaluate(
+        snapshot,
+        start="2023-01-02",  # Different date from existing interval
+        end="2023-01-02",
+        execution_time="2023-01-02",
+        snapshots={},
+    )
+
+    if model_kind_name == "FULL":
+        # Full refresh  always calls _replace_query_for_model()
+        sync_grants_mock.assert_called_once()
+        assert sync_grants_mock.call_args[0][1] == grants
+    else:
+        # Should not apply grants since it's not the first insert
+        sync_grants_mock.assert_not_called()
