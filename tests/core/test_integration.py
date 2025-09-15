@@ -3116,7 +3116,32 @@ def test_virtual_environment_mode_dev_only_model_change_downstream_of_seed(
 
     # Make sure there's no error when applying the plan
     context.apply(plan)
-    context.plan("prod", auto_apply=True, no_prompts=True)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_change_standalone_audit(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    # Change a model upstream from a standalone audit
+    model = context.get_model("sushi.items")
+    model = model.copy(update={"stamp": "force new version"})
+    context.upsert_model(model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # Make sure the standalone audit is among modified
+    assert (
+        context.get_snapshot("assert_item_price_above_zero").snapshot_id
+        in plan.indirectly_modified[context.get_snapshot("sushi.items").snapshot_id]
+    )
+
+    # Make sure there's no error when applying the plan
+    context.apply(plan)
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")

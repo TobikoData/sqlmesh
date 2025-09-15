@@ -23,6 +23,12 @@ def should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
 
 
 def is_breaking_kind_change(old: Snapshot, new: Snapshot) -> bool:
+    if new.is_model != old.is_model:
+        # If one is a model and the other isn't, then we need to rebuild
+        return True
+    if not new.is_model or not old.is_model:
+        # If neither are models, then we don't need to rebuild
+        return False
     if old.virtual_environment_mode != new.virtual_environment_mode:
         # If the virtual environment mode has changed, then we need to rebuild
         return True
