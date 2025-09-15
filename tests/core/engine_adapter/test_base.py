@@ -13,7 +13,6 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core import dialect as d
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
-from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
 from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, DataObject
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation, NestedSupport
 from sqlmesh.utils import columns_to_types_to_struct
@@ -21,8 +20,6 @@ from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
-if t.TYPE_CHECKING:
-    pass
 
 pytestmark = pytest.mark.engine
 
@@ -482,7 +479,8 @@ def test_insert_overwrite_no_where(make_mocked_engine_adapter: t.Callable):
 def test_insert_overwrite_by_condition_column_contains_unsafe_characters(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
 ):
-    adapter = make_mocked_engine_adapter(InsertOverwriteWithMergeMixin)
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.MERGE
 
     source_queries, columns_to_types = adapter._get_source_queries_and_columns_to_types(
         parse_one("SELECT 1 AS c"), None, target_table="test_table"

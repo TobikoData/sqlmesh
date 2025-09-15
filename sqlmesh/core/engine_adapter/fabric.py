@@ -7,21 +7,14 @@ import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
+from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
-    SourceQuery,
 )
-from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
 
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
-
-
-from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 
 logger = logging.getLogger(__name__)
 
@@ -57,26 +50,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     @_target_catalog.setter
     def _target_catalog(self, value: t.Optional[str]) -> None:
         self._connection_pool.set_attribute("target_catalog", value)
-
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        source_queries: t.List[SourceQuery],
-        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        where: t.Optional[exp.Condition] = None,
-        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        # Override to avoid MERGE statement which isn't fully supported in Fabric
-        return EngineAdapter._insert_overwrite_by_condition(
-            self,
-            table_name=table_name,
-            source_queries=source_queries,
-            target_columns_to_types=target_columns_to_types,
-            where=where,
-            insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
-            **kwargs,
-        )
 
     @property
     def api_client(self) -> FabricHttpClient:
