@@ -1633,6 +1633,30 @@ class EngineAdapter:
                             target_columns_to_types=target_columns_to_types,
                             order_projections=False,
                         )
+                    elif insert_overwrite_strategy.is_merge:
+                        columns = [exp.column(col) for col in target_columns_to_types]
+                        when_not_matched_by_source = exp.When(
+                            matched=False,
+                            source=True,
+                            condition=where,
+                            then=exp.Delete(),
+                        )
+                        when_not_matched_by_target = exp.When(
+                            matched=False,
+                            source=False,
+                            then=exp.Insert(
+                                this=exp.Tuple(expressions=columns),
+                                expression=exp.Tuple(expressions=columns),
+                            ),
+                        )
+                        self._merge(
+                            target_table=table_name,
+                            query=query,
+                            on=exp.false(),
+                            whens=exp.Whens(
+                                expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                            ),
+                        )
                     else:
                         insert_exp = exp.insert(
                             query,

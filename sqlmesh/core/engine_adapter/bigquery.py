@@ -9,7 +9,6 @@ from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
-    InsertOverwriteWithMergeMixin,
     ClusteredByMixin,
     RowDiffMixin,
     TableAlterClusterByOperation,
@@ -20,6 +19,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     SourceQuery,
     set_catalog,
+    InsertOverwriteStrategy,
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import TableAlterOperation, NestedSupport
@@ -54,7 +54,7 @@ NestedFieldsDict = t.Dict[str, t.List[NestedField]]
 
 
 @set_catalog()
-class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, RowDiffMixin):
+class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -68,6 +68,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin, ClusteredByMixin, Row
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA"]
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.MERGE
 
     SCHEMA_DIFFER_KWARGS = {
         "compatible_types": {
