@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.dialect import schema_
+from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -683,3 +684,91 @@ def test_replace_table_catalog_support(
             sql_calls[0]
             == f'CREATE TABLE IF NOT EXISTS "{catalog_name}"."schema"."test_table" AS SELECT 1 AS "col"'
         )
+
+
+def test_insert_overwrite_time_partition_hive(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["hive", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION hive.insert_existing_partitions_behavior='OVERWRITE'",
+        'INSERT INTO "hive"."schema"."test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+        "SET SESSION hive.insert_existing_partitions_behavior='APPEND'",
+    ]
+
+
+def test_insert_overwrite_time_partition_iceberg(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["acme_iceberg", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'MERGE INTO "acme_iceberg"."schema"."test_table" AS "__merge_target__" USING (SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\') AS "__MERGE_SOURCE__" ON FALSE WHEN NOT MATCHED BY SOURCE AND "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "b") VALUES ("a", "b")'
+    ]
+
+
+def test_insert_overwrite_time_partition_delta(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["acme_delta_lake", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'MERGE INTO "acme_delta_lake"."schema"."test_table" AS "__merge_target__" USING (SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\') AS "__MERGE_SOURCE__" ON FALSE WHEN NOT MATCHED BY SOURCE AND "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "b") VALUES ("a", "b")'
+    ]
+
+
+def test_insert_overwrite_time_partition_other(
+    trino_mocked_engine_adapter: TrinoEngineAdapter, mocker: MockerFixture
+):
+    adapter = trino_mocked_engine_adapter
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.trino.TrinoEngineAdapter.get_catalog_type",
+        return_value="other",
+    )
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["other", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'DELETE FROM "other"."schema"."test_table" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+        'INSERT INTO "other"."schema"."test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+    ]

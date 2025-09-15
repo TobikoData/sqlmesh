@@ -34,8 +34,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
-CATALOG_TYPES_SUPPORTING_REPLACE_TABLE = {"iceberg", "delta_lake"}
-
 
 @set_catalog()
 class TrinoEngineAdapter(
@@ -117,6 +115,22 @@ class TrinoEngineAdapter(
         finally:
             self.execute(f"RESET SESSION AUTHORIZATION")
 
+    @classmethod
+    def _is_hive_catalog(cls, catalog_type: str) -> bool:
+        return catalog_type == "hive"
+
+    @classmethod
+    def _is_delta_lake_catalog(cls, catalog_type: str) -> bool:
+        # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
+        # Ex: `acme_delta_lake` would be identified as an delta lake catalog
+        return "delta_lake" in catalog_type
+
+    @classmethod
+    def _is_iceberg_catalog(cls, catalog_type: str) -> bool:
+        # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
+        # Ex: `acme_iceberg` would be identified as an iceberg catalog
+        return "iceberg" in catalog_type
+
     def replace_query(
         self,
         table_name: TableName,
@@ -129,13 +143,9 @@ class TrinoEngineAdapter(
         **kwargs: t.Any,
     ) -> None:
         catalog_type = self.get_catalog_type_from_table(table_name)
-        # User may have a custom catalog type name so we are assuming they keep the catalog type still in the name
-        # Ex: `acme_iceberg` would be identified as an iceberg catalog and therefore supports replace table
-        supports_replace_table_override = None
-        for replace_table_catalog_type in CATALOG_TYPES_SUPPORTING_REPLACE_TABLE:
-            if replace_table_catalog_type in catalog_type:
-                supports_replace_table_override = True
-                break
+        supports_replace_table_override = self._is_delta_lake_catalog(
+            catalog_type
+        ) or self._is_iceberg_catalog(catalog_type)
 
         super().replace_query(
             table_name=table_name,
@@ -158,8 +168,9 @@ class TrinoEngineAdapter(
         **kwargs: t.Any,
     ) -> None:
         catalog = exp.to_table(table_name).catalog or self.get_current_catalog()
+        catalog_type = self.get_catalog_type(catalog)
 
-        if where and self.get_catalog_type(catalog) == "hive":
+        if where and self._is_hive_catalog(catalog_type):
             # These session properties are only valid for the Trino Hive connector
             # Attempting to set them on an Iceberg catalog will throw an error:
             # "Session property 'catalog.insert_existing_partitions_behavior' does not exist"
@@ -168,6 +179,14 @@ class TrinoEngineAdapter(
                 table_name, source_queries, target_columns_to_types, where
             )
             self.execute(f"SET SESSION {catalog}.insert_existing_partitions_behavior='APPEND'")
+        elif self._is_delta_lake_catalog(catalog_type) or self._is_iceberg_catalog(catalog_type):
+            super()._insert_overwrite_by_condition(
+                table_name,
+                source_queries,
+                target_columns_to_types,
+                where,
+                insert_overwrite_strategy_override=InsertOverwriteStrategy.MERGE,
+            )
         else:
             super()._insert_overwrite_by_condition(
                 table_name,
