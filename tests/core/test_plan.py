@@ -26,7 +26,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ModelKindName,
 )
-from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange, ViewKind
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
