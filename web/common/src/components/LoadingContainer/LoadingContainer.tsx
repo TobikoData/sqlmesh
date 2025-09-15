@@ -28,7 +28,7 @@ export const LoadingContainer = React.forwardRef<
     function renderLoading() {
       return (
         <>
-          <LoadingIcon />
+          <LoadingIcon className="shrink-0" />
           {message && <span className="text-sm">{message}</span>}
         </>
       )
