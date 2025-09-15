@@ -4200,4 +4200,4 @@ def test_indirect_change_to_materialized_view_is_breaking(make_snapshot):
 
     PlanBuilder(context_diff).build()
 
-    assert snapshot_b_new.change_category == SnapshotChangeCategory.BREAKING
+    assert snapshot_b_new.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
