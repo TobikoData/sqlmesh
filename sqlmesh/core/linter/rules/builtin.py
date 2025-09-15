@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import typing as t
-from pathlib import Path
 
 from ruamel.yaml import YAML
 from sqlglot.expressions import Star
@@ -139,7 +138,7 @@ class NoMissingUnitTest(Rule):
         if isinstance(model, ExternalModel):
             return None
 
-        test_dir = Path("tests")
+        test_dir = self.context.path / "tests"
         found_test = False
 
         yaml_parser = YAML(typ="safe")
@@ -151,7 +150,6 @@ class NoMissingUnitTest(Rule):
                 continue
 
             for _, test_config in test_data.items():
-                print(f"Test_Config: {test_config}")
                 if test_config.get("model") == model.name:
                     found_test = True
                     break

@@ -212,8 +212,23 @@ def test_no_missing_unit_tests(tmp_path, copy_to_temp_path):
 
     # Lint the models
     lints = context.lint_models(raise_on_error=False)
-    assert 1 == 1
-    # assert len(lints) >= 1
-    # lint = lints[0]
-    # assert lint.violation_range is None
-    # print(lints)
+
+    # Should have violations for models without tests (most models except customers)
+    assert len(lints) >= 1
+
+    # Check that we get violations for models without tests
+    violation_messages = [lint.violation_msg for lint in lints]
+    assert any("is missing unit test(s)" in msg for msg in violation_messages)
+
+    # Check that models with existing tests don't have violations
+    models_with_tests = ["customer_revenue_by_day", "customer_revenue_lifetime", "order_items"]
+
+    for model_name in models_with_tests:
+        model_violations = [
+            lint
+            for lint in lints
+            if model_name in lint.violation_msg and "is missing unit test(s)" in lint.violation_msg
+        ]
+        assert len(model_violations) == 0, (
+            f"Model {model_name} should not have a violation since it has a test"
+        )
