@@ -677,7 +677,7 @@ class PlanBuilder:
             if snapshot.is_materialized_view:
                 # We categorize changes as breaking to allow for instantaneous switches in a virtual layer.
                 # Otherwise, there might be a potentially long downtime during MVs recreation.
-                snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING, forward_only)
                 return
 
             all_upstream_forward_only = set()
