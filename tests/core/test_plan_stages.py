@@ -771,9 +771,11 @@ def test_build_plan_stages_restatement_prod_identifies_dev_intervals(
     # note: we only clear the intervals from state for "a" in dev, we leave prod alone
     assert restatement_stage.snapshot_intervals_to_clear
     assert len(restatement_stage.snapshot_intervals_to_clear) == 1
-    snapshot_name, clear_request = list(restatement_stage.snapshot_intervals_to_clear.items())[0]
-    assert isinstance(clear_request, SnapshotIntervalClearRequest)
+    snapshot_name, clear_requests = list(restatement_stage.snapshot_intervals_to_clear.items())[0]
     assert snapshot_name == '"a"'
+    assert len(clear_requests) == 1
+    clear_request = clear_requests[0]
+    assert isinstance(clear_request, SnapshotIntervalClearRequest)
     assert clear_request.snapshot_id == snapshot_a_dev.snapshot_id
     assert clear_request.snapshot == snapshot_a_dev.id_and_version
     assert clear_request.interval == (to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))
