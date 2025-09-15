@@ -192,6 +192,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
         {showCopy && (
           <CopyButton
             size="2xs"
+            variant="transparent"
             text={name}
             className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover"
           >
