@@ -42,11 +42,20 @@ SignalRegistry = UniqueKeyDict[str, signal]
 
 @signal()
 def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionContext) -> bool:
+    deployability_index = context.deployability_index
     adapter = context.engine_adapter
-    if not snapshot.last_altered_ts or not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
+
+    if not deployability_index or not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
         return True
 
-    adapter = context.engine_adapter
+    last_altered_ts = (
+        snapshot.last_altered_ts
+        if deployability_index.is_deployable(snapshot)
+        else snapshot.dev_last_altered_ts
+    )
+    if not last_altered_ts:
+        return True
+
     parent_snapshots = {context.snapshots[p.name] for p in snapshot.parents}
     if len(parent_snapshots) != len(snapshot.node.depends_on) or not all(
         p.is_external for p in parent_snapshots
@@ -57,7 +66,7 @@ def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionConte
     # Finding new data means that the upstream depedencies have been altered
     # since the last time the model was evaluated
     upstream_dep_has_new_data = any(
-        upstream_last_altered_ts > snapshot.last_altered_ts
+        upstream_last_altered_ts > last_altered_ts
         for upstream_last_altered_ts in adapter.get_external_model_freshness(
             [p.name for p in parent_snapshots]
         )

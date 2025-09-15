@@ -309,12 +309,6 @@ class IntervalState:
                         identifier=identifier,
                         version=version,
                         dev_version=dev_version,
-                        last_altered_ts=last_altered_ts,
-                    )
-
-                if last_altered_ts:
-                    intervals[merge_key].last_altered_ts = max(
-                        intervals[merge_key].last_altered_ts or 0, last_altered_ts
                     )
 
                 if pending_restatement_interval_merge_key not in intervals:
@@ -337,8 +331,10 @@ class IntervalState:
                 else:
                     if is_dev:
                         intervals[merge_key].add_dev_interval(start, end)
+                        intervals[merge_key].add_dev_last_altered_ts(last_altered_ts)
                     else:
                         intervals[merge_key].add_interval(start, end)
+                        intervals[merge_key].add_last_altered_ts(last_altered_ts)
                         # Remove all pending restatement intervals recorded before the current interval has been added
                         intervals[
                             pending_restatement_interval_merge_key
