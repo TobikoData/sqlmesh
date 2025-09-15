@@ -4135,10 +4135,11 @@ def test_plan_ignore_cron_flag(make_snapshot):
 
 def test_indirect_change_to_materialized_view_is_breaking(make_snapshot):
     snapshot_a_old = make_snapshot(
-        SqlModel(name="a",
-                 query=parse_one("select 1 as col_a, col_b"),
-                 kind=ViewKind(materialized=True),
-            )
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as col_a, col_b"),
+            kind=ViewKind(materialized=True),
+        )
     )
     snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
 
@@ -4153,10 +4154,11 @@ def test_indirect_change_to_materialized_view_is_breaking(make_snapshot):
     snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=False)
 
     snapshot_a_new = make_snapshot(
-        SqlModel(name="a",
-                 query=parse_one("select 2 as col_a, col_b"),
-                 kind=ViewKind(materialized=True),
-                 )
+        SqlModel(
+            name="a",
+            query=parse_one("select 2 as col_a, col_b"),
+            kind=ViewKind(materialized=True),
+        )
     )
 
     snapshot_a_new.previous_versions = snapshot_a_old.all_versions
