@@ -674,6 +674,12 @@ class PlanBuilder:
                     if mode == AutoCategorizationMode.FULL:
                         snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
         elif self._context_diff.indirectly_modified(snapshot.name):
+            if snapshot.is_materialized_view:
+                # We categorize changes as breaking to allow for instantaneous switches in a virtual layer.
+                # Otherwise, there might be a potentially long downtime during MVs recreation.
+                snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only)
+                return
+
             all_upstream_forward_only = set()
             all_upstream_categories = set()
             direct_parent_categories = set()
