@@ -66,7 +66,9 @@ class Plan(PydanticModel, frozen=True):
     
     Note that dev previews are also considered restatements, so :selected_models_to_restate can be empty
     while :restatements is still populated with dev previews
-    """
+    """    
+    clear_restated_intervals_across_model_versions: bool
+    """Whether or not to clear intervals from state for other versions of the models listed in :restatements"""
 
     start_override_per_model: t.Optional[t.Dict[str, datetime]]
     end_override_per_model: t.Optional[t.Dict[str, datetime]]
@@ -268,6 +270,7 @@ class Plan(PydanticModel, frozen=True):
             skip_backfill=self.skip_backfill,
             empty_backfill=self.empty_backfill,
             restatements={s.name: i for s, i in self.restatements.items()},
+            clear_restated_intervals_across_model_versions=self.clear_restated_intervals_across_model_versions,
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
             allow_additive_models=self.allow_additive_models,
@@ -312,6 +315,7 @@ class EvaluatablePlan(PydanticModel):
     skip_backfill: bool
     empty_backfill: bool
     restatements: t.Dict[str, Interval]
+    clear_restated_intervals_across_model_versions: bool
     is_dev: bool
     allow_destructive_models: t.Set[str]
     allow_additive_models: t.Set[str]

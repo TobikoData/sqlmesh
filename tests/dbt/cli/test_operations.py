@@ -2,17 +2,18 @@ import typing as t
 from pathlib import Path
 import pytest
 from sqlmesh_dbt.operations import create
+from sqlmesh_dbt.console import DbtCliConsole
 from sqlmesh.utils import yaml
 from sqlmesh.utils.errors import SQLMeshError
 import time_machine
-from sqlmesh.core.console import NoopConsole
 from sqlmesh.core.plan import PlanBuilder
 from sqlmesh.core.config.common import VirtualEnvironmentMode
+from tests.dbt.cli.conftest import EmptyProjectCreator
 
 pytestmark = pytest.mark.slow
 
 
-class PlanCapturingConsole(NoopConsole):
+class PlanCapturingConsole(DbtCliConsole):
     def plan(
         self,
         plan_builder: PlanBuilder,
@@ -257,3 +258,78 @@ def test_run_option_mapping_dev(jaffle_shop_duckdb: Path):
         '"jaffle_shop"."main"."orders"',
         '"jaffle_shop"."main"."stg_orders"',
     }
+
+
+@pytest.mark.parametrize(
+    "env_name,vde_mode",
+    [
+        ("prod", VirtualEnvironmentMode.DEV_ONLY),
+        ("prod", VirtualEnvironmentMode.FULL),
+        ("dev", VirtualEnvironmentMode.DEV_ONLY),
+        ("dev", VirtualEnvironmentMode.FULL),
+    ],
+)
+def test_run_option_full_refresh(
+    create_empty_project: EmptyProjectCreator, env_name: str, vde_mode: VirtualEnvironmentMode
+):
+    # create config file prior to load
+    project_path = create_empty_project(project_name="test")
+
+    config_path = project_path / "sqlmesh.yaml"
+    config = yaml.load(config_path)
+    config["virtual_environment_mode"] = vde_mode.value
+
+    with config_path.open("w") as f:
+        yaml.dump(config, f)
+
+    (project_path / "models" / "model_a.sql").write_text("select 1")
+    (project_path / "models" / "model_b.sql").write_text("select 2")
+
+    operations = create(project_dir=project_path)
+
+    assert operations.context.config.virtual_environment_mode == vde_mode
+
+    console = PlanCapturingConsole()
+    operations.context.console = console
+
+    plan = operations.run(environment=env_name, full_refresh=True)
+
+    # both models added as backfills + restatements regardless of env / vde mode setting
+    assert plan.environment.name == env_name
+    assert len(plan.restatements) == 2
+    assert list(plan.restatements)[0].name == '"test"."main"."model_a"'
+    assert list(plan.restatements)[1].name == '"test"."main"."model_b"'
+
+    assert plan.requires_backfill
+    assert not plan.empty_backfill
+    assert not plan.skip_backfill
+    assert plan.models_to_backfill == set(['"test"."main"."model_a"', '"test"."main"."model_b"'])
+
+    if vde_mode == VirtualEnvironmentMode.DEV_ONLY:
+        # We do not clear intervals across all model versions in the default DEV_ONLY mode, even when targeting prod,
+        # because dev data is hardcoded to preview only so by definition and can never be deployed
+        assert not plan.clear_restated_intervals_across_model_versions
+    else:
+        if env_name == "prod":
+            # in FULL mode, we do it for prod
+            assert plan.clear_restated_intervals_across_model_versions
+        else:
+            # but not dev
+            assert not plan.clear_restated_intervals_across_model_versions
+
+
+def test_run_option_full_refresh_with_selector(jaffle_shop_duckdb: Path):
+    operations = create(project_dir=jaffle_shop_duckdb)
+    assert len(operations.context.models) > 5
+
+    console = PlanCapturingConsole()
+    operations.context.console = console
+
+    plan = operations.run(select=["main.stg_customers"], full_refresh=True)
+    assert len(plan.restatements) == 1
+    assert list(plan.restatements)[0].name == '"jaffle_shop"."main"."stg_customers"'
+
+    assert plan.requires_backfill
+    assert not plan.empty_backfill
+    assert not plan.skip_backfill
+    assert plan.models_to_backfill == set(['"jaffle_shop"."main"."stg_customers"'])

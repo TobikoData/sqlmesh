@@ -452,13 +452,12 @@ class PlanStagesBuilder:
     def _get_restatement_stage(
         self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]
     ) -> t.Optional[RestatementStage]:
-        if not plan.restatements or plan.is_dev:
-            # The RestatementStage to clear intervals from state across all environments is not needed for plans against dev, only prod
-            return None
+        if plan.restatements and plan.clear_restated_intervals_across_model_versions:
+            return RestatementStage(
+                all_snapshots=snapshots_by_name,
+            )
 
-        return RestatementStage(
-            all_snapshots=snapshots_by_name,
-        )
+        return None
 
     def _get_physical_layer_update_stage(
         self,

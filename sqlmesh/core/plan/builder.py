@@ -65,6 +65,11 @@ class PlanBuilder:
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
             of the restatement.
+        clear_restated_intervals_across_model_versions: If restatements are present, this flag indicates whether or not the intervals
+            being restated should be cleared from state for other versions of this model (typically, versions that are present in other environments).
+            If set to None, the default behaviour is to not clear anything unless the target environment is prod.
+        always_include_local_changes: Usually when restatements are present, local changes in the filesystem are ignored.
+            However, it can be desirable to deploy changes + restatements in the same plan, so this flag overrides the default behaviour.
         backfill_models: A list of fully qualified model names for which the data should be backfilled as part of this plan.
         no_gaps:  Whether to ensure that new snapshots for nodes that are already a
             part of the target environment have no data gaps when compared against previous
@@ -103,6 +108,8 @@ class PlanBuilder:
         execution_time: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
+        clear_restated_intervals_across_model_versions: bool = False,
+        always_include_local_changes: t.Optional[bool] = None,
         backfill_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
@@ -154,6 +161,9 @@ class PlanBuilder:
         self._auto_categorization_enabled = auto_categorization_enabled
         self._include_unmodified = include_unmodified
         self._restate_models = set(restate_models) if restate_models is not None else None
+        self._clear_restated_intervals_across_model_versions = (
+            clear_restated_intervals_across_model_versions
+        )
         self._effective_from = effective_from
 
         # note: this deliberately doesnt default to now() here.
@@ -172,6 +182,7 @@ class PlanBuilder:
         self._user_provided_flags = user_provided_flags
         self._selected_models = selected_models
         self._explain = explain
+        self._always_include_local_changes = always_include_local_changes
 
         self._start = start
         if not self._start and (
@@ -340,6 +351,7 @@ class PlanBuilder:
             deployability_index=deployability_index,
             selected_models_to_restate=self._restate_models,
             restatements=restatements,
+            clear_restated_intervals_across_model_versions=self._clear_restated_intervals_across_model_versions,
             start_override_per_model=self._start_override_per_model,
             end_override_per_model=end_override_per_model,
             selected_models_to_backfill=self._backfill_models,
@@ -860,6 +872,12 @@ class PlanBuilder:
                 )
 
     def _ensure_no_new_snapshots_with_restatements(self) -> None:
+        if self._always_include_local_changes:
+            # the sqlmesh_dbt cli sets "always include local changes" to deliberately allow changes and restatements
+            # to be deployed in the same plan. If this is set, "force_no_diff" is also turned off on the ContextDiff
+            # so that the user is shown the local changes that will be applied and must accept them in order to run the plan
+            return
+
         if self._restate_models is not None and (
             self._context_diff.new_snapshots or self._context_diff.modified_snapshots
         ):
