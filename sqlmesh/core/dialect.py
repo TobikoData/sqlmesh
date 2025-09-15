@@ -350,6 +350,7 @@ def _parse_select(
     parse_subquery_alias: bool = True,
     parse_set_operation: bool = True,
     consume_pipe: bool = True,
+    from_: t.Optional[exp.From] = None,
 ) -> t.Optional[exp.Expression]:
     select = self.__parse_select(  # type: ignore
         nested=nested,
@@ -357,6 +358,7 @@ def _parse_select(
         parse_subquery_alias=parse_subquery_alias,
         parse_set_operation=parse_set_operation,
         consume_pipe=consume_pipe,
+        from_=from_,
     )
 
     if (

@@ -722,3 +722,11 @@ def test_sqlglot_extended_correctly(dialect: str) -> None:
 def test_connected_identifier():
     ast = d.parse_one("""SELECT ("x"at time zone 'utc')::timestamp as x""", "redshift")
     assert ast.sql("redshift") == """SELECT CAST(("x" AT TIME ZONE 'utc') AS TIMESTAMP) AS x"""
+
+
+def test_pipe_syntax():
+    ast = d.parse_one("SELECT * FROM (FROM t2 |> SELECT id)", "bigquery")
+    assert (
+        ast.sql("bigquery")
+        == "SELECT * FROM (WITH __tmp1 AS (SELECT id FROM t2) SELECT * FROM __tmp1)"
+    )
