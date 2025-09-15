@@ -270,7 +270,6 @@ class PlanStagesBuilder:
             }
             after_promote_snapshots = all_selected_for_backfill_snapshots - before_promote_snapshots
             deployability_index = DeployabilityIndex.all_deployable()
-
             snapshots_with_schema_migration = [
                 s for s in snapshots.values() if s.requires_schema_migration_in_prod
             ]

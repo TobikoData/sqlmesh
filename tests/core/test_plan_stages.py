@@ -1659,16 +1659,17 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
     stages = build_plan_stages(plan, state_reader, None)
 
     # Verify stages
-    assert len(stages) == 8
+    assert len(stages) == 9
 
     assert isinstance(stages[0], CreateSnapshotRecordsStage)
     assert isinstance(stages[1], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[2], BackfillStage)
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
-    assert isinstance(stages[4], UnpauseStage)
-    assert isinstance(stages[5], BackfillStage)
-    assert isinstance(stages[6], VirtualLayerUpdateStage)
-    assert isinstance(stages[7], FinalizeEnvironmentStage)
+    assert isinstance(stages[4], MigrateSchemasStage)
+    assert isinstance(stages[5], UnpauseStage)
+    assert isinstance(stages[6], BackfillStage)
+    assert isinstance(stages[7], VirtualLayerUpdateStage)
+    assert isinstance(stages[8], FinalizeEnvironmentStage)
 
 
 def test_build_plan_stages_virtual_environment_mode_filtering(
@@ -1934,6 +1935,76 @@ def test_build_plan_stages_virtual_environment_mode_no_updates(
     # No VirtualLayerUpdateStage should be created since all snapshots are filtered out
     virtual_stages = [stage for stage in stages if isinstance(stage, VirtualLayerUpdateStage)]
     assert len(virtual_stages) == 0
+
+
+def test_build_plan_stages_virtual_environment_mode_metadata_only_changes(
+    mocker: MockerFixture,
+) -> None:
+    snapshot_view: Snapshot = Snapshot.from_node(
+        SqlModel(
+            name="dev_only_view",
+            query=parse_one("select 1 as id"),
+            kind=dict(name=ModelKindName.VIEW),
+            virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
+        ),
+        nodes={},
+        ttl="in 1 week",
+    )
+    snapshot_view.categorize_as(SnapshotChangeCategory.METADATA)
+
+    state_reader = mocker.Mock(spec=StateReader)
+    state_reader.get_snapshots.return_value = {}
+    state_reader.get_environment.return_value = None
+
+    # Production environment with the view promoted
+    environment = Environment(
+        name="prod",
+        snapshots=[snapshot_view.table_info],
+        start_at="2023-01-01",
+        end_at="2023-01-02",
+        plan_id="test_plan",
+        previous_plan_id=None,
+        promoted_snapshot_ids=[snapshot_view.snapshot_id],
+    )
+
+    plan = EvaluatablePlan(
+        start="2023-01-01",
+        end="2023-01-02",
+        new_snapshots=[snapshot_view],
+        environment=environment,
+        no_gaps=False,
+        skip_backfill=True,
+        empty_backfill=False,
+        restatements={},
+        is_dev=False,
+        allow_destructive_models=set(),
+        allow_additive_models=set(),
+        forward_only=False,
+        end_bounded=True,
+        ensure_finalized_snapshots=False,
+        ignore_cron=False,
+        directly_modified_snapshots=[snapshot_view.snapshot_id],
+        indirectly_modified_snapshots={},
+        metadata_updated_snapshots=[snapshot_view.snapshot_id],
+        removed_snapshots=[],
+        requires_backfill=False,
+        models_to_backfill=None,
+        execution_time="2023-01-02",
+        disabled_restatement_models=set(),
+        environment_statements=None,
+        user_provided_flags=None,
+    )
+
+    stages = build_plan_stages(plan, state_reader, None)
+
+    migrate_stages = [s for s in stages if isinstance(s, MigrateSchemasStage)]
+    assert migrate_stages, (
+        "Expected a MigrateSchemasStage for dev_only VIEW with metadata-only change"
+    )
+    migrate_stage = migrate_stages[0]
+    assert snapshot_view in migrate_stage.snapshots
+
+    assert not any(isinstance(s, VirtualLayerUpdateStage) for s in stages)
 
 
 def test_adjust_intervals_new_forward_only_dev_intervals(
