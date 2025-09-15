@@ -368,6 +368,16 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
 
 @pytest.mark.slow
+def test_variables_override(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context(
+        "tests/fixtures/dbt/sushi_test", config="test_config_with_var_override"
+    )
+    dbt_project = context._loaders[0]._load_projects()[0]  # type: ignore
+    assert dbt_project.packages["sushi"].variables["some_var"] == "overridden_from_config_py"
+    assert dbt_project.packages["customers"].variables["some_var"] == "overridden_from_config_py"
+
+
+@pytest.mark.slow
 def test_jinja_in_dbt_variables(sushi_test_dbt_context: Context):
     assert sushi_test_dbt_context.render("sushi.top_waiters").sql().endswith("LIMIT 10")
 
