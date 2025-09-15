@@ -101,6 +101,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
     pre_ping: bool
     pretty_sql: bool = False
     schema_differ_overrides: t.Optional[t.Dict[str, t.Any]] = None
+    catalog_type_overrides: t.Optional[t.Dict[str, str]] = None
 
     # Whether to share a  single connection across threads or create a new connection per thread.
     shared_connection: t.ClassVar[bool] = False
@@ -176,6 +177,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             pretty_sql=self.pretty_sql,
             shared_connection=self.shared_connection,
             schema_differ_overrides=self.schema_differ_overrides,
+            catalog_type_overrides=self.catalog_type_overrides,
             **self._extra_engine_config,
         )
 

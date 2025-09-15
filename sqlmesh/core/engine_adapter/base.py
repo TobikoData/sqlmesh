@@ -223,6 +223,10 @@ class EngineAdapter:
             }
         )
 
+    @property
+    def _catalog_type_overrides(self) -> t.Dict[str, str]:
+        return self._extra_config.get("catalog_type_overrides") or {}
+
     @classmethod
     def _casted_columns(
         cls,
@@ -430,7 +434,11 @@ class EngineAdapter:
             raise UnsupportedCatalogOperationError(
                 f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
             )
-        return self.DEFAULT_CATALOG_TYPE
+        return (
+            self._catalog_type_overrides.get(catalog, self.DEFAULT_CATALOG_TYPE)
+            if catalog
+            else self.DEFAULT_CATALOG_TYPE
+        )
 
     def get_catalog_type_from_table(self, table: TableName) -> str:
         """Get the catalog type from a table name if it has a catalog specified, otherwise return the current catalog type"""
