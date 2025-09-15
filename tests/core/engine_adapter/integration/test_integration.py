@@ -3848,13 +3848,24 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
     if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
         pytest.skip("This test only runs for engines that support external model freshness")
 
-    def _assert_snapshot_last_altered_ts(context: Context, snapshot_id: str, timestamp: datetime):
+    def _assert_snapshot_last_altered_ts(
+        context: Context,
+        snapshot_id: str,
+        last_altered_ts: datetime,
+        dev_last_altered_ts: t.Optional[datetime] = None,
+    ):
         from sqlmesh.utils.date import to_datetime
 
         snapshot = context.state_sync.get_snapshots([snapshot_id])[snapshot_id]
-        assert to_datetime(snapshot.last_altered_ts).replace(microsecond=0) == timestamp.replace(
+
+        assert to_datetime(snapshot.last_altered_ts).replace(
             microsecond=0
-        )
+        ) == last_altered_ts.replace(microsecond=0)
+
+        if dev_last_altered_ts:
+            assert to_datetime(snapshot.dev_last_altered_ts).replace(
+                microsecond=0
+            ) == dev_last_altered_ts.replace(microsecond=0)
 
     import sqlmesh
 
@@ -3944,14 +3955,14 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
     )
 
     prod_snapshot_id = next(iter(prod_plan.context_diff.new_snapshots))
-    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, prod_plan_ts)
+    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, last_altered_ts=prod_plan_ts)
 
     # Case 2: Model is NOT evaluated on run if external models are not fresh
     _assert_model_evaluation(lambda: context.run(), was_evaluated=False, day_delta=1)
 
     # Case 3: Differentiate last_altered_ts between snapshots with shared version
     # For instance, creating a FORWARD_ONLY change in dev (reusing the version but creating a dev preview) should not cause
-    # the prod snapshot's last_altered_ts to be updated when fetched from the state sync
+    # any side effects to the prod snapshot's last_altered_ts hydration
     model_path.write_text(model_path.read_text().replace("col1 * col2", "col1 + col2"))
     context.load()
     dev_plan_ts = now(minute_floor=False) + timedelta(days=2)
@@ -3962,8 +3973,13 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
 
     context.state_sync.clear_cache()
     dev_snapshot_id = next(iter(dev_plan.context_diff.new_snapshots))
-    _assert_snapshot_last_altered_ts(context, dev_snapshot_id, dev_plan_ts)
-    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, prod_plan_ts)
+    _assert_snapshot_last_altered_ts(
+        context,
+        dev_snapshot_id,
+        last_altered_ts=prod_plan_ts,
+        dev_last_altered_ts=dev_plan_ts,
+    )
+    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, last_altered_ts=prod_plan_ts)
 
     # Case 4: Model is evaluated on run if any external model is fresh
     adapter.execute(f"INSERT INTO {external_table2} (col2) VALUES (3)", quote_identifiers=False)
