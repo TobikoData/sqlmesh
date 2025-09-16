@@ -7,7 +7,6 @@ import { cn } from '@/utils'
 export interface NodeBaseProps extends NodeProps {
   className?: string
   children?: React.ReactNode
-  style?: React.CSSProperties
 }
 
 export const NodeBase = React.memo(

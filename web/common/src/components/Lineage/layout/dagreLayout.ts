@@ -49,19 +49,24 @@ export async function getLayoutedGraph<
     worker.addEventListener('error', errorHandler)
 
     try {
-      worker.postMessage({ edges, nodesMap })
+      worker.postMessage({ edges, nodesMap } as LayoutedGraph<
+        TNodeData,
+        TEdgeData
+      >)
     } catch (postError) {
       errorHandler(postError as ErrorEvent)
     }
 
     function handler(
-      event: MessageEvent<LayoutedGraph<TNodeData> & { error: ErrorEvent }>,
+      event: MessageEvent<
+        LayoutedGraph<TNodeData, TEdgeData> & { error: ErrorEvent }
+      >,
     ) {
       cleanup()
 
       if (event.data.error) return errorHandler(event.data.error)
 
-      resolve(event.data as LayoutedGraph<TNodeData, TEdgeData>)
+      resolve(event.data)
     }
 
     function errorHandler(error: ErrorEvent) {

@@ -1,4 +1,4 @@
-import { toEdgeID, toNodeID, toPortID } from '../help'
+import { toEdgeID, toNodeID, toPortID } from '../utils'
 import {
   type AdjacencyListColumnKey,
   type AdjacencyListKey,
