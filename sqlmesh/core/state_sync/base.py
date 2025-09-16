@@ -518,7 +518,8 @@ class StateSync(StateReader, abc.ABC):
             dev_version=snapshot.dev_version,
             intervals=intervals if not is_dev else [],
             dev_intervals=intervals if is_dev else [],
-            last_altered_ts=last_altered_ts,
+            last_altered_ts=last_altered_ts if not is_dev else None,
+            dev_last_altered_ts=last_altered_ts if is_dev else None,
         )
         self.add_snapshots_intervals([snapshot_intervals])
 
