@@ -9,7 +9,6 @@ from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import InsertOverwriteStrategy, SourceQuery
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.schema_diff import TableAlterOperation
@@ -73,52 +72,6 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
             )
             df = read_sql_query(sql, self._connection_pool.get())
         return df
-
-
-class InsertOverwriteWithMergeMixin(EngineAdapter):
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        source_queries: t.List[SourceQuery],
-        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        where: t.Optional[exp.Condition] = None,
-        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Some engines do not support `INSERT OVERWRITE` but instead support
-        doing an "INSERT OVERWRITE" using a Merge expression but with the
-        predicate being `False`.
-        """
-        target_columns_to_types = target_columns_to_types or self.columns(table_name)
-        for source_query in source_queries:
-            with source_query as query:
-                query = self._order_projections_and_filter(
-                    query, target_columns_to_types, where=where
-                )
-                columns = [exp.column(col) for col in target_columns_to_types]
-                when_not_matched_by_source = exp.When(
-                    matched=False,
-                    source=True,
-                    condition=where,
-                    then=exp.Delete(),
-                )
-                when_not_matched_by_target = exp.When(
-                    matched=False,
-                    source=False,
-                    then=exp.Insert(
-                        this=exp.Tuple(expressions=columns),
-                        expression=exp.Tuple(expressions=columns),
-                    ),
-                )
-                self._merge(
-                    target_table=table_name,
-                    query=query,
-                    on=exp.false(),
-                    whens=exp.Whens(
-                        expressions=[when_not_matched_by_source, when_not_matched_by_target]
-                    ),
-                )
 
 
 class HiveMetastoreTablePropertiesMixin(EngineAdapter):

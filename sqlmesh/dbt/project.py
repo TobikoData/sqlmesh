@@ -113,6 +113,8 @@ class Project:
                 package.variables.update(package_scoped_vars)
             else:
                 package.variables.update(all_project_variables)
+            if variable_overrides:
+                package.variables.update(variable_overrides)
 
         return Project(context, profile, packages)
 

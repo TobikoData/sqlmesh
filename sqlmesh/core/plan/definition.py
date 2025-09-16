@@ -58,7 +58,16 @@ class Plan(PydanticModel, frozen=True):
     indirectly_modified: t.Dict[SnapshotId, t.Set[SnapshotId]]
 
     deployability_index: DeployabilityIndex
+    selected_models_to_restate: t.Optional[t.Set[str]] = None
+    """Models that have been explicitly selected for restatement by a user"""
     restatements: t.Dict[SnapshotId, Interval]
+    """
+    All models being restated, which are typically the explicitly selected ones + their downstream dependencies.
+    
+    Note that dev previews are also considered restatements, so :selected_models_to_restate can be empty
+    while :restatements is still populated with dev previews
+    """
+
     start_override_per_model: t.Optional[t.Dict[str, datetime]]
     end_override_per_model: t.Optional[t.Dict[str, datetime]]
 

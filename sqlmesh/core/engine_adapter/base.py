@@ -223,6 +223,10 @@ class EngineAdapter:
             }
         )
 
+    @property
+    def _catalog_type_overrides(self) -> t.Dict[str, str]:
+        return self._extra_config.get("catalog_type_overrides") or {}
+
     @classmethod
     def _casted_columns(
         cls,
@@ -430,7 +434,11 @@ class EngineAdapter:
             raise UnsupportedCatalogOperationError(
                 f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
             )
-        return self.DEFAULT_CATALOG_TYPE
+        return (
+            self._catalog_type_overrides.get(catalog, self.DEFAULT_CATALOG_TYPE)
+            if catalog
+            else self.DEFAULT_CATALOG_TYPE
+        )
 
     def get_catalog_type_from_table(self, table: TableName) -> str:
         """Get the catalog type from a table name if it has a catalog specified, otherwise return the current catalog type"""
@@ -1632,6 +1640,30 @@ class EngineAdapter:
                             query,
                             target_columns_to_types=target_columns_to_types,
                             order_projections=False,
+                        )
+                    elif insert_overwrite_strategy.is_merge:
+                        columns = [exp.column(col) for col in target_columns_to_types]
+                        when_not_matched_by_source = exp.When(
+                            matched=False,
+                            source=True,
+                            condition=where,
+                            then=exp.Delete(),
+                        )
+                        when_not_matched_by_target = exp.When(
+                            matched=False,
+                            source=False,
+                            then=exp.Insert(
+                                this=exp.Tuple(expressions=columns),
+                                expression=exp.Tuple(expressions=columns),
+                            ),
+                        )
+                        self._merge(
+                            target_table=table_name,
+                            query=query,
+                            on=exp.false(),
+                            whens=exp.Whens(
+                                expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                            ),
                         )
                     else:
                         insert_exp = exp.insert(

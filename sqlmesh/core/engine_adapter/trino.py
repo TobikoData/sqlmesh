@@ -71,7 +71,7 @@ class TrinoEngineAdapter(
     MAX_TIMESTAMP_PRECISION = 3
 
     @property
-    def schema_location_mapping(self) -> t.Optional[dict[re.Pattern, str]]:
+    def schema_location_mapping(self) -> t.Optional[t.Dict[re.Pattern, str]]:
         return self._extra_config.get("schema_location_mapping")
 
     @property
@@ -86,6 +86,8 @@ class TrinoEngineAdapter(
     def get_catalog_type(self, catalog: t.Optional[str]) -> str:
         row: t.Tuple = tuple()
         if catalog:
+            if catalog_type_override := self._catalog_type_overrides.get(catalog):
+                return catalog_type_override
             row = (
                 self.fetchone(
                     f"select connector_name from system.metadata.catalogs where catalog_name='{catalog}'"

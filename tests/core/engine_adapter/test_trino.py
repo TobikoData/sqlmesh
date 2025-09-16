@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter import TrinoEngineAdapter
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.dialect import schema_
+from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -683,3 +684,74 @@ def test_replace_table_catalog_support(
             sql_calls[0]
             == f'CREATE TABLE IF NOT EXISTS "{catalog_name}"."schema"."test_table" AS SELECT 1 AS "col"'
         )
+
+
+@pytest.mark.parametrize(
+    "catalog_type_overrides", [{}, {"my_catalog": "hive"}, {"other_catalog": "iceberg"}]
+)
+def test_insert_overwrite_time_partition_hive(
+    make_mocked_engine_adapter: t.Callable, catalog_type_overrides: t.Dict[str, str]
+):
+    config = TrinoConnectionConfig(
+        user="user",
+        host="host",
+        catalog="catalog",
+        catalog_type_overrides=catalog_type_overrides,
+    )
+    adapter: TrinoEngineAdapter = make_mocked_engine_adapter(
+        TrinoEngineAdapter, catalog_type_overrides=config.catalog_type_overrides
+    )
+    adapter.fetchone = MagicMock(return_value=None)  # type: ignore
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["my_catalog", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        "SET SESSION my_catalog.insert_existing_partitions_behavior='OVERWRITE'",
+        'INSERT INTO "my_catalog"."schema"."test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+        "SET SESSION my_catalog.insert_existing_partitions_behavior='APPEND'",
+    ]
+
+
+@pytest.mark.parametrize(
+    "catalog_type_overrides",
+    [
+        {"my_catalog": "iceberg"},
+        {"my_catalog": "unknown"},
+    ],
+)
+def test_insert_overwrite_time_partition_iceberg(
+    make_mocked_engine_adapter: t.Callable, catalog_type_overrides: t.Dict[str, str]
+):
+    config = TrinoConnectionConfig(
+        user="user",
+        host="host",
+        catalog="catalog",
+        catalog_type_overrides=catalog_type_overrides,
+    )
+    adapter: TrinoEngineAdapter = make_mocked_engine_adapter(
+        TrinoEngineAdapter, catalog_type_overrides=config.catalog_type_overrides
+    )
+    adapter.fetchone = MagicMock(return_value=None)  # type: ignore
+
+    adapter.insert_overwrite_by_time_partition(
+        table_name=".".join(["my_catalog", "schema", "test_table"]),
+        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
+        target_columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'DELETE FROM "my_catalog"."schema"."test_table" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+        'INSERT INTO "my_catalog"."schema"."test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN \'2022-01-01\' AND \'2022-01-02\'',
+    ]
