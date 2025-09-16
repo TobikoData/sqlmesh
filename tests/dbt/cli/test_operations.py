@@ -308,14 +308,14 @@ def test_run_option_full_refresh(
     if vde_mode == VirtualEnvironmentMode.DEV_ONLY:
         # We do not clear intervals across all model versions in the default DEV_ONLY mode, even when targeting prod,
         # because dev data is hardcoded to preview only so by definition and can never be deployed
-        assert not plan.clear_restated_intervals_across_model_versions
+        assert not plan.restate_all_snapshots
     else:
         if env_name == "prod":
             # in FULL mode, we do it for prod
-            assert plan.clear_restated_intervals_across_model_versions
+            assert plan.restate_all_snapshots
         else:
             # but not dev
-            assert not plan.clear_restated_intervals_across_model_versions
+            assert not plan.restate_all_snapshots
 
 
 def test_run_option_full_refresh_with_selector(jaffle_shop_duckdb: Path):

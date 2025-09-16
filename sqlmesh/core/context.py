@@ -1656,7 +1656,7 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         # When handling prod restatements, only clear intervals from other model versions if we are using full virtual environments
         # If we are not, then there is no point, because none of the data in dev environments can be promoted by definition
-        clear_restated_intervals_across_model_versions = (
+        restate_all_snapshots = (
             expanded_restate_models is not None
             and not is_dev
             and self.config.virtual_environment_mode.is_full
@@ -1669,7 +1669,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             execution_time=execution_time,
             apply=self.apply,
             restate_models=expanded_restate_models,
-            clear_restated_intervals_across_model_versions=clear_restated_intervals_across_model_versions,
+            restate_all_snapshots=restate_all_snapshots,
             backfill_models=backfill_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
@@ -1703,7 +1703,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             },
             explain=explain or False,
             ignore_cron=ignore_cron or False,
-            always_include_local_changes=always_include_local_changes,
         )
 
     def apply(
