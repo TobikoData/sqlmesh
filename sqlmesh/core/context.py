@@ -413,9 +413,10 @@ class GenericContext(BaseContext, t.Generic[C]):
             global_defaults = self.config.model_defaults.model_dump(exclude_unset=True)
             gateway_defaults = gw_model_defaults.model_dump(exclude_unset=True)
 
-            self.config.model_defaults = ModelDefaultsConfig(
-                **{**global_defaults, **gateway_defaults}
-            )
+            self.config.model_defaults = ModelDefaultsConfig(**{
+                **global_defaults,
+                **gateway_defaults,
+            })
 
         # This allows overriding the default dialect's normalization strategy, so for example
         # one can do `dialect="duckdb,normalization_strategy=lowercase"` and this will be
@@ -513,13 +514,11 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         self.dag.add(model.fqn, model.depends_on)
 
-        self._models.update(
-            {
-                model.fqn: model,
-                # bust the fingerprint cache for all downstream models
-                **{fqn: self._models[fqn].copy() for fqn in self.dag.downstream(model.fqn)},
-            }
-        )
+        self._models.update({
+            model.fqn: model,
+            # bust the fingerprint cache for all downstream models
+            **{fqn: self._models[fqn].copy() for fqn in self.dag.downstream(model.fqn)},
+        })
 
         update_model_schemas(
             self.dag,

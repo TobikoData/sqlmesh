@@ -52,6 +52,7 @@ from sqlmesh.utils.errors import (
     format_destructive_change_msg,
     format_additive_change_msg,
 )
+from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.rich import strip_ansi_codes
 
 if t.TYPE_CHECKING:
@@ -184,6 +185,126 @@ class JanitorConsole(abc.ABC):
         Args:
             success: Whether or not the cleanup completed successfully
         """
+
+
+from rich.console import Console as RichConsole, Group
+from rich.live import Live
+from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
+from rich.table import Table
+from rich.text import Text
+
+
+class JanitorStateRenderer:
+    def __init__(self) -> None:
+        self.console = RichConsole()
+        self.live = Live(auto_refresh=True)
+
+    def __enter__(self) -> "JanitorStateRenderer":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: t.Optional[t.Type[BaseException]],
+        exc_value: t.Optional[BaseException],
+        traceback: t.Optional[t.Any],
+    ) -> None:
+        self.live.stop()
+
+    @staticmethod
+    def _render_start(cleanedup_obects: t.List[str]) -> t.List:
+        return [
+            Text("Started janitor job."),
+            # Flatten
+            [Text(f"Deleted object {object_name}") for object_name in cleanedup_obects],
+        ]
+
+    @staticmethod
+    def _render_completion(state: JanitorState) -> t.List:
+        if isinstance(state.state, JanitorStateFinished):
+            if state.state.success:
+                return [Text("Cleanup complete.")]
+            return [Text("Cleanup failed!")]
+        return []
+
+    def render(self, state: JanitorState) -> None:
+        # TODO Can we just get rid of the ignore_ttl we don't use it in the interface
+        if not self.live.is_started:
+            self.live.start()
+        group = Group(
+            Text("Started janitor job."),
+            # TO
+            JanitorStateRenderer.render_start(state),
+            JanitorStateRenderer.render_completion(state),
+        )
+        self.live.update(group)
+        self.live.refresh()
+
+
+class JanitorStateStarted(PydanticModel):
+    state: t.Literal["started"] = "started"
+    cleanedup_objects: t.List[str] = []
+    ignore_ttl: bool
+
+
+class JanitorStateFinished(PydanticModel):
+    state: t.Literal["finished"] = "finished"
+    cleanedup_object: t.List[str] = []
+    ignore_ttl: bool
+    success: bool
+
+
+JanitorStates = t.Union[
+    JanitorStateStarted,
+    JanitorStateFinished,
+]
+
+from pydantic import Field
+
+
+class JanitorState(PydanticModel):
+    state: t.Annotated[
+        JanitorStates,
+        Field(discriminator="state"),
+    ]
+
+
+class JanitorConosoleDaemon(JanitorConsole):
+    state: t.Optional[JanitorState] = None
+    callback: t.Callable
+
+    def __init__(self, callback: t.Callable):
+        self.callback = callback
+
+    def send_message(self):
+        self.callback(self.state)
+
+    def start_cleanup(self, ignore_ttl: bool) -> bool:
+        # TODO: In the normal one there is an input request that the server should wait for
+        self.state = JanitorState(state=JanitorStateStarted(ignore_ttl=ignore_ttl))
+        self.send_message()
+        return True
+
+    def update_cleanup_progress(self, object_name: str) -> None:
+        self.state.cleanedup_object.append(object_name)
+        self.send_message()
+
+    def stop_cleanup(self, success: bool = True) -> None:
+        state = self.state
+        if state is None:
+            raise ValueError("should only finish after having started")
+        state_inside = state.state
+        if not instanceof(state_inside, JanitorStateStarted):
+            raise ValueError("should only finish after having started")
+
+        self.state = JanitorState(
+            state=JanitorStateFinished(
+                cleanedup_object=state_inside.cleanedup_object,
+                ignore_ttl=state_inside.ignore_ttl,
+                success=success,
+            )
+        )
+        self.send_message()
+        self.state = None
 
 
 class DestroyConsole(abc.ABC):
@@ -2614,16 +2735,10 @@ class TerminalConsole(Console):
                         table.add_column(column_name, style=style, header_style=style)
 
                     for _, row in column_table.iterrows():
-                        table.add_row(
-                            *[
-                                str(
-                                    round(cell, row_diff.decimals)
-                                    if isinstance(cell, float)
-                                    else cell
-                                )
-                                for cell in row
-                            ]
-                        )
+                        table.add_row(*[
+                            str(round(cell, row_diff.decimals) if isinstance(cell, float) else cell)
+                            for cell in row
+                        ])
 
                     self.console.print(
                         f"Column: [underline][bold cyan]{column}[/bold cyan][/underline]",
@@ -2996,13 +3111,11 @@ class NotebookMagicConsole(TerminalConsole):
 
         add_to_layout_widget(
             prompt,
-            widgets.HBox(
-                [
-                    widgets.Label("Effective From Date:", layout={"width": "8rem"}),
-                    date_picker,
-                    going_forward_checkbox,
-                ]
-            ),
+            widgets.HBox([
+                widgets.Label("Effective From Date:", layout={"width": "8rem"}),
+                date_picker,
+                going_forward_checkbox,
+            ]),
         )
 
         self._add_to_dynamic_options(prompt)
@@ -3047,30 +3160,24 @@ class NotebookMagicConsole(TerminalConsole):
         if plan_builder.is_start_and_end_allowed:
             add_to_layout_widget(
                 prompt,
-                widgets.HBox(
-                    [
-                        widgets.Label(
-                            f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}
-                        ),
-                        _date_picker(
-                            plan_builder, to_date(plan_builder.build().start), start_change_callback
-                        ),
-                    ]
-                ),
+                widgets.HBox([
+                    widgets.Label(f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}),
+                    _date_picker(
+                        plan_builder, to_date(plan_builder.build().start), start_change_callback
+                    ),
+                ]),
             )
 
             add_to_layout_widget(
                 prompt,
-                widgets.HBox(
-                    [
-                        widgets.Label(f"End {backfill_or_preview} Date:", layout={"width": "8rem"}),
-                        _date_picker(
-                            plan_builder,
-                            to_date(plan_builder.build().end),
-                            end_change_callback,
-                        ),
-                    ]
-                ),
+                widgets.HBox([
+                    widgets.Label(f"End {backfill_or_preview} Date:", layout={"width": "8rem"}),
+                    _date_picker(
+                        plan_builder,
+                        to_date(plan_builder.build().end),
+                        end_change_callback,
+                    ),
+                ]),
             )
 
         self._add_to_dynamic_options(prompt)
@@ -3308,9 +3415,10 @@ class MarkdownConsole(CaptureTerminalConsole):
         self.warning_capture_only = kwargs.pop("warning_capture_only", False)
         self.error_capture_only = kwargs.pop("error_capture_only", False)
 
-        super().__init__(
-            **{**kwargs, "console": RichConsole(no_color=True, width=kwargs.pop("width", None))}
-        )
+        super().__init__(**{
+            **kwargs,
+            "console": RichConsole(no_color=True, width=kwargs.pop("width", None)),
+        })
 
     def show_environment_difference_summary(
         self,
@@ -3458,9 +3566,9 @@ class MarkdownConsole(CaptureTerminalConsole):
                     f"* `{snapshot.display_name(environment_naming_info, default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None, dialect=self.dialect)}` ({category_str})"
                 )
 
-                indirectly_modified_children = sorted(
-                    [s for s in indirectly_modified if snapshot.snapshot_id in s.parents]
-                )
+                indirectly_modified_children = sorted([
+                    s for s in indirectly_modified if snapshot.snapshot_id in s.parents
+                ])
 
                 if not no_diff:
                     diff_text = context_diff.text_diff(snapshot.name)
@@ -3468,9 +3576,9 @@ class MarkdownConsole(CaptureTerminalConsole):
                     if diff_text:
                         diff_text = f"\n```diff\n{diff_text}\n```"
                         # these are part of a Markdown list, so indent them by 2 spaces to relate them to the current list item
-                        diff_text_indented = "\n".join(
-                            [f"  {line}" for line in diff_text.splitlines()]
-                        )
+                        diff_text_indented = "\n".join([
+                            f"  {line}" for line in diff_text.splitlines()
+                        ])
                         self._print(diff_text_indented)
                     else:
                         if indirectly_modified_children:
@@ -3771,13 +3879,11 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         status = "Loaded" if finished_loading else "Loading"
         print(f"{status} '{view_name}', Completed Batches: {loaded_batches}/{total_batches}")
         if finished_loading:
-            total_finished_loading = len(
-                [
-                    s
-                    for s, total in self.evaluation_model_batch_sizes.items()
-                    if self.evaluation_batch_progress.get(s.snapshot_id, (None, -1))[1] == total
-                ]
-            )
+            total_finished_loading = len([
+                s
+                for s, total in self.evaluation_model_batch_sizes.items()
+                if self.evaluation_batch_progress.get(s.snapshot_id, (None, -1))[1] == total
+            ])
             total = len(self.evaluation_batch_progress)
             print(f"Completed Loading {total_finished_loading}/{total} Models")
 
@@ -4153,9 +4259,10 @@ def create_console(
     rich_console_kwargs: t.Dict[str, t.Any] = {"theme": srich.theme}
     if runtime_env.is_jupyter or runtime_env.is_google_colab:
         rich_console_kwargs["force_jupyter"] = True
-    return runtime_env_mapping[runtime_env](
-        **{**{"console": RichConsole(**rich_console_kwargs)}, **kwargs}
-    )
+    return runtime_env_mapping[runtime_env](**{
+        **{"console": RichConsole(**rich_console_kwargs)},
+        **kwargs,
+    })
 
 
 def _format_missing_intervals(snapshot: Snapshot, missing: SnapshotIntervals) -> str:
