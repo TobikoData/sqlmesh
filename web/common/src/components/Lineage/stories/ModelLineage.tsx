@@ -23,6 +23,7 @@ import { FactoryEdgeWithGradient } from '../edge/FactoryEdgeWithGradient'
 import { toNodeID, toPortID } from '../utils'
 import {
   calculateNodeBaseHeight,
+  calculateNodeDetailsHeight,
   createEdge,
   createNode,
   getOnlySelectedNodes,
@@ -133,29 +134,31 @@ export const ModelLineage = ({
         tags: detail.tags || [],
         columns,
       })
-
-      const hasNodeFooter = false
       const selectedColumnsCount = new Set(
         Object.keys(columns).map(k => toPortID(detail.name, k)),
       ).intersection(selectedColumns).size
-      const hasColumnsFilter =
-        Object.keys(columns).length > MAX_COLUMNS_TO_DISPLAY
-
-      const baseNodeHeight = calculateNodeBaseHeight({
-        hasNodeFooter,
-        hasCeiling: true,
-        hasFloor: false,
-        nodeOptionsCount: 0,
+      // We are trying to project the node hight so we are including the ceiling and floor height
+      const nodeBaseHeight = calculateNodeBaseHeight({
+        includeNodeFooterHeight: false,
+        includeCeilingHeight: true,
+        includeFloorHeight: true,
+      })
+      const nodeDetailsHeight = calculateNodeDetailsHeight({
+        nodeDetailsCount: 0,
       })
       const selectedColumnsHeight =
         calculateSelectedColumnsHeight(selectedColumnsCount)
 
       const columnsHeight = calculateColumnsHeight({
         columnsCount: calculateNodeColumnsCount(Object.keys(columns).length),
-        hasColumnsFilter,
+        hasColumnsFilter: Object.keys(columns).length > MAX_COLUMNS_TO_DISPLAY,
       })
 
-      node.height = baseNodeHeight + selectedColumnsHeight + columnsHeight
+      node.height =
+        nodeBaseHeight +
+        nodeDetailsHeight +
+        selectedColumnsHeight +
+        columnsHeight
 
       return node
     },

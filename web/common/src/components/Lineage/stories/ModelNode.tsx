@@ -12,7 +12,7 @@ import {
   calculateSelectedColumnsHeight,
 } from '../LineageColumnLevel/help'
 import { useColumns, type Column } from '../LineageColumnLevel/useColumns'
-import { calculateNodeBaseHeight } from '../help'
+import { calculateNodeBaseHeight, calculateNodeDetailsHeight } from '../help'
 import { NodeAppendix } from '../node/NodeAppendix'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodeBase } from '../node/NodeBase'
@@ -39,6 +39,7 @@ import { Tooltip } from '@/components/Tooltip/Tooltip'
 import type { ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/ColumnLevelLineageContext'
 import { ModelName } from '@/components/ModelName/ModelName'
 import { Metadata } from '@/components/Metadata/Metadata'
+import { Badge } from '@/components/Badge/Badge'
 
 export const ModelNode = React.memo(function ModelNode({
   id,
@@ -90,21 +91,35 @@ export const ModelNode = React.memo(function ModelNode({
   const modelType = data.model_type.toLowerCase() as NodeType
   const hasColumnsFilter =
     shouldShowColumns && columns.length > MAX_COLUMNS_TO_DISPLAY
-
-  const baseNodeHeight = calculateNodeBaseHeight({
-    nodeOptionsCount: 0,
+  // We are not including the footer, because we need actual height to dynamically adjust node container height
+  const nodeBaseHeight = calculateNodeBaseHeight({
+    includeNodeFooterHeight: false,
+    includeCeilingHeight: false,
+    includeFloorHeight: false,
   })
+  const nodeDetailsHeight =
+    zoom > ZOOM_TRESHOLD
+      ? calculateNodeDetailsHeight({
+          nodeDetailsCount: 0,
+        })
+      : 0
   const selectedColumnsHeight = calculateSelectedColumnsHeight(
     modelSelectedColumns.length,
   )
-  const columnsHeight = calculateColumnsHeight({
-    columnsCount: shouldShowColumns
-      ? calculateNodeColumnsCount(columns.length)
-      : 0,
-    hasColumnsFilter,
-  })
+  const columnsHeight =
+    zoom > ZOOM_TRESHOLD && shouldShowColumns
+      ? calculateColumnsHeight({
+          columnsCount: calculateNodeColumnsCount(columns.length),
+          hasColumnsFilter,
+        })
+      : 0
 
-  const nodeHeight = baseNodeHeight + selectedColumnsHeight + columnsHeight
+  // If zoom is less than ZOOM_TRESHOLD, we are making node looks bigger
+  const nodeHeight =
+    (zoom > ZOOM_TRESHOLD ? nodeBaseHeight : nodeBaseHeight * 2) +
+    nodeDetailsHeight +
+    selectedColumnsHeight +
+    columnsHeight
 
   return (
     <NodeContainer
@@ -124,7 +139,7 @@ export const ModelNode = React.memo(function ModelNode({
         position="top"
         className="bg-lineage-node-appendix-background"
       >
-        <HorizontalContainer className="gap-1 items-center h-5">
+        <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
           {zoom > ZOOM_TRESHOLD && (
             <>
               <NodeBadge>{data.kind.toUpperCase()}</NodeBadge>
@@ -165,7 +180,7 @@ export const ModelNode = React.memo(function ModelNode({
         )}
       >
         <NodeHeader
-          className="shrink-0 h-7"
+          className={cn(zoom > ZOOM_TRESHOLD ? 'shrink-0 h-7' : 'h-full')}
           onClick={toggleSelectedNode}
         >
           <NodeHandles
@@ -193,60 +208,50 @@ export const ModelNode = React.memo(function ModelNode({
           >
             <HorizontalContainer
               className={cn(
-                'items-center px-1 w-auto shrink-0',
-                leftId ? 'pl-2' : 'pl-1',
-                getNodeTypeColor(modelType),
-              )}
-            >
-              <NodeBadge
-                size="2xs"
-                className="bg-[transparent] text-[white]"
-              >
-                {modelType.toUpperCase()}
-              </NodeBadge>
-            </HorizontalContainer>
-            <HorizontalContainer
-              className={cn(
-                'gap-2 items-center px-2',
-                rightId ? 'pr-3' : 'pr-2',
+                'gap-2 items-center pl-4 pr-2',
                 getNodeTypeBorderColor(modelType),
               )}
             >
               <ModelName
+                showTooltip
                 hideCatalog
-                showTooltip={zoom > ZOOM_TRESHOLD}
+                hideSchema={zoom <= ZOOM_TRESHOLD}
                 hideIcon
                 name={data.displayName}
                 grayscale
-                showCopy
-                className="w-full text-xs overflow-hidden cursor-default truncate"
+                className={cn(
+                  'w-full overflow-hidden cursor-default truncate',
+                  zoom > ZOOM_TRESHOLD ? ' text-xs' : 'text-2xl justify-center',
+                )}
               />
             </HorizontalContainer>
           </NodeHandles>
         </NodeHeader>
         {shouldShowColumns && (
-          <VerticalContainer className="border-t border-lineage-node-border">
-            <VerticalContainer className="h-auto shrink-0">
-              {modelSelectedColumns.map(column => (
-                <ModelNodeColumn
-                  key={column.id}
-                  id={column.id}
-                  nodeId={nodeId}
-                  modelName={data.name}
-                  name={column.name}
-                  description={column.description}
-                  type={column.data_type}
-                  className="p-1 first:border-t-0 h-6"
-                  columnLineageData={
-                    (
-                      column as Column & {
-                        columnLineageData?: ColumnLevelLineageAdjacencyList
-                      }
-                    ).columnLineageData
-                  }
-                />
-              ))}
-            </VerticalContainer>
+          <>
+            {modelSelectedColumns.length > 0 && (
+              <VerticalContainer className="h-auto shrink-0 border-t border-lineage-node-border">
+                {modelSelectedColumns.map(column => (
+                  <ModelNodeColumn
+                    key={column.id}
+                    id={column.id}
+                    nodeId={nodeId}
+                    modelName={data.name}
+                    name={column.name}
+                    description={column.description}
+                    type={column.data_type}
+                    className="p-1 first:border-t-0 h-6"
+                    columnLineageData={
+                      (
+                        column as Column & {
+                          columnLineageData?: ColumnLevelLineageAdjacencyList
+                        }
+                      ).columnLineageData
+                    }
+                  />
+                ))}
+              </VerticalContainer>
+            )}
             {columns.length > 0 && (
               <NodePorts
                 ports={columns}
@@ -275,11 +280,33 @@ export const ModelNode = React.memo(function ModelNode({
                     }
                   />
                 )}
+                className="border-t border-lineage-node-border"
               />
             )}
-          </VerticalContainer>
+          </>
         )}
       </NodeBase>
+      <NodeAppendix
+        position="bottom"
+        className="bg-lineage-node-appendix-background"
+      >
+        <HorizontalContainer
+          className={cn(
+            'gap-1 items-center overflow-visible',
+            zoom > ZOOM_TRESHOLD ? 'h-5' : 'h-8',
+          )}
+        >
+          <Badge
+            size={zoom > ZOOM_TRESHOLD ? '2xs' : 'm'}
+            className={cn(
+              'text-[white] font-black',
+              getNodeTypeColor(modelType),
+            )}
+          >
+            {modelType.toUpperCase()}
+          </Badge>
+        </HorizontalContainer>
+      </NodeAppendix>
     </NodeContainer>
   )
 })

@@ -144,7 +144,13 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
                 : 'text-model-name-model',
             )}
           >
-            {truncate(model, truncateMaxCharsModel, 15)}
+            {truncate(
+              model,
+              truncateMaxCharsModel,
+              truncateLimitBefore * 2,
+              '...',
+              truncateLimitBefore * 2,
+            )}
           </span>
         </span>
       )

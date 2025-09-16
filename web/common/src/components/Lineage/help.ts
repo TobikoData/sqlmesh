@@ -113,25 +113,19 @@ export function createNode<TNodeData extends LineageNodeData = LineageNodeData>(
 }
 
 export function calculateNodeBaseHeight({
-  hasNodeFooter = false,
-  hasCeiling = false,
-  hasFloor = false,
-  nodeOptionsCount = 0,
+  includeNodeFooterHeight = false,
+  includeCeilingHeight = false,
+  includeFloorHeight = false,
 }: {
-  hasNodeFooter?: boolean
-  hasCeiling?: boolean
-  hasFloor?: boolean
-  nodeOptionsCount?: number
+  includeNodeFooterHeight?: boolean
+  includeCeilingHeight?: boolean
+  includeFloorHeight?: boolean
 }) {
   const border = 2
   const footerHeight = 20 // tailwind h-5
   const base = 28 // tailwind h-7
   const ceilingHeight = 20 // tailwind h-5
   const floorHeight = 20 // tailwind h-5
-  const nodeOptionHeight = 24 // tailwind h-6
-
-  const nodeOptionsSeparator = 1
-  const nodeOptionsSeparators = nodeOptionsCount > 1 ? nodeOptionsCount - 1 : 0
 
   const ceilingGap = 4
   const floorGap = 4
@@ -139,13 +133,25 @@ export function calculateNodeBaseHeight({
   return [
     border * 2,
     base,
-    hasNodeFooter ? footerHeight : 0,
+    includeNodeFooterHeight ? footerHeight : 0,
+    includeCeilingHeight ? ceilingHeight + ceilingGap : 0,
+    includeFloorHeight ? floorHeight + floorGap : 0,
+  ].reduce((acc, h) => acc + h, 0)
+}
 
-    hasCeiling ? ceilingHeight + ceilingGap : 0,
-    hasFloor ? floorHeight + floorGap : 0,
+export function calculateNodeDetailsHeight({
+  nodeDetailsCount = 0,
+}: {
+  nodeDetailsCount?: number
+}) {
+  const nodeOptionHeight = 24 // tailwind h-6
 
+  const nodeOptionsSeparator = 1
+  const nodeOptionsSeparators = nodeDetailsCount > 1 ? nodeDetailsCount - 1 : 0
+
+  return [
     nodeOptionsSeparators * nodeOptionsSeparator,
-    nodeOptionsCount * nodeOptionHeight,
+    nodeDetailsCount * nodeOptionHeight,
   ].reduce((acc, h) => acc + h, 0)
 }
 
