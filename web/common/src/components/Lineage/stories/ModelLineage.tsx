@@ -20,6 +20,7 @@ import { LineageControlButton } from '../LineageControlButton'
 import { LineageControlIcon } from '../LineageControlIcon'
 import { LineageLayout } from '../LineageLayout'
 import { FactoryEdgeWithGradient } from '../edge/FactoryEdgeWithGradient'
+import { toNodeID, toPortID } from '../utils'
 import {
   calculateNodeBaseHeight,
   createEdge,
@@ -27,8 +28,6 @@ import {
   getOnlySelectedNodes,
   getTransformedModelEdges,
   getTransformedNodes,
-  toNodeID,
-  toPortID,
 } from '../help'
 import {
   cleanupLayoutWorker,

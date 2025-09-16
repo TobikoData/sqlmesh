@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { toPortID } from '../help'
+import { toPortID } from '../utils'
 import {
   type AdjacencyListColumnKey,
   type AdjacencyListKey,

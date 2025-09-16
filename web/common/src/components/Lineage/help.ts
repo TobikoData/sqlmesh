@@ -14,6 +14,8 @@ import {
   type LineageNodesMap,
   type NodeId,
   type PortId,
+  toEdgeID,
+  toNodeID,
   type TransformEdgeFn,
   type TransformNodeFn,
 } from './utils'
@@ -166,20 +168,4 @@ export function createEdge<TEdgeData extends LineageEdgeData = LineageEdgeData>(
     data,
     zIndex: 1,
   }
-}
-
-export function toID<TReturn extends string>(...args: string[]) {
-  return args.join('.') as TReturn
-}
-
-export function toNodeID(...args: string[]) {
-  return encodeURI(toID(...args)) as NodeId
-}
-
-export function toEdgeID(...args: string[]) {
-  return encodeURI(toID(...args)) as EdgeId
-}
-
-export function toPortID(...args: string[]) {
-  return encodeURI(toID(...args)) as PortId
 }
