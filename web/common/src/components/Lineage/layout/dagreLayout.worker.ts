@@ -3,12 +3,16 @@ import dagre from 'dagre'
 import {
   DEFAULT_NODE_WIDTH,
   type LayoutedGraph,
+  type LineageEdgeData,
   type LineageNodeData,
   type NodeId,
 } from '../utils'
 
-self.onmessage = <TNodeData extends LineageNodeData = LineageNodeData>(
-  event: MessageEvent<LayoutedGraph<TNodeData>>,
+self.onmessage = <
+  TNodeData extends LineageNodeData = LineageNodeData,
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+>(
+  event: MessageEvent<LayoutedGraph<TNodeData, TEdgeData>>,
 ) => {
   try {
     const { edges, nodesMap } = event.data
@@ -21,7 +25,7 @@ self.onmessage = <TNodeData extends LineageNodeData = LineageNodeData>(
       return self.postMessage({
         edges: [],
         nodesMap: {},
-      })
+      } as LayoutedGraph<TNodeData, TEdgeData>)
 
     const g = new dagre.graphlib.Graph({
       compound: true,
@@ -75,8 +79,8 @@ self.onmessage = <TNodeData extends LineageNodeData = LineageNodeData>(
     self.postMessage({
       edges,
       nodesMap,
-    })
+    } as LayoutedGraph<TNodeData, TEdgeData>)
   } catch (outerError) {
-    self.postMessage({ error: outerError })
+    self.postMessage({ error: outerError } as { error: ErrorEvent })
   }
 }
