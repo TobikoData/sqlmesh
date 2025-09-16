@@ -942,6 +942,26 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     context.apply(plan)
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_forward_only_view_migration(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    assert model.kind.is_view
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+
+    # Apply a forward-only plan
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True, forward_only=True)
+
+    # Make sure that the new column got reflected in the view schema
+    df = context.fetchdf("SELECT one FROM sushi.top_waiters LIMIT 1")
+    assert len(df) == 1
+
+
 @time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_new_forward_only_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")

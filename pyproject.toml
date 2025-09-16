@@ -225,7 +225,8 @@ module = [
     "pydantic_core.*",
     "dlt.*",
     "bigframes.*",
-    "json_stream.*"
+    "json_stream.*",
+    "duckdb.*"
 ]
 ignore_missing_imports = true
 
