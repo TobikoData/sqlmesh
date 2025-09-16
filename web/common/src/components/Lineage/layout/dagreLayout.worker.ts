@@ -35,14 +35,15 @@ self.onmessage = <
 
     g.setGraph({
       rankdir: 'LR',
-      nodesep: 24,
-      ranksep: DEFAULT_NODE_WIDTH / 2,
+      nodesep: 0,
+      ranksep: 48,
       edgesep: 0,
       ranker: 'longest-path',
     })
 
     g.setDefaultEdgeLabel(() => ({}))
 
+    // Building layout already heavy operation, so trying to optimize it a bit
     for (let i = 0; i < maxCount; i++) {
       if (i < edgeCount) {
         g.setEdge(edges[i].source, edges[i].target)
@@ -58,14 +59,15 @@ self.onmessage = <
 
     dagre.layout(g)
 
+    // Building layout already heavy operation, so trying to optimize it a bit
     for (let i = 0; i < nodeCount; i++) {
       const node = nodes[i]
       const width = node.width || DEFAULT_NODE_WIDTH
       const height = node.height || 0
       const nodeId = node.id as NodeId
       const nodeWithPosition = g.node(nodeId)
-      const halfWidth = width >> 1
-      const halfHeight = height >> 1
+      const halfWidth = width / 2
+      const halfHeight = height / 2
 
       nodesMap[nodeId] = {
         ...node,
