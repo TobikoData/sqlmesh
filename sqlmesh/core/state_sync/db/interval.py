@@ -232,7 +232,7 @@ class IntervalState:
                         end_ts,
                         is_dev=True,
                         is_compacted=is_compacted,
-                        last_altered_ts=snapshot.last_altered_ts,
+                        last_altered_ts=snapshot.dev_last_altered_ts,
                     )
                 )
 
