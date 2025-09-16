@@ -281,9 +281,7 @@ class PlanStagesBuilder:
             snapshots_with_schema_migration = [
                 snapshots[s_id]
                 for s_id in dag.subdag(*snapshot_ids_with_schema_migration)
-                if snapshots[s_id].is_paused
-                and snapshots[s_id].is_model
-                and not snapshots[s_id].is_symbolic
+                if snapshots[s_id].supports_schema_migration_in_prod
             ]
 
         snapshots_to_intervals = self._missing_intervals(
