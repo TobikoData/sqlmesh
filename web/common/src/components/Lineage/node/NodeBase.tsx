@@ -1,0 +1,32 @@
+import { type NodeProps } from '@xyflow/react'
+import React from 'react'
+
+import { BaseNode } from '@/components/Lineage/node/base-node'
+import { cn } from '@/utils'
+
+export interface NodeBaseProps extends NodeProps {
+  className?: string
+  children?: React.ReactNode
+  style?: React.CSSProperties
+}
+
+export const NodeBase = React.memo(
+  React.forwardRef<HTMLDivElement, NodeBaseProps>(
+    ({ className, children }, ref) => {
+      return (
+        <BaseNode
+          data-component="BaseNode"
+          className={cn(
+            'bg-lineage-node-background text-lineage-node-foreground',
+            'h-full flex flex-col flex-1 justify-center flex-shrink-0 rounded-md',
+            className,
+          )}
+          ref={ref}
+        >
+          {children}
+        </BaseNode>
+      )
+    },
+  ),
+)
+NodeBase.displayName = 'NodeBase'
