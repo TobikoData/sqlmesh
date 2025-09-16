@@ -26,6 +26,12 @@ from sqlmesh.lsp.api import (
     ApiResponseGetModels,
     ApiResponseGetTableDiff,
 )
+from sqlmesh.lsp.cli_calls import (
+    DaemonCommunicationMode,
+    DaemonCommunicationModeUnixSocket,
+    generate_lock_file,
+    return_lock_file_path,
+)
 
 from sqlmesh.lsp.commands import EXTERNAL_MODEL_UPDATE_COLUMNS
 from sqlmesh.lsp.completions import get_sql_completions
@@ -69,6 +75,7 @@ from sqlmesh.lsp.custom import (
     GetModelsResponse,
     ModelInfo,
 )
+from pydantic import Field
 from sqlmesh.lsp.errors import ContextFailedError, context_error_to_diagnostic
 from sqlmesh.lsp.helpers import to_lsp_range, to_sqlmesh_position
 from sqlmesh.lsp.hints import get_hints
@@ -126,11 +133,40 @@ class ContextFailed:
 ContextState = Union[NoContext, ContextLoaded, ContextFailed]
 
 
+class LSPCLICallRequest(PydanticModel):
+    argumens: t.List[str]
+
+
+class SocketMessageFinished(PydanticModel):
+    state: t.Literal["finished"] = "finished"
+
+
+T = t.TypeVar("T", bound=PydanticModel)
+
+
+class SocketMessageOngoing(PydanticModel, t.Generic[T]):
+    state: t.Literal["ongoing"] = "ongoing"
+    message: T
+
+
+class SocketMessageError(PydanticModel):
+    state: t.Literal["error"] = "error"
+    message: str
+
+
+class SocketMessage(PydanticModel):
+    state: t.Union[SocketMessageOngoing, SocketMessageFinished] = Field(discriminator="state")
+
+
+CLI_CALL_FEATURE = "sqlmesh/cli/call"
+
+
 class SQLMeshLanguageServer:
     # Specified folders take precedence over workspace folders or looking
     # for a config files. They are explicitly set by the user and optionally
     # pass in at init
     specified_paths: t.Optional[t.List[Path]] = None
+    claenup_calls: t.List = []
 
     def __init__(
         self,
@@ -170,6 +206,7 @@ class SQLMeshLanguageServer:
             RUN_TEST_FEATURE: self._run_test,
             GET_ENVIRONMENTS_FEATURE: self._custom_get_environments,
             GET_MODELS_FEATURE: self._custom_get_models,
+            CLI_CALL_FEATURE: self._custom_cli_call,
         }
 
         # Register LSP features (e.g., formatting, hover, etc.)
@@ -232,26 +269,26 @@ class SQLMeshLanguageServer:
         try:
             context = self._context_get_or_load(uri)
             return LSPContext.get_completions(context, uri, content)
-        except Exception as e:
+        except Exception as _:
             from sqlmesh.lsp.completions import get_sql_completions
 
             return get_sql_completions(None, URI(params.textDocument.uri), content)
 
     def _custom_render_model(
-        self, ls: LanguageServer, params: RenderModelRequest
+        self, _: LanguageServer, params: RenderModelRequest
     ) -> RenderModelResponse:
         uri = URI(params.textDocumentUri)
         context = self._context_get_or_load(uri)
         return RenderModelResponse(models=context.render_model(uri))
 
     def _custom_all_models_for_render(
-        self, ls: LanguageServer, params: AllModelsForRenderRequest
+        self, ls: LanguageServer, _: AllModelsForRenderRequest
     ) -> AllModelsForRenderResponse:
         context = self._context_get_or_load()
         return AllModelsForRenderResponse(models=context.list_of_models_for_rendering())
 
     def _custom_format_project(
-        self, ls: LanguageServer, params: FormatProjectRequest
+        self, ls: LanguageServer, _: FormatProjectRequest
     ) -> FormatProjectResponse:
         """Format all models in the current project."""
         try:
@@ -263,7 +300,7 @@ class SQLMeshLanguageServer:
             return FormatProjectResponse()
 
     def _custom_get_environments(
-        self, ls: LanguageServer, params: GetEnvironmentsRequest
+        self, ls: LanguageServer, _: GetEnvironmentsRequest
     ) -> GetEnvironmentsResponse:
         """Get all environments in the current project."""
         try:
@@ -424,6 +461,72 @@ class SQLMeshLanguageServer:
                 return ApiResponseGetTableDiff(data=table_diff_result)
 
         raise NotImplementedError(f"API request not implemented: {request.url}")
+
+    def _custom_cli_call(self, ls: LanguageServer, params: LSPCLICallRequest) -> SocketMessage:
+        """Handle CLI call requests from the daemon connector."""
+        try:
+            context = self._context_get_or_load()
+            if not context or not hasattr(context, 'context'):
+                return SocketMessage(state=SocketMessageError(message="No context available"))
+
+            arguments = params.argumens if hasattr(params, 'argumens') else params.arguments
+
+            # For now, only support janitor command
+            if not arguments or arguments[0] != "janitor":
+                return SocketMessage(state=SocketMessageError(message="Only 'janitor' command is supported"))
+
+            # Parse janitor arguments
+            ignore_ttl = "--ignore-ttl" in arguments
+
+            # Run the janitor with a custom console that sends updates via notifications
+            try:
+                # Create a daemon console that will send state updates
+                from sqlmesh.core.console import JanitorConosoleDaemon, JanitorState
+                import json
+
+                def send_state(state: JanitorState):
+                    """Callback to send janitor state updates as notifications."""
+                    # Send each update as a separate JSON-RPC notification
+                    notification = {
+                        "jsonrpc": "2.0",
+                        "method": "sqlmesh/cli/update",
+                        "params": {
+                            "state": "ongoing",
+                            "message": state.state.model_dump()
+                        }
+                    }
+
+                    # Send notification through the server's transport
+                    message = json.dumps(notification)
+                    content_length = len(message.encode("utf-8"))
+                    header = f"Content-Length: {content_length}\r\n\r\n"
+                    full_message = header.encode("utf-8") + message.encode("utf-8")
+
+                    # Write directly to the server's output stream
+                    if hasattr(ls.lsp, '_writer') and ls.lsp._writer:
+                        ls.lsp._writer.write(full_message)
+                        ls.lsp._writer.flush()
+
+                # Create daemon console with callback
+                daemon_console = JanitorConosoleDaemon()
+                daemon_console.callback = send_state
+
+                # Run janitor with the daemon console
+                original_console = context.context.console
+                try:
+                    context.context.console = daemon_console
+                    context.context.run_janitor(ignore_ttl=ignore_ttl)
+                finally:
+                    context.context.console = original_console
+
+                # Return final success message
+                return SocketMessage(state=SocketMessageFinished())
+
+            except Exception as e:
+                return SocketMessage(state=SocketMessageError(message=f"Janitor failed: {str(e)}"))
+
+        except Exception as e:
+            return SocketMessage(state=SocketMessageError(message=f"CLI call failed: {str(e)}"))
 
     def _custom_supported_methods(
         self, ls: LanguageServer, params: SupportedMethodsRequest
@@ -1181,10 +1284,47 @@ class SQLMeshLanguageServer:
         """Convert a URI to a path."""
         return URI(uri).to_path()
 
-    def start(self) -> None:
-        """Start the server with I/O transport."""
+    def start(self, socket_path: t.Optional[str] = None) -> None:
+        """Start the server with Unix socket (for both VS Code and CLI)."""
         logging.basicConfig(level=logging.DEBUG)
-        self.server.start_io()
+
+        if socket_path:
+            import os
+            import socket
+            from pathlib import Path
+
+            # Write lock file with socket information
+            project_path = self.workspace_folders[0] if self.workspace_folders else Path.cwd()
+            lock_path = return_lock_file_path(project_path)
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+            lock_file = generate_lock_file()
+            lock_file.communication = DaemonCommunicationMode(
+                type=DaemonCommunicationModeUnixSocket(socket=socket_path)
+            )
+            lock_path.write_text(lock_file.model_dump_json(indent=2))
+
+            # Remove existing socket file if it exists
+            if os.path.exists(socket_path):
+                os.unlink(socket_path)
+
+            # Create and bind to the Unix domain socket
+            server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server_sock.bind(socket_path)
+            server_sock.listen(1)
+
+            # Accept the first connection (from VS Code)
+            client_sock, _ = server_sock.accept()
+
+            # Convert socket to file-like objects for reading and writing
+            import io
+            reader = io.BufferedReader(io.FileIO(client_sock.fileno(), mode='r', closefd=False))
+            writer = io.BufferedWriter(io.FileIO(client_sock.fileno(), mode='w', closefd=False))
+
+            self.server.start_io(reader, writer)
+        else:
+            # Use standard I/O
+            self.server.start_io()
 
 
 def loaded_sqlmesh_message(ls: LanguageServer) -> None:
@@ -1195,9 +1335,15 @@ def loaded_sqlmesh_message(ls: LanguageServer) -> None:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--socket', help='Unix socket path for communication', default=None)
+    args = parser.parse_args()
+
     # Example instantiator that just uses the same signature as your original `Context` usage.
     sqlmesh_server = SQLMeshLanguageServer(context_class=Context)
-    sqlmesh_server.start()
+    sqlmesh_server.start(socket_path=args.socket)
 
 
 if __name__ == "__main__":

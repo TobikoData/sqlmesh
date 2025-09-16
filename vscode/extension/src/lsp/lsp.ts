@@ -96,18 +96,30 @@ export class LSPClient implements Disposable {
     }
 
     const workspacePath = sqlmesh.value.workspacePath
+
+    // Create a unique socket path for this workspace
+    const os = require('os')
+    const path = require('path')
+    const crypto = require('crypto')
+    const tmpDir = os.tmpdir()
+    const workspaceHash = crypto.createHash('md5').update(workspacePath).digest('hex').substring(0, 8)
+    const socketPath = path.join(tmpDir, `sqlmesh_${workspaceHash}.sock`)
+
+    // Add --socket argument to the LSP server
+    const argsWithSocket = [...sqlmesh.value.args, '--socket', socketPath]
+
     const serverOptions: ServerOptions = {
       run: {
         command: sqlmesh.value.bin,
-        transport: TransportKind.stdio,
+        transport: TransportKind.ipc,
         options: { cwd: workspacePath, env: sqlmesh.value.env },
-        args: sqlmesh.value.args,
+        args: argsWithSocket,
       },
       debug: {
         command: sqlmesh.value.bin,
-        transport: TransportKind.stdio,
+        transport: TransportKind.ipc,
         options: { cwd: workspacePath, env: sqlmesh.value.env },
-        args: sqlmesh.value.args,
+        args: argsWithSocket,
       },
     }
     const paths = resolveProjectPath(getWorkspaceFolders()[0])
