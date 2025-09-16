@@ -1,0 +1,331 @@
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  type EdgeTypes,
+  type NodeTypes,
+  ReactFlow,
+  type SetCenter,
+  getConnectedEdges,
+  getIncomers,
+  getOutgoers,
+  useReactFlow,
+  useViewport,
+} from '@xyflow/react'
+
+import '@xyflow/react/dist/style.css'
+import './Lineage.css'
+
+import { debounce } from 'lodash'
+import { CircuitBoard, Crosshair, LocateFixed, RotateCcw } from 'lucide-react'
+import React from 'react'
+
+import { cn } from '@/utils'
+import { type LineageContextHook } from './LineageContext'
+import { LineageControlButton } from './LineageControlButton'
+import { LineageControlIcon } from './LineageControlIcon'
+import {
+  DEFAULT_ZOOM,
+  type EdgeId,
+  type LineageEdge,
+  type LineageEdgeData,
+  type LineageNode,
+  type LineageNodeData,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  NODES_TRESHOLD,
+  NODES_TRESHOLD_ZOOM,
+  type NodeId,
+  ZOOM_TRESHOLD,
+} from './utils'
+import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
+import { MessageContainer } from '../MessageContainer/MessageContainer'
+import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
+
+export function LineageLayout<
+  TNodeData extends LineageNodeData = LineageNodeData,
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+>({
+  nodeTypes,
+  edgeTypes,
+  className,
+  controls,
+  useLineage,
+  onNodeClick,
+  onNodeDoubleClick,
+}: {
+  useLineage: LineageContextHook<TNodeData, TEdgeData>
+  nodeTypes?: NodeTypes
+  edgeTypes?: EdgeTypes
+  className?: string
+  controls?:
+    | React.ReactNode
+    | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
+  onNodeClick?: (
+    event: React.MouseEvent<Element, MouseEvent>,
+    node: LineageNode<TNodeData>,
+  ) => void
+  onNodeDoubleClick?: (
+    event: React.MouseEvent<Element, MouseEvent>,
+    node: LineageNode<TNodeData>,
+  ) => void
+}) {
+  const { zoom: viewportZoom } = useViewport()
+  const { setCenter } = useReactFlow()
+
+  const {
+    isBuildingLayout,
+    currentNode,
+    zoom,
+    nodes,
+    edges,
+    nodesMap,
+    showOnlySelectedNodes,
+    selectedNodeId,
+    setZoom,
+    setSelectedNodeId,
+    setShowOnlySelectedNodes,
+    setSelectedNodes,
+    setSelectedEdges,
+  } = useLineage()
+
+  const updateZoom = React.useMemo(() => debounce(setZoom, 200), [setZoom])
+
+  const zoomToCurrentNode = React.useCallback(
+    (zoom: number = DEFAULT_ZOOM) => {
+      if (currentNode) {
+        setCenter(currentNode.position.x, currentNode.position.y, {
+          zoom,
+          duration: 0,
+        })
+      }
+    },
+    [currentNode, setCenter],
+  )
+
+  const zoomToSelectedNode = React.useCallback(
+    (zoom: number = DEFAULT_ZOOM) => {
+      const node = nodesMap[selectedNodeId as NodeId]
+      if (node) {
+        setCenter(node.position.x, node.position.y, {
+          zoom,
+          duration: 0,
+        })
+      }
+    },
+    [nodesMap, selectedNodeId, setCenter],
+  )
+
+  const getAllIncomers = React.useCallback(
+    (
+      node: LineageNode<TNodeData>,
+      visited: Set<NodeId> = new Set(),
+    ): LineageNode<TNodeData>[] => {
+      if (visited.has(node.id as NodeId)) return []
+
+      visited.add(node.id as NodeId)
+
+      return Array.from(
+        new Set<LineageNode<TNodeData>>([
+          node,
+          ...getIncomers(node, nodes, edges)
+            .map(n => getAllIncomers(n, visited))
+            .flat(),
+        ]),
+      )
+    },
+    [nodes, edges],
+  )
+
+  const getAllOutgoers = React.useCallback(
+    (
+      node: LineageNode<TNodeData>,
+      visited: Set<NodeId> = new Set(),
+    ): LineageNode<TNodeData>[] => {
+      if (visited.has(node.id as NodeId)) return []
+
+      visited.add(node.id as NodeId)
+
+      return Array.from(
+        new Set<LineageNode<TNodeData>>([
+          node,
+          ...getOutgoers(node, nodes, edges)
+            .map(n => getAllOutgoers(n, visited))
+            .flat(),
+        ]),
+      )
+    },
+    [nodes, edges],
+  )
+
+  React.useEffect(() => {
+    if (selectedNodeId == null) {
+      setShowOnlySelectedNodes(false)
+      setSelectedNodes(new Set())
+      setSelectedEdges(new Set())
+
+      return
+    }
+
+    const node = nodesMap[selectedNodeId as NodeId]
+
+    if (node == null) {
+      setSelectedNodeId(null)
+      return
+    }
+
+    const incomers = getAllIncomers(node)
+    const outgoers = getAllOutgoers(node)
+    const connectedNodes = [...incomers, ...outgoers]
+
+    if (currentNode) {
+      connectedNodes.push(currentNode)
+    }
+
+    const connectedEdges = getConnectedEdges(connectedNodes, edges)
+    const selectedNodes = new Set(connectedNodes.map(node => node.id))
+    const selectedEdges = new Set(
+      connectedEdges.reduce((acc, edge) => {
+        if ([edge.source, edge.target].every(id => selectedNodes.has(id))) {
+          edge.zIndex = 2
+          acc.add(edge.id)
+        } else {
+          edge.zIndex = 1
+        }
+        return acc
+      }, new Set<EdgeId>()),
+    )
+
+    setSelectedNodes(selectedNodes)
+    setSelectedEdges(selectedEdges)
+  }, [
+    currentNode,
+    selectedNodeId,
+    setSelectedNodes,
+    setSelectedEdges,
+    getAllIncomers,
+    getAllOutgoers,
+    setShowOnlySelectedNodes,
+    setSelectedNodeId,
+  ])
+
+  React.useEffect(() => {
+    if (selectedNodeId) {
+      zoomToSelectedNode(zoom)
+    } else {
+      zoomToCurrentNode(zoom)
+    }
+  }, [zoomToCurrentNode, zoomToSelectedNode])
+
+  React.useEffect(() => {
+    updateZoom(viewportZoom)
+  }, [updateZoom, viewportZoom])
+
+  React.useEffect(() => {
+    if (currentNode?.id) {
+      setSelectedNodeId(currentNode.id as NodeId)
+    } else if (selectedNodeId) {
+      // setSelectedNodeId(selectedNodeId);
+    } else {
+      const node = nodes.length > 0 ? nodes[nodes.length - 1] : null
+
+      if (node) {
+        setCenter(node.position.x, node.position.y, {
+          zoom: zoom,
+          duration: 0,
+        })
+      }
+    }
+  }, [currentNode?.id, setSelectedNodeId, nodes, setCenter])
+
+  return (
+    <VerticalContainer
+      className={cn(
+        'border-2 border-lineage-border bg-lineage-background relative h-full',
+        className,
+      )}
+    >
+      {isBuildingLayout && (
+        <MessageContainer
+          className={cn('absolute inset-0 backdrop-blur-sm z-10 rounded-none')}
+        >
+          <LoadingContainer
+            isLoading={isBuildingLayout}
+            className="px-4 py-2 font-semibold shadow-lg bg-lineage-background rounded-md"
+          >
+            Building layout...
+          </LoadingContainer>
+        </MessageContainer>
+      )}
+      <ReactFlow<LineageNode<TNodeData>, LineageEdge<TEdgeData>>
+        className="shrink-0"
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        zoomOnDoubleClick={false}
+        panOnScroll={true}
+        zoomOnScroll={true}
+        minZoom={nodes.length > NODES_TRESHOLD ? NODES_TRESHOLD_ZOOM : MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        fitView={false}
+        nodeOrigin={[0.5, 0.5]}
+        onlyRenderVisibleElements
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+      >
+        {zoom > ZOOM_TRESHOLD && (
+          <Background
+            id="1"
+            gap={10}
+            color="var(--color-lineage-grid-dot)"
+            variant={BackgroundVariant.Dots}
+          />
+        )}
+        <Controls
+          showInteractive={false}
+          position="top-right"
+        >
+          {currentNode && (
+            <LineageControlButton
+              text="Zoom to current node"
+              onClick={() => zoomToCurrentNode(DEFAULT_ZOOM)}
+              disabled={isBuildingLayout}
+            >
+              <LineageControlIcon Icon={Crosshair} />
+            </LineageControlButton>
+          )}
+          {selectedNodeId && (
+            <>
+              <LineageControlButton
+                text={
+                  showOnlySelectedNodes
+                    ? 'Rebuild with all nodes'
+                    : 'Only selected nodes'
+                }
+                onClick={() => setShowOnlySelectedNodes(!showOnlySelectedNodes)}
+                disabled={isBuildingLayout}
+              >
+                <LineageControlIcon
+                  Icon={showOnlySelectedNodes ? RotateCcw : CircuitBoard}
+                />
+              </LineageControlButton>
+              <LineageControlButton
+                text="Zoom to selected node"
+                onClick={() => zoomToSelectedNode(DEFAULT_ZOOM)}
+                disabled={isBuildingLayout}
+              >
+                <LineageControlIcon Icon={LocateFixed} />
+              </LineageControlButton>
+            </>
+          )}
+          {controls && typeof controls === 'function'
+            ? controls({ setCenter })
+            : controls}
+        </Controls>
+      </ReactFlow>
+    </VerticalContainer>
+  )
+}
