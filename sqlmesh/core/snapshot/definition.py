@@ -1483,7 +1483,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return (
             self.is_paused
             and self.is_model
-            and self.is_materialized
+            and not self.is_symbolic
             and (
                 (self.previous_version and self.previous_version.version == self.version)
                 or self.model.forward_only

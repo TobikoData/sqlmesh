@@ -12,6 +12,7 @@ from sqlmesh.core.snapshot.definition import (
     Snapshot,
     SnapshotTableInfo,
     SnapshotId,
+    snapshots_to_dag,
 )
 
 
@@ -248,6 +249,7 @@ class PlanStagesBuilder:
         stored_snapshots = self.state_reader.get_snapshots(plan.environment.snapshots)
         snapshots = {**new_snapshots, **stored_snapshots}
         snapshots_by_name = {s.name: s for s in snapshots.values()}
+        dag = snapshots_to_dag(snapshots.values())
 
         all_selected_for_backfill_snapshots = {
             s.snapshot_id for s in snapshots.values() if plan.is_selected_for_backfill(s.name)
@@ -271,8 +273,17 @@ class PlanStagesBuilder:
             after_promote_snapshots = all_selected_for_backfill_snapshots - before_promote_snapshots
             deployability_index = DeployabilityIndex.all_deployable()
 
+            snapshot_ids_with_schema_migration = [
+                s.snapshot_id for s in snapshots.values() if s.requires_schema_migration_in_prod
+            ]
+            # Include all upstream dependencies of snapshots that require schema migration to make sure
+            # the upstream tables are created before the schema updates are applied
             snapshots_with_schema_migration = [
-                s for s in snapshots.values() if s.requires_schema_migration_in_prod
+                snapshots[s_id]
+                for s_id in dag.subdag(*snapshot_ids_with_schema_migration)
+                if snapshots[s_id].is_paused
+                and snapshots[s_id].is_model
+                and not snapshots[s_id].is_symbolic
             ]
 
         snapshots_to_intervals = self._missing_intervals(

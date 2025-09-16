@@ -1661,16 +1661,17 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
     stages = build_plan_stages(plan, state_reader, None)
 
     # Verify stages
-    assert len(stages) == 8
+    assert len(stages) == 9
 
     assert isinstance(stages[0], CreateSnapshotRecordsStage)
     assert isinstance(stages[1], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[2], BackfillStage)
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
-    assert isinstance(stages[4], UnpauseStage)
-    assert isinstance(stages[5], BackfillStage)
-    assert isinstance(stages[6], VirtualLayerUpdateStage)
-    assert isinstance(stages[7], FinalizeEnvironmentStage)
+    assert isinstance(stages[4], MigrateSchemasStage)
+    assert isinstance(stages[5], UnpauseStage)
+    assert isinstance(stages[6], BackfillStage)
+    assert isinstance(stages[7], VirtualLayerUpdateStage)
+    assert isinstance(stages[8], FinalizeEnvironmentStage)
 
 
 def test_build_plan_stages_virtual_environment_mode_filtering(
