@@ -332,11 +332,11 @@ class ModelMeta(_Node):
 
     @field_validator("grants_target_layer", mode="before")
     def _grants_target_layer_validator(cls, v: t.Any) -> t.Any:
-        return cls._validate_str_enum_value(v)
-
-    @field_validator("virtual_environment_mode", mode="before")
-    def _virtual_environment_mode_validator(cls, v: t.Any) -> t.Any:
-        return cls._validate_str_enum_value(v)
+        if isinstance(v, exp.Identifier):
+            return v.this
+        if isinstance(v, exp.Literal) and v.is_string:
+            return v.this
+        return v
 
     @field_validator("session_properties_", mode="before")
     def session_properties_validator(cls, v: t.Any, info: ValidationInfo) -> t.Any:

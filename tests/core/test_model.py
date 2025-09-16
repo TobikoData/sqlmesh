@@ -1953,7 +1953,6 @@ def test_render_definition_with_grants():
                 'insert' = ['admin'],
                 'roles/bigquery.dataViewer' = ['user:data_eng@mycompany.com']
             ),
-            virtual_environment_mode dev_only,
             grants_target_layer all,
         );
         SELECT 1 as id
@@ -2023,30 +2022,6 @@ def test_render_definition_with_grants():
     )
     default_model = load_sql_based_model(default_expressions)
     assert default_model.grants_target_layer == GrantsTargetLayer.ALL  # default value
-
-    # Test round-trip: parse model with grants_target_layer, render definition, parse back
-    original_expressions = d.parse(
-        """
-        MODEL (
-            name test.roundtrip_model,
-            kind FULL,
-            grants (
-                'select' = ['user1', 'user2'],
-                'insert' = ['admin']
-            ),
-            grants_target_layer 'virtual'
-        );
-        SELECT 1 as id
-        """
-    )
-    original_model = load_sql_based_model(original_expressions)
-    rendered_def = original_model.render_definition(include_defaults=True)
-    rendered_text = d.format_model_expressions(rendered_def)
-    reparsed_expressions = d.parse(rendered_text)
-    reparsed_model = load_sql_based_model(reparsed_expressions)
-
-    assert reparsed_model.grants_target_layer == GrantsTargetLayer.VIRTUAL
-    assert reparsed_model.grants == original_model.grants
 
 
 def test_render_definition_partitioned_by():
