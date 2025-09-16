@@ -875,6 +875,7 @@ def test_load_model_dbt_node_name(tmp_path: Path) -> None:
     assert model.dbt_name == "model.test_project.simple_model"
 
 
+@pytest.mark.slow
 def test_jinja_config_no_query(tmp_path, create_empty_project):
     project_dir, model_dir = create_empty_project()
 
