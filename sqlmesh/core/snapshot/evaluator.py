@@ -750,7 +750,7 @@ class SnapshotEvaluator:
                     model.kind.is_materialized
                     and model.columns_to_types_
                     and columns_to_types_all_known(model.columns_to_types_)
-                )
+                ) or (model.depends_on_self and model.annotated)
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
