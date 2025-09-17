@@ -1678,7 +1678,6 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
-        replace=True,
         rendered_physical_properties={},
     )
 
@@ -1701,7 +1700,7 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     adapter_mock.get_alter_operations.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    adapter_mock.alter_table.side_effect = Exception("Migration failed")
+    adapter_mock.alter_table.side_effect = DestructiveChangeError("Migration failed")
 
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1728,7 +1727,6 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
-        replace=True,
         rendered_physical_properties={},
     )
 
