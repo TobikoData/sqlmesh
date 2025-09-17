@@ -263,11 +263,9 @@ export const ModelLineage = ({
             setNodesMap({})
           })
           .finally(() => {
-            setTimeout(() => {
-              setIsBuildingLayout(false)
-            })
+            setIsBuildingLayout(false)
           }),
-      1000,
+      200,
     )
   }, [])
 
