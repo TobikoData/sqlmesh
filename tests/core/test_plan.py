@@ -4239,4 +4239,6 @@ def test_forward_only_indirect_change_to_materialized_view(make_snapshot):
 
     PlanBuilder(context_diff, forward_only=True).build()
 
+    # Forward-only indirect changes to MVs should not always be classified as indirect breaking.
+    # Instead, we want to preserve the standard categorization.
     assert snapshot_b_new.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
