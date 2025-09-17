@@ -106,6 +106,7 @@ def test_build_plan_stages_basic(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -215,6 +216,7 @@ def test_build_plan_stages_with_before_all_and_after_all(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -325,6 +327,7 @@ def test_build_plan_stages_select_models(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -426,6 +429,7 @@ def test_build_plan_stages_basic_no_backfill(
         skip_backfill=skip_backfill,
         empty_backfill=empty_backfill,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -562,6 +566,7 @@ def test_build_plan_stages_restatement_prod_only(
             '"a"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
             '"b"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
         },
+        restate_all_snapshots=True,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -718,6 +723,7 @@ def test_build_plan_stages_restatement_prod_identifies_dev_intervals(
             '"a"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
             '"b"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
         },
+        restate_all_snapshots=True,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -881,6 +887,7 @@ def test_build_plan_stages_restatement_dev_does_not_clear_intervals(
         restatements={
             '"a"': (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
         },
+        restate_all_snapshots=False,
         is_dev=True,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -988,6 +995,7 @@ def test_build_plan_stages_forward_only(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1116,6 +1124,7 @@ def test_build_plan_stages_forward_only_dev(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=True,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1241,6 +1250,7 @@ def test_build_plan_stages_audit_only(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=True,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1378,6 +1388,7 @@ def test_build_plan_stages_forward_only_ensure_finalized_snapshots(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1454,6 +1465,7 @@ def test_build_plan_stages_removed_model(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1537,6 +1549,7 @@ def test_build_plan_stages_environment_suffix_target_changed(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=True,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1636,6 +1649,7 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1661,16 +1675,17 @@ def test_build_plan_stages_indirect_non_breaking_view_migration(
     stages = build_plan_stages(plan, state_reader, None)
 
     # Verify stages
-    assert len(stages) == 8
+    assert len(stages) == 9
 
     assert isinstance(stages[0], CreateSnapshotRecordsStage)
     assert isinstance(stages[1], PhysicalLayerSchemaCreationStage)
     assert isinstance(stages[2], BackfillStage)
     assert isinstance(stages[3], EnvironmentRecordUpdateStage)
-    assert isinstance(stages[4], UnpauseStage)
-    assert isinstance(stages[5], BackfillStage)
-    assert isinstance(stages[6], VirtualLayerUpdateStage)
-    assert isinstance(stages[7], FinalizeEnvironmentStage)
+    assert isinstance(stages[4], MigrateSchemasStage)
+    assert isinstance(stages[5], UnpauseStage)
+    assert isinstance(stages[6], BackfillStage)
+    assert isinstance(stages[7], VirtualLayerUpdateStage)
+    assert isinstance(stages[8], FinalizeEnvironmentStage)
 
 
 def test_build_plan_stages_virtual_environment_mode_filtering(
@@ -1722,6 +1737,7 @@ def test_build_plan_stages_virtual_environment_mode_filtering(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=True,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1775,6 +1791,7 @@ def test_build_plan_stages_virtual_environment_mode_filtering(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1838,6 +1855,7 @@ def test_build_plan_stages_virtual_environment_mode_filtering(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1912,6 +1930,7 @@ def test_build_plan_stages_virtual_environment_mode_no_updates(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -1976,6 +1995,7 @@ def test_adjust_intervals_new_forward_only_dev_intervals(
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=True,  # Dev environment
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -2045,6 +2065,7 @@ def test_adjust_intervals_restatement_removal(
         skip_backfill=False,
         empty_backfill=False,
         restatements=restatements,
+        restate_all_snapshots=True,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),
@@ -2136,6 +2157,7 @@ def test_adjust_intervals_should_force_rebuild(make_snapshot, mocker: MockerFixt
         skip_backfill=False,
         empty_backfill=False,
         restatements={},
+        restate_all_snapshots=False,
         is_dev=False,
         allow_destructive_models=set(),
         allow_additive_models=set(),

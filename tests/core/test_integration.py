@@ -942,6 +942,26 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     context.apply(plan)
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_forward_only_view_migration(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    assert model.kind.is_view
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+
+    # Apply a forward-only plan
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True, forward_only=True)
+
+    # Make sure that the new column got reflected in the view schema
+    df = context.fetchdf("SELECT one FROM sushi.top_waiters LIMIT 1")
+    assert len(df) == 1
+
+
 @time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_new_forward_only_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
@@ -958,6 +978,32 @@ def test_new_forward_only_model(init_and_plan_context: t.Callable):
 
     assert context.engine_adapter.table_exists(snapshot.table_name())
     assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_annotated_self_referential_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Projections are fully annotated in the query but columns were not specified explicitly
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_self_ref,
+            kind FULL,
+            start '2023-01-01',
+        );
+
+        SELECT 1::INT AS one FROM memory.sushi.test_self_ref;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on_self
+    context.upsert_model(model)
+
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    df = context.fetchdf("SELECT one FROM memory.sushi.test_self_ref")
+    assert len(df) == 0
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")

@@ -489,15 +489,14 @@ class SnapshotEvaluator:
         allow_destructive_snapshots = allow_destructive_snapshots or set()
         allow_additive_snapshots = allow_additive_snapshots or set()
         snapshots_by_name = {s.name: s for s in snapshots.values()}
-        snapshots_with_data_objects = [snapshots[s_id] for s_id in target_data_objects]
         with self.concurrent_context():
             # Only migrate snapshots for which there's an existing data object
             concurrent_apply_to_snapshots(
-                snapshots_with_data_objects,
+                snapshots_by_name.values(),
                 lambda s: self._migrate_snapshot(
                     s,
                     snapshots_by_name,
-                    target_data_objects[s.snapshot_id],
+                    target_data_objects.get(s.snapshot_id),
                     allow_destructive_snapshots,
                     allow_additive_snapshots,
                     self.get_adapter(s.model_gateway),
@@ -747,11 +746,15 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
-                columns_to_types_provided = (
+                # Only create the empty table if the columns were provided explicitly by the user
+                should_create_empty_table = (
                     model.kind.is_materialized
                     and model.columns_to_types_
                     and columns_to_types_all_known(model.columns_to_types_)
                 )
+                if not should_create_empty_table:
+                    # Or if the model is self-referential and its query is fully annotated with types
+                    should_create_empty_table = model.depends_on_self and model.annotated
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
@@ -764,7 +767,7 @@ class SnapshotEvaluator:
                     )
                     runtime_stage = RuntimeStage.EVALUATING
                     target_table_exists = True
-                elif columns_to_types_provided or model.is_seed or model.kind.is_scd_type_2:
+                elif should_create_empty_table or model.is_seed or model.kind.is_scd_type_2:
                     self._execute_create(
                         snapshot=snapshot,
                         table_name=target_table_name,
@@ -1059,7 +1062,7 @@ class SnapshotEvaluator:
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
     ) -> None:
-        if not snapshot.requires_schema_migration_in_prod:
+        if not snapshot.is_model or snapshot.is_symbolic:
             return
 
         deployability_index = DeployabilityIndex.all_deployable()
@@ -1081,6 +1084,10 @@ class SnapshotEvaluator:
             ):
                 table_exists = False
 
+            rendered_physical_properties = snapshot.model.render_physical_properties(
+                **render_kwargs
+            )
+
             if table_exists:
                 self._migrate_target_table(
                     target_table_name=target_table_name,
@@ -1088,12 +1095,20 @@ class SnapshotEvaluator:
                     snapshots=snapshots,
                     deployability_index=deployability_index,
                     render_kwargs=render_kwargs,
-                    rendered_physical_properties=snapshot.model.render_physical_properties(
-                        **render_kwargs
-                    ),
+                    rendered_physical_properties=rendered_physical_properties,
                     allow_destructive_snapshots=allow_destructive_snapshots,
                     allow_additive_snapshots=allow_additive_snapshots,
                     run_pre_post_statements=True,
+                )
+            else:
+                self._execute_create(
+                    snapshot=snapshot,
+                    table_name=snapshot.table_name(is_deployable=True),
+                    is_table_deployable=True,
+                    deployability_index=deployability_index,
+                    create_render_kwargs=render_kwargs,
+                    rendered_physical_properties=rendered_physical_properties,
+                    dry_run=True,
                 )
 
     def _migrate_target_table(

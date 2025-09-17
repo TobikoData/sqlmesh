@@ -1402,7 +1402,13 @@ def test_migrate_view(
     evaluator = SnapshotEvaluator(adapter)
     evaluator.migrate([snapshot], {})
 
-    adapter.cursor.execute.assert_not_called()
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call(
+                f'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__{snapshot.version}" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+            ),
+        ]
+    )
 
 
 def test_migrate_snapshot_data_object_type_mismatch(
