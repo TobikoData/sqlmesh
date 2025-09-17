@@ -26,6 +26,7 @@ export function NodePorts<
         items={items}
         estimatedListItemHeight={estimatedListItemHeight}
         renderListItem={item => renderPort(item)}
+        className={cn(!isFilterable && className)}
       />
     )
   }

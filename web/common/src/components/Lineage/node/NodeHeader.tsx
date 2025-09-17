@@ -17,7 +17,7 @@ export const NodeHeader = forwardRef<HTMLElement, NodeHeaderProps>(
         ref={ref}
         {...props}
         className={cn(
-          'flex w-full items-center justify-between p-0',
+          'flex w-full items-center justify-between p-0 relative',
           className,
         )}
       />

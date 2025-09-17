@@ -217,6 +217,7 @@ export const ModelNode = React.memo(function ModelNode({
                 hideCatalog
                 hideSchema={zoom <= ZOOM_TRESHOLD}
                 hideIcon
+                showCopy
                 name={data.displayName}
                 grayscale
                 className={cn(
@@ -230,7 +231,7 @@ export const ModelNode = React.memo(function ModelNode({
         {shouldShowColumns && (
           <>
             {modelSelectedColumns.length > 0 && (
-              <VerticalContainer className="h-auto shrink-0 border-t border-lineage-node-border">
+              <VerticalContainer className="h-auto shrink-0 border-t border-lineage-divider">
                 {modelSelectedColumns.map(column => (
                   <ModelNodeColumn
                     key={column.id}
@@ -252,7 +253,7 @@ export const ModelNode = React.memo(function ModelNode({
                 ))}
               </VerticalContainer>
             )}
-            {columns.length > 0 && (
+            {columns.length > 0 && zoom > ZOOM_TRESHOLD && (
               <NodePorts
                 ports={columns}
                 estimatedListItemHeight={24}
@@ -280,7 +281,7 @@ export const ModelNode = React.memo(function ModelNode({
                     }
                   />
                 )}
-                className="border-t border-lineage-node-border"
+                className="border-t border-lineage-divider"
               />
             )}
           </>

@@ -64,6 +64,7 @@ export type TransformNodeFn<
 export type TransformEdgeFn<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
 > = (
+  edgeType: string,
   edgeId: EdgeId,
   sourceId: NodeId,
   targetId: NodeId,

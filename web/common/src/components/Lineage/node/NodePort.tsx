@@ -42,10 +42,10 @@ export const NodePort = React.memo(function NodePort({
     <NodeHandles
       data-component="NodePort"
       leftIcon={
-        <span className="flex-shrink-0 p-1.5 rounded-full bg-lineage-node-port-handle"></span>
+        <span className="flex-shrink-0 p-1.5 rounded-full bg-lineage-node-port-handle-target"></span>
       }
       rightIcon={
-        <span className="flex-shrink-0 p-1.5 rounded-full bg-lineage-node-port-handle"></span>
+        <span className="flex-shrink-0 p-1.5 rounded-full bg-lineage-node-port-handle-source"></span>
       }
       leftId={leftId}
       rightId={rightId}

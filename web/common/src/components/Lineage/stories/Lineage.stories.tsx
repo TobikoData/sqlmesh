@@ -13,7 +13,7 @@ import { NodePorts } from '../node/NodePorts'
 import { NodePort } from '../node/NodePort'
 import type { AdjacencyListKey, NodeId, PortId } from '../utils'
 import { Metadata } from '../../Metadata/Metadata'
-import { ReactFlow, type NodeProps, type Node } from '@xyflow/react'
+import { type NodeProps, type Node } from '@xyflow/react'
 
 import '@xyflow/react/dist/style.css'
 import { NodeDivider } from '../node/NodeDivider'
@@ -25,106 +25,6 @@ import type {
 
 export default {
   title: 'Components/Lineage',
-}
-
-const nodeTypes = {
-  model: CustomNode,
-}
-
-const nodes = [
-  {
-    id: 'schema.model',
-    position: { x: 200, y: 200 },
-    type: 'model',
-    data: {
-      kind: 'INCREMENTAL_BY_TIME',
-      cron: '0 0 * * *',
-      name: 'catalog.schema.model',
-      owner: 'admin',
-      dialect: 'bigquery',
-      tags: ['test', 'tag', 'another tag'],
-      identifier: '123456789',
-      displayName: 'schema.model',
-      model_type: 'sql',
-      columns: {
-        account_id: {
-          data_type: 'STRING',
-          description: 'node',
-        },
-        user_id: {
-          data_type: 'STRING',
-          description: 'node',
-        },
-        event_id: {
-          data_type: 'STRING',
-          description: 'node',
-        },
-        created_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        updated_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        deleted_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        expired_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        start_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        end_at: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-        created_ts: {
-          data_type: 'TIMESTAMP',
-          description: 'node',
-        },
-      },
-    },
-    width: 300,
-    height: 370,
-  },
-]
-
-export const LineageNode = () => {
-  return (
-    <div
-      style={{
-        width: '90vw',
-        height: '90vh',
-        border: '1px solid rgb(0, 0, 0, 0.1)',
-        borderRadius: '10px',
-      }}
-    >
-      <style>{`
-        :root {
-          --color-lineage-divider: rgba(0, 0, 0, 0.1);
-          
-          --color-lineage-node-appendix-background: transparent;
-          
-          --color-lineage-node-background: rgba(0, 0, 0, 0);
-          --color-lineage-node-foreground: rgba(0, 0, 0, 0.75);
-          --color-lineage-node-border: rgba(0, 0, 0, 0.1);
-          --color-lineage-node-border-hover: rgba(0, 0, 0, 0.2);
-
-          --color-lineage-node-badge-background: rgba(0, 0, 0, 0.05);
-          --color-lineage-node-badge-foreground: rgba(0, 0, 0, 1);
-        }
-      `}</style>
-      <ReactFlow
-        nodeTypes={nodeTypes}
-        nodes={nodes}
-      />
-    </div>
-  )
 }
 
 export const LineageModel = () => {
@@ -169,24 +69,38 @@ export const LineageModel = () => {
           --color-lineage-node-type-border-python: rgba(120, 0, 120, 1);
 
           --color-lineage-node-type-handle-icon-background: rgba(255, 255, 255, 1);
+
+          --color-lineage-node-port-background: rgba(70, 0, 0, 0.05);
+          --color-lineage-node-port-handle-source: rgba(70, 0, 0, 1);
+          --color-lineage-node-port-handle-target: rgba(170, 0, 0, 1);
+          --color-lineage-node-port-edge-source: rgba(70, 0, 0, 1);
+          --color-lineage-node-port-edge-target: rgba(130, 0, 0, 1);
+
+          --color-lineage-model-column-error-background: rgba(255, 0, 0, 1);
+          --color-lineage-model-column-source-background: rgba(200, 0, 0, 1);
+          --color-lineage-model-column-expression-background: rgba(100, 0, 0, 1);
+          --color-lineage-model-column-error-icon: rgba(255, 0, 0, 1);
+          --color-lineage-model-column-active: rgba(70, 0, 0, 0.1);
+          --color-lineage-model-column-icon: rgba(0, 0, 0, 1);
+          --color-lineage-model-column-icon-active: rgba(0, 0, 0, 1);
         }
       `}</style>
       <ModelLineage
         selectedModelName="sqlmesh.sushi.orders"
         artifactAdjacencyList={
           {
-            'sqlmesh.sushi.orders': [
+            'sqlmesh.sushi.raw_orders': [
               {
-                name: 'sqlmesh.sushi.raw_orders',
+                name: 'sqlmesh.sushi.orders',
                 identifier: '123456789',
               },
             ],
-            'sqlmesh.sushi.raw_orders': [],
+            'sqlmesh.sushi.orders': [],
           } as Record<AdjacencyListKey, AdjacencyListNode[]>
         }
         artifactDetails={
           {
-            'sqlmesh.sushi.orders': {
+            'sqlmesh.sushi.raw_orders': {
               name: 'sqlmesh.sushi.raw_orders',
               display_name: 'sushi.raw_orders',
               identifier: '123456789',
@@ -196,10 +110,23 @@ export const LineageModel = () => {
               owner: 'admin',
               kind: 'INCREMENTAL_BY_TIME',
               model_type: 'python',
-              tags: [],
-              columns: {},
+              tags: ['test', 'tag', 'another tag'],
+              columns: {
+                user_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                },
+                event_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                },
+                created_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+              },
             },
-            'sqlmesh.sushi.raw_orders': {
+            'sqlmesh.sushi.orders': {
               name: 'sqlmesh.sushi.orders',
               display_name: 'sushi.orders',
               identifier: '123456789',
@@ -209,8 +136,70 @@ export const LineageModel = () => {
               owner: 'admin',
               kind: 'INCREMENTAL_BY_TIME',
               model_type: 'sql',
-              tags: [],
-              columns: {},
+              tags: ['test', 'tag', 'another tag'],
+              columns: {
+                user_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                  columnLineageData: {
+                    'sqlmesh.sushi.orders': {
+                      user_id: {
+                        source: 'sqlmesh.sushi.raw_orders',
+                        expression:
+                          'select user_id from sqlmesh.sushi.raw_orders',
+                        models: {
+                          'sqlmesh.sushi.raw_orders': ['user_id'],
+                        },
+                      },
+                    },
+                  },
+                },
+                event_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                  columnLineageData: {
+                    'sqlmesh.sushi.orders': {
+                      event_id: {
+                        models: {
+                          'sqlmesh.sushi.raw_orders': ['event_id'],
+                        },
+                      },
+                    },
+                  },
+                },
+                product_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                },
+                customer_id: {
+                  data_type: 'STRING',
+                  description: 'node',
+                },
+                updated_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+                deleted_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+                expired_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+                start_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+                end_at: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+                created_ts: {
+                  data_type: 'TIMESTAMP',
+                  description: 'node',
+                },
+              },
             },
           } as Record<AdjacencyListKey, ModelLineageNodeDetails>
         }

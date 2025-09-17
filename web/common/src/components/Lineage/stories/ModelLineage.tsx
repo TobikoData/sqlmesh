@@ -55,12 +55,14 @@ import {
 } from './ModelLineageContext'
 import { ModelNode } from './ModelNode'
 import { getNodeTypeColorVar } from './help'
+import { EdgeWithGradient } from '../edge/EdgeWithGradient'
 
 const nodeTypes = {
   node: ModelNode,
 }
 const edgeTypes = {
-  gradient: FactoryEdgeWithGradient(useModelLineage),
+  edge: FactoryEdgeWithGradient(useModelLineage),
+  port: EdgeWithGradient,
 }
 
 export const ModelLineage = ({
@@ -121,7 +123,7 @@ export const ModelLineage = ({
       const columns: Record<AdjacencyListColumnKey, Column> =
         detail.columns || {}
 
-      const node = createNode(nodeId, 'node', {
+      const node = createNode('node', nodeId, {
         name: detail.name as AdjacencyListKey,
         identifier: detail.identifier,
         model_type: detail.model_type as NodeType,
@@ -137,7 +139,7 @@ export const ModelLineage = ({
       const selectedColumnsCount = new Set(
         Object.keys(columns).map(k => toPortID(detail.name, k)),
       ).intersection(selectedColumns).size
-      // We are trying to project the node hight so we are including the ceiling and floor height
+      // We are trying to project the node hight so we are including the ceiling and floor heights
       const nodeBaseHeight = calculateNodeBaseHeight({
         includeNodeFooterHeight: false,
         includeCeilingHeight: true,
@@ -175,6 +177,7 @@ export const ModelLineage = ({
 
   const transformEdge = React.useCallback(
     (
+      edgeType: string,
       edgeId: EdgeId,
       sourceId: NodeId,
       targetId: NodeId,
@@ -185,23 +188,35 @@ export const ModelLineage = ({
       const targetNode = transformedNodesMap[targetId]
       const data: EdgeData = {}
 
-      if (sourceNode?.data?.model_type) {
-        data.startColor = getNodeTypeColorVar(
-          sourceNode.data.model_type as NodeType,
-        )
+      if (sourceHandleId) {
+        data.startColor = 'var(--color-lineage-node-port-edge-source)'
+      } else {
+        if (sourceNode?.data?.model_type) {
+          data.startColor = getNodeTypeColorVar(
+            sourceNode.data.model_type as NodeType,
+          )
+        }
       }
 
-      if (targetNode?.data?.model_type) {
-        data.endColor = getNodeTypeColorVar(
-          targetNode.data.model_type as NodeType,
-        )
+      if (targetHandleId) {
+        data.endColor = 'var(--color-lineage-node-port-edge-target)'
+      } else {
+        if (targetNode?.data?.model_type) {
+          data.endColor = getNodeTypeColorVar(
+            targetNode.data.model_type as NodeType,
+          )
+        }
+      }
+
+      if (sourceHandleId && targetHandleId) {
+        data.strokeWidth = 2
       }
 
       return createEdge<EdgeData>(
+        edgeType,
         edgeId,
         sourceId,
         targetId,
-        'gradient',
         sourceHandleId,
         targetHandleId,
         data,
