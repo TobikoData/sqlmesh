@@ -22,6 +22,7 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -1938,7 +1939,12 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
+@pytest.mark.parametrize(
+    "virtual_environment_mode", [VirtualEnvironmentMode.FULL, VirtualEnvironmentMode.DEV_ONLY]
+)
+def test_sushi(
+    ctx: TestContext, tmp_path: pathlib.Path, virtual_environment_mode: VirtualEnvironmentMode
+):
     if ctx.mark == "athena_hive":
         pytest.skip(
             "Sushi end-to-end tests only need to run once for Athena because sushi needs a hybrid of both Hive and Iceberg"
@@ -1984,6 +1990,7 @@ def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
             ).sql(dialect=config.model_defaults.dialect)
             for e in before_all
         ]
+        config.virtual_environment_mode = virtual_environment_mode
 
     context = ctx.create_context(_mutate_config, path=tmp_path, ephemeral_state_connection=False)
 
