@@ -746,11 +746,15 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
-                columns_to_types_provided = (
+                # Only create the empty table if the columns were provided explicitly by the user
+                should_create_empty_table = (
                     model.kind.is_materialized
                     and model.columns_to_types_
                     and columns_to_types_all_known(model.columns_to_types_)
                 )
+                if not should_create_empty_table:
+                    # Or if the model is self-referential and its query is fully annotated with types
+                    should_create_empty_table = model.depends_on_self and model.annotated
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
@@ -763,7 +767,7 @@ class SnapshotEvaluator:
                     )
                     runtime_stage = RuntimeStage.EVALUATING
                     target_table_exists = True
-                elif columns_to_types_provided or model.is_seed or model.kind.is_scd_type_2:
+                elif should_create_empty_table or model.is_seed or model.kind.is_scd_type_2:
                     self._execute_create(
                         snapshot=snapshot,
                         table_name=target_table_name,
