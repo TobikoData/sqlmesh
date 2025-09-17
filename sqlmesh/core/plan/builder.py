@@ -65,6 +65,9 @@ class PlanBuilder:
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
             of the restatement.
+        restate_all_snapshots: If restatements are present, this flag indicates whether or not the intervals
+            being restated should be cleared from state for other versions of this model (typically, versions that are present in other environments).
+            If set to None, the default behaviour is to not clear anything unless the target environment is prod.
         backfill_models: A list of fully qualified model names for which the data should be backfilled as part of this plan.
         no_gaps:  Whether to ensure that new snapshots for nodes that are already a
             part of the target environment have no data gaps when compared against previous
@@ -103,6 +106,7 @@ class PlanBuilder:
         execution_time: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
+        restate_all_snapshots: bool = False,
         backfill_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
@@ -154,6 +158,7 @@ class PlanBuilder:
         self._auto_categorization_enabled = auto_categorization_enabled
         self._include_unmodified = include_unmodified
         self._restate_models = set(restate_models) if restate_models is not None else None
+        self._restate_all_snapshots = restate_all_snapshots
         self._effective_from = effective_from
 
         # note: this deliberately doesnt default to now() here.
@@ -277,7 +282,6 @@ class PlanBuilder:
         if self._latest_plan:
             return self._latest_plan
 
-        self._ensure_no_new_snapshots_with_restatements()
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range()
         self._ensure_no_broken_references()
@@ -340,6 +344,7 @@ class PlanBuilder:
             deployability_index=deployability_index,
             selected_models_to_restate=self._restate_models,
             restatements=restatements,
+            restate_all_snapshots=self._restate_all_snapshots,
             start_override_per_model=self._start_override_per_model,
             end_override_per_model=end_override_per_model,
             selected_models_to_backfill=self._backfill_models,
@@ -858,15 +863,6 @@ class PlanBuilder:
                 raise PlanError(
                     f"""Removed {broken_references_msg} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."""
                 )
-
-    def _ensure_no_new_snapshots_with_restatements(self) -> None:
-        if self._restate_models is not None and (
-            self._context_diff.new_snapshots or self._context_diff.modified_snapshots
-        ):
-            raise PlanError(
-                "Model changes and restatements can't be a part of the same plan. "
-                "Revert or apply changes before proceeding with restatements."
-            )
 
     def _ensure_new_env_with_changes(self) -> None:
         if (

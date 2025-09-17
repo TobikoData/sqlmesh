@@ -14,6 +14,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotId,
     snapshots_to_dag,
 )
+from sqlmesh.utils.errors import PlanError
 
 
 @dataclass
@@ -461,13 +462,18 @@ class PlanStagesBuilder:
     def _get_restatement_stage(
         self, plan: EvaluatablePlan, snapshots_by_name: t.Dict[str, Snapshot]
     ) -> t.Optional[RestatementStage]:
-        if not plan.restatements or plan.is_dev:
-            # The RestatementStage to clear intervals from state across all environments is not needed for plans against dev, only prod
-            return None
+        if plan.restate_all_snapshots:
+            if plan.is_dev:
+                raise PlanError(
+                    "Clearing intervals from state across dev model versions is only valid for prod plans"
+                )
 
-        return RestatementStage(
-            all_snapshots=snapshots_by_name,
-        )
+            if plan.restatements:
+                return RestatementStage(
+                    all_snapshots=snapshots_by_name,
+                )
+
+        return None
 
     def _get_physical_layer_update_stage(
         self,

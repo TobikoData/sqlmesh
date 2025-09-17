@@ -826,6 +826,7 @@ def test_missing_intervals_lookback(make_snapshot, mocker: MockerFixture):
         indirectly_modified={},
         deployability_index=DeployabilityIndex.all_deployable(),
         restatements={},
+        restate_all_snapshots=False,
         end_bounded=False,
         ensure_finalized_snapshots=False,
         start_override_per_model=None,
@@ -1072,36 +1073,6 @@ def test_restate_missing_model(make_snapshot, mocker: MockerFixture):
         match=r"Cannot restate model 'missing'. Model does not exist.",
     ):
         PlanBuilder(context_diff, restate_models=["missing"]).build()
-
-
-def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-
-    context_diff = ContextDiff(
-        environment="test_environment",
-        is_new_environment=True,
-        is_unfinalized_environment=False,
-        normalize_environment_name=True,
-        create_from="prod",
-        create_from_env_exists=True,
-        added=set(),
-        removed_snapshots={},
-        modified_snapshots={},
-        snapshots={snapshot_a.snapshot_id: snapshot_a},
-        new_snapshots={snapshot_a.snapshot_id: snapshot_a},
-        previous_plan_id=None,
-        previously_promoted_snapshot_ids=set(),
-        previous_finalized_snapshots=None,
-        previous_gateway_managed_virtual_layer=False,
-        gateway_managed_virtual_layer=False,
-        environment_statements=[],
-    )
-
-    with pytest.raises(
-        PlanError,
-        match=r"Model changes and restatements can't be a part of the same plan.*",
-    ):
-        PlanBuilder(context_diff, restate_models=["a"]).build()
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
