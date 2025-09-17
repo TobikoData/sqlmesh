@@ -86,7 +86,7 @@ export function getTransformedModelEdges<
 
       const edgeId = toEdgeID(adjacencyListKey, target)
 
-      edges.push(transformEdge(edgeId, nodeId, toNodeID(target)))
+      edges.push(transformEdge('edge', edgeId, nodeId, toNodeID(target)))
     }
   }
 
@@ -94,8 +94,8 @@ export function getTransformedModelEdges<
 }
 
 export function createNode<TNodeData extends LineageNodeData = LineageNodeData>(
+  type: string,
   nodeId: NodeId,
-  type: string = 'node',
   data: TNodeData,
 ) {
   return {
@@ -156,10 +156,10 @@ export function calculateNodeDetailsHeight({
 }
 
 export function createEdge<TEdgeData extends LineageEdgeData = LineageEdgeData>(
+  type: string,
   edgeId: EdgeId,
   sourceId: NodeId,
   targetId: NodeId,
-  type: string = 'edge',
   sourceHandleId?: PortId,
   targetHandleId?: PortId,
   data?: TEdgeData,
