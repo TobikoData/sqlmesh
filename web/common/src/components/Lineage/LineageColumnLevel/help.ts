@@ -100,6 +100,7 @@ export function getEdgesFromColumnLineage<
 
           edges.push(
             transformEdge(
+              'port',
               edgeId,
               sourceNodeId,
               targetNodeId,
@@ -114,7 +115,7 @@ export function getEdgesFromColumnLineage<
 
   Array.from(modelLevelEdgeIDs.entries()).forEach(
     ([edgeId, [sourceNodeId, targetNodeId]]) => {
-      edges.push(transformEdge(edgeId, sourceNodeId, targetNodeId))
+      edges.push(transformEdge('edge', edgeId, sourceNodeId, targetNodeId))
     },
   )
   return edges

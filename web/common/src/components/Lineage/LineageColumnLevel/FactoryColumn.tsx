@@ -1,4 +1,10 @@
-import { AlertCircle, CircleOff, FileText, Workflow } from 'lucide-react'
+import {
+  AlertCircle,
+  CircleOff,
+  FileCode,
+  FileMinus,
+  Workflow,
+} from 'lucide-react'
 import React from 'react'
 
 import { cn } from '@/utils'
@@ -34,6 +40,7 @@ export function FactoryColumn(useLineage: ColumnLevelLineageContextHook) {
     error,
     renderError,
     renderExpression,
+    renderSource,
     onClick,
     onCancel,
   }: {
@@ -49,6 +56,7 @@ export function FactoryColumn(useLineage: ColumnLevelLineageContextHook) {
     error?: Error | null
     renderError?: (error: Error) => React.ReactNode
     renderExpression?: (expression: string) => React.ReactNode
+    renderSource?: (source: string) => React.ReactNode
     onClick?: () => void
     onCancel?: () => void
   }) {
@@ -125,17 +133,33 @@ export function FactoryColumn(useLineage: ColumnLevelLineageContextHook) {
               )}
             />
           )}
-          {column?.expression && renderExpression && (
+          {column?.source && renderSource && (
             <Tooltip
               trigger={
-                <FileText
+                <FileCode
                   size={16}
                   className="text-lineage-model-column-icon hover:text-lineage-model-column-icon-active"
                 />
               }
               side="left"
               sideOffset={20}
-              className="p-0 min-w-[30rem] max-w-xl"
+              className="p-0 min-w-[30rem] max-w-xl bg-lineage-model-column-source-background"
+              delayDuration={0}
+            >
+              {renderSource(column.source)}
+            </Tooltip>
+          )}
+          {column?.expression && renderExpression && (
+            <Tooltip
+              trigger={
+                <FileMinus
+                  size={16}
+                  className="text-lineage-model-column-icon hover:text-lineage-model-column-icon-active"
+                />
+              }
+              side="left"
+              sideOffset={20}
+              className="p-0 min-w-[30rem] max-w-xl bg-lineage-model-column-expression-background"
               delayDuration={0}
             >
               {renderExpression(column.expression)}

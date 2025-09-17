@@ -64,6 +64,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
       onCancel={() => console.log('cancel')}
       renderError={error => <div>Error: {error.message}</div>}
       renderExpression={expression => <div>{expression}</div>}
+      renderSource={source => <div>{source}</div>}
     />
   )
 })
