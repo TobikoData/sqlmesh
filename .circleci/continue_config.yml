@@ -310,10 +310,10 @@ workflows:
                 - athena
                 - fabric
                 - gcp-postgres
-          # filters:
-          #   branches:
-          #     only:
-          #       - main
+          filters:
+            branches:
+              only:
+                - main
       - ui_style
       - ui_test
       - vscode_test
