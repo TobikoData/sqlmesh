@@ -1440,8 +1440,9 @@ class SnapshotEvaluator:
             and adapter.SUPPORTS_CLONING
             # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
             and not snapshot.is_managed
-            # If the deployable table is missing we can't clone it
             and not deployability_index.is_deployable(snapshot)
+            # If the deployable table is missing we can't clone it
+            and adapter.table_exists(snapshot.table_name())
         )
 
     def _get_data_objects(
