@@ -72,18 +72,22 @@ export type TransformEdgeFn<
   targetColumnId?: PortId,
 ) => LineageEdge<TEdgeData>
 
-export function toID<TReturn extends string>(...args: string[]) {
-  return args.join('.') as TReturn
+// ID generated from toInternalID is meant to be used only internally to identify nodes, edges and ports within the graph
+// Do not rely on the ID to be a valid URL, or anythjin outside of the graph
+export function toInternalID<TReturn extends string>(
+  ...args: string[]
+): TReturn {
+  return encodeURI(args.filter(Boolean).join('.')) as TReturn
 }
 
-export function toNodeID(...args: string[]) {
-  return encodeURI(toID(...args)) as NodeId
+export function toNodeID(...args: string[]): NodeId {
+  return toInternalID<NodeId>(...args)
 }
 
-export function toEdgeID(...args: string[]) {
-  return encodeURI(toID(...args)) as EdgeId
+export function toEdgeID(...args: string[]): EdgeId {
+  return toInternalID<EdgeId>(...args)
 }
 
-export function toPortID(...args: string[]) {
-  return encodeURI(toID(...args)) as PortId
+export function toPortID(...args: string[]): PortId {
+  return toInternalID<PortId>(...args)
 }
