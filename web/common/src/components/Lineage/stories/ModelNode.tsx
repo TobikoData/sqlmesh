@@ -109,8 +109,8 @@ export const ModelNode = React.memo(function ModelNode({
   const nodeDetailsHeight =
     zoom > ZOOM_THRESHOLD
       ? calculateNodeDetailsHeight({
-        nodeDetailsCount: 0,
-      })
+          nodeDetailsCount: 0,
+        })
       : 0
   const selectedColumnsHeight = calculateSelectedColumnsHeight(
     modelSelectedColumns.length,
@@ -118,9 +118,9 @@ export const ModelNode = React.memo(function ModelNode({
   const columnsHeight =
     zoom > ZOOM_THRESHOLD && shouldShowColumns
       ? calculateColumnsHeight({
-        columnsCount: calculateNodeColumnsCount(columns.length),
-        hasColumnsFilter,
-      })
+          columnsCount: calculateNodeColumnsCount(columns.length),
+          hasColumnsFilter,
+        })
       : 0
 
   // If zoom is less than ZOOM_THRESHOLD, we are making node looks bigger
@@ -231,7 +231,9 @@ export const ModelNode = React.memo(function ModelNode({
                 grayscale
                 className={cn(
                   'w-full overflow-hidden cursor-default truncate',
-                  zoom > ZOOM_THRESHOLD ? ' text-xs' : 'text-2xl justify-center',
+                  zoom > ZOOM_THRESHOLD
+                    ? ' text-xs'
+                    : 'text-2xl justify-center',
                 )}
               />
             </HorizontalContainer>
