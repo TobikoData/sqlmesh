@@ -38,7 +38,7 @@ import {
   cleanupLayoutWorker,
   getLayoutedGraph as getDagreLayoutedGraph,
 } from '../layout/dagreLayout'
-import { type LineageEdge, type LineageNodesMap, ZOOM_TRESHOLD } from '../utils'
+import { type LineageEdge, type LineageNodesMap, ZOOM_THRESHOLD } from '../utils'
 import {
   type EdgeData,
   ModelLineageContext,
@@ -75,7 +75,7 @@ export const ModelLineage = ({
   selectedModelName?: ModelName
   className?: string
 }) => {
-  const [zoom, setZoom] = React.useState(ZOOM_TRESHOLD)
+  const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
   const [edges, setEdges] = React.useState<
     LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[]
@@ -252,12 +252,12 @@ export const ModelLineage = ({
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
       : getTransformedModelEdges<
-          ModelName,
-          EdgeData,
-          ModelNodeId,
-          ModelEdgeId,
-          ModelColumnID
-        >(adjacencyListKeys, adjacencyList, transformEdge)
+        ModelName,
+        EdgeData,
+        ModelNodeId,
+        ModelEdgeId,
+        ModelColumnID
+      >(adjacencyListKeys, adjacencyList, transformEdge)
   }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
   const calculateLayout = React.useMemo(() => {

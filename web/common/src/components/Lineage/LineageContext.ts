@@ -9,7 +9,7 @@ import {
   type LineageNodesMap,
   type NodeId,
   type PortId,
-  ZOOM_TRESHOLD,
+  ZOOM_THRESHOLD,
 } from './utils'
 
 export interface LineageContextValue<
@@ -52,22 +52,22 @@ export function getInitial<
 >() {
   return {
     showOnlySelectedNodes: false,
-    setShowOnlySelectedNodes: () => {},
+    setShowOnlySelectedNodes: () => { },
     selectedNodes: new Set<TNodeID>(),
-    setSelectedNodes: () => {},
+    setSelectedNodes: () => { },
     selectedEdges: new Set<TEdgeID>(),
-    setSelectedEdges: () => {},
+    setSelectedEdges: () => { },
     selectedNodeId: null,
-    setSelectedNodeId: () => {},
-    zoom: ZOOM_TRESHOLD,
-    setZoom: () => {},
+    setSelectedNodeId: () => { },
+    zoom: ZOOM_THRESHOLD,
+    setZoom: () => { },
     edges: [],
-    setEdges: () => {},
+    setEdges: () => { },
     nodes: [],
     nodesMap: {},
-    setNodesMap: () => {},
+    setNodesMap: () => { },
     isBuildingLayout: false,
-    setIsBuildingLayout: () => {},
+    setIsBuildingLayout: () => { },
     currentNode: null,
   }
 }
