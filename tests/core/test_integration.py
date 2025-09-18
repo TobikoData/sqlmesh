@@ -2393,7 +2393,7 @@ def test_custom_materialization(init_and_plan_context: t.Callable):
             nonlocal custom_insert_called
             custom_insert_called = True
 
-            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)
+            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs, **kwargs)
 
     model = context.get_model("sushi.top_waiters")
     kwargs = {
@@ -2441,7 +2441,7 @@ def test_custom_materialization_with_custom_kind(init_and_plan_context: t.Callab
             nonlocal custom_insert_calls
             custom_insert_calls.append(model.kind.custom_property)
 
-            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)
+            self._replace_query_for_model(model, table_name, query_or_df, render_kwargs, **kwargs)
 
     model = context.get_model("sushi.top_waiters")
     kwargs = {
@@ -10329,14 +10329,14 @@ def test_restatement_plan_interval_external_visibility(tmp_path: Path):
     )  # python model creates this file if it's in the wait loop and deletes it once done
 
     # Note: to make execution block so we can test stuff, we use a Python model that blocks until it no longer detects the presence of a file
-    (models_dir / "model_a.py").write_text(f"""                                           
+    (models_dir / "model_a.py").write_text(f"""
 from sqlmesh.core.model import model
 from sqlmesh.core.macros import MacroEvaluator
 
 @model(
     "test.model_a",
     is_sql=True,
-    kind="FULL"    
+    kind="FULL"
 )
 def entrypoint(evaluator: MacroEvaluator) -> str:
     from pathlib import Path
@@ -10360,7 +10360,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
         name test.model_b,
         kind FULL
     );
-                  
+
     select a.m as m, 'model_b' as mb from test.model_a as a
     """)
 
@@ -10390,7 +10390,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
         name test.model_b,
         kind FULL
     );
-                  
+
     select a.m as m, 'model_b' as mb, 'dev' as dev_version from test.model_a as a
     """)
 
@@ -10400,7 +10400,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
         name test.model_c,
         kind FULL
     );
-                  
+
     select b.*, 'model_c' as mc from test.model_b as b
     """)
 
@@ -10478,7 +10478,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
         name test.model_b,
         kind FULL
     );
-                  
+
     select a.m as m, 'model_b' as mb, 'dev2' as dev_version from test.model_a as a
     """)
     ctx.load()
@@ -10571,14 +10571,14 @@ def test_restatement_plan_detects_prod_deployment_during_restatement(tmp_path: P
     )  # python model creates this file if it's in the wait loop and deletes it once done
 
     # Note: to make execution block so we can test stuff, we use a Python model that blocks until it no longer detects the presence of a file
-    (models_dir / "model_a.py").write_text(f"""                                           
+    (models_dir / "model_a.py").write_text(f"""
 from sqlmesh.core.model import model
 from sqlmesh.core.macros import MacroEvaluator
 
 @model(
     "test.model_a",
     is_sql=True,
-    kind="FULL"    
+    kind="FULL"
 )
 def entrypoint(evaluator: MacroEvaluator) -> str:
     from pathlib import Path
@@ -10620,7 +10620,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
         name test.model_a,
         kind FULL
     );
-                  
+
     select 1 as changed
     """)
 
