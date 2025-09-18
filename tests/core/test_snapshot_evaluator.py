@@ -4875,7 +4875,9 @@ def test_properties_are_preserved_in_both_create_statements(
     assert props == ["'SECURITY INVOKER'", "'SECURITY INVOKER'"]
 
 
-def _create_grants_test_model(grants=None, kind="FULL", grants_target_layer=None):
+def _create_grants_test_model(
+    grants=None, kind="FULL", grants_target_layer=None, virtual_environment_mode=None
+):
     if kind == "SEED":
         from sqlmesh.core.model.definition import create_seed_model
         from sqlmesh.core.model.kind import SeedKind
@@ -4912,6 +4914,8 @@ def _create_grants_test_model(grants=None, kind="FULL", grants_target_layer=None
         kwargs["grants"] = grants
     if grants_target_layer is not None:
         kwargs["grants_target_layer"] = grants_target_layer
+    if virtual_environment_mode is not None:
+        kwargs["virtual_environment_mode"] = virtual_environment_mode
 
     # Add column annotations for non-SEED models to ensure table creation
     if kind != "SEED":
@@ -5329,3 +5333,51 @@ def test_grants_evaluator_insert_with_replace_query_for_model(
     else:
         # Should not apply grants since it's not the first insert
         sync_grants_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "model_grants_target_layer",
+    [
+        GrantsTargetLayer.ALL,
+        GrantsTargetLayer.VIRTUAL,
+        GrantsTargetLayer.PHYSICAL,
+    ],
+)
+def test_grants_in_production_with_dev_only_vde(
+    adapter_mock: Mock,
+    mocker: MockerFixture,
+    make_snapshot: t.Callable[..., Snapshot],
+    model_grants_target_layer: GrantsTargetLayer,
+):
+    adapter_mock.SUPPORTS_GRANTS = True
+    sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
+
+    from sqlmesh.core.model.meta import VirtualEnvironmentMode, GrantsTargetLayer
+    from sqlmesh.core.snapshot.definition import DeployabilityIndex
+
+    model_virtual_grants = _create_grants_test_model(
+        grants={"select": ["user1"], "insert": ["role1"]},
+        grants_target_layer=model_grants_target_layer,
+        virtual_environment_mode=VirtualEnvironmentMode.DEV_ONLY,
+    )
+
+    snapshot = make_snapshot(model_virtual_grants)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator = SnapshotEvaluator(adapter_mock)
+    # create will apply grants to physical layer tables
+    deployability_index = DeployabilityIndex.all_deployable()
+    evaluator.create([snapshot], {}, deployability_index=deployability_index)
+
+    sync_grants_mock.assert_called_once()
+    assert sync_grants_mock.call_args[0][1] == {"select": ["user1"], "insert": ["role1"]}
+
+    # Non-deployable (dev) env
+    sync_grants_mock.reset_mock()
+    deployability_index = DeployabilityIndex.none_deployable()
+    evaluator.create([snapshot], {}, deployability_index=deployability_index)
+    if model_grants_target_layer == GrantsTargetLayer.VIRTUAL:
+        sync_grants_mock.assert_not_called()
+    else:
+        # Should still apply grants to physical table when target layer is ALL or PHYSICAL
+        sync_grants_mock.assert_called_once()
+        assert sync_grants_mock.call_args[0][1] == {"select": ["user1"], "insert": ["role1"]}
