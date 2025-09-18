@@ -1927,7 +1927,7 @@ def test_render_definition_with_defaults():
                 materialized FALSE
             ),
             virtual_environment_mode 'full',
-            grants_target_layer 'all'
+            grants_target_layer 'virtual'
         );
 
         {query}
@@ -2021,7 +2021,7 @@ def test_render_definition_with_grants():
         """
     )
     default_model = load_sql_based_model(default_expressions)
-    assert default_model.grants_target_layer == GrantsTargetLayer.ALL  # default value
+    assert default_model.grants_target_layer == GrantsTargetLayer.VIRTUAL  # default value
 
 
 def test_render_definition_partitioned_by():

@@ -4959,7 +4959,9 @@ def test_grants_create_model_kind(
     sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
 
     grants = {"select": ["user1"]}
-    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    model = _create_grants_test_model(
+        grants=grants, kind=model_kind_name, grants_target_layer=GrantsTargetLayer.ALL
+    )
     snapshot = make_snapshot(model)
 
     evaluator = SnapshotEvaluator(adapter_mock)
@@ -5028,6 +5030,7 @@ def test_grants_update(
         parse_one("SELECT 1 as id"),
         kind="FULL",
         grants={"select": ["user1"]},
+        grants_target_layer=GrantsTargetLayer.ALL,
     )
 
     snapshot = make_snapshot(model)
@@ -5085,7 +5088,8 @@ def test_grants_create_and_evaluate(
                 grants (
                     'select' = ['reader1', 'reader2'],
                     'insert' = ['writer']
-                )
+                ),
+                grants_target_layer 'all'
             );
             SELECT ds::DATE, value::INT FROM source WHERE ds BETWEEN @start_ds AND @end_ds;
         """
@@ -5134,7 +5138,7 @@ def test_grants_materializable_strategy_migrate(
     sync_grants_mock = mocker.patch.object(adapter_mock, "sync_grants_config")
     strategy = strategy_class(adapter_mock)
     grants = {"select": ["user1"]}
-    model = _create_grants_test_model(grants=grants)
+    model = _create_grants_test_model(grants=grants, grants_target_layer=GrantsTargetLayer.ALL)
     snapshot = make_snapshot(model)
 
     strategy.migrate(
@@ -5159,7 +5163,7 @@ def test_grants_clone_snapshot_in_dev(
 
     evaluator = SnapshotEvaluator(adapter_mock)
     grants = {"select": ["user1", "user2"]}
-    model = _create_grants_test_model(grants=grants)
+    model = _create_grants_test_model(grants=grants, grants_target_layer=GrantsTargetLayer.ALL)
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -5195,7 +5199,9 @@ def test_grants_evaluator_insert_without_replace_query_for_model(
     evaluator = SnapshotEvaluator(adapter_mock)
 
     grants = {"select": ["reader1", "reader2"]}
-    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    model = _create_grants_test_model(
+        grants=grants, kind=model_kind_name, grants_target_layer=GrantsTargetLayer.ALL
+    )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -5252,7 +5258,9 @@ def test_grants_evaluator_insert_with_replace_query_for_model(
     evaluator = SnapshotEvaluator(adapter_mock)
 
     grants = {"select": ["user1"]}
-    model = _create_grants_test_model(grants=grants, kind=model_kind_name)
+    model = _create_grants_test_model(
+        grants=grants, kind=model_kind_name, grants_target_layer=GrantsTargetLayer.ALL
+    )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
