@@ -62,7 +62,7 @@ class GrantsTargetLayer(str, Enum):
 
     @classproperty
     def default(cls) -> "GrantsTargetLayer":
-        return GrantsTargetLayer.ALL
+        return GrantsTargetLayer.VIRTUAL
 
     @property
     def is_all(self) -> bool:
