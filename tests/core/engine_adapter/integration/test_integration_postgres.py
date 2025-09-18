@@ -5,6 +5,7 @@ from pytest import FixtureRequest
 from pathlib import Path
 from sqlmesh.core.engine_adapter import PostgresEngineAdapter
 from sqlmesh.core.config import Config, DuckDBConnectionConfig
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from tests.core.engine_adapter.integration import TestContext
 import time_machine
 from datetime import timedelta
@@ -869,3 +870,316 @@ def test_grants_metadata_only_changes(
             exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
         )
         assert final_virtual_grants == {"SELECT": [roles["reader"]["username"]]}
+
+
+def _vde_dev_only_config(gateway: str, config: Config) -> None:
+    config.virtual_environment_mode = VirtualEnvironmentMode.DEV_ONLY
+
+
+@pytest.mark.parametrize(
+    "grants_target_layer,model_kind",
+    [
+        ("virtual", "FULL"),
+        ("physical", "FULL"),
+        ("all", "FULL"),
+        ("virtual", "VIEW"),
+        ("physical", "VIEW"),
+    ],
+)
+def test_grants_target_layer_with_vde_dev_only(
+    engine_adapter: PostgresEngineAdapter,
+    ctx: TestContext,
+    tmp_path: Path,
+    grants_target_layer: str,
+    model_kind: str,
+):
+    with create_users(engine_adapter, "reader", "writer") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        if model_kind == "VIEW":
+            grants_config = (
+                f"'SELECT' = ['{roles['reader']['username']}', '{roles['writer']['username']}']"
+            )
+        else:
+            grants_config = f"""
+                'SELECT' = ['{roles["reader"]["username"]}', '{roles["writer"]["username"]}'],
+                'INSERT' = ['{roles["writer"]["username"]}']
+            """.strip()
+
+        model_def = f"""
+        MODEL (
+            name test_schema.vde_model_{grants_target_layer}_{model_kind.lower()},
+            kind {model_kind},
+            grants (
+                {grants_config}
+            ),
+            grants_target_layer '{grants_target_layer}'
+        );
+        SELECT 1 as id, '{grants_target_layer}_{model_kind}' as test_type
+        """
+        (
+            tmp_path / "models" / f"vde_model_{grants_target_layer}_{model_kind.lower()}.sql"
+        ).write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path, config_mutator=_vde_dev_only_config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        table_name = f"test_schema.vde_model_{grants_target_layer}_{model_kind.lower()}"
+
+        # In VDE dev_only mode, VIEWs are created as actual views
+        assert context.engine_adapter.table_exists(table_name)
+
+        grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert roles["reader"]["username"] in grants.get("SELECT", [])
+        assert roles["writer"]["username"] in grants.get("SELECT", [])
+
+        if model_kind != "VIEW":
+            assert roles["writer"]["username"] in grants.get("INSERT", [])
+
+
+def test_grants_incremental_model_with_vde_dev_only(
+    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+):
+    with create_users(engine_adapter, "etl", "analyst") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = f"""
+        MODEL (
+            name test_schema.vde_incremental_model,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column event_date
+            ),
+            grants (
+                'SELECT' = ['{roles["analyst"]["username"]}'],
+                'INSERT' = ['{roles["etl"]["username"]}']
+            ),
+            grants_target_layer 'virtual'
+        );
+        SELECT
+            1 as id,
+            @start_date::date as event_date,
+            'event' as event_type
+        """
+        (tmp_path / "models" / "vde_incremental_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path, config_mutator=_vde_dev_only_config)
+
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        prod_table = "test_schema.vde_incremental_model"
+        prod_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(prod_table, dialect=engine_adapter.dialect)
+        )
+        assert roles["analyst"]["username"] in prod_grants.get("SELECT", [])
+        assert roles["etl"]["username"] in prod_grants.get("INSERT", [])
+
+
+@pytest.mark.parametrize(
+    "change_type,initial_query,updated_query,expect_schema_change",
+    [
+        # Metadata-only change (grants only)
+        (
+            "metadata_only",
+            "SELECT 1 as id, 'same' as status",
+            "SELECT 1 as id, 'same' as status",
+            False,
+        ),
+        # Breaking change only
+        (
+            "breaking_only",
+            "SELECT 1 as id, 'initial' as status, 100 as amount",
+            "SELECT 1 as id, 'updated' as status",  # Removed column
+            True,
+        ),
+        # Both metadata and breaking changes
+        (
+            "metadata_and_breaking",
+            "SELECT 1 as id, 'initial' as status, 100 as amount",
+            "SELECT 2 as id, 'changed' as new_status",  # Different schema
+            True,
+        ),
+    ],
+)
+def test_grants_changes_with_vde_dev_only(
+    engine_adapter: PostgresEngineAdapter,
+    ctx: TestContext,
+    tmp_path: Path,
+    change_type: str,
+    initial_query: str,
+    updated_query: str,
+    expect_schema_change: bool,
+):
+    with create_users(engine_adapter, "user1", "user2", "user3") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+        model_path = tmp_path / "models" / f"vde_changes_{change_type}.sql"
+
+        initial_model = f"""
+        MODEL (
+            name test_schema.vde_changes_{change_type},
+            kind FULL,
+            grants (
+                'SELECT' = ['{roles["user1"]["username"]}']
+            ),
+            grants_target_layer 'virtual'
+        );
+        {initial_query}
+        """
+        model_path.write_text(initial_model)
+
+        context = ctx.create_context(path=tmp_path, config_mutator=_vde_dev_only_config)
+        context.plan("prod", auto_apply=True, no_prompts=True)
+
+        table_name = f"test_schema.vde_changes_{change_type}"
+        initial_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert roles["user1"]["username"] in initial_grants.get("SELECT", [])
+        assert roles["user2"]["username"] not in initial_grants.get("SELECT", [])
+
+        # Update model with new grants and potentially new query
+        updated_model = f"""
+        MODEL (
+            name test_schema.vde_changes_{change_type},
+            kind FULL,
+            grants (
+                'SELECT' = ['{roles["user1"]["username"]}', '{roles["user2"]["username"]}', '{roles["user3"]["username"]}'],
+                'INSERT' = ['{roles["user3"]["username"]}']
+            ),
+            grants_target_layer 'virtual'
+        );
+        {updated_query}
+        """
+        model_path.write_text(updated_model)
+
+        # Get initial table columns
+        initial_columns = set(
+            col[0]
+            for col in engine_adapter.fetchall(
+                f"SELECT column_name FROM information_schema.columns WHERE table_schema = 'test_schema' AND table_name = 'vde_changes_{change_type}'"
+            )
+        )
+
+        context.load()
+        plan = context.plan("prod", auto_apply=True, no_prompts=True)
+
+        assert len(plan.new_snapshots) == 1
+
+        current_columns = set(
+            col[0]
+            for col in engine_adapter.fetchall(
+                f"SELECT column_name FROM information_schema.columns WHERE table_schema = 'test_schema' AND table_name = 'vde_changes_{change_type}'"
+            )
+        )
+
+        if expect_schema_change:
+            assert current_columns != initial_columns
+        else:
+            # For metadata-only changes, schema should be the same
+            assert current_columns == initial_columns
+
+        # Grants should be updated in all cases
+        updated_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=engine_adapter.dialect)
+        )
+        assert roles["user1"]["username"] in updated_grants.get("SELECT", [])
+        assert roles["user2"]["username"] in updated_grants.get("SELECT", [])
+        assert roles["user3"]["username"] in updated_grants.get("SELECT", [])
+        assert roles["user3"]["username"] in updated_grants.get("INSERT", [])
+
+
+@pytest.mark.parametrize(
+    "grants_target_layer,environment",
+    [
+        ("virtual", "prod"),
+        ("virtual", "dev"),
+        ("physical", "prod"),
+        ("physical", "staging"),
+        ("all", "prod"),
+        ("all", "preview"),
+    ],
+)
+def test_grants_target_layer_plan_env_with_vde_dev_only(
+    engine_adapter: PostgresEngineAdapter,
+    ctx: TestContext,
+    tmp_path: Path,
+    grants_target_layer: str,
+    environment: str,
+):
+    with create_users(engine_adapter, "grantee") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = f"""
+        MODEL (
+            name test_schema.vde_layer_model,
+            kind FULL,
+            grants (
+                'SELECT' = ['{roles["grantee"]["username"]}']
+            ),
+            grants_target_layer '{grants_target_layer}'
+        );
+        SELECT 1 as id, '{environment}' as env, '{grants_target_layer}' as layer
+        """
+        (tmp_path / "models" / "vde_layer_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path, config_mutator=_vde_dev_only_config)
+
+        if environment == "prod":
+            context.plan("prod", auto_apply=True, no_prompts=True)
+            table_name = "test_schema.vde_layer_model"
+            grants = engine_adapter._get_current_grants_config(
+                exp.to_table(table_name, dialect=engine_adapter.dialect)
+            )
+            assert roles["grantee"]["username"] in grants.get("SELECT", [])
+        else:
+            context.plan(environment, auto_apply=True, no_prompts=True, include_unmodified=True)
+            virtual_view = f"test_schema__{environment}.vde_layer_model"
+            assert context.engine_adapter.table_exists(virtual_view)
+            virtual_grants = engine_adapter._get_current_grants_config(
+                exp.to_table(virtual_view, dialect=engine_adapter.dialect)
+            )
+
+            data_objects = engine_adapter.get_data_objects("sqlmesh__test_schema")
+            physical_tables = [
+                obj
+                for obj in data_objects
+                if "vde_layer_model" in obj.name
+                and obj.name.endswith("__dev")  # Always __dev suffix in VDE dev_only
+                and "TABLE" in str(obj.type).upper()
+            ]
+
+            if grants_target_layer == "virtual":
+                # Virtual layer should have grants, physical should not
+                assert roles["grantee"]["username"] in virtual_grants.get("SELECT", [])
+
+                assert len(physical_tables) > 0
+                for physical_table in physical_tables:
+                    physical_table_name = f"sqlmesh__test_schema.{physical_table.name}"
+                    physical_grants = engine_adapter._get_current_grants_config(
+                        exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+                    )
+                    assert roles["grantee"]["username"] not in physical_grants.get("SELECT", [])
+
+            elif grants_target_layer == "physical":
+                # Virtual layer should not have grants, physical should
+                assert roles["grantee"]["username"] not in virtual_grants.get("SELECT", [])
+
+                assert len(physical_tables) > 0
+                for physical_table in physical_tables:
+                    physical_table_name = f"sqlmesh__test_schema.{physical_table.name}"
+                    physical_grants = engine_adapter._get_current_grants_config(
+                        exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+                    )
+                    assert roles["grantee"]["username"] in physical_grants.get("SELECT", [])
+
+            else:  # grants_target_layer == "all"
+                # Both layers should have grants
+                assert roles["grantee"]["username"] in virtual_grants.get("SELECT", [])
+                assert len(physical_tables) > 0
+                for physical_table in physical_tables:
+                    physical_table_name = f"sqlmesh__test_schema.{physical_table.name}"
+                    physical_grants = engine_adapter._get_current_grants_config(
+                        exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+                    )
+                    assert roles["grantee"]["username"] in physical_grants.get("SELECT", [])
