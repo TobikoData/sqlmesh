@@ -39,6 +39,7 @@ except ImportError:
     # ref: https://github.com/dbt-labs/dbt-core/commit/14fc39a76ff4830cdf2fcbe73f57ca27db500018#diff-1f09db95588f46879a83378c2a86d6b16b7cdfcaddbfe46afc5d919ee5e9a4d9R430
     from dbt.parser.sources import merge_source_freshness as merge_freshness  # type: ignore[no-redef,attr-defined]
 
+from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import ModelDefaultsConfig
@@ -464,7 +465,7 @@ class ManifestHelper:
         return self.__manifest
 
     def _load_manifest(self) -> Manifest:
-        # do_not_track()
+        do_not_track()
 
         variables = (
             self.variable_overrides
@@ -480,6 +481,14 @@ class ManifestHelper:
             target=self.target.name,
             macro_debugging=False,
             REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES=True,
+        )
+        logger.debug(
+            "DBT RuntimeConfig args - profile %s, project_dir %s, profiles_dir %s, target %s, vars %s",
+            args.profile,
+            args.project_dir,
+            args.profiles_dir,
+            args.target,
+            args.vars,
         )
         flags.set_from_args(args, None)
 
