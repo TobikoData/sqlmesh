@@ -688,7 +688,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, default_catalog="test_catalog")
     adapter.clone_table("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE "target_table" CLONE "source_table"'
+        'CREATE TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
     # Validate with transient type we create the clone table accordingly
@@ -700,7 +700,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
         "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
     )
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TRANSIENT TABLE "target_table" CLONE "source_table"'
+        'CREATE TRANSIENT TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
     # Validate other engine adapters would work as usual even when we pass the properties
@@ -710,7 +710,7 @@ def test_clone_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callab
         "target_table", "source_table", rendered_physical_properties=rendered_physical_properties
     )
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE "target_table" CLONE "source_table"'
+        'CREATE TABLE IF NOT EXISTS "target_table" CLONE "source_table"'
     )
 
 

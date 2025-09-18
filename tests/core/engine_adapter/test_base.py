@@ -3347,7 +3347,7 @@ def test_clone_table(make_mocked_engine_adapter: t.Callable):
     adapter.clone_table("target_table", "source_table")
 
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE `target_table` CLONE `source_table`"
+        "CREATE TABLE IF NOT EXISTS `target_table` CLONE `source_table`"
     )
 
 
