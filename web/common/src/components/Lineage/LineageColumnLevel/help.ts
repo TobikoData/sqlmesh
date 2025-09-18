@@ -1,10 +1,10 @@
-import { toEdgeID, toNodeID, toPortID } from '../utils'
 import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type EdgeId,
+  toEdgeID,
+  toNodeID,
+  toPortID,
   type LineageEdge,
   type LineageEdgeData,
+  type EdgeId,
   type NodeId,
   type PortId,
   type TransformEdgeFn,
@@ -17,28 +17,34 @@ import {
 
 export const MAX_COLUMNS_TO_DISPLAY = 5
 
-export function getAdjacencyListKeysFromColumnLineage(
-  columnLineage: ColumnLevelLineageAdjacencyList,
+export function getAdjacencyListKeysFromColumnLineage<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
+>(
+  columnLineage: ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 ) {
-  const adjacencyListKeys = new Set<AdjacencyListKey>()
+  const adjacencyListKeys = new Set<TAdjacencyListKey>()
 
   const targets = Object.entries(columnLineage) as [
-    AdjacencyListKey,
-    ColumnLevelConnections,
+    TAdjacencyListKey,
+    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
   ][]
 
   for (const [sourceModelName, targetColumns] of targets) {
     adjacencyListKeys.add(sourceModelName)
 
     const targetConnections = Object.entries(targetColumns) as [
-      AdjacencyListColumnKey,
-      ColumnLevelDetails,
+      TAdjacencyListColumnKey,
+      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
     ][]
 
     for (const [, { models: sourceModels }] of targetConnections) {
       for (const targetModelName of Object.keys(
         sourceModels,
-      ) as AdjacencyListKey[]) {
+      ) as TAdjacencyListKey[]) {
         adjacencyListKeys.add(targetModelName)
       }
     }
@@ -48,55 +54,69 @@ export function getAdjacencyListKeysFromColumnLineage(
 }
 
 export function getEdgesFromColumnLineage<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TEdgeID extends string = EdgeId,
+  TNodeID extends string = NodeId,
+  TPortID extends string = PortId,
 >({
-  columnLineage = {},
+  columnLineage,
   transformEdge,
 }: {
-  columnLineage: ColumnLevelLineageAdjacencyList
-  transformEdge: TransformEdgeFn<TEdgeData>
+  columnLineage: ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >
+  transformEdge: TransformEdgeFn<TEdgeData, TNodeID, TEdgeID, TPortID>
 }) {
-  const edges: LineageEdge<TEdgeData>[] = []
-  const modelLevelEdgeIDs = new Map<EdgeId, [NodeId, NodeId]>()
+  const edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[] = []
+  const modelLevelEdgeIDs = new Map<TEdgeID, [TNodeID, TNodeID]>()
   const targets = Object.entries(columnLineage || {}) as [
-    AdjacencyListKey,
-    ColumnLevelConnections,
+    TAdjacencyListKey,
+    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
   ][]
 
   for (const [targetModelName, targetColumns] of targets) {
     const targetConnections = Object.entries(targetColumns) as [
-      AdjacencyListColumnKey,
-      ColumnLevelDetails,
+      TAdjacencyListColumnKey,
+      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
     ][]
 
-    const targetNodeId = toNodeID(targetModelName)
+    const targetNodeId = toNodeID<TNodeID>(targetModelName)
 
     for (const [
       targetColumnName,
       { models: sourceModels },
     ] of targetConnections) {
       const sources = Object.entries(sourceModels) as [
-        AdjacencyListKey,
-        AdjacencyListKey[],
+        TAdjacencyListKey,
+        TAdjacencyListColumnKey[],
       ][]
 
       for (const [sourceModelName, sourceColumns] of sources) {
-        const sourceNodeId = toNodeID(sourceModelName)
+        const sourceNodeId = toNodeID<TNodeID>(sourceModelName)
 
-        modelLevelEdgeIDs.set(toEdgeID(sourceModelName, targetModelName), [
-          sourceNodeId,
-          targetNodeId,
-        ])
+        modelLevelEdgeIDs.set(
+          toEdgeID<TEdgeID>(sourceModelName, targetModelName),
+          [sourceNodeId, targetNodeId],
+        )
 
         sourceColumns.forEach(sourceColumnName => {
-          const edgeId = toEdgeID(
+          const edgeId = toEdgeID<TEdgeID>(
             sourceModelName,
             sourceColumnName,
             targetModelName,
             targetColumnName,
           )
-          const sourceColumnId = toPortID(sourceModelName, sourceColumnName)
-          const targetColumnId = toPortID(targetModelName, targetColumnName)
+          const sourceColumnId = toPortID<TPortID>(
+            sourceModelName,
+            sourceColumnName,
+          )
+          const targetColumnId = toPortID<TPortID>(
+            targetModelName,
+            targetColumnName,
+          )
 
           edges.push(
             transformEdge(
@@ -121,19 +141,26 @@ export function getEdgesFromColumnLineage<
   return edges
 }
 
-export function getConnectedColumnsIDs(
-  adjacencyList: ColumnLevelLineageAdjacencyList,
+export function getConnectedColumnsIDs<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
+  TColumnID extends string = PortId,
+>(
+  adjacencyList: ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 ) {
-  const connectedColumns = new Set<PortId>()
+  const connectedColumns = new Set<TColumnID>()
   const targets = Object.entries(adjacencyList) as [
-    AdjacencyListKey,
-    ColumnLevelConnections,
+    TAdjacencyListKey,
+    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
   ][]
 
   for (const [sourceModelName, targetColumns] of targets) {
     const targetConnections = Object.entries(targetColumns) as [
-      AdjacencyListColumnKey,
-      ColumnLevelDetails,
+      TAdjacencyListColumnKey,
+      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
     ][]
 
     for (const [
@@ -143,8 +170,8 @@ export function getConnectedColumnsIDs(
       connectedColumns.add(toPortID(sourceModelName, sourceColumnName))
 
       const sources = Object.entries(sourceModels) as [
-        AdjacencyListKey,
-        AdjacencyListKey[],
+        TAdjacencyListKey,
+        TAdjacencyListColumnKey[],
       ][]
 
       for (const [targetModelName, sourceColumns] of sources) {

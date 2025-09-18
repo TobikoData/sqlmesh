@@ -3,9 +3,7 @@ import { VirtualList } from '@/components/VirtualList/VirtualList'
 import { FilterableList } from '@/components/VirtualList/FilterableList'
 import type { IFuseOptions } from 'fuse.js'
 
-export function NodePorts<
-  TPort extends Record<string, unknown> = Record<string, unknown>,
->({
+export function NodePorts<TPort>({
   ports,
   estimatedListItemHeight,
   renderPort,

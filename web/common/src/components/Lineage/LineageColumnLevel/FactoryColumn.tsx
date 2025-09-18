@@ -10,12 +10,7 @@ import React from 'react'
 import { cn } from '@/utils'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodePort } from '../node/NodePort'
-import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type NodeId,
-  type PortId,
-} from '../utils'
+import { type NodeId, type PortId } from '../utils'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextHook,
@@ -26,7 +21,18 @@ import { HorizontalContainer } from '@/components/HorizontalContainer/Horizontal
 import { Information } from '@/components/Typography/Information'
 import { LoadingContainer } from '@/components/LoadingContainer/LoadingContainer'
 
-export function FactoryColumn(useLineage: ColumnLevelLineageContextHook) {
+export function FactoryColumn<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
+  TNodeID extends string = NodeId,
+  TColumnID extends string = PortId,
+>(
+  useLineage: ColumnLevelLineageContextHook<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey,
+    TColumnID
+  >,
+) {
   return React.memo(function FactoryColumn({
     id,
     nodeId,
@@ -44,14 +50,17 @@ export function FactoryColumn(useLineage: ColumnLevelLineageContextHook) {
     onClick,
     onCancel,
   }: {
-    id: PortId
-    nodeId: NodeId
-    modelName: AdjacencyListKey
-    name: AdjacencyListColumnKey
+    id: TColumnID
+    nodeId: TNodeID
+    modelName: TAdjacencyListKey
+    name: TAdjacencyListColumnKey
     type: string
     description?: string | null
     className?: string
-    data?: ColumnLevelLineageAdjacencyList
+    data?: ColumnLevelLineageAdjacencyList<
+      TAdjacencyListKey,
+      TAdjacencyListColumnKey
+    >
     isFetching?: boolean
     error?: Error | null
     renderError?: (error: Error) => React.ReactNode

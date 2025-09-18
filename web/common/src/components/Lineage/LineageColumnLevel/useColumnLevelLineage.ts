@@ -8,17 +8,31 @@ import {
   getConnectedColumnsIDs,
 } from './help'
 
-export function useColumnLevelLineage(
-  columnLevelLineage: Map<PortId, ColumnLevelLineageAdjacencyList>,
+export function useColumnLevelLineage<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
+  TColumnID extends string = PortId,
+>(
+  columnLevelLineage: Map<
+    TColumnID,
+    ColumnLevelLineageAdjacencyList<TAdjacencyListKey, TAdjacencyListColumnKey>
+  >,
 ) {
   const adjacencyListColumnLevel = React.useMemo(() => {
     return merge.all(Array.from(columnLevelLineage.values()), {
       arrayMerge: (dest, source) => Array.from(new Set([...dest, ...source])),
-    }) as ColumnLevelLineageAdjacencyList
+    }) as ColumnLevelLineageAdjacencyList<
+      TAdjacencyListKey,
+      TAdjacencyListColumnKey
+    >
   }, [columnLevelLineage])
 
   const selectedColumns = React.useMemo(() => {
-    return getConnectedColumnsIDs(adjacencyListColumnLevel)
+    return getConnectedColumnsIDs<
+      TAdjacencyListKey,
+      TAdjacencyListColumnKey,
+      TColumnID
+    >(adjacencyListColumnLevel)
   }, [adjacencyListColumnLevel])
 
   const adjacencyListKeysColumnLevel = React.useMemo(() => {

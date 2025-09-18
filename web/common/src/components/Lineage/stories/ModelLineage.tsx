@@ -15,12 +15,16 @@ import {
   getEdgesFromColumnLineage,
 } from '../LineageColumnLevel/help'
 import { useColumnLevelLineage } from '../LineageColumnLevel/useColumnLevelLineage'
-import { type Column } from '../LineageColumnLevel/useColumns'
 import { LineageControlButton } from '../LineageControlButton'
 import { LineageControlIcon } from '../LineageControlIcon'
 import { LineageLayout } from '../LineageLayout'
 import { FactoryEdgeWithGradient } from '../edge/FactoryEdgeWithGradient'
-import { toNodeID, toPortID } from '../utils'
+import {
+  toNodeID,
+  toPortID,
+  type LineageAdjacencyList,
+  type LineageDetails,
+} from '../utils'
 import {
   calculateNodeBaseHeight,
   calculateNodeDetailsHeight,
@@ -34,24 +38,19 @@ import {
   cleanupLayoutWorker,
   getLayoutedGraph as getDagreLayoutedGraph,
 } from '../layout/dagreLayout'
+import { type LineageEdge, type LineageNodesMap, ZOOM_TRESHOLD } from '../utils'
 import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type EdgeId,
-  type LineageEdge,
-  type LineageNodesMap,
-  type NodeId,
-  type PortId,
-  ZOOM_TRESHOLD,
-} from '../utils'
-import {
-  type AdjacencyListNode,
   type EdgeData,
   ModelLineageContext,
   type ModelLineageNodeDetails,
+  type ModelName,
+  type ColumnName,
   type NodeData,
   type NodeType,
   useModelLineage,
+  type ModelNodeId,
+  type ModelColumnID,
+  type ModelEdgeId,
 } from './ModelLineageContext'
 import { ModelNode } from './ModelNode'
 import { getNodeTypeColorVar } from './help'
@@ -67,64 +66,68 @@ const edgeTypes = {
 
 export const ModelLineage = ({
   selectedModelName,
-  artifactAdjacencyList,
-  artifactDetails,
+  adjacencyList,
+  lineageDetails,
   className,
 }: {
-  artifactAdjacencyList: Record<AdjacencyListKey, AdjacencyListNode[]>
-  artifactDetails: Record<AdjacencyListKey, ModelLineageNodeDetails>
-  selectedModelName?: string
+  adjacencyList: LineageAdjacencyList<ModelName>
+  lineageDetails: LineageDetails<ModelName, ModelLineageNodeDetails>
+  selectedModelName?: ModelName
   className?: string
 }) => {
   const [zoom, setZoom] = React.useState(ZOOM_TRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
-  const [edges, setEdges] = React.useState<LineageEdge<EdgeData>[]>([])
-  const [nodesMap, setNodesMap] = React.useState<LineageNodesMap<NodeData>>({})
+  const [edges, setEdges] = React.useState<
+    LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[]
+  >([])
+  const [nodesMap, setNodesMap] = React.useState<
+    LineageNodesMap<NodeData, ModelNodeId>
+  >({})
   const [showOnlySelectedNodes, setShowOnlySelectedNodes] =
     React.useState(false)
-  const [selectedNodes, setSelectedNodes] = React.useState<Set<NodeId>>(
+  const [selectedNodes, setSelectedNodes] = React.useState<Set<ModelNodeId>>(
     new Set(),
   )
-  const [selectedEdges, setSelectedEdges] = React.useState<Set<EdgeId>>(
+  const [selectedEdges, setSelectedEdges] = React.useState<Set<ModelEdgeId>>(
     new Set(),
   )
-  const [selectedNodeId, setSelectedNodeId] = React.useState<NodeId | null>(
-    null,
-  )
+  const [selectedNodeId, setSelectedNodeId] =
+    React.useState<ModelNodeId | null>(null)
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
-    Map<PortId, ColumnLevelLineageAdjacencyList>
+    Map<ModelColumnID, ColumnLevelLineageAdjacencyList<ModelName, ColumnName>>
   >(new Map())
-  const [fetchingColumns, setFetchingColumns] = React.useState<Set<PortId>>(
-    new Set(),
-  )
+  const [fetchingColumns, setFetchingColumns] = React.useState<
+    Set<ModelColumnID>
+  >(new Set())
 
   const {
     adjacencyListColumnLevel,
     selectedColumns,
     adjacencyListKeysColumnLevel,
-  } = useColumnLevelLineage(columnLevelLineage)
+  } = useColumnLevelLineage<ModelName, ColumnName, ModelColumnID>(
+    columnLevelLineage,
+  )
 
   const adjacencyListKeys = React.useMemo(() => {
-    let keys: AdjacencyListKey[] = []
+    let keys: ModelName[] = []
 
     if (adjacencyListKeysColumnLevel.length > 0) {
       keys = adjacencyListKeysColumnLevel
     } else {
-      keys = Object.keys(artifactAdjacencyList) as AdjacencyListKey[]
+      keys = Object.keys(adjacencyList) as ModelName[]
     }
 
     return keys
-  }, [adjacencyListKeysColumnLevel, artifactAdjacencyList])
+  }, [adjacencyListKeysColumnLevel, adjacencyList])
 
   const transformNode = React.useCallback(
-    (nodeId: NodeId, detail: ModelLineageNodeDetails) => {
-      const columns: Record<AdjacencyListColumnKey, Column> =
-        detail.columns || {}
+    (nodeId: ModelNodeId, detail: ModelLineageNodeDetails) => {
+      const columns = detail.columns
 
       const node = createNode('node', nodeId, {
-        name: detail.name as AdjacencyListKey,
+        name: detail.name,
         identifier: detail.identifier,
         model_type: detail.model_type as NodeType,
         kind: detail.kind!,
@@ -137,7 +140,7 @@ export const ModelLineage = ({
         columns,
       })
       const selectedColumnsCount = new Set(
-        Object.keys(columns).map(k => toPortID(detail.name, k)),
+        Object.keys(columns ?? {}).map(k => toPortID(detail.name, k)),
       ).intersection(selectedColumns).size
       // We are trying to project the node hight so we are including the ceiling and floor heights
       const nodeBaseHeight = calculateNodeBaseHeight({
@@ -152,8 +155,11 @@ export const ModelLineage = ({
         calculateSelectedColumnsHeight(selectedColumnsCount)
 
       const columnsHeight = calculateColumnsHeight({
-        columnsCount: calculateNodeColumnsCount(Object.keys(columns).length),
-        hasColumnsFilter: Object.keys(columns).length > MAX_COLUMNS_TO_DISPLAY,
+        columnsCount: calculateNodeColumnsCount(
+          Object.keys(columns ?? {}).length,
+        ),
+        hasColumnsFilter:
+          Object.keys(columns ?? {}).length > MAX_COLUMNS_TO_DISPLAY,
       })
 
       node.height =
@@ -168,21 +174,22 @@ export const ModelLineage = ({
   )
 
   const transformedNodesMap = React.useMemo(() => {
-    return getTransformedNodes<ModelLineageNodeDetails, NodeData>(
-      adjacencyListKeys,
-      artifactDetails,
-      transformNode,
-    )
-  }, [adjacencyListKeys, artifactDetails, transformNode])
+    return getTransformedNodes<
+      ModelName,
+      ModelLineageNodeDetails,
+      NodeData,
+      ModelNodeId
+    >(adjacencyListKeys, lineageDetails, transformNode)
+  }, [adjacencyListKeys, lineageDetails, transformNode])
 
   const transformEdge = React.useCallback(
     (
       edgeType: string,
-      edgeId: EdgeId,
-      sourceId: NodeId,
-      targetId: NodeId,
-      sourceHandleId?: PortId,
-      targetHandleId?: PortId,
+      edgeId: ModelEdgeId,
+      sourceId: ModelNodeId,
+      targetId: ModelNodeId,
+      sourceHandleId?: ModelColumnID,
+      targetHandleId?: ModelColumnID,
     ) => {
       const sourceNode = transformedNodesMap[sourceId]
       const targetNode = transformedNodesMap[targetId]
@@ -212,7 +219,7 @@ export const ModelLineage = ({
         data.strokeWidth = 2
       }
 
-      return createEdge<EdgeData>(
+      return createEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>(
         edgeType,
         edgeId,
         sourceId,
@@ -227,7 +234,14 @@ export const ModelLineage = ({
 
   const edgesColumnLevel = React.useMemo(
     () =>
-      getEdgesFromColumnLineage({
+      getEdgesFromColumnLineage<
+        ModelName,
+        ColumnName,
+        EdgeData,
+        ModelEdgeId,
+        ModelNodeId,
+        ModelColumnID
+      >({
         columnLineage: adjacencyListColumnLevel,
         transformEdge,
       }),
@@ -237,21 +251,21 @@ export const ModelLineage = ({
   const transformedEdges = React.useMemo(() => {
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
-      : getTransformedModelEdges<AdjacencyListNode, EdgeData>(
-          adjacencyListKeys,
-          artifactAdjacencyList,
-          transformEdge,
-        )
-  }, [
-    adjacencyListKeys,
-    artifactAdjacencyList,
-    transformEdge,
-    edgesColumnLevel,
-  ])
+      : getTransformedModelEdges<
+          ModelName,
+          EdgeData,
+          ModelNodeId,
+          ModelEdgeId,
+          ModelColumnID
+        >(adjacencyListKeys, adjacencyList, transformEdge)
+  }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
   const calculateLayout = React.useMemo(() => {
     return debounce(
-      (eds: LineageEdge<EdgeData>[], nds: LineageNodesMap<NodeData>) =>
+      (
+        eds: LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[],
+        nds: LineageNodesMap<NodeData>,
+      ) =>
         getDagreLayoutedGraph(eds, nds)
           .then(({ edges, nodesMap }) => {
             setEdges(edges)
@@ -275,7 +289,7 @@ export const ModelLineage = ({
 
   const currentNode = React.useMemo(() => {
     return selectedModelName
-      ? nodesMap[toNodeID(selectedModelName as string)]
+      ? nodesMap[toNodeID<ModelNodeId>(selectedModelName)]
       : null
   }, [selectedModelName, nodesMap])
 
@@ -294,12 +308,12 @@ export const ModelLineage = ({
     setIsBuildingLayout(true)
 
     if (showOnlySelectedNodes) {
-      const onlySelectedNodesMap = getOnlySelectedNodes<NodeData>(
+      const onlySelectedNodesMap = getOnlySelectedNodes<NodeData, ModelNodeId>(
         transformedNodesMap,
         selectedNodes,
       )
       const onlySelectedEdges = transformedEdges.filter(edge =>
-        selectedEdges.has(edge.id),
+        selectedEdges.has(edge.id as ModelEdgeId),
       )
       calculateLayout(onlySelectedEdges, onlySelectedNodesMap)
     } else {
@@ -314,7 +328,7 @@ export const ModelLineage = ({
 
   React.useEffect(() => {
     const currentNodeId = selectedModelName
-      ? toNodeID(selectedModelName)
+      ? toNodeID<ModelNodeId>(selectedModelName)
       : undefined
 
     if (currentNodeId && currentNodeId in nodesMap) {
@@ -363,7 +377,13 @@ export const ModelLineage = ({
       }}
     >
       <ReactFlowProvider>
-        <LineageLayout<NodeData, EdgeData>
+        <LineageLayout<
+          NodeData,
+          EdgeData,
+          ModelNodeId,
+          ModelEdgeId,
+          ModelColumnID
+        >
           useLineage={useModelLineage}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}

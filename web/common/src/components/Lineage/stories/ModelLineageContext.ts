@@ -1,31 +1,31 @@
+import type { Branded } from '@/types'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextValue,
-  initial as columnLevelLineageContextInitial,
+  getInitial as getColumnLevelLineageContextInitial,
 } from '../LineageColumnLevel/ColumnLevelLineageContext'
 import { type Column } from '../LineageColumnLevel/useColumns'
 import {
   type LineageContextValue,
   createLineageContext,
-  initial as lineageContextInitial,
+  getInitial as getLineageContextInitial,
 } from '../LineageContext'
-import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type LineageEdgeData,
-  type LineageNodeData,
-  type PathType,
-} from '../utils'
+import { type PathType } from '../utils'
 
-export type NodeType = 'sql' | 'python'
-
-export type AdjacencyListNode = {
-  name: AdjacencyListKey
-  identifier: string
+export type ModelName = Branded<string, 'ModelName'>
+export type ColumnName = Branded<string, 'ColumnName'>
+export type ModelColumnID = Branded<string, 'ModelColumnID'>
+export type ModelNodeId = Branded<string, 'ModelNodeId'>
+export type ModelEdgeId = Branded<string, 'ModelEdgeId'>
+export type ModelColumn = Column & {
+  id: ModelColumnID
+  name: ColumnName
+  columnLineageData?: ColumnLevelLineageAdjacencyList<ModelName, ColumnName>
 }
 
-export interface ModelLineageNodeDetails {
-  name: string
+export type NodeType = 'sql' | 'python'
+export type ModelLineageNodeDetails = {
+  name: ModelName
   display_name: string
   identifier: string
   version: string
@@ -35,14 +35,11 @@ export interface ModelLineageNodeDetails {
   kind?: string
   model_type?: string
   tags?: string[]
-  columns?: Record<
-    AdjacencyListColumnKey,
-    Column & { columnLineageData?: ColumnLevelLineageAdjacencyList }
-  >
+  columns?: Record<ColumnName, ModelColumn>
 }
 
 export type NodeData = {
-  name: AdjacencyListKey
+  name: ModelName
   displayName: string
   model_type: NodeType
   identifier: string
@@ -51,7 +48,7 @@ export type NodeData = {
   cron: string
   owner: string
   dialect: string
-  columns?: Record<AdjacencyListColumnKey, Column>
+  columns?: Record<ColumnName, ModelColumn>
   tags: string[]
 }
 
@@ -62,21 +59,35 @@ export type EdgeData = {
   strokeWidth?: number
 }
 
-export interface ModelLineageContextValue<
-  TNodeData extends LineageNodeData = LineageNodeData,
-  TEdgeData extends LineageEdgeData = LineageEdgeData,
-> extends ColumnLevelLineageContextValue,
-    LineageContextValue<TNodeData, TEdgeData> {}
+export type ModelLineageContextValue = ColumnLevelLineageContextValue<
+  ModelName,
+  ColumnName,
+  ModelColumnID
+> &
+  LineageContextValue<
+    NodeData,
+    EdgeData,
+    ModelNodeId,
+    ModelEdgeId,
+    ModelColumnID
+  >
 
-const initial = {
-  ...lineageContextInitial,
-  ...columnLevelLineageContextInitial,
+export const initial = {
+  ...getLineageContextInitial<ModelNodeId, ModelEdgeId>(),
+  ...getColumnLevelLineageContextInitial<
+    ModelName,
+    ColumnName,
+    ModelColumnID
+  >(),
 }
 
 export const { Provider, useLineage } = createLineageContext<
   NodeData,
   EdgeData,
-  ModelLineageContextValue<NodeData, EdgeData>
+  ModelNodeId,
+  ModelEdgeId,
+  ModelColumnID,
+  ModelLineageContextValue
 >(initial)
 
 export const ModelLineageContext = {

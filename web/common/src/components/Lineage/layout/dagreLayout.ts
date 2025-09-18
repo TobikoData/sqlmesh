@@ -1,9 +1,12 @@
 import {
+  type EdgeId,
   type LayoutedGraph,
   type LineageEdge,
   type LineageEdgeData,
   type LineageNodeData,
   type LineageNodesMap,
+  type NodeId,
+  type PortId,
 } from '../utils'
 
 const DEFAULT_TIMEOUT = 1000 * 60 // 1 minute
@@ -24,10 +27,13 @@ function getWorker(): Worker {
 export async function getLayoutedGraph<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
 >(
-  edges: LineageEdge<TEdgeData>[],
+  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[],
   nodesMap: LineageNodesMap<TNodeData>,
-): Promise<LayoutedGraph<TNodeData, TEdgeData>> {
+): Promise<LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>> {
   let timeoutId: NodeJS.Timeout | null = null
 
   return new Promise((resolve, reject) => {
@@ -51,7 +57,10 @@ export async function getLayoutedGraph<
     try {
       worker.postMessage({ edges, nodesMap } as LayoutedGraph<
         TNodeData,
-        TEdgeData
+        TEdgeData,
+        TNodeID,
+        TEdgeID,
+        TPortID
       >)
     } catch (postError) {
       errorHandler(postError as ErrorEvent)
@@ -59,7 +68,9 @@ export async function getLayoutedGraph<
 
     function handler(
       event: MessageEvent<
-        LayoutedGraph<TNodeData, TEdgeData> & { error: ErrorEvent }
+        LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID> & {
+          error: ErrorEvent
+        }
       >,
     ) {
       cleanup()

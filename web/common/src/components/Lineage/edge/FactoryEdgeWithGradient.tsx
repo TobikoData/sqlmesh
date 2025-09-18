@@ -5,7 +5,9 @@ import {
   type EdgeId,
   type LineageEdgeData,
   type LineageNodeData,
+  type NodeId,
   type PathType,
+  type PortId,
 } from '../utils'
 import { EdgeWithGradient } from './EdgeWithGradient'
 import type { Edge, EdgeProps } from '@xyflow/react'
@@ -20,9 +22,20 @@ export interface EdgeData extends LineageEdgeData {
 export function FactoryEdgeWithGradient<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends EdgeData = EdgeData,
->(useLineage: LineageContextHook<TNodeData, TEdgeData>) {
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+>(
+  useLineage: LineageContextHook<
+    TNodeData,
+    TEdgeData,
+    TNodeID,
+    TEdgeID,
+    TPortID
+  >,
+) {
   return React.memo(({ data, id, ...props }: EdgeProps<Edge<TEdgeData>>) => {
-    const edgeId = id as EdgeId
+    const edgeId = id as TEdgeID
 
     const { selectedEdges } = useLineage()
 
