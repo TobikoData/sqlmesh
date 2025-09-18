@@ -19,7 +19,6 @@ self.onmessage = <
     const nodes = Object.values(nodesMap)
     const nodeCount = nodes.length
     const edgeCount = edges.length
-    const maxCount = Math.max(nodeCount, edgeCount)
 
     if (nodeCount === 0)
       return self.postMessage({
@@ -44,17 +43,16 @@ self.onmessage = <
     g.setDefaultEdgeLabel(() => ({}))
 
     // Building layout already heavy operation, so trying to optimize it a bit
-    for (let i = 0; i < maxCount; i++) {
-      if (i < edgeCount) {
-        g.setEdge(edges[i].source, edges[i].target)
-      }
-      if (i < nodeCount) {
-        const node = nodes[i]
-        g.setNode(node.id, {
-          width: node.width || DEFAULT_NODE_WIDTH,
-          height: node.height || 0,
-        })
-      }
+    for (let i = 0; i < edgeCount; i++) {
+      g.setEdge(edges[i].source, edges[i].target)
+    }
+
+    for (let i = 0; i < nodeCount; i++) {
+      const node = nodes[i]
+      g.setNode(node.id, {
+        width: node.width || DEFAULT_NODE_WIDTH,
+        height: node.height || 0,
+      })
     }
 
     dagre.layout(g)
