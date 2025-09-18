@@ -475,7 +475,8 @@ def test_grants_plan(engine_adapter: PostgresEngineAdapter, ctx: TestContext, tm
             kind FULL,
             grants (
                 'select' = ['test_analyst']
-            )
+            ),
+            grants_target_layer 'all'
         );
         SELECT 1 as id, CURRENT_DATE as created_date
         """
@@ -510,7 +511,8 @@ def test_grants_plan(engine_adapter: PostgresEngineAdapter, ctx: TestContext, tm
             grants (
                 'select' = ['test_analyst', 'test_etl_user'],
                 'insert' = ['test_etl_user']
-            )
+            ),
+            grants_target_layer 'all'
         );
         SELECT 1 as id, CURRENT_DATE as created_date, 'v2' as version
         """
@@ -636,7 +638,8 @@ def test_grants_plan_full_refresh_model_via_replace(
                 kind FULL,
                 grants (
                     'SELECT' = ['{roles["reader"]["username"]}']
-                )
+                ),
+                grants_target_layer 'all'
             );
             SELECT 1 as id, 'test_data' as status
             """
@@ -683,7 +686,8 @@ def test_grants_plan_incremental_model_first_insert(
                 ),
                 grants (
                     'SELECT' = ['{roles["reader"]["username"]}']
-                )
+                ),
+                grants_target_layer 'all'
             );
 
             SELECT 1 as id, @start_ds::timestamp as ts, 'data' as value
@@ -727,7 +731,8 @@ def test_grants_plan_clone_environment(
                 kind FULL,
                 grants (
                     'SELECT' = ['{roles["reader"]["username"]}']
-                )
+                ),
+                grants_target_layer 'all'
             );
 
             SELECT 1 as id, 'data' as value
@@ -783,7 +788,8 @@ def test_grants_metadata_only_changes(
             kind FULL,
             grants (
                 'select' = ['{roles["reader"]["username"]}']
-            )
+            ),
+            grants_target_layer 'all'
         );
         SELECT 1 as id, 'unchanged_query' as data
         """
@@ -817,7 +823,8 @@ def test_grants_metadata_only_changes(
             grants (
                 'select' = ['{roles["writer"]["username"]}', '{roles["admin"]["username"]}'],
                 'insert' = ['{roles["admin"]["username"]}']
-            )
+            ),
+            grants_target_layer 'all'
         );
         SELECT 1 as id, 'unchanged_query' as data
         """
@@ -851,7 +858,8 @@ def test_grants_metadata_only_changes(
             kind FULL,
             grants (
                 'select' = ['{roles["reader"]["username"]}']
-            )
+            ),
+            grants_target_layer 'all'
         );
         SELECT 1 as id, 'unchanged_query' as data
         """

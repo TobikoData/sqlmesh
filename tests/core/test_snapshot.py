@@ -168,7 +168,7 @@ def test_json(snapshot: Snapshot):
             "enabled": True,
             "extract_dependencies_from_query": True,
             "virtual_environment_mode": "full",
-            "grants_target_layer": "all",
+            "grants_target_layer": "virtual",
         },
         "name": '"name"',
         "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
@@ -985,7 +985,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="2406542604",
-        metadata_hash="185287368",
+        metadata_hash="1056339358",
     )
 
     assert fingerprint == original_fingerprint
@@ -1046,7 +1046,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="1586624913",
-        metadata_hash="1817881990",
+        metadata_hash="2674364560",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -1085,7 +1085,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="93332825",
-        metadata_hash="185287368",
+        metadata_hash="1056339358",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
