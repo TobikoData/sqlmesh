@@ -544,6 +544,11 @@ class ModelConfig(BaseModelConfig):
                     "Ignoring cluster_by config for model '%s'; cluster_by is not supported for views.",
                     self.name,
                 )
+            elif isinstance(kind, EmbeddedKind):
+                logger.warning(
+                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for embedded models.",
+                    self.name,
+                )
             else:
                 clustered_by = []
                 for c in self.cluster_by:
