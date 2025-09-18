@@ -21,3 +21,7 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
         ],
     )
     engine_adapter.execute(alter_table_exp)
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
+    pass
