@@ -2074,6 +2074,17 @@ def test_model_cluster_by():
     )
     assert model.to_sqlmesh(context).clustered_by == []
 
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        cluster_by=["Bar", "qux"],
+        sql="SELECT * FROM baz",
+        materialized=Materialization.EPHEMERAL.value,
+    )
+    assert model.to_sqlmesh(context).clustered_by == []
+
 
 def test_snowflake_dynamic_table():
     context = DbtContext()
