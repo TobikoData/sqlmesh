@@ -10662,3 +10662,121 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     assert len(model_a.intervals)
 
     set_console(orig_console)
+
+
+def test_seed_model_metadata_update_does_not_trigger_backfill(tmp_path: Path):
+    """
+    Scenario:
+        - Create a seed model; perform initial population
+        - Modify the model with a metadata-only change and trigger a plan
+
+    Outcome:
+        - The seed model is modified (metadata-only) but this should NOT trigger backfill
+        - There should be no missing_intervals on the plan to backfill
+    """
+
+    models_path = tmp_path / "models"
+    seeds_path = tmp_path / "seeds"
+    models_path.mkdir()
+    seeds_path.mkdir()
+
+    seed_model_path = models_path / "seed.sql"
+    seed_path = seeds_path / "seed_data.csv"
+
+    seed_path.write_text("\n".join(["id,name", "1,test"]))
+
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        )
+    );    
+    """)
+
+    config = Config(
+        gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"),
+    )
+    ctx = Context(paths=tmp_path, config=config)
+
+    plan = ctx.plan(auto_apply=True)
+
+    original_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert plan.directly_modified == {original_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test")
+    ]
+
+    # prove no diff
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert not plan.has_changes
+    assert not plan.missing_intervals
+
+    # make metadata-only change
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        ),
+        description 'updated by test'
+    );    
+    """)
+
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    new_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert (
+        new_seed_snapshot.version == original_seed_snapshot.version
+    )  # should be using the same physical table
+    assert (
+        new_seed_snapshot.snapshot_id != original_seed_snapshot.snapshot_id
+    )  # but still be different due to the metadata change
+    assert plan.directly_modified == set()
+    assert plan.metadata_updated == {new_seed_snapshot.snapshot_id}
+
+    # there should be no missing intervals to backfill since all we did is update a description
+    assert not plan.missing_intervals
+
+    # there should still be no diff or missing intervals in 3 days time
+    assert new_seed_snapshot.model.interval_unit.is_day
+    with time_machine.travel(timedelta(days=3)):
+        ctx.clear_caches()
+        ctx.load()
+        plan = ctx.plan(auto_apply=True)
+        assert not plan.has_changes
+        assert not plan.missing_intervals
+
+    # change seed data
+    seed_path.write_text("\n".join(["id,name", "1,test", "2,updated"]))
+
+    # new plan - NOW we should backfill because data changed
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    updated_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+
+    assert (
+        updated_seed_snapshot.snapshot_id
+        != new_seed_snapshot.snapshot_id
+        != original_seed_snapshot.snapshot_id
+    )
+    assert not updated_seed_snapshot.forward_only
+    assert plan.directly_modified == {updated_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove backfilled data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test"),
+        (2, "updated"),
+    ]
