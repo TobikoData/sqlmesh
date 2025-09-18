@@ -552,6 +552,22 @@ class Console(
         """Display list of models that failed during evaluation to the user."""
 
     @abc.abstractmethod
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
+        """Display a list of models where new versions got deployed to the specified :environment while we were restating data the old versions
+
+        Args:
+            snapshots: a list of (snapshot_we_restated, snapshot_it_got_replaced_with_during_restatement) tuples
+            environment: which environment got updated while we were restating models
+            environment_naming_info: how snapshots are named in that :environment (for display name purposes)
+            default_catalog: the configured default catalog (for display name purposes)
+        """
+
+    @abc.abstractmethod
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
         """Starts loading and returns a unique ID that can be used to stop the loading. Optionally can display a message."""
 
@@ -769,6 +785,14 @@ class NoopConsole(Console):
         pass
 
     def log_failed_models(self, errors: t.List[NodeExecutionFailedError]) -> None:
+        pass
+
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         pass
 
     def log_destructive_change(
@@ -1998,7 +2022,34 @@ class TerminalConsole(Console):
         plan = plan_builder.build()
 
         if plan.restatements:
-            self._print("\n[bold]Restating models\n")
+            # A plan can have restatements for the following reasons:
+            # - The user specifically called `sqlmesh plan` with --restate-model.
+            #   This creates a "restatement plan" which disallows all other changes and simply force-backfills
+            #   the selected models and their downstream dependencies using the versions of the models stored in state.
+            # - There are no specific restatements (so changes are allowed) AND dev previews need to be computed.
+            #   The "restatements" feature is currently reused for dev previews.
+            if plan.selected_models_to_restate:
+                # There were legitimate restatements, no dev previews
+                tree = Tree(
+                    "[bold]Models selected for restatement:[/bold]\n"
+                    "This causes backfill of the model itself as well as affected downstream models"
+                )
+                model_fqn_to_snapshot = {s.name: s for s in plan.snapshots.values()}
+                for model_fqn in plan.selected_models_to_restate:
+                    snapshot = model_fqn_to_snapshot[model_fqn]
+                    display_name = snapshot.display_name(
+                        plan.environment_naming_info,
+                        default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                        dialect=self.dialect,
+                    )
+                    tree.add(
+                        display_name
+                    )  # note: we deliberately dont show any intervals here; they get shown in the backfill section
+                self._print(tree)
+            else:
+                # We are computing dev previews, do not confuse the user by printing out something to do
+                # with restatements. Dev previews are already highlighted in the backfill step
+                pass
         else:
             self.show_environment_difference_summary(
                 plan.context_diff,
@@ -2224,6 +2275,30 @@ class TerminalConsole(Console):
 
             for node_name, msg in error_messages.items():
                 self._print(f"  [red]{node_name}[/red]\n\n{msg}")
+
+    def log_models_updated_during_restatement(
+        self,
+        snapshots: t.List[t.Tuple[SnapshotTableInfo, SnapshotTableInfo]],
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
+        if snapshots:
+            tree = Tree(
+                f"[yellow]The following models had new versions deployed while data was being restated:[/yellow]"
+            )
+
+            for restated_snapshot, updated_snapshot in snapshots:
+                display_name = restated_snapshot.display_name(
+                    environment_naming_info,
+                    default_catalog if self.verbosity < Verbosity.VERY_VERBOSE else None,
+                    dialect=self.dialect,
+                )
+                current_branch = tree.add(display_name)
+                current_branch.add(f"restated version: '{restated_snapshot.version}'")
+                current_branch.add(f"currently active version: '{updated_snapshot.version}'")
+
+            self._print(tree)
+            self._print("")  # newline spacer
 
     def log_destructive_change(
         self,

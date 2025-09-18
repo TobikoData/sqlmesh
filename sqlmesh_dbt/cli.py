@@ -90,7 +90,9 @@ def dbt(
 @click.option(
     "-f",
     "--full-refresh",
-    help="If specified, dbt will drop incremental models and fully-recalculate the incremental table from the model definition.",
+    is_flag=True,
+    default=False,
+    help="If specified, sqlmesh will drop incremental models and fully-recalculate the incremental table from the model definition.",
 )
 @click.option(
     "--env",

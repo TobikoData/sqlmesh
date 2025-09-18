@@ -6,7 +6,7 @@ import { LoadingIcon } from './LoadingIcon'
 export interface LoadingContainerProps
   extends React.HTMLAttributes<HTMLDivElement> {
   isLoading?: boolean
-  message?: string
+  message?: React.ReactNode
   side?: Side
   className?: string
 }
@@ -15,17 +15,20 @@ export const LoadingContainer = React.forwardRef<
   HTMLDivElement,
   LoadingContainerProps
 >(
-  ({
-    isLoading = true,
-    side = 'left',
-    message,
-    children,
-    className,
-  }: LoadingContainerProps) => {
+  (
+    {
+      isLoading = true,
+      side = 'left',
+      message,
+      children,
+      className,
+    }: LoadingContainerProps,
+    ref,
+  ) => {
     function renderLoading() {
       return (
         <>
-          <LoadingIcon />
+          <LoadingIcon className="shrink-0" />
           {message && <span className="text-sm">{message}</span>}
         </>
       )
@@ -33,6 +36,7 @@ export const LoadingContainer = React.forwardRef<
 
     return isLoading ? (
       <div
+        ref={ref}
         data-component="LoadingContainer"
         className={cn('flex items-center justify-center gap-2', className)}
       >

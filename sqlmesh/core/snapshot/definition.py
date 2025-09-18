@@ -638,6 +638,16 @@ class SnapshotIdAndVersion(PydanticModel, ModelKindMixin):
     def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.kind_name_
 
+    def display_name(
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        dialect: DialectType = None,
+    ) -> str:
+        return model_display_name(
+            self.name, environment_naming_info, default_catalog, dialect=dialect
+        )
+
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
     """A snapshot represents a node at a certain point in time.
@@ -1468,18 +1478,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
+    def supports_schema_migration_in_prod(self) -> bool:
+        """Returns whether or not this snapshot supports schema migration when deployed to production."""
+        return self.is_paused and self.is_model and not self.is_symbolic
+
+    @property
     def requires_schema_migration_in_prod(self) -> bool:
         """Returns whether or not this snapshot requires a schema migration when deployed to production."""
-        return (
-            self.is_paused
-            and self.is_model
-            and self.is_materialized
-            and (
-                (self.previous_version and self.previous_version.version == self.version)
-                or self.model.forward_only
-                or bool(self.model.physical_version)
-                or not self.virtual_environment_mode.is_full
-            )
+        return self.supports_schema_migration_in_prod and (
+            (self.previous_version and self.previous_version.version == self.version)
+            or self.model.forward_only
+            or bool(self.model.physical_version)
+            or not self.virtual_environment_mode.is_full
         )
 
     @property
@@ -1788,7 +1798,19 @@ def display_name(
     """
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
-    view_name = exp.to_table(snapshot_info_like.name)
+
+    return model_display_name(
+        snapshot_info_like.name, environment_naming_info, default_catalog, dialect
+    )
+
+
+def model_display_name(
+    node_name: str,
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str],
+    dialect: DialectType = None,
+) -> str:
+    view_name = exp.to_table(node_name)
 
     catalog = (
         None

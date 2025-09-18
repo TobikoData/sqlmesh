@@ -268,33 +268,6 @@ class BaseModelConfig(GeneralConfig):
             and all(source in context.sources for source in test.dependencies.sources)
         ]
 
-    def fix_circular_test_refs(self, context: DbtContext) -> None:
-        """
-        Checks for direct circular references between two models and moves the test to the downstream
-        model if found. This addresses the most common circular reference - relationship tests in both
-        directions. In the future, we may want to increase coverage by checking for indirect circular references.
-
-        Args:
-            context: The dbt context this model resides within.
-
-        Returns:
-            None
-        """
-        for test in self.tests.copy():
-            for ref in test.dependencies.refs:
-                if ref == self.name or ref in self.dependencies.refs:
-                    continue
-                model = context.refs[ref]
-                if (
-                    self.name in model.dependencies.refs
-                    or self.name in model.tests_ref_source_dependencies.refs
-                ):
-                    logger.info(
-                        f"Moving test '{test.name}' from model '{self.name}' to '{model.name}' to avoid circular reference."
-                    )
-                    model.tests.append(test)
-                    self.tests.remove(test)
-
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
@@ -314,7 +287,6 @@ class BaseModelConfig(GeneralConfig):
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.remove_tests_with_invalid_refs(context)
-        self.fix_circular_test_refs(context)
 
         dependencies = self.dependencies.copy()
         if dependencies.has_dynamic_var_names:

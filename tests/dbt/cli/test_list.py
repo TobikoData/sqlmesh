@@ -24,7 +24,6 @@ def test_list_select(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Resul
     assert result.exit_code == 0
     assert not result.exception
 
-    assert "main.orders" in result.output
     assert "main.customers" in result.output
     assert "main.stg_customers" in result.output
     assert "main.raw_customers" in result.output

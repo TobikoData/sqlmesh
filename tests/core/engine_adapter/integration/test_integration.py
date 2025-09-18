@@ -22,6 +22,7 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -1938,7 +1939,12 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
+@pytest.mark.parametrize(
+    "virtual_environment_mode", [VirtualEnvironmentMode.FULL, VirtualEnvironmentMode.DEV_ONLY]
+)
+def test_sushi(
+    ctx: TestContext, tmp_path: pathlib.Path, virtual_environment_mode: VirtualEnvironmentMode
+):
     if ctx.mark == "athena_hive":
         pytest.skip(
             "Sushi end-to-end tests only need to run once for Athena because sushi needs a hybrid of both Hive and Iceberg"
@@ -1984,6 +1990,7 @@ def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
             ).sql(dialect=config.model_defaults.dialect)
             for e in before_all
         ]
+        config.virtual_environment_mode = virtual_environment_mode
 
     context = ctx.create_context(_mutate_config, path=tmp_path, ephemeral_state_connection=False)
 
@@ -2423,9 +2430,9 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
         assert actual_execution_stats["incremental_model"].total_rows_processed == 7
-        # snowflake doesn't track rows for CTAS
+        # snowflake and redshift don't track rows for CTAS
         assert actual_execution_stats["full_model"].total_rows_processed == (
-            None if ctx.mark.startswith("snowflake") else 3
+            None if ctx.mark.startswith("snowflake") or ctx.mark.startswith("redshift") else 3
         )
         assert actual_execution_stats["seed_model"].total_rows_processed == (
             None if ctx.mark.startswith("snowflake") else 7

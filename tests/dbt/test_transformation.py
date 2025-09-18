@@ -1014,6 +1014,18 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.path }}") == "None"
     assert context.render("{{ target.profile_name }}") == "None"
 
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+        warehouse="warehouse",
+    )
+    assert context.render("{{ target.warehouse }}") == "warehouse"
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_project_name_jinja(sushi_test_project: Project):
@@ -1669,6 +1681,18 @@ def test_partition_by(sushi_test_project: Project):
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
     context.target = DuckDbConfig(name="target", schema="foo")
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized=Materialization.VIEW.value,
+        unique_key="ds",
+        partition_by={"field": "ds", "granularity": "month"},
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
     assert model_config.to_sqlmesh(context).partitioned_by == []
 
 

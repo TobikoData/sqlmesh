@@ -640,7 +640,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_efgh""
+  FROM "__temp_target_efgh"
   WHERE
     NOT "test_valid_to" IS NULL
 ), "latest" AS (
@@ -652,7 +652,7 @@ WITH "source" AS (
     "test_valid_from",
     "test_valid_to",
     TRUE AS "_exists"
-  FROM ""__temp_target_efgh""
+  FROM "__temp_target_efgh"
   WHERE
     "test_valid_to" IS NULL
 ), "deleted" AS (

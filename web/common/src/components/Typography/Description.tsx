@@ -1,14 +1,16 @@
 import { cn } from '@/utils'
 import React from 'react'
 
+export interface DescriptionProps {
+  children?: React.ReactNode
+  className?: string
+}
+
 export function Description({
   children,
   className,
   ...props
-}: {
-  children?: React.ReactNode
-  className?: string
-}) {
+}: DescriptionProps) {
   return (
     <div
       data-component="Description"

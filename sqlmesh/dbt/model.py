@@ -510,27 +510,33 @@ class ModelConfig(BaseModelConfig):
         physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            partitioned_by = []
-            if isinstance(self.partition_by, list):
-                for p in self.partition_by:
-                    try:
-                        partitioned_by.append(d.parse_one(p, dialect=model_dialect))
-                    except SqlglotError as e:
-                        raise ConfigError(
-                            f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
-                        ) from e
-            elif isinstance(self.partition_by, dict):
-                if context.target.dialect == "bigquery":
-                    partitioned_by.append(self._big_query_partition_by_expr(context))
-                else:
-                    logger.warning(
-                        "Ignoring partition_by config for model '%s' targeting %s. The format of the config field is only supported for BigQuery.",
-                        self.name,
-                        context.target.dialect,
-                    )
+            if isinstance(kind, ViewKind):
+                logger.warning(
+                    "Ignoring partition_by config for model '%s'; partition_by is not supported for views.",
+                    self.name,
+                )
+            else:
+                partitioned_by = []
+                if isinstance(self.partition_by, list):
+                    for p in self.partition_by:
+                        try:
+                            partitioned_by.append(d.parse_one(p, dialect=model_dialect))
+                        except SqlglotError as e:
+                            raise ConfigError(
+                                f"Failed to parse model '{self.canonical_name(context)}' partition_by field '{p}' in '{self.path}': {e}"
+                            ) from e
+                elif isinstance(self.partition_by, dict):
+                    if context.target.dialect == "bigquery":
+                        partitioned_by.append(self._big_query_partition_by_expr(context))
+                    else:
+                        logger.warning(
+                            "Ignoring partition_by config for model '%s' targeting %s. The format of the config field is only supported for BigQuery.",
+                            self.name,
+                            context.target.dialect,
+                        )
 
-            if partitioned_by:
-                optional_kwargs["partitioned_by"] = partitioned_by
+                if partitioned_by:
+                    optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
             if isinstance(kind, ViewKind):

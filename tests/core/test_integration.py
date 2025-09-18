@@ -14,7 +14,7 @@ import pandas as pd  # noqa: TID253
 import pytest
 from pytest import MonkeyPatch
 from pathlib import Path
-from sqlmesh.core.console import set_console, get_console, TerminalConsole
+from sqlmesh.core.console import set_console, get_console, TerminalConsole, CaptureTerminalConsole
 from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
@@ -24,7 +24,9 @@ from sqlglot import exp
 from sqlglot.expressions import DataType
 import re
 from IPython.utils.capture import capture_output
-
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import time
+import queue
 
 from sqlmesh import CustomMaterialization
 from sqlmesh.cli.project_init import init_example_project
@@ -72,7 +74,13 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, now, to_date, to_datetime, to_timestamp
-from sqlmesh.utils.errors import NoChangesPlanError, SQLMeshError, PlanError, ConfigError
+from sqlmesh.utils.errors import (
+    NoChangesPlanError,
+    SQLMeshError,
+    PlanError,
+    ConfigError,
+    ConflictingPlanError,
+)
 from sqlmesh.utils.pydantic import validate_string
 from tests.conftest import DuckDBMetadata, SushiDataValidator
 from sqlmesh.utils import CorrelationId
@@ -934,6 +942,26 @@ def test_forward_only_parent_created_in_dev_child_created_in_prod(
     context.apply(plan)
 
 
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_forward_only_view_migration(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    model = context.get_model("sushi.top_waiters")
+    assert model.kind.is_view
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    context.upsert_model(model)
+
+    # Apply a forward-only plan
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True, forward_only=True)
+
+    # Make sure that the new column got reflected in the view schema
+    df = context.fetchdf("SELECT one FROM sushi.top_waiters LIMIT 1")
+    assert len(df) == 1
+
+
 @time_machine.travel("2023-01-08 00:00:00 UTC")
 def test_new_forward_only_model(init_and_plan_context: t.Callable):
     context, _ = init_and_plan_context("examples/sushi")
@@ -950,6 +978,32 @@ def test_new_forward_only_model(init_and_plan_context: t.Callable):
 
     assert context.engine_adapter.table_exists(snapshot.table_name())
     assert context.engine_adapter.table_exists(snapshot.table_name(is_deployable=False))
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_annotated_self_referential_model(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    # Projections are fully annotated in the query but columns were not specified explicitly
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name memory.sushi.test_self_ref,
+            kind FULL,
+            start '2023-01-01',
+        );
+
+        SELECT 1::INT AS one FROM memory.sushi.test_self_ref;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.depends_on_self
+    context.upsert_model(model)
+
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
+
+    df = context.fetchdf("SELECT one FROM memory.sushi.test_self_ref")
+    assert len(df) == 0
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -3108,7 +3162,32 @@ def test_virtual_environment_mode_dev_only_model_change_downstream_of_seed(
 
     # Make sure there's no error when applying the plan
     context.apply(plan)
-    context.plan("prod", auto_apply=True, no_prompts=True)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_model_change_standalone_audit(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    # Change a model upstream from a standalone audit
+    model = context.get_model("sushi.items")
+    model = model.copy(update={"stamp": "force new version"})
+    context.upsert_model(model)
+
+    plan = context.plan_builder("prod", skip_tests=True).build()
+
+    # Make sure the standalone audit is among modified
+    assert (
+        context.get_snapshot("assert_item_price_above_zero").snapshot_id
+        in plan.indirectly_modified[context.get_snapshot("sushi.items").snapshot_id]
+    )
+
+    # Make sure there's no error when applying the plan
+    context.apply(plan)
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -10181,3 +10260,523 @@ test_test_model:
         assert test_result.testsRun == len(test_result.successes)
 
     context.close()
+
+
+def test_restatement_plan_interval_external_visibility(tmp_path: Path):
+    """
+    Scenario:
+        - `prod` environment exists, models A <- B
+        - `dev` environment created, models A <- B(dev) <- C (dev)
+        - Restatement plan is triggered against `prod` for model A
+        - During restatement, a new dev environment `dev_2` is created with a new version of B(dev_2)
+
+    Outcome:
+        - At no point are the prod_intervals considered "missing" from state for A
+        - The intervals for B(dev) and C(dev) are cleared
+        - The intervals for B(dev_2) are also cleared even though the environment didnt exist at the time the plan was started,
+          because they are based on the data from a partially restated version of A
+    """
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    lock_file_path = tmp_path / "test.lock"  # python model blocks while this file is present
+
+    evaluation_lock_file_path = (
+        tmp_path / "evaluation.lock"
+    )  # python model creates this file if it's in the wait loop and deletes it once done
+
+    # Note: to make execution block so we can test stuff, we use a Python model that blocks until it no longer detects the presence of a file
+    (models_dir / "model_a.py").write_text(f"""                                           
+from sqlmesh.core.model import model
+from sqlmesh.core.macros import MacroEvaluator
+
+@model(
+    "test.model_a",
+    is_sql=True,
+    kind="FULL"    
+)
+def entrypoint(evaluator: MacroEvaluator) -> str:
+    from pathlib import Path
+    import time
+
+    if evaluator.runtime_stage == 'evaluating':
+        while True:
+            if Path("{str(lock_file_path)}").exists():
+                Path("{str(evaluation_lock_file_path)}").touch()
+                print("lock exists; sleeping")
+                time.sleep(2)
+            else:
+                Path("{str(evaluation_lock_file_path)}").unlink(missing_ok=True)
+                break
+
+    return "select 'model_a' as m"
+""")
+
+    (models_dir / "model_b.sql").write_text("""
+    MODEL (
+        name test.model_b,
+        kind FULL
+    );
+                  
+    select a.m as m, 'model_b' as mb from test.model_a as a
+    """)
+
+    config = Config(
+        gateways={
+            "": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=str(tmp_path / "db.db")),
+                state_connection=DuckDBConnectionConfig(database=str(tmp_path / "state.db")),
+            )
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"),
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    ctx.plan(environment="prod", auto_apply=True)
+
+    assert len(ctx.snapshots) == 2
+    assert all(s.intervals for s in ctx.snapshots.values())
+
+    prod_model_a_snapshot_id = ctx.snapshots['"db"."test"."model_a"'].snapshot_id
+    prod_model_b_snapshot_id = ctx.snapshots['"db"."test"."model_b"'].snapshot_id
+
+    # dev models
+    # new version of B
+    (models_dir / "model_b.sql").write_text("""
+    MODEL (
+        name test.model_b,
+        kind FULL
+    );
+                  
+    select a.m as m, 'model_b' as mb, 'dev' as dev_version from test.model_a as a
+    """)
+
+    # add C
+    (models_dir / "model_c.sql").write_text("""
+    MODEL (
+        name test.model_c,
+        kind FULL
+    );
+                  
+    select b.*, 'model_c' as mc from test.model_b as b
+    """)
+
+    ctx.load()
+    ctx.plan(environment="dev", auto_apply=True)
+
+    dev_model_b_snapshot_id = ctx.snapshots['"db"."test"."model_b"'].snapshot_id
+    dev_model_c_snapshot_id = ctx.snapshots['"db"."test"."model_c"'].snapshot_id
+
+    assert dev_model_b_snapshot_id != prod_model_b_snapshot_id
+
+    # now, we restate A in prod but touch the lockfile so it hangs during evaluation
+    # we also have to do it in its own thread due to the hang
+    lock_file_path.touch()
+
+    def _run_restatement_plan(tmp_path: Path, config: Config, q: queue.Queue):
+        q.put("thread_started")
+
+        # give this thread its own Context object to prevent segfaulting the Python interpreter
+        restatement_ctx = Context(paths=[tmp_path], config=config)
+
+        # dev2 not present before the restatement plan starts
+        assert restatement_ctx.state_sync.get_environment("dev2") is None
+
+        q.put("plan_started")
+        plan = restatement_ctx.plan(
+            environment="prod", restate_models=['"db"."test"."model_a"'], auto_apply=True
+        )
+        q.put("plan_completed")
+
+        # dev2 was created during the restatement plan
+        assert restatement_ctx.state_sync.get_environment("dev2") is not None
+
+        return plan
+
+    executor = ThreadPoolExecutor()
+    q: queue.Queue = queue.Queue()
+    restatement_plan_future = executor.submit(_run_restatement_plan, tmp_path, config, q)
+    assert q.get() == "thread_started"
+
+    try:
+        if e := restatement_plan_future.exception(timeout=1):
+            # abort early if the plan thread threw an exception
+            raise e
+    except TimeoutError:
+        # that's ok, we dont actually expect the plan to have finished in 1 second
+        pass
+
+    # while that restatement is running, we can simulate another process and check that it sees no empty intervals
+    assert q.get() == "plan_started"
+
+    # dont check for potentially missing intervals until the plan is in the evaluation loop
+    attempts = 0
+    while not evaluation_lock_file_path.exists():
+        time.sleep(2)
+        attempts += 1
+        if attempts > 10:
+            raise ValueError("Gave up waiting for evaluation loop")
+
+    ctx.clear_caches()  # get rid of the file cache so that data is re-fetched from state
+    prod_models_from_state = ctx.state_sync.get_snapshots(
+        snapshot_ids=[prod_model_a_snapshot_id, prod_model_b_snapshot_id]
+    )
+
+    # prod intervals should be present still
+    assert all(m.intervals for m in prod_models_from_state.values())
+
+    # so should dev intervals since prod restatement is still running
+    assert all(m.intervals for m in ctx.snapshots.values())
+
+    # now, lets create a new dev environment "dev2", while the prod restatement plan is still running,
+    # that changes model_b while still being based on the original version of model_a
+    (models_dir / "model_b.sql").write_text("""
+    MODEL (
+        name test.model_b,
+        kind FULL
+    );
+                  
+    select a.m as m, 'model_b' as mb, 'dev2' as dev_version from test.model_a as a
+    """)
+    ctx.load()
+    ctx.plan(environment="dev2", auto_apply=True)
+
+    dev2_model_b_snapshot_id = ctx.snapshots['"db"."test"."model_b"'].snapshot_id
+    assert dev2_model_b_snapshot_id != dev_model_b_snapshot_id
+    assert dev2_model_b_snapshot_id != prod_model_b_snapshot_id
+
+    # as at this point, everything still has intervals
+    ctx.clear_caches()
+    assert all(
+        s.intervals
+        for s in ctx.state_sync.get_snapshots(
+            snapshot_ids=[
+                prod_model_a_snapshot_id,
+                prod_model_b_snapshot_id,
+                dev_model_b_snapshot_id,
+                dev_model_c_snapshot_id,
+                dev2_model_b_snapshot_id,
+            ]
+        ).values()
+    )
+
+    # now, we finally let that restatement plan complete
+    # first, verify it's still blocked where it should be
+    assert not restatement_plan_future.done()
+
+    lock_file_path.unlink()  # remove lock file, plan should be able to proceed now
+
+    if e := restatement_plan_future.exception():  # blocks until future complete
+        raise e
+
+    assert restatement_plan_future.result()
+    assert q.get() == "plan_completed"
+
+    ctx.clear_caches()
+
+    # check that intervals in prod are present
+    assert all(
+        s.intervals
+        for s in ctx.state_sync.get_snapshots(
+            snapshot_ids=[
+                prod_model_a_snapshot_id,
+                prod_model_b_snapshot_id,
+            ]
+        ).values()
+    )
+
+    # check that intervals in dev have been cleared, including the dev2 env that
+    # was created after the restatement plan started
+    assert all(
+        not s.intervals
+        for s in ctx.state_sync.get_snapshots(
+            snapshot_ids=[
+                dev_model_b_snapshot_id,
+                dev_model_c_snapshot_id,
+                dev2_model_b_snapshot_id,
+            ]
+        ).values()
+    )
+
+    executor.shutdown()
+
+
+def test_restatement_plan_detects_prod_deployment_during_restatement(tmp_path: Path):
+    """
+    Scenario:
+        - `prod` environment exists, model A
+        - `dev` environment created, model A(dev)
+        - Restatement plan is triggered against `prod` for model A
+        - During restatement, someone else deploys A(dev) to prod, replacing the model that is currently being restated.
+
+    Outcome:
+        - The deployment plan for dev -> prod should succeed in deploying the new version of A
+        - The prod restatement plan should fail with a ConflictingPlanError and warn about the model that got updated while undergoing restatement
+        - The new version of A should have no intervals cleared. The user needs to rerun the restatement if the intervals should still be cleared
+    """
+    orig_console = get_console()
+    console = CaptureTerminalConsole()
+    set_console(console)
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    lock_file_path = tmp_path / "test.lock"  # python model blocks while this file is present
+
+    evaluation_lock_file_path = (
+        tmp_path / "evaluation.lock"
+    )  # python model creates this file if it's in the wait loop and deletes it once done
+
+    # Note: to make execution block so we can test stuff, we use a Python model that blocks until it no longer detects the presence of a file
+    (models_dir / "model_a.py").write_text(f"""                                           
+from sqlmesh.core.model import model
+from sqlmesh.core.macros import MacroEvaluator
+
+@model(
+    "test.model_a",
+    is_sql=True,
+    kind="FULL"    
+)
+def entrypoint(evaluator: MacroEvaluator) -> str:
+    from pathlib import Path
+    import time
+
+    if evaluator.runtime_stage == 'evaluating':
+        while True:
+            if Path("{str(lock_file_path)}").exists():
+                Path("{str(evaluation_lock_file_path)}").touch()
+                print("lock exists; sleeping")
+                time.sleep(2)
+            else:
+                Path("{str(evaluation_lock_file_path)}").unlink(missing_ok=True)
+                break
+
+    return "select 'model_a' as m"
+""")
+
+    config = Config(
+        gateways={
+            "": GatewayConfig(
+                connection=DuckDBConnectionConfig(database=str(tmp_path / "db.db")),
+                state_connection=DuckDBConnectionConfig(database=str(tmp_path / "state.db")),
+            )
+        },
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"),
+    )
+    ctx = Context(paths=[tmp_path], config=config)
+
+    # create prod
+    ctx.plan(environment="prod", auto_apply=True)
+    original_prod = ctx.state_sync.get_environment("prod")
+    assert original_prod
+
+    # update model_a for dev
+    (models_dir / "model_a.py").unlink()
+    (models_dir / "model_a.sql").write_text("""
+    MODEL (
+        name test.model_a,
+        kind FULL
+    );
+                  
+    select 1 as changed
+    """)
+
+    # create dev
+    ctx.load()
+    plan = ctx.plan(environment="dev", auto_apply=True)
+    assert len(plan.modified_snapshots) == 1
+    new_model_a_snapshot_id = list(plan.modified_snapshots)[0]
+
+    # now, trigger a prod restatement plan in a different thread and block it to simulate a long restatement
+    def _run_restatement_plan(tmp_path: Path, config: Config, q: queue.Queue):
+        q.put("thread_started")
+
+        # give this thread its own Context object to prevent segfaulting the Python interpreter
+        restatement_ctx = Context(paths=[tmp_path], config=config)
+
+        # ensure dev is present before the restatement plan starts
+        assert restatement_ctx.state_sync.get_environment("dev") is not None
+
+        q.put("plan_started")
+        expected_error = None
+        try:
+            restatement_ctx.plan(
+                environment="prod", restate_models=['"db"."test"."model_a"'], auto_apply=True
+            )
+        except ConflictingPlanError as e:
+            expected_error = e
+
+        q.put("plan_completed")
+        return expected_error
+
+    executor = ThreadPoolExecutor()
+    q: queue.Queue = queue.Queue()
+    lock_file_path.touch()
+
+    restatement_plan_future = executor.submit(_run_restatement_plan, tmp_path, config, q)
+    restatement_plan_future.add_done_callback(lambda _: executor.shutdown())
+
+    assert q.get() == "thread_started"
+
+    try:
+        if e := restatement_plan_future.exception(timeout=1):
+            # abort early if the plan thread threw an exception
+            raise e
+    except TimeoutError:
+        # that's ok, we dont actually expect the plan to have finished in 1 second
+        pass
+
+    assert q.get() == "plan_started"
+
+    # ok, now the prod restatement plan is running, let's deploy dev to prod
+    ctx.plan(environment="prod", auto_apply=True)
+
+    new_prod = ctx.state_sync.get_environment("prod")
+    assert new_prod
+    assert new_prod.plan_id != original_prod.plan_id
+    assert new_prod.previous_plan_id == original_prod.plan_id
+
+    # new prod is deployed but restatement plan is still running
+    assert not restatement_plan_future.done()
+
+    # allow restatement plan to complete
+    lock_file_path.unlink()
+
+    plan_error = restatement_plan_future.result()
+    assert isinstance(plan_error, ConflictingPlanError)
+    assert "please re-apply your plan" in repr(plan_error).lower()
+
+    output = " ".join(re.split("\s+", console.captured_output, flags=re.UNICODE))
+    assert (
+        f"The following models had new versions deployed while data was being restated: └── test.model_a"
+        in output
+    )
+
+    # check that no intervals have been cleared from the model_a currently in prod
+    model_a = ctx.state_sync.get_snapshots(snapshot_ids=[new_model_a_snapshot_id])[
+        new_model_a_snapshot_id
+    ]
+    assert isinstance(model_a.node, SqlModel)
+    assert model_a.node.render_query_or_raise().sql() == 'SELECT 1 AS "changed"'
+    assert len(model_a.intervals)
+
+    set_console(orig_console)
+
+
+def test_seed_model_metadata_update_does_not_trigger_backfill(tmp_path: Path):
+    """
+    Scenario:
+        - Create a seed model; perform initial population
+        - Modify the model with a metadata-only change and trigger a plan
+
+    Outcome:
+        - The seed model is modified (metadata-only) but this should NOT trigger backfill
+        - There should be no missing_intervals on the plan to backfill
+    """
+
+    models_path = tmp_path / "models"
+    seeds_path = tmp_path / "seeds"
+    models_path.mkdir()
+    seeds_path.mkdir()
+
+    seed_model_path = models_path / "seed.sql"
+    seed_path = seeds_path / "seed_data.csv"
+
+    seed_path.write_text("\n".join(["id,name", "1,test"]))
+
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        )
+    );    
+    """)
+
+    config = Config(
+        gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"),
+    )
+    ctx = Context(paths=tmp_path, config=config)
+
+    plan = ctx.plan(auto_apply=True)
+
+    original_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert plan.directly_modified == {original_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test")
+    ]
+
+    # prove no diff
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert not plan.has_changes
+    assert not plan.missing_intervals
+
+    # make metadata-only change
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        ),
+        description 'updated by test'
+    );    
+    """)
+
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    new_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert (
+        new_seed_snapshot.version == original_seed_snapshot.version
+    )  # should be using the same physical table
+    assert (
+        new_seed_snapshot.snapshot_id != original_seed_snapshot.snapshot_id
+    )  # but still be different due to the metadata change
+    assert plan.directly_modified == set()
+    assert plan.metadata_updated == {new_seed_snapshot.snapshot_id}
+
+    # there should be no missing intervals to backfill since all we did is update a description
+    assert not plan.missing_intervals
+
+    # there should still be no diff or missing intervals in 3 days time
+    assert new_seed_snapshot.model.interval_unit.is_day
+    with time_machine.travel(timedelta(days=3)):
+        ctx.clear_caches()
+        ctx.load()
+        plan = ctx.plan(auto_apply=True)
+        assert not plan.has_changes
+        assert not plan.missing_intervals
+
+    # change seed data
+    seed_path.write_text("\n".join(["id,name", "1,test", "2,updated"]))
+
+    # new plan - NOW we should backfill because data changed
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    updated_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+
+    assert (
+        updated_seed_snapshot.snapshot_id
+        != new_seed_snapshot.snapshot_id
+        != original_seed_snapshot.snapshot_id
+    )
+    assert not updated_seed_snapshot.forward_only
+    assert plan.directly_modified == {updated_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove backfilled data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test"),
+        (2, "updated"),
+    ]

@@ -6,19 +6,21 @@ import { Button } from '../Button/Button'
 import { ScrollContainer } from '../ScrollContainer/ScrollContainer'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 
+export interface VirtualListProps<TItem> {
+  items: TItem[]
+  estimatedListItemHeight: number
+  renderListItem: (item: TItem) => React.ReactNode
+  isSelected?: (item: TItem) => boolean
+  className?: string
+}
+
 export function VirtualList<TItem>({
   items,
   estimatedListItemHeight,
   renderListItem,
   isSelected,
   className,
-}: {
-  items: TItem[]
-  estimatedListItemHeight: number
-  renderListItem: (item: TItem) => React.ReactNode
-  isSelected?: (item: TItem) => boolean
-  className?: string
-}) {
+}: VirtualListProps<TItem>) {
   const scrollableAreaRef = React.useRef<HTMLDivElement>(null)
 
   const [activeItemIndex] = React.useMemo(() => {

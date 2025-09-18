@@ -1,26 +1,25 @@
-import typing as t
 import pytest
-from pytest import FixtureRequest
-from sqlglot import exp
+import typing as t
+from datetime import datetime
 from pathlib import Path
-from sqlglot.optimizer.qualify_columns import quote_identifiers
+from pytest import FixtureRequest
+from pytest_mock import MockerFixture
+
+import sqlmesh.core.dialect as d
+from sqlglot import exp
+from sqlmesh import Config, ExecutionContext, model
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.qualify_columns import quote_identifiers
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject
-import sqlmesh.core.dialect as d
-from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.model import ModelKindName, SqlModel, load_sql_based_model
 from sqlmesh.core.plan import Plan
-from tests.core.engine_adapter.integration import TestContext
-from sqlmesh import model, ExecutionContext
-from pytest_mock import MockerFixture
 from sqlmesh.core.snapshot import SnapshotId, SnapshotIdBatch
 from sqlmesh.core.snapshot.execution_tracker import (
     QueryExecutionContext,
     QueryExecutionTracker,
 )
-from sqlmesh.core.model import ModelKindName
-from datetime import datetime
-
 from tests.core.engine_adapter.integration import (
     TestContext,
     generate_pytest_params,
@@ -337,3 +336,45 @@ def test_rows_tracker(
     assert stats is not None
     assert stats.total_rows_processed is None
     assert stats.total_bytes_processed is None
+
+
+def test_unit_test(tmp_path: Path, ctx: TestContext):
+    models_path = tmp_path / "models"
+    tests_path = tmp_path / "tests"
+
+    models_path.mkdir()
+    tests_path.mkdir()
+
+    test_payload = """
+test_dummy_model:
+  model: s.dummy
+  inputs:
+    s.src_table:
+      rows:
+        - c: 1
+  outputs:
+    query:
+      - c: 1
+    """
+
+    (models_path / "dummy_model.sql").write_text(f"MODEL (name s.dummy); SELECT c FROM s.src_table")
+    (tests_path / "test_dummy_model.yaml").write_text(test_payload)
+
+    def _config_mutator(gateway_name: str, config: Config):
+        config.model_defaults = ModelDefaultsConfig(dialect="snowflake")
+        test_connection = config.gateways[gateway_name].connection.copy()  # type: ignore
+
+        # Force the database to lowercase to test that we normalize (if we didn't, the test would fail)
+        test_connection.database = test_connection.database.lower()  # type: ignore
+        config.gateways[gateway_name].test_connection = test_connection
+
+    sqlmesh = ctx.create_context(path=tmp_path, config_mutator=_config_mutator)
+
+    test_conn = sqlmesh.config.get_test_connection(ctx.gateway)
+    assert test_conn.type_ == "snowflake"
+
+    catalog = test_conn.get_catalog()
+    assert catalog is not None and catalog.islower()
+
+    test_results = sqlmesh.test()
+    assert not test_results.errors

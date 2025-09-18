@@ -20,6 +20,12 @@ models:
         error_after: {count: 9, period: hour}
   - name: waiters
     description: '{{ doc("waiters") }}'
+    config:
+      # Exercise pre and post hooks
+      pre_hook:
+        - SELECT 1 
+      post_hook: 
+        - SELECT 1 
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day
     versions:

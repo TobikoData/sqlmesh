@@ -6,6 +6,18 @@ import { getTextSize } from './help'
 import type { Size } from '@/types'
 import { Tooltip } from '../Tooltip/Tooltip'
 
+export interface InformationProps {
+  children?: React.ReactNode
+  className?: string
+  classNameTooltip?: string
+  side?: 'right' | 'left'
+  size?: Size
+  sideOffset?: number
+  delayDuration?: number
+  info?: React.ReactNode
+  infoIcon?: React.ReactNode
+}
+
 export function Information({
   children,
   className,
@@ -22,17 +34,7 @@ export function Information({
     />
   ),
   ...props
-}: {
-  children?: React.ReactNode
-  className?: string
-  classNameTooltip?: string
-  side?: 'right' | 'left'
-  size?: Size
-  sideOffset?: number
-  delayDuration?: number
-  info?: React.ReactNode
-  infoIcon?: React.ReactNode
-}) {
+}: InformationProps) {
   return (
     <div
       data-component="Information"

@@ -32,6 +32,7 @@ from functools import reduce
 
 from sqlglot import exp, select
 from sqlglot.executor import execute
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -76,6 +77,7 @@ from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import (
     ConfigError,
     DestructiveChangeError,
+    MigrationNotSupportedError,
     SQLMeshError,
     format_destructive_change_msg,
     format_additive_change_msg,
@@ -489,15 +491,14 @@ class SnapshotEvaluator:
         allow_destructive_snapshots = allow_destructive_snapshots or set()
         allow_additive_snapshots = allow_additive_snapshots or set()
         snapshots_by_name = {s.name: s for s in snapshots.values()}
-        snapshots_with_data_objects = [snapshots[s_id] for s_id in target_data_objects]
         with self.concurrent_context():
             # Only migrate snapshots for which there's an existing data object
             concurrent_apply_to_snapshots(
-                snapshots_with_data_objects,
+                snapshots_by_name.values(),
                 lambda s: self._migrate_snapshot(
                     s,
                     snapshots_by_name,
-                    target_data_objects[s.snapshot_id],
+                    target_data_objects.get(s.snapshot_id),
                     allow_destructive_snapshots,
                     allow_additive_snapshots,
                     self.get_adapter(s.model_gateway),
@@ -747,11 +748,15 @@ class SnapshotEvaluator:
             adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
-                columns_to_types_provided = (
+                # Only create the empty table if the columns were provided explicitly by the user
+                should_create_empty_table = (
                     model.kind.is_materialized
                     and model.columns_to_types_
                     and columns_to_types_all_known(model.columns_to_types_)
                 )
+                if not should_create_empty_table:
+                    # Or if the model is self-referential and its query is fully annotated with types
+                    should_create_empty_table = model.depends_on_self and model.annotated
                 if self._can_clone(snapshot, deployability_index):
                     self._clone_snapshot_in_dev(
                         snapshot=snapshot,
@@ -764,7 +769,7 @@ class SnapshotEvaluator:
                     )
                     runtime_stage = RuntimeStage.EVALUATING
                     target_table_exists = True
-                elif columns_to_types_provided or model.is_seed or model.kind.is_scd_type_2:
+                elif should_create_empty_table or model.is_seed or model.kind.is_scd_type_2:
                     self._execute_create(
                         snapshot=snapshot,
                         table_name=target_table_name,
@@ -1032,7 +1037,6 @@ class SnapshotEvaluator:
             adapter.clone_table(
                 target_table_name,
                 snapshot.table_name(),
-                replace=True,
                 rendered_physical_properties=rendered_physical_properties,
             )
             self._migrate_target_table(
@@ -1059,7 +1063,7 @@ class SnapshotEvaluator:
         adapter: EngineAdapter,
         deployability_index: DeployabilityIndex,
     ) -> None:
-        if not snapshot.requires_schema_migration_in_prod:
+        if not snapshot.is_model or snapshot.is_symbolic:
             return
 
         deployability_index = DeployabilityIndex.all_deployable()
@@ -1081,6 +1085,10 @@ class SnapshotEvaluator:
             ):
                 table_exists = False
 
+            rendered_physical_properties = snapshot.model.render_physical_properties(
+                **render_kwargs
+            )
+
             if table_exists:
                 self._migrate_target_table(
                     target_table_name=target_table_name,
@@ -1088,14 +1096,31 @@ class SnapshotEvaluator:
                     snapshots=snapshots,
                     deployability_index=deployability_index,
                     render_kwargs=render_kwargs,
-                    rendered_physical_properties=snapshot.model.render_physical_properties(
-                        **render_kwargs
-                    ),
+                    rendered_physical_properties=rendered_physical_properties,
                     allow_destructive_snapshots=allow_destructive_snapshots,
                     allow_additive_snapshots=allow_additive_snapshots,
                     run_pre_post_statements=True,
                 )
+            else:
+                self._execute_create(
+                    snapshot=snapshot,
+                    table_name=snapshot.table_name(is_deployable=True),
+                    is_table_deployable=True,
+                    deployability_index=deployability_index,
+                    create_render_kwargs=render_kwargs,
+                    rendered_physical_properties=rendered_physical_properties,
+                    dry_run=True,
+                )
 
+    # Retry in case when the table is migrated concurrently from another plan application
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(min=1, max=16),
+        retry=retry_if_not_exception_type(
+            (DestructiveChangeError, AdditiveChangeError, MigrationNotSupportedError)
+        ),
+    )
     def _migrate_target_table(
         self,
         target_table_name: str,
@@ -1110,7 +1135,10 @@ class SnapshotEvaluator:
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
-        tmp_table_name = f"{target_table_name}_schema_tmp"
+        target_table = exp.to_table(target_table_name)
+        target_table.this.set("this", f"{target_table.name}_schema_tmp")
+
+        tmp_table_name = target_table.sql()
         if snapshot.is_materialized:
             self._execute_create(
                 snapshot=snapshot,
@@ -1422,8 +1450,9 @@ class SnapshotEvaluator:
             and adapter.SUPPORTS_CLONING
             # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
             and not snapshot.is_managed
-            # If the deployable table is missing we can't clone it
             and not deployability_index.is_deployable(snapshot)
+            # If the deployable table is missing we can't clone it
+            and adapter.table_exists(snapshot.table_name())
         )
 
     def _get_data_objects(
@@ -2653,7 +2682,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         )
         if len(potential_alter_operations) > 0:
             # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`
-            raise SQLMeshError(
+            raise MigrationNotSupportedError(
                 f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
             )
 

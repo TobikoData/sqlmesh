@@ -2898,7 +2898,15 @@ def test_python_model_decorator_kind() -> None:
     # no warning with valid kind dict
     with patch.object(get_console(), "log_warning") as mock_logger:
 
-        @model("kind_valid_dict", kind=dict(name=ModelKindName.FULL), columns={'"COL"': "int"})
+        @model(
+            "kind_valid_dict",
+            kind=dict(
+                name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+                time_column="ds",
+                auto_restatement_cron="@hourly",
+            ),
+            columns={'"ds"': "date", '"COL"': "int"},
+        )
         def my_model(context):
             pass
 
@@ -2907,9 +2915,31 @@ def test_python_model_decorator_kind() -> None:
             path=Path("."),
         )
 
-        assert isinstance(python_model.kind, FullKind)
+        assert isinstance(python_model.kind, IncrementalByTimeRangeKind)
 
         assert not mock_logger.call_args
+
+
+def test_python_model_decorator_auto_restatement_cron() -> None:
+    @model(
+        "auto_restatement_model",
+        cron="@daily",
+        kind=dict(
+            name=ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+            time_column="ds",
+            auto_restatement_cron="@hourly",
+        ),
+        columns={'"ds"': "date", '"COL"': "int"},
+    )
+    def my_model(context):
+        pass
+
+    python_model = model.get_registry()["auto_restatement_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert python_model.auto_restatement_cron == "@hourly"
 
 
 def test_python_model_decorator_col_descriptions() -> None:
@@ -2934,10 +2964,15 @@ def test_python_model_decorator_col_descriptions() -> None:
     def b_model(context):
         pass
 
-    with pytest.raises(ConfigError, match="a description is provided for column 'COL'"):
+    with patch.object(get_console(), "log_warning") as mock_logger:
         py_model = model.get_registry()["col_descriptions_quoted"].model(
             module_path=Path("."),
             path=Path("."),
+        )
+        assert '"COL"' not in py_model.column_descriptions
+        assert (
+            mock_logger.mock_calls[0].args[0]
+            == "In model 'col_descriptions_quoted', a description is provided for column 'COL' but it is not a column in the model."
         )
 
 
@@ -9372,9 +9407,9 @@ def test_model_blueprinting(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
-    blueprint_sql = tmp_path / "macros" / "identity_macro.py"
-    blueprint_sql.parent.mkdir(parents=True, exist_ok=True)
-    blueprint_sql.write_text(
+    identity_macro = tmp_path / "macros" / "identity_macro.py"
+    identity_macro.parent.mkdir(parents=True, exist_ok=True)
+    identity_macro.write_text(
         """from sqlmesh import macro
 
 @macro()
@@ -11618,3 +11653,40 @@ def test_use_original_sql():
     assert model.query_.sql == "SELECT 1 AS one, 2 AS two"
     assert model.pre_statements_[0].sql == "CREATE TABLE pre (a INT)"
     assert model.post_statements_[0].sql == "CREATE TABLE post (b INT)"
+
+
+def test_case_sensitive_macro_locals(tmp_path: Path) -> None:
+    init_example_project(tmp_path, engine_type="duckdb", template=ProjectTemplate.EMPTY)
+
+    db_path = str(tmp_path / "db.db")
+    db_connection = DuckDBConnectionConfig(database=db_path)
+
+    config = Config(
+        gateways={"gw": GatewayConfig(connection=db_connection)},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    macro_file = tmp_path / "macros" / "some_macro_with_globals.py"
+    macro_file.parent.mkdir(parents=True, exist_ok=True)
+    macro_file.write_text(
+        """from sqlmesh import macro
+
+x = 1
+X = 2
+
+@macro()
+def my_macro(evaluator):
+    assert evaluator.locals.get("x") == 1
+    assert evaluator.locals.get("X") == 2
+
+    return x + X
+"""
+    )
+    test_model = tmp_path / "models" / "test_model.sql"
+    test_model.parent.mkdir(parents=True, exist_ok=True)
+    test_model.write_text("MODEL (name test_model, kind FULL); SELECT @my_macro() AS c")
+
+    context = Context(paths=tmp_path, config=config)
+    model = context.get_model("test_model", raise_if_missing=True)
+
+    assert model.render_query_or_raise().sql() == 'SELECT 3 AS "c"'

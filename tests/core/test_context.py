@@ -1593,7 +1593,7 @@ def test_raw_code_handling(sushi_test_dbt_context: Context):
     hook = model.render_pre_statements()[0]
     assert (
         hook.sql()
-        == f'''CREATE TABLE "t" AS SELECT 'Length is {raw_code_length}' AS "length_col"'''
+        == f'''CREATE TABLE IF NOT EXISTS "t" AS SELECT 'Length is {raw_code_length}' AS "length_col"'''
     )
 
 

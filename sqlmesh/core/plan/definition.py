@@ -58,7 +58,18 @@ class Plan(PydanticModel, frozen=True):
     indirectly_modified: t.Dict[SnapshotId, t.Set[SnapshotId]]
 
     deployability_index: DeployabilityIndex
+    selected_models_to_restate: t.Optional[t.Set[str]] = None
+    """Models that have been explicitly selected for restatement by a user"""
     restatements: t.Dict[SnapshotId, Interval]
+    """
+    All models being restated, which are typically the explicitly selected ones + their downstream dependencies.
+    
+    Note that dev previews are also considered restatements, so :selected_models_to_restate can be empty
+    while :restatements is still populated with dev previews
+    """
+    restate_all_snapshots: bool
+    """Whether or not to clear intervals from state for other versions of the models listed in :restatements"""
+
     start_override_per_model: t.Optional[t.Dict[str, datetime]]
     end_override_per_model: t.Optional[t.Dict[str, datetime]]
 
@@ -259,6 +270,7 @@ class Plan(PydanticModel, frozen=True):
             skip_backfill=self.skip_backfill,
             empty_backfill=self.empty_backfill,
             restatements={s.name: i for s, i in self.restatements.items()},
+            restate_all_snapshots=self.restate_all_snapshots,
             is_dev=self.is_dev,
             allow_destructive_models=self.allow_destructive_models,
             allow_additive_models=self.allow_additive_models,
@@ -303,6 +315,7 @@ class EvaluatablePlan(PydanticModel):
     skip_backfill: bool
     empty_backfill: bool
     restatements: t.Dict[str, Interval]
+    restate_all_snapshots: bool
     is_dev: bool
     allow_destructive_models: t.Set[str]
     allow_additive_models: t.Set[str]

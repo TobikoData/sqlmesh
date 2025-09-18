@@ -247,11 +247,15 @@ class ModelMeta(_Node):
 
         columns_to_types = info.data.get("columns_to_types_")
         if columns_to_types:
-            for column_name in col_descriptions:
+            from sqlmesh.core.console import get_console
+
+            console = get_console()
+            for column_name in list(col_descriptions):
                 if column_name not in columns_to_types:
-                    raise ConfigError(
+                    console.log_warning(
                         f"In model '{info.data['name']}', a description is provided for column '{column_name}' but it is not a column in the model."
                     )
+                    del col_descriptions[column_name]
 
         return col_descriptions
 

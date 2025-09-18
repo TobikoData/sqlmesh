@@ -20,12 +20,22 @@ export const Metadata = React.forwardRef<HTMLDivElement, MetadataProps>(
         {...props}
       >
         {typeof label === 'string' ? (
-          <div className="text-metadata-label">{label}</div>
+          <div
+            title={label}
+            className="text-metadata-label truncate shrink-0"
+          >
+            {label}
+          </div>
         ) : (
           label
         )}
         {typeof value === 'string' ? (
-          <div className="text-metadata-value font-semibold">{value}</div>
+          <div
+            title={value}
+            className="text-metadata-value font-semibold truncate"
+          >
+            {value}
+          </div>
         ) : (
           value
         )}
