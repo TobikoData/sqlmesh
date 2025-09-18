@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
 
-from sqlglot import exp, parse
+from sqlglot import exp, Dialect
 from sqlglot.errors import SqlglotError
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.annotate_types import annotate_types
@@ -249,15 +249,24 @@ class BaseExpressionRenderer:
                 ) from ex
 
             if rendered_expression.strip():
-                try:
-                    expressions = [e for e in parse(rendered_expression, read=self._dialect) if e]
+                # ensure there is actual SQL and not just comments and non-SQL jinja
+                dialect = Dialect.get_or_raise(self._dialect)
+                tokens = dialect.tokenize(rendered_expression)
 
-                    if not expressions:
-                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
-                except Exception as ex:
-                    raise ConfigError(
-                        f"Could not parse the rendered jinja at '{self._path}'.\n{ex}"
-                    ) from ex
+                if tokens:
+                    try:
+                        expressions = [
+                            e for e in dialect.parser().parse(tokens, rendered_expression) if e
+                        ]
+
+                        if not expressions:
+                            raise ConfigError(
+                                f"Failed to parse an expression:\n{rendered_expression}"
+                            )
+                    except Exception as ex:
+                        raise ConfigError(
+                            f"Could not parse the rendered jinja at '{self._path}'.\n{ex}"
+                        ) from ex
 
         if this_model:
             render_kwargs["this_model"] = this_model

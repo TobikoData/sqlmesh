@@ -873,3 +873,24 @@ def test_load_model_dbt_node_name(tmp_path: Path) -> None:
     # Verify that node_name is the equivalent dbt one
     model = context.snapshots[model_fqn].model
     assert model.dbt_name == "model.test_project.simple_model"
+
+
+@pytest.mark.slow
+def test_jinja_config_no_query(tmp_path, create_empty_project):
+    project_dir, model_dir = create_empty_project()
+
+    # model definition contains only a comment and non-SQL jinja
+    model_contents = "/* comment */ {{ config(materialized='table') }}"
+    model_file = model_dir / "comment_config_model.sql"
+    with open(model_file, "w", encoding="utf-8") as f:
+        f.write(model_contents)
+
+    schema_yaml = {"version": 2, "models": [{"name": "comment_config_model"}]}
+    schema_file = model_dir / "schema.yml"
+    with open(schema_file, "w", encoding="utf-8") as f:
+        YAML().dump(schema_yaml, f)
+
+    context = Context(paths=project_dir)
+
+    # loads without error and contains empty query (which will error at runtime)
+    assert not context.snapshots['"local"."main"."comment_config_model"'].model.render_query()
