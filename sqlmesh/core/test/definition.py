@@ -644,16 +644,16 @@ class ModelTest(unittest.TestCase):
             return self._execute(query)
 
         rows = values["rows"]
+        columns_str: t.Optional[t.List[str]] = None
         if columns:
+            columns_str = [str(c) for c in columns]
             referenced_columns = list(dict.fromkeys(col for row in rows for col in row))
             _raise_if_unexpected_columns(columns, referenced_columns)
 
             if partial:
-                columns = referenced_columns
+                columns_str = [c for c in columns_str if c in referenced_columns]
 
-        return pd.DataFrame.from_records(
-            rows, columns=[str(c) for c in columns] if columns else None
-        )
+        return pd.DataFrame.from_records(rows, columns=columns_str)
 
     def _add_missing_columns(
         self, query: exp.Query, all_columns: t.Optional[t.Collection[str]] = None
