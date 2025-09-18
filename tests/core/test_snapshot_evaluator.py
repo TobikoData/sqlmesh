@@ -854,6 +854,55 @@ def test_create_prod_table_exists(mocker: MockerFixture, adapter_mock, make_snap
     )
 
 
+def test_pre_hook_forward_only_clone(
+    mocker: MockerFixture, make_mocked_engine_adapter, make_snapshot
+):
+    """
+    Verifies that pre-statements are executed when creating a clone of a forward-only model.
+    """
+    pre_statement = """CREATE TEMPORARY FUNCTION "example_udf"("x" BIGINT) AS ("x" + 1)"""
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            f"""
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+            
+            {pre_statement};
+
+            SELECT a::int, ds::string FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+    snapshot.previous_versions = snapshot.all_versions
+
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.with_settings = lambda **kwargs: adapter
+    adapter.table_exists = lambda _: True  # type: ignore
+    adapter.SUPPORTS_CLONING = True
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[],
+    )
+    mocker.patch.object(
+        adapter,
+        "get_alter_operations",
+        return_value=[],
+    )
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+    adapter.cursor.execute.assert_any_call(pre_statement)
+
+
 def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
     model = load_sql_based_model(
         parse(  # type: ignore

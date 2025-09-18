@@ -867,6 +867,7 @@ class SnapshotEvaluator:
                     rendered_physical_properties=rendered_physical_properties,
                     allow_destructive_snapshots=allow_destructive_snapshots,
                     allow_additive_snapshots=allow_additive_snapshots,
+                    run_pre_post_statements=True,
                 )
             else:
                 is_table_deployable = deployability_index.is_deployable(snapshot)
@@ -1026,6 +1027,7 @@ class SnapshotEvaluator:
         rendered_physical_properties: t.Dict[str, exp.Expression],
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
+        run_pre_post_statements: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
@@ -1048,6 +1050,7 @@ class SnapshotEvaluator:
                 rendered_physical_properties=rendered_physical_properties,
                 allow_destructive_snapshots=allow_destructive_snapshots,
                 allow_additive_snapshots=allow_additive_snapshots,
+                run_pre_post_statements=run_pre_post_statements,
             )
         except Exception:
             adapter.drop_table(target_table_name)
