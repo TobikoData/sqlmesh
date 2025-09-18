@@ -712,6 +712,12 @@ class PlanBuilder:
                 snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING, forward_only)
         else:
             # Metadata updated.
+            if not forward_only and snapshot.is_seed:
+                # seeds with metadata updates should be categorized as forward_only to prevent unnecessary backfill
+                # backfill should only happen if the actual seed data changes, in which case it will be classed as
+                # directly modified / breaking and not forward only as this code path will not be hit
+                forward_only = True
+
             snapshot.categorize_as(SnapshotChangeCategory.METADATA, forward_only)
 
     def _get_orphaned_indirect_change_category(

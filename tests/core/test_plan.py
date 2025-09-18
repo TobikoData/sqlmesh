@@ -1189,6 +1189,67 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     assert not snapshot_a_updated.is_forward_only
 
 
+def test_seed_model_metadata_change_categorized_forward_only(
+    make_snapshot: t.Callable[..., Snapshot],
+):
+    snapshot_a = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="content"),
+            column_hashes={"col": "hash1"},
+            depends_on=set(),
+        )
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_a.add_interval("2022-01-01", now())
+
+    snapshot_a_metadata_updated = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="content"),
+            column_hashes={"col": "hash1"},
+            depends_on=set(),
+            description="foo",
+        )
+    )
+    assert snapshot_a_metadata_updated.version is None
+    assert snapshot_a_metadata_updated.change_category is None
+
+    context_diff = ContextDiff(
+        environment="prod",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a_metadata_updated.name: (snapshot_a_metadata_updated, snapshot_a)
+        },
+        snapshots={snapshot_a_metadata_updated.snapshot_id: snapshot_a_metadata_updated},
+        new_snapshots={snapshot_a_metadata_updated.snapshot_id: snapshot_a},
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    plan = PlanBuilder(context_diff).build()
+    assert snapshot_a_metadata_updated.change_category == SnapshotChangeCategory.METADATA
+    assert (
+        snapshot_a_metadata_updated.is_forward_only
+    )  # needs to be forward_only to prevent backfill on a metadata change
+    assert (
+        snapshot_a_metadata_updated.intervals == snapshot_a.intervals
+    )  # intervals should have been copied
+    assert not plan.missing_intervals  # plan should have no missing intervals
+
+
 def test_start_inference(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), start="2022-01-01")
