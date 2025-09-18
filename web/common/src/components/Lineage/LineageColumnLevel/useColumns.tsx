@@ -1,24 +1,25 @@
 import React from 'react'
 
 import { toPortID } from '../utils'
-import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type PortId,
-} from '../utils'
+import { type PortId } from '../utils'
 
 export interface Column {
   data_type: string
   description?: string | null
 }
 
-export function useColumns(
-  selectedPorts: Set<PortId>,
-  adjacencyListKey: AdjacencyListKey,
-  rawColumns: Record<AdjacencyListColumnKey, Column> = {},
+export function useColumns<
+  TAdjacencyListKey extends string,
+  TAdjacencyListColumnKey extends string,
+  TColumn extends Column,
+  TColumnID extends string = PortId,
+>(
+  selectedPorts: Set<TColumnID>,
+  adjacencyListKey: TAdjacencyListKey,
+  rawColumns?: Record<TAdjacencyListColumnKey, TColumn>,
 ) {
   const columnNames = React.useMemo(() => {
-    return new Set<PortId>(
+    return new Set<TColumnID>(
       Object.keys(rawColumns ?? {}).map(column =>
         toPortID(adjacencyListKey, column),
       ),
@@ -29,11 +30,11 @@ export function useColumns(
     const selected = []
     const output = []
 
-    for (const [column, info] of Object.entries(rawColumns) as [
-      AdjacencyListColumnKey,
-      Column,
+    for (const [column, info] of Object.entries(rawColumns ?? {}) as [
+      TAdjacencyListColumnKey,
+      TColumn,
     ][]) {
-      const columnId = toPortID(adjacencyListKey, column)
+      const columnId = toPortID<TColumnID>(adjacencyListKey, column)
       const nodeColumn = {
         name: column,
         ...info,

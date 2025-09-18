@@ -4,11 +4,12 @@ import { type LineageNode, type LineageNodeData, type NodeId } from '../utils'
 
 export function useNodeMetadata<
   TNodeData extends LineageNodeData = LineageNodeData,
+  TNodeID extends string = NodeId,
 >(
-  nodeId: NodeId,
-  currentNode: LineageNode<TNodeData> | null,
-  selectedNodeId: NodeId | null,
-  selectedNodes: Set<NodeId>,
+  nodeId: TNodeID,
+  currentNode: LineageNode<TNodeData, TNodeID> | null,
+  selectedNodeId: TNodeID | null,
+  selectedNodes: Set<TNodeID>,
 ) {
   const sources = useNodeConnections({
     handleType: 'source',

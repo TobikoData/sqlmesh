@@ -1,15 +1,14 @@
 import { Position } from '@xyflow/react'
 
 import {
-  type AdjacencyListKey,
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
   type EdgeId,
   type LineageAdjacencyList,
-  type LineageAdjacencyListNode,
   type LineageDetails,
   type LineageEdge,
   type LineageEdgeData,
+  type LineageNode,
   type LineageNodeData,
   type LineageNodesMap,
   type NodeId,
@@ -22,31 +21,31 @@ import {
 
 export function getOnlySelectedNodes<
   TNodeData extends LineageNodeData = LineageNodeData,
->(nodeMaps: LineageNodesMap<TNodeData>, selectedNodes: Set<NodeId>) {
-  return Object.values(nodeMaps).reduce(
+  TNodeID extends string = NodeId,
+>(nodeMaps: LineageNodesMap<TNodeData, TNodeID>, selectedNodes: Set<TNodeID>) {
+  return (Object.values(nodeMaps) as LineageNode<TNodeData, TNodeID>[]).reduce(
     (acc, node) =>
       selectedNodes.has(node.id) ? { ...acc, [node.id]: node } : acc,
-    {} as LineageNodesMap<TNodeData>,
+    {} as LineageNodesMap<TNodeData, TNodeID>,
   )
 }
 
 export function getTransformedNodes<
+  TAdjacencyListKey extends string,
   TDetailsNode,
   TNodeData extends LineageNodeData = LineageNodeData,
+  TNodeID extends string = NodeId,
 >(
-  adjacencyListKeys: AdjacencyListKey[] = [],
-  lineageDetails: LineageDetails<TDetailsNode> = {},
-  transformNode: TransformNodeFn<TDetailsNode, TNodeData>,
-) {
+  adjacencyListKeys: TAdjacencyListKey[],
+  lineageDetails: LineageDetails<TAdjacencyListKey, TDetailsNode>,
+  transformNode: TransformNodeFn<TDetailsNode, TNodeData, TNodeID>,
+): LineageNodesMap<TNodeData, TNodeID> {
   const nodesCount = adjacencyListKeys.length
-
-  if (nodesCount === 0) return {}
-
-  const nodesMap: LineageNodesMap<TNodeData> = Object.create(null)
+  const nodesMap: LineageNodesMap<TNodeData, TNodeID> = Object.create(null)
 
   for (let i = 0; i < nodesCount; i++) {
     const nodeId = adjacencyListKeys[i]
-    const encodedNodeId = toNodeID(nodeId)
+    const encodedNodeId = toNodeID<TNodeID>(nodeId)
     nodesMap[encodedNodeId] = transformNode(
       encodedNodeId,
       lineageDetails[nodeId],
@@ -57,13 +56,15 @@ export function getTransformedNodes<
 }
 
 export function getTransformedModelEdges<
-  TAdjacencyListNode extends
-    LineageAdjacencyListNode = LineageAdjacencyListNode,
+  TAdjacencyListKey extends string,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
 >(
-  adjacencyListKeys: AdjacencyListKey[],
-  lineageAdjacencyList: LineageAdjacencyList<TAdjacencyListNode>,
-  transformEdge: TransformEdgeFn<TEdgeData>,
+  adjacencyListKeys: TAdjacencyListKey[],
+  lineageAdjacencyList: LineageAdjacencyList<TAdjacencyListKey>,
+  transformEdge: TransformEdgeFn<TEdgeData, TNodeID, TEdgeID, TPortID>,
 ) {
   const nodesCount = adjacencyListKeys.length
 
@@ -73,31 +74,32 @@ export function getTransformedModelEdges<
 
   for (let i = 0; i < nodesCount; i++) {
     const adjacencyListKey = adjacencyListKeys[i]
-    const nodeId = toNodeID(adjacencyListKey)
+    const nodeId = toNodeID<TNodeID>(adjacencyListKey)
     const targets = lineageAdjacencyList[adjacencyListKey]
     const targetsCount = targets?.length || 0
 
     if (targets == null || targetsCount < 1) continue
 
     for (let j = 0; j < targetsCount; j++) {
-      const target = targets[j]?.name
+      const target = targets[j]
 
       if (!(target in lineageAdjacencyList)) continue
 
-      const edgeId = toEdgeID(adjacencyListKey, target)
+      const edgeId = toEdgeID<TEdgeID>(adjacencyListKey, target)
 
-      edges.push(transformEdge('edge', edgeId, nodeId, toNodeID(target)))
+      edges.push(
+        transformEdge('edge', edgeId, nodeId, toNodeID<TNodeID>(target)),
+      )
     }
   }
 
   return edges
 }
 
-export function createNode<TNodeData extends LineageNodeData = LineageNodeData>(
-  type: string,
-  nodeId: NodeId,
-  data: TNodeData,
-) {
+export function createNode<
+  TNodeData extends LineageNodeData = LineageNodeData,
+  TNodeID extends string = NodeId,
+>(type: string, nodeId: TNodeID, data: TNodeData) {
   return {
     id: nodeId,
     sourcePosition: Position.Right,
@@ -155,15 +157,20 @@ export function calculateNodeDetailsHeight({
   ].reduce((acc, h) => acc + h, 0)
 }
 
-export function createEdge<TEdgeData extends LineageEdgeData = LineageEdgeData>(
+export function createEdge<
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+>(
   type: string,
-  edgeId: EdgeId,
-  sourceId: NodeId,
-  targetId: NodeId,
-  sourceHandleId?: PortId,
-  targetHandleId?: PortId,
+  edgeId: TEdgeID,
+  sourceId: TNodeID,
+  targetId: TNodeID,
+  sourceHandleId?: TPortID,
+  targetHandleId?: TPortID,
   data?: TEdgeData,
-): LineageEdge<TEdgeData> {
+): LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID> {
   return {
     id: edgeId,
     source: sourceId,

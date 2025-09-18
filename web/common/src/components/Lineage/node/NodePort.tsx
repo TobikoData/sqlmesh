@@ -5,14 +5,17 @@ import { cn } from '@/utils'
 import { type NodeId, type PortId } from '../utils'
 import { NodeHandles } from './NodeHandles'
 
-export const NodePort = React.memo(function NodePort({
+export const NodePort = React.memo(function NodePort<
+  TPortId extends string = PortId,
+  TNodeID extends string = NodeId,
+>({
   id,
   nodeId,
   className,
   children,
 }: {
-  id: PortId
-  nodeId: NodeId
+  id: TPortId
+  nodeId: TNodeID
   className?: string
   children: React.ReactNode
 }) {

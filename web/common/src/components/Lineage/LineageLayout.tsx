@@ -26,7 +26,6 @@ import { LineageControlButton } from './LineageControlButton'
 import { LineageControlIcon } from './LineageControlIcon'
 import {
   DEFAULT_ZOOM,
-  type EdgeId,
   type LineageEdge,
   type LineageEdgeData,
   type LineageNode,
@@ -36,7 +35,9 @@ import {
   NODES_TRESHOLD,
   NODES_TRESHOLD_ZOOM,
   type NodeId,
+  type EdgeId,
   ZOOM_TRESHOLD,
+  type PortId,
 } from './utils'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 import { MessageContainer } from '../MessageContainer/MessageContainer'
@@ -45,6 +46,9 @@ import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
 export function LineageLayout<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
 >({
   nodeTypes,
   edgeTypes,
@@ -54,7 +58,13 @@ export function LineageLayout<
   onNodeClick,
   onNodeDoubleClick,
 }: {
-  useLineage: LineageContextHook<TNodeData, TEdgeData>
+  useLineage: LineageContextHook<
+    TNodeData,
+    TEdgeData,
+    TNodeID,
+    TEdgeID,
+    TPortID
+  >
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
@@ -63,11 +73,11 @@ export function LineageLayout<
     | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
   onNodeClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
-    node: LineageNode<TNodeData>,
+    node: LineageNode<TNodeData, TNodeID>,
   ) => void
   onNodeDoubleClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
-    node: LineageNode<TNodeData>,
+    node: LineageNode<TNodeData, TNodeID>,
   ) => void
 }) {
   const { zoom: viewportZoom } = useViewport()
@@ -105,7 +115,7 @@ export function LineageLayout<
 
   const zoomToSelectedNode = React.useCallback(
     (zoom: number = DEFAULT_ZOOM) => {
-      const node = nodesMap[selectedNodeId as NodeId]
+      const node = selectedNodeId ? nodesMap[selectedNodeId] : null
       if (node) {
         setCenter(node.position.x, node.position.y, {
           zoom,
@@ -118,15 +128,15 @@ export function LineageLayout<
 
   const getAllIncomers = React.useCallback(
     (
-      node: LineageNode<TNodeData>,
-      visited: Set<NodeId> = new Set(),
-    ): LineageNode<TNodeData>[] => {
-      if (visited.has(node.id as NodeId)) return []
+      node: LineageNode<TNodeData, TNodeID>,
+      visited: Set<TNodeID> = new Set(),
+    ): LineageNode<TNodeData, TNodeID>[] => {
+      if (visited.has(node.id)) return []
 
-      visited.add(node.id as NodeId)
+      visited.add(node.id)
 
       return Array.from(
-        new Set<LineageNode<TNodeData>>([
+        new Set<LineageNode<TNodeData, TNodeID>>([
           node,
           ...getIncomers(node, nodes, edges)
             .map(n => getAllIncomers(n, visited))
@@ -139,15 +149,15 @@ export function LineageLayout<
 
   const getAllOutgoers = React.useCallback(
     (
-      node: LineageNode<TNodeData>,
-      visited: Set<NodeId> = new Set(),
-    ): LineageNode<TNodeData>[] => {
-      if (visited.has(node.id as NodeId)) return []
+      node: LineageNode<TNodeData, TNodeID>,
+      visited: Set<TNodeID> = new Set(),
+    ): LineageNode<TNodeData, TNodeID>[] => {
+      if (visited.has(node.id)) return []
 
-      visited.add(node.id as NodeId)
+      visited.add(node.id)
 
       return Array.from(
-        new Set<LineageNode<TNodeData>>([
+        new Set<LineageNode<TNodeData, TNodeID>>([
           node,
           ...getOutgoers(node, nodes, edges)
             .map(n => getAllOutgoers(n, visited))
@@ -167,7 +177,7 @@ export function LineageLayout<
       return
     }
 
-    const node = nodesMap[selectedNodeId as NodeId]
+    const node = selectedNodeId ? nodesMap[selectedNodeId] : null
 
     if (node == null) {
       setSelectedNodeId(null)
@@ -182,8 +192,11 @@ export function LineageLayout<
       connectedNodes.push(currentNode)
     }
 
-    const connectedEdges = getConnectedEdges(connectedNodes, edges)
-    const selectedNodes = new Set(connectedNodes.map(node => node.id))
+    const connectedEdges = getConnectedEdges<
+      LineageNode<TNodeData, TNodeID>,
+      LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+    >(connectedNodes, edges)
+    const selectedNodes = new Set<TNodeID>(connectedNodes.map(node => node.id))
     const selectedEdges = new Set(
       connectedEdges.reduce((acc, edge) => {
         if ([edge.source, edge.target].every(id => selectedNodes.has(id))) {
@@ -193,7 +206,7 @@ export function LineageLayout<
           edge.zIndex = 1
         }
         return acc
-      }, new Set<EdgeId>()),
+      }, new Set<TEdgeID>()),
     )
 
     setSelectedNodes(selectedNodes)
@@ -223,7 +236,7 @@ export function LineageLayout<
 
   React.useEffect(() => {
     if (currentNode?.id) {
-      setSelectedNodeId(currentNode.id as NodeId)
+      setSelectedNodeId(currentNode.id)
     } else if (selectedNodeId) {
       // setSelectedNodeId(selectedNodeId);
     } else {
@@ -257,7 +270,10 @@ export function LineageLayout<
           </LoadingContainer>
         </MessageContainer>
       )}
-      <ReactFlow<LineageNode<TNodeData>, LineageEdge<TEdgeData>>
+      <ReactFlow<
+        LineageNode<TNodeData, TNodeID>,
+        LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+      >
         className="shrink-0"
         nodes={nodes}
         edges={edges}

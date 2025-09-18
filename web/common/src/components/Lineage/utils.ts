@@ -4,44 +4,50 @@ import { type Edge, type Node } from '@xyflow/react'
 export type NodeId = Branded<string, 'NodeId'>
 export type EdgeId = Branded<string, 'EdgeId'>
 export type PortId = Branded<string, 'PortId'>
-export type AdjacencyListKey = Branded<string, 'AdjacencyListKey'>
-export type AdjacencyListColumnKey = Branded<string, 'AdjacencyListColumnKey'>
 
-export type LineageAdjacencyListNode = {
-  name: AdjacencyListKey
-  [key: string]: unknown
-}
 export type LineageNodeData = Record<string, unknown>
 export type LineageEdgeData = Record<string, unknown>
 
-export type LineageAdjacencyList<
-  TAdjacencyListNode = LineageAdjacencyListNode,
-> = Record<AdjacencyListKey, TAdjacencyListNode[]>
-export type LineageDetails<TValue> = Record<AdjacencyListKey, TValue>
+export type LineageAdjacencyList<TAdjacencyListKey extends string = string> =
+  Record<TAdjacencyListKey, TAdjacencyListKey[]>
 
-export type LineageNodesMap<TNodeData extends LineageNodeData> = Record<
-  NodeId,
-  LineageNode<TNodeData>
+export type LineageDetails<TAdjacencyListKey extends string, TValue> = Record<
+  TAdjacencyListKey,
+  TValue
 >
-export interface LineageNode<TNodeData extends LineageNodeData>
-  extends Node<TNodeData> {
-  id: NodeId
+
+export type LineageNodesMap<
+  TNodeData extends LineageNodeData,
+  TNodeID extends string = NodeId,
+> = Record<TNodeID, LineageNode<TNodeData, TNodeID>>
+export interface LineageNode<
+  TNodeData extends LineageNodeData,
+  TNodeID extends string = NodeId,
+> extends Node<TNodeData> {
+  id: TNodeID
 }
 
-export interface LineageEdge<TEdgeData extends LineageEdgeData>
-  extends Edge<TEdgeData> {
-  id: EdgeId
-  source: NodeId
-  target: NodeId
-  sourceHandle?: PortId
-  targetHandle?: PortId
+export interface LineageEdge<
+  TEdgeData extends LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+> extends Edge<TEdgeData> {
+  id: TEdgeID
+  source: TNodeID
+  target: TNodeID
+  sourceHandle?: TPortID
+  targetHandle?: TPortID
 }
 
 export type LayoutedGraph<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
 > = {
-  edges: LineageEdge<TEdgeData>[]
+  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
   nodesMap: LineageNodesMap<TNodeData>
 }
 
@@ -59,18 +65,22 @@ export const NODES_TRESHOLD_ZOOM = 0.1
 export type TransformNodeFn<
   TData,
   TNodeData extends LineageNodeData = LineageNodeData,
-> = (nodeId: NodeId, data: TData) => LineageNode<TNodeData>
+  TNodeID extends string = NodeId,
+> = (nodeId: TNodeID, data: TData) => LineageNode<TNodeData, TNodeID>
 
 export type TransformEdgeFn<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
 > = (
   edgeType: string,
-  edgeId: EdgeId,
-  sourceId: NodeId,
-  targetId: NodeId,
-  sourceColumnId?: PortId,
-  targetColumnId?: PortId,
-) => LineageEdge<TEdgeData>
+  edgeId: TEdgeID,
+  sourceId: TNodeID,
+  targetId: TNodeID,
+  sourceColumnId?: TPortID,
+  targetColumnId?: TPortID,
+) => LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
 
 // ID generated from toInternalID is meant to be used only internally to identify nodes, edges and ports within the graph
 // Do not rely on the ID to be a valid URL, or anythjin outside of the graph
@@ -80,14 +90,20 @@ export function toInternalID<TReturn extends string>(
   return encodeURI(args.filter(Boolean).join('.')) as TReturn
 }
 
-export function toNodeID(...args: string[]): NodeId {
-  return toInternalID<NodeId>(...args)
+export function toNodeID<TNodeID extends string = NodeId>(
+  ...args: string[]
+): TNodeID {
+  return toInternalID<TNodeID>(...args)
 }
 
-export function toEdgeID(...args: string[]): EdgeId {
-  return toInternalID<EdgeId>(...args)
+export function toEdgeID<TEdgeID extends string = EdgeId>(
+  ...args: string[]
+): TEdgeID {
+  return toInternalID<TEdgeID>(...args)
 }
 
-export function toPortID(...args: string[]): PortId {
-  return toInternalID<PortId>(...args)
+export function toPortID<TPortId extends string = PortId>(
+  ...args: string[]
+): TPortId {
+  return toInternalID<TPortId>(...args)
 }
