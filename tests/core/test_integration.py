@@ -10664,7 +10664,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     set_console(orig_console)
 
 
-def test_seed_model_metadata_update_sets_forward_only(tmp_path: Path):
+def test_seed_model_metadata_update_does_not_trigger_backfill(tmp_path: Path):
     """
     Scenario:
         - Create a seed model; perform initial population
@@ -10672,7 +10672,7 @@ def test_seed_model_metadata_update_sets_forward_only(tmp_path: Path):
 
     Outcome:
         - The seed model is modified (metadata-only) but this should NOT trigger backfill
-        - To prevent backfill, the categorizer needs to set forward_only on the seed
+        - There should be no missing_intervals on the plan to backfill
     """
 
     models_path = tmp_path / "models"
@@ -10703,7 +10703,6 @@ def test_seed_model_metadata_update_sets_forward_only(tmp_path: Path):
     plan = ctx.plan(auto_apply=True)
 
     original_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
-    assert not original_seed_snapshot.forward_only
     assert plan.directly_modified == {original_seed_snapshot.snapshot_id}
     assert plan.metadata_updated == set()
     assert plan.missing_intervals
@@ -10735,9 +10734,6 @@ def test_seed_model_metadata_update_sets_forward_only(tmp_path: Path):
     assert plan.has_changes
 
     new_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
-    assert (
-        new_seed_snapshot.forward_only
-    )  # change needs to be applied as forward-only to prevent backfill
     assert (
         new_seed_snapshot.version == original_seed_snapshot.version
     )  # should be using the same physical table

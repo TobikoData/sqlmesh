@@ -1189,7 +1189,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     assert not snapshot_a_updated.is_forward_only
 
 
-def test_seed_model_metadata_change_categorized_forward_only(
+def test_seed_model_metadata_change_no_missing_intervals(
     make_snapshot: t.Callable[..., Snapshot],
 ):
     snapshot_a = make_snapshot(
@@ -1241,13 +1241,11 @@ def test_seed_model_metadata_change_categorized_forward_only(
 
     plan = PlanBuilder(context_diff).build()
     assert snapshot_a_metadata_updated.change_category == SnapshotChangeCategory.METADATA
-    assert (
-        snapshot_a_metadata_updated.is_forward_only
-    )  # needs to be forward_only to prevent backfill on a metadata change
+    assert not snapshot_a_metadata_updated.is_forward_only
+    assert not plan.missing_intervals  # plan should have no missing intervals
     assert (
         snapshot_a_metadata_updated.intervals == snapshot_a.intervals
     )  # intervals should have been copied
-    assert not plan.missing_intervals  # plan should have no missing intervals
 
 
 def test_start_inference(make_snapshot, mocker: MockerFixture):
