@@ -539,15 +539,11 @@ class ModelConfig(BaseModelConfig):
                     optional_kwargs["partitioned_by"] = partitioned_by
 
         if self.cluster_by:
-            if isinstance(kind, ViewKind):
+            if isinstance(kind, (ViewKind, EmbeddedKind)):
                 logger.warning(
-                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for views.",
+                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for %s.",
                     self.name,
-                )
-            elif isinstance(kind, EmbeddedKind):
-                logger.warning(
-                    "Ignoring cluster_by config for model '%s'; cluster_by is not supported for embedded models.",
-                    self.name,
+                    "views" if isinstance(kind, ViewKind) else "ephemeral models",
                 )
             else:
                 clustered_by = []
