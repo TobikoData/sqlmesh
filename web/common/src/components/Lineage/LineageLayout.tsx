@@ -69,8 +69,8 @@ export function LineageLayout<
   edgeTypes?: EdgeTypes
   className?: string
   controls?:
-  | React.ReactNode
-  | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
+    | React.ReactNode
+    | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
   onNodeClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
     node: LineageNode<TNodeData, TNodeID>,
