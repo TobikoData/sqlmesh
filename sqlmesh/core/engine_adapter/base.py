@@ -3062,9 +3062,6 @@ class EngineAdapter:
     ) -> t.List[exp.Expression]:
         """Returns SQLGlot expressions to revoke grants from a table.
 
-        Note: SQLGlot doesn't yet have a Revoke expression type, so implementations
-        may return other expression types or handle revokes as strings.
-
         Args:
             table: The table/view to revoke permissions from.
             grant_config: Dictionary mapping permissions to lists of grantees.
