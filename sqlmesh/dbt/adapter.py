@@ -115,28 +115,32 @@ class BaseAdapter(abc.ABC):
         """Returns the value quoted according to the quote policy."""
         return self.quote(value) if getattr(self.quote_policy, component_type, False) else value
 
-    def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
+    def dispatch(
+        self,
+        macro_name: str,
+        macro_namespace: t.Optional[str] = None,
+    ) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
         target_type = self.jinja_globals["target"]["type"]
-        macro_suffix = f"__{name}"
+        macro_suffix = f"__{macro_name}"
 
         def _relevance(package_name_pair: t.Tuple[t.Optional[str], str]) -> t.Tuple[int, int]:
             """Lower scores more relevant."""
-            macro_package, macro_name = package_name_pair
+            macro_package, name = package_name_pair
 
-            package_score = 0 if macro_package == package else 1
+            package_score = 0 if macro_package == macro_namespace else 1
             name_score = 1
 
-            if macro_name.startswith("default"):
+            if name.startswith("default"):
                 name_score = 2
-            elif macro_name.startswith(target_type):
+            elif name.startswith(target_type):
                 name_score = 0
 
             return name_score, package_score
 
         jinja_env = self.jinja_macros.build_environment(**self.jinja_globals).globals
         packages_to_check: t.List[t.Optional[str]] = [
-            package,
+            macro_namespace,
             *(k for k in jinja_env if k.startswith("dbt")),
         ]
         candidates = {}
@@ -156,7 +160,7 @@ class BaseAdapter(abc.ABC):
             sorted_candidates = sorted(candidates, key=_relevance)
             return candidates[sorted_candidates[0]]
 
-        raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
+        raise ConfigError(f"Macro '{macro_name}', package '{macro_namespace}' was not found.")
 
     def type(self) -> str:
         return self.project_dialect or ""
