@@ -36,7 +36,7 @@ import {
   NODES_TRESHOLD_ZOOM,
   type NodeId,
   type EdgeId,
-  ZOOM_TRESHOLD,
+  ZOOM_THRESHOLD,
   type PortId,
 } from './utils'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
@@ -69,8 +69,8 @@ export function LineageLayout<
   edgeTypes?: EdgeTypes
   className?: string
   controls?:
-    | React.ReactNode
-    | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
+  | React.ReactNode
+  | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
   onNodeClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
     node: LineageNode<TNodeData, TNodeID>,
@@ -292,7 +292,7 @@ export function LineageLayout<
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
       >
-        {zoom > ZOOM_TRESHOLD && (
+        {zoom > ZOOM_THRESHOLD && (
           <Background
             id="1"
             gap={10}

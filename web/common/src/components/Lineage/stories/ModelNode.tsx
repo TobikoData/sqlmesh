@@ -23,7 +23,7 @@ import { NodeHandles } from '../node/NodeHandles'
 import { NodeHeader } from '../node/NodeHeader'
 import { NodePorts } from '../node/NodePorts'
 import { useNodeMetadata } from '../node/useNodeMetadata'
-import { ZOOM_TRESHOLD } from '../utils'
+import { ZOOM_THRESHOLD } from '../utils'
 import {
   type ModelName as ModelNameType,
   type ColumnName,
@@ -107,25 +107,25 @@ export const ModelNode = React.memo(function ModelNode({
     includeFloorHeight: false,
   })
   const nodeDetailsHeight =
-    zoom > ZOOM_TRESHOLD
+    zoom > ZOOM_THRESHOLD
       ? calculateNodeDetailsHeight({
-          nodeDetailsCount: 0,
-        })
+        nodeDetailsCount: 0,
+      })
       : 0
   const selectedColumnsHeight = calculateSelectedColumnsHeight(
     modelSelectedColumns.length,
   )
   const columnsHeight =
-    zoom > ZOOM_TRESHOLD && shouldShowColumns
+    zoom > ZOOM_THRESHOLD && shouldShowColumns
       ? calculateColumnsHeight({
-          columnsCount: calculateNodeColumnsCount(columns.length),
-          hasColumnsFilter,
-        })
+        columnsCount: calculateNodeColumnsCount(columns.length),
+        hasColumnsFilter,
+      })
       : 0
 
-  // If zoom is less than ZOOM_TRESHOLD, we are making node looks bigger
+  // If zoom is less than ZOOM_THRESHOLD, we are making node looks bigger
   const nodeHeight =
-    (zoom > ZOOM_TRESHOLD ? nodeBaseHeight : nodeBaseHeight * 2) +
+    (zoom > ZOOM_THRESHOLD ? nodeBaseHeight : nodeBaseHeight * 2) +
     nodeDetailsHeight +
     selectedColumnsHeight +
     columnsHeight
@@ -149,7 +149,7 @@ export const ModelNode = React.memo(function ModelNode({
         className="bg-lineage-node-appendix-background"
       >
         <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
-          {zoom > ZOOM_TRESHOLD && (
+          {zoom > ZOOM_THRESHOLD && (
             <>
               <NodeBadge>{data.kind.toUpperCase()}</NodeBadge>
               <Tooltip
@@ -189,7 +189,7 @@ export const ModelNode = React.memo(function ModelNode({
         )}
       >
         <NodeHeader
-          className={cn(zoom > ZOOM_TRESHOLD ? 'shrink-0 h-7' : 'h-full')}
+          className={cn(zoom > ZOOM_THRESHOLD ? 'shrink-0 h-7' : 'h-full')}
           onClick={toggleSelectedNode}
         >
           <NodeHandles
@@ -224,14 +224,14 @@ export const ModelNode = React.memo(function ModelNode({
               <ModelName
                 showTooltip
                 hideCatalog
-                hideSchema={zoom <= ZOOM_TRESHOLD}
+                hideSchema={zoom <= ZOOM_THRESHOLD}
                 hideIcon
                 showCopy
                 name={data.displayName}
                 grayscale
                 className={cn(
                   'w-full overflow-hidden cursor-default truncate',
-                  zoom > ZOOM_TRESHOLD ? ' text-xs' : 'text-2xl justify-center',
+                  zoom > ZOOM_THRESHOLD ? ' text-xs' : 'text-2xl justify-center',
                 )}
               />
             </HorizontalContainer>
@@ -265,7 +265,7 @@ export const ModelNode = React.memo(function ModelNode({
                 ))}
               </VerticalContainer>
             )}
-            {columns.length > 0 && zoom > ZOOM_TRESHOLD && (
+            {columns.length > 0 && zoom > ZOOM_THRESHOLD && (
               <NodePorts<ModelColumn>
                 ports={columns}
                 estimatedListItemHeight={24}
@@ -309,11 +309,11 @@ export const ModelNode = React.memo(function ModelNode({
         <HorizontalContainer
           className={cn(
             'gap-1 items-center overflow-visible',
-            zoom > ZOOM_TRESHOLD ? 'h-5' : 'h-8',
+            zoom > ZOOM_THRESHOLD ? 'h-5' : 'h-8',
           )}
         >
           <Badge
-            size={zoom > ZOOM_TRESHOLD ? '2xs' : 'm'}
+            size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
             className={cn(
               'text-[white] font-black',
               getNodeTypeColor(modelType),
