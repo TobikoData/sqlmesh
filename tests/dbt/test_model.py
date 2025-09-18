@@ -734,6 +734,7 @@ def test_load_microbatch_with_ref_no_filter(
 
 
 @pytest.mark.slow
+@pytest.mark.isolated
 def test_load_multiple_snapshots_defined_in_same_file(sushi_test_dbt_context: Context) -> None:
     context = sushi_test_dbt_context
     assert context.get_model("snapshots.items_snapshot")
