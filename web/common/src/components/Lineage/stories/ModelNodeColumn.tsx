@@ -2,15 +2,21 @@ import React from 'react'
 
 import { type ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/ColumnLevelLineageContext'
 import { FactoryColumn } from '../LineageColumnLevel/FactoryColumn'
-import {
-  type AdjacencyListColumnKey,
-  type AdjacencyListKey,
-  type NodeId,
-  type PortId,
-} from '../utils'
-import { useModelLineage } from './ModelLineageContext'
 
-const ModelColumn = FactoryColumn(useModelLineage)
+import {
+  useModelLineage,
+  type ModelColumnID,
+  type ModelName,
+  type ModelNodeId,
+  type ColumnName,
+} from './ModelLineageContext'
+
+const ModelColumn = FactoryColumn<
+  ModelName,
+  ColumnName,
+  ModelNodeId,
+  ModelColumnID
+>(useModelLineage)
 
 export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   id,
@@ -22,14 +28,14 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   className,
   columnLineageData,
 }: {
-  id: PortId
-  nodeId: NodeId
-  modelName: AdjacencyListKey
-  name: AdjacencyListColumnKey
+  id: ModelColumnID
+  nodeId: ModelNodeId
+  modelName: ModelName
+  name: ColumnName
   type: string
   description?: string | null
   className?: string
-  columnLineageData?: ColumnLevelLineageAdjacencyList
+  columnLineageData?: ColumnLevelLineageAdjacencyList<ModelName, ColumnName>
 }) {
   const { selectedColumns, setColumnLevelLineage } = useModelLineage()
 

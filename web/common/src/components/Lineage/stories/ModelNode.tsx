@@ -23,11 +23,16 @@ import { NodeHandles } from '../node/NodeHandles'
 import { NodeHeader } from '../node/NodeHeader'
 import { NodePorts } from '../node/NodePorts'
 import { useNodeMetadata } from '../node/useNodeMetadata'
-import { type NodeId, ZOOM_TRESHOLD } from '../utils'
+import { ZOOM_TRESHOLD } from '../utils'
 import {
+  type ModelName as ModelNameType,
+  type ColumnName,
   type NodeData,
   type NodeType,
   useModelLineage,
+  type ModelColumn,
+  type ModelNodeId,
+  type ModelColumnID,
 } from './ModelLineageContext'
 import { ModelNodeColumn } from './ModelNodeColumn'
 import {
@@ -60,7 +65,7 @@ export const ModelNode = React.memo(function ModelNode({
   const [showNodeColumns, setShowNodeColumns] = React.useState(showColumns)
   const [isHovered, setIsHovered] = React.useState(false)
 
-  const nodeId = id as NodeId
+  const nodeId = id as ModelNodeId
 
   const {
     leftId,
@@ -73,7 +78,11 @@ export const ModelNode = React.memo(function ModelNode({
     columns,
     selectedColumns: modelSelectedColumns,
     columnNames,
-  } = useColumns(selectedColumns, data.name, data.columns)
+  } = useColumns<ModelNameType, ColumnName, ModelColumn, ModelColumnID>(
+    selectedColumns,
+    data.name,
+    data.columns,
+  )
 
   const hasSelectedColumns = selectedColumns.intersection(columnNames).size > 0
   const hasFetchingColumns = fetchingColumns.intersection(columnNames).size > 0
@@ -245,7 +254,10 @@ export const ModelNode = React.memo(function ModelNode({
                     columnLineageData={
                       (
                         column as Column & {
-                          columnLineageData?: ColumnLevelLineageAdjacencyList
+                          columnLineageData?: ColumnLevelLineageAdjacencyList<
+                            ModelNameType,
+                            ColumnName
+                          >
                         }
                       ).columnLineageData
                     }
@@ -254,7 +266,7 @@ export const ModelNode = React.memo(function ModelNode({
               </VerticalContainer>
             )}
             {columns.length > 0 && zoom > ZOOM_TRESHOLD && (
-              <NodePorts
+              <NodePorts<ModelColumn>
                 ports={columns}
                 estimatedListItemHeight={24}
                 isFilterable={hasColumnsFilter}
@@ -275,7 +287,10 @@ export const ModelNode = React.memo(function ModelNode({
                     columnLineageData={
                       (
                         column as Column & {
-                          columnLineageData?: ColumnLevelLineageAdjacencyList
+                          columnLineageData?: ColumnLevelLineageAdjacencyList<
+                            ModelNameType,
+                            ColumnName
+                          >
                         }
                       ).columnLineageData
                     }
