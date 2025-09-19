@@ -3955,6 +3955,63 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
     )
 
 
+def test_migrate_only_processes_target_snapshots(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    target_model = SqlModel(
+        name="test_schema.target_model",
+        kind=FullKind(),
+        query=parse_one("SELECT 1 AS a"),
+    )
+    extra_model = SqlModel(
+        name="test_schema.extra_model",
+        kind=FullKind(),
+        query=parse_one("SELECT 1 AS a"),
+    )
+
+    target_snapshot = make_snapshot(target_model)
+    extra_snapshot = make_snapshot(extra_model)
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    extra_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    target_snapshots = [target_snapshot]
+    snapshots = {
+        target_snapshot.snapshot_id: target_snapshot,
+        extra_snapshot.snapshot_id: extra_snapshot,
+    }
+
+    mocker.patch.object(
+        evaluator,
+        "_get_data_objects",
+        return_value={target_snapshot.snapshot_id: mocker.Mock()},
+    )
+    migrate_mock = mocker.patch.object(evaluator, "_migrate_snapshot")
+
+    def apply_side_effect(snapshot_iterable, fn, *_args, **_kwargs):
+        for snapshot in snapshot_iterable:
+            fn(snapshot)
+        return ([], [])
+
+    apply_mock = mocker.patch(
+        "sqlmesh.core.snapshot.evaluator.concurrent_apply_to_snapshots",
+        side_effect=apply_side_effect,
+    )
+
+    evaluator.migrate(target_snapshots=target_snapshots, snapshots=snapshots)
+
+    assert apply_mock.call_count == 1
+    called_snapshots = list(apply_mock.call_args.args[0])
+    assert called_snapshots == target_snapshots
+
+    migrate_mock.assert_called_once()
+    called_snapshot, snapshots_by_name, *_ = migrate_mock.call_args.args
+    assert called_snapshot is target_snapshot
+    assert target_snapshot.name in snapshots_by_name
+    assert extra_snapshot.name in snapshots_by_name
+
+
 def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator = SnapshotEvaluator(adapter_mock)
 
