@@ -302,3 +302,30 @@ macro_a
 
     rendered = registry.build_environment().from_string("{{ spark__macro_a() }}").render()
     assert rendered.strip() == "macro_a"
+
+
+def test_macro_registry_to_expressions_sorted():
+    refs = AttributeDict(
+        {
+            "payments": {
+                "database": "jaffle_shop",
+                "schema": "main",
+                "nested": {"foo": "bar", "baz": "bing"},
+            },
+            "orders": {"schema": "main", "database": "jaffle_shop", "nested_list": ["b", "a", "c"]},
+        }
+    )
+
+    registry = JinjaMacroRegistry()
+    registry.add_globals({"sources": {}, "refs": refs})
+
+    # Ensure that the AttributeDict string representation is sorted
+    # in order to prevent an unexpected *visual* diff in ModelDiff
+    # (note that the actual diff is based on the data hashes, so this is purely visual)
+    expressions = registry.to_expressions()
+    assert len(expressions) == 1
+    assert (
+        expressions[0].sql(dialect="duckdb")
+        == "refs = {'orders': {'database': 'jaffle_shop', 'nested_list': ['a', 'b', 'c'], 'schema': 'main'}, 'payments': {'database': 'jaffle_shop', 'nested': {'baz': 'bing', 'foo': 'bar'}, 'schema': 'main'}}\n"
+        "sources = {}"
+    )

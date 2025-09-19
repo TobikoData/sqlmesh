@@ -206,6 +206,20 @@ def extract_macro_references_and_variables(
     return macro_references, variables
 
 
+def sort_dict_recursive(
+    item: t.Dict[str, t.Any],
+) -> t.Dict[str, t.Any]:
+    sorted_dict: t.Dict[str, t.Any] = {}
+    for k, v in sorted(item.items()):
+        if isinstance(v, list):
+            sorted_dict[k] = sorted(v)
+        elif isinstance(v, dict):
+            sorted_dict[k] = sort_dict_recursive(v)
+        else:
+            sorted_dict[k] = v
+    return sorted_dict
+
+
 JinjaGlobalAttribute = t.Union[str, int, float, bool, AttributeDict]
 
 
@@ -440,7 +454,7 @@ class JinjaMacroRegistry(PydanticModel):
                 d.PythonCode(
                     expressions=[
                         f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(filtered_objs.items())
+                        for k, v in sort_dict_recursive(filtered_objs).items()
                     ]
                 )
             )
