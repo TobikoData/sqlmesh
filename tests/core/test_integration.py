@@ -14,7 +14,13 @@ import pandas as pd  # noqa: TID253
 import pytest
 from pytest import MonkeyPatch
 from pathlib import Path
-from sqlmesh.core.console import set_console, get_console, TerminalConsole, CaptureTerminalConsole
+from sqlmesh.core.console import (
+    MarkdownConsole,
+    set_console,
+    get_console,
+    TerminalConsole,
+    CaptureTerminalConsole,
+)
 from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
@@ -1670,6 +1676,42 @@ def test_run_with_select_models(
             '"memory"."sushi"."count_customers_active"': to_timestamp("2023-01-08"),
             '"memory"."sushi"."count_customers_inactive"': to_timestamp("2023-01-08"),
         }
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_seed_model_promote_to_prod_after_dev(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    with open(context.path / "seeds" / "waiter_names.csv", "a") as f:
+        f.write("\n10,New Waiter")
+
+    context.load()
+
+    waiter_names_snapshot = context.get_snapshot("sushi.waiter_names")
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert waiter_names_snapshot.snapshot_id in plan.directly_modified
+
+    # Trigger a metadata change to reuse the previous version
+    waiter_names_model = waiter_names_snapshot.model.copy(
+        update={"description": "Updated description"}
+    )
+    context.upsert_model(waiter_names_model)
+    context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    # Promote all changes to prod
+    waiter_names_snapshot = context.get_snapshot("sushi.waiter_names")
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    # Clear the cache to source the dehydrated model instance from the state
+    context.clear_caches()
+    context.apply(plan)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT COUNT(*) FROM sushi.waiter_names WHERE id = 10")[0]
+        == 1
+    )
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
@@ -10589,8 +10631,15 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     new_model_a_snapshot_id = list(plan.modified_snapshots)[0]
 
     # now, trigger a prod restatement plan in a different thread and block it to simulate a long restatement
+    thread_console = None
+
     def _run_restatement_plan(tmp_path: Path, config: Config, q: queue.Queue):
+        nonlocal thread_console
         q.put("thread_started")
+
+        # Give this thread its own markdown console to avoid Rich LiveError
+        thread_console = MarkdownConsole()
+        set_console(thread_console)
 
         # give this thread its own Context object to prevent segfaulting the Python interpreter
         restatement_ctx = Context(paths=[tmp_path], config=config)
@@ -10647,7 +10696,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     assert isinstance(plan_error, ConflictingPlanError)
     assert "please re-apply your plan" in repr(plan_error).lower()
 
-    output = " ".join(re.split("\s+", console.captured_output, flags=re.UNICODE))
+    output = " ".join(re.split("\\s+", thread_console.captured_output, flags=re.UNICODE))  # type: ignore
     assert (
         f"The following models had new versions deployed while data was being restated: └── test.model_a"
         in output
@@ -10662,3 +10711,121 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     assert len(model_a.intervals)
 
     set_console(orig_console)
+
+
+def test_seed_model_metadata_update_does_not_trigger_backfill(tmp_path: Path):
+    """
+    Scenario:
+        - Create a seed model; perform initial population
+        - Modify the model with a metadata-only change and trigger a plan
+
+    Outcome:
+        - The seed model is modified (metadata-only) but this should NOT trigger backfill
+        - There should be no missing_intervals on the plan to backfill
+    """
+
+    models_path = tmp_path / "models"
+    seeds_path = tmp_path / "seeds"
+    models_path.mkdir()
+    seeds_path.mkdir()
+
+    seed_model_path = models_path / "seed.sql"
+    seed_path = seeds_path / "seed_data.csv"
+
+    seed_path.write_text("\n".join(["id,name", "1,test"]))
+
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        )
+    );    
+    """)
+
+    config = Config(
+        gateways={"": GatewayConfig(connection=DuckDBConnectionConfig())},
+        model_defaults=ModelDefaultsConfig(dialect="duckdb", start="2024-01-01"),
+    )
+    ctx = Context(paths=tmp_path, config=config)
+
+    plan = ctx.plan(auto_apply=True)
+
+    original_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert plan.directly_modified == {original_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test")
+    ]
+
+    # prove no diff
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert not plan.has_changes
+    assert not plan.missing_intervals
+
+    # make metadata-only change
+    seed_model_path.write_text("""
+    MODEL (
+        name test.source_data,
+        kind SEED (
+            path '../seeds/seed_data.csv'
+        ),
+        description 'updated by test'
+    );    
+    """)
+
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    new_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+    assert (
+        new_seed_snapshot.version == original_seed_snapshot.version
+    )  # should be using the same physical table
+    assert (
+        new_seed_snapshot.snapshot_id != original_seed_snapshot.snapshot_id
+    )  # but still be different due to the metadata change
+    assert plan.directly_modified == set()
+    assert plan.metadata_updated == {new_seed_snapshot.snapshot_id}
+
+    # there should be no missing intervals to backfill since all we did is update a description
+    assert not plan.missing_intervals
+
+    # there should still be no diff or missing intervals in 3 days time
+    assert new_seed_snapshot.model.interval_unit.is_day
+    with time_machine.travel(timedelta(days=3)):
+        ctx.clear_caches()
+        ctx.load()
+        plan = ctx.plan(auto_apply=True)
+        assert not plan.has_changes
+        assert not plan.missing_intervals
+
+    # change seed data
+    seed_path.write_text("\n".join(["id,name", "1,test", "2,updated"]))
+
+    # new plan - NOW we should backfill because data changed
+    ctx.load()
+    plan = ctx.plan(auto_apply=True)
+    assert plan.has_changes
+
+    updated_seed_snapshot = ctx.snapshots['"memory"."test"."source_data"']
+
+    assert (
+        updated_seed_snapshot.snapshot_id
+        != new_seed_snapshot.snapshot_id
+        != original_seed_snapshot.snapshot_id
+    )
+    assert not updated_seed_snapshot.forward_only
+    assert plan.directly_modified == {updated_seed_snapshot.snapshot_id}
+    assert plan.metadata_updated == set()
+    assert plan.missing_intervals
+
+    # prove backfilled data loaded
+    assert ctx.engine_adapter.fetchall("select id, name from memory.test.source_data") == [
+        (1, "test"),
+        (2, "updated"),
+    ]

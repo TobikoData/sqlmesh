@@ -106,7 +106,7 @@ def test_clone_table(mocker: MockFixture, make_mocked_engine_adapter: t.Callable
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.clone_table("target_table", "source_table")
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE `target_table` SHALLOW CLONE `source_table`"
+        "CREATE TABLE IF NOT EXISTS `target_table` SHALLOW CLONE `source_table`"
     )
 
 

@@ -32,6 +32,7 @@ from functools import reduce
 
 from sqlglot import exp, select
 from sqlglot.executor import execute
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -76,6 +77,7 @@ from sqlmesh.utils.date import TimeLike, now, time_like_to_str
 from sqlmesh.utils.errors import (
     ConfigError,
     DestructiveChangeError,
+    MigrationNotSupportedError,
     SQLMeshError,
     format_destructive_change_msg,
     format_additive_change_msg,
@@ -492,7 +494,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             # Only migrate snapshots for which there's an existing data object
             concurrent_apply_to_snapshots(
-                snapshots_by_name.values(),
+                target_snapshots,
                 lambda s: self._migrate_snapshot(
                     s,
                     snapshots_by_name,
@@ -761,7 +763,7 @@ class SnapshotEvaluator:
                         snapshots=snapshots,
                         deployability_index=deployability_index,
                         render_kwargs=create_render_kwargs,
-                        rendered_physical_properties=rendered_physical_properties,
+                        rendered_physical_properties=rendered_physical_properties.copy(),
                         allow_destructive_snapshots=allow_destructive_snapshots,
                         allow_additive_snapshots=allow_additive_snapshots,
                     )
@@ -774,7 +776,7 @@ class SnapshotEvaluator:
                         is_table_deployable=is_snapshot_deployable,
                         deployability_index=deployability_index,
                         create_render_kwargs=create_render_kwargs,
-                        rendered_physical_properties=rendered_physical_properties,
+                        rendered_physical_properties=rendered_physical_properties.copy(),
                         dry_run=False,
                         run_pre_post_statements=False,
                     )
@@ -865,6 +867,7 @@ class SnapshotEvaluator:
                     rendered_physical_properties=rendered_physical_properties,
                     allow_destructive_snapshots=allow_destructive_snapshots,
                     allow_additive_snapshots=allow_additive_snapshots,
+                    run_pre_post_statements=True,
                 )
             else:
                 is_table_deployable = deployability_index.is_deployable(snapshot)
@@ -1024,6 +1027,7 @@ class SnapshotEvaluator:
         rendered_physical_properties: t.Dict[str, exp.Expression],
         allow_destructive_snapshots: t.Set[str],
         allow_additive_snapshots: t.Set[str],
+        run_pre_post_statements: bool = False,
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
@@ -1035,7 +1039,6 @@ class SnapshotEvaluator:
             adapter.clone_table(
                 target_table_name,
                 snapshot.table_name(),
-                replace=True,
                 rendered_physical_properties=rendered_physical_properties,
             )
             self._migrate_target_table(
@@ -1047,6 +1050,7 @@ class SnapshotEvaluator:
                 rendered_physical_properties=rendered_physical_properties,
                 allow_destructive_snapshots=allow_destructive_snapshots,
                 allow_additive_snapshots=allow_additive_snapshots,
+                run_pre_post_statements=run_pre_post_statements,
             )
         except Exception:
             adapter.drop_table(target_table_name)
@@ -1111,6 +1115,15 @@ class SnapshotEvaluator:
                     dry_run=True,
                 )
 
+    # Retry in case when the table is migrated concurrently from another plan application
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(min=1, max=16),
+        retry=retry_if_not_exception_type(
+            (DestructiveChangeError, AdditiveChangeError, MigrationNotSupportedError)
+        ),
+    )
     def _migrate_target_table(
         self,
         target_table_name: str,
@@ -1440,8 +1453,9 @@ class SnapshotEvaluator:
             and adapter.SUPPORTS_CLONING
             # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
             and not snapshot.is_managed
-            # If the deployable table is missing we can't clone it
             and not deployability_index.is_deployable(snapshot)
+            # If the deployable table is missing we can't clone it
+            and adapter.table_exists(snapshot.table_name())
         )
 
     def _get_data_objects(
@@ -2671,7 +2685,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         )
         if len(potential_alter_operations) > 0:
             # this can happen if a user changes a managed model and deliberately overrides a plan to be forward only, eg `sqlmesh plan --forward-only`
-            raise SQLMeshError(
+            raise MigrationNotSupportedError(
                 f"The schema of the managed model '{target_table_name}' cannot be updated in a forward-only fashion."
             )
 

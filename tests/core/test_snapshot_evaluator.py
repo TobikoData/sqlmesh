@@ -854,6 +854,55 @@ def test_create_prod_table_exists(mocker: MockerFixture, adapter_mock, make_snap
     )
 
 
+def test_pre_hook_forward_only_clone(
+    mocker: MockerFixture, make_mocked_engine_adapter, make_snapshot
+):
+    """
+    Verifies that pre-statements are executed when creating a clone of a forward-only model.
+    """
+    pre_statement = """CREATE TEMPORARY FUNCTION "example_udf"("x" BIGINT) AS ("x" + 1)"""
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            f"""
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+            
+            {pre_statement};
+
+            SELECT a::int, ds::string FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
+    snapshot.previous_versions = snapshot.all_versions
+
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.with_settings = lambda **kwargs: adapter
+    adapter.table_exists = lambda _: True  # type: ignore
+    adapter.SUPPORTS_CLONING = True
+    mocker.patch.object(
+        adapter,
+        "get_data_objects",
+        return_value=[],
+    )
+    mocker.patch.object(
+        adapter,
+        "get_alter_operations",
+        return_value=[],
+    )
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    evaluator.create([snapshot], {}, deployability_index=DeployabilityIndex.none_deployable())
+    adapter.cursor.execute.assert_any_call(pre_statement)
+
+
 def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_snapshot):
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1678,7 +1727,6 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.dev_version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
-        replace=True,
         rendered_physical_properties={},
     )
 
@@ -1701,7 +1749,7 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     adapter_mock.get_alter_operations.return_value = []
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    adapter_mock.alter_table.side_effect = Exception("Migration failed")
+    adapter_mock.alter_table.side_effect = DestructiveChangeError("Migration failed")
 
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -1728,7 +1776,6 @@ def test_drop_clone_in_dev_when_migration_fails(mocker: MockerFixture, adapter_m
     adapter_mock.clone_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__dev",
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
-        replace=True,
         rendered_physical_properties={},
     )
 
@@ -3908,6 +3955,63 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
     )
 
 
+def test_migrate_only_processes_target_snapshots(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    target_model = SqlModel(
+        name="test_schema.target_model",
+        kind=FullKind(),
+        query=parse_one("SELECT 1 AS a"),
+    )
+    extra_model = SqlModel(
+        name="test_schema.extra_model",
+        kind=FullKind(),
+        query=parse_one("SELECT 1 AS a"),
+    )
+
+    target_snapshot = make_snapshot(target_model)
+    extra_snapshot = make_snapshot(extra_model)
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    extra_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    target_snapshots = [target_snapshot]
+    snapshots = {
+        target_snapshot.snapshot_id: target_snapshot,
+        extra_snapshot.snapshot_id: extra_snapshot,
+    }
+
+    mocker.patch.object(
+        evaluator,
+        "_get_data_objects",
+        return_value={target_snapshot.snapshot_id: mocker.Mock()},
+    )
+    migrate_mock = mocker.patch.object(evaluator, "_migrate_snapshot")
+
+    def apply_side_effect(snapshot_iterable, fn, *_args, **_kwargs):
+        for snapshot in snapshot_iterable:
+            fn(snapshot)
+        return ([], [])
+
+    apply_mock = mocker.patch(
+        "sqlmesh.core.snapshot.evaluator.concurrent_apply_to_snapshots",
+        side_effect=apply_side_effect,
+    )
+
+    evaluator.migrate(target_snapshots=target_snapshots, snapshots=snapshots)
+
+    assert apply_mock.call_count == 1
+    called_snapshots = list(apply_mock.call_args.args[0])
+    assert called_snapshots == target_snapshots
+
+    migrate_mock.assert_called_once()
+    called_snapshot, snapshots_by_name, *_ = migrate_mock.call_args.args
+    assert called_snapshot is target_snapshot
+    assert target_snapshot.name in snapshots_by_name
+    assert extra_snapshot.name in snapshots_by_name
+
+
 def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -4633,3 +4737,79 @@ def test_wap_publish_failure(adapter_mock: Mock, make_snapshot: t.Callable[..., 
     # Execute audit with WAP ID and expect it to raise the exception
     with pytest.raises(Exception, match="WAP publish failed"):
         evaluator.audit(snapshot, snapshots={}, wap_id=wap_id)
+
+
+def test_properties_are_preserved_in_both_create_statements(
+    adapter_mock: Mock, make_snapshot: t.Callable[..., Snapshot]
+) -> None:
+    # the below mocks are needed to create a situation
+    # where we trigger two create statements during evaluation
+    transaction_mock = Mock()
+    transaction_mock.__enter__ = Mock()
+    transaction_mock.__exit__ = Mock()
+    session_mock = Mock()
+    session_mock.__enter__ = Mock()
+    session_mock.__exit__ = Mock()
+    adapter_mock = Mock()
+    adapter_mock.transaction.return_value = transaction_mock
+    adapter_mock.session.return_value = session_mock
+    adapter_mock.dialect = "trino"
+    adapter_mock.HAS_VIEW_BINDING = False
+    adapter_mock.wap_supported.return_value = False
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.with_settings.return_value = adapter_mock
+    adapter_mock.table_exists.return_value = False
+
+    props = []
+
+    def mutate_view_properties(*args, **kwargs):
+        view_props = kwargs.get("view_properties")
+        if isinstance(view_props, dict):
+            props.append(view_props["creatable_type"].sql())
+            # simulate view pop
+            view_props.pop("creatable_type")
+        return None
+
+    adapter_mock.create_view.side_effect = mutate_view_properties
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    # create a view model with SECURITY INVOKER physical property
+    # AND self referenctial to trigger two create statements
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.security_view,
+                kind VIEW,
+                physical_properties (
+                    'creatable_type' = 'SECURITY INVOKER'
+                )
+            );
+
+            SELECT 1 as col from test_schema.security_view;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.evaluate(
+        snapshot,
+        start="2024-01-01",
+        end="2024-01-02",
+        execution_time="2024-01-02",
+        snapshots={},
+    )
+
+    # Verify create_view was called twice
+    assert adapter_mock.create_view.call_count == 2
+    first_call = adapter_mock.create_view.call_args_list[0]
+    second_call = adapter_mock.create_view.call_args_list[1]
+
+    # First call should be CREATE VIEW (replace=False) second CREATE OR REPLACE VIEW (replace=True)
+    assert first_call.kwargs.get("replace") == False
+    assert second_call.kwargs.get("replace") == True
+
+    # Both calls should have view_properties with security invoker
+    assert props == ["'SECURITY INVOKER'", "'SECURITY INVOKER'"]

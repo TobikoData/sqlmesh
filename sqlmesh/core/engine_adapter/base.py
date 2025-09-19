@@ -1044,6 +1044,7 @@ class EngineAdapter:
         target_table_name: TableName,
         source_table_name: TableName,
         replace: bool = False,
+        exists: bool = True,
         clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -1053,6 +1054,7 @@ class EngineAdapter:
             target_table_name: The name of the table that should be created.
             source_table_name: The name of the source table that should be cloned.
             replace: Whether or not to replace an existing table.
+            exists: Indicates whether to include the IF NOT EXISTS check.
         """
         if not self.SUPPORTS_CLONING:
             raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
@@ -1063,6 +1065,7 @@ class EngineAdapter:
                 this=exp.to_table(target_table_name),
                 kind="TABLE",
                 replace=replace,
+                exists=exists,
                 clone=exp.Clone(
                     this=exp.to_table(source_table_name),
                     **(clone_kwargs or {}),

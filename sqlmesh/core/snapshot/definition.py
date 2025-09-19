@@ -1480,7 +1480,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def supports_schema_migration_in_prod(self) -> bool:
         """Returns whether or not this snapshot supports schema migration when deployed to production."""
-        return self.is_paused and self.is_model and not self.is_symbolic
+        return self.is_paused and self.is_model and not self.is_symbolic and not self.is_seed
 
     @property
     def requires_schema_migration_in_prod(self) -> bool:

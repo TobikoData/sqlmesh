@@ -151,6 +151,10 @@ class AdditiveChangeError(SQLMeshError):
     pass
 
 
+class MigrationNotSupportedError(SQLMeshError):
+    pass
+
+
 class NotificationTargetError(SQLMeshError):
     pass
 
