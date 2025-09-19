@@ -2765,7 +2765,7 @@ class EngineManagedStrategy(MaterializableStrategy):
         is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
 
         if is_table_deployable and is_snapshot_deployable:
-            # We cloud deploy this to prod; create a proper managed table
+            # We could deploy this to prod; create a proper managed table
             logger.info("Creating managed table: %s", table_name)
             self.adapter.create_managed_table(
                 table_name=table_name,
