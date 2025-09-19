@@ -2571,6 +2571,10 @@ class SCDType2Strategy(IncrementalStrategy):
                 f"Unexpected SCD Type 2 kind: {model.kind}. This is not expected and please report this as a bug."
             )
 
+        # Apply grants after SCD Type 2 table recreation
+        is_snapshot_deployable = kwargs["is_snapshot_deployable"]
+        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
+
     def append(
         self,
         table_name: str,

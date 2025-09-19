@@ -5284,6 +5284,7 @@ def test_grants_evaluator_insert_without_replace_query_for_model(
         "INCREMENTAL_BY_UNIQUE_KEY",
         "INCREMENTAL_UNMANAGED",
         "FULL",
+        "SCD_TYPE_2",
     ],
 )
 def test_grants_evaluator_insert_with_replace_query_for_model(
@@ -5334,8 +5335,8 @@ def test_grants_evaluator_insert_with_replace_query_for_model(
         snapshots={},
     )
 
-    if model_kind_name == "FULL":
-        # Full refresh  always calls _replace_query_for_model()
+    if model_kind_name in ("FULL", "SCD_TYPE_2"):
+        # Full refresh and SCD_TYPE_2 always recreate the table, so grants are always applied
         sync_grants_mock.assert_called_once()
         assert sync_grants_mock.call_args[0][1] == grants
     else:
