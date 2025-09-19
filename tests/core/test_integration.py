@@ -1673,6 +1673,42 @@ def test_run_with_select_models(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_seed_model_promote_to_prod_after_dev(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    with open(context.path / "seeds" / "waiter_names.csv", "a") as f:
+        f.write("\n10,New Waiter")
+
+    context.load()
+
+    waiter_names_snapshot = context.get_snapshot("sushi.waiter_names")
+    plan = context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+    assert waiter_names_snapshot.snapshot_id in plan.directly_modified
+
+    # Trigger a metadata change to reuse the previous version
+    waiter_names_model = waiter_names_snapshot.model.copy(
+        update={"description": "Updated description"}
+    )
+    context.upsert_model(waiter_names_model)
+    context.plan("dev", skip_tests=True, auto_apply=True, no_prompts=True)
+
+    # Promote all changes to prod
+    waiter_names_snapshot = context.get_snapshot("sushi.waiter_names")
+    plan = context.plan_builder("prod", skip_tests=True).build()
+    # Clear the cache  to source the dehydrated model instance from the state
+    context.clear_caches()
+    context.apply(plan)
+
+    assert (
+        context.engine_adapter.fetchone("SELECT COUNT(*) FROM sushi.waiter_names WHERE id = 10")[0]
+        == 1
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_plan_with_run(
     init_and_plan_context: t.Callable,
 ):
