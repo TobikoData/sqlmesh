@@ -1093,7 +1093,7 @@ class SnapshotEvaluator:
                 **render_kwargs
             )
 
-            if table_exists:
+            if table_exists and not snapshot.is_seed:
                 self._migrate_target_table(
                     target_table_name=target_table_name,
                     snapshot=snapshot,
@@ -1106,6 +1106,11 @@ class SnapshotEvaluator:
                     run_pre_post_statements=True,
                 )
             else:
+                if table_exists:
+                    assert snapshot.is_seed
+                    logger.info("Deleting the existing seed table '%s'", target_table_name)
+                    adapter.drop_table(target_table_name)
+
                 self._execute_create(
                     snapshot=snapshot,
                     table_name=snapshot.table_name(is_deployable=True),
@@ -1113,7 +1118,7 @@ class SnapshotEvaluator:
                     deployability_index=deployability_index,
                     create_render_kwargs=render_kwargs,
                     rendered_physical_properties=rendered_physical_properties,
-                    dry_run=True,
+                    dry_run=not snapshot.is_seed,
                 )
 
     # Retry in case when the table is migrated concurrently from another plan application
