@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, GrantsConfig, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
@@ -64,6 +64,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
+    SUPPORTS_GRANTS = True
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
@@ -1296,6 +1297,101 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     @_session_id.setter
     def _session_id(self, value: t.Any) -> None:
         self._connection_pool.set_attribute("session_id", value)
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        """Returns current grants for a BigQuery table as a dictionary."""
+        dataset = table.db or self.get_current_catalog()
+        table_name = table.name
+
+        # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
+        grant_expr = (
+            exp.select("privilege_type", "grantee")
+            .from_(exp.table_("OBJECT_PRIVILEGES", db="information_schema"))
+            .where(
+                exp.and_(
+                    exp.column("object_schema").eq(exp.Literal.string(dataset)),
+                    exp.column("object_name").eq(exp.Literal.string(table_name)),
+                    # Filter out current user as BigQuery includes session_user() in results
+                    exp.column("grantee").neq(exp.func("session_user")),
+                )
+            )
+        )
+        results = self.fetchall(grant_expr)
+
+        grants_dict: t.Dict[str, t.List[str]] = {}
+        for row in results:
+            privilege = str(row[0])
+            grantee = str(row[1])
+
+            if privilege not in grants_dict:
+                grants_dict[privilege] = []
+
+            if grantee not in grants_dict[privilege]:
+                grants_dict[privilege].append(grantee)
+
+        return grants_dict
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        """Returns SQLGlot Grant expressions to apply grants to a BigQuery table."""
+        expressions = []
+
+        # Determine the BigQuery object type string
+        object_type = "TABLE" if table_type == DataObjectType.TABLE else "VIEW"
+
+        for privilege, principals in grant_config.items():
+            if not principals:
+                continue
+
+            # BigQuery GRANT syntax: GRANT privilege ON object_type table_name TO "principal1", "principal2"
+            # Create a custom securable expression that includes the object type
+            securable_with_type = exp.Literal.string(
+                f"{object_type} {table.sql(dialect=self.DIALECT)}"
+            )
+
+            grant = exp.Grant(
+                privileges=[exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                securable=securable_with_type,
+                principals=[f'"{principal}"' for principal in principals],
+            )
+            expressions.append(grant)
+
+        return expressions
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        """Returns SQLGlot expressions to revoke grants from a BigQuery table."""
+        expressions = []
+
+        # Determine the BigQuery object type string
+        object_type = "TABLE" if table_type == DataObjectType.TABLE else "VIEW"
+
+        for privilege, principals in grant_config.items():
+            if not principals:
+                continue
+
+            # BigQuery REVOKE syntax: REVOKE privilege ON object_type table_name FROM "principal1", "principal2"
+            # Create a custom securable expression that includes the object type
+            securable_with_type = exp.Literal.string(
+                f"{object_type} {table.sql(dialect=self.DIALECT)}"
+            )
+
+            revoke = exp.Revoke(
+                privileges=[exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                securable=securable_with_type,
+                principals=[f'"{principal}"' for principal in principals],
+            )
+            expressions.append(revoke)
+
+        return expressions
 
 
 class _ErrorCounter:
