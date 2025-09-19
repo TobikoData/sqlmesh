@@ -758,6 +758,21 @@ class TestContext:
             # Creating an account-level group in Databricks requires making REST API calls so we are going to
             # use a pre-created group instead. We assume the suffix on the name is the unique id
             return "_".join(username.split("_")[:-1]), None
+        if self.dialect == "bigquery":
+            # BigQuery uses IAM service accounts that need to be pre-created
+            # Pre-created GCP service accounts:
+            # - sqlmesh-test-admin@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-analyst@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-etl-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-reader@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-writer@{project-id}.iam.gserviceaccount.com
+            role_name = (
+                username.replace(f"_{self.test_id}", "").replace("test_", "").replace("_", "-")
+            )
+            project_id = self.engine_adapter.get_current_catalog()
+            service_account = f"sqlmesh-test-{role_name}@{project_id}.iam.gserviceaccount.com"
+            return f"serviceAccount:{service_account}", None
         raise ValueError(f"User creation not supported for dialect: {self.dialect}")
 
     def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
@@ -791,20 +806,29 @@ class TestContext:
             for user_name in created_users:
                 self._cleanup_user_or_role(user_name)
 
+    def get_select_privilege(self) -> str:
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataViewer"
+        return "SELECT"
+
     def get_insert_privilege(self) -> str:
         if self.dialect == "databricks":
             # This would really be "MODIFY" but for the purposes of having this be unique from UPDATE
             # we return "MANAGE" instead
             return "MANAGE"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataEditor"
         return "INSERT"
 
     def get_update_privilege(self) -> str:
         if self.dialect == "databricks":
             return "MODIFY"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataOwner"
         return "UPDATE"
 
     def _cleanup_user_or_role(self, user_name: str) -> None:
-        """Helper function to clean up a PostgreSQL user and all their dependencies."""
+        """Helper function to clean up a user/role and all their dependencies."""
         try:
             if self.dialect in ["postgres", "redshift"]:
                 self.engine_adapter.execute(f"""
@@ -816,7 +840,8 @@ class TestContext:
                 self.engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
             elif self.dialect == "snowflake":
                 self.engine_adapter.execute(f"DROP ROLE IF EXISTS {user_name}")
-            elif self.dialect == "databricks":
+            elif self.dialect in ["databricks", "bigquery"]:
+                # For Databricks and BigQuery, we use pre-created accounts that should not be deleted
                 pass
         except Exception:
             pass

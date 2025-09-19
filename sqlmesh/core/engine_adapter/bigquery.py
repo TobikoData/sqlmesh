@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import BigframeSession, DF, Query
+    from sqlmesh.core.engine_adapter._typing import BigframeSession, DCL, DF, GrantsConfig, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
@@ -64,6 +64,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
+    SUPPORTS_GRANTS = True
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
@@ -1296,6 +1297,120 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     @_session_id.setter
     def _session_id(self, value: t.Any) -> None:
         self._connection_pool.set_attribute("session_id", value)
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        """Returns current grants for a BigQuery table as a dictionary."""
+        dataset = table.db or self.get_current_catalog()
+        table_name = table.name
+        project = self.get_current_catalog()
+        location = self.client.location
+
+        if not location:
+            raise ValueError("BigQuery client location not set")
+
+        # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
+        # OBJECT_PRIVILEGES is a project-level INFORMATION_SCHEMA view with regional qualifier
+        object_privileges_table = exp.to_table(
+            f"`{project}`.`region-{location}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES",
+            dialect=self.dialect,
+        )
+        grant_expr = (
+            exp.select("privilege_type", "grantee")
+            .from_(object_privileges_table)
+            .where(
+                exp.and_(
+                    exp.column("object_schema").eq(exp.Literal.string(dataset)),
+                    exp.column("object_name").eq(exp.Literal.string(table_name)),
+                    # Filter out current_user
+                    # BigQuery grantees format: "user:email" or "group:name"
+                    exp.func("split", exp.column("grantee"), exp.Literal.string(":"))[
+                        exp.func("OFFSET", exp.Literal.number("1"))
+                    ].neq(exp.func("session_user")),
+                )
+            )
+        )
+        results = self.fetchall(grant_expr)
+
+        grants_dict: t.Dict[str, t.List[str]] = {}
+        for row in results:
+            privilege = str(row[0])
+            grantee = str(row[1])
+
+            if privilege not in grants_dict:
+                grants_dict[privilege] = []
+
+            if grantee not in grants_dict[privilege]:
+                grants_dict[privilege].append(grantee)
+
+        return grants_dict
+
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        return "TABLE"
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grant_config:
+            return expressions
+
+        def normalize_principal(p: str) -> str:
+            if ":" not in p:
+                raise ValueError(f"Principal '{p}' missing a prefix label")
+
+            # allUsers and allAuthenticatedUsers special groups that are cas-sensitive and must start with "specialGroup:"
+            if p.endswith("allUsers") or p.endswith("allAuthenticatedUsers"):
+                if not p.startswith("specialGroup:"):
+                    raise ValueError(
+                        f"Special group principal '{p}' must start with 'specialGroup:' prefix label"
+                    )
+                return p
+
+            label, principal = p.split(":", 1)
+            # always lowercase principals
+            return f"{label}:{principal.lower()}"
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grant_config.items():
+            if not principals:
+                continue
+
+            noramlized_principals = [exp.Literal.string(normalize_principal(p)) for p in principals]
+            args: t.Dict[str, t.Any] = {
+                "privileges": [exp.GrantPrivilege(this=exp.to_identifier(privilege, quoted=True))],
+                "securable": table.copy(),
+                "principals": noramlized_principals,
+            }
+
+            if object_kind:
+                args["kind"] = exp.Var(this=object_kind)
+
+            expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
 
 
 class _ErrorCounter:

@@ -3843,29 +3843,30 @@ def test_sync_grants_config(ctx: TestContext) -> None:
         )
 
     table = ctx.table("sync_grants_integration")
+    select_privilege = ctx.get_select_privilege()
     insert_privilege = ctx.get_insert_privilege()
     update_privilege = ctx.get_update_privilege()
     with ctx.create_users_or_roles("reader", "writer", "admin") as roles:
         ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
 
         initial_grants = {
-            "SELECT": [roles["reader"]],
+            select_privilege: [roles["reader"]],
             insert_privilege: [roles["writer"]],
         }
         ctx.engine_adapter.sync_grants_config(table, initial_grants)
 
         current_grants = ctx.engine_adapter._get_current_grants_config(table)
-        assert set(current_grants.get("SELECT", [])) == {roles["reader"]}
+        assert set(current_grants.get(select_privilege, [])) == {roles["reader"]}
         assert set(current_grants.get(insert_privilege, [])) == {roles["writer"]}
 
         target_grants = {
-            "SELECT": [roles["writer"], roles["admin"]],
+            select_privilege: [roles["writer"], roles["admin"]],
             update_privilege: [roles["admin"]],
         }
         ctx.engine_adapter.sync_grants_config(table, target_grants)
 
         synced_grants = ctx.engine_adapter._get_current_grants_config(table)
-        assert set(synced_grants.get("SELECT", [])) == {
+        assert set(synced_grants.get(select_privilege, [])) == {
             roles["writer"],
             roles["admin"],
         }
@@ -3880,18 +3881,19 @@ def test_grants_sync_empty_config(ctx: TestContext):
         )
 
     table = ctx.table("grants_empty_test")
+    select_privilege = ctx.get_select_privilege()
     insert_privilege = ctx.get_insert_privilege()
     with ctx.create_users_or_roles("user") as roles:
         ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
 
         initial_grants = {
-            "SELECT": [roles["user"]],
+            select_privilege: [roles["user"]],
             insert_privilege: [roles["user"]],
         }
         ctx.engine_adapter.sync_grants_config(table, initial_grants)
 
         initial_current_grants = ctx.engine_adapter._get_current_grants_config(table)
-        assert roles["user"] in initial_current_grants.get("SELECT", [])
+        assert roles["user"] in initial_current_grants.get(select_privilege, [])
         assert roles["user"] in initial_current_grants.get(insert_privilege, [])
 
         ctx.engine_adapter.sync_grants_config(table, {})
@@ -3912,22 +3914,30 @@ def test_grants_case_insensitive_grantees(ctx: TestContext):
 
         reader = roles["reader"]
         writer = roles["writer"]
+        select_privilege = ctx.get_select_privilege()
 
-        grants_config = {"SELECT": [reader, writer.upper()]}
+        if ctx.dialect == "bigquery":
+            # BigQuery labels are case sensitive, e.g. serviceAccount
+            lablel, grantee = writer.split(":", 1)
+            upper_case_writer = f"{lablel}:{grantee.upper()}"
+        else:
+            upper_case_writer = writer.upper()
+
+        grants_config = {select_privilege: [reader, upper_case_writer]}
         ctx.engine_adapter.sync_grants_config(table, grants_config)
 
         # Grantees are still in lowercase
         current_grants = ctx.engine_adapter._get_current_grants_config(table)
-        assert reader in current_grants.get("SELECT", [])
-        assert writer in current_grants.get("SELECT", [])
+        assert reader in current_grants.get(select_privilege, [])
+        assert writer in current_grants.get(select_privilege, [])
 
         # Revoke writer
-        grants_config = {"SELECT": [reader.upper()]}
+        grants_config = {select_privilege: [reader.upper()]}
         ctx.engine_adapter.sync_grants_config(table, grants_config)
 
         current_grants = ctx.engine_adapter._get_current_grants_config(table)
-        assert reader in current_grants.get("SELECT", [])
-        assert writer not in current_grants.get("SELECT", [])
+        assert reader in current_grants.get(select_privilege, [])
+        assert writer not in current_grants.get(select_privilege, [])
 
 
 def test_grants_plan(ctx: TestContext, tmp_path: Path):
@@ -3937,6 +3947,7 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
         )
 
     table = ctx.table("grant_model").sql(dialect="duckdb")
+    select_privilege = ctx.get_select_privilege()
     insert_privilege = ctx.get_insert_privilege()
     with ctx.create_users_or_roles("analyst", "etl_user") as roles:
         (tmp_path / "models").mkdir(exist_ok=True)
@@ -3946,7 +3957,7 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
             name {table},
             kind FULL,
             grants (
-                'select' = ['{roles["analyst"]}']
+                '{select_privilege}' = ['{roles["analyst"]}']
             ),
             grants_target_layer 'all'
         );
@@ -3969,13 +3980,13 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
         current_grants = ctx.engine_adapter._get_current_grants_config(
             exp.to_table(table_name, dialect=ctx.dialect)
         )
-        assert current_grants == {"SELECT": [roles["analyst"]]}
+        assert current_grants == {select_privilege: [roles["analyst"]]}
 
         # Virtual layer (view) w/ grants
         virtual_grants = ctx.engine_adapter._get_current_grants_config(
             exp.to_table(view_name, dialect=ctx.dialect)
         )
-        assert virtual_grants == {"SELECT": [roles["analyst"]]}
+        assert virtual_grants == {select_privilege: [roles["analyst"]]}
 
         # Update model with query change and new grants
         updated_model = load_sql_based_model(
@@ -3985,7 +3996,7 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
                     name {table},
                     kind FULL,
                     grants (
-                        'select' = ['{roles["analyst"]}', '{roles["etl_user"]}'],
+                        '{select_privilege}' = ['{roles["analyst"]}', '{roles["etl_user"]}'],
                         '{insert_privilege}' = ['{roles["etl_user"]}']
                     ),
                     grants_target_layer 'all'
@@ -4010,17 +4021,21 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
             exp.to_table(new_table_name, dialect=ctx.dialect)
         )
         expected_final_grants = {
-            "SELECT": [roles["analyst"], roles["etl_user"]],
+            select_privilege: [roles["analyst"], roles["etl_user"]],
             insert_privilege: [roles["etl_user"]],
         }
-        assert set(final_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert set(final_grants.get(select_privilege, [])) == set(
+            expected_final_grants[select_privilege]
+        )
         assert final_grants.get(insert_privilege, []) == expected_final_grants[insert_privilege]
 
         # Virtual layer should also have the updated grants
         updated_virtual_grants = ctx.engine_adapter._get_current_grants_config(
             exp.to_table(view_name, dialect=ctx.dialect)
         )
-        assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert set(updated_virtual_grants.get(select_privilege, [])) == set(
+            expected_final_grants[select_privilege]
+        )
         assert (
             updated_virtual_grants.get(insert_privilege, [])
             == expected_final_grants[insert_privilege]
