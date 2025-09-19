@@ -1698,7 +1698,7 @@ def test_seed_model_promote_to_prod_after_dev(
     # Promote all changes to prod
     waiter_names_snapshot = context.get_snapshot("sushi.waiter_names")
     plan = context.plan_builder("prod", skip_tests=True).build()
-    # Clear the cache  to source the dehydrated model instance from the state
+    # Clear the cache to source the dehydrated model instance from the state
     context.clear_caches()
     context.apply(plan)
 
