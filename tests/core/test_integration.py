@@ -14,7 +14,13 @@ import pandas as pd  # noqa: TID253
 import pytest
 from pytest import MonkeyPatch
 from pathlib import Path
-from sqlmesh.core.console import set_console, get_console, TerminalConsole, CaptureTerminalConsole
+from sqlmesh.core.console import (
+    MarkdownConsole,
+    set_console,
+    get_console,
+    TerminalConsole,
+    CaptureTerminalConsole,
+)
 from sqlmesh.core.config.naming import NameInferenceConfig
 from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
@@ -10589,8 +10595,15 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     new_model_a_snapshot_id = list(plan.modified_snapshots)[0]
 
     # now, trigger a prod restatement plan in a different thread and block it to simulate a long restatement
+    thread_console = None
+
     def _run_restatement_plan(tmp_path: Path, config: Config, q: queue.Queue):
+        nonlocal thread_console
         q.put("thread_started")
+
+        # Give this thread its own markdown console to avoid Rich LiveError
+        thread_console = MarkdownConsole()
+        set_console(thread_console)
 
         # give this thread its own Context object to prevent segfaulting the Python interpreter
         restatement_ctx = Context(paths=[tmp_path], config=config)
@@ -10647,7 +10660,7 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     assert isinstance(plan_error, ConflictingPlanError)
     assert "please re-apply your plan" in repr(plan_error).lower()
 
-    output = " ".join(re.split("\s+", console.captured_output, flags=re.UNICODE))
+    output = " ".join(re.split("\\s+", thread_console.captured_output, flags=re.UNICODE))  # type: ignore
     assert (
         f"The following models had new versions deployed while data was being restated: └── test.model_a"
         in output
