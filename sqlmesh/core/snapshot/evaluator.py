@@ -763,7 +763,7 @@ class SnapshotEvaluator:
                         snapshots=snapshots,
                         deployability_index=deployability_index,
                         render_kwargs=create_render_kwargs,
-                        rendered_physical_properties=rendered_physical_properties,
+                        rendered_physical_properties=rendered_physical_properties.copy(),
                         allow_destructive_snapshots=allow_destructive_snapshots,
                         allow_additive_snapshots=allow_additive_snapshots,
                     )
@@ -776,7 +776,7 @@ class SnapshotEvaluator:
                         is_table_deployable=is_snapshot_deployable,
                         deployability_index=deployability_index,
                         create_render_kwargs=create_render_kwargs,
-                        rendered_physical_properties=rendered_physical_properties,
+                        rendered_physical_properties=rendered_physical_properties.copy(),
                         dry_run=False,
                         run_pre_post_statements=False,
                     )
