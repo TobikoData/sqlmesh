@@ -793,6 +793,7 @@ class SnapshotEvaluator:
             if (
                 snapshot.is_materialized
                 and target_table_exists
+                and adapter.wap_enabled
                 and (model.wap_supported or adapter.wap_supported(target_table_name))
             ):
                 wap_id = random_id()[0:8]

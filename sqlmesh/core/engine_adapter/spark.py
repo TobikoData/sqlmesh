@@ -457,12 +457,14 @@ class SparkEngineAdapter(
             if wap_id.startswith(f"{self.BRANCH_PREFIX}{self.WAP_PREFIX}"):
                 table_name.set("this", table_name.this.this)
 
-        wap_supported = (
-            kwargs.get("storage_format") or ""
-        ).lower() == "iceberg" or self.wap_supported(table_name)
-        do_dummy_insert = (
-            False if not wap_supported or not exists else not self.table_exists(table_name)
-        )
+        do_dummy_insert = False
+        if self.wap_enabled:
+            wap_supported = (
+                kwargs.get("storage_format") or ""
+            ).lower() == "iceberg" or self.wap_supported(table_name)
+            do_dummy_insert = (
+                False if not wap_supported or not exists else not self.table_exists(table_name)
+            )
         super()._create_table(
             table_name_or_schema,
             expression,

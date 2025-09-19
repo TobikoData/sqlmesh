@@ -1755,6 +1755,7 @@ class SparkConnectionConfig(ConnectionConfig):
     config_dir: t.Optional[str] = None
     catalog: t.Optional[str] = None
     config: t.Dict[str, t.Any] = {}
+    wap_enabled: bool = False
 
     concurrent_tasks: int = 4
     register_comments: bool = True
@@ -1800,6 +1801,10 @@ class SparkConnectionConfig(ConnectionConfig):
             .enableHiveSupport()
             .getOrCreate(),
         }
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {"wap_enabled": self.wap_enabled}
 
 
 class TrinoAuthenticationMethod(str, Enum):
