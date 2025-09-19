@@ -2357,6 +2357,11 @@ class EngineAdapter:
         """Fetches a PySpark DataFrame from the cursor"""
         raise NotImplementedError(f"Engine does not support PySpark DataFrames: {type(self)}")
 
+    @property
+    def wap_enabled(self) -> bool:
+        """Returns whether WAP is enabled for this engine."""
+        return self._extra_config.get("wap_enabled", False)
+
     def wap_supported(self, table_name: TableName) -> bool:
         """Returns whether WAP for the target table is supported."""
         return False
