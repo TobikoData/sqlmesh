@@ -494,7 +494,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             # Only migrate snapshots for which there's an existing data object
             concurrent_apply_to_snapshots(
-                snapshots_by_name.values(),
+                target_snapshots,
                 lambda s: self._migrate_snapshot(
                     s,
                     snapshots_by_name,
