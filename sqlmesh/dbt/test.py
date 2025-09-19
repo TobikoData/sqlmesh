@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import Field
 import sqlmesh.core.dialect as d
 from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
+from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.common import (
     Dependencies,
     GeneralConfig,
@@ -79,8 +80,10 @@ class TestConfig(GeneralConfig):
     dialect_: t.Optional[str] = Field(None, alias="dialect")
 
     # dbt fields
+    unique_id: str = ""
     package_name: str = ""
     alias: t.Optional[str] = None
+    fqn: t.List[str] = []
     schema_: t.Optional[str] = Field("", alias="schema")
     database: t.Optional[str] = None
     severity: Severity = Severity.ERROR
@@ -155,6 +158,7 @@ class TestConfig(GeneralConfig):
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
                 name=self.name,
+                dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
                 query=query,
@@ -171,6 +175,7 @@ class TestConfig(GeneralConfig):
         else:
             audit = ModelAudit(
                 name=self.name,
+                dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
                 blocking=blocking,
@@ -212,6 +217,12 @@ class TestConfig(GeneralConfig):
                 "type": None,
                 "quote_policy": AttributeDict(),
             }
+        )
+
+    @property
+    def node_info(self) -> DbtNodeInfo:
+        return DbtNodeInfo(
+            unique_id=self.unique_id, name=self.name, fqn=".".join(self.fqn), alias=self.alias
         )
 
 

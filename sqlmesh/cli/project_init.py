@@ -298,6 +298,7 @@ def init_example_project(
     dlt_path: t.Optional[str] = None,
     schema_name: str = "sqlmesh_example",
     cli_mode: InitCliMode = InitCliMode.DEFAULT,
+    start: t.Optional[str] = None,
 ) -> Path:
     root_path = Path(path)
 
@@ -336,7 +337,6 @@ def init_example_project(
 
     models: t.Set[t.Tuple[str, str]] = set()
     settings = None
-    start = None
     if engine_type and template == ProjectTemplate.DLT:
         project_dialect = dialect or DIALECT_TO_TYPE.get(engine_type)
         if pipeline and project_dialect:

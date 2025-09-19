@@ -19,7 +19,7 @@ from sqlmesh.core.model.common import (
     sorted_python_env_payloads,
 )
 from sqlmesh.core.model.common import make_python_env, single_value_or_tuple, ParsableSql
-from sqlmesh.core.node import _Node
+from sqlmesh.core.node import _Node, DbtInfoMixin, DbtNodeInfo
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
@@ -120,7 +120,7 @@ def audit_map_validator(cls: t.Type, v: t.Any, values: t.Any) -> t.Dict[str, t.A
     return {}
 
 
-class ModelAudit(PydanticModel, AuditMixin, frozen=True):
+class ModelAudit(PydanticModel, AuditMixin, DbtInfoMixin, frozen=True):
     """
     Audit is an assertion made about your tables.
 
@@ -137,6 +137,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     expressions_: t.Optional[t.List[ParsableSql]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     formatting: t.Optional[bool] = Field(default=None, exclude=True)
+    dbt_node_info_: t.Optional[DbtNodeInfo] = Field(alias="dbt_node_info", default=None)
 
     _path: t.Optional[Path] = None
 
@@ -149,6 +150,10 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     def __str__(self) -> str:
         path = f": {self._path.name}" if self._path else ""
         return f"{self.__class__.__name__}<{self.name}{path}>"
+
+    @property
+    def dbt_node_info(self) -> t.Optional[DbtNodeInfo]:
+        return self.dbt_node_info_
 
 
 class StandaloneAudit(_Node, AuditMixin):
@@ -552,4 +557,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "tags": single_value_or_tuple,
     "default_catalog": exp.to_identifier,
+    "dbt_node_info_": lambda value: value.to_expression(),
 }

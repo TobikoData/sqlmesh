@@ -61,7 +61,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.kind import ModelKindName, _model_kind_validator
 from sqlmesh.core.model.seed import CsvSettings
-from sqlmesh.core.node import IntervalUnit, _Node
+from sqlmesh.core.node import IntervalUnit, _Node, DbtNodeInfo
 from sqlmesh.core.signal import signal
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike, to_datetime, to_ds, to_timestamp
@@ -2097,6 +2097,33 @@ def test_render_definition_with_virtual_update_statements():
         == """ON_VIRTUAL_UPDATE_BEGIN;
 GRANT SELECT ON VIEW @this_model TO ROLE role_name;
 ON_VIRTUAL_UPDATE_END;"""
+    )
+
+
+def test_render_definition_dbt_node_info():
+    node_info = DbtNodeInfo(unique_id="model.db.table", name="table", fqn="db.table")
+    model = load_sql_based_model(
+        d.parse(
+            f"""
+        MODEL (
+            name db.table,
+            kind FULL
+        );
+
+        select 1 as a;
+        """
+        ),
+        dbt_node_info=node_info,
+    )
+
+    assert model.dbt_node_info
+    assert (
+        model.render_definition()[0].sql(pretty=True)
+        == """MODEL (
+  name db.table,
+  dbt_node_info (fqn := 'db.table', name := 'table', unique_id := 'model.db.table'),
+  kind FULL
+)"""
     )
 
 

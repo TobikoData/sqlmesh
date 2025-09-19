@@ -5,7 +5,7 @@ from click.testing import Result
 import time_machine
 from sqlmesh_dbt.operations import create
 from tests.cli.test_cli import FREEZE_TIME
-from tests.dbt.cli.conftest import EmptyProjectCreator
+from tests.dbt.conftest import EmptyProjectCreator
 
 pytestmark = pytest.mark.slow
 
@@ -45,13 +45,13 @@ def test_run_with_selectors(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[...
 def test_run_with_changes_and_full_refresh(
     create_empty_project: EmptyProjectCreator, invoke_cli: t.Callable[..., Result]
 ):
-    project_path = create_empty_project(project_name="test")
+    project_path, models_path = create_empty_project(project_name="test")
 
     engine_adapter = create(project_path).context.engine_adapter
     engine_adapter.execute("create table external_table as select 'foo' as a, 'bar' as b")
 
-    (project_path / "models" / "model_a.sql").write_text("select a, b from external_table")
-    (project_path / "models" / "model_b.sql").write_text("select a, b from {{ ref('model_a') }}")
+    (models_path / "model_a.sql").write_text("select a, b from external_table")
+    (models_path / "model_b.sql").write_text("select a, b from {{ ref('model_a') }}")
 
     # populate initial env
     result = invoke_cli(["run"])
