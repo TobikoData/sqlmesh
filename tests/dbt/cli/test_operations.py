@@ -8,7 +8,7 @@ from sqlmesh.utils.errors import SQLMeshError
 import time_machine
 from sqlmesh.core.plan import PlanBuilder
 from sqlmesh.core.config.common import VirtualEnvironmentMode
-from tests.dbt.cli.conftest import EmptyProjectCreator
+from tests.dbt.conftest import EmptyProjectCreator
 
 pytestmark = pytest.mark.slow
 
@@ -273,7 +273,7 @@ def test_run_option_full_refresh(
     create_empty_project: EmptyProjectCreator, env_name: str, vde_mode: VirtualEnvironmentMode
 ):
     # create config file prior to load
-    project_path = create_empty_project(project_name="test")
+    project_path, models_path = create_empty_project(project_name="test")
 
     config_path = project_path / "sqlmesh.yaml"
     config = yaml.load(config_path)
@@ -282,8 +282,8 @@ def test_run_option_full_refresh(
     with config_path.open("w") as f:
         yaml.dump(config, f)
 
-    (project_path / "models" / "model_a.sql").write_text("select 1")
-    (project_path / "models" / "model_b.sql").write_text("select 2")
+    (models_path / "model_a.sql").write_text("select 1")
+    (models_path / "model_b.sql").write_text("select 2")
 
     operations = create(project_dir=project_path)
 

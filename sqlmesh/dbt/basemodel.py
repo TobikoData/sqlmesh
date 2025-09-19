@@ -13,6 +13,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model
+from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -120,8 +121,10 @@ class BaseModelConfig(GeneralConfig):
     grain: t.Union[str, t.List[str]] = []
 
     # DBT configuration fields
+    unique_id: str = ""
     name: str = ""
     package_name: str = ""
+    fqn: t.List[str] = []
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
@@ -273,12 +276,10 @@ class BaseModelConfig(GeneralConfig):
         return {"description", "owner", "stamp", "storage_format"}
 
     @property
-    def node_name(self) -> str:
-        resource_type = getattr(self, "resource_type", "model")
-        node_name = f"{resource_type}.{self.package_name}.{self.name}"
-        if self.version:
-            node_name += f".v{self.version}"
-        return node_name
+    def node_info(self) -> DbtNodeInfo:
+        return DbtNodeInfo(
+            unique_id=self.unique_id, name=self.name, fqn=".".join(self.fqn), alias=self.alias
+        )
 
     def sqlmesh_model_kwargs(
         self,
@@ -349,8 +350,8 @@ class BaseModelConfig(GeneralConfig):
     def _model_jinja_context(
         self, context: DbtContext, dependencies: Dependencies
     ) -> t.Dict[str, t.Any]:
-        if context._manifest and self.node_name in context._manifest._manifest.nodes:
-            attributes = context._manifest._manifest.nodes[self.node_name].to_dict()
+        if context._manifest and self.unique_id in context._manifest._manifest.nodes:
+            attributes = context._manifest._manifest.nodes[self.unique_id].to_dict()
             if dependencies.model_attrs.all_attrs:
                 model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
             else:

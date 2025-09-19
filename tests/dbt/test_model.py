@@ -1,5 +1,4 @@
 import datetime
-import typing as t
 import pytest
 
 from pathlib import Path
@@ -16,51 +15,9 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.target import PostgresConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.date import to_ds
 
 pytestmark = pytest.mark.dbt
-
-
-@pytest.fixture
-def create_empty_project(tmp_path: Path) -> t.Callable[[], t.Tuple[Path, Path]]:
-    def _create_empty_project() -> t.Tuple[Path, Path]:
-        yaml = YAML()
-        dbt_project_dir = tmp_path / "dbt"
-        dbt_project_dir.mkdir()
-        dbt_model_dir = dbt_project_dir / "models"
-        dbt_model_dir.mkdir()
-        dbt_project_config = {
-            "name": "empty_project",
-            "version": "1.0.0",
-            "config-version": 2,
-            "profile": "test",
-            "model-paths": ["models"],
-        }
-        dbt_project_file = dbt_project_dir / "dbt_project.yml"
-        with open(dbt_project_file, "w", encoding="utf-8") as f:
-            YAML().dump(dbt_project_config, f)
-        sqlmesh_config = {
-            "model_defaults": {
-                "start": "2025-01-01",
-            }
-        }
-        sqlmesh_config_file = dbt_project_dir / "sqlmesh.yaml"
-        with open(sqlmesh_config_file, "w", encoding="utf-8") as f:
-            YAML().dump(sqlmesh_config, f)
-        dbt_data_dir = tmp_path / "dbt_data"
-        dbt_data_dir.mkdir()
-        dbt_data_file = dbt_data_dir / "local.db"
-        dbt_profile_config = {
-            "test": {
-                "outputs": {"duckdb": {"type": "duckdb", "path": str(dbt_data_file)}},
-                "target": "duckdb",
-            }
-        }
-        db_profile_file = dbt_project_dir / "profiles.yml"
-        with open(db_profile_file, "w", encoding="utf-8") as f:
-            yaml.dump(dbt_profile_config, f)
-        return dbt_project_dir, dbt_model_dir
-
-    return _create_empty_project
 
 
 def test_test_config_is_standalone_behavior() -> None:
@@ -174,7 +131,7 @@ def test_manifest_filters_standalone_tests_from_models(
 ) -> None:
     """Integration test that verifies models only contain non-standalone tests after manifest loading."""
     yaml = YAML()
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
 
     # Create two models
     model1_contents = "SELECT 1 as id"
@@ -265,7 +222,7 @@ def test_load_invalid_ref_audit_constraints(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
     yaml = YAML()
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     full_model_contents = """{{ config(tags=["blah"], tests=[{"blah": {"to": "ref('completely_ignored')", "field": "blah2"} }]) }} SELECT 1 as cola"""
     full_model_file = model_dir / "full_model.sql"
@@ -332,7 +289,7 @@ def test_load_invalid_ref_audit_constraints(
 def test_load_microbatch_all_defined(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     microbatch_contents = """
     {{
@@ -373,7 +330,7 @@ def test_load_microbatch_all_defined(
 def test_load_microbatch_all_defined_diff_values(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     microbatch_contents = """
     {{
@@ -415,7 +372,7 @@ def test_load_microbatch_all_defined_diff_values(
 def test_load_microbatch_required_only(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     microbatch_contents = """
     {{
@@ -454,7 +411,7 @@ def test_load_microbatch_required_only(
 def test_load_incremental_time_range_strategy_required_only(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local", start="2025-01-01")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     incremental_time_range_contents = """
     {{
@@ -476,7 +433,7 @@ def test_load_incremental_time_range_strategy_required_only(
     snapshot = context.snapshots[snapshot_fqn]
     model = snapshot.model
     # Validate model-level attributes
-    assert model.start == "2025-01-01"
+    assert to_ds(model.start or "") == "2025-01-01"
     assert model.interval_unit.is_day
     # Validate model kind attributes
     assert isinstance(model.kind, IncrementalByTimeRangeKind)
@@ -496,7 +453,7 @@ def test_load_incremental_time_range_strategy_required_only(
 def test_load_incremental_time_range_strategy_all_defined(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local", start="2025-01-01")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     incremental_time_range_contents = """
     {{
@@ -532,7 +489,7 @@ def test_load_incremental_time_range_strategy_all_defined(
     snapshot = context.snapshots[snapshot_fqn]
     model = snapshot.model
     # Validate model-level attributes
-    assert model.start == "2025-01-01"
+    assert to_ds(model.start or "") == "2025-01-01"
     assert model.interval_unit.is_day
     # Validate model kind attributes
     assert isinstance(model.kind, IncrementalByTimeRangeKind)
@@ -559,7 +516,7 @@ def test_load_incremental_time_range_strategy_all_defined(
 def test_load_deprecated_incremental_time_column(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local", start="2025-01-01")
     # add `tests` to model config since this is loaded by dbt and ignored and we shouldn't error when loading it
     incremental_time_range_contents = """
     {{
@@ -580,10 +537,10 @@ def test_load_deprecated_incremental_time_column(
     context = Context(paths=project_dir)
     model = context.snapshots[snapshot_fqn].model
     # Validate model-level attributes
-    assert model.start == "2025-01-01"
+    assert to_ds(model.start or "") == "2025-01-01"
     assert model.interval_unit.is_day
     # Validate model-level attributes
-    assert model.start == "2025-01-01"
+    assert to_ds(model.start or "") == "2025-01-01"
     assert model.interval_unit.is_day
     # Validate model kind attributes
     assert isinstance(model.kind, IncrementalByTimeRangeKind)
@@ -606,7 +563,7 @@ def test_load_microbatch_with_ref(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
     yaml = YAML()
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     source_schema = {
         "version": 2,
         "sources": [
@@ -672,7 +629,7 @@ def test_load_microbatch_with_ref_no_filter(
     tmp_path: Path, caplog, dbt_dummy_postgres_config: PostgresConfig, create_empty_project
 ) -> None:
     yaml = YAML()
-    project_dir, model_dir = create_empty_project()
+    project_dir, model_dir = create_empty_project(project_name="local")
     source_schema = {
         "version": 2,
         "sources": [
@@ -749,21 +706,6 @@ def test_load_multiple_snapshots_defined_in_same_file(sushi_test_dbt_context: Co
 def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
     project_dir, model_dir = create_empty_project()
 
-    dbt_profile_config = {
-        "test": {
-            "outputs": {
-                "duckdb": {
-                    "type": "duckdb",
-                    "path": str(project_dir.parent / "dbt_data" / "main.db"),
-                }
-            },
-            "target": "duckdb",
-        }
-    }
-    db_profile_file = project_dir / "profiles.yml"
-    with open(db_profile_file, "w", encoding="utf-8") as f:
-        YAML().dump(dbt_profile_config, f)
-
     macros_dir = project_dir / "macros"
     macros_dir.mkdir()
 
@@ -801,6 +743,8 @@ def test_dbt_jinja_macro_undefined_variable_error(create_empty_project):
 @pytest.mark.slow
 def test_node_name_populated_for_dbt_models(dbt_dummy_postgres_config: PostgresConfig) -> None:
     model_config = ModelConfig(
+        unique_id="model.test_package.test_model",
+        fqn=["test_package", "test_model"],
         name="test_model",
         package_name="test_package",
         sql="SELECT 1 as id",
@@ -815,7 +759,8 @@ def test_node_name_populated_for_dbt_models(dbt_dummy_postgres_config: PostgresC
 
     # check after convert to SQLMesh model that node_name is populated correctly
     sqlmesh_model = model_config.to_sqlmesh(context)
-    assert sqlmesh_model.dbt_name == "model.test_package.test_model"
+    assert sqlmesh_model.dbt_unique_id == "model.test_package.test_model"
+    assert sqlmesh_model.dbt_fqn == "test_package.test_model"
 
 
 @pytest.mark.slow
@@ -872,12 +817,15 @@ def test_load_model_dbt_node_name(tmp_path: Path) -> None:
 
     # Verify that node_name is the equivalent dbt one
     model = context.snapshots[model_fqn].model
-    assert model.dbt_name == "model.test_project.simple_model"
+    assert model.dbt_unique_id == "model.test_project.simple_model"
+    assert model.dbt_fqn == "test_project.simple_model"
+    assert model.dbt_node_info
+    assert model.dbt_node_info.name == "simple_model"
 
 
 @pytest.mark.slow
-def test_jinja_config_no_query(tmp_path, create_empty_project):
-    project_dir, model_dir = create_empty_project()
+def test_jinja_config_no_query(create_empty_project):
+    project_dir, model_dir = create_empty_project(project_name="local")
 
     # model definition contains only a comment and non-SQL jinja
     model_contents = "/* comment */ {{ config(materialized='table') }}"

@@ -6,4 +6,4 @@ empty_project:
     duckdb:
       type: duckdb
       path: 'empty_project.duckdb'
-      threads: 4    
+      threads: 4

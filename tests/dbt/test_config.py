@@ -91,8 +91,10 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 
 def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
     model_config = ModelConfig(
+        unique_id="model.package.name",
         name="name",
         package_name="package",
+        fqn=["package", "name"],
         alias="model",
         schema="custom",
         database="database",
@@ -123,6 +125,8 @@ def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
 
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
+    assert model.dbt_unique_id == "model.package.name"
+    assert model.dbt_fqn == "package.name"
     assert model.description == "test model"
     assert (
         model.render_query_or_raise().sql()
@@ -185,7 +189,9 @@ def test_model_to_sqlmesh_fields(dbt_dummy_postgres_config: PostgresConfig):
 def test_test_to_sqlmesh_fields():
     sql = "SELECT * FROM FOO WHERE cost > 100"
     test_config = TestConfig(
+        unique_id="test.test_package.foo_test",
         name="foo_test",
+        fqn=["test_package", "foo_test"],
         sql=sql,
         model_name="Foo",
         column_name="cost",
@@ -199,6 +205,8 @@ def test_test_to_sqlmesh_fields():
     audit = test_config.to_sqlmesh(context)
 
     assert audit.name == "foo_test"
+    assert audit.dbt_unique_id == "test.test_package.foo_test"
+    assert audit.dbt_fqn == "test_package.foo_test"
     assert audit.dialect == "duckdb"
     assert not audit.skip
     assert audit.blocking

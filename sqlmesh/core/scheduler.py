@@ -839,7 +839,9 @@ class Scheduler:
             run_environment_statements=run_environment_statements,
             audit_only=audit_only,
             auto_restatement_triggers=auto_restatement_triggers,
-            selected_models={s.node.dbt_name for s in merged_intervals if s.node.dbt_name},
+            selected_models={
+                s.node.dbt_unique_id for s in merged_intervals if s.node.dbt_unique_id
+            },
         )
 
         return CompletionStatus.FAILURE if errors else CompletionStatus.SUCCESS
