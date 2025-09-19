@@ -4680,3 +4680,79 @@ def test_wap_publish_failure(adapter_mock: Mock, make_snapshot: t.Callable[..., 
     # Execute audit with WAP ID and expect it to raise the exception
     with pytest.raises(Exception, match="WAP publish failed"):
         evaluator.audit(snapshot, snapshots={}, wap_id=wap_id)
+
+
+def test_properties_are_preserved_in_both_create_statements(
+    adapter_mock: Mock, make_snapshot: t.Callable[..., Snapshot]
+) -> None:
+    # the below mocks are needed to create a situation
+    # where we trigger two create statements during evaluation
+    transaction_mock = Mock()
+    transaction_mock.__enter__ = Mock()
+    transaction_mock.__exit__ = Mock()
+    session_mock = Mock()
+    session_mock.__enter__ = Mock()
+    session_mock.__exit__ = Mock()
+    adapter_mock = Mock()
+    adapter_mock.transaction.return_value = transaction_mock
+    adapter_mock.session.return_value = session_mock
+    adapter_mock.dialect = "trino"
+    adapter_mock.HAS_VIEW_BINDING = False
+    adapter_mock.wap_supported.return_value = False
+    adapter_mock.get_data_objects.return_value = []
+    adapter_mock.with_settings.return_value = adapter_mock
+    adapter_mock.table_exists.return_value = False
+
+    props = []
+
+    def mutate_view_properties(*args, **kwargs):
+        view_props = kwargs.get("view_properties")
+        if isinstance(view_props, dict):
+            props.append(view_props["creatable_type"].sql())
+            # simulate view pop
+            view_props.pop("creatable_type")
+        return None
+
+    adapter_mock.create_view.side_effect = mutate_view_properties
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    # create a view model with SECURITY INVOKER physical property
+    # AND self referenctial to trigger two create statements
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.security_view,
+                kind VIEW,
+                physical_properties (
+                    'creatable_type' = 'SECURITY INVOKER'
+                )
+            );
+
+            SELECT 1 as col from test_schema.security_view;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.evaluate(
+        snapshot,
+        start="2024-01-01",
+        end="2024-01-02",
+        execution_time="2024-01-02",
+        snapshots={},
+    )
+
+    # Verify create_view was called twice
+    assert adapter_mock.create_view.call_count == 2
+    first_call = adapter_mock.create_view.call_args_list[0]
+    second_call = adapter_mock.create_view.call_args_list[1]
+
+    # First call should be CREATE VIEW (replace=False) second CREATE OR REPLACE VIEW (replace=True)
+    assert first_call.kwargs.get("replace") == False
+    assert second_call.kwargs.get("replace") == True
+
+    # Both calls should have view_properties with security invoker
+    assert props == ["'SECURITY INVOKER'", "'SECURITY INVOKER'"]
