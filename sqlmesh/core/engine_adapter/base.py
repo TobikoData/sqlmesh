@@ -80,9 +80,6 @@ MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 KEY_FOR_CREATABLE_TYPE = "CREATABLE_TYPE"
 
 
-# Use existing DataObjectType from shared module for grants
-
-
 @set_catalog()
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.

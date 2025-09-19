@@ -161,14 +161,6 @@ class ModelMeta(_Node):
 
         return v
 
-    @classmethod
-    def _validate_str_enum_value(cls, v: t.Any) -> t.Any:
-        if isinstance(v, exp.Identifier):
-            return v.this
-        if isinstance(v, exp.Literal) and v.is_string:
-            return v.this
-        return v
-
     @field_validator("table_format", "storage_format", mode="before")
     def _format_validator(cls, v: t.Any, info: ValidationInfo) -> t.Optional[str]:
         if isinstance(v, exp.Expression) and not (isinstance(v, (exp.Literal, exp.Identifier))):
