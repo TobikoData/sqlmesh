@@ -268,7 +268,7 @@ class PlanStagesBuilder:
             before_promote_snapshots = {
                 s.snapshot_id
                 for s in snapshots.values()
-                if deployability_index.is_representative(s)
+                if (deployability_index.is_representative(s) or s.is_seed)
                 and plan.is_selected_for_backfill(s.name)
             }
             after_promote_snapshots = all_selected_for_backfill_snapshots - before_promote_snapshots

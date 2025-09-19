@@ -1138,10 +1138,10 @@ class SnapshotEvaluator:
     ) -> None:
         adapter = self.get_adapter(snapshot.model.gateway)
 
-        target_table = exp.to_table(target_table_name)
-        target_table.this.set("this", f"{target_table.name}_schema_tmp")
+        tmp_table = exp.to_table(target_table_name)
+        tmp_table.this.set("this", f"{tmp_table.name}_schema_tmp")
+        tmp_table_name = tmp_table.sql()
 
-        tmp_table_name = target_table.sql()
         if snapshot.is_materialized:
             self._execute_create(
                 snapshot=snapshot,
@@ -2181,6 +2181,18 @@ class SeedStrategy(MaterializableStrategy):
         except Exception:
             self.adapter.drop_table(table_name)
             raise
+
+    def migrate(
+        self,
+        target_table_name: str,
+        source_table_name: str,
+        snapshot: Snapshot,
+        *,
+        ignore_destructive: bool,
+        ignore_additive: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        raise NotImplementedError("Seeds do not support migrations.")
 
     def insert(
         self,
