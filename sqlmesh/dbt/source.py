@@ -8,6 +8,7 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.dbt.relation import RelationType
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
@@ -46,6 +47,7 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     source_meta: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
+    event_time: t.Optional[str] = None
 
     _canonical_name: t.Optional[str] = None
 
@@ -93,6 +95,11 @@ class SourceConfig(GeneralConfig):
         )
         if external_location:
             extras["external"] = external_location.replace("{name}", self.table_name)
+
+        if DBT_VERSION >= (1, 9, 0) and self.event_time:
+            extras["event_time_filter"] = {
+                "field_name": self.event_time,
+            }
 
         return AttributeDict(
             {

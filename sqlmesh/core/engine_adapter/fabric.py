@@ -7,21 +7,14 @@ import time
 from functools import cached_property
 from sqlglot import exp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_result
+from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     InsertOverwriteStrategy,
-    SourceQuery,
 )
-from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
 
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
-
-
-from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 
 logger = logging.getLogger(__name__)
 
@@ -57,26 +50,6 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     @_target_catalog.setter
     def _target_catalog(self, value: t.Optional[str]) -> None:
         self._connection_pool.set_attribute("target_catalog", value)
-
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        source_queries: t.List[SourceQuery],
-        target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        where: t.Optional[exp.Condition] = None,
-        insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        # Override to avoid MERGE statement which isn't fully supported in Fabric
-        return EngineAdapter._insert_overwrite_by_condition(
-            self,
-            table_name=table_name,
-            source_queries=source_queries,
-            target_columns_to_types=target_columns_to_types,
-            where=where,
-            insert_overwrite_strategy_override=InsertOverwriteStrategy.DELETE_INSERT,
-            **kwargs,
-        )
 
     @property
     def api_client(self) -> FabricHttpClient:
@@ -121,9 +94,18 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     def _drop_catalog(self, catalog_name: exp.Identifier) -> None:
         """Drop a catalog (warehouse) in Microsoft Fabric via REST API."""
         warehouse_name = catalog_name.sql(dialect=self.dialect, identify=False)
+        current_catalog = self.get_current_catalog()
 
         logger.info(f"Deleting Fabric warehouse: {warehouse_name}")
         self.api_client.delete_warehouse(warehouse_name)
+
+        if warehouse_name == current_catalog:
+            # Somewhere around 2025-09-08, Fabric started validating the "Database=" connection argument and throwing 'Authentication failed' if the database doesnt exist
+            # In addition, set_current_catalog() is implemented using a threadlocal variable "target_catalog"
+            # So, when we drop a warehouse, and there are still threads with "target_catalog" set to reference it, any operations on those threads
+            # that use an either use an existing connection pointing to this warehouse or trigger a new connection
+            # will fail with an 'Authentication Failed' error unless we close all connections here, which also clears all the threadlocal data
+            self.close()
 
     def set_current_catalog(self, catalog_name: str) -> None:
         """

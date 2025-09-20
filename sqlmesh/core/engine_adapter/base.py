@@ -223,6 +223,10 @@ class EngineAdapter:
             }
         )
 
+    @property
+    def _catalog_type_overrides(self) -> t.Dict[str, str]:
+        return self._extra_config.get("catalog_type_overrides") or {}
+
     @classmethod
     def _casted_columns(
         cls,
@@ -430,7 +434,11 @@ class EngineAdapter:
             raise UnsupportedCatalogOperationError(
                 f"{self.dialect} does not support catalogs and a catalog was provided: {catalog}"
             )
-        return self.DEFAULT_CATALOG_TYPE
+        return (
+            self._catalog_type_overrides.get(catalog, self.DEFAULT_CATALOG_TYPE)
+            if catalog
+            else self.DEFAULT_CATALOG_TYPE
+        )
 
     def get_catalog_type_from_table(self, table: TableName) -> str:
         """Get the catalog type from a table name if it has a catalog specified, otherwise return the current catalog type"""
@@ -1036,6 +1044,7 @@ class EngineAdapter:
         target_table_name: TableName,
         source_table_name: TableName,
         replace: bool = False,
+        exists: bool = True,
         clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ) -> None:
@@ -1045,6 +1054,7 @@ class EngineAdapter:
             target_table_name: The name of the table that should be created.
             source_table_name: The name of the source table that should be cloned.
             replace: Whether or not to replace an existing table.
+            exists: Indicates whether to include the IF NOT EXISTS check.
         """
         if not self.SUPPORTS_CLONING:
             raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
@@ -1055,6 +1065,7 @@ class EngineAdapter:
                 this=exp.to_table(target_table_name),
                 kind="TABLE",
                 replace=replace,
+                exists=exists,
                 clone=exp.Clone(
                     this=exp.to_table(source_table_name),
                     **(clone_kwargs or {}),
@@ -1632,6 +1643,30 @@ class EngineAdapter:
                             query,
                             target_columns_to_types=target_columns_to_types,
                             order_projections=False,
+                        )
+                    elif insert_overwrite_strategy.is_merge:
+                        columns = [exp.column(col) for col in target_columns_to_types]
+                        when_not_matched_by_source = exp.When(
+                            matched=False,
+                            source=True,
+                            condition=where,
+                            then=exp.Delete(),
+                        )
+                        when_not_matched_by_target = exp.When(
+                            matched=False,
+                            source=False,
+                            then=exp.Insert(
+                                this=exp.Tuple(expressions=columns),
+                                expression=exp.Tuple(expressions=columns),
+                            ),
+                        )
+                        self._merge(
+                            target_table=table_name,
+                            query=query,
+                            on=exp.false(),
+                            whens=exp.Whens(
+                                expressions=[when_not_matched_by_source, when_not_matched_by_target]
+                            ),
                         )
                     else:
                         insert_exp = exp.insert(
@@ -2321,6 +2356,11 @@ class EngineAdapter:
     ) -> PySparkDataFrame:
         """Fetches a PySpark DataFrame from the cursor"""
         raise NotImplementedError(f"Engine does not support PySpark DataFrames: {type(self)}")
+
+    @property
+    def wap_enabled(self) -> bool:
+        """Returns whether WAP is enabled for this engine."""
+        return self._extra_config.get("wap_enabled", False)
 
     def wap_supported(self, table_name: TableName) -> bool:
         """Returns whether WAP for the target table is supported."""

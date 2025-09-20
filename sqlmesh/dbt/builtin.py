@@ -16,8 +16,10 @@ from sqlglot import Dialect
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.snapshot.definition import DeployabilityIndex
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.common import RAW_CODE_KEY
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
@@ -168,8 +170,24 @@ class Config:
     def __init__(self, config_dict: t.Dict[str, t.Any]) -> None:
         self._config = config_dict
 
-    def __call__(self, **kwargs: t.Any) -> str:
-        self._config.update(**kwargs)
+    def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
+        if args and kwargs:
+            raise ConfigError(
+                "Invalid inline model config: cannot mix positional and keyword arguments"
+            )
+
+        if args:
+            if len(args) == 1 and isinstance(args[0], dict):
+                # Single dict argument: config({"materialized": "table"})
+                self._config.update(args[0])
+            else:
+                raise ConfigError(
+                    f"Invalid inline model config: expected a single dictionary, got {len(args)} arguments"
+                )
+        elif kwargs:
+            # Keyword arguments: config(materialized="table")
+            self._config.update(kwargs)
+
         return ""
 
     def set(self, name: str, value: t.Any) -> str:
@@ -469,14 +487,29 @@ def create_builtin_globals(
             is_incremental &= snapshot_table_exists
     else:
         is_incremental = False
+
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config", "var")}
     )
 
+    if (model := jinja_globals.pop("model", None)) is not None:
+        if isinstance(model_instance := jinja_globals.pop("model_instance", None), SqlModel):
+            builtin_globals["model"] = AttributeDict(
+                {**model, RAW_CODE_KEY: model_instance.query.name}
+            )
+        else:
+            builtin_globals["model"] = AttributeDict(model.copy())
+
+    builtin_globals["flags"] = (
+        Flags(which="run") if engine_adapter is not None else Flags(which="parse")
+    )
+    builtin_globals["invocation_args_dict"] = {
+        k.lower(): v for k, v in builtin_globals["flags"].__dict__.items()
+    }
+
     if engine_adapter is not None:
-        builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
@@ -494,7 +527,6 @@ def create_builtin_globals(
             project_dialect=project_dialect,
         )
     else:
-        builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
@@ -513,11 +545,13 @@ def create_builtin_globals(
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
             "graph": adapter.graph,
+            "selected_resources": list(jinja_globals.get("selected_models") or []),
         }
     )
 
     builtin_globals["run_started_at"] = jinja_globals.get("execution_dt") or now()
     builtin_globals["dbt"] = AttributeDict(builtin_globals)
+    builtin_globals["context"] = builtin_globals["dbt"]
 
     return {**builtin_globals, **jinja_globals}
 

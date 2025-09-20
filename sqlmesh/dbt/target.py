@@ -49,6 +49,7 @@ SERIALIZABLE_FIELDS = {
     "name",
     "database",
     "schema_",
+    "warehouse",
 }
 
 SCHEMA_DIFFER_OVERRIDES = {

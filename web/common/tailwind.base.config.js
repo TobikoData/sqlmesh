@@ -36,6 +36,15 @@ module.exports = {
           800: 'var(--color-neutral-800)',
           900: 'var(--color-neutral-900)',
         },
+        typography: {
+          heading: 'var(--color-typography-headline)',
+          tagline: 'var(--color-typography-tagline)',
+          description: 'var(--color-typography-description)',
+          info: 'var(--color-typography-info)',
+        },
+        message: {
+          lucid: 'var(--color-message-lucid)',
+        },
         link: {
           underline: 'var(--color-link-underline)',
           hover: 'var(--color-link-hover)',
@@ -62,6 +71,13 @@ module.exports = {
         badge: {
           background: 'var(--color-badge-background)',
           foreground: 'var(--color-badge-foreground)',
+        },
+        input: {
+          'background-lucid': 'var(--color-input-background-lucid)',
+          background: 'var(--color-input-background)',
+          foreground: 'var(--color-input-foreground)',
+          placeholder: 'var(--color-input-placeholder)',
+          border: 'var(--color-input-border)',
         },
         button: {
           primary: {

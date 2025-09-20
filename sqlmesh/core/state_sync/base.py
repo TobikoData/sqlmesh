@@ -19,10 +19,12 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIdAndVersionLike,
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
     SnapshotTableInfo,
     SnapshotNameVersion,
+    SnapshotIdAndVersion,
 )
 from sqlmesh.core.snapshot.definition import Interval, SnapshotIntervals
 from sqlmesh.utils import major_minor
@@ -60,11 +62,14 @@ class Versions(PydanticModel):
         return 0 if v is None else int(v)
 
 
+MIN_SCHEMA_VERSION = 60
+MIN_SQLMESH_VERSION = "0.134.0"
 MIGRATIONS = [
     importlib.import_module(f"sqlmesh.migrations.{migration}")
     for migration in sorted(info.name for info in pkgutil.iter_modules(migrations.__path__))
 ]
-SCHEMA_VERSION: int = len(MIGRATIONS)
+# -1 to account for the baseline script
+SCHEMA_VERSION: int = MIN_SCHEMA_VERSION + len(MIGRATIONS) - 1
 
 
 class PromotionResult(PydanticModel):
@@ -95,6 +100,24 @@ class StateReader(abc.ABC):
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
+        """
+
+    @abc.abstractmethod
+    def get_snapshots_by_names(
+        self,
+        snapshot_names: t.Iterable[str],
+        current_ts: t.Optional[int] = None,
+        exclude_expired: bool = True,
+    ) -> t.Set[SnapshotIdAndVersion]:
+        """Return the snapshot records for all versions of the specified snapshot names.
+
+        Args:
+            snapshot_names: Iterable of snapshot names to fetch all snapshot records for
+            current_ts: Sets the current time for identifying which snapshots have expired so they can be excluded (only relevant if :exclude_expired=True)
+            exclude_expired: Whether or not to return the snapshot id's of expired snapshots in the result
+
+        Returns:
+            A set containing all the matched snapshot records. To fetch full snapshots, pass it into StateSync.get_snapshots()
         """
 
     @abc.abstractmethod
@@ -368,7 +391,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def remove_intervals(
         self,
-        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotIdAndVersionLike, Interval]],
         remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.
@@ -450,7 +473,6 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def migrate(
         self,
-        default_catalog: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:

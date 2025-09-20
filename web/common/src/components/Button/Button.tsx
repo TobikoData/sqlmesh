@@ -28,6 +28,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button'
     return (
       <Comp
+        data-component="Button"
         className={cn(
           buttonVariants({ variant, size, className }),
           disabled && 'pointer-events-none bg-neutral-150 text-prose',

@@ -1,5 +1,6 @@
 # type: ignore
 import typing as t
+from datetime import datetime
 
 import pandas as pd  # noqa: TID253
 import pytest
@@ -1173,3 +1174,36 @@ def test_drop_cascade(adapter: BigQueryEngineAdapter):
         "DROP SCHEMA IF EXISTS `foo` CASCADE",
         "DROP SCHEMA IF EXISTS `foo`",
     ]
+
+
+def test_scd_type_2_by_partitioning(adapter: BigQueryEngineAdapter):
+    adapter.scd_type_2_by_time(
+        target_table="target",
+        source_table=t.cast(
+            exp.Select, parse_one("SELECT id, name, price, test_UPDATED_at FROM source")
+        ),
+        unique_key=[
+            exp.to_column("id"),
+        ],
+        updated_at_col=exp.column("test_UPDATED_at", quoted=True),
+        valid_from_col=exp.to_column("valid_from", quoted=True),
+        valid_to_col=exp.to_column("valid_to", quoted=True),
+        target_columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("VARCHAR"),
+            "price": exp.DataType.build("DOUBLE"),
+            "test_UPDATED_at": exp.DataType.build("TIMESTAMP"),
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+        partitioned_by=[parse_one("TIMESTAMP_TRUNC(valid_from, DAY)")],
+    )
+
+    calls = _to_sql_calls(adapter)
+
+    # Initial call to create the table and then another to replace since it is self-referencing
+    assert len(calls) == 2
+    # Both calls should contain the partition logic (the scd logic is already covered by other tests)
+    assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[0]
+    assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[1]

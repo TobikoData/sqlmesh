@@ -11,7 +11,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.dbt.project import Project
     from sqlmesh_dbt.console import DbtCliConsole
     from sqlmesh.core.model import Model
-    from sqlmesh.core.plan import Plan
+    from sqlmesh.core.plan import Plan, PlanBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,39 @@ class DbtOperations:
         full_refresh: bool = False,
         empty: bool = False,
     ) -> Plan:
-        return self.context.plan(
-            **self._plan_options(
+        plan_builder = self._plan_builder(
+            environment=environment,
+            select=select,
+            exclude=exclude,
+            full_refresh=full_refresh,
+            empty=empty,
+        )
+
+        plan = plan_builder.build()
+
+        self.console.plan(
+            plan_builder,
+            default_catalog=self.context.default_catalog,
+            # start doing work immediately (since no_diff is set, there isnt really anything for the user to say yes/no to)
+            auto_apply=True,
+            # dont output a diff of model changes
+            no_diff=True,
+            # don't throw up any prompts like "set the effective date" - use defaults
+            no_prompts=True,
+        )
+
+        return plan
+
+    def _plan_builder(
+        self,
+        environment: t.Optional[str] = None,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+        full_refresh: bool = False,
+        empty: bool = False,
+    ) -> PlanBuilder:
+        return self.context.plan_builder(
+            **self._plan_builder_options(
                 environment=environment,
                 select=select,
                 exclude=exclude,
@@ -71,13 +102,15 @@ class DbtOperations:
 
         return selected_models
 
-    def _plan_options(
+    def _plan_builder_options(
         self,
-        environment: t.Optional[str] = None,
+        # upstream dbt options
         select: t.Optional[t.List[str]] = None,
         exclude: t.Optional[t.List[str]] = None,
         empty: bool = False,
         full_refresh: bool = False,
+        # sqlmesh extra options
+        environment: t.Optional[str] = None,
     ) -> t.Dict[str, t.Any]:
         import sqlmesh.core.constants as c
 
@@ -130,24 +163,38 @@ class DbtOperations:
             # `dbt --empty` adds LIMIT 0 to the queries, resulting in empty tables. In addition, it happily clobbers existing tables regardless of if they are populated.
             # This *partially* lines up with --skip-backfill in SQLMesh, which indicates to not populate tables if they happened to be created/updated as part of this plan.
             # However, if a table already exists and has data in it, there is no change so SQLMesh will not recreate the table and thus it will not be cleared.
-            # So in order to fully replicate dbt's --empty, we also need --full-refresh semantics in order to replace existing tables
+            # Currently, SQLMesh has no way to say "restate with empty data", because --restate-model coupled with --skip-backfill ends up being a no-op
             options["skip_backfill"] = True
-            full_refresh = True
+
+            self.console.log_warning(
+                "dbt's `--empty` drops the tables for all selected models and replaces them with empty ones.\n"
+                "This can easily result in accidental data loss, so SQLMesh limits this to only new or modified models and leaves the tables for existing unmodified models alone.\n\n"
+                "If you were creating empty tables to preview model changes, please consider using `--environment` to preview these changes in an isolated Virtual Data Environment instead.\n\n"
+                "Otherwise, if you really do want dbt's `--empty` behaviour of clearing every selected table, please file an issue on GitHub so we can better understand the use-case.\n"
+            )
+
+            if full_refresh:
+                # --full-refresh is implemented in terms of "add every model as a restatement"
+                # however, `--empty` sets skip_backfill=True, which causes the BackfillStage of the plan to be skipped.
+                # the re-processing of data intervals happens in the BackfillStage, so if it gets skipped, restatements become a no-op
+                raise ValueError("`--full-refresh` alongside `--empty` is not currently supported.")
 
         if full_refresh:
-            # TODO: handling this requires some updates in the engine to enable restatements+changes in the same plan without affecting prod
-            # if the plan targets dev
-            pass
+            options.update(
+                dict(
+                    # Add every selected model as a restatement to force them to get repopulated from scratch
+                    restate_models=list(self.context.models)
+                    if not select_models
+                    else select_models,
+                    # by default in SQLMesh, restatements only operate on what has been committed to state.
+                    # in order to emulate dbt, we need to use the local filesystem instead, so we override this default
+                    always_include_local_changes=True,
+                )
+            )
 
         return dict(
             environment=environment,
             select_models=select_models,
-            # dont output a diff of model changes
-            no_diff=True,
-            # don't throw up any prompts like "set the effective date" - use defaults
-            no_prompts=True,
-            # start doing work immediately (since no_diff is set, there isnt really anything for the user to say yes/no to)
-            auto_apply=True,
             **options,
         )
 

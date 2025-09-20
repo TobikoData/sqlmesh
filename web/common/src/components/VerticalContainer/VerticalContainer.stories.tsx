@@ -1,4 +1,7 @@
-import { VerticalContainer } from './VerticalContainer'
+import {
+  VerticalContainer,
+  type VerticalContainerProps,
+} from './VerticalContainer'
 
 export default {
   title: 'Components/Containers/VerticalContainer',
@@ -14,7 +17,7 @@ const content = Array.from({ length: 20 }, (_, i) => (
   </div>
 ))
 
-export const Default = (args: any) => (
+export const Default = (args: VerticalContainerProps) => (
   <div style={{ height: 350, width: '100%', border: '1px solid #ccc' }}>
     <VerticalContainer
       {...args}
@@ -26,7 +29,7 @@ export const Default = (args: any) => (
 )
 Default.storyName = 'Default (No Scroll)'
 
-export const WithScroll = (args: any) => (
+export const WithScroll = (args: VerticalContainerProps) => (
   <div style={{ height: 350, width: '100%', border: '1px solid #ccc' }}>
     <VerticalContainer
       {...args}
@@ -37,7 +40,7 @@ export const WithScroll = (args: any) => (
   </div>
 )
 
-export const CustomClassName = (args: any) => (
+export const CustomClassName = (args: VerticalContainerProps) => (
   <div style={{ height: 350, width: '100%' }}>
     <VerticalContainer
       {...args}
@@ -49,7 +52,7 @@ export const CustomClassName = (args: any) => (
 )
 CustomClassName.storyName = 'With Custom ClassName'
 
-export const NestedVerticalContainer = (args: any) => (
+export const NestedVerticalContainer = (args: VerticalContainerProps) => (
   <div
     style={{
       height: 500,

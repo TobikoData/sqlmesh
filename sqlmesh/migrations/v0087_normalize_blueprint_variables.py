@@ -35,7 +35,11 @@ class SqlValue:
     sql: str
 
 
-def migrate(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(state_sync, **kwargs):  # type: ignore
+    pass
+
+
+def migrate_rows(state_sync, **kwargs):  # type: ignore
     import pandas as pd
 
     engine_adapter = state_sync.engine_adapter

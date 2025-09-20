@@ -425,6 +425,25 @@ def test_trino_schema_location_mapping(make_config):
     assert all((isinstance(v, str) for v in config.schema_location_mapping.values()))
 
 
+def test_trino_catalog_type_override(make_config):
+    required_kwargs = dict(
+        type="trino",
+        user="user",
+        host="host",
+        catalog="catalog",
+    )
+
+    config = make_config(
+        **required_kwargs,
+        catalog_type_overrides={"my_catalog": "iceberg"},
+    )
+
+    assert config.catalog_type_overrides is not None
+    assert len(config.catalog_type_overrides) == 1
+
+    assert config.catalog_type_overrides == {"my_catalog": "iceberg"}
+
+
 def test_duckdb(make_config):
     config = make_config(
         type="duckdb",

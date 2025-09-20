@@ -10,6 +10,7 @@ from sqlmesh.dbt.util import DBT_VERSION
 
 import pytest
 from dbt.adapters.base import BaseRelation
+from jinja2 import Template
 
 if DBT_VERSION >= (1, 4, 0):
     from dbt.exceptions import CompilationError
@@ -42,8 +43,9 @@ from sqlmesh.core.model.kind import (
     OnAdditiveChange,
 )
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
-from sqlmesh.dbt.builtin import _relation_info_to_relation
+from sqlmesh.dbt.builtin import _relation_info_to_relation, Config
 from sqlmesh.dbt.common import Dependencies
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -1012,6 +1014,18 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.path }}") == "None"
     assert context.render("{{ target.profile_name }}") == "None"
 
+    context = DbtContext()
+    context._target = SnowflakeConfig(
+        name="target",
+        schema="test",
+        database="test",
+        account="account",
+        user="user",
+        password="password",
+        warehouse="warehouse",
+    )
+    assert context.render("{{ target.warehouse }}") == "warehouse"
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_project_name_jinja(sushi_test_project: Project):
@@ -1050,6 +1064,97 @@ def test_config_jinja(sushi_test_project: Project):
     model = t.cast(SqlModel, model_config.to_sqlmesh(context))
     assert hook in model.pre_statements[0].sql()
     assert model.render_pre_statements()[0].sql() == '"bar"'
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_config_dict_syntax():
+    # Test dictionary syntax
+    config = Config({})
+    result = config({"materialized": "table", "alias": "dict_table"})
+    assert result == ""
+    assert config._config["materialized"] == "table"
+    assert config._config["alias"] == "dict_table"
+
+    # Test kwargs syntax still works
+    config2 = Config({})
+    result = config2(materialized="view", alias="kwargs_table")
+    assert result == ""
+    assert config2._config["materialized"] == "view"
+    assert config2._config["alias"] == "kwargs_table"
+
+    # Test that mixing args and kwargs is rejected
+    config3 = Config({})
+    try:
+        config3({"materialized": "table"}, alias="mixed")
+        assert False, "Should have raised ConfigError"
+    except Exception as e:
+        assert "cannot mix positional and keyword arguments" in str(e)
+
+    # Test nested dicts
+    config4 = Config({})
+    config4({"meta": {"owner": "data_team", "priority": 1}, "tags": ["daily", "critical"]})
+    assert config4._config["meta"]["owner"] == "data_team"
+    assert config4._config["tags"] == ["daily", "critical"]
+
+    # Test multiple positional arguments are rejected
+    config4 = Config({})
+    try:
+        config4({"materialized": "table"}, {"alias": "test"})
+        assert False
+    except Exception as e:
+        assert "expected a single dictionary, got 2 arguments" in str(e)
+
+
+def test_config_dict_in_jinja():
+    # Test dict syntax directly with Config class
+    config = Config({})
+    template = Template("{{ config({'materialized': 'table', 'unique_key': 'id'}) }}done")
+    result = template.render(config=config)
+    assert result == "done"
+    assert config._config["materialized"] == "table"
+    assert config._config["unique_key"] == "id"
+
+    # Test with nested dict and list values
+    config2 = Config({})
+    complex_template = Template("""{{ config({
+        'tags': ['test', 'dict'],
+        'meta': {'owner': 'data_team'}
+    }) }}result""")
+    result = complex_template.render(config=config2)
+    assert result == "result"
+    assert config2._config["tags"] == ["test", "dict"]
+    assert config2._config["meta"]["owner"] == "data_team"
+
+    # Test that kwargs still work
+    config3 = Config({})
+    kwargs_template = Template("{{ config(materialized='view', alias='my_view') }}done")
+    result = kwargs_template.render(config=config3)
+    assert result == "done"
+    assert config3._config["materialized"] == "view"
+    assert config3._config["alias"] == "my_view"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_config_dict_syntax_in_sushi_project(sushi_test_project: Project):
+    assert sushi_test_project is not None
+    assert sushi_test_project.context is not None
+
+    sushi_package = sushi_test_project.packages.get("sushi")
+    assert sushi_package is not None
+
+    top_waiters_found = False
+    for model_config in sushi_package.models.values():
+        if model_config.name == "top_waiters":
+            # top_waiters model now uses dict config syntax with:
+            # config({'materialized': 'view', 'limit_value': var('top_waiters:limit'), 'meta': {...}})
+            top_waiters_found = True
+            assert model_config.materialized == "view"
+            assert model_config.meta is not None
+            assert model_config.meta.get("owner") == "analytics_team"
+            assert model_config.meta.get("priority") == "high"
+            break
+
+    assert top_waiters_found
 
 
 @pytest.mark.xdist_group("dbt_manifest")
@@ -1343,6 +1448,21 @@ def test_flags(sushi_test_project: Project):
     assert context.render("{{ flags.WHICH }}") == "parse"
 
 
+def test_invocation_args_dict(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ invocation_args_dict['full_refresh'] }}") == "None"
+    assert context.render("{{ invocation_args_dict['store_failures'] }}") == "None"
+    assert context.render("{{ invocation_args_dict['which'] }}") == "parse"
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_context_namespace(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ context.flags.FULL_REFRESH }}") == "None"
+
+
 @pytest.mark.xdist_group("dbt_manifest")
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
@@ -1561,6 +1681,18 @@ def test_partition_by(sushi_test_project: Project):
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds", quoted=True)]
 
     context.target = DuckDbConfig(name="target", schema="foo")
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+
+    model_config = ModelConfig(
+        name="model",
+        alias="model",
+        schema="test",
+        package_name="package",
+        materialized=Materialization.VIEW.value,
+        unique_key="ds",
+        partition_by={"field": "ds", "granularity": "month"},
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
     assert model_config.to_sqlmesh(context).partitioned_by == []
 
 
@@ -1942,6 +2074,17 @@ def test_model_cluster_by():
     )
     assert model.to_sqlmesh(context).clustered_by == []
 
+    model = ModelConfig(
+        name="model",
+        alias="model",
+        package_name="package",
+        target_schema="test",
+        cluster_by=["Bar", "qux"],
+        sql="SELECT * FROM baz",
+        materialized=Materialization.EPHEMERAL.value,
+    )
+    assert model.to_sqlmesh(context).clustered_by == []
+
 
 def test_snowflake_dynamic_table():
     context = DbtContext()
@@ -2018,11 +2161,11 @@ def test_allow_partials_by_default():
         sql="SELECT * FROM baz",
         materialized=Materialization.TABLE.value,
     )
-    assert model.allow_partials is None
+    assert model.allow_partials
     assert model.to_sqlmesh(context).allow_partials
 
     model.materialized = Materialization.INCREMENTAL.value
-    assert model.allow_partials is None
+    assert model.allow_partials
     assert model.to_sqlmesh(context).allow_partials
 
     model.allow_partials = True
@@ -2090,7 +2233,7 @@ def test_on_run_start_end():
         runtime_stage=RuntimeStage.BEFORE_ALL,
     )
 
-    rendered_after_all = render_statements(
+    runtime_rendered_after_all = render_statements(
         root_environment_statements.after_all,
         dialect=sushi_context.default_dialect,
         python_env=root_environment_statements.python_env,
@@ -2100,6 +2243,22 @@ def test_on_run_start_end():
         environment_naming_info=EnvironmentNamingInfo(name="dev"),
         engine_adapter=sushi_context.engine_adapter,
     )
+
+    # not passing engine adapter simulates "parse-time" rendering
+    parse_time_rendered_after_all = render_statements(
+        root_environment_statements.after_all,
+        dialect=sushi_context.default_dialect,
+        python_env=root_environment_statements.python_env,
+        jinja_macros=root_environment_statements.jinja_macros,
+        snapshots=sushi_context.snapshots,
+        runtime_stage=RuntimeStage.AFTER_ALL,
+        environment_naming_info=EnvironmentNamingInfo(name="dev"),
+    )
+
+    # validate that the graph_table statement is the same between parse-time and runtime rendering
+    assert sorted(parse_time_rendered_after_all) == sorted(runtime_rendered_after_all)
+    graph_table_stmt = runtime_rendered_after_all[-1]
+    assert graph_table_stmt == parse_time_rendered_after_all[-1]
 
     assert rendered_before_all == [
         "CREATE TABLE IF NOT EXISTS analytic_stats (physical_table TEXT, evaluation_time TEXT)",
@@ -2113,10 +2272,9 @@ def test_on_run_start_end():
         "CREATE OR REPLACE TABLE schema_table_sushi__dev AS SELECT 'sushi__dev' AS schema",
         "DROP TABLE to_be_executed_last",
     ]
-    assert sorted(rendered_after_all[:-1]) == sorted(expected_statements)
+    assert sorted(runtime_rendered_after_all[:-1]) == sorted(expected_statements)
 
     # Assert the models with their materialisations are present in the rendered graph_table statement
-    graph_table_stmt = rendered_after_all[-1]
     assert "'model.sushi.simple_model_a' AS unique_id, 'table' AS materialized" in graph_table_stmt
     assert "'model.sushi.waiters' AS unique_id, 'ephemeral' AS materialized" in graph_table_stmt
     assert "'model.sushi.simple_model_b' AS unique_id, 'table' AS materialized" in graph_table_stmt
@@ -2253,3 +2411,84 @@ def test_dynamic_var_names_in_macro(sushi_test_project: Project):
     )
     converted_model = model_config.to_sqlmesh(context)
     assert "dynamic_test_var" in converted_model.jinja_macros.global_objs["vars"]  # type: ignore
+
+
+def test_selected_resources_with_selectors():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+
+    # A plan with a specific model selection
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers"])
+    plan = plan_builder.build()
+    assert len(plan.selected_models) == 1
+    selected_model = list(plan.selected_models)[0]
+    assert "customers" in selected_model
+
+    # Plan without model selections should include all models
+    plan_builder = sushi_context.plan_builder()
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) > 10
+
+    # with downstream models should select customers and at least one downstream model
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.customers+"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 2
+    assert any("customers" in model for model in plan.selected_models)
+
+    # Test wildcard selection
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.waiter_*"])
+    plan = plan_builder.build()
+    assert plan.selected_models is not None
+    assert len(plan.selected_models) >= 4
+    assert all("waiter" in model for model in plan.selected_models)
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_selected_resources_context_variable(
+    sushi_test_project: Project, sushi_test_dbt_context: Context
+):
+    context = sushi_test_project.context
+
+    # empty selected resources
+    direct_access = context.render("{{ selected_resources }}")
+    assert direct_access == "[]"
+
+    # selected_resources is iterable and count items
+    test_jinja = """
+    {%- set resources = [] -%}
+    {%- for resource in selected_resources -%}
+        {%- do resources.append(resource) -%}
+    {%- endfor -%}
+    {{ resources | length }}
+    """
+    result = context.render(test_jinja)
+    assert result.strip() == "0"
+
+    # selected_resources in conditions
+    test_condition = """
+    {%- if selected_resources -%}
+        has_resources
+    {%- else -%}
+        no_resources
+    {%- endif -%}
+    """
+    result = context.render(test_condition)
+    assert result.strip() == "no_resources"
+
+    #  selected resources in dbt format
+    selected_resources = [
+        "model.jaffle_shop.customers",
+        "model.jaffle_shop.items",
+        "model.jaffle_shop.orders",
+    ]
+
+    # check the jinja macros rendering
+    result = context.render("{{ selected_resources }}", selected_resources=selected_resources)
+    assert result == selected_resources.__repr__()
+
+    result = context.render(test_jinja, selected_resources=selected_resources)
+    assert result.strip() == "3"
+
+    result = context.render(test_condition, selected_resources=selected_resources)
+    assert result.strip() == "has_resources"

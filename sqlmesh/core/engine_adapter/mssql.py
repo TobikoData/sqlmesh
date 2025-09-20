@@ -16,7 +16,6 @@ from sqlmesh.core.engine_adapter.base import (
 )
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
-    InsertOverwriteWithMergeMixin,
     PandasNativeFetchDFSupportMixin,
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
@@ -41,7 +40,6 @@ if t.TYPE_CHECKING:
 class MSSQLEngineAdapter(
     EngineAdapterWithIndexSupport,
     PandasNativeFetchDFSupportMixin,
-    InsertOverwriteWithMergeMixin,
     GetCurrentCatalogFromFunctionMixin,
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
@@ -74,6 +72,7 @@ class MSSQLEngineAdapter(
         },
     }
     VARIABLE_LENGTH_DATA_TYPES = {"binary", "varbinary", "char", "varchar", "nchar", "nvarchar"}
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.MERGE
 
     @property
     def catalog_support(self) -> CatalogSupport:

@@ -631,6 +631,49 @@ def test_env_and_default_schema_normalization(mocker: MockerFixture):
     assert list(context.fetchdf('select c from "DEFAULT__DEV"."X"')["c"])[0] == 1
 
 
+def test_jinja_macro_undefined_variable_error(tmp_path: pathlib.Path):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True)
+    macros_dir = tmp_path / "macros"
+    macros_dir.mkdir(parents=True)
+
+    macro_file = macros_dir / "my_macros.sql"
+    macro_file.write_text("""
+{%- macro generate_select(table_name) -%}
+  {%- if target.name == 'production' -%}
+    {%- set results = run_query('SELECT 1') -%}
+  {%- endif -%}
+  SELECT {{ results.columns[0].values()[0] }} FROM {{ table_name }}
+{%- endmacro -%}
+""")
+
+    model_file = models_dir / "my_model.sql"
+    model_file.write_text("""
+MODEL (
+    name my_schema.my_model,
+    kind FULL
+);
+
+JINJA_QUERY_BEGIN;
+{{ generate_select('users') }}
+JINJA_END;
+""")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+model_defaults:
+  dialect: duckdb
+""")
+
+    with pytest.raises(ConfigError) as exc_info:
+        Context(paths=str(tmp_path))
+
+    error_message = str(exc_info.value)
+    assert "Failed to load model" in error_message
+    assert "Could not render jinja for" in error_message
+    assert "Undefined macro/variable: 'target' in macro: 'generate_select'" in error_message
+
+
 def test_clear_caches(tmp_path: pathlib.Path):
     models_dir = tmp_path / "models"
 
@@ -1532,6 +1575,58 @@ def test_plan_enable_preview_default(sushi_context: Context, sushi_dbt_context: 
 
     sushi_dbt_context.engine_adapter.SUPPORTS_CLONING = True
     assert sushi_dbt_context._plan_preview_enabled
+
+
+@pytest.mark.slow
+def test_raw_code_handling(sushi_test_dbt_context: Context):
+    model = sushi_test_dbt_context.models['"memory"."sushi"."model_with_raw_code"']
+    assert "raw_code" not in model.jinja_macros.global_objs["model"]  # type: ignore
+
+    # logging "pre-hook" (in dbt_projects.yml) + the actual pre-hook in the model file
+    assert len(model.pre_statements) == 2
+
+    original_file_path = model.jinja_macros.global_objs["model"]["original_file_path"]  # type: ignore
+    model_file_path = sushi_test_dbt_context.path / original_file_path
+
+    raw_code_length = len(model_file_path.read_text()) - 1
+
+    hook = model.render_pre_statements()[0]
+    assert (
+        hook.sql()
+        == f'''CREATE TABLE IF NOT EXISTS "t" AS SELECT 'Length is {raw_code_length}' AS "length_col"'''
+    )
+
+
+@pytest.mark.slow
+def test_dbt_models_are_not_validated(sushi_test_dbt_context: Context):
+    model = sushi_test_dbt_context.models['"memory"."sushi"."non_validated_model"']
+
+    assert model.render_query_or_raise().sql(comments=False) == 'SELECT 1 AS "c", 2 AS "c"'
+    assert sushi_test_dbt_context.fetchdf(
+        'SELECT * FROM "memory"."sushi"."non_validated_model"'
+    ).to_dict() == {"c": {0: 1}, "c_1": {0: 2}}
+
+    # Write a new incremental model file that should fail validation
+    models_dir = sushi_test_dbt_context.path / "models"
+    incremental_model_path = models_dir / "invalid_incremental.sql"
+    incremental_model_content = """{{
+  config(
+    materialized='incremental',
+    incremental_strategy='delete+insert',
+  )
+}}
+
+SELECT
+  1 AS c"""
+
+    incremental_model_path.write_text(incremental_model_content)
+
+    # Reload the context - this should raise a validation error for the incremental model
+    with pytest.raises(
+        ConfigError,
+        match="Unmanaged incremental models with insert / overwrite enabled must specify the partitioned_by field",
+    ):
+        Context(paths=sushi_test_dbt_context.path, config="test_config")
 
 
 def test_catalog_name_needs_to_be_quoted():
@@ -2445,7 +2540,7 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@daily'
-    );                        
+    );
 
     select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2458,9 +2553,9 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@weekly'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                        
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     (tmp_path / "models" / "monthly_model.sql").write_text("""
@@ -2471,9 +2566,9 @@ def test_plan_min_intervals(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@monthly'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                         
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     (tmp_path / "models" / "ended_daily_model.sql").write_text("""
@@ -2485,9 +2580,9 @@ def test_plan_min_intervals(tmp_path: Path):
       start '2020-01-01',
       end '2020-01-18',
       cron '@daily'
-    );                        
+    );
 
-    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;                 
+    select @start_ds as start_ds, @end_ds as end_ds, @start_dt as start_dt, @end_dt as end_dt;
     """)
 
     context.load()
@@ -2620,7 +2715,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@hourly'
-    );                        
+    );
 
     select @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2629,11 +2724,11 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
     MODEL (
       name sqlmesh_example.two_hourly_model,
       kind INCREMENTAL_BY_TIME_RANGE (
-        time_column start_dt        
+        time_column start_dt
       ),
       start '2020-01-01',
       cron '0 */2 * * *'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
     """)
@@ -2642,11 +2737,11 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
     MODEL (
       name sqlmesh_example.unrelated_monthly_model,
       kind INCREMENTAL_BY_TIME_RANGE (
-        time_column start_dt        
+        time_column start_dt
       ),
       start '2020-01-01',
       cron '@monthly'
-    );                        
+    );
 
     select @start_dt as start_dt, @end_dt as end_dt;
     """)
@@ -2659,7 +2754,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@daily'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.hourly_model where start_dt between @start_dt and @end_dt;
     """)
@@ -2672,7 +2767,7 @@ def test_plan_min_intervals_adjusted_for_downstream(tmp_path: Path):
       ),
       start '2020-01-01',
       cron '@weekly'
-    );                        
+    );
 
     select start_dt, end_dt from sqlmesh_example.daily_model where start_dt between @start_dt and @end_dt;
     """)
@@ -3065,3 +3160,20 @@ def test_plan_no_start_configured():
         match=r"Model '.*xvg.*': Start date / time .* can't be greater than end date / time .*\.\nSet the `start` attribute in your project config model defaults to avoid this issue",
     ):
         context.plan("dev", execution_time="1999-01-05")
+
+
+def test_lint_model_projections(tmp_path: Path):
+    init_example_project(tmp_path, engine_type="duckdb", dialect="duckdb")
+
+    context = Context(paths=tmp_path)
+    context.upsert_model(
+        load_sql_based_model(
+            parse("""MODEL(name sqlmesh_example.m); SELECT 1 AS x, 2 AS x"""),
+            default_catalog="db",
+        )
+    )
+
+    config_err = "Linter detected errors in the code. Please fix them before proceeding."
+
+    with pytest.raises(LinterError, match=config_err):
+        prod_plan = context.plan(no_prompts=True, auto_apply=True)

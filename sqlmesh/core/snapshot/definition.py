@@ -587,6 +587,67 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         """Returns the name and version of the snapshot."""
         return SnapshotNameVersion(name=self.name, version=self.version)
 
+    @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return SnapshotIdAndVersion(
+            name=self.name,
+            kind_name=self.kind_name,
+            identifier=self.identifier,
+            version=self.version,
+            dev_version=self.dev_version,
+            fingerprint=self.fingerprint,
+        )
+
+
+class SnapshotIdAndVersion(PydanticModel, ModelKindMixin):
+    """A stripped down version of a snapshot that is used in situations where we want to fetch the main fields of the snapshots table
+    without the overhead of parsing the full snapshot payload and fetching intervals.
+    """
+
+    name: str
+    version: str
+    kind_name_: t.Optional[ModelKindName] = Field(default=None, alias="kind_name")
+    dev_version_: t.Optional[str] = Field(alias="dev_version")
+    identifier: str
+    fingerprint_: t.Union[str, SnapshotFingerprint] = Field(alias="fingerprint")
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return self
+
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def fingerprint(self) -> SnapshotFingerprint:
+        value = self.fingerprint_
+        if isinstance(value, str):
+            self.fingerprint_ = value = SnapshotFingerprint.parse_raw(value)
+        return value
+
+    @property
+    def dev_version(self) -> str:
+        return self.dev_version_ or self.fingerprint.to_version()
+
+    @property
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
+        return self.kind_name_
+
+    def display_name(
+        self,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+        dialect: DialectType = None,
+    ) -> str:
+        return model_display_name(
+            self.name, environment_naming_info, default_catalog, dialect=dialect
+        )
+
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
     """A snapshot represents a node at a certain point in time.
@@ -1394,6 +1455,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return SnapshotNameVersion(name=self.name, version=self.version)
 
     @property
+    def id_and_version(self) -> SnapshotIdAndVersion:
+        return self.table_info.id_and_version
+
+    @property
     def disable_restatement(self) -> bool:
         """Is restatement disabled for the node"""
         return self.is_model and self.model.disable_restatement
@@ -1413,18 +1478,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
+    def supports_schema_migration_in_prod(self) -> bool:
+        """Returns whether or not this snapshot supports schema migration when deployed to production."""
+        return self.is_paused and self.is_model and not self.is_symbolic and not self.is_seed
+
+    @property
     def requires_schema_migration_in_prod(self) -> bool:
         """Returns whether or not this snapshot requires a schema migration when deployed to production."""
-        return (
-            self.is_paused
-            and self.is_model
-            and self.is_materialized
-            and (
-                (self.previous_version and self.previous_version.version == self.version)
-                or self.model.forward_only
-                or bool(self.model.physical_version)
-                or not self.virtual_environment_mode.is_full
-            )
+        return self.supports_schema_migration_in_prod and (
+            (self.previous_version and self.previous_version.version == self.version)
+            or self.model.forward_only
+            or bool(self.model.physical_version)
+            or not self.virtual_environment_mode.is_full
         )
 
     @property
@@ -1463,9 +1528,12 @@ class SnapshotTableCleanupTask(PydanticModel):
     dev_table_only: bool
 
 
-SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
+SnapshotIdLike = t.Union[SnapshotId, SnapshotIdAndVersion, SnapshotTableInfo, Snapshot]
+SnapshotIdAndVersionLike = t.Union[SnapshotIdAndVersion, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
-SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
+SnapshotNameVersionLike = t.Union[
+    SnapshotNameVersion, SnapshotTableInfo, SnapshotIdAndVersion, Snapshot
+]
 
 
 class DeployabilityIndex(PydanticModel, frozen=True):
@@ -1611,6 +1679,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     snapshot.is_valid_start(start, snapshot_start) if start is not None else True
                 )
 
+                children_deployable = is_valid_start and not has_auto_restatement
                 if (
                     snapshot.is_forward_only
                     or snapshot.is_indirect_non_breaking
@@ -1627,15 +1696,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     ):
                         # This snapshot represents what's currently deployed in prod.
                         representative_shared_version_ids.add(node)
-
-                # A child can still be deployable even if its parent is not
-                children_deployable = (
-                    is_valid_start
-                    and not (
-                        snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
-                    )
-                    and not has_auto_restatement
-                )
+                    else:
+                        # If the parent is not representative then its children can't be deployable.
+                        children_deployable = False
             else:
                 children_deployable = False
                 if not snapshots[node].is_paused:
@@ -1735,7 +1798,19 @@ def display_name(
     """
     if snapshot_info_like.is_audit:
         return snapshot_info_like.name
-    view_name = exp.to_table(snapshot_info_like.name)
+
+    return model_display_name(
+        snapshot_info_like.name, environment_naming_info, default_catalog, dialect
+    )
+
+
+def model_display_name(
+    node_name: str,
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str],
+    dialect: DialectType = None,
+) -> str:
+    view_name = exp.to_table(node_name)
 
     catalog = (
         None

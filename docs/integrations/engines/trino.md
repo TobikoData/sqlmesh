@@ -81,19 +81,21 @@ hive.metastore.glue.default-warehouse-dir=s3://my-bucket/
 
 ### Connection options
 
-| Option               | Description                                                                                                                                                               |  Type  | Required |
-|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `type`               | Engine type name - must be `trino`                                                                                                                                        | string |    Y     |
-| `user`               | The username (of the account) to log in to your cluster. When connecting to Starburst Galaxy clusters, you must include the role of the user as a suffix to the username. | string |    Y     |
-| `host`               | The hostname of your cluster. Don't include the `http://` or `https://` prefix.                                                                                           | string |    Y     |
-| `catalog`            | The name of a catalog in your cluster.                                                                                                                                    | string |    Y     |
-| `http_scheme`        | The HTTP scheme to use when connecting to your cluster. By default, it's `https` and can only be `http` for no-auth or basic auth.                                        | string |    N     |
-| `port`               | The port to connect to your cluster. By default, it's `443` for `https` scheme and `80` for `http`                                                                        |  int   |    N     |
-| `roles`              | Mapping of catalog name to a role                                                                                                                                         |  dict  |    N     |
-| `http_headers`       | Additional HTTP headers to send with each request.                                                                                                                        |  dict  |    N     |
-| `session_properties` | Trino session properties. Run `SHOW SESSION` to see all options.                                                                                                          |  dict  |    N     |
-| `retries`            | Number of retries to attempt when a request fails. Default: `3`                                                                                                           |  int   |    N     |
-| `timezone`           | Timezone to use for the connection. Default: client-side local timezone                                                                                                   | string |    N     |
+| Option                    | Description                                                                                                                                                                             |  Type  | Required |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `type`                    | Engine type name - must be `trino`                                                                                                                                                      | string |    Y     |
+| `user`                    | The username (of the account) to log in to your cluster. When connecting to Starburst Galaxy clusters, you must include the role of the user as a suffix to the username.               | string |    Y     |
+| `host`                    | The hostname of your cluster. Don't include the `http://` or `https://` prefix.                                                                                                         | string |    Y     |
+| `catalog`                 | The name of a catalog in your cluster.                                                                                                                                                  | string |    Y     |
+| `http_scheme`             | The HTTP scheme to use when connecting to your cluster. By default, it's `https` and can only be `http` for no-auth or basic auth.                                                      | string |    N     |
+| `port`                    | The port to connect to your cluster. By default, it's `443` for `https` scheme and `80` for `http`                                                                                      |  int   |    N     |
+| `roles`                   | Mapping of catalog name to a role                                                                                                                                                       |  dict  |    N     |
+| `http_headers`            | Additional HTTP headers to send with each request.                                                                                                                                      |  dict  |    N     |
+| `session_properties`      | Trino session properties. Run `SHOW SESSION` to see all options.                                                                                                                        |  dict  |    N     |
+| `retries`                 | Number of retries to attempt when a request fails. Default: `3`                                                                                                                         |  int   |    N     |
+| `timezone`                | Timezone to use for the connection. Default: client-side local timezone                                                                                                                 | string |    N     |
+| `schema_location_mapping` | A mapping of regex patterns to S3 locations to use for the `LOCATION` property when creating schemas. See [Table and Schema locations](#table-and-schema-locations) for more details.   |  dict  |    N     |
+| `catalog_type_overrides`  | A mapping of catalog names to their connector type. This is used to enable/disable connector specific behavior. See [Catalog Type Overrides](#catalog-type-overrides) for more details. |  dict  |    N     |
 
 ## Table and Schema locations
 
@@ -203,6 +205,25 @@ SELECT ...
 ```
 
 This will cause SQLMesh to set the specified `LOCATION` when issuing a `CREATE TABLE` statement.
+
+## Catalog Type Overrides
+
+SQLMesh attempts to determine the connector type of a catalog by querying the `system.metadata.catalogs` table and checking the `connector_name` column.
+It checks if the connector name is `hive` for Hive connector behavior or contains `iceberg` or `delta_lake` for Iceberg or Delta Lake connector behavior respectively.
+However, the connector name may not always be a reliable way to determine the connector type, for example when using a custom connector or a fork of an existing connector.
+To handle such cases, you can use the `catalog_type_overrides` connection property to explicitly specify the connector type for specific catalogs.
+For example, to specify that the `datalake` catalog is using the Iceberg connector and the `analytics` catalog is using the Hive connector, you can configure the connection as follows:
+
+```yaml title="config.yaml"
+gateways:
+  trino:
+    connection:
+      type: trino
+      ...
+      catalog_type_overrides:
+        datalake: iceberg
+        analytics: hive
+```
 
 ## Authentication
 

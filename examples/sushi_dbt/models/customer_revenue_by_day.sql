@@ -1,7 +1,7 @@
 {{
   config(
     materialized='incremental',
-    incremental_strategy='delete+insert',
+    incremental_strategy='incremental_by_time_range',
     cluster_by=['ds'],
     time_column='ds',
   )

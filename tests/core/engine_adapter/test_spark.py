@@ -66,14 +66,15 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
+@pytest.mark.parametrize("wap_enabled", [True, False])
 def test_replace_query_table_properties_not_exists(
-    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, wap_enabled: bool
 ):
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=wap_enabled)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -89,10 +90,13 @@ def test_replace_query_table_properties_not_exists(
         table_properties={"a": exp.convert(1)},
     )
 
-    assert to_sql_calls(adapter) == [
+    expected_sql_calls = [
         "CREATE TABLE IF NOT EXISTS `test_table` USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1) AS SELECT CAST(`cola` AS INT) AS `cola`, CAST(`colb` AS STRING) AS `colb`, CAST(`colc` AS STRING) AS `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery`",
-        "INSERT INTO `test_table` SELECT * FROM `test_table`",
     ]
+    if wap_enabled:
+        expected_sql_calls.append("INSERT INTO `test_table` SELECT * FROM `test_table`")
+
+    assert to_sql_calls(adapter) == expected_sql_calls
 
 
 def test_replace_query_table_properties_exists(
@@ -825,13 +829,16 @@ def test_wap_publish(make_mocked_engine_adapter: t.Callable, mocker: MockerFixtu
     )
 
 
-def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+@pytest.mark.parametrize("wap_enabled", [True, False])
+def test_create_table_iceberg(
+    mocker: MockerFixture, make_mocked_engine_adapter: t.Callable, wap_enabled: bool
+):
     mocker.patch(
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
 
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=wap_enabled)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -846,10 +853,13 @@ def test_create_table_iceberg(mocker: MockerFixture, make_mocked_engine_adapter:
         storage_format="ICEBERG",
     )
 
-    assert to_sql_calls(adapter) == [
+    expected_sql_calls = [
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)",
-        "INSERT INTO `test_table` SELECT * FROM `test_table`",
     ]
+    if wap_enabled:
+        expected_sql_calls.append("INSERT INTO `test_table` SELECT * FROM `test_table`")
+
+    assert to_sql_calls(adapter) == expected_sql_calls
 
 
 def test_comments_hive(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
@@ -973,7 +983,7 @@ def test_create_table_with_wap(make_mocked_engine_adapter: t.Callable, mocker: M
         "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter, wap_enabled=True)
 
     adapter.create_table(
         "catalog.schema.table.branch_wap_12345",

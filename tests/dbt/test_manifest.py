@@ -6,6 +6,7 @@ import pytest
 
 from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.basemodel import Dependencies
+from sqlmesh.dbt.common import ModelAttrs
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper, _convert_jinja_test_to_macro
 from sqlmesh.dbt.profile import Profile
@@ -33,7 +34,7 @@ def test_manifest_helper(caplog):
     assert models["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
         variables={"top_waiters:revenue", "top_waiters:limit"},
-        model_attrs={"columns", "config"},
+        model_attrs=ModelAttrs(attrs={"columns", "config"}),
         macros=[
             MacroReference(name="get_top_waiters_limit"),
             MacroReference(name="ref"),
@@ -80,7 +81,7 @@ def test_manifest_helper(caplog):
         macros=[MacroReference(name="ref")],
     )
     assert waiter_as_customer_by_day_config.materialized == "incremental"
-    assert waiter_as_customer_by_day_config.incremental_strategy == "delete+insert"
+    assert waiter_as_customer_by_day_config.incremental_strategy == "incremental_by_time_range"
     assert waiter_as_customer_by_day_config.cluster_by == ["ds"]
     assert waiter_as_customer_by_day_config.time_column == "ds"
 
@@ -102,7 +103,7 @@ def test_manifest_helper(caplog):
         has_dynamic_var_names=True,
     )
     assert waiter_revenue_by_day_config.materialized == "incremental"
-    assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"
+    assert waiter_revenue_by_day_config.incremental_strategy == "incremental_by_time_range"
     assert waiter_revenue_by_day_config.cluster_by == ["ds"]
     assert waiter_revenue_by_day_config.time_column == "ds"
     assert waiter_revenue_by_day_config.dialect_ == "bigquery"
@@ -303,3 +304,23 @@ def test_convert_jinja_test_to_macro():
 {%- endmacro -%}"""
 
     assert _convert_jinja_test_to_macro(macro_input) == macro_input
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_macro_depenency_none_str():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
+    )
+    node = helper._manifest.nodes["model.customers.customer_revenue_by_day"]
+    node.depends_on.macros.append("None")
+
+    from sqlmesh.dbt.manifest import _macro_references
+
+    # "None" macro shouldn't raise a KeyError
+    _macro_references(helper._manifest, node)

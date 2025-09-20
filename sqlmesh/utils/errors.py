@@ -86,6 +86,10 @@ class AuditConfigError(ConfigError):
     pass
 
 
+class StateMigrationError(SQLMeshError):
+    pass
+
+
 class AuditError(SQLMeshError):
     def __init__(
         self,
@@ -144,6 +148,10 @@ class DestructiveChangeError(SQLMeshError):
 
 
 class AdditiveChangeError(SQLMeshError):
+    pass
+
+
+class MigrationNotSupportedError(SQLMeshError):
     pass
 
 

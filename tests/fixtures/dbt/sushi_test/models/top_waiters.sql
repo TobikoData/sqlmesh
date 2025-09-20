@@ -1,8 +1,9 @@
 {{
-    config(
-        materialized='view',
-        limit_value=var('top_waiters:limit'),
-    )
+    config({
+        'materialized': 'view',
+        'limit_value': var('top_waiters:limit'),
+        'meta': {'owner': 'analytics_team', 'priority': 'high'}
+    })
 }}
 
 {% set columns = model.columns %}

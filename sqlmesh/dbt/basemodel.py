@@ -22,11 +22,13 @@ from sqlmesh.dbt.common import (
     DbtConfig,
     Dependencies,
     GeneralConfig,
+    RAW_CODE_KEY,
     SqlStr,
     sql_str_validator,
 )
 from sqlmesh.dbt.relation import Policy, RelationType
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
@@ -129,6 +131,7 @@ class BaseModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
+    event_time: t.Optional[str] = None
 
     version: t.Optional[int] = None
     latest_version: t.Optional[int] = None
@@ -166,14 +169,6 @@ class BaseModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
-
-    @property
-    def sql_no_config(self) -> SqlStr:
-        return SqlStr("")
-
-    @property
-    def sql_embedded_config(self) -> SqlStr:
-        return SqlStr("")
 
     @property
     def table_schema(self) -> str:
@@ -229,6 +224,12 @@ class BaseModelConfig(GeneralConfig):
         else:
             relation_type = RelationType.Table
 
+        extras = {}
+        if DBT_VERSION >= (1, 9, 0) and self.event_time:
+            extras["event_time_filter"] = {
+                "field_name": self.event_time,
+            }
+
         return AttributeDict(
             {
                 "database": self.database,
@@ -236,6 +237,7 @@ class BaseModelConfig(GeneralConfig):
                 "identifier": self.table_name,
                 "type": relation_type.value,
                 "quote_policy": AttributeDict(self.quoting),
+                **extras,
             }
         )
 
@@ -266,33 +268,6 @@ class BaseModelConfig(GeneralConfig):
             and all(source in context.sources for source in test.dependencies.sources)
         ]
 
-    def fix_circular_test_refs(self, context: DbtContext) -> None:
-        """
-        Checks for direct circular references between two models and moves the test to the downstream
-        model if found. This addresses the most common circular reference - relationship tests in both
-        directions. In the future, we may want to increase coverage by checking for indirect circular references.
-
-        Args:
-            context: The dbt context this model resides within.
-
-        Returns:
-            None
-        """
-        for test in self.tests.copy():
-            for ref in test.dependencies.refs:
-                if ref == self.name or ref in self.dependencies.refs:
-                    continue
-                model = context.refs[ref]
-                if (
-                    self.name in model.dependencies.refs
-                    or self.name in model.tests_ref_source_dependencies.refs
-                ):
-                    logger.info(
-                        f"Moving test '{test.name}' from model '{self.name}' to '{model.name}' to avoid circular reference."
-                    )
-                    model.tests.append(test)
-                    self.tests.remove(test)
-
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
@@ -312,7 +287,6 @@ class BaseModelConfig(GeneralConfig):
     ) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         self.remove_tests_with_invalid_refs(context)
-        self.fix_circular_test_refs(context)
 
         dependencies = self.dependencies.copy()
         if dependencies.has_dynamic_var_names:
@@ -375,15 +349,21 @@ class BaseModelConfig(GeneralConfig):
     def _model_jinja_context(
         self, context: DbtContext, dependencies: Dependencies
     ) -> t.Dict[str, t.Any]:
-        model_node: AttributeDict[str, t.Any] = AttributeDict(
-            {
-                k: v
-                for k, v in context._manifest._manifest.nodes[self.node_name].to_dict().items()
-                if k in dependencies.model_attrs
-            }
-            if context._manifest and self.node_name in context._manifest._manifest.nodes
-            else {}
-        )
+        if context._manifest and self.node_name in context._manifest._manifest.nodes:
+            attributes = context._manifest._manifest.nodes[self.node_name].to_dict()
+            if dependencies.model_attrs.all_attrs:
+                model_node: AttributeDict[str, t.Any] = AttributeDict(attributes)
+            else:
+                model_node = AttributeDict(
+                    filter(lambda kv: kv[0] in dependencies.model_attrs.attrs, attributes.items())
+                )
+
+            # We exclude the raw SQL code to reduce the payload size. It's still accessible through
+            # the JinjaQuery instance stored in the resulting SQLMesh model's `query` field.
+            model_node.pop(RAW_CODE_KEY, None)
+        else:
+            model_node = AttributeDict({})
+
         return {
             "this": self.relation_info,
             "model": model_node,

@@ -5,6 +5,8 @@ import pathlib
 from unittest import TestCase, mock
 from unittest.result import TestResult
 
+TestResult.__test__ = False  # prevent pytest trying to collect this as a test class
+
 import pytest
 from pytest_mock.plugin import MockerFixture
 

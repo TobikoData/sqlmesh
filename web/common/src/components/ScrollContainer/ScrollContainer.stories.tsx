@@ -1,4 +1,4 @@
-import { ScrollContainer } from './ScrollContainer'
+import { ScrollContainer, type ScrollContainerProps } from './ScrollContainer'
 
 export default {
   title: 'Components/Containers/ScrollContainer',
@@ -14,7 +14,7 @@ const content = Array.from({ length: 30 }, (_, i) => (
   </div>
 ))
 
-export const VerticalScroll = (args: any) => (
+export const VerticalScroll = (args: ScrollContainerProps) => (
   <div style={{ height: 200, width: 300, border: '1px solid #ccc' }}>
     <ScrollContainer
       {...args}
@@ -25,7 +25,7 @@ export const VerticalScroll = (args: any) => (
   </div>
 )
 
-export const HorizontalScroll = (args: any) => (
+export const HorizontalScroll = (args: ScrollContainerProps) => (
   <div style={{ width: 300, border: '1px solid #ccc', overflow: 'hidden' }}>
     <ScrollContainer
       {...args}
@@ -50,7 +50,7 @@ export const HorizontalScroll = (args: any) => (
   </div>
 )
 
-export const BothDirectionsScroll = (args: any) => (
+export const BothDirectionsScroll = (args: ScrollContainerProps) => (
   <div style={{ height: 200, width: 300, border: '1px solid #ccc' }}>
     <ScrollContainer
       {...args}
@@ -75,7 +75,7 @@ export const BothDirectionsScroll = (args: any) => (
   </div>
 )
 
-export const CustomClassName = (args: any) => (
+export const CustomClassName = (args: ScrollContainerProps) => (
   <div style={{ height: 200, width: 300 }}>
     <ScrollContainer
       {...args}
@@ -87,7 +87,7 @@ export const CustomClassName = (args: any) => (
 )
 CustomClassName.storyName = 'With Custom ClassName'
 
-export const PageContentLayout = (args: any) => (
+export const PageContentLayout = (args: ScrollContainerProps) => (
   <div style={{ height: '90vh', width: '100%', border: '1px solid #ccc' }}>
     <ScrollContainer {...args}>
       <div className="flex flex-col gap-4">

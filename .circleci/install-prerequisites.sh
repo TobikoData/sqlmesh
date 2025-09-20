@@ -34,4 +34,9 @@ echo "Installing OS-level dependencies: $ALL_DEPENDENCIES"
 
 sudo apt-get clean && sudo apt-get -y update && sudo ACCEPT_EULA='Y' apt-get -y install $ALL_DEPENDENCIES
 
+if [ "$ENGINE" == "spark" ]; then
+    echo "Using Java version for spark:"
+    java -version
+fi
+
 echo "All done"

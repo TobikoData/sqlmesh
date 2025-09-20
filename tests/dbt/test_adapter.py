@@ -243,6 +243,34 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
     assert renderer("{{ adapter.dispatch('current_timestamp')() }}") == "now()"
     assert renderer("{{ adapter.dispatch('current_timestamp', 'dbt')() }}") == "now()"
 
+    # test with keyword arguments
+    assert (
+        renderer(
+            "{{ adapter.dispatch(macro_name='current_engine', macro_namespace='customers')() }}"
+        )
+        == "duckdb"
+    )
+    assert renderer("{{ adapter.dispatch(macro_name='current_timestamp')() }}") == "now()"
+    assert (
+        renderer("{{ adapter.dispatch(macro_name='current_timestamp', macro_namespace='dbt')() }}")
+        == "now()"
+    )
+
+    # mixing positional and keyword arguments
+    assert (
+        renderer("{{ adapter.dispatch('current_engine', macro_namespace='customers')() }}")
+        == "duckdb"
+    )
+    assert (
+        renderer("{{ adapter.dispatch('current_timestamp', macro_namespace=None)() }}") == "now()"
+    )
+    assert (
+        renderer("{{ adapter.dispatch('current_timestamp', macro_namespace='dbt')() }}") == "now()"
+    )
+
+    with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
+        renderer("{{ adapter.dispatch(macro_name='current_engine')() }}")
+
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
         renderer("{{ adapter.dispatch('current_engine')() }}")
 

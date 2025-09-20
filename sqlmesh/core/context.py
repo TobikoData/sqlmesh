@@ -587,7 +587,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._state_sync = self._new_state_sync()
 
             if self._state_sync.get_versions(validate=False).schema_version == 0:
-                self._state_sync.migrate(default_catalog=self.default_catalog)
+                self.console.log_status_update("Initializing new project state...")
+                self._state_sync.migrate()
             self._state_sync.get_versions()
             self._state_sync = CachingStateSync(self._state_sync)  # type: ignore
         return self._state_sync
@@ -1428,6 +1429,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         explain: t.Optional[bool] = None,
         ignore_cron: t.Optional[bool] = None,
         min_intervals: t.Optional[int] = None,
+        always_include_local_changes: t.Optional[bool] = None,
     ) -> PlanBuilder:
         """Creates a plan builder.
 
@@ -1466,6 +1468,8 @@ class GenericContext(BaseContext, t.Generic[C]):
             diff_rendered: Whether the diff should compare raw vs rendered models
             min_intervals: Adjust the plan start date on a per-model basis in order to ensure at least this many intervals are covered
                 on every model when checking for missing intervals
+            always_include_local_changes: Usually when restatements are present, local changes in the filesystem are ignored.
+                However, it can be desirable to deploy changes + restatements in the same plan, so this flag overrides the default behaviour.
 
         Returns:
             The plan builder.
@@ -1582,13 +1586,20 @@ class GenericContext(BaseContext, t.Generic[C]):
                 "Selector did not return any models. Please check your model selection and try again."
             )
 
+        if always_include_local_changes is None:
+            # default behaviour - if restatements are detected; we operate entirely out of state and ignore local changes
+            force_no_diff = restate_models is not None or (
+                backfill_models is not None and not backfill_models
+            )
+        else:
+            force_no_diff = not always_include_local_changes
+
         snapshots = self._snapshots(models_override)
         context_diff = self._context_diff(
             environment or c.PROD,
             snapshots=snapshots,
             create_from=create_from,
-            force_no_diff=restate_models is not None
-            or (backfill_models is not None and not backfill_models),
+            force_no_diff=force_no_diff,
             ensure_finalized_snapshots=self.config.plan.use_finalized_state,
             diff_rendered=diff_rendered,
             always_recreate_environment=self.config.plan.always_recreate_environment,
@@ -1643,6 +1654,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         elif forward_only is None:
             forward_only = self.config.plan.forward_only
 
+        # When handling prod restatements, only clear intervals from other model versions if we are using full virtual environments
+        # If we are not, then there is no point, because none of the data in dev environments can be promoted by definition
+        restate_all_snapshots = (
+            expanded_restate_models is not None
+            and not is_dev
+            and self.config.virtual_environment_mode.is_full
+        )
+
         return self.PLAN_BUILDER_TYPE(
             context_diff=context_diff,
             start=start,
@@ -1650,6 +1669,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             execution_time=execution_time,
             apply=self.apply,
             restate_models=expanded_restate_models,
+            restate_all_snapshots=restate_all_snapshots,
             backfill_models=backfill_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
@@ -1676,6 +1696,11 @@ class GenericContext(BaseContext, t.Generic[C]):
             end_override_per_model=max_interval_end_per_model,
             console=self.console,
             user_provided_flags=user_provided_flags,
+            selected_models={
+                dbt_name
+                for model in model_selector.expand_model_selections(select_models or "*")
+                if (dbt_name := snapshots[model].node.dbt_name)
+            },
             explain=explain or False,
             ignore_cron=ignore_cron or False,
         )
@@ -2355,7 +2380,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._load_materializations()
         try:
             self._new_state_sync().migrate(
-                default_catalog=self.default_catalog,
                 promoted_snapshots_only=self.config.migration.promoted_snapshots_only,
             )
         except Exception as e:
@@ -3130,7 +3154,9 @@ class GenericContext(BaseContext, t.Generic[C]):
         found_error = False
 
         model_list = (
-            list(self.get_model(model) for model in models) if models else self.models.values()
+            list(self.get_model(model, raise_if_missing=True) for model in models)
+            if models
+            else self.models.values()
         )
         all_violations = []
         for model in model_list:

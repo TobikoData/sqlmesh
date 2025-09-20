@@ -22,6 +22,7 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh import Config, Context
 from sqlmesh.cli.project_init import init_example_project
+from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.config.connection import ConnectionConfig
 import sqlmesh.core.dialect as d
 from sqlmesh.core.environment import EnvironmentSuffixTarget
@@ -1938,7 +1939,12 @@ def test_transaction(ctx: TestContext):
     ctx.compare_with_current(table, input_data)
 
 
-def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
+@pytest.mark.parametrize(
+    "virtual_environment_mode", [VirtualEnvironmentMode.FULL, VirtualEnvironmentMode.DEV_ONLY]
+)
+def test_sushi(
+    ctx: TestContext, tmp_path: pathlib.Path, virtual_environment_mode: VirtualEnvironmentMode
+):
     if ctx.mark == "athena_hive":
         pytest.skip(
             "Sushi end-to-end tests only need to run once for Athena because sushi needs a hybrid of both Hive and Iceberg"
@@ -1984,6 +1990,7 @@ def test_sushi(ctx: TestContext, tmp_path: pathlib.Path):
             ).sql(dialect=config.model_defaults.dialect)
             for e in before_all
         ]
+        config.virtual_environment_mode = virtual_environment_mode
 
     context = ctx.create_context(_mutate_config, path=tmp_path, ephemeral_state_connection=False)
 
@@ -2423,9 +2430,9 @@ def test_init_project(ctx: TestContext, tmp_path: pathlib.Path):
 
     if ctx.engine_adapter.SUPPORTS_QUERY_EXECUTION_TRACKING:
         assert actual_execution_stats["incremental_model"].total_rows_processed == 7
-        # snowflake doesn't track rows for CTAS
+        # snowflake and redshift don't track rows for CTAS
         assert actual_execution_stats["full_model"].total_rows_processed == (
-            None if ctx.mark.startswith("snowflake") else 3
+            None if ctx.mark.startswith("snowflake") or ctx.mark.startswith("redshift") else 3
         )
         assert actual_execution_stats["seed_model"].total_rows_processed == (
             None if ctx.mark.startswith("snowflake") else 7
@@ -2630,6 +2637,10 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
     assert context.default_dialect == "duckdb"
 
     schema = ctx.schema(TEST_SCHEMA)
+    seed_columns_to_types = {
+        "item_id": exp.DataType.build("integer"),
+        "event_date": exp.DataType.build("date"),
+    }
     seed_query = ctx.input_data(
         pd.DataFrame(
             [
@@ -2643,13 +2654,15 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
             ],
             columns=["item_id", "event_date"],
         ),
-        columns_to_types={
-            "item_id": exp.DataType.build("integer"),
-            "event_date": exp.DataType.build("date"),
-        },
+        columns_to_types=seed_columns_to_types,
     )
     context.upsert_model(
-        create_sql_model(name=f"{schema}.seed_model", query=seed_query, kind="FULL")
+        create_sql_model(
+            name=f"{schema}.seed_model",
+            query=seed_query,
+            kind="FULL",
+            columns=seed_columns_to_types,
+        )
     )
 
     table_format = ""
@@ -3742,6 +3755,14 @@ def test_janitor(
         assert not md.views
         assert not md.tables
         assert not md.managed_tables
+
+    if ctx.dialect == "fabric":
+        # TestContext is using a different EngineAdapter instance / connection pool instance to the SQLMesh context
+        # When the SQLMesh context drops :snapshot_schema using its EngineAdapter, connections in TestContext are unaware
+        # and still have their threadlocal "target_catalog" attribute pointing to a catalog that no longer exists
+        # Trying to establish a connection to a nonexistant catalog produces an error, so we close all connections here
+        # to clear the threadlocal attributes
+        ctx.engine_adapter.close()
 
     md = ctx.get_metadata_results(snapshot_schema)
     assert not md.views

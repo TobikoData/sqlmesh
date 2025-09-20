@@ -210,6 +210,29 @@ def test_thread_local_connection_pool_transaction(mocker: MockerFixture):
     assert cursor_mock_thread_two.begin.call_count == 1
 
 
+def test_thread_local_connection_pool_attributes(mocker: MockerFixture):
+    pool = ThreadLocalConnectionPool(connection_factory=lambda: mocker.Mock())
+
+    pool.set_attribute("foo", "bar")
+    current_threadid = get_ident()
+
+    def _in_thread(pool: ThreadLocalConnectionPool):
+        assert get_ident() != current_threadid
+        pool.set_attribute("foo", "baz")
+
+    with ThreadPoolExecutor() as executor:
+        future = executor.submit(_in_thread, pool)
+        assert not future.exception()
+
+    assert pool.get_all_attributes("foo") == ["bar", "baz"]
+    assert pool.get_attribute("foo") == "bar"
+
+    pool.close_all()
+
+    assert pool.get_all_attributes("foo") == []
+    assert pool.get_attribute("foo") is None
+
+
 def test_thread_local_shared_connection_pool(mocker: MockerFixture):
     cursor_mock_thread_one = mocker.Mock()
     cursor_mock_thread_two = mocker.Mock()

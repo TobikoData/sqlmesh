@@ -16,7 +16,6 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
-    InsertOverwriteStrategy,
 )
 from sqlmesh.utils.date import to_ds
 from tests.core.engine_adapter import to_sql_calls
@@ -337,46 +336,6 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas_exi
         },
     )
     assert to_sql_calls(adapter) == [
-        f"""MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], CAST([ds] AS VARCHAR(MAX)) AS [ds] FROM [__temp_test_table_{temp_table_id}]) AS [_subquery] WHERE [ds] BETWEEN '2022-01-01' AND '2022-01-02') AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND [ds] BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [ds]) VALUES ([a], [ds]);""",
-        f"DROP TABLE IF EXISTS [__temp_test_table_{temp_table_id}];",
-    ]
-
-
-def test_insert_overwrite_by_time_partition_replace_where_pandas(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
-):
-    mocker.patch(
-        "sqlmesh.core.engine_adapter.mssql.MSSQLEngineAdapter.table_exists",
-        return_value=False,
-    )
-
-    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
-    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
-
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    table_name = "test_table"
-    temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
-
-    df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
-    adapter.insert_overwrite_by_time_partition(
-        table_name,
-        df,
-        start="2022-01-01",
-        end="2022-01-02",
-        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        time_column="ds",
-        target_columns_to_types={
-            "a": exp.DataType.build("INT"),
-            "ds": exp.DataType.build("STRING"),
-        },
-    )
-    adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f"__temp_test_table_{temp_table_id}", [(1, "2022-01-01"), (2, "2022-01-02")]
-    )
-
-    assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE [__temp_test_table_{temp_table_id}] ([a] INTEGER, [ds] VARCHAR(MAX))');""",
         f"""MERGE INTO [test_table] AS [__MERGE_TARGET__] USING (SELECT [a] AS [a], [ds] AS [ds] FROM (SELECT CAST([a] AS INTEGER) AS [a], CAST([ds] AS VARCHAR(MAX)) AS [ds] FROM [__temp_test_table_{temp_table_id}]) AS [_subquery] WHERE [ds] BETWEEN '2022-01-01' AND '2022-01-02') AS [__MERGE_SOURCE__] ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND [ds] BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ([a], [ds]) VALUES ([a], [ds]);""",
         f"DROP TABLE IF EXISTS [__temp_test_table_{temp_table_id}];",
     ]

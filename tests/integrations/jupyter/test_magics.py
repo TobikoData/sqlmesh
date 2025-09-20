@@ -168,9 +168,9 @@ def test_render(
 
     assert output.stdout == ""
     assert output.stderr == ""
-    assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) > 2200
-    assert len(convert_all_html_output_to_tags(output)[0]) > 150
+    assert len(output.outputs) == 2
+    assert len(convert_all_html_output_to_text(output)[1]) > 2200
+    assert len(convert_all_html_output_to_tags(output)[1]) > 150
 
 
 @pytest.mark.slow
@@ -182,9 +182,9 @@ def test_render_no_format(
 
     assert output.stdout == ""
     assert output.stderr == ""
-    assert len(output.outputs) == 1
-    assert len(convert_all_html_output_to_text(output)[0]) >= 700
-    assert len(convert_all_html_output_to_tags(output)[0]) >= 50
+    assert len(output.outputs) == 2
+    assert len(convert_all_html_output_to_text(output)[1]) >= 700
+    assert len(convert_all_html_output_to_tags(output)[1]) >= 50
 
 
 @pytest.mark.slow

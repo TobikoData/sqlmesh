@@ -285,11 +285,13 @@ class EnvironmentState:
         return []
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        return Environment(**{field: row[i] for i, field in enumerate(Environment.all_fields())})
+        return Environment(
+            **{field: row[i] for i, field in enumerate(sorted(Environment.all_fields()))}
+        )
 
     def _environment_summmary_from_row(self, row: t.Tuple[str, ...]) -> EnvironmentSummary:
         return EnvironmentSummary(
-            **{field: row[i] for i, field in enumerate(EnvironmentSummary.all_fields())}
+            **{field: row[i] for i, field in enumerate(sorted(EnvironmentSummary.all_fields()))}
         )
 
     def _environments_query(
@@ -298,7 +300,7 @@ class EnvironmentState:
         lock_for_update: bool = False,
         required_fields: t.Optional[t.List[str]] = None,
     ) -> exp.Select:
-        query_fields = required_fields if required_fields else Environment.all_fields()
+        query_fields = required_fields if required_fields else sorted(Environment.all_fields())
         query = (
             exp.select(*(exp.to_identifier(field) for field in query_fields))
             .from_(self.environments_table)
@@ -328,7 +330,7 @@ class EnvironmentState:
                 self.engine_adapter,
                 self._environments_query(
                     where=where,
-                    required_fields=list(EnvironmentSummary.all_fields()),
+                    required_fields=sorted(EnvironmentSummary.all_fields()),
                 ),
             )
         ]

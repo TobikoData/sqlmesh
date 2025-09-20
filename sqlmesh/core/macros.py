@@ -128,6 +128,17 @@ def _macro_str_replace(text: str) -> str:
     return f"self.template({text}, locals())"
 
 
+class CaseInsensitiveMapping(t.Dict[str, t.Any]):
+    def __init__(self, data: t.Dict[str, t.Any]) -> None:
+        super().__init__(data)
+
+    def __getitem__(self, key: str) -> t.Any:
+        return super().__getitem__(key.lower())
+
+    def get(self, key: str, default: t.Any = None, /) -> t.Any:
+        return super().get(key.lower(), default)
+
+
 class MacroDialect(Python):
     class Generator(Python.Generator):
         TRANSFORMS = {
@@ -256,14 +267,18 @@ class MacroEvaluator:
                 changed = True
                 variables = self.variables
 
-                if node.name not in self.locals and node.name.lower() not in variables:
+                # This makes all variables case-insensitive, e.g. @X is the same as @x. We do this
+                # for consistency, since `variables` and `blueprint_variables` are normalized.
+                var_name = node.name.lower()
+
+                if var_name not in self.locals and var_name not in variables:
                     if not isinstance(node.parent, StagedFilePath):
                         raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 
                 # Precedence order is locals (e.g. @DEF) > blueprint variables > config variables
-                value = self.locals.get(node.name, variables.get(node.name.lower()))
+                value = self.locals.get(var_name, variables.get(var_name))
                 if isinstance(value, list):
                     return exp.convert(
                         tuple(
@@ -313,11 +328,11 @@ class MacroEvaluator:
         """
         # We try to convert all variables into sqlglot expressions because they're going to be converted
         # into strings; in sql we don't convert strings because that would result in adding quotes
-        mapping = {
-            k: convert_sql(v, self.dialect)
+        base_mapping = {
+            k.lower(): convert_sql(v, self.dialect)
             for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
         }
-        return MacroStrTemplate(str(text)).safe_substitute(mapping)
+        return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
@@ -327,7 +342,9 @@ class MacroEvaluator:
                     args[0] if len(args) == 1 else exp.Tuple(expressions=list(args))
                 )
             else:
-                self.locals[node.name] = self.transform(node.expression)
+                # Make variables defined through `@DEF` case-insensitive
+                self.locals[node.name.lower()] = self.transform(node.expression)
+
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
@@ -630,7 +647,7 @@ def _norm_var_arg_lambda(
     ) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, (exp.Identifier, exp.Var)):
             if not isinstance(node.parent, exp.Column):
-                name = node.name
+                name = node.name.lower()
                 if name in args:
                     return args[name].copy()
                 if name in evaluator.locals:
@@ -663,7 +680,7 @@ def _norm_var_arg_lambda(
         return expressions, lambda args: func.this.transform(
             substitute,
             {
-                expression.name: arg
+                expression.name.lower(): arg
                 for expression, arg in zip(
                     func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
                 )
@@ -1128,7 +1145,7 @@ def haversine_distance(
 def pivot(
     evaluator: MacroEvaluator,
     column: SQL,
-    values: t.List[SQL],
+    values: t.List[exp.Expression],
     alias: bool = True,
     agg: exp.Expression = exp.Literal.string("SUM"),
     cmp: exp.Expression = exp.Literal.string("="),
@@ -1146,10 +1163,10 @@ def pivot(
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "\\'cancelled\\'", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "\\'completed\\'" FROM rides GROUP BY 1'
+        'SELECT date_day, SUM(CASE WHEN status = \\'cancelled\\' THEN 1 ELSE 0 END) AS "cancelled", SUM(CASE WHEN status = \\'completed\\' THEN 1 ELSE 0 END) AS "completed" FROM rides GROUP BY 1'
         >>> sql = "SELECT @PIVOT(a, ['v'], then_value := tv, suffix := '_sfx', quote := FALSE)"
         >>> MacroEvaluator(dialect="bigquery").transform(parse_one(sql)).sql("bigquery")
-        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS `v_sfx`"
+        "SELECT SUM(CASE WHEN a = 'v' THEN tv ELSE 0 END) AS v_sfx"
     """
     aggregates: t.List[exp.Expression] = []
     for value in values:
@@ -1157,12 +1174,12 @@ def pivot(
         if distinct:
             proj += "DISTINCT "
 
-        proj += f"CASE WHEN {column} {cmp.name} {value} THEN {then_value} ELSE {else_value} END) "
+        proj += f"CASE WHEN {column} {cmp.name} {value.sql(evaluator.dialect)} THEN {then_value} ELSE {else_value} END) "
         node = evaluator.parse_one(proj)
 
         if alias:
             node = node.as_(
-                f"{prefix.name}{value}{suffix.name}",
+                f"{prefix.name}{value.name}{suffix.name}",
                 quoted=quote,
                 copy=False,
                 dialect=evaluator.dialect,

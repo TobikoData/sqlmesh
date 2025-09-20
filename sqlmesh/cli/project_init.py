@@ -114,6 +114,7 @@ linter:
   rules:
     - ambiguousorinvalidcolumn
     - invalidselectstarexpansion
+    - noambiguousprojections
 """,
         ProjectTemplate.DBT: f"""# --- Virtual Data Environment Mode ---
 # Enable Virtual Data Environments (VDE) for *development* environments.
