@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import typing as t
 from pathlib import Path
+from itertools import zip_longest
 
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -36,6 +37,7 @@ class Selector:
         default_catalog: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
         cache_dir: t.Optional[Path] = None,
+        dbt_mode: bool = False,
     ):
         self._state_reader = state_reader
         self._models = models
@@ -44,6 +46,7 @@ class Selector:
         self._default_catalog = default_catalog
         self._dialect = dialect
         self._git_client = GitClient(context_path)
+        self._dbt_mode = dbt_mode
 
         if dag is None:
             self._dag: DAG[str] = DAG()
@@ -167,13 +170,13 @@ class Selector:
     def expand_model_selections(
         self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
     ) -> t.Set[str]:
-        """Expands a set of model selections into a set of model names.
+        """Expands a set of model selections into a set of model fqns that can be looked up in the Context.
 
         Args:
             model_selections: A set of model selections.
 
         Returns:
-            A set of model names.
+            A set of model fqns.
         """
 
         node = parse(" | ".join(f"({s})" for s in model_selections))
@@ -194,10 +197,9 @@ class Selector:
                     return {
                         fqn
                         for fqn, model in all_models.items()
-                        if fnmatch.fnmatchcase(model.name, node.this)
+                        if fnmatch.fnmatchcase(self._model_name(model), node.this)
                     }
-                fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
-                return {fqn} if fqn in all_models else set()
+                return self._pattern_to_model_fqns(pattern, all_models)
             if isinstance(node, exp.And):
                 return evaluate(node.left) & evaluate(node.right)
             if isinstance(node, exp.Or):
@@ -240,6 +242,59 @@ class Selector:
             raise ParseError(f"Unexpected node {node}")
 
         return evaluate(node)
+
+    def _model_fqn(self, model: Model) -> str:
+        if self._dbt_mode:
+            dbt_fqn = model.dbt_fqn
+            if dbt_fqn is None:
+                raise SQLMeshError("Expecting dbt node information to be populated; it wasnt")
+            return dbt_fqn
+        return model.fqn
+
+    def _model_name(self, model: Model) -> str:
+        if self._dbt_mode:
+            # dbt always matches on the fqn, not the name
+            return self._model_fqn(model)
+        return model.name
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+        # note: all_models should be keyed by sqlmesh fqn, not dbt fqn
+        if not self._dbt_mode:
+            fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
+            return {fqn} if fqn in all_models else set()
+
+        # a pattern like "staging.customers" should match a model called "jaffle_shop.staging.customers"
+        # but not a model called "jaffle_shop.customers.staging"
+        # also a pattern like "aging" should not match "staging" so we need to consider components; not substrings
+        pattern_components = pattern.split(".")
+        first_pattern_component = pattern_components[0]
+        matches = set()
+        for fqn, model in all_models.items():
+            if not model.dbt_fqn:
+                continue
+
+            dbt_fqn_components = model.dbt_fqn.split(".")
+            try:
+                starting_idx = dbt_fqn_components.index(first_pattern_component)
+            except ValueError:
+                continue
+            for pattern_component, fqn_component in zip_longest(
+                pattern_components, dbt_fqn_components[starting_idx:]
+            ):
+                if pattern_component and not fqn_component:
+                    # the pattern still goes but we have run out of fqn components to match; no match
+                    break
+                if fqn_component and not pattern_component:
+                    # all elements of the pattern have matched elements of the fqn; match
+                    matches.add(fqn)
+                    break
+                if pattern_component != fqn_component:
+                    # the pattern explicitly doesnt match a component; no match
+                    break
+            else:
+                # called if no explicit break, indicating all components of the pattern matched all components of the fqn
+                matches.add(fqn)
+        return matches
 
 
 class SelectorDialect(Dialect):

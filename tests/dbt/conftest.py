@@ -99,7 +99,7 @@ def jaffle_shop_duckdb(copy_to_temp_path: t.Callable[..., t.List[Path]]) -> t.It
 @pytest.fixture
 def jaffle_shop_duckdb_context(jaffle_shop_duckdb: Path) -> Context:
     init_project_if_required(jaffle_shop_duckdb)
-    return Context(paths=[jaffle_shop_duckdb])
+    return Context(paths=[jaffle_shop_duckdb], dbt_mode=True)
 
 
 @pytest.fixture()

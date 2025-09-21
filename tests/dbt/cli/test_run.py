@@ -27,7 +27,7 @@ def test_run_with_selectors(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[...
         assert result.exit_code == 0
         assert "main.orders" in result.output
 
-    result = invoke_cli(["run", "--select", "main.raw_customers+", "--exclude", "main.orders"])
+    result = invoke_cli(["run", "--select", "raw_customers+", "--exclude", "orders"])
 
     assert result.exit_code == 0
     assert not result.exception

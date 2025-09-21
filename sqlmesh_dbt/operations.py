@@ -185,7 +185,7 @@ class DbtOperations:
             options.update(
                 dict(
                     # Add every selected model as a restatement to force them to get repopulated from scratch
-                    restate_models=list(self.context.models)
+                    restate_models=[m.dbt_fqn for m in self.context.models.values() if m.dbt_fqn]
                     if not select_models
                     else select_models,
                     # by default in SQLMesh, restatements only operate on what has been committed to state.
@@ -250,6 +250,8 @@ def create(
             paths=[project_dir],
             config_loader_kwargs=dict(profile=profile, target=target, variables=vars),
             load=True,
+            # dbt mode enables selectors to use dbt model fqn's rather than SQLMesh model names
+            dbt_mode=True,
         )
 
         dbt_loader = sqlmesh_context._loaders[0]

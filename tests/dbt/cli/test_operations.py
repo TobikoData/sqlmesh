@@ -138,7 +138,7 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
     assert plan.selected_models_to_backfill is None
     assert {s.name for s in plan.snapshots} == {k for k in operations.context.snapshots}
 
-    plan = operations.run(select=["main.stg_orders+"])
+    plan = operations.run(select=["stg_orders+"])
     assert plan.environment.name == "prod"
     assert console.no_prompts is True
     assert console.no_diff is True
@@ -155,7 +155,7 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
         plan.selected_models_to_backfill | {standalone_audit_name}
     )
 
-    plan = operations.run(select=["main.stg_orders+"], exclude=["main.customers"])
+    plan = operations.run(select=["stg_orders+"], exclude=["customers"])
     assert plan.environment.name == "prod"
     assert console.no_prompts is True
     assert console.no_diff is True
@@ -171,7 +171,7 @@ def test_run_option_mapping(jaffle_shop_duckdb: Path):
         plan.selected_models_to_backfill | {standalone_audit_name}
     )
 
-    plan = operations.run(exclude=["main.customers"])
+    plan = operations.run(exclude=["customers"])
     assert plan.environment.name == "prod"
     assert console.no_prompts is True
     assert console.no_diff is True
@@ -238,7 +238,7 @@ def test_run_option_mapping_dev(jaffle_shop_duckdb: Path):
     assert plan.skip_backfill is True
     assert plan.selected_models_to_backfill == {'"jaffle_shop"."main"."new_model"'}
 
-    plan = operations.run(environment="dev", select=["main.stg_orders+"])
+    plan = operations.run(environment="dev", select=["stg_orders+"])
     assert plan.environment.name == "dev"
     assert console.no_prompts is True
     assert console.no_diff is True
@@ -325,7 +325,7 @@ def test_run_option_full_refresh_with_selector(jaffle_shop_duckdb: Path):
     console = PlanCapturingConsole()
     operations.context.console = console
 
-    plan = operations.run(select=["main.stg_customers"], full_refresh=True)
+    plan = operations.run(select=["stg_customers"], full_refresh=True)
     assert len(plan.restatements) == 1
     assert list(plan.restatements)[0].name == '"jaffle_shop"."main"."stg_customers"'
 
