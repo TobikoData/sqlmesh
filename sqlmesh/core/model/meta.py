@@ -522,48 +522,11 @@ class ModelMeta(_Node):
         if not self.grants_.expressions:
             return {}
 
-        def expr_to_string(expr: exp.Expression, context: str) -> str:
-            if isinstance(expr, (d.MacroFunc, d.MacroVar)):
-                raise ConfigError(
-                    f"Unresolved macro in {context}: {expr.sql(dialect=self.dialect)}"
-                )
-
-            if isinstance(expr, exp.Null):
-                raise ConfigError(f"NULL value in {context}")
-
-            if isinstance(expr, exp.Literal):
-                return str(expr.this).strip()
-            if isinstance(expr, exp.Identifier):
-                return expr.name
-            if isinstance(expr, exp.Column):
-                return expr.name
-            return expr.sql(dialect=self.dialect).strip()
-
-        def normalize_to_string_list(value_expr: exp.Expression) -> t.List[str]:
-            result = []
-
-            def process_expression(expr: exp.Expression) -> None:
-                if isinstance(expr, exp.Array):
-                    for elem in expr.expressions:
-                        process_expression(elem)
-
-                elif isinstance(expr, (exp.Tuple, exp.Paren)):
-                    expressions = (
-                        [expr.unnest()] if isinstance(expr, exp.Paren) else expr.expressions
-                    )
-                    for elem in expressions:
-                        process_expression(elem)
-                else:
-                    result.append(expr_to_string(expr, "grant value"))
-
-            process_expression(value_expr)
-            return result
-
         grants_dict = {}
         for eq_expr in self.grants_.expressions:
             try:
-                permission_name = expr_to_string(eq_expr.left, "permission name")
-                grantee_list = normalize_to_string_list(eq_expr.expression)
+                permission_name = self._validate_config_expression(eq_expr.left)
+                grantee_list = self._validate_nested_config_values(eq_expr.expression)
                 grants_dict[permission_name] = grantee_list
             except ConfigError as e:
                 permission_name = (
@@ -637,3 +600,33 @@ class ModelMeta(_Node):
     @property
     def ignored_rules(self) -> t.Set[str]:
         return self.ignored_rules_ or set()
+
+    def _validate_config_expression(self, expr: exp.Expression) -> str:
+        if isinstance(expr, (d.MacroFunc, d.MacroVar)):
+            raise ConfigError(f"Unresolved macro: {expr.sql(dialect=self.dialect)}")
+
+        if isinstance(expr, exp.Null):
+            raise ConfigError("NULL value")
+
+        if isinstance(expr, exp.Literal):
+            return str(expr.this).strip()
+        if isinstance(expr, (exp.Column, exp.Identifier)):
+            return expr.name
+        return expr.sql(dialect=self.dialect).strip()
+
+    def _validate_nested_config_values(self, value_expr: exp.Expression) -> t.List[str]:
+        result = []
+
+        def flatten_expr(expr: exp.Expression) -> None:
+            if isinstance(expr, exp.Array):
+                for elem in expr.expressions:
+                    flatten_expr(elem)
+            elif isinstance(expr, (exp.Tuple, exp.Paren)):
+                expressions = [expr.unnest()] if isinstance(expr, exp.Paren) else expr.expressions
+                for elem in expressions:
+                    flatten_expr(elem)
+            else:
+                result.append(self._validate_config_expression(expr))
+
+        flatten_expr(value_expr)
+        return result

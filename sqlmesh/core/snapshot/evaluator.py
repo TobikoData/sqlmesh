@@ -1724,26 +1724,23 @@ class EvaluationStrategy(abc.ABC):
 
         model_grants_target_layer = model.grants_target_layer
 
-        is_prod_and_dev_only = is_snapshot_deployable and model.virtual_environment_mode.is_dev_only
-
-        if not (
+        if (
             model_grants_target_layer.is_all
             or model_grants_target_layer == target_layer
             # Always apply grants in production when VDE is dev_only regardless of target_layer
             # since only physical tables are created in production
-            or is_prod_and_dev_only
+            or (is_snapshot_deployable and model.virtual_environment_mode.is_dev_only)
         ):
+            logger.info(f"Applying grants for model {model.name} to table {table_name}")
+            self.adapter.sync_grants_config(
+                exp.to_table(table_name, dialect=self.adapter.dialect),
+                grants_config,
+                model.grants_table_type,
+            )
+        else:
             logger.debug(
                 f"Skipping grants application for model {model.name} in {target_layer} layer"
             )
-            return
-
-        logger.info(f"Applying grants for model {model.name} to table {table_name}")
-        self.adapter.sync_grants_config(
-            exp.to_table(table_name, dialect=self.adapter.dialect),
-            grants_config,
-            model.grants_table_type,
-        )
 
 
 class SymbolicStrategy(EvaluationStrategy):
