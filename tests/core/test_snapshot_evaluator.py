@@ -436,10 +436,14 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
         snapshot.categorize_as(SnapshotChangeCategory.BREAKING, forward_only=True)
         snapshot.version = "test_version"
 
+        on_cleanup_mock = mocker.Mock()
+
         evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
         evaluator.cleanup(
-            [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=dev_table_only)]
+            [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=dev_table_only)],
+            on_complete=on_cleanup_mock,
         )
+        assert on_cleanup_mock.call_count == 1 if dev_table_only else 2
         return snapshot
 
     snapshot = create_and_cleanup("catalog.test_schema.test_model", True)
@@ -609,6 +613,39 @@ def test_cleanup_external_model(mocker: MockerFixture, adapter_mock, make_snapsh
 
     create_and_cleanup_external_model("catalog.test_schema.test_model", True)
     adapter_mock.drop_table.assert_not_called()
+
+
+def test_cleanup_symbolic_and_audit_snapshots_no_callback(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    on_complete_mock = mocker.Mock()
+
+    # Test external model
+    external_model = ExternalModel(
+        name="test_schema.external_model",
+        kind=ExternalKind(),
+    )
+    external_snapshot = make_snapshot(external_model)
+    external_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    # Test standalone audit
+    audit = StandaloneAudit(name="test_audit", query=parse_one("SELECT NULL LIMIT 0"))
+    audit_snapshot = make_snapshot(audit)
+    audit_snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    evaluator.cleanup(
+        [
+            SnapshotTableCleanupTask(snapshot=external_snapshot.table_info, dev_table_only=False),
+            SnapshotTableCleanupTask(snapshot=audit_snapshot.table_info, dev_table_only=False),
+        ],
+        on_complete=on_complete_mock,
+    )
+
+    # Verify that no physical tables were attempted to be dropped
+    adapter_mock.drop_table.assert_not_called()
+    adapter_mock.get_data_object.assert_not_called()
+    on_complete_mock.assert_not_called()
 
 
 @pytest.mark.parametrize("view_exists", [True, False])
