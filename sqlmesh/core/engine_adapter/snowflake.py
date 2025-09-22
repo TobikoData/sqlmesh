@@ -526,7 +526,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
                 type=DataObjectType.from_str(row.type),  # type: ignore
                 clustering_key=row.clustering_key,  # type: ignore
             )
-            for row in df.itertuples()
+            # lowercase the column names for cases where Snowflake might return uppercase column names for certain catalogs
+            for row in df.rename(columns={col: col.lower() for col in df.columns}).itertuples()
         ]
 
     def set_current_catalog(self, catalog: str) -> None:

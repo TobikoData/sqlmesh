@@ -7,9 +7,10 @@ from sqlglot import exp, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.engine_adapter import SnowflakeEngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObjectType
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
@@ -37,6 +38,38 @@ def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Cal
     )
 
     assert value.sql(dialect=adapter.dialect) == '"CATALOG"."DB"."__temp_TEST_TABLE_abcdefgh"'
+
+
+def test_get_data_objects_lowercases_columns(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+) -> None:
+    adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter, patch_get_data_objects=False)
+
+    adapter.get_current_catalog = mocker.Mock(return_value="TEST_CATALOG")
+
+    adapter.fetchdf = mocker.Mock(
+        return_value=pd.DataFrame(  # type: ignore[assignment]
+            [
+                {
+                    "CATALOG": "TEST_CATALOG",
+                    "NAME": "MY_TABLE",
+                    "SCHEMA_NAME": "PUBLIC",
+                    "TYPE": "TABLE",
+                    "CLUSTERING_KEY": "ID",
+                }
+            ]
+        )
+    )
+
+    data_objects = adapter._get_data_objects("TEST_CATALOG.PUBLIC")
+
+    assert len(data_objects) == 1
+    data_object = data_objects[0]
+    assert data_object.catalog == "TEST_CATALOG"
+    assert data_object.schema_name == "PUBLIC"
+    assert data_object.name == "MY_TABLE"
+    assert data_object.type == DataObjectType.TABLE
+    assert data_object.clustering_key == "ID"
 
 
 @pytest.mark.parametrize(
