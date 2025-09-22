@@ -183,7 +183,7 @@ class DbtNodeInfo(PydanticModel):
 
     fqn: str
     """Used for selectors in --select/--exclude.
-    Takes the filesystem into account so may be structured differently to :resource_name.
+    Takes the filesystem into account so may be structured differently to :unique_id.
     
     Examples:
         - jaffle_shop.staging.unique_stg_orders_order_id
