@@ -1008,32 +1008,23 @@ def test_model_grants_engine_specific_bigquery() -> None:
     assert grants_config["select"] == ["analyst@company.com"]
 
 
-def test_ephemeral_model_with_global_grants(create_empty_project):
-    dbt_project_dir, dbt_model_dir = create_empty_project()
+def test_ephemeral_model_ignores_grants() -> None:
+    """Test that ephemeral models ignore grants configuration."""
+    model_config = ModelConfig(
+        name="ephemeral_model",
+        sql="SELECT 1 as id",
+        materialized="ephemeral",
+        grants={"select": ["reporter", "analyst"]},
+        path=Path("ephemeral_model.sql"),
+    )
 
-    yaml = YAML()
-    dbt_project_config = {
-        "name": "test_project",
-        "version": "1.0.0",
-        "config-version": 2,
-        "profile": "test",
-        "model-paths": ["models"],
-        "models": {"test_project": {"grants": {"select": ["reporter", "analyst"]}}},
-    }
-    dbt_project_file = dbt_project_dir / "dbt_project.yml"
-    with open(dbt_project_file, "w", encoding="utf-8") as f:
-        yaml.dump(dbt_project_config, f)
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
 
-    ephemeral_model_sql = """
-        {{ config(materialized='ephemeral') }}
-        SELECT 1 as id
-    """
-    ephemeral_model_file = dbt_model_dir / "ephemeral_model.sql"
-    with open(ephemeral_model_file, "w", encoding="utf-8") as f:
-        f.write(ephemeral_model_sql)
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
 
-    context = Context(paths=dbt_project_dir)
-    model = context.get_model('"local"."main"."ephemeral_model"')
-
-    assert model.kind.is_embedded
-    assert model.grants is None  # grants config is skipped for ephemeral / embedded models
+    assert sqlmesh_model.kind.is_embedded
+    assert sqlmesh_model.grants is None  # grants config is skipped for ephemeral / embedded models
