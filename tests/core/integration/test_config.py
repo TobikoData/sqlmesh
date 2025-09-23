@@ -16,11 +16,14 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
     TableNamingConvention,
+    AutoCategorizationMode,
 )
 from sqlmesh.core.config.common import EnvironmentSuffixTarget
 from sqlmesh.core.context import Context
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
+from sqlmesh.core.model import SqlModel
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
 )
@@ -30,7 +33,7 @@ from sqlmesh.utils.errors import (
 from tests.conftest import DuckDBMetadata
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
-from tests.core.integration.utils import apply_to_environment
+from tests.core.integration.utils import apply_to_environment, initial_add
 
 pytestmark = pytest.mark.slow
 
@@ -537,3 +540,41 @@ def test_before_all_after_all_execution_order(tmp_path: Path, mocker: MockerFixt
 
     # and that the last is the sole after all that depends on the model
     assert "after_all_created_table" in execute_calls[-1]
+
+
+def test_auto_categorization(sushi_context: Context):
+    environment = "dev"
+    for config in sushi_context.configs.values():
+        config.plan.auto_categorize_changes.sql = AutoCategorizationMode.FULL
+    initial_add(sushi_context, environment)
+
+    version = sushi_context.get_snapshot(
+        "sushi.waiter_as_customer_by_day", raise_if_missing=True
+    ).version
+    fingerprint = sushi_context.get_snapshot(
+        "sushi.waiter_as_customer_by_day", raise_if_missing=True
+    ).fingerprint
+
+    model = t.cast(SqlModel, sushi_context.get_model("sushi.customers", raise_if_missing=True))
+    sushi_context.upsert_model(
+        "sushi.customers",
+        query_=ParsableSql(sql=model.query.select("'foo' AS foo").sql(dialect=model.dialect)),  # type: ignore
+    )
+    apply_to_environment(sushi_context, environment)
+
+    assert (
+        sushi_context.get_snapshot(
+            "sushi.waiter_as_customer_by_day", raise_if_missing=True
+        ).change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert (
+        sushi_context.get_snapshot(
+            "sushi.waiter_as_customer_by_day", raise_if_missing=True
+        ).fingerprint
+        != fingerprint
+    )
+    assert (
+        sushi_context.get_snapshot("sushi.waiter_as_customer_by_day", raise_if_missing=True).version
+        == version
+    )
