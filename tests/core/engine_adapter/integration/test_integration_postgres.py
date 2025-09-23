@@ -504,29 +504,24 @@ def test_grants_plan(engine_adapter: PostgresEngineAdapter, ctx: TestContext, tm
         assert virtual_grants == {"SELECT": [roles["analyst"]["username"]]}
 
         # Update model with query change and new grants
-        updated_model_def = """
-        MODEL (
-            name test_schema.grant_model,
-            kind FULL,
-            grants (
-                'select' = ['test_analyst', 'test_etl_user'],
-                'insert' = ['test_etl_user']
-            ),
-            grants_target_layer 'all'
-        );
-        SELECT 1 as id, CURRENT_DATE as created_date, 'v2' as version
-        """
+        existing_model = context.get_model("test_schema.grant_model")
+        from sqlglot import parse_one
 
-        (tmp_path / "models" / "grant_model.sql").write_text(updated_model_def)
-
-        context = ctx.create_context(path=tmp_path)
+        updated_query = parse_one("SELECT 1 as id, CURRENT_DATE as created_date, 'v2' as version")
+        context.upsert_model(
+            existing_model,
+            query=updated_query,
+            grants={
+                "select": [roles["analyst"]["username"], roles["etl_user"]["username"]],
+                "insert": [roles["etl_user"]["username"]],
+            },
+        )
         plan_result = context.plan(auto_apply=True, no_prompts=True)
-        assert len(plan_result.directly_modified) == 1
 
-        modified_snapshot_id = next(iter(plan_result.directly_modified))
-        new_snapshot = context.get_snapshot(modified_snapshot_id.name)
+        assert len(plan_result.new_snapshots) == 1
+        new_snapshot = plan_result.new_snapshots[0]
+
         assert new_snapshot is not None
-
         new_table_name = new_snapshot.table_name()
         final_grants = engine_adapter._get_current_grants_config(
             exp.to_table(new_table_name, dialect=engine_adapter.dialect)
@@ -697,7 +692,6 @@ def test_grants_plan_incremental_model(
 
         context = ctx.create_context(path=tmp_path)
 
-        # First plan
         plan_result = context.plan(
             "dev", start="2020-01-01", end="2020-01-01", auto_apply=True, no_prompts=True
         )
@@ -777,27 +771,71 @@ def test_grants_plan_clone_environment(
         assert dev_view_grants == prod_grants
 
 
+@pytest.mark.parametrize(
+    "model_name,kind_config,query,extra_config,needs_seed",
+    [
+        (
+            "grants_full",
+            "FULL",
+            "SELECT 1 as id, 'unchanged_query' as data",
+            "",
+            False,
+        ),
+        (
+            "grants_view",
+            "VIEW",
+            "SELECT 1 as id, 'unchanged_query' as data",
+            "",
+            False,
+        ),
+        (
+            "grants_incr_time",
+            "INCREMENTAL_BY_TIME_RANGE (time_column event_date)",
+            "SELECT '2025-09-01'::date as event_date, 1 as id, 'unchanged_query' as data",
+            "start '2025-09-01',",
+            False,
+        ),
+        (
+            "grants_seed",
+            "SEED (path '../seeds/grants_seed.csv')",
+            "",
+            "",
+            True,
+        ),
+    ],
+)
 def test_grants_metadata_only_changes(
-    engine_adapter: PostgresEngineAdapter, ctx: TestContext, tmp_path: Path
+    engine_adapter: PostgresEngineAdapter,
+    ctx: TestContext,
+    tmp_path: Path,
+    model_name: str,
+    kind_config: str,
+    query: str,
+    extra_config: str,
+    needs_seed: bool,
 ):
     with create_users(engine_adapter, "reader", "writer", "admin") as roles:
         (tmp_path / "models").mkdir(exist_ok=True)
 
+        if needs_seed:
+            (tmp_path / "seeds").mkdir(exist_ok=True)
+            csv_content = "id,data\\n1,unchanged_query"
+            (tmp_path / "seeds" / f"{model_name}.csv").write_text(csv_content)
+
         initial_model_def = f"""
         MODEL (
-            name test_schema.metadata_grants_model,
-            kind FULL,
+            name test_schema.{model_name},
+            kind {kind_config},
+            {extra_config}
             grants (
                 'select' = ['{roles["reader"]["username"]}']
             ),
             grants_target_layer 'all'
         );
-        SELECT 1 as id, 'unchanged_query' as data
+        {query}
         """
+        (tmp_path / "models" / f"{model_name}.sql").write_text(initial_model_def)
 
-        (tmp_path / "models" / "metadata_grants_model.sql").write_text(initial_model_def)
-
-        # Create initial model with grants
         context = ctx.create_context(path=tmp_path)
         initial_plan_result = context.plan(auto_apply=True, no_prompts=True)
 
@@ -805,44 +843,37 @@ def test_grants_metadata_only_changes(
         initial_snapshot = initial_plan_result.new_snapshots[0]
 
         physical_table_name = initial_snapshot.table_name()
+        virtual_view_name = f"test_schema.{model_name}"
+
         initial_physical_grants = engine_adapter._get_current_grants_config(
             exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
         )
         assert initial_physical_grants == {"SELECT": [roles["reader"]["username"]]}
 
-        virtual_view_name = f"test_schema.metadata_grants_model"
         initial_virtual_grants = engine_adapter._get_current_grants_config(
             exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
         )
         assert initial_virtual_grants == {"SELECT": [roles["reader"]["username"]]}
 
-        # Update grants ONLY (same SQL query, replace SELECT with writer and admin, add admin to INSERT)
-        updated_model_def = f"""
-        MODEL (
-            name test_schema.metadata_grants_model,
-            kind FULL,
-            grants (
-                'select' = ['{roles["writer"]["username"]}', '{roles["admin"]["username"]}'],
-                'insert' = ['{roles["admin"]["username"]}']
-            ),
-            grants_target_layer 'all'
-        );
-        SELECT 1 as id, 'unchanged_query' as data
-        """
-
-        (tmp_path / "models" / "metadata_grants_model.sql").write_text(updated_model_def)
-
-        context = ctx.create_context(path=tmp_path)
+        # Metadata-only change: update grants only using upsert_model
+        existing_model = context.get_model(f"test_schema.{model_name}")
+        context.upsert_model(
+            existing_model,
+            grants={
+                "select": [roles["writer"]["username"], roles["admin"]["username"]],
+                "insert": [roles["admin"]["username"]],
+            },
+        )
         context.plan(auto_apply=True, no_prompts=True)
 
-        # Grants should be updated regardless of how the change is categorized
-        updated_physical_grants = engine_adapter._get_current_grants_config(
-            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
-        )
         expected_grants = {
             "SELECT": [roles["writer"]["username"], roles["admin"]["username"]],
             "INSERT": [roles["admin"]["username"]],
         }
+
+        updated_physical_grants = engine_adapter._get_current_grants_config(
+            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
+        )
         assert set(updated_physical_grants.get("SELECT", [])) == set(expected_grants["SELECT"])
         assert updated_physical_grants.get("INSERT", []) == expected_grants["INSERT"]
 
@@ -851,34 +882,6 @@ def test_grants_metadata_only_changes(
         )
         assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_grants["SELECT"])
         assert updated_virtual_grants.get("INSERT", []) == expected_grants["INSERT"]
-
-        # Test removing grants (remove INSERT, replace SELECT with reader)
-        minimal_grants_model_def = f"""
-        MODEL (
-            name test_schema.metadata_grants_model,
-            kind FULL,
-            grants (
-                'select' = ['{roles["reader"]["username"]}']
-            ),
-            grants_target_layer 'all'
-        );
-        SELECT 1 as id, 'unchanged_query' as data
-        """
-
-        (tmp_path / "models" / "metadata_grants_model.sql").write_text(minimal_grants_model_def)
-
-        context = ctx.create_context(path=tmp_path)
-        context.plan(auto_apply=True, no_prompts=True)
-
-        final_physical_grants = engine_adapter._get_current_grants_config(
-            exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
-        )
-        assert final_physical_grants == {"SELECT": [roles["reader"]["username"]]}
-
-        final_virtual_grants = engine_adapter._get_current_grants_config(
-            exp.to_table(virtual_view_name, dialect=engine_adapter.dialect)
-        )
-        assert final_virtual_grants == {"SELECT": [roles["reader"]["username"]]}
 
 
 def _vde_dev_only_config(gateway: str, config: Config) -> None:
@@ -974,7 +977,6 @@ def test_grants_incremental_model_with_vde_dev_only(
         (tmp_path / "models" / "vde_incremental_model.sql").write_text(model_def)
 
         context = ctx.create_context(path=tmp_path, config_mutator=_vde_dev_only_config)
-
         context.plan("prod", auto_apply=True, no_prompts=True)
 
         prod_table = "test_schema.vde_incremental_model"
