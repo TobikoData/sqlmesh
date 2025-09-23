@@ -57,6 +57,8 @@ dev = [
     "beautifulsoup4",
     "clickhouse-connect",
     "cryptography<46.0.0",
+    # `0.66.0` release contains a breaking change for dbt-databricks
+    "databricks-sdk<0.66.0",
     "databricks-sql-connector",
     "dbt-bigquery",
     "dbt-core",
@@ -76,6 +78,7 @@ dev = [
     "google-cloud-bigquery-storage",
     "httpx",
     "mypy~=1.13.0",
+    "numpy",
     "pandas-stubs",
     "pre-commit",
     "psycopg2-binary",
