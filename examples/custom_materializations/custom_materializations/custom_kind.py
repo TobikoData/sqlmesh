@@ -29,4 +29,4 @@ class CustomFullWithCustomKindMaterialization(CustomMaterialization[ExtendedCust
     ) -> None:
         assert type(model.kind).__name__ == "ExtendedCustomKind"
 
-        self._replace_query_for_model(model, table_name, query_or_df, render_kwargs, **kwargs)
+        self._replace_query_for_model(model, table_name, query_or_df, render_kwargs)
