@@ -172,16 +172,8 @@ class DbtLoader(Loader):
                 for test in package.tests.values():
                     logger.debug("Converting '%s' to sqlmesh format", test.name)
                     try:
-                        sqlmesh_audit = test.to_sqlmesh(package_context)
-                        qualified_name = f"{package.name}.{test.name}"
-                        is_from_dbt_packages = "dbt_packages" in str(test.path)
-
-                        if is_from_dbt_packages:
-                            audits[qualified_name] = sqlmesh_audit
-                            if test.name not in audits:
-                                audits[test.name] = sqlmesh_audit
-                        else:
-                            audits[test.name] = sqlmesh_audit
+                        audit = test.to_sqlmesh(package_context)
+                        audits[audit.name] = audit
 
                     except BaseMissingReferenceError as e:
                         ref_type = "model" if isinstance(e, MissingModelError) else "source"
