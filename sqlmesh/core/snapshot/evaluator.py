@@ -1847,9 +1847,13 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
             view_properties=model.render_virtual_properties(**render_kwargs),
         )
 
-        snapshot = kwargs["snapshot"]
-        deployability_index = kwargs["deployability_index"]
-        is_snapshot_deployable = deployability_index.is_deployable(snapshot)
+        snapshot = kwargs.get("snapshot")
+        deployability_index = kwargs.get("deployability_index")
+        is_snapshot_deployable = (
+            deployability_index.is_deployable(snapshot)
+            if snapshot and deployability_index
+            else False
+        )
 
         # Apply grants to the physical layer (referenced table / view) after promotion
         self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
@@ -1916,7 +1920,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
 
         # Apply grants after table creation (unless explicitly skipped by caller)
         if not skip_grants:
-            is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+            is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
             self._apply_grants(
                 model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable
             )
@@ -2005,7 +2009,7 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
 
         # Apply grants after table replacement (unless explicitly skipped by caller)
         if not skip_grants:
-            is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+            is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
             self._apply_grants(model, name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
 
     def _get_target_and_source_columns(
@@ -2296,7 +2300,7 @@ class SeedStrategy(MaterializableStrategy):
 
             if not skip_grants:
                 # Apply grants after seed table creation and data insertion
-                is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+                is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
                 self._apply_grants(
                     model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable
                 )
@@ -2383,7 +2387,7 @@ class SCDType2Strategy(IncrementalStrategy):
 
         if not skip_grants:
             # Apply grants after SCD Type 2 table creation
-            is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+            is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
             self._apply_grants(
                 model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable
             )
@@ -2456,7 +2460,7 @@ class SCDType2Strategy(IncrementalStrategy):
             )
 
         # Apply grants after SCD Type 2 table recreation
-        is_snapshot_deployable = kwargs["is_snapshot_deployable"]
+        is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
         self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
 
     def append(
@@ -2516,7 +2520,7 @@ class ViewStrategy(PromotableStrategy):
         )
 
         # Apply grants after view creation / replacement
-        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+        is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
         self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
 
     def append(
@@ -2538,7 +2542,7 @@ class ViewStrategy(PromotableStrategy):
         skip_grants: bool,
         **kwargs: t.Any,
     ) -> None:
-        is_snapshot_deployable: bool = kwargs["is_snapshot_deployable"]
+        is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
 
         if self.adapter.table_exists(table_name):
             # Make sure we don't recreate the view to prevent deletion of downstream views in engines with no late
