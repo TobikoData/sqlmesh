@@ -64,7 +64,17 @@
     },
     "./styles/*": "./dist/styles/*",
     "./design/*": "./dist/styles/design/*",
-    "./configs/*": "./dist/configs/*"
+    "./configs/*": "./dist/configs/*",
+    "./lineage": {
+      "import": {
+        "types": "./dist/lineage/index.d.ts",
+        "default": "./dist/lineage/index.es.js"
+      },
+      "require": {
+        "types": "./dist/lineage/index.d.ts",
+        "default": "./dist/lineage/index.umd.js"
+      }
+    }
   },
   "files": [
     "/dist"

@@ -1,7 +1,3 @@
-import { ReactFlowProvider } from '@xyflow/react'
-
-import '@xyflow/react/dist/style.css'
-
 import { debounce } from 'lodash'
 import { Focus, Rows2, Rows3 } from 'lucide-react'
 import React from 'react'
@@ -35,10 +31,6 @@ import {
   getTransformedNodes,
 } from '../help'
 import {
-  cleanupLayoutWorker,
-  getLayoutedGraph as getDagreLayoutedGraph,
-} from '../layout/dagreLayout'
-import {
   type LineageEdge,
   type LineageNodesMap,
   ZOOM_THRESHOLD,
@@ -50,15 +42,16 @@ import {
   type ModelName,
   type ColumnName,
   type NodeData,
-  type NodeType,
   useModelLineage,
   type ModelNodeId,
   type ModelColumnID,
   type ModelEdgeId,
+  type NodeType,
 } from './ModelLineageContext'
 import { ModelNode } from './ModelNode'
 import { getNodeTypeColorVar } from './help'
 import { EdgeWithGradient } from '../edge/EdgeWithGradient'
+import { cleanupLayoutWorker, getLayoutedGraph } from '../layout/help'
 
 const nodeTypes = {
   node: ModelNode,
@@ -270,7 +263,11 @@ export const ModelLineage = ({
         eds: LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[],
         nds: LineageNodesMap<NodeData>,
       ) =>
-        getDagreLayoutedGraph(eds, nds)
+        getLayoutedGraph(
+          eds,
+          nds,
+          new URL('./dagreLayout.worker.ts', import.meta.url),
+        )
           .then(({ edges, nodesMap }) => {
             setEdges(edges)
             setNodesMap(nodesMap)
@@ -380,42 +377,40 @@ export const ModelLineage = ({
         setNodesMap,
       }}
     >
-      <ReactFlowProvider>
-        <LineageLayout<
-          NodeData,
-          EdgeData,
-          ModelNodeId,
-          ModelEdgeId,
-          ModelColumnID
-        >
-          useLineage={useModelLineage}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          className={className}
-          controls={
-            <>
-              <LineageControlButton
-                text={showColumns ? 'Hide columns' : `Show columns`}
-                onClick={() => toggleColumns()}
-                disabled={isBuildingLayout}
-              >
-                {showColumns ? (
-                  <LineageControlIcon Icon={Rows2} />
-                ) : (
-                  <LineageControlIcon Icon={Rows3} />
-                )}
-              </LineageControlButton>
-              <LineageControlButton
-                text="Reset"
-                onClick={() => handleReset()}
-                disabled={isBuildingLayout}
-              >
-                <LineageControlIcon Icon={Focus} />
-              </LineageControlButton>
-            </>
-          }
-        />
-      </ReactFlowProvider>
+      <LineageLayout<
+        NodeData,
+        EdgeData,
+        ModelNodeId,
+        ModelEdgeId,
+        ModelColumnID
+      >
+        useLineage={useModelLineage}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        className={className}
+        controls={
+          <>
+            <LineageControlButton
+              text={showColumns ? 'Hide columns' : `Show columns`}
+              onClick={() => toggleColumns()}
+              disabled={isBuildingLayout}
+            >
+              {showColumns ? (
+                <LineageControlIcon Icon={Rows2} />
+              ) : (
+                <LineageControlIcon Icon={Rows3} />
+              )}
+            </LineageControlButton>
+            <LineageControlButton
+              text="Reset"
+              onClick={() => handleReset()}
+              disabled={isBuildingLayout}
+            >
+              <LineageControlIcon Icon={Focus} />
+            </LineageControlButton>
+          </>
+        }
+      />
     </ModelLineageContext.Provider>
   )
 }

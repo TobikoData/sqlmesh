@@ -52,16 +52,6 @@ export type LayoutedGraph<
 }
 
 export type PathType = 'bezier' | 'smoothstep' | 'step' | 'straight'
-
-export const DEFAULT_NODE_HEIGHT = 32
-export const DEFAULT_NODE_WIDTH = 300
-export const DEFAULT_ZOOM = 0.85
-export const MIN_ZOOM = 0.01
-export const MAX_ZOOM = 1.75
-export const ZOOM_THRESHOLD = 0.75
-export const NODES_TRESHOLD = 200
-export const NODES_TRESHOLD_ZOOM = 0.1
-
 export type TransformNodeFn<
   TData,
   TNodeData extends LineageNodeData = LineageNodeData,
@@ -81,6 +71,15 @@ export type TransformEdgeFn<
   sourceColumnId?: TPortID,
   targetColumnId?: TPortID,
 ) => LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+
+export const DEFAULT_NODE_HEIGHT = 32
+export const DEFAULT_NODE_WIDTH = 300
+export const DEFAULT_ZOOM = 0.85
+export const MIN_ZOOM = 0.01
+export const MAX_ZOOM = 1.75
+export const ZOOM_THRESHOLD = 0.75
+export const NODES_TRESHOLD = 200
+export const NODES_TRESHOLD_ZOOM = 0.1
 
 // ID generated from toInternalID is meant to be used only internally to identify nodes, edges and ports within the graph
 // Do not rely on the ID to be a valid URL, or anythjin outside of the graph
