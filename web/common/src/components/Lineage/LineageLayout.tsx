@@ -5,6 +5,7 @@ import {
   type EdgeTypes,
   type NodeTypes,
   ReactFlow,
+  ReactFlowProvider,
   type SetCenter,
   getConnectedEdges,
   getIncomers,
@@ -44,6 +45,58 @@ import { MessageContainer } from '../MessageContainer/MessageContainer'
 import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
 
 export function LineageLayout<
+  TNodeData extends LineageNodeData = LineageNodeData,
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+>({
+  nodeTypes,
+  edgeTypes,
+  className,
+  controls,
+  useLineage,
+  onNodeClick,
+  onNodeDoubleClick,
+}: {
+  useLineage: LineageContextHook<
+    TNodeData,
+    TEdgeData,
+    TNodeID,
+    TEdgeID,
+    TPortID
+  >
+  nodeTypes?: NodeTypes
+  edgeTypes?: EdgeTypes
+  className?: string
+  controls?:
+    | React.ReactNode
+    | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
+  onNodeClick?: (
+    event: React.MouseEvent<Element, MouseEvent>,
+    node: LineageNode<TNodeData, TNodeID>,
+  ) => void
+  onNodeDoubleClick?: (
+    event: React.MouseEvent<Element, MouseEvent>,
+    node: LineageNode<TNodeData, TNodeID>,
+  ) => void
+}) {
+  return (
+    <ReactFlowProvider>
+      <LineageLayoutBase
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        className={className}
+        controls={controls}
+        useLineage={useLineage}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+      />
+    </ReactFlowProvider>
+  )
+}
+
+function LineageLayoutBase<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,

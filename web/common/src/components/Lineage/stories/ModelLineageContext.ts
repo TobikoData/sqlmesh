@@ -2,7 +2,7 @@ import type { Branded } from '@/types'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextValue,
-  getInitial as getColumnLevelLineageContextInitial,
+  getColumnLevelLineageContextInitial,
 } from '../LineageColumnLevel/ColumnLevelLineageContext'
 import { type Column } from '../LineageColumnLevel/useColumns'
 import {

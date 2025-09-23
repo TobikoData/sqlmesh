@@ -1,6 +1,6 @@
 import {
+  DEFAULT_NODE_WIDTH,
   type EdgeId,
-  type LayoutedGraph,
   type LineageEdge,
   type LineageEdgeData,
   type LineageNodeData,
@@ -8,95 +8,83 @@ import {
   type NodeId,
   type PortId,
 } from '../utils'
+import dagre from 'dagre'
 
-const DEFAULT_TIMEOUT = 1000 * 60 // 1 minute
-
-let workerInstance: Worker | null = null
-
-function getWorker(): Worker {
-  if (workerInstance) return workerInstance
-
-  workerInstance = new Worker(
-    new URL('./dagreLayout.worker.ts', import.meta.url),
-    { type: 'module' },
-  )
-
-  return workerInstance
-}
-
-export async function getLayoutedGraph<
+export function buildLayout<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
   TPortID extends string = PortId,
->(
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[],
-  nodesMap: LineageNodesMap<TNodeData>,
-): Promise<LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>> {
-  let timeoutId: NodeJS.Timeout | null = null
+>({
+  edges,
+  nodesMap,
+}: {
+  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
+  nodesMap: LineageNodesMap<TNodeData>
+}) {
+  const nodes = Object.values(nodesMap)
+  const nodeCount = nodes.length
+  const edgeCount = edges.length
 
-  return new Promise((resolve, reject) => {
-    const nodes = Object.values(nodesMap)
-
-    if (nodes.length === 0) return resolve({ edges: [], nodesMap: {} })
-
-    const worker = getWorker()
-
-    if (worker == null)
-      return errorHandler(new ErrorEvent('Failed to create worker'))
-
-    timeoutId = setTimeout(
-      () => errorHandler(new ErrorEvent('Layout calculation timed out')),
-      DEFAULT_TIMEOUT,
-    )
-
-    worker.addEventListener('message', handler)
-    worker.addEventListener('error', errorHandler)
-
-    try {
-      worker.postMessage({ edges, nodesMap } as LayoutedGraph<
-        TNodeData,
-        TEdgeData,
-        TNodeID,
-        TEdgeID,
-        TPortID
-      >)
-    } catch (postError) {
-      errorHandler(postError as ErrorEvent)
+  if (nodeCount === 0)
+    return {
+      edges: [],
+      nodesMap: {},
     }
 
-    function handler(
-      event: MessageEvent<
-        LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID> & {
-          error: ErrorEvent
-        }
-      >,
-    ) {
-      cleanup()
-
-      if (event.data.error) return errorHandler(event.data.error)
-
-      resolve(event.data)
-    }
-
-    function errorHandler(error: ErrorEvent) {
-      cleanup()
-      reject(error)
-    }
-
-    function cleanup() {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
-      worker?.removeEventListener('message', handler)
-      worker?.removeEventListener('error', errorHandler)
-    }
+  const g = new dagre.graphlib.Graph({
+    compound: true,
+    multigraph: true,
+    directed: true,
   })
-}
 
-export function cleanupLayoutWorker(): void {
-  workerInstance?.terminate()
-  workerInstance = null
+  g.setGraph({
+    rankdir: 'LR',
+    nodesep: 0,
+    ranksep: 48,
+    edgesep: 0,
+    ranker: 'longest-path',
+  })
+
+  g.setDefaultEdgeLabel(() => ({}))
+
+  // Building layout already heavy operation, so trying to optimize it a bit
+  for (let i = 0; i < edgeCount; i++) {
+    g.setEdge(edges[i].source, edges[i].target)
+  }
+
+  for (let i = 0; i < nodeCount; i++) {
+    const node = nodes[i]
+    g.setNode(node.id, {
+      width: node.width || DEFAULT_NODE_WIDTH,
+      height: node.height || 0,
+    })
+  }
+
+  dagre.layout(g)
+
+  // Building layout already heavy operation, so trying to optimize it a bit
+  for (let i = 0; i < nodeCount; i++) {
+    const node = nodes[i]
+    const width = node.width || DEFAULT_NODE_WIDTH
+    const height = node.height || 0
+    const nodeId = node.id as NodeId
+    const nodeWithPosition = g.node(nodeId)
+    const halfWidth = width / 2
+    const halfHeight = height / 2
+
+    nodesMap[nodeId] = {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - halfWidth,
+        y: nodeWithPosition.y - halfHeight,
+      },
+    }
+  }
+
+  return {
+    edges,
+    nodesMap,
+  }
 }

@@ -3,21 +3,12 @@ import React from 'react'
 import { type LineageContextHook } from '../LineageContext'
 import {
   type EdgeId,
-  type LineageEdgeData,
   type LineageNodeData,
   type NodeId,
-  type PathType,
   type PortId,
 } from '../utils'
-import { EdgeWithGradient } from './EdgeWithGradient'
+import { EdgeWithGradient, type EdgeData } from './EdgeWithGradient'
 import type { Edge, EdgeProps } from '@xyflow/react'
-
-export interface EdgeData extends LineageEdgeData {
-  startColor?: string
-  endColor?: string
-  strokeWidth?: number
-  pathType?: PathType
-}
 
 export function FactoryEdgeWithGradient<
   TNodeData extends LineageNodeData = LineageNodeData,

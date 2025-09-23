@@ -1,4 +1,3 @@
-import { type Node, type NodeProps } from '@xyflow/react'
 import cronstrue from 'cronstrue'
 import React from 'react'
 
@@ -21,14 +20,12 @@ import { NodeDivider } from '../node/NodeDivider'
 import { NodeHandleIcon } from '../node/NodeHandleIcon'
 import { NodeHandles } from '../node/NodeHandles'
 import { NodeHeader } from '../node/NodeHeader'
-import { NodePorts } from '../node/NodePorts'
-import { useNodeMetadata } from '../node/useNodeMetadata'
+import { useNodeMetadata, type NodeProps } from '../node/useNodeMetadata'
 import { ZOOM_THRESHOLD } from '../utils'
 import {
   type ModelName as ModelNameType,
   type ColumnName,
   type NodeData,
-  type NodeType,
   useModelLineage,
   type ModelColumn,
   type ModelNodeId,
@@ -45,12 +42,13 @@ import type { ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/Colu
 import { ModelName } from '@/components/ModelName/ModelName'
 import { Metadata } from '@/components/Metadata/Metadata'
 import { Badge } from '@/components/Badge/Badge'
+import { NodePorts } from '../node/NodePorts'
 
 export const ModelNode = React.memo(function ModelNode({
   id,
   data,
   ...props
-}: NodeProps<Node<NodeData>>) {
+}: NodeProps<NodeData>) {
   const {
     selectedColumns,
     zoom,
@@ -97,7 +95,8 @@ export const ModelNode = React.memo(function ModelNode({
 
   const shouldShowColumns =
     showNodeColumns || hasSelectedColumns || hasFetchingColumns || isHovered
-  const modelType = data.model_type.toLowerCase() as NodeType
+  // const modelType = data.model_type?.toLowerCase() as NodeType
+  const modelType = 'sql'
   const hasColumnsFilter =
     shouldShowColumns && columns.length > MAX_COLUMNS_TO_DISPLAY
   // We are not including the footer, because we need actual height to dynamically adjust node container height
@@ -151,26 +150,28 @@ export const ModelNode = React.memo(function ModelNode({
         <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
           {zoom > ZOOM_THRESHOLD && (
             <>
-              <NodeBadge>{data.kind.toUpperCase()}</NodeBadge>
-              <Tooltip
-                side="top"
-                sideOffset={6}
-                trigger={
-                  <NodeBadge className="cursor-default whitespace-nowrap">
-                    {data.cron.toUpperCase()}
-                  </NodeBadge>
-                }
-                className="text-xs p-2 rounded-md font-semibold"
-              >
-                <span className="flex gap-2">
-                  <NodeBadge size="2xs">UTC Time</NodeBadge>
-                  {cronstrue.toString(data.cron, {
-                    dayOfWeekStartIndexZero: true,
-                    use24HourTimeFormat: true,
-                    verbose: true,
-                  })}
-                </span>
-              </Tooltip>
+              <NodeBadge>{data.kind?.toUpperCase()}</NodeBadge>
+              {data.cron && (
+                <Tooltip
+                  side="top"
+                  sideOffset={6}
+                  trigger={
+                    <NodeBadge className="cursor-default whitespace-nowrap">
+                      {data.cron.toUpperCase()}
+                    </NodeBadge>
+                  }
+                  className="text-xs p-2 rounded-md font-semibold"
+                >
+                  <span className="flex gap-2">
+                    <NodeBadge size="2xs">UTC Time</NodeBadge>
+                    {cronstrue.toString(data.cron, {
+                      dayOfWeekStartIndexZero: true,
+                      use24HourTimeFormat: true,
+                      verbose: true,
+                    })}
+                  </span>
+                </Tooltip>
+              )}
             </>
           )}
         </HorizontalContainer>
@@ -304,27 +305,29 @@ export const ModelNode = React.memo(function ModelNode({
           </>
         )}
       </NodeBase>
-      <NodeAppendix
-        position="bottom"
-        className="bg-lineage-node-appendix-background"
-      >
-        <HorizontalContainer
-          className={cn(
-            'gap-1 items-center overflow-visible',
-            zoom > ZOOM_THRESHOLD ? 'h-5' : 'h-8',
-          )}
+      {modelType && (
+        <NodeAppendix
+          position="bottom"
+          className="bg-lineage-node-appendix-background"
         >
-          <Badge
-            size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
+          <HorizontalContainer
             className={cn(
-              'text-[white] font-black',
-              getNodeTypeColor(modelType),
+              'gap-1 items-center overflow-visible',
+              zoom > ZOOM_THRESHOLD ? 'h-5' : 'h-8',
             )}
           >
-            {modelType.toUpperCase()}
-          </Badge>
-        </HorizontalContainer>
-      </NodeAppendix>
+            <Badge
+              size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
+              className={cn(
+                'text-[white] font-black',
+                getNodeTypeColor(modelType),
+              )}
+            >
+              {modelType.toUpperCase()}
+            </Badge>
+          </HorizontalContainer>
+        </NodeAppendix>
+      )}
     </NodeContainer>
   )
 })

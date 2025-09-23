@@ -67,7 +67,7 @@ export type ColumnLevelLineageContextValue<
   setFetchingColumns: React.Dispatch<React.SetStateAction<Set<TColumnID>>>
 }
 
-export function getInitial<
+export function getColumnLevelLineageContextInitial<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,

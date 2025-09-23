@@ -1,6 +1,13 @@
-import { useNodeConnections } from '@xyflow/react'
+import {
+  type Node,
+  type NodeProps as ReactFlowNodeProps,
+  useNodeConnections,
+} from '@xyflow/react'
 
 import { type LineageNode, type LineageNodeData, type NodeId } from '../utils'
+
+export type NodeProps<TNodeData extends LineageNodeData = LineageNodeData> =
+  ReactFlowNodeProps<Node<TNodeData>>
 
 export function useNodeMetadata<
   TNodeData extends LineageNodeData = LineageNodeData,
@@ -12,9 +19,11 @@ export function useNodeMetadata<
   selectedNodes: Set<TNodeID>,
 ) {
   const sources = useNodeConnections({
+    id: nodeId,
     handleType: 'source',
   })
   const targets = useNodeConnections({
+    id: nodeId,
     handleType: 'target',
   })
 

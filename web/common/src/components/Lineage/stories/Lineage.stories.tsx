@@ -1,6 +1,5 @@
 import type { LineageAdjacencyList, LineageDetails } from '../utils'
 
-import '@xyflow/react/dist/style.css'
 import { ModelLineage } from './ModelLineage'
 import type { ModelLineageNodeDetails, ModelName } from './ModelLineageContext'
 
