@@ -93,7 +93,7 @@ from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
-from sqlmesh.core.selector import Selector
+from sqlmesh.core.selector import Selector, NativeSelector
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -348,8 +348,6 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
-        dbt_mode: A flag to indicate we are running in 'dbt mode' which means that things like
-            model selections should use the dbt names and not the native SQLMesh names
     """
 
     CONFIG_TYPE: t.Type[C]
@@ -370,7 +368,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: bool = True,
         users: t.Optional[t.List[User]] = None,
         config_loader_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
-        dbt_mode: bool = False,
+        selector: t.Optional[t.Type[Selector]] = None,
     ):
         self.configs = (
             config
@@ -393,7 +391,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._engine_adapter: t.Optional[EngineAdapter] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
-        self._dbt_mode = dbt_mode
+        self._selector_cls = selector or NativeSelector
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
@@ -2897,7 +2895,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _new_selector(
         self, models: t.Optional[UniqueKeyDict[str, Model]] = None, dag: t.Optional[DAG[str]] = None
     ) -> Selector:
-        return Selector(
+        return self._selector_cls(
             self.state_reader,
             models=models or self._models,
             context_path=self.path,
@@ -2905,7 +2903,6 @@ class GenericContext(BaseContext, t.Generic[C]):
             default_catalog=self.default_catalog,
             dialect=self.default_dialect,
             cache_dir=self.cache_dir,
-            dbt_mode=self._dbt_mode,
         )
 
     def _register_notification_targets(self) -> None:

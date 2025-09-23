@@ -4,6 +4,7 @@ import fnmatch
 import typing as t
 from pathlib import Path
 from itertools import zip_longest
+import abc
 
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -27,7 +28,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 
-class Selector:
+class Selector(abc.ABC):
     def __init__(
         self,
         state_reader: StateReader,
@@ -37,7 +38,6 @@ class Selector:
         default_catalog: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
         cache_dir: t.Optional[Path] = None,
-        dbt_mode: bool = False,
     ):
         self._state_reader = state_reader
         self._models = models
@@ -46,7 +46,6 @@ class Selector:
         self._default_catalog = default_catalog
         self._dialect = dialect
         self._git_client = GitClient(context_path)
-        self._dbt_mode = dbt_mode
 
         if dag is None:
             self._dag: DAG[str] = DAG()
@@ -243,26 +242,37 @@ class Selector:
 
         return evaluate(node)
 
-    def _model_fqn(self, model: Model) -> str:
-        if self._dbt_mode:
-            dbt_fqn = model.dbt_fqn
-            if dbt_fqn is None:
-                raise SQLMeshError("Expecting dbt node information to be populated; it wasnt")
-            return dbt_fqn
-        return model.fqn
+    @abc.abstractmethod
+    def _model_name(self, model: Model) -> str:
+        """Given a model, return the name that a selector pattern contining wildcards should be fnmatch'd on"""
+        pass
+
+    @abc.abstractmethod
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+        """Given a pattern, return the keys of the matching models from :all_models"""
+        pass
+
+
+class NativeSelector(Selector):
+    """Implementation of selectors that matches objects based on SQLMesh native names"""
 
     def _model_name(self, model: Model) -> str:
-        if self._dbt_mode:
-            # dbt always matches on the fqn, not the name
-            return self._model_fqn(model)
         return model.name
 
     def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
-        # note: all_models should be keyed by sqlmesh fqn, not dbt fqn
-        if not self._dbt_mode:
-            fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
-            return {fqn} if fqn in all_models else set()
+        fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
+        return {fqn} if fqn in all_models else set()
 
+
+class DbtSelector(Selector):
+    """Implementation of selectors that matches objects based on the DBT names instead of the SQLMesh native names"""
+
+    def _model_name(self, model: Model) -> str:
+        if dbt_fqn := model.dbt_fqn:
+            return dbt_fqn
+        raise SQLMeshError("dbt node information must be populated to use dbt selectors")
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
         # a pattern like "staging.customers" should match a model called "jaffle_shop.staging.customers"
         # but not a model called "jaffle_shop.customers.staging"
         # also a pattern like "aging" should not match "staging" so we need to consider components; not substrings

@@ -1,6 +1,7 @@
 import typing as t
 import pytest
 from sqlmesh_dbt import selectors
+from sqlmesh.core.selector import DbtSelector
 from sqlmesh.core.context import Context
 from pathlib import Path
 
@@ -112,6 +113,7 @@ def test_split_unions_and_intersections(
             ["customers+", "stg_orders"],
             {'"jaffle_shop"."main"."customers"', '"jaffle_shop"."main"."stg_orders"'},
         ),
+        (["*.staging.stg_c*"], {'"jaffle_shop"."main"."stg_customers"'}),
         (["tag:agg"], {'"jaffle_shop"."main"."agg_orders"'}),
         (
             ["staging.stg_customers", "tag:agg"],
@@ -137,6 +139,16 @@ def test_split_unions_and_intersections(
                 '"jaffle_shop"."main"."agg_orders"',
             },
         ),
+        (
+            ["tag:b*"],
+            set(),
+        ),
+        (
+            ["tag:a*"],
+            {
+                '"jaffle_shop"."main"."agg_orders"',
+            },
+        ),
     ],
 )
 def test_select_by_dbt_names(
@@ -155,7 +167,7 @@ def test_select_by_dbt_names(
     assert '"jaffle_shop"."main"."agg_orders"' in ctx.models
 
     selector = ctx._new_selector()
-    assert selector._dbt_mode
+    assert isinstance(selector, DbtSelector)
 
     sqlmesh_selector = selectors.to_sqlmesh(dbt_select=dbt_select, dbt_exclude=[])
     assert sqlmesh_selector
@@ -205,7 +217,7 @@ def test_exclude_by_dbt_names(
     assert '"jaffle_shop"."main"."agg_orders"' in ctx.models
 
     selector = ctx._new_selector()
-    assert selector._dbt_mode
+    assert isinstance(selector, DbtSelector)
 
     sqlmesh_selector = selectors.to_sqlmesh(dbt_select=[], dbt_exclude=dbt_exclude)
     assert sqlmesh_selector
@@ -251,7 +263,7 @@ def test_selection_and_exclusion_by_dbt_names(
     assert '"jaffle_shop"."main"."agg_orders"' in ctx.models
 
     selector = ctx._new_selector()
-    assert selector._dbt_mode
+    assert isinstance(selector, DbtSelector)
 
     sqlmesh_selector = selectors.to_sqlmesh(dbt_select=dbt_select, dbt_exclude=dbt_exclude)
     assert sqlmesh_selector

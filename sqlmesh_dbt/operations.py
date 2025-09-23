@@ -231,6 +231,7 @@ def create(
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
+        from sqlmesh.core.selector import DbtSelector
 
         # clear any existing handlers set up by click/rich as defaults so that once SQLMesh logging config is applied,
         # we dont get duplicate messages logged from things like console.log_warning()
@@ -250,8 +251,8 @@ def create(
             paths=[project_dir],
             config_loader_kwargs=dict(profile=profile, target=target, variables=vars),
             load=True,
-            # dbt mode enables selectors to use dbt model fqn's rather than SQLMesh model names
-            dbt_mode=True,
+            # DbtSelector selects based on dbt model fqn's rather than SQLMesh model names
+            selector=DbtSelector,
         )
 
         dbt_loader = sqlmesh_context._loaders[0]
