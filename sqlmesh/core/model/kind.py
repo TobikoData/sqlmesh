@@ -150,6 +150,11 @@ class ModelKindMixin:
     def supports_python_models(self) -> bool:
         return True
 
+    @property
+    def supports_grants(self) -> bool:
+        """Whether this model kind supports grants configuration."""
+        return self.is_materialized or self.is_view
+
 
 class ModelKindName(str, ModelKindMixin, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
