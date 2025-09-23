@@ -3233,6 +3233,62 @@ def test_virtual_environment_mode_dev_only_model_change_standalone_audit(
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_virtual_environment_mode_dev_only_seed_model_change_schema(
+    init_and_plan_context: t.Callable,
+):
+    context, plan = init_and_plan_context(
+        "examples/sushi", config="test_config_virtual_environment_mode_dev_only"
+    )
+    context.apply(plan)
+
+    new_csv = []
+    with open(context.path / "seeds" / "waiter_names.csv", "r") as fd:
+        is_header = True
+        for idx, line in enumerate(fd):
+            line = line.strip()
+            if not line:
+                continue
+            if is_header:
+                new_csv.append(line + ",new_column")
+                is_header = False
+            else:
+                new_csv.append(line + f",v{idx}")
+
+    with open(context.path / "seeds" / "waiter_names.csv", "w") as fd:
+        fd.write("\n".join(new_csv))
+
+    context.load()
+
+    downstream_model = context.get_model("sushi.waiter_as_customer_by_day")
+    downstream_model_kind = downstream_model.kind.dict()
+    downstream_model_kwargs = {
+        **downstream_model.dict(),
+        "kind": {
+            **downstream_model_kind,
+            "on_destructive_change": "allow",
+        },
+        "audits": [],
+        # Use the new column
+        "query": "SELECT '2023-01-07' AS event_date, new_column AS new_column FROM sushi.waiter_names",
+    }
+    context.upsert_model(SqlModel.parse_obj(downstream_model_kwargs))
+
+    context.plan("dev", auto_apply=True, no_prompts=True, skip_tests=True, enable_preview=True)
+
+    assert (
+        context.engine_adapter.fetchone(
+            "SELECT COUNT(*) FROM sushi__dev.waiter_as_customer_by_day"
+        )[0]
+        == len(new_csv) - 1
+    )
+
+    # Deploy to prod
+    context.clear_caches()
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+    assert "new_column" in context.engine_adapter.columns("sushi.waiter_as_customer_by_day")
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
 def test_restatement_plan_ignores_changes(init_and_plan_context: t.Callable):
     context, plan = init_and_plan_context("examples/sushi")
     context.apply(plan)

@@ -16,7 +16,11 @@ def should_force_rebuild(old: Snapshot, new: Snapshot) -> bool:
     if new.is_view and new.is_indirect_non_breaking and not new.is_forward_only:
         # View models always need to be rebuilt to reflect updated upstream dependencies
         return True
-    if new.is_seed and not new.is_metadata:
+    if new.is_seed and not (
+        new.is_metadata
+        and new.previous_version
+        and new.previous_version.snapshot_id(new.name) == old.snapshot_id
+    ):
         # Seed models always need to be rebuilt to reflect changes in the seed file
         # Unless only their metadata has been updated (eg description added) and the seed file has not been touched
         return True

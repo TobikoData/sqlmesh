@@ -169,17 +169,18 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         )
 
         def query_factory() -> Query:
-            if bigframes_pd and isinstance(df, bigframes_pd.DataFrame):
-                df.to_gbq(
+            ordered_df = df[list(source_columns_to_types)]
+            if bigframes_pd and isinstance(ordered_df, bigframes_pd.DataFrame):
+                ordered_df.to_gbq(
                     f"{temp_bq_table.project}.{temp_bq_table.dataset_id}.{temp_bq_table.table_id}",
                     if_exists="replace",
                 )
             elif not self.table_exists(temp_table):
                 # Make mypy happy
-                assert isinstance(df, pd.DataFrame)
+                assert isinstance(ordered_df, pd.DataFrame)
                 self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
                 result = self.__load_pandas_to_table(
-                    temp_bq_table, df, source_columns_to_types, replace=False
+                    temp_bq_table, ordered_df, source_columns_to_types, replace=False
                 )
                 if result.errors:
                     raise SQLMeshError(result.errors)
