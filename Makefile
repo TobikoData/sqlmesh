@@ -57,7 +57,7 @@ install-dev-dbt-%:
 	fi; \
 	if [ "$$version" = "1.5.0" ]; then \
 		echo "Applying overrides for dbt 1.5.0"; \
-		$(PIP) install 'databricks-sql-connector==4.1.3' 'databricks-sdk==0.9.0' 'dbt-databricks==1.5.6' 'numpy<2' --reinstall; \
+		$(PIP) install 'dbt-databricks==1.5.6' 'numpy<2' --reinstall; \
 	fi; \
 	mv pyproject.toml.backup pyproject.toml; \
 	echo "Restored original pyproject.toml"
