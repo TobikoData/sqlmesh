@@ -487,7 +487,13 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     retry_resp_call.errors = None
     retry_mock.return_value = retry_resp
     db_call_mock.return_value = AttributeDict({"errors": None})
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    df = pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "ts": ["2025-01-01 00:00:00", "2025-01-01 00:00:00", "2025-01-01 00:00:00"],
+            "val": [7, 8, 9],
+        }
+    )
     adapter.merge(
         target_table="target",
         source_table=df,
