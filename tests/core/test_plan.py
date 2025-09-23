@@ -1214,6 +1214,7 @@ def test_seed_model_metadata_change_no_missing_intervals(
             description="foo",
         )
     )
+    snapshot_a_metadata_updated.previous_versions = snapshot_a.all_versions
     assert snapshot_a_metadata_updated.version is None
     assert snapshot_a_metadata_updated.change_category is None
 
