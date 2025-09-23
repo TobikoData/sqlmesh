@@ -76,6 +76,7 @@ dev = [
     "google-cloud-bigquery-storage",
     "httpx",
     "mypy~=1.13.0",
+    "numpy",
     "pandas-stubs",
     "pre-commit",
     "psycopg2-binary",

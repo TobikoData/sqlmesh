@@ -36,10 +36,15 @@ install-dev-dbt-%:
 	if [ "$$version" = "1.10.0" ]; then \
 		echo "Applying special handling for dbt 1.10.0"; \
 		$(SED_INPLACE) -E 's/"(dbt-core)[^"]*"/"\1~='"$$version"'"/g' pyproject.toml; \
-		$(SED_INPLACE) -E 's/"(dbt-(bigquery|duckdb|snowflake|athena-community|clickhouse|databricks|redshift|trino))[^"]*"/"\1"/g' pyproject.toml; \
+		$(SED_INPLACE) -E 's/"(dbt-(bigquery|duckdb|snowflake|athena-community|clickhouse|redshift|trino))[^"]*"/"\1"/g' pyproject.toml; \
+		$(SED_INPLACE) -E 's/"(dbt-databricks)[^"]*"/"\1~='"$$version"'"/g' pyproject.toml; \
 	else \
 		echo "Applying version $$version to all dbt packages"; \
 		$(SED_INPLACE) -E 's/"(dbt-[^"><=~!]+)[^"]*"/"\1~='"$$version"'"/g' pyproject.toml; \
+	fi; \
+	if printf '%s\n' "$$version" | awk -F. '{ if ($$1 == 1 && (($$2 >= 3 && $$2 <= 5) || $$2 == 10)) exit 0; exit 1 }'; then \
+		echo "Applying numpy<2 constraint for dbt $$version"; \
+		$(SED_INPLACE) 's/"numpy"/"numpy<2"/g' pyproject.toml; \
 	fi; \
 	$(MAKE) install-dev; \
 	if [ "$$version" = "1.6.0" ]; then \
@@ -49,6 +54,10 @@ install-dev-dbt-%:
 	if [ "$$version" = "1.7.0" ]; then \
 		echo "Applying overrides for dbt 1.7.0"; \
 		$(PIP) install 'databricks-sdk==0.28.0' --reinstall; \
+	fi; \
+	if [ "$$version" = "1.5.0" ]; then \
+		echo "Applying overrides for dbt 1.5.0"; \
+		$(PIP) install 'dbt-databricks==1.5.6' 'numpy<2' --reinstall; \
 	fi; \
 	mv pyproject.toml.backup pyproject.toml; \
 	echo "Restored original pyproject.toml"
