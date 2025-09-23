@@ -112,8 +112,9 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
                     storage_format=exp.var("MergeTree"),
                     **kwargs,
                 )
+                ordered_df = df[list(source_columns_to_types)]
 
-                self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=df)
+                self.cursor.client.insert_df(temp_table.sql(dialect=self.dialect), df=ordered_df)
 
             return exp.select(*self._casted_columns(target_columns_to_types, source_columns)).from_(
                 temp_table

@@ -148,7 +148,7 @@ def ctx_df(
     yield from create_test_context(*request.param)
 
 
-@pytest.fixture(params=list(generate_pytest_params(ENGINES, query=True, df=False)))
+@pytest.fixture(params=list(generate_pytest_params(ENGINES, query=True, df=True)))
 def ctx_query_and_df(
     request: FixtureRequest,
     create_test_context: t.Callable[[IntegrationTestEngine, str], t.Iterable[TestContext]],
