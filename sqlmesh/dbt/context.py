@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -27,6 +28,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.dbt.relation import Policy
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -125,7 +128,7 @@ class DbtContext:
             try:
                 rendered_variables[k] = _render_var(v)
             except Exception as ex:
-                raise ConfigError(f"Failed to render variable '{k}', value '{v}': {ex}") from ex
+                logger.warning(f"Failed to render variable '{k}', value '{v}': {ex}")
 
         self.variables = rendered_variables
 

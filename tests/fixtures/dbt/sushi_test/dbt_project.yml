@@ -66,6 +66,9 @@ vars:
     - name: 'item2'
       value: 2
 
+  # Despite this being an invalid variable definition, dbt doesn't mind if it's unused
+  invalid_var: "{{ ref('ref_without_closing_paren' }}"
+
 
 on-run-start:
   - 'CREATE TABLE IF NOT EXISTS analytic_stats (physical_table VARCHAR, evaluation_time VARCHAR);'

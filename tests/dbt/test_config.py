@@ -352,6 +352,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
             "some_var": ["foo", "bar"],
         },
         "some_var": "should be overridden in customers package",
+        "invalid_var": "{{ ref('ref_without_closing_paren' }}",
     }
     expected_customer_variables = {
         "some_var": ["foo", "bar"],  # Takes precedence over the root project variable
@@ -370,6 +371,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
             {"name": "item1", "value": 1},
             {"name": "item2", "value": 2},
         ],
+        "invalid_var": "{{ ref('ref_without_closing_paren' }}",
     }
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
     assert sushi_test_project.packages["customers"].variables == expected_customer_variables
