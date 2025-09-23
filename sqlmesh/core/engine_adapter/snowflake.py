@@ -34,7 +34,14 @@ if t.TYPE_CHECKING:
     import pandas as pd
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF, SnowparkSession
+    from sqlmesh.core.engine_adapter._typing import (
+        DCL,
+        DF,
+        GrantsConfig,
+        Query,
+        QueryOrDF,
+        SnowparkSession,
+    )
     from sqlmesh.core.node import IntervalUnit
 
 
@@ -73,6 +80,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     MANAGED_TABLE_KIND = "DYNAMIC TABLE"
     SNOWPARK = "snowpark"
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    SUPPORTS_GRANTS = True
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -126,6 +134,118 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
+
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            return "MATERIALIZED VIEW"
+        if table_type == DataObjectType.MANAGED_TABLE:
+            return "DYNAMIC TABLE"
+        return "TABLE"
+
+    def _get_current_schema(self) -> str:
+        """Returns the current default schema for the connection."""
+        result = self.fetchone("SELECT CURRENT_SCHEMA()")
+        if not result or not result[0]:
+            raise SQLMeshError("Unable to determine current schema")
+        return str(result[0])
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grant_config:
+            return expressions
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grant_config.items():
+            for principal in principals:
+                args: t.Dict[str, t.Any] = {
+                    "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                    "securable": table.copy(),
+                    "principals": [principal],
+                }
+
+                if object_kind:
+                    args["kind"] = exp.Var(this=object_kind)
+
+                expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        schema_identifier = table.args.get("db") or normalize_identifiers(
+            exp.to_identifier(self._get_current_schema(), quoted=True), dialect=self.dialect
+        )
+        catalog_identifier = table.args.get("catalog")
+        if not catalog_identifier:
+            current_catalog = self.get_current_catalog()
+            if not current_catalog:
+                raise SQLMeshError("Unable to determine current catalog for fetching grants")
+            catalog_identifier = normalize_identifiers(
+                exp.to_identifier(current_catalog, quoted=True), dialect=self.dialect
+            )
+        catalog_identifier.set("quoted", True)
+        table_identifier = table.args.get("this")
+
+        grant_expr = (
+            exp.select("privilege_type", "grantee")
+            .from_(
+                exp.table_(
+                    "TABLE_PRIVILEGES",
+                    db="INFORMATION_SCHEMA",
+                    catalog=catalog_identifier,
+                )
+            )
+            .where(
+                exp.and_(
+                    exp.column("table_schema").eq(exp.Literal.string(schema_identifier.this)),
+                    exp.column("table_name").eq(exp.Literal.string(table_identifier.this)),  # type: ignore
+                    exp.column("grantor").eq(exp.func("CURRENT_ROLE")),
+                    exp.column("grantee").neq(exp.func("CURRENT_ROLE")),
+                )
+            )
+        )
+
+        results = self.fetchall(grant_expr)
+
+        grants_dict: GrantsConfig = {}
+        for privilege_raw, grantee_raw in results:
+            if privilege_raw is None or grantee_raw is None:
+                continue
+
+            privilege = str(privilege_raw)
+            grantee = str(grantee_raw)
+            if not privilege or not grantee:
+                continue
+
+            grantees = grants_dict.setdefault(privilege, [])
+            if grantee not in grantees:
+                grantees.append(grantee)
+
+        return grants_dict
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
         props = exp.Properties(

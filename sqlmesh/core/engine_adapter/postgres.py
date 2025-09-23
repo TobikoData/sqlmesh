@@ -18,9 +18,7 @@ from sqlmesh.core.engine_adapter.shared import set_catalog
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, GrantsConfig, QueryOrDF
-
-    DCL = t.TypeVar("DCL", exp.Grant, exp.Revoke)
+    from sqlmesh.core.engine_adapter._typing import DCL, DF, GrantsConfig, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class PostgresEngineAdapter(
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
-    MAX_IDENTIFIER_LENGTH = 63
+    MAX_IDENTIFIER_LENGTH: t.Optional[int] = 63
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
