@@ -24,7 +24,6 @@ from sqlmesh.core.config import (
     ModelDefaultsConfig,
     DuckDBConnectionConfig,
 )
-from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
