@@ -32,7 +32,9 @@ class DbtOperations:
         # - "data tests" (audits) for those models
         # it also applies selectors which is useful for testing selectors
         selected_models = list(self._selected_models(select, exclude).values())
-        self.console.list_models(selected_models)
+        self.console.list_models(
+            selected_models, {k: v.node for k, v in self.context.snapshots.items()}
+        )
 
     def run(
         self,
@@ -260,7 +262,7 @@ def create(
         return DbtOperations(sqlmesh_context, dbt_project, debug=debug)
 
 
-def init_project_if_required(project_dir: Path) -> None:
+def init_project_if_required(project_dir: Path, start: t.Optional[str] = None) -> None:
     """
     SQLMesh needs a start date to as the starting point for calculating intervals on incremental models, amongst other things
 
@@ -276,4 +278,6 @@ def init_project_if_required(project_dir: Path) -> None:
 
     if not any(f.exists() for f in [project_dir / file for file in ALL_CONFIG_FILENAMES]):
         get_console().log_warning("No existing SQLMesh config detected; creating one")
-        init_example_project(path=project_dir, engine_type=None, template=ProjectTemplate.DBT)
+        init_example_project(
+            path=project_dir, engine_type=None, template=ProjectTemplate.DBT, start=start
+        )

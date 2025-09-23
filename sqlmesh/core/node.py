@@ -153,6 +153,101 @@ class IntervalUnit(str, Enum):
         return self.seconds * 1000
 
 
+class DbtNodeInfo(PydanticModel):
+    """
+    Represents dbt-specific model information set by the dbt loader and intended to be made available at the Snapshot level
+    (as opposed to hidden within the individual model jinja macro registries).
+
+    This allows for things like injecting implementations of variables / functions into the Jinja context that are compatible with
+    their dbt equivalents but are backed by the sqlmesh snapshots in any given plan / environment
+    """
+
+    unique_id: str
+    """This is the node/resource name/unique_id that's used as the node key in the dbt manifest.
+    It's prefixed by the resource type and is exposed in context variables like {{ selected_resources }}.
+
+    Examples:
+        - test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a
+        - seed.jaffle_shop.raw_payments
+        - model.jaffle_shop.stg_orders
+    """
+
+    name: str
+    """Name of this object in the dbt global namespace, used by things like {{ ref() }} calls.    
+    
+    Examples:
+        - unique_stg_orders_order_id
+        - raw_payments
+        - stg_orders
+    """
+
+    fqn: str
+    """Used for selectors in --select/--exclude.
+    Takes the filesystem into account so may be structured differently to :unique_id.
+    
+    Examples:
+        - jaffle_shop.staging.unique_stg_orders_order_id
+        - jaffle_shop.raw_payments
+        - jaffle_shop.staging.stg_orders
+    """
+
+    alias: t.Optional[str] = None
+    """This is dbt's way of overriding the _physical table_ a model is written to.
+
+    It's used in the following situation:
+     - Say you have two models, "stg_customers" and "customers"
+     - You want "stg_customers" to be written to the "staging" schema as eg "staging.customers" - NOT "staging.stg_customers"
+     - But you cant rename the file to "customers" because it will conflict with your other model file "customers"
+     - Even if you put it in a different folder, eg "staging/customers.sql" - dbt still has a global namespace so it will conflict
+        when you try to do something like "{{ ref('customers') }}"
+     - So dbt's solution to this problem is to keep calling it "stg_customers" at the dbt project/model level,
+        but allow overriding the physical table to "customers" via something like "{{ config(alias='customers', schema='staging') }}"
+
+    Note that if :alias is set, it does *not* replace :name at the model level and cannot be used interchangably with :name.
+    It also does not affect the :fqn or :unique_id. It's just used to override :name when it comes time to generate the physical table name.
+    """
+
+    @model_validator(mode="after")
+    def post_init(self) -> Self:
+        # by default, dbt sets alias to the same as :name
+        # however, we only want to include :alias if it is actually different / actually providing an override
+        if self.alias == self.name:
+            self.alias = None
+        return self
+
+    def to_expression(self) -> exp.Expression:
+        """Produce a SQLGlot expression representing this object, for use in things like the model/audit definition renderers"""
+        return exp.tuple_(
+            *(
+                exp.PropertyEQ(this=exp.var(k), expression=exp.Literal.string(v))
+                for k, v in sorted(self.model_dump(exclude_none=True).items())
+            )
+        )
+
+
+class DbtInfoMixin:
+    """This mixin encapsulates properties that only exist for dbt compatibility and are otherwise not required
+    for native projects"""
+
+    @property
+    def dbt_node_info(self) -> t.Optional[DbtNodeInfo]:
+        raise NotImplementedError()
+
+    @property
+    def dbt_unique_id(self) -> t.Optional[str]:
+        """Used for compatibility with jinja context variables such as {{ selected_resources }}"""
+        if self.dbt_node_info:
+            return self.dbt_node_info.unique_id
+        return None
+
+    @property
+    def dbt_fqn(self) -> t.Optional[str]:
+        """Used in the selector engine for compatibility with selectors that select models by dbt fqn"""
+        if self.dbt_node_info:
+            return self.dbt_node_info.fqn
+        return None
+
+
 # this must be sorted in descending order
 INTERVAL_SECONDS = {
     IntervalUnit.YEAR: 60 * 60 * 24 * 365,
@@ -165,7 +260,7 @@ INTERVAL_SECONDS = {
 }
 
 
-class _Node(PydanticModel):
+class _Node(DbtInfoMixin, PydanticModel):
     """
     Node is the core abstraction for entity that can be executed within the scheduler.
 
@@ -199,7 +294,7 @@ class _Node(PydanticModel):
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
-    dbt_name: t.Optional[str] = None  # dbt node name
+    dbt_node_info_: t.Optional[DbtNodeInfo] = Field(alias="dbt_node_info", default=None)
     _path: t.Optional[Path] = None
     _data_hash: t.Optional[str] = None
     _metadata_hash: t.Optional[str] = None
@@ -445,6 +540,10 @@ class _Node(PydanticModel):
     def is_audit(self) -> bool:
         """Return True if this is an audit node"""
         return False
+
+    @property
+    def dbt_node_info(self) -> t.Optional[DbtNodeInfo]:
+        return self.dbt_node_info_
 
 
 class NodeType(str, Enum):

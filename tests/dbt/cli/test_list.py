@@ -12,10 +12,10 @@ def test_list(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
     assert result.exit_code == 0
     assert not result.exception
 
-    assert "main.orders" in result.output
-    assert "main.customers" in result.output
-    assert "main.stg_payments" in result.output
-    assert "main.raw_orders" in result.output
+    assert "─ jaffle_shop.orders" in result.output
+    assert "─ jaffle_shop.customers" in result.output
+    assert "─ jaffle_shop.staging.stg_payments" in result.output
+    assert "─ jaffle_shop.raw_orders" in result.output
 
 
 def test_list_select(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
@@ -24,12 +24,12 @@ def test_list_select(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Resul
     assert result.exit_code == 0
     assert not result.exception
 
-    assert "main.customers" in result.output
-    assert "main.stg_customers" in result.output
-    assert "main.raw_customers" in result.output
+    assert "─ jaffle_shop.customers" in result.output
+    assert "─ jaffle_shop.staging.stg_customers" in result.output
+    assert "─ jaffle_shop.raw_customers" in result.output
 
-    assert "main.stg_payments" not in result.output
-    assert "main.raw_orders" not in result.output
+    assert "─ jaffle_shop.staging.stg_payments" not in result.output
+    assert "─ jaffle_shop.raw_orders" not in result.output
 
 
 def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
@@ -39,13 +39,13 @@ def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..
     assert result.exit_code == 0
     assert not result.exception
 
-    assert "main.customers" in result.output
-    assert "main.stg_customers" in result.output
-    assert "main.raw_customers" in result.output
+    assert "─ jaffle_shop.customers" in result.output
+    assert "─ jaffle_shop.staging.stg_customers" in result.output
+    assert "─ jaffle_shop.raw_customers" in result.output
 
-    assert "main.orders" not in result.output
-    assert "main.stg_payments" not in result.output
-    assert "main.raw_orders" not in result.output
+    assert "─ jaffle_shop.orders" not in result.output
+    assert "─ jaffle_shop.staging.stg_payments" not in result.output
+    assert "─ jaffle_shop.raw_orders" not in result.output
 
     # multiple exclude
     for args in (
@@ -56,21 +56,26 @@ def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..
         assert result.exit_code == 0
         assert not result.exception
 
-        assert "main.stg_orders" in result.output
+        assert "─ jaffle_shop.staging.stg_orders" in result.output
 
-        assert "main.customers" not in result.output
-        assert "main.orders" not in result.output
+        assert "─ jaffle_shop.customers" not in result.output
+        assert "─ jaffle_shop.orders" not in result.output
 
 
 def test_list_with_vars(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
-    (jaffle_shop_duckdb / "models" / "aliased_model.sql").write_text("""
-    {{ config(alias='model_' + var('foo')) }}                                                              
-    select 1
+    (
+        jaffle_shop_duckdb / "models" / "vars_model.sql"
+    ).write_text("""                                                          
+    select * from {{ ref('custom' + var('foo')) }}
     """)
 
-    result = invoke_cli(["list", "--vars", "foo: bar"])
+    result = invoke_cli(["list", "--vars", "foo: ers"])
 
     assert result.exit_code == 0
     assert not result.exception
 
-    assert "model_bar" in result.output
+    assert (
+        """├── jaffle_shop.vars_model
+│   └── depends_on: jaffle_shop.customers"""
+        in result.output
+    )

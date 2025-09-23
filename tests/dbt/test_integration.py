@@ -540,3 +540,67 @@ test_config = config"""
                 )
                 df_expected = create_df(expected_table_data, self.target_schema)
                 compare_dataframes(df_actual, df_expected, msg=f"Failed on time {time}")
+
+
+def test_dbt_node_info(jaffle_shop_duckdb_context: Context):
+    ctx = jaffle_shop_duckdb_context
+
+    customers = ctx.models['"jaffle_shop"."main"."customers"']
+    assert customers.dbt_unique_id == "model.jaffle_shop.customers"
+    assert customers.dbt_fqn == "jaffle_shop.customers"
+    assert customers.dbt_node_info
+    assert customers.dbt_node_info.name == "customers"
+
+    orders = ctx.models['"jaffle_shop"."main"."orders"']
+    assert orders.dbt_unique_id == "model.jaffle_shop.orders"
+    assert orders.dbt_fqn == "jaffle_shop.orders"
+    assert orders.dbt_node_info
+    assert orders.dbt_node_info.name == "orders"
+
+    stg_customers = ctx.models['"jaffle_shop"."main"."stg_customers"']
+    assert stg_customers.dbt_unique_id == "model.jaffle_shop.stg_customers"
+    assert stg_customers.dbt_fqn == "jaffle_shop.staging.stg_customers"
+    assert stg_customers.dbt_node_info
+    assert stg_customers.dbt_node_info.name == "stg_customers"
+
+    stg_orders = ctx.models['"jaffle_shop"."main"."stg_orders"']
+    assert stg_orders.dbt_unique_id == "model.jaffle_shop.stg_orders"
+    assert stg_orders.dbt_fqn == "jaffle_shop.staging.stg_orders"
+    assert stg_orders.dbt_node_info
+    assert stg_orders.dbt_node_info.name == "stg_orders"
+
+    raw_customers = ctx.models['"jaffle_shop"."main"."raw_customers"']
+    assert raw_customers.dbt_unique_id == "seed.jaffle_shop.raw_customers"
+    assert raw_customers.dbt_fqn == "jaffle_shop.raw_customers"
+    assert raw_customers.dbt_node_info
+    assert raw_customers.dbt_node_info.name == "raw_customers"
+
+    raw_orders = ctx.models['"jaffle_shop"."main"."raw_orders"']
+    assert raw_orders.dbt_unique_id == "seed.jaffle_shop.raw_orders"
+    assert raw_orders.dbt_fqn == "jaffle_shop.raw_orders"
+    assert raw_orders.dbt_node_info
+    assert raw_orders.dbt_node_info.name == "raw_orders"
+
+    raw_payments = ctx.models['"jaffle_shop"."main"."raw_payments"']
+    assert raw_payments.dbt_unique_id == "seed.jaffle_shop.raw_payments"
+    assert raw_payments.dbt_fqn == "jaffle_shop.raw_payments"
+    assert raw_payments.dbt_node_info
+    assert raw_payments.dbt_node_info.name == "raw_payments"
+
+    relationship_audit = ctx.snapshots[
+        "relationships_orders_customer_id__customer_id__ref_customers_"
+    ]
+    assert relationship_audit.node.is_audit
+    assert (
+        relationship_audit.node.dbt_unique_id
+        == "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_customers_.c6ec7f58f2"
+    )
+    assert (
+        relationship_audit.node.dbt_fqn
+        == "jaffle_shop.relationships_orders_customer_id__customer_id__ref_customers_"
+    )
+    assert relationship_audit.node.dbt_node_info
+    assert (
+        relationship_audit.node.dbt_node_info.name
+        == "relationships_orders_customer_id__customer_id__ref_customers_"
+    )
