@@ -378,6 +378,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             elif isinstance(df, pd.DataFrame):
                 from snowflake.connector.pandas_tools import write_pandas
 
+                ordered_df = df[list(source_columns_to_types)]
+
                 # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
                 # The above issue has already been fixed upstream, but we keep the following
                 # line anyway in order to support a wider range of Snowflake versions.
@@ -388,16 +390,16 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
                 # See: https://stackoverflow.com/a/75627721
                 for column, kind in source_columns_to_types.items():
-                    if is_datetime64_any_dtype(df.dtypes[column]):
+                    if is_datetime64_any_dtype(ordered_df.dtypes[column]):
                         if kind.is_type("date"):  # type: ignore
-                            df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
-                        elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
-                            df[column] = pd.to_datetime(df[column]).dt.strftime(
+                            ordered_df[column] = pd.to_datetime(ordered_df[column]).dt.date  # type: ignore
+                        elif getattr(ordered_df.dtypes[column], "tz", None) is not None:  # type: ignore
+                            ordered_df[column] = pd.to_datetime(ordered_df[column]).dt.strftime(
                                 "%Y-%m-%d %H:%M:%S.%f%z"
                             )  # type: ignore
                         # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
                         else:  # type: ignore
-                            df[column] = pd.to_datetime(df[column]).dt.strftime(
+                            ordered_df[column] = pd.to_datetime(ordered_df[column]).dt.strftime(
                                 "%Y-%m-%d %H:%M:%S.%f"
                             )  # type: ignore
 
@@ -407,7 +409,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
                 write_pandas(
                     self._connection_pool.get(),
-                    df,
+                    ordered_df,
                     temp_table.name,
                     schema=temp_table.db or None,
                     database=database.sql(dialect=self.dialect) if database else None,
