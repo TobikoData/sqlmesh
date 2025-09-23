@@ -154,13 +154,14 @@ class TestConfig(GeneralConfig):
         blocking = self.severity == Severity.ERROR
 
         audit: Audit
+        audit_name = self.name
         if self.package_name and self.package_name != context.project_name:
-            self.name = f"{self.package_name}.{self.name}"
+            audit_name = f"{self.package_name}.{self.name}"
 
         if self.is_standalone:
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
-                name=self.name,
+                name=audit_name,
                 dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
@@ -177,7 +178,7 @@ class TestConfig(GeneralConfig):
             )
         else:
             audit = ModelAudit(
-                name=self.name,
+                name=audit_name,
                 dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
