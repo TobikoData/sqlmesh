@@ -18,9 +18,7 @@ from sqlmesh.core.engine_adapter.shared import set_catalog
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, GrantsConfig, QueryOrDF
-
-    DCL = t.TypeVar("DCL", exp.Grant, exp.Revoke)
+    from sqlmesh.core.engine_adapter._typing import DCL, DF, GrantsConfig, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
