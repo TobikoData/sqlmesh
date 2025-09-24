@@ -120,6 +120,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.MANAGED
 
     @property
+    def is_dbt_custom(self) -> bool:
+        return self.model_kind_name == ModelKindName.DBT_CUSTOM
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
         return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
@@ -170,6 +174,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EXTERNAL = "EXTERNAL"
     CUSTOM = "CUSTOM"
     MANAGED = "MANAGED"
+    DBT_CUSTOM = "DBT_CUSTOM"
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
@@ -887,6 +892,52 @@ class ManagedKind(_ModelKind):
         return False
 
 
+class DbtCustomKind(_ModelKind):
+    name: t.Literal[ModelKindName.DBT_CUSTOM] = ModelKindName.DBT_CUSTOM
+    materialization: str
+    adapter: str = "default"
+    definition: str
+    dialect: t.Optional[str] = Field(None, validate_default=True)
+
+    _dialect_validator = kind_dialect_validator
+
+    @field_validator("materialization", "adapter", "definition", mode="before")
+    @classmethod
+    def _validate_fields(cls, v: t.Any) -> str:
+        return validate_string(v)
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            self.materialization,
+            self.definition,
+            self.adapter,
+            self.dialect,
+        ]
+
+    @property
+    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().metadata_hash_values,
+        ]
+
+    def to_expression(
+        self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
+    ) -> d.ModelKind:
+        return super().to_expression(
+            expressions=[
+                *(expressions or []),
+                *_properties(
+                    {
+                        "materialization": exp.Literal.string(self.materialization),
+                        "adapter": exp.Literal.string(self.adapter),
+                    }
+                ),
+            ],
+        )
+
+
 class EmbeddedKind(_ModelKind):
     name: t.Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
 
@@ -992,6 +1043,7 @@ ModelKind = t.Annotated[
         SCDType2ByColumnKind,
         CustomKind,
         ManagedKind,
+        DbtCustomKind,
     ],
     Field(discriminator="name"),
 ]
@@ -1011,6 +1063,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.SCD_TYPE_2_BY_COLUMN: SCDType2ByColumnKind,
     ModelKindName.CUSTOM: CustomKind,
     ModelKindName.MANAGED: ManagedKind,
+    ModelKindName.DBT_CUSTOM: DbtCustomKind,
 }
 
 

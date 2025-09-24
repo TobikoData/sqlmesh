@@ -47,7 +47,7 @@ from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.package import HookConfig, MacroConfig
+from sqlmesh.dbt.package import HookConfig, MacroConfig, MaterializationConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import TargetConfig
@@ -75,6 +75,7 @@ SeedConfigs = t.Dict[str, SeedConfig]
 SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
 HookConfigs = t.Dict[str, HookConfig]
+MaterializationConfigs = t.Dict[str, MaterializationConfig]
 
 
 IGNORED_PACKAGES = {"elementary"}
@@ -135,6 +136,7 @@ class ManifestHelper:
 
         self._on_run_start_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
         self._on_run_end_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
+        self._materializations_per_package: t.Dict[str, MaterializationConfigs] = defaultdict(dict)
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -163,6 +165,10 @@ class ManifestHelper:
     def on_run_end(self, package_name: t.Optional[str] = None) -> HookConfigs:
         self._load_all()
         return self._on_run_end_per_package[package_name or self._project_name]
+
+    def materializations(self, package_name: t.Optional[str] = None) -> MaterializationConfigs:
+        self._load_all()
+        return self._materializations_per_package[package_name or self._project_name]
 
     @property
     def all_macros(self) -> t.Dict[str, t.Dict[str, MacroInfo]]:
@@ -213,6 +219,7 @@ class ManifestHelper:
         self._calls = {k: (v, False) for k, v in (self._call_cache.get("") or {}).items()}
 
         self._load_macros()
+        self._load_materializations()
         self._load_sources()
         self._load_tests()
         self._load_models_and_seeds()
@@ -250,11 +257,14 @@ class ManifestHelper:
 
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():
+            if macro.name.startswith("materialization_"):
+                continue
+
             if macro.name.startswith("test_"):
                 macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
             dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
-            if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
+            if not macro.name.startswith("test_"):
                 dependencies = dependencies.union(
                     self._extra_dependencies(macro.macro_sql, macro.package_name)
                 )
@@ -280,6 +290,34 @@ class ManifestHelper:
                 pos = name.find("__")
                 if pos > 0 and name[pos + 2 :] in adapter_macro_names:
                     macro_config.info.is_top_level = True
+
+    def _load_materializations(self) -> None:
+        for macro in self._manifest.macros.values():
+            if macro.name.startswith("materialization_"):
+                # Extract name and adapter ( "materialization_{name}_{adapter}" or "materialization_{name}_default")
+                name_parts = macro.name.split("_")
+                if len(name_parts) >= 3:
+                    mat_name = "_".join(name_parts[1:-1])
+                    adapter = name_parts[-1]
+
+                    dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
+                    macro.macro_sql = _strip_jinja_materialization_tags(macro.macro_sql)
+                    dependencies = dependencies.union(
+                        self._extra_dependencies(macro.macro_sql, macro.package_name)
+                    )
+
+                    materialization_config = MaterializationConfig(
+                        name=mat_name,
+                        adapter=adapter,
+                        definition=macro.macro_sql,
+                        dependencies=dependencies,
+                        path=Path(macro.original_file_path),
+                    )
+
+                    key = f"{mat_name}_{adapter}"
+                    self._materializations_per_package[macro.package_name][key] = (
+                        materialization_config
+                    )
 
     def _load_tests(self) -> None:
         for node in self._manifest.nodes.values():
@@ -732,3 +770,27 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
     macro = macro_tag + test_jinja[match.span()[-1] :]
 
     return re.sub(ENDTEST_REGEX, lambda m: m.group(0).replace("endtest", "endmacro"), macro)
+
+
+def _strip_jinja_materialization_tags(materialization_jinja: str) -> str:
+    MATERIALIZATION_TAG_REGEX = r"{%-?\s*materialization\s+[^%]*%}\s*\n?"
+    ENDMATERIALIZATION_REGEX = r"{%-?\s*endmaterialization\s*-?%}\s*\n?"
+
+    if not re.match(MATERIALIZATION_TAG_REGEX, materialization_jinja):
+        return materialization_jinja
+
+    materialization_jinja = re.sub(
+        MATERIALIZATION_TAG_REGEX,
+        "",
+        materialization_jinja,
+        flags=re.IGNORECASE,
+    )
+
+    materialization_jinja = re.sub(
+        ENDMATERIALIZATION_REGEX,
+        "",
+        materialization_jinja,
+        flags=re.IGNORECASE,
+    )
+
+    return materialization_jinja.strip()

@@ -50,7 +50,7 @@ from sqlmesh.core.model import (
     ViewKind,
     CustomKind,
 )
-from sqlmesh.core.model.kind import _Incremental
+from sqlmesh.core.model.kind import _Incremental, DbtCustomKind
 from sqlmesh.utils import CompletionStatus, columns_to_types_all_known
 from sqlmesh.core.schema_diff import (
     has_drop_alteration,
@@ -83,6 +83,7 @@ from sqlmesh.utils.errors import (
     format_additive_change_msg,
     AdditiveChangeError,
 )
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -747,7 +748,8 @@ class SnapshotEvaluator:
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**render_statements_kwargs)),
         ):
-            adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+            if not snapshot.is_dbt_custom:
+                adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
                 # Only create the empty table if the columns were provided explicitly by the user
@@ -817,7 +819,8 @@ class SnapshotEvaluator:
                 batch_index=batch_index,
             )
 
-            adapter.execute(model.render_post_statements(**render_statements_kwargs))
+            if not snapshot.is_dbt_custom:
+                adapter.execute(model.render_post_statements(**render_statements_kwargs))
 
             return wap_id
 
@@ -1432,7 +1435,7 @@ class SnapshotEvaluator:
             **create_render_kwargs,
             "table_mapping": {snapshot.name: table_name},
         }
-        if run_pre_post_statements:
+        if run_pre_post_statements and not snapshot.is_dbt_custom:
             adapter.execute(snapshot.model.render_pre_statements(**create_render_kwargs))
         evaluation_strategy.create(
             table_name=table_name,
@@ -1444,7 +1447,7 @@ class SnapshotEvaluator:
             dry_run=dry_run,
             physical_properties=rendered_physical_properties,
         )
-        if run_pre_post_statements:
+        if run_pre_post_statements and not snapshot.is_dbt_custom:
             adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
 
     def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
@@ -1456,6 +1459,7 @@ class SnapshotEvaluator:
             and adapter.SUPPORTS_CLONING
             # managed models cannot have their schema mutated because theyre based on queries, so clone + alter wont work
             and not snapshot.is_managed
+            and not snapshot.is_dbt_custom
             and not deployability_index.is_deployable(snapshot)
             # If the deployable table is missing we can't clone it
             and adapter.table_exists(snapshot.table_name())
@@ -1540,6 +1544,19 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = ViewStrategy
     elif snapshot.is_scd_type_2:
         klass = SCDType2Strategy
+    elif snapshot.is_dbt_custom:
+        if hasattr(snapshot, "model") and isinstance(
+            (model_kind := snapshot.model.kind), DbtCustomKind
+        ):
+            return DbtCustomMaterialization(
+                adapter=adapter,
+                materialization_name=model_kind.materialization,
+                materialization_template=model_kind.definition,
+            )
+
+        raise SQLMeshError(
+            f"Expected DbtCustomKind for dbt custom materialization in model '{snapshot.name}'"
+        )
     elif snapshot.is_custom:
         if snapshot.custom_materialization is None:
             raise SQLMeshError(
@@ -2591,6 +2608,139 @@ def get_custom_materialization_type_or_raise(
 
     # Shouldnt get here as get_custom_materialization_type() has raise_errors=True, but just in case...
     raise SQLMeshError(f"Custom materialization '{name}' not present in the Python environment")
+
+
+class DbtCustomMaterialization(MaterializableStrategy):
+    def __init__(
+        self,
+        adapter: EngineAdapter,
+        materialization_name: str,
+        materialization_template: str,
+    ):
+        super().__init__(adapter)
+        self.materialization_name = materialization_name
+        self.materialization_template = materialization_template
+
+    def create(
+        self,
+        table_name: str,
+        model: Model,
+        is_table_deployable: bool,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        original_query = model.render_query_or_raise(**render_kwargs)
+        self._execute_materialization(
+            table_name=table_name,
+            query_or_df=original_query.limit(0),
+            model=model,
+            is_first_insert=True,
+            render_kwargs=render_kwargs,
+            create_only=True,
+            **kwargs,
+        )
+
+    def insert(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        self._execute_materialization(
+            table_name=table_name,
+            query_or_df=query_or_df,
+            model=model,
+            is_first_insert=is_first_insert,
+            render_kwargs=render_kwargs,
+            **kwargs,
+        )
+
+    def append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        render_kwargs: t.Dict[str, t.Any],
+        **kwargs: t.Any,
+    ) -> None:
+        return self.insert(
+            table_name,
+            query_or_df,
+            model,
+            is_first_insert=False,
+            render_kwargs=render_kwargs,
+            **kwargs,
+        )
+
+    def _execute_materialization(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        model: Model,
+        is_first_insert: bool,
+        render_kwargs: t.Dict[str, t.Any],
+        create_only: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        from sqlmesh.dbt.builtin import create_builtin_globals
+
+        jinja_macros = getattr(model, "jinja_macros", JinjaMacroRegistry())
+        existing_globals = jinja_macros.global_objs.copy()
+
+        # For vdes we need to use the table, since we don't know the schema/table at parse time
+        parts = exp.to_table(table_name, dialect=self.adapter.dialect)
+
+        relation_info = existing_globals.pop("this")
+        if isinstance(relation_info, dict):
+            relation_info["database"] = parts.catalog
+            relation_info["identifier"] = parts.name
+            relation_info["name"] = parts.name
+
+        jinja_globals = {
+            **existing_globals,
+            "this": relation_info,
+            "database": parts.catalog,
+            "schema": parts.db,
+            "identifier": parts.name,
+            "target": existing_globals.get("target", {"type": self.adapter.dialect}),
+            "execution_dt": kwargs.get("execution_time"),
+        }
+
+        context = create_builtin_globals(
+            jinja_macros=jinja_macros, jinja_globals=jinja_globals, engine_adapter=self.adapter
+        )
+
+        context.update(
+            {
+                "sql": str(query_or_df),
+                "is_first_insert": is_first_insert,
+                "create_only": create_only,
+                "pre_hooks": model.render_pre_statements(**render_kwargs),
+                "post_hooks": model.render_post_statements(**render_kwargs),
+                **kwargs,
+            }
+        )
+
+        try:
+            jinja_env = jinja_macros.build_environment(**context)
+            template = jinja_env.from_string(self.materialization_template)
+
+            try:
+                template.render(**context)
+            except MacroReturnVal as ret:
+                # this is a succesful return from a macro call (dbt uses this list of Relations to update their relation cache)
+                returned_relations = ret.value.get("relations", [])
+                logger.info(
+                    f"Materialization {self.materialization_name} returned relations: {returned_relations}"
+                )
+
+        except Exception as e:
+            raise SQLMeshError(
+                f"Failed to execute dbt materialization '{self.materialization_name}': {e}"
+            ) from e
 
 
 class EngineManagedStrategy(MaterializableStrategy):

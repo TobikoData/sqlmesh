@@ -1,5 +1,5 @@
 import agate
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import typing as t
@@ -111,6 +111,129 @@ def test_materialization():
     # clickhouse "dictionary" materialization
     with pytest.raises(ConfigError):
         ModelConfig(name="model", alias="model", schema="schema", materialized="dictionary")
+
+
+def test_dbt_custom_materialization():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+
+    plan_builder = sushi_context.plan_builder(select_models=["sushi.custom_incremental_model"])
+    plan = plan_builder.build()
+    assert len(plan.selected_models) == 1
+    selected_model = list(plan.selected_models)[0]
+    assert selected_model == "model.sushi.custom_incremental_model"
+
+    qoery = "SELECT * FROM sushi.custom_incremental_model ORDER BY created_at"
+    hook_table = "SELECT * FROM hook_table ORDER BY id"
+    sushi_context.apply(plan)
+    result = sushi_context.engine_adapter.fetchdf(qoery)
+    assert len(result) == 1
+    assert {"created_at", "id"}.issubset(result.columns)
+
+    # assert the pre/post hooks executed as well as part of the custom materialization
+    hook_result = sushi_context.engine_adapter.fetchdf(hook_table)
+    assert len(hook_result) == 1
+    assert {"length_col", "id", "updated_at"}.issubset(hook_result.columns)
+    assert int(hook_result["length_col"][0]) >= 519
+    assert hook_result["id"][0] == 1
+
+    # running with execution time one day in the future to simulate an incremental insert
+    tomorrow = datetime.now() + timedelta(days=1)
+    sushi_context.run(select_models=["sushi.custom_incremental_model"], execution_time=tomorrow)
+
+    result_after_run = sushi_context.engine_adapter.fetchdf(qoery)
+    assert {"created_at", "id"}.issubset(result_after_run.columns)
+
+    # this should have added new unique values for the new row
+    assert len(result_after_run) == 2
+    assert result_after_run["id"].is_unique
+    assert result_after_run["created_at"].is_unique
+
+    # validate the hooks executed as part of the run as well
+    hook_result = sushi_context.engine_adapter.fetchdf(hook_table)
+    assert len(hook_result) == 2
+    assert hook_result["id"][1] == 2
+    assert int(hook_result["length_col"][1]) >= 519
+    assert hook_result["id"].is_monotonic_increasing
+    assert hook_result["updated_at"].is_unique
+    assert not hook_result["length_col"].is_unique
+
+
+def test_dbt_custom_materialization_with_time_filter_and_macro():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+    today = datetime.now()
+
+    # select both custom materialiasation models with the wildcard
+    selector = ["sushi.custom_incremental*"]
+    plan_builder = sushi_context.plan_builder(select_models=selector, execution_time=today)
+    plan = plan_builder.build()
+
+    assert len(plan.selected_models) == 2
+    assert {
+        "model.sushi.custom_incremental_model",
+        "model.sushi.custom_incremental_with_filter",
+    }.issubset(plan.selected_models)
+
+    # the model that daily (default cron) populates with data
+    select_daily = "SELECT * FROM sushi.custom_incremental_model ORDER BY created_at"
+
+    # this model uses `run_started_at` as a filter (which we populate with execution time) with 2 day interval
+    select_filter = "SELECT * FROM sushi.custom_incremental_with_filter ORDER BY created_at"
+
+    sushi_context.apply(plan)
+    result = sushi_context.engine_adapter.fetchdf(select_daily)
+    assert len(result) == 1
+    assert {"created_at", "id"}.issubset(result.columns)
+
+    result = sushi_context.engine_adapter.fetchdf(select_filter)
+    assert len(result) == 1
+    assert {"created_at", "id"}.issubset(result.columns)
+
+    # - run ONE DAY LATER
+    a_day_later = today + timedelta(days=1)
+    sushi_context.run(select_models=selector, execution_time=a_day_later)
+    result_after_run = sushi_context.engine_adapter.fetchdf(select_daily)
+
+    # the new row is inserted in the normal incremental model
+    assert len(result_after_run) == 2
+    assert {"created_at", "id"}.issubset(result_after_run.columns)
+    assert result_after_run["id"].is_unique
+    assert result_after_run["created_at"].is_unique
+
+    # this model due to the filter shouldn't populate with any new data
+    result_after_run_filter = sushi_context.engine_adapter.fetchdf(select_filter)
+    assert len(result_after_run_filter) == 1
+    assert {"created_at", "id"}.issubset(result_after_run_filter.columns)
+    assert result.equals(result_after_run_filter)
+    assert result_after_run_filter["id"].is_unique
+    assert result_after_run_filter["created_at"][0].date() == today.date()
+
+    # - run TWO DAYS LATER
+    two_days_later = a_day_later + timedelta(days=1)
+    sushi_context.run(select_models=selector, execution_time=two_days_later)
+    result_after_run = sushi_context.engine_adapter.fetchdf(select_daily)
+
+    # again a new row is inserted in the normal model
+    assert len(result_after_run) == 3
+    assert {"created_at", "id"}.issubset(result_after_run.columns)
+    assert result_after_run["id"].is_unique
+    assert result_after_run["created_at"].is_unique
+
+    # the model with the filter now should populate as well
+    result_after_run_filter = sushi_context.engine_adapter.fetchdf(select_filter)
+    assert len(result_after_run_filter) == 2
+    assert {"created_at", "id"}.issubset(result_after_run_filter.columns)
+    assert result_after_run_filter["id"].is_unique
+    assert result_after_run_filter["created_at"][0].date() == today.date()
+    assert result_after_run_filter["created_at"][1].date() == two_days_later.date()
+
+    # assert hooks have executed for both plan and incremental runs
+    hook_result = sushi_context.engine_adapter.fetchdf("SELECT * FROM hook_table ORDER BY id")
+    assert len(hook_result) == 3
+    hook_result["id"][0] == 1
+    assert hook_result["id"].is_monotonic_increasing
+    assert hook_result["updated_at"].is_unique
+    assert int(hook_result["length_col"][1]) >= 519
+    assert not hook_result["length_col"].is_unique
 
 
 def test_model_kind():
