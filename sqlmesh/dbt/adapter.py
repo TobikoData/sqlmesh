@@ -140,7 +140,6 @@ class BaseAdapter(abc.ABC):
 
         jinja_env = self.jinja_macros.build_environment(**self.jinja_globals).globals
 
-        # Build the set of packages to check based on dispatch configuration
         packages_to_check: t.List[t.Optional[str]] = [None]
         if macro_namespace is not None:
             if macro_namespace in jinja_env:
