@@ -1962,9 +1962,6 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
             else False
         )
 
-        # Apply grants to the physical layer (referenced table / view) after promotion
-        self._apply_grants(model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable)
-
         # Apply grants to the virtual layer (view) after promotion
         self._apply_grants(model, view_name, GrantsTargetLayer.VIRTUAL, is_snapshot_deployable)
 
