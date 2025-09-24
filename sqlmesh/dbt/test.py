@@ -158,7 +158,6 @@ class TestConfig(GeneralConfig):
         blocking = self.severity == Severity.ERROR
 
         audit: Audit
-
         if self.is_standalone:
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
