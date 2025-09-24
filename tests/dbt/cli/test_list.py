@@ -19,7 +19,7 @@ def test_list(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
 
 
 def test_list_select(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
-    result = invoke_cli(["list", "--select", "main.raw_customers+"])
+    result = invoke_cli(["list", "--select", "raw_customers+"])
 
     assert result.exit_code == 0
     assert not result.exception
@@ -34,7 +34,7 @@ def test_list_select(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Resul
 
 def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
     # single exclude
-    result = invoke_cli(["list", "--select", "main.raw_customers+", "--exclude", "main.orders"])
+    result = invoke_cli(["list", "--select", "raw_customers+", "--exclude", "orders"])
 
     assert result.exit_code == 0
     assert not result.exception
@@ -49,8 +49,8 @@ def test_list_select_exclude(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..
 
     # multiple exclude
     for args in (
-        ["--select", "main.stg_orders+", "--exclude", "main.customers", "--exclude", "main.orders"],
-        ["--select", "main.stg_orders+", "--exclude", "main.customers main.orders"],
+        ["--select", "stg_orders+", "--exclude", "customers", "--exclude", "orders"],
+        ["--select", "stg_orders+", "--exclude", "customers orders"],
     ):
         result = invoke_cli(["list", *args])
         assert result.exit_code == 0

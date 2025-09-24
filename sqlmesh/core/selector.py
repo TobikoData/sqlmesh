@@ -3,6 +3,8 @@ from __future__ import annotations
 import fnmatch
 import typing as t
 from pathlib import Path
+from itertools import zip_longest
+import abc
 
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -26,7 +28,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.state_sync import StateReader
 
 
-class Selector:
+class Selector(abc.ABC):
     def __init__(
         self,
         state_reader: StateReader,
@@ -167,13 +169,13 @@ class Selector:
     def expand_model_selections(
         self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
     ) -> t.Set[str]:
-        """Expands a set of model selections into a set of model names.
+        """Expands a set of model selections into a set of model fqns that can be looked up in the Context.
 
         Args:
             model_selections: A set of model selections.
 
         Returns:
-            A set of model names.
+            A set of model fqns.
         """
 
         node = parse(" | ".join(f"({s})" for s in model_selections))
@@ -194,10 +196,9 @@ class Selector:
                     return {
                         fqn
                         for fqn, model in all_models.items()
-                        if fnmatch.fnmatchcase(model.name, node.this)
+                        if fnmatch.fnmatchcase(self._model_name(model), node.this)
                     }
-                fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
-                return {fqn} if fqn in all_models else set()
+                return self._pattern_to_model_fqns(pattern, all_models)
             if isinstance(node, exp.And):
                 return evaluate(node.left) & evaluate(node.right)
             if isinstance(node, exp.Or):
@@ -240,6 +241,70 @@ class Selector:
             raise ParseError(f"Unexpected node {node}")
 
         return evaluate(node)
+
+    @abc.abstractmethod
+    def _model_name(self, model: Model) -> str:
+        """Given a model, return the name that a selector pattern contining wildcards should be fnmatch'd on"""
+        pass
+
+    @abc.abstractmethod
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+        """Given a pattern, return the keys of the matching models from :all_models"""
+        pass
+
+
+class NativeSelector(Selector):
+    """Implementation of selectors that matches objects based on SQLMesh native names"""
+
+    def _model_name(self, model: Model) -> str:
+        return model.name
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+        fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
+        return {fqn} if fqn in all_models else set()
+
+
+class DbtSelector(Selector):
+    """Implementation of selectors that matches objects based on the DBT names instead of the SQLMesh native names"""
+
+    def _model_name(self, model: Model) -> str:
+        if dbt_fqn := model.dbt_fqn:
+            return dbt_fqn
+        raise SQLMeshError("dbt node information must be populated to use dbt selectors")
+
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+        # a pattern like "staging.customers" should match a model called "jaffle_shop.staging.customers"
+        # but not a model called "jaffle_shop.customers.staging"
+        # also a pattern like "aging" should not match "staging" so we need to consider components; not substrings
+        pattern_components = pattern.split(".")
+        first_pattern_component = pattern_components[0]
+        matches = set()
+        for fqn, model in all_models.items():
+            if not model.dbt_fqn:
+                continue
+
+            dbt_fqn_components = model.dbt_fqn.split(".")
+            try:
+                starting_idx = dbt_fqn_components.index(first_pattern_component)
+            except ValueError:
+                continue
+            for pattern_component, fqn_component in zip_longest(
+                pattern_components, dbt_fqn_components[starting_idx:]
+            ):
+                if pattern_component and not fqn_component:
+                    # the pattern still goes but we have run out of fqn components to match; no match
+                    break
+                if fqn_component and not pattern_component:
+                    # all elements of the pattern have matched elements of the fqn; match
+                    matches.add(fqn)
+                    break
+                if pattern_component != fqn_component:
+                    # the pattern explicitly doesnt match a component; no match
+                    break
+            else:
+                # called if no explicit break, indicating all components of the pattern matched all components of the fqn
+                matches.add(fqn)
+        return matches
 
 
 class SelectorDialect(Dialect):

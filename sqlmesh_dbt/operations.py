@@ -185,7 +185,7 @@ class DbtOperations:
             options.update(
                 dict(
                     # Add every selected model as a restatement to force them to get repopulated from scratch
-                    restate_models=list(self.context.models)
+                    restate_models=[m.dbt_fqn for m in self.context.models.values() if m.dbt_fqn]
                     if not select_models
                     else select_models,
                     # by default in SQLMesh, restatements only operate on what has been committed to state.
@@ -231,6 +231,7 @@ def create(
         from sqlmesh.core.console import set_console
         from sqlmesh_dbt.console import DbtCliConsole
         from sqlmesh.utils.errors import SQLMeshError
+        from sqlmesh.core.selector import DbtSelector
 
         # clear any existing handlers set up by click/rich as defaults so that once SQLMesh logging config is applied,
         # we dont get duplicate messages logged from things like console.log_warning()
@@ -250,6 +251,8 @@ def create(
             paths=[project_dir],
             config_loader_kwargs=dict(profile=profile, target=target, variables=vars),
             load=True,
+            # DbtSelector selects based on dbt model fqn's rather than SQLMesh model names
+            selector=DbtSelector,
         )
 
         dbt_loader = sqlmesh_context._loaders[0]

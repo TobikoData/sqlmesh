@@ -93,7 +93,7 @@ from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
-from sqlmesh.core.selector import Selector
+from sqlmesh.core.selector import Selector, NativeSelector
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -368,6 +368,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         load: bool = True,
         users: t.Optional[t.List[User]] = None,
         config_loader_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        selector: t.Optional[t.Type[Selector]] = None,
     ):
         self.configs = (
             config
@@ -390,6 +391,7 @@ class GenericContext(BaseContext, t.Generic[C]):
         self._engine_adapter: t.Optional[EngineAdapter] = None
         self._linters: t.Dict[str, Linter] = {}
         self._loaded: bool = False
+        self._selector_cls = selector or NativeSelector
 
         self.path, self.config = t.cast(t.Tuple[Path, C], next(iter(self.configs.items())))
 
@@ -2893,7 +2895,7 @@ class GenericContext(BaseContext, t.Generic[C]):
     def _new_selector(
         self, models: t.Optional[UniqueKeyDict[str, Model]] = None, dag: t.Optional[DAG[str]] = None
     ) -> Selector:
-        return Selector(
+        return self._selector_cls(
             self.state_reader,
             models=models or self._models,
             context_path=self.path,

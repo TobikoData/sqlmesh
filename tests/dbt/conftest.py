@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.selector import DbtSelector
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import PostgresConfig
@@ -99,7 +100,7 @@ def jaffle_shop_duckdb(copy_to_temp_path: t.Callable[..., t.List[Path]]) -> t.It
 @pytest.fixture
 def jaffle_shop_duckdb_context(jaffle_shop_duckdb: Path) -> Context:
     init_project_if_required(jaffle_shop_duckdb)
-    return Context(paths=[jaffle_shop_duckdb])
+    return Context(paths=[jaffle_shop_duckdb], selector=DbtSelector)
 
 
 @pytest.fixture()
