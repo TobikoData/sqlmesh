@@ -3834,3 +3834,195 @@ def test_materialized_view_evaluation(ctx: TestContext, mocker: MockerFixture):
         assert any("Replacing view" in call[0][0] for call in mock_logger.call_args_list)
 
     _assert_mview_value(value=2)
+
+
+def test_sync_grants_config(ctx: TestContext) -> None:
+    if not ctx.engine_adapter.SUPPORTS_GRANTS:
+        pytest.skip(
+            f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
+        )
+
+    table = ctx.table("sync_grants_integration")
+
+    with ctx.create_users_or_roles("reader", "writer", "admin") as roles:
+        ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        initial_grants = {
+            "SELECT": [roles["reader"]],
+            "INSERT": [roles["writer"]],
+        }
+        ctx.engine_adapter.sync_grants_config(table, initial_grants)
+
+        current_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert set(current_grants.get("SELECT", [])) == {roles["reader"]}
+        assert set(current_grants.get("INSERT", [])) == {roles["writer"]}
+
+        target_grants = {
+            "SELECT": [roles["writer"], roles["admin"]],
+            "UPDATE": [roles["admin"]],
+        }
+        ctx.engine_adapter.sync_grants_config(table, target_grants)
+
+        synced_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert set(synced_grants.get("SELECT", [])) == {
+            roles["writer"],
+            roles["admin"],
+        }
+        assert set(synced_grants.get("UPDATE", [])) == {roles["admin"]}
+        assert synced_grants.get("INSERT", []) == []
+
+
+def test_grants_sync_empty_config(ctx: TestContext):
+    if not ctx.engine_adapter.SUPPORTS_GRANTS:
+        pytest.skip(
+            f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
+        )
+
+    table = ctx.table("grants_empty_test")
+
+    with ctx.create_users_or_roles("user") as roles:
+        ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        initial_grants = {
+            "SELECT": [roles["user"]],
+            "INSERT": [roles["user"]],
+        }
+        ctx.engine_adapter.sync_grants_config(table, initial_grants)
+
+        initial_current_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert roles["user"] in initial_current_grants.get("SELECT", [])
+        assert roles["user"] in initial_current_grants.get("INSERT", [])
+
+        ctx.engine_adapter.sync_grants_config(table, {})
+
+        final_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert final_grants == {}
+
+
+def test_grants_case_insensitive_grantees(ctx: TestContext):
+    if not ctx.engine_adapter.SUPPORTS_GRANTS:
+        pytest.skip(
+            f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
+        )
+
+    with ctx.create_users_or_roles("test_reader", "test_writer") as roles:
+        table = ctx.table("grants_quoted_test")
+        ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
+
+        test_schema = table.db
+        for role_credentials in roles.values():
+            ctx.engine_adapter.execute(
+                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials}"'
+            )
+
+        reader = roles["test_reader"]
+        writer = roles["test_writer"]
+
+        grants_config = {"SELECT": [reader, writer.upper()]}
+        ctx.engine_adapter.sync_grants_config(table, grants_config)
+
+        # Grantees are still in lowercase
+        current_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer in current_grants.get("SELECT", [])
+
+        # Revoke writer
+        grants_config = {"SELECT": [reader.upper()]}
+        ctx.engine_adapter.sync_grants_config(table, grants_config)
+
+        current_grants = ctx.engine_adapter._get_current_grants_config(table)
+        assert reader in current_grants.get("SELECT", [])
+        assert writer not in current_grants.get("SELECT", [])
+
+
+def test_grants_plan(ctx: TestContext, tmp_path: Path):
+    if not ctx.engine_adapter.SUPPORTS_GRANTS:
+        pytest.skip(
+            f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
+        )
+
+    table = ctx.table("grant_model").sql(dialect=ctx.dialect)
+    with ctx.create_users_or_roles("analyst", "etl_user") as roles:
+        (tmp_path / "models").mkdir(exist_ok=True)
+
+        model_def = f"""
+        MODEL (
+            name {table},
+            kind FULL,
+            grants (
+                'select' = ['{roles["analyst"]}']
+            ),
+            grants_target_layer 'all'
+        );
+        SELECT 1 as id, CURRENT_DATE as created_date
+        """
+
+        (tmp_path / "models" / "grant_model.sql").write_text(model_def)
+
+        context = ctx.create_context(path=tmp_path)
+        plan_result = context.plan(auto_apply=True, no_prompts=True)
+
+        assert len(plan_result.new_snapshots) == 1
+        snapshot = plan_result.new_snapshots[0]
+
+        # Physical layer w/ grants
+        table_name = snapshot.table_name()
+        view_name = snapshot.qualified_view_name.for_environment(
+            plan_result.environment_naming_info, dialect=ctx.dialect
+        )
+        current_grants = ctx.engine_adapter._get_current_grants_config(
+            exp.to_table(table_name, dialect=ctx.dialect)
+        )
+        assert current_grants == {"SELECT": [roles["analyst"]]}
+
+        # Virtual layer (view) w/ grants
+        virtual_grants = ctx.engine_adapter._get_current_grants_config(
+            exp.to_table(view_name, dialect=ctx.dialect)
+        )
+        assert virtual_grants == {"SELECT": [roles["analyst"]]}
+
+        # Update model with query change and new grants
+        updated_model = load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (
+                    name {table},
+                    kind FULL,
+                    grants (
+                        'select' = ['{roles["analyst"]}', '{roles["etl_user"]}'],
+                        'insert' = ['{roles["etl_user"]}']
+                    ),
+                    grants_target_layer 'all'
+                );
+                SELECT 1 as id, CURRENT_DATE as created_date, 'v2' as version
+                """,
+                default_dialect=context.default_dialect,
+            ),
+            dialect=context.default_dialect,
+        )
+        context.upsert_model(updated_model)
+
+        plan = context.plan(auto_apply=True, no_prompts=True)
+        plan_result = PlanResults.create(plan, ctx, ctx.add_test_suffix(TEST_SCHEMA))
+        assert len(plan_result.plan.directly_modified) == 1
+
+        new_snapshot = plan_result.snapshot_for(updated_model)
+        assert new_snapshot is not None
+
+        new_table_name = new_snapshot.table_name()
+        final_grants = ctx.engine_adapter._get_current_grants_config(
+            exp.to_table(new_table_name, dialect=ctx.dialect)
+        )
+        expected_final_grants = {
+            "SELECT": [roles["analyst"], roles["etl_user"]],
+            "INSERT": [roles["etl_user"]],
+        }
+        assert set(final_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert final_grants.get("INSERT", []) == expected_final_grants["INSERT"]
+
+        # Virtual layer should also have the updated grants
+        updated_virtual_grants = ctx.engine_adapter._get_current_grants_config(
+            exp.to_table(view_name, dialect=ctx.dialect)
+        )
+        assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
+        assert updated_virtual_grants.get("INSERT", []) == expected_final_grants["INSERT"]

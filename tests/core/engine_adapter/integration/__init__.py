@@ -5,10 +5,12 @@ import pathlib
 import sys
 import typing as t
 import time
+from contextlib import contextmanager
 
 import pandas as pd  # noqa: TID253
 import pytest
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
@@ -743,6 +745,55 @@ class TestContext:
         assert isinstance(model, SqlModel)
         self._context.upsert_model(model)
         return self._context, model
+
+    def _get_create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
+        password = password or random_id()
+        if self.dialect == "postgres":
+            return f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
+        if self.dialect == "snowflake":
+            return f"CREATE ROLE {username}"
+        raise ValueError(f"User creation not supported for dialect: {self.dialect}")
+
+    def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> None:
+        create_user_sql = self._get_create_user_or_role(username, password)
+        self.engine_adapter.execute(create_user_sql)
+
+    @contextmanager
+    def create_users_or_roles(self, *role_names: str) -> t.Iterator[t.Dict[str, str]]:
+        created_users = []
+        roles = {}
+
+        try:
+            for role_name in role_names:
+                user_name = normalize_identifiers(
+                    self.add_test_suffix(f"test_{role_name}"), dialect=self.dialect
+                ).sql(dialect=self.dialect)
+                password = random_id()
+                self._create_user_or_role(user_name, password)
+                created_users.append(user_name)
+                roles[role_name] = user_name
+
+            yield roles
+
+        finally:
+            for user_name in created_users:
+                self._cleanup_user_or_role(user_name)
+
+    def _cleanup_user_or_role(self, user_name: str) -> None:
+        """Helper function to clean up a PostgreSQL user and all their dependencies."""
+        try:
+            if self.dialect == "postgres":
+                self.engine_adapter.execute(f"""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE usename = '{user_name}' AND pid <> pg_backend_pid()
+                """)
+                self.engine_adapter.execute(f'DROP OWNED BY "{user_name}"')
+                self.engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
+            elif self.dialect == "snowflake":
+                self.engine_adapter.execute(f"DROP ROLE IF EXISTS {user_name}")
+        except Exception:
+            pass
 
 
 def wait_until(fn: t.Callable[..., bool], attempts=3, wait=5) -> None:
