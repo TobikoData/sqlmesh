@@ -139,6 +139,183 @@ def test_get_current_database(mocker: MockFixture, make_mocked_engine_adapter: t
     assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]
 
 
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockFixture):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM main.information_schema.table_privileges "
+        "WHERE table_catalog = 'main' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `main`.`test_schema`.`test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `main`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `main`.`test_schema`.`test_table` FROM `stale`" in sql_calls
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockFixture
+):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["shared", "new_role"],
+        "MODIFY": ["shared", "writer"],
+    }
+
+    current_grants = [
+        ("SELECT", "shared"),
+        ("SELECT", "legacy"),
+        ("MODIFY", "shared"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM main.information_schema.table_privileges "
+        "WHERE table_catalog = 'main' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+
+    assert "GRANT SELECT ON TABLE `main`.`test_schema`.`test_table` TO `new_role`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `main`.`test_schema`.`test_table` TO `writer`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `main`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+        (DataObjectType.MANAGED_TABLE, "TABLE"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main")
+    relation = exp.to_table("main.test_schema.test_object", dialect="databricks")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+
+    adapter.sync_grants_config(relation, {"SELECT": ["test"]}, table_type)
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        f"GRANT SELECT ON {expected_keyword} `main`.`test_schema`.`test_object` TO `test`"
+    ]
+
+
+def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockFixture):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="`test_db`")
+    relation = exp.to_table("`test_db`.`test_schema`.`test_table`", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM test_db.information_schema.table_privileges "
+        "WHERE table_catalog = 'test_db' AND table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `test_db`.`test_schema`.`test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `test_db`.`test_schema`.`test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `test_db`.`test_schema`.`test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `test_db`.`test_schema`.`test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `test_db`.`test_schema`.`test_table` FROM `stale`" in sql_calls
+
+
+def test_sync_grants_config_no_catalog_or_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockFixture
+):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="main_catalog")
+    relation = exp.to_table("test_table", dialect="databricks")
+    new_grants_config = {
+        "SELECT": ["group1", "group2"],
+        "MODIFY": ["writers"],
+    }
+
+    current_grants = [
+        ("SELECT", "legacy"),
+        ("REFRESH", "stale"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    mocker.patch.object(adapter, "get_current_database", return_value="schema")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="main_catalog")
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="databricks")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM main_catalog.information_schema.table_privileges "
+        "WHERE table_catalog = 'main_catalog' AND table_schema = 'schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 5
+
+    assert "GRANT SELECT ON TABLE `test_table` TO `group1`" in sql_calls
+    assert "GRANT SELECT ON TABLE `test_table` TO `group2`" in sql_calls
+    assert "GRANT MODIFY ON TABLE `test_table` TO `writers`" in sql_calls
+    assert "REVOKE SELECT ON TABLE `test_table` FROM `legacy`" in sql_calls
+    assert "REVOKE REFRESH ON TABLE `test_table` FROM `stale`" in sql_calls
+
+
 def test_insert_overwrite_by_partition_query(
     make_mocked_engine_adapter: t.Callable, mocker: MockFixture, make_temp_table_name: t.Callable
 ):
