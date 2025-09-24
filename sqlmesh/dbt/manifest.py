@@ -482,7 +482,7 @@ class ManifestHelper:
             macro_debugging=False,
             REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES=True,
         )
-        logger.debug(
+        print(
             "DBT RuntimeConfig args - profile %s, project_dir %s, profiles_dir %s, target %s, vars %s",
             args.profile,
             args.project_dir,
