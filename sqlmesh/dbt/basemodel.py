@@ -305,7 +305,7 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros.add_globals(self._model_jinja_context(model_context, dependencies))
 
         model_kwargs = {
-            "audits": [(test.name, {}) for test in self.tests],
+            "audits": [(test.canonical_name, {}) for test in self.tests],
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()

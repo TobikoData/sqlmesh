@@ -110,6 +110,10 @@ class TestConfig(GeneralConfig):
         return v.lower()
 
     @property
+    def canonical_name(self) -> str:
+        return f"{self.package_name}.{self.name}" if self.package_name else self.name
+
+    @property
     def is_standalone(self) -> bool:
         # A test is standalone if:
         # 1. It has no model_name (already standalone), OR
@@ -154,14 +158,11 @@ class TestConfig(GeneralConfig):
         blocking = self.severity == Severity.ERROR
 
         audit: Audit
-        audit_name = self.name
-        if self.package_name and self.package_name != context.project_name:
-            audit_name = f"{self.package_name}.{self.name}"
 
         if self.is_standalone:
             jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
-                name=audit_name,
+                name=self.name,
                 dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
@@ -178,7 +179,7 @@ class TestConfig(GeneralConfig):
             )
         else:
             audit = ModelAudit(
-                name=audit_name,
+                name=self.name,
                 dbt_node_info=self.node_info,
                 dialect=self.dialect(context),
                 skip=skip,
