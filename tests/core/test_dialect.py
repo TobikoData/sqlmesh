@@ -16,6 +16,8 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.config.connection import DIALECT_TO_TYPE
 
+pytestmark = pytest.mark.dialect_isolated
+
 
 def test_format_model_expressions():
     x = format_model_expressions(
