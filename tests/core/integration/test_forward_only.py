@@ -5,7 +5,6 @@ import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
 import pytest
 import time_machine
-from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.context import Context
@@ -15,7 +14,7 @@ from sqlmesh.core.model import (
     SqlModel,
     load_sql_based_model,
 )
-from sqlmesh.core.plan import PlanBuilder, SnapshotIntervals
+from sqlmesh.core.plan import SnapshotIntervals
 from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
 )
@@ -23,18 +22,6 @@ from sqlmesh.utils.date import to_datetime, to_timestamp
 from tests.core.integration.utils import add_projection_to_model
 
 pytestmark = pytest.mark.slow
-
-
-@pytest.fixture(autouse=True)
-def mock_choices(mocker: MockerFixture):
-    mocker.patch("sqlmesh.core.console.TerminalConsole._get_snapshot_change_category")
-    mocker.patch("sqlmesh.core.console.TerminalConsole._prompt_backfill")
-
-
-def plan_choice(plan_builder: PlanBuilder, choice: SnapshotChangeCategory) -> None:
-    for snapshot in plan_builder.build().snapshots.values():
-        if not snapshot.version:
-            plan_builder.set_choice(snapshot, choice)
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
