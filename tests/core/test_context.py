@@ -3199,7 +3199,9 @@ def test_grants_through_plan_apply(sushi_context, mocker):
 
     sushi_context.plan("dev", no_prompts=True, auto_apply=True)
 
-    assert sync_grants_mock.call_count == 2
+    # When planning for dev env w/ metadata only changes,
+    # only virtual layer is updated, so no physical grants are applied
+    assert sync_grants_mock.call_count == 1
     assert all(
         call[0][1] == {"select": ["analyst", "reporter"]}
         for call in sync_grants_mock.call_args_list
@@ -3212,15 +3214,19 @@ def test_grants_through_plan_apply(sushi_context, mocker):
         update={
             "query": parse_one(model.query.sql() + " LIMIT 1000"),
             "grants": new_grants,
+            # force model update, hence new physical table creation
             "stamp": "update model and grants",
         }
     )
     sushi_context.upsert_model(model_updated)
-
     sushi_context.plan("dev", no_prompts=True, auto_apply=True)
 
-    # Applies grants 3 times:
-    #   2 x physical (duplicated): create, promote (will diff but won't apply since it's the same grants)
-    #   1 x virtual
-    assert sync_grants_mock.call_count == 3
+    # Applies grants 2 times: 1 x physical, 1 x virtual
+    assert sync_grants_mock.call_count == 2
     assert all(call[0][1] == new_grants for call in sync_grants_mock.call_args_list)
+
+    sync_grants_mock.reset_mock()
+
+    # plan for prod
+    sushi_context.plan(no_prompts=True, auto_apply=True)
+    assert sync_grants_mock.call_count == 2
