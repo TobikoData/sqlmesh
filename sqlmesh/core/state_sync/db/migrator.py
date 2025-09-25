@@ -229,6 +229,7 @@ class StateMigrator:
                 "updated_ts": updated_ts,
                 "unpaused_ts": unpaused_ts,
                 "unrestorable": unrestorable,
+                "forward_only": forward_only,
             }
             for where in (
                 snapshot_id_filter(
@@ -237,10 +238,16 @@ class StateMigrator:
                 if snapshots is not None
                 else [None]
             )
-            for name, identifier, raw_snapshot, updated_ts, unpaused_ts, unrestorable in fetchall(
+            for name, identifier, raw_snapshot, updated_ts, unpaused_ts, unrestorable, forward_only in fetchall(
                 self.engine_adapter,
                 exp.select(
-                    "name", "identifier", "snapshot", "updated_ts", "unpaused_ts", "unrestorable"
+                    "name",
+                    "identifier",
+                    "snapshot",
+                    "updated_ts",
+                    "unpaused_ts",
+                    "unrestorable",
+                    "forward_only",
                 )
                 .from_(self.snapshot_state.snapshots_table)
                 .where(where)
