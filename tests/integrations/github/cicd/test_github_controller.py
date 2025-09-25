@@ -15,6 +15,7 @@ from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.core.plan.definition import Plan
+from sqlmesh.core.linter.rule import RuleViolation
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
@@ -28,6 +29,29 @@ from tests.integrations.github.cicd.conftest import MockIssueComment
 from sqlmesh.utils.errors import SQLMeshError
 
 pytestmark = pytest.mark.github
+
+
+def add_linter_violations(controller: GithubController):
+    class _MockModel:
+        _path = "tests/linter_test.sql"
+
+    class _MockLinterRule:
+        name = "mock_linter_rule"
+
+    controller._console.show_linter_violations(
+        [
+            RuleViolation(
+                rule=_MockLinterRule(), violation_msg="Linter warning", violation_range=None
+            )
+        ],
+        _MockModel(),
+    )
+    controller._console.show_linter_violations(
+        [RuleViolation(rule=_MockLinterRule(), violation_msg="Linter error", violation_range=None)],
+        _MockModel(),
+        is_error=True,
+    )
+
 
 github_controller_approvers_params = [
     (
@@ -660,12 +684,18 @@ def test_get_plan_summary_includes_warnings_and_errors(
     controller._console.log_warning("Warning 1\nWith multiline")
     controller._console.log_warning("Warning 2")
     controller._console.log_error("Error 1")
+    add_linter_violations(controller)
 
     summary = controller.get_plan_summary(controller.prod_plan)
 
-    assert ("> [!WARNING]\n>\n> - Warning 1\n> With multiline\n>\n> - Warning 2\n\n") in summary
-
-    assert ("> [!CAUTION]\n>\n> Error 1\n\n") in summary
+    assert ("> [!WARNING]\n>\n> - Warning 1\n> With multiline\n>\n> - Warning 2\n>\n>") in summary
+    assert (
+        "> Linter warnings for `tests/linter_test.sql`:\n>  - mock_linter_rule: Linter warning\n>"
+    ) in summary
+    assert ("> [!CAUTION]\n>\n> - Error 1\n>\n>") in summary
+    assert (
+        "> Linter **errors** for `tests/linter_test.sql`:\n>  - mock_linter_rule: Linter error\n>"
+    ) in summary
 
 
 def test_get_pr_environment_summary_includes_warnings_and_errors(
@@ -679,24 +709,39 @@ def test_get_pr_environment_summary_includes_warnings_and_errors(
 
     controller._console.log_warning("Warning 1")
     controller._console.log_error("Error 1")
+    add_linter_violations(controller)
 
     # completed with no exception triggers a SUCCESS conclusion and only shows warnings
     success_summary = controller.get_pr_environment_summary(
         conclusion=GithubCheckConclusion.SUCCESS
     )
-    assert "> [!WARNING]\n>\n> Warning 1\n" in success_summary
-    assert "> [!CAUTION]\n>\n> Error 1" not in success_summary
+    assert "> [!WARNING]\n>\n> - Warning 1\n" in success_summary
+    assert (
+        "> Linter warnings for `tests/linter_test.sql`:\n>  - mock_linter_rule: Linter warning\n"
+        in success_summary
+    )
+    assert "Error 1" not in success_summary
+    assert "mock_linter_rule: Linter error" not in success_summary
 
     # since they got consumed in the previous call
     controller._console.log_warning("Warning 1")
     controller._console.log_error("Error 1")
+    add_linter_violations(controller)
 
     # completed with an exception triggers a FAILED conclusion and shows errors
     error_summary = controller.get_pr_environment_summary(
         conclusion=GithubCheckConclusion.FAILURE, exception=SQLMeshError("Something broke")
     )
-    assert "> [!WARNING]\n>\n> Warning 1\n" in error_summary
-    assert "> [!CAUTION]\n>\n> Error 1" in error_summary
+    assert "> [!WARNING]\n>\n> - Warning 1\n>\n" in error_summary
+    assert (
+        "> Linter warnings for `tests/linter_test.sql`:\n>  - mock_linter_rule: Linter warning\n"
+        in error_summary
+    )
+    assert "[!CAUTION]\n> <details>\n>\n> - Error 1\n>\n" in error_summary
+    assert (
+        "> Linter **errors** for `tests/linter_test.sql`:\n>  - mock_linter_rule: Linter error\n"
+        in error_summary
+    )
 
 
 def test_pr_comment_deploy_indicator_includes_command_namespace(
