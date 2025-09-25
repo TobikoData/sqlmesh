@@ -274,7 +274,7 @@ class ExecutionContext(BaseContext):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
-        is_restatement_plan: t.Optional[bool] = None,
+        is_restatement: t.Optional[bool] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
@@ -285,7 +285,7 @@ class ExecutionContext(BaseContext):
         self._default_dialect = default_dialect
         self._variables = variables or {}
         self._blueprint_variables = blueprint_variables or {}
-        self._is_restatement_plan = is_restatement_plan
+        self._is_restatement = is_restatement
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -311,8 +311,8 @@ class ExecutionContext(BaseContext):
         return self.var(c.GATEWAY)
 
     @property
-    def is_restatement_plan(self) -> t.Optional[bool]:
-        return self._is_restatement_plan
+    def is_restatement(self) -> t.Optional[bool]:
+        return self._is_restatement
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns a variable value."""
@@ -334,7 +334,7 @@ class ExecutionContext(BaseContext):
             self.deployability_index,
             self._default_dialect,
             self._default_catalog,
-            self._is_restatement_plan,
+            self._is_restatement,
             variables=variables,
             blueprint_variables=blueprint_variables,
         )

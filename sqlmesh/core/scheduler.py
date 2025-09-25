@@ -200,7 +200,6 @@ class Scheduler:
         allow_destructive_snapshots: t.Optional[t.Set[str]] = None,
         allow_additive_snapshots: t.Optional[t.Set[str]] = None,
         target_table_exists: t.Optional[bool] = None,
-        is_restatement_plan: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -338,7 +337,7 @@ class Scheduler:
         deployability_index: t.Optional[DeployabilityIndex],
         environment_naming_info: EnvironmentNamingInfo,
         dag: t.Optional[DAG[SnapshotId]] = None,
-        is_restatement_plan: bool = False,
+        is_restatement: bool = False,
     ) -> t.Dict[Snapshot, Intervals]:
         dag = dag or snapshots_to_dag(merged_intervals)
 
@@ -371,7 +370,7 @@ class Scheduler:
                 deployability_index,
                 default_dialect=adapter.dialect,
                 default_catalog=self.default_catalog,
-                is_restatement_plan=is_restatement_plan,
+                is_restatement=is_restatement,
             )
 
             intervals = self._check_ready_intervals(
@@ -379,7 +378,6 @@ class Scheduler:
                 intervals,
                 context,
                 environment_naming_info,
-                is_restatement_plan=is_restatement_plan,
             )
             unready -= set(intervals)
 
@@ -428,7 +426,7 @@ class Scheduler:
         run_environment_statements: bool = False,
         audit_only: bool = False,
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {},
-        is_restatement_plan: bool = False,
+        is_restatement: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -466,7 +464,7 @@ class Scheduler:
             deployability_index,
             environment_naming_info,
             dag=snapshot_dag,
-            is_restatement_plan=is_restatement_plan,
+            is_restatement=is_restatement,
         )
         self.console.start_evaluation_progress(
             batched_intervals,
@@ -552,7 +550,6 @@ class Scheduler:
                             allow_additive_snapshots=allow_additive_snapshots,
                             target_table_exists=snapshot.snapshot_id not in snapshots_to_create,
                             selected_models=selected_models,
-                            is_restatement_plan=is_restatement_plan,
                         )
 
                     evaluation_duration_ms = now_timestamp() - execution_start_ts
@@ -926,7 +923,6 @@ class Scheduler:
         intervals: Intervals,
         context: ExecutionContext,
         environment_naming_info: EnvironmentNamingInfo,
-        is_restatement_plan: bool = False,
     ) -> Intervals:
         """Checks if the intervals are ready for evaluation for the given snapshot.
 
@@ -947,8 +943,6 @@ class Scheduler:
 
         if not (signals and signals.signals_to_kwargs):
             return intervals
-
-        signal_names = signals.signals_to_kwargs.keys()
 
         self.console.start_signal_progress(
             snapshot,

@@ -7,6 +7,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.snapshot.definition import Snapshot
     from sqlmesh.utils.date import DatetimeRanges
+    from sqlmesh.core.snapshot.definition import DeployabilityIndex
 
 
 class signal(registry_decorator):
@@ -42,14 +43,11 @@ SignalRegistry = UniqueKeyDict[str, signal]
 
 @signal()
 def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionContext) -> bool:
-    if context.is_restatement_plan:
-        return True
-
-    deployability_index = context.deployability_index
     adapter = context.engine_adapter
-
-    if not deployability_index or not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
+    if context.is_restatement or not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
         return True
+
+    deployability_index = context.deployability_index or DeployabilityIndex.all_deployable()
 
     last_altered_ts = (
         snapshot.last_altered_ts
