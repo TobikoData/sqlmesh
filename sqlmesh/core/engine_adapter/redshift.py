@@ -28,6 +28,7 @@ if t.TYPE_CHECKING:
     import pandas as pd
 
     from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core.engine_adapter._typing import DCL, GrantsConfig
     from sqlmesh.core.engine_adapter.base import QueryOrDF, Query
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class RedshiftEngineAdapter(
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    SUPPORTS_GRANTS = True
 
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
@@ -162,6 +164,96 @@ class RedshiftEngineAdapter(
 
         result = [tuple(row) for row in fetcheddata]
         return pd.DataFrame(result, columns=columns)
+
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            return "MATERIALIZED VIEW"
+        return "TABLE"
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grant_config:
+            return expressions
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grant_config.items():
+            if not principals:
+                continue
+
+            args: t.Dict[str, t.Any] = {
+                "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                "securable": table.copy(),
+                "principals": principals,
+            }
+
+            if object_kind:
+                args["kind"] = exp.Var(this=object_kind)
+
+            expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        """Returns current grants for a Redshift table as a dictionary."""
+        table_schema = table.db or self.get_current_schema()
+        table_name = table.name
+        current_user = exp.func("current_user")
+
+        grant_expr = (
+            exp.select("privilege_type", "grantee")
+            .from_(exp.table_("table_privileges", db="information_schema"))
+            .where(
+                exp.and_(
+                    exp.column("table_schema").eq(exp.Literal.string(table_schema)),
+                    exp.column("table_name").eq(exp.Literal.string(table_name)),
+                    exp.column("grantor").eq(current_user),
+                    exp.column("grantee").neq(current_user),
+                )
+            )
+        )
+
+        results = self.fetchall(grant_expr)
+
+        grants_dict: GrantsConfig = {}
+        for privilege_raw, grantee_raw in results:
+            if privilege_raw is None or grantee_raw is None:
+                continue
+
+            privilege = str(privilege_raw)
+            grantee = str(grantee_raw)
+            if not privilege or not grantee:
+                continue
+
+            grants_dict.setdefault(privilege, [])
+            if grantee not in grants_dict[privilege]:
+                grants_dict[privilege].append(grantee)
+
+        return grants_dict
 
     def _create_table_from_source_queries(
         self,

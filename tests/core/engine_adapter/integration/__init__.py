@@ -750,7 +750,7 @@ class TestContext:
         self, username: str, password: t.Optional[str] = None
     ) -> t.Tuple[str, t.Optional[str]]:
         password = password or random_id()
-        if self.dialect == "postgres":
+        if self.dialect in ["postgres", "redshift"]:
             return username, f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
         if self.dialect == "snowflake":
             return username, f"CREATE ROLE {username}"
@@ -777,6 +777,10 @@ class TestContext:
                     self.add_test_suffix(f"test_{role_name}"), dialect=self.dialect
                 ).sql(dialect=self.dialect)
                 password = random_id()
+                if self.dialect == "redshift":
+                    password += (
+                        "A"  # redshift requires passwords to have at least one uppercase letter
+                    )
                 user_name = self._create_user_or_role(user_name, password)
                 created_users.append(user_name)
                 roles[role_name] = user_name
@@ -802,7 +806,7 @@ class TestContext:
     def _cleanup_user_or_role(self, user_name: str) -> None:
         """Helper function to clean up a PostgreSQL user and all their dependencies."""
         try:
-            if self.dialect == "postgres":
+            if self.dialect in ["postgres", "redshift"]:
                 self.engine_adapter.execute(f"""
                     SELECT pg_terminate_backend(pid)
                     FROM pg_stat_activity
