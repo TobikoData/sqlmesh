@@ -1844,6 +1844,12 @@ class SeedModel(_Model):
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
+
+        # Include grants in data hash for seed models to force recreation on grant changes
+        # since seed models don't support migration
+        data.append(json.dumps(self.grants, sort_keys=True) if self.grants else "")
+        data.append(self.grants_target_layer)
+
         return data
 
 
