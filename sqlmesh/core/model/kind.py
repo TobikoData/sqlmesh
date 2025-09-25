@@ -916,12 +916,6 @@ class DbtCustomKind(_ModelKind):
             self.dialect,
         ]
 
-    @property
-    def metadata_hash_values(self) -> t.List[t.Optional[str]]:
-        return [
-            *super().metadata_hash_values,
-        ]
-
     def to_expression(
         self, expressions: t.Optional[t.List[exp.Expression]] = None, **kwargs: t.Any
     ) -> d.ModelKind:

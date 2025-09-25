@@ -136,7 +136,7 @@ class ManifestHelper:
 
         self._on_run_start_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
         self._on_run_end_per_package: t.Dict[str, HookConfigs] = defaultdict(dict)
-        self._materializations_per_package: t.Dict[str, MaterializationConfigs] = defaultdict(dict)
+        self._materializations: MaterializationConfigs = {}
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -166,9 +166,9 @@ class ManifestHelper:
         self._load_all()
         return self._on_run_end_per_package[package_name or self._project_name]
 
-    def materializations(self, package_name: t.Optional[str] = None) -> MaterializationConfigs:
+    def materializations(self) -> MaterializationConfigs:
         self._load_all()
-        return self._materializations_per_package[package_name or self._project_name]
+        return self._materializations
 
     @property
     def all_macros(self) -> t.Dict[str, t.Dict[str, MacroInfo]]:
@@ -315,9 +315,7 @@ class ManifestHelper:
                     )
 
                     key = f"{mat_name}_{adapter}"
-                    self._materializations_per_package[macro.package_name][key] = (
-                        materialization_config
-                    )
+                    self._materializations[key] = materialization_config
 
     def _load_tests(self) -> None:
         for node in self._manifest.nodes.values():
