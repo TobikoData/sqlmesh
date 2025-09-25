@@ -3843,23 +3843,24 @@ def test_sync_grants_config(ctx: TestContext) -> None:
         )
 
     table = ctx.table("sync_grants_integration")
-
+    insert_privilege = ctx.get_insert_privilege()
+    update_privilege = ctx.get_update_privilege()
     with ctx.create_users_or_roles("reader", "writer", "admin") as roles:
         ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
 
         initial_grants = {
             "SELECT": [roles["reader"]],
-            "INSERT": [roles["writer"]],
+            insert_privilege: [roles["writer"]],
         }
         ctx.engine_adapter.sync_grants_config(table, initial_grants)
 
         current_grants = ctx.engine_adapter._get_current_grants_config(table)
         assert set(current_grants.get("SELECT", [])) == {roles["reader"]}
-        assert set(current_grants.get("INSERT", [])) == {roles["writer"]}
+        assert set(current_grants.get(insert_privilege, [])) == {roles["writer"]}
 
         target_grants = {
             "SELECT": [roles["writer"], roles["admin"]],
-            "UPDATE": [roles["admin"]],
+            update_privilege: [roles["admin"]],
         }
         ctx.engine_adapter.sync_grants_config(table, target_grants)
 
@@ -3868,8 +3869,8 @@ def test_sync_grants_config(ctx: TestContext) -> None:
             roles["writer"],
             roles["admin"],
         }
-        assert set(synced_grants.get("UPDATE", [])) == {roles["admin"]}
-        assert synced_grants.get("INSERT", []) == []
+        assert set(synced_grants.get(update_privilege, [])) == {roles["admin"]}
+        assert synced_grants.get(insert_privilege, []) == []
 
 
 def test_grants_sync_empty_config(ctx: TestContext):
@@ -3879,19 +3880,19 @@ def test_grants_sync_empty_config(ctx: TestContext):
         )
 
     table = ctx.table("grants_empty_test")
-
+    insert_privilege = ctx.get_insert_privilege()
     with ctx.create_users_or_roles("user") as roles:
         ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
 
         initial_grants = {
             "SELECT": [roles["user"]],
-            "INSERT": [roles["user"]],
+            insert_privilege: [roles["user"]],
         }
         ctx.engine_adapter.sync_grants_config(table, initial_grants)
 
         initial_current_grants = ctx.engine_adapter._get_current_grants_config(table)
         assert roles["user"] in initial_current_grants.get("SELECT", [])
-        assert roles["user"] in initial_current_grants.get("INSERT", [])
+        assert roles["user"] in initial_current_grants.get(insert_privilege, [])
 
         ctx.engine_adapter.sync_grants_config(table, {})
 
@@ -3905,18 +3906,12 @@ def test_grants_case_insensitive_grantees(ctx: TestContext):
             f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
         )
 
-    with ctx.create_users_or_roles("test_reader", "test_writer") as roles:
+    with ctx.create_users_or_roles("reader", "writer") as roles:
         table = ctx.table("grants_quoted_test")
         ctx.engine_adapter.create_table(table, {"id": exp.DataType.build("INT")})
 
-        test_schema = table.db
-        for role_credentials in roles.values():
-            ctx.engine_adapter.execute(
-                f'GRANT USAGE ON SCHEMA "{test_schema}" TO "{role_credentials}"'
-            )
-
-        reader = roles["test_reader"]
-        writer = roles["test_writer"]
+        reader = roles["reader"]
+        writer = roles["writer"]
 
         grants_config = {"SELECT": [reader, writer.upper()]}
         ctx.engine_adapter.sync_grants_config(table, grants_config)
@@ -3941,7 +3936,8 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
             f"Skipping Test since engine adapter {ctx.engine_adapter.dialect} doesn't support grants"
         )
 
-    table = ctx.table("grant_model").sql(dialect=ctx.dialect)
+    table = ctx.table("grant_model").sql(dialect="duckdb")
+    insert_privilege = ctx.get_insert_privilege()
     with ctx.create_users_or_roles("analyst", "etl_user") as roles:
         (tmp_path / "models").mkdir(exist_ok=True)
 
@@ -3990,7 +3986,7 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
                     kind FULL,
                     grants (
                         'select' = ['{roles["analyst"]}', '{roles["etl_user"]}'],
-                        'insert' = ['{roles["etl_user"]}']
+                        '{insert_privilege}' = ['{roles["etl_user"]}']
                     ),
                     grants_target_layer 'all'
                 );
@@ -4015,14 +4011,17 @@ def test_grants_plan(ctx: TestContext, tmp_path: Path):
         )
         expected_final_grants = {
             "SELECT": [roles["analyst"], roles["etl_user"]],
-            "INSERT": [roles["etl_user"]],
+            insert_privilege: [roles["etl_user"]],
         }
         assert set(final_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
-        assert final_grants.get("INSERT", []) == expected_final_grants["INSERT"]
+        assert final_grants.get(insert_privilege, []) == expected_final_grants[insert_privilege]
 
         # Virtual layer should also have the updated grants
         updated_virtual_grants = ctx.engine_adapter._get_current_grants_config(
             exp.to_table(view_name, dialect=ctx.dialect)
         )
         assert set(updated_virtual_grants.get("SELECT", [])) == set(expected_final_grants["SELECT"])
-        assert updated_virtual_grants.get("INSERT", []) == expected_final_grants["INSERT"]
+        assert (
+            updated_virtual_grants.get(insert_privilege, [])
+            == expected_final_grants[insert_privilege]
+        )

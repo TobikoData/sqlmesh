@@ -746,17 +746,25 @@ class TestContext:
         self._context.upsert_model(model)
         return self._context, model
 
-    def _get_create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
+    def _get_create_user_or_role(
+        self, username: str, password: t.Optional[str] = None
+    ) -> t.Tuple[str, t.Optional[str]]:
         password = password or random_id()
         if self.dialect == "postgres":
-            return f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
+            return username, f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
         if self.dialect == "snowflake":
-            return f"CREATE ROLE {username}"
+            return username, f"CREATE ROLE {username}"
+        if self.dialect == "databricks":
+            # Creating an account-level group in Databricks requires making REST API calls so we are going to
+            # use a pre-created group instead. We assume the suffix on the name is the unique id
+            return "_".join(username.split("_")[:-1]), None
         raise ValueError(f"User creation not supported for dialect: {self.dialect}")
 
-    def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> None:
-        create_user_sql = self._get_create_user_or_role(username, password)
-        self.engine_adapter.execute(create_user_sql)
+    def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
+        username, create_user_sql = self._get_create_user_or_role(username, password)
+        if create_user_sql:
+            self.engine_adapter.execute(create_user_sql)
+        return username
 
     @contextmanager
     def create_users_or_roles(self, *role_names: str) -> t.Iterator[t.Dict[str, str]]:
@@ -769,7 +777,7 @@ class TestContext:
                     self.add_test_suffix(f"test_{role_name}"), dialect=self.dialect
                 ).sql(dialect=self.dialect)
                 password = random_id()
-                self._create_user_or_role(user_name, password)
+                user_name = self._create_user_or_role(user_name, password)
                 created_users.append(user_name)
                 roles[role_name] = user_name
 
@@ -778,6 +786,18 @@ class TestContext:
         finally:
             for user_name in created_users:
                 self._cleanup_user_or_role(user_name)
+
+    def get_insert_privilege(self) -> str:
+        if self.dialect == "databricks":
+            # This would really be "MODIFY" but for the purposes of having this be unique from UPDATE
+            # we return "MANAGE" instead
+            return "MANAGE"
+        return "INSERT"
+
+    def get_update_privilege(self) -> str:
+        if self.dialect == "databricks":
+            return "MODIFY"
+        return "UPDATE"
 
     def _cleanup_user_or_role(self, user_name: str) -> None:
         """Helper function to clean up a PostgreSQL user and all their dependencies."""
@@ -792,6 +812,8 @@ class TestContext:
                 self.engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
             elif self.dialect == "snowflake":
                 self.engine_adapter.execute(f"DROP ROLE IF EXISTS {user_name}")
+            elif self.dialect == "databricks":
+                pass
         except Exception:
             pass
 
