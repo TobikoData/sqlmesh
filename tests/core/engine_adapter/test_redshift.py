@@ -9,7 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
@@ -81,6 +81,156 @@ def test_varchar_size_workaround(make_mocked_engine_adapter: t.Callable, mocker:
         'DROP VIEW IF EXISTS "__temp_ctas_test_random_id" CASCADE',
         'CREATE TABLE "test_schema"."test_table" ("char" CHAR, "char1" CHAR(max), "char2" CHAR(2), "varchar" VARCHAR, "varchar256" VARCHAR(max), "varchar2" VARCHAR(2))',
     ]
+
+
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_table", dialect="redshift")
+    new_grants_config = {"SELECT": ["user1", "user2"], "INSERT": ["user3"]}
+
+    current_grants = [("SELECT", "old_user"), ("UPDATE", "legacy_user")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 4
+    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM old_user' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "test_schema"."test_table" FROM legacy_user' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO user1, user2' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO user3' in sql_calls
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_table", dialect="redshift")
+    new_grants_config = {
+        "SELECT": ["user_shared", "user_new"],
+        "INSERT": ["user_shared", "user_writer"],
+    }
+
+    current_grants = [
+        ("SELECT", "user_shared"),
+        ("SELECT", "user_legacy"),
+        ("INSERT", "user_shared"),
+    ]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'test_schema' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM user_legacy' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO user_new' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO user_writer' in sql_calls
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_schema.test_object", dialect="redshift")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+
+    adapter.sync_grants_config(relation, {"SELECT": ["user_test"]}, table_type)
+
+    sql_calls = to_sql_calls(adapter)
+    assert sql_calls == [
+        f'GRANT SELECT ON {expected_keyword} "test_schema"."test_object" TO user_test'
+    ]
+
+
+def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table('"TestSchema"."TestTable"', dialect="redshift")
+    new_grants_config = {"SELECT": ["user1", "user2"], "INSERT": ["user3"]}
+
+    current_grants = [("SELECT", "user_old"), ("UPDATE", "user_legacy")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'TestSchema' AND table_name = 'TestTable' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 4
+    assert 'REVOKE SELECT ON TABLE "TestSchema"."TestTable" FROM user_old' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "TestSchema"."TestTable" FROM user_legacy' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TestSchema"."TestTable" TO user1, user2' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TestSchema"."TestTable" TO user3' in sql_calls
+
+
+def test_sync_grants_config_no_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    relation = exp.to_table("test_table", dialect="redshift")
+    new_grants_config = {"SELECT": ["user1"], "INSERT": ["user2"]}
+
+    current_grants = [("UPDATE", "user_old")]
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    get_schema_mock = mocker.patch.object(adapter, "get_current_schema", return_value="public")
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    get_schema_mock.assert_called_once()
+
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="redshift")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM information_schema.table_privileges "
+        "WHERE table_schema = 'public' AND table_name = 'test_table' "
+        "AND grantor = CURRENT_USER AND grantee <> CURRENT_USER"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = to_sql_calls(adapter)
+    assert len(sql_calls) == 3
+    assert 'REVOKE UPDATE ON TABLE "test_table" FROM user_old' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_table" TO user1' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_table" TO user2' in sql_calls
 
 
 def test_create_table_from_query_exists_no_if_not_exists(
