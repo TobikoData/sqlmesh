@@ -67,7 +67,6 @@ from sqlmesh.core.snapshot.evaluator import (
     IncrementalUnmanagedStrategy,
     MaterializableStrategy,
     SCDType2Strategy,
-    SeedStrategy,
     SnapshotCreationFailedError,
     ViewStrategy,
 )
@@ -5048,9 +5047,13 @@ def test_grants_target_layer(
         assert sync_grants_mock.call_args[0][1] == grants
     sync_grants_mock.reset_mock()
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="prod"))
-    if target_layer == GrantsTargetLayer.ALL:
-        assert sync_grants_mock.call_count == 2
-    else:
+    if target_layer == GrantsTargetLayer.VIRTUAL:
+        assert sync_grants_mock.call_count == 1
+    elif target_layer == GrantsTargetLayer.PHYSICAL:
+        # Physical layer: no grants applied during promotion (already applied during create)
+        assert sync_grants_mock.call_count == 0
+    else:  # target_layer == GrantsTargetLayer.ALL
+        # All layers: only virtual grants applied during promotion (physical already done in create)
         assert sync_grants_mock.call_count == 1
 
 
@@ -5161,7 +5164,7 @@ def test_grants_create_and_evaluate(
         IncrementalUnmanagedStrategy,
         IncrementalByUniqueKeyStrategy,
         SCDType2Strategy,
-        SeedStrategy,
+        # SeedStrategy excluded because seeds do not support migrations
     ],
 )
 def test_grants_materializable_strategy_migrate(

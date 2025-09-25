@@ -1045,7 +1045,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1586624913",
+        data_hash="2112858704",
         metadata_hash="2674364560",
     )
 

@@ -698,12 +698,17 @@ def test_grants_metadata_only_changes(
                 "insert": [roles["admin"]["username"]],
             },
         )
-        context.plan(auto_apply=True, no_prompts=True)
+        second_plan_result = context.plan(auto_apply=True, no_prompts=True)
 
         expected_grants = {
             "SELECT": [roles["writer"]["username"], roles["admin"]["username"]],
             "INSERT": [roles["admin"]["username"]],
         }
+
+        # For seed models, grant changes rebuild the entire table, so it will create a new physical table
+        if model_name == "grants_seed" and second_plan_result.new_snapshots:
+            updated_snapshot = second_plan_result.new_snapshots[0]
+            physical_table_name = updated_snapshot.table_name()
 
         updated_physical_grants = engine_adapter._get_current_grants_config(
             exp.to_table(physical_table_name, dialect=engine_adapter.dialect)
