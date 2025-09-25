@@ -54,8 +54,6 @@ from sqlmesh.utils.errors import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
-    from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter import EngineAdapter
 
 logger = logging.getLogger(__name__)
 SnapshotToIntervals = t.Dict[Snapshot, Intervals]
@@ -189,46 +187,6 @@ class Scheduler:
                 s: i for s, i in snapshots_to_intervals.items() if s.name in selected_snapshots
             }
         return snapshots_to_intervals
-
-    def can_skip_evaluation(self, snapshot: Snapshot, snapshots: t.Dict[str, Snapshot]) -> bool:
-        if not snapshot.last_altered_ts:
-            return False
-
-        from collections import defaultdict
-
-        parent_snapshots = {p for p in snapshots.values() if p.name != snapshot.name}
-        if len(parent_snapshots) != len(snapshot.node.depends_on):
-            # The mismatch can happen if e.g an external model is not registered in the project
-            return False
-
-        adapter_to_parent_snapshots: t.Dict[EngineAdapter, t.List[Snapshot]] = defaultdict(list)
-
-        for parent_snapshot in parent_snapshots:
-            if not parent_snapshot.is_external:
-                return False
-
-            adapter = self.snapshot_evaluator.get_adapter(parent_snapshot.model_gateway)
-            if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
-                return False
-
-            adapter_to_parent_snapshots[adapter].append(parent_snapshot)
-
-        if not adapter_to_parent_snapshots:
-            return False
-
-        external_models_freshness: t.List[int] = []
-
-        for adapter, adapter_snapshots in adapter_to_parent_snapshots.items():
-            table_names: t.List[TableName] = [
-                exp.to_table(parent_snapshot.name, parent_snapshot.node.dialect)
-                for parent_snapshot in adapter_snapshots
-            ]
-            external_models_freshness.extend(adapter.get_external_model_freshness(table_names))
-
-        return all(
-            snapshot.last_altered_ts > external_model_freshness
-            for external_model_freshness in external_models_freshness
-        )
 
     def evaluate(
         self,
@@ -413,6 +371,7 @@ class Scheduler:
                 deployability_index,
                 default_dialect=adapter.dialect,
                 default_catalog=self.default_catalog,
+                is_restatement_plan=is_restatement_plan,
             )
 
             intervals = self._check_ready_intervals(
@@ -991,15 +950,6 @@ class Scheduler:
 
         signal_names = signals.signals_to_kwargs.keys()
 
-        if (
-            is_restatement_plan
-            and len(signal_names) == 1
-            and next(iter(signal_names)) == "freshness"
-        ):
-            # Freshness signal is not checked for restatement plans to allow users
-            # for an escape hatch in reevaluating models
-            return intervals
-
         self.console.start_signal_progress(
             snapshot,
             self.default_catalog,
@@ -1007,9 +957,6 @@ class Scheduler:
         )
 
         for signal_idx, (signal_name, kwargs) in enumerate(signals.signals_to_kwargs.items()):
-            if is_restatement_plan and signal_name == "freshness":
-                continue
-
             # Capture intervals before signal check for display
             intervals_to_check = merge_intervals(intervals)
 

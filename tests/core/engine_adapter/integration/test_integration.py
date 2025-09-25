@@ -3845,8 +3845,8 @@ def test_materialized_view_evaluation(ctx: TestContext):
 @use_terminal_console
 def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_path: pathlib.Path):
     adapter = ctx.engine_adapter
-    if not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
-        pytest.skip("This test only runs for engines that support external model freshness")
+    if not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
+        pytest.skip("This test only runs for engines that support metadata-based freshness")
 
     def _assert_snapshot_last_altered_ts(
         context: Context,
@@ -3880,15 +3880,7 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
 
         evaluate_function_called = spy.call_count == 1
         signal_was_checked = "Checking signals for" in output.stdout
-        restatement_plan = isinstance(plan_or_run_result, Plan) and plan_or_run_result.restatements
-        if restatement_plan:
-            # Restatement plans exclude this signal so we expect the actual evaluation
-            # to happen but not through the signal
-            assert evaluate_function_called
-            assert not signal_was_checked
-            return
 
-        # All other cases (e.g normal plans or runs) will check the freshness signal
         assert signal_was_checked
         if was_evaluated:
             assert "All ready" in output.stdout

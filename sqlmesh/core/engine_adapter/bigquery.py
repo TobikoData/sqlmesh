@@ -755,7 +755,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         except NotFound:
             return False
 
-    def get_external_model_freshness(self, table_names: t.List[TableName]) -> t.List[int]:
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
         from sqlmesh.utils.date import to_timestamp
 
         datasets_to_tables: t.DefaultDict[str, t.List[str]] = defaultdict(list)

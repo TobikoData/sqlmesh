@@ -54,7 +54,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     SUPPORTS_MANAGED_MODELS = True
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SUPPORTS_CREATE_DROP_CATALOG = True
-    SUPPORTS_EXTERNAL_MODEL_FRESHNESS = True
+    SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA", "TABLE"]
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
@@ -671,7 +671,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
 
         return super().close()
 
-    def get_external_model_freshness(self, table_names: t.List[TableName]) -> t.List[int]:
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
         from sqlmesh.utils.date import to_timestamp
 
         num_tables = len(table_names)

@@ -207,11 +207,11 @@ class SnapshotIntervals(PydanticModel):
     def add_pending_restatement_interval(self, start: int, end: int) -> None:
         self._add_interval(start, end, "pending_restatement_intervals")
 
-    def add_last_altered_ts(self, last_altered_ts: t.Optional[int]) -> None:
-        self._add_last_altered_ts(last_altered_ts, "last_altered_ts")
+    def update_last_altered_ts(self, last_altered_ts: t.Optional[int]) -> None:
+        self._update_last_altered_ts(last_altered_ts, "last_altered_ts")
 
-    def add_dev_last_altered_ts(self, last_altered_ts: t.Optional[int]) -> None:
-        self._add_last_altered_ts(last_altered_ts, "dev_last_altered_ts")
+    def update_dev_last_altered_ts(self, last_altered_ts: t.Optional[int]) -> None:
+        self._update_last_altered_ts(last_altered_ts, "dev_last_altered_ts")
 
     def remove_interval(self, start: int, end: int) -> None:
         self._remove_interval(start, end, "intervals")
@@ -232,12 +232,12 @@ class SnapshotIntervals(PydanticModel):
         target_intervals = merge_intervals([*target_intervals, (start, end)])
         setattr(self, interval_attr, target_intervals)
 
-    def _add_last_altered_ts(
+    def _update_last_altered_ts(
         self, last_altered_ts: t.Optional[int], last_altered_attr: str
     ) -> None:
         if last_altered_ts:
             existing_last_altered_ts = getattr(self, last_altered_attr)
-            setattr(self, last_altered_attr, max(existing_last_altered_ts or -1, last_altered_ts))
+            setattr(self, last_altered_attr, max(existing_last_altered_ts or 0, last_altered_ts))
 
     def _remove_interval(self, start: int, end: int, interval_attr: str) -> None:
         target_intervals = getattr(self, interval_attr)
@@ -978,7 +978,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 self.add_interval(start, end)
 
         if other.last_altered_ts:
-            self.last_altered_ts = max(self.last_altered_ts or -1, other.last_altered_ts)
+            self.last_altered_ts = max(self.last_altered_ts or 0, other.last_altered_ts)
 
         if self.dev_version == other.dev_version:
             # Merge dev intervals if the dev versions match which would mean
@@ -988,7 +988,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
             if other.dev_last_altered_ts:
                 self.dev_last_altered_ts = max(
-                    self.dev_last_altered_ts or -1, other.dev_last_altered_ts
+                    self.dev_last_altered_ts or 0, other.dev_last_altered_ts
                 )
 
         self.pending_restatement_intervals = merge_intervals(

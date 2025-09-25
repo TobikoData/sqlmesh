@@ -42,10 +42,13 @@ SignalRegistry = UniqueKeyDict[str, signal]
 
 @signal()
 def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionContext) -> bool:
+    if context.is_restatement_plan:
+        return True
+
     deployability_index = context.deployability_index
     adapter = context.engine_adapter
 
-    if not deployability_index or not adapter.SUPPORTS_EXTERNAL_MODEL_FRESHNESS:
+    if not deployability_index or not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
         return True
 
     last_altered_ts = (
@@ -67,7 +70,7 @@ def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionConte
     # since the last time the model was evaluated
     upstream_dep_has_new_data = any(
         upstream_last_altered_ts > last_altered_ts
-        for upstream_last_altered_ts in adapter.get_external_model_freshness(
+        for upstream_last_altered_ts in adapter.get_table_last_modified_ts(
             [p.name for p in parent_snapshots]
         )
     )
