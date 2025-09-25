@@ -83,7 +83,7 @@ from sqlmesh.utils.errors import (
     format_additive_change_msg,
     AdditiveChangeError,
 )
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
+from sqlmesh.utils.jinja import MacroReturnVal
 
 if sys.version_info >= (3, 12):
     from importlib import metadata
@@ -2685,9 +2685,7 @@ class DbtCustomMaterialization(MaterializableStrategy):
         create_only: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        from sqlmesh.dbt.builtin import create_builtin_globals
-
-        jinja_macros = getattr(model, "jinja_macros", JinjaMacroRegistry())
+        jinja_macros = model.jinja_macros
         existing_globals = jinja_macros.global_objs.copy()
 
         # For vdes we need to use the table, since we don't know the schema/table at parse time
@@ -2709,8 +2707,8 @@ class DbtCustomMaterialization(MaterializableStrategy):
             "execution_dt": kwargs.get("execution_time"),
         }
 
-        context = create_builtin_globals(
-            jinja_macros=jinja_macros, jinja_globals=jinja_globals, engine_adapter=self.adapter
+        context = jinja_macros._create_builtin_globals(
+            {"engine_adapter": self.adapter, **jinja_globals}
         )
 
         context.update(
@@ -2731,7 +2729,7 @@ class DbtCustomMaterialization(MaterializableStrategy):
             try:
                 template.render(**context)
             except MacroReturnVal as ret:
-                # this is a succesful return from a macro call (dbt uses this list of Relations to update their relation cache)
+                # this is a successful return from a macro call (dbt uses this list of Relations to update their relation cache)
                 returned_relations = ret.value.get("relations", [])
                 logger.info(
                     f"Materialization {self.materialization_name} returned relations: {returned_relations}"

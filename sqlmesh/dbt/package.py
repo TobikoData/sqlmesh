@@ -105,9 +105,7 @@ class PackageLoader:
         models = _fix_paths(self._context.manifest.models(package_name), package_root)
         seeds = _fix_paths(self._context.manifest.seeds(package_name), package_root)
         macros = _fix_paths(self._context.manifest.macros(package_name), package_root)
-        materializations = _fix_paths(
-            self._context.manifest.materializations(package_name), package_root
-        )
+        materializations = _fix_paths(self._context.manifest.materializations(), package_root)
         on_run_start = _fix_paths(self._context.manifest.on_run_start(package_name), package_root)
         on_run_end = _fix_paths(self._context.manifest.on_run_end(package_name), package_root)
         sources = self._context.manifest.sources(package_name)
