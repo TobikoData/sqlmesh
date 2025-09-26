@@ -755,6 +755,28 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         except NotFound:
             return False
 
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
+        from sqlmesh.utils.date import to_timestamp
+
+        datasets_to_tables: t.DefaultDict[str, t.List[str]] = defaultdict(list)
+        for table_name in table_names:
+            table = exp.to_table(table_name)
+            datasets_to_tables[table.db].append(table.name)
+
+        results = []
+
+        for dataset, tables in datasets_to_tables.items():
+            query = (
+                f"SELECT TIMESTAMP_MILLIS(last_modified_time) FROM `{dataset}.__TABLES__` WHERE "
+            )
+            for i, table_name in enumerate(tables):
+                query += f"TABLE_ID = '{table_name}'"
+                if i < len(tables) - 1:
+                    query += " OR "
+            results.extend(self.fetchall(query))
+
+        return [to_timestamp(row[0]) for row in results]
+
     def _get_table(self, table_name: TableName) -> BigQueryTable:
         """
         Returns a BigQueryTable object for the given table name.

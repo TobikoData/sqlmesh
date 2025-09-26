@@ -251,7 +251,9 @@ class Scheduler:
             **kwargs,
         )
 
-        self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
+        self.state_sync.add_interval(
+            snapshot, start, end, is_dev=not is_deployable, last_altered_ts=now_timestamp()
+        )
         return audit_results
 
     def run(
@@ -335,6 +337,7 @@ class Scheduler:
         deployability_index: t.Optional[DeployabilityIndex],
         environment_naming_info: EnvironmentNamingInfo,
         dag: t.Optional[DAG[SnapshotId]] = None,
+        is_restatement: bool = False,
     ) -> t.Dict[Snapshot, Intervals]:
         dag = dag or snapshots_to_dag(merged_intervals)
 
@@ -367,6 +370,7 @@ class Scheduler:
                 deployability_index,
                 default_dialect=adapter.dialect,
                 default_catalog=self.default_catalog,
+                is_restatement=is_restatement,
             )
 
             intervals = self._check_ready_intervals(
@@ -422,6 +426,7 @@ class Scheduler:
         run_environment_statements: bool = False,
         audit_only: bool = False,
         auto_restatement_triggers: t.Dict[SnapshotId, t.List[SnapshotId]] = {},
+        is_restatement: bool = False,
     ) -> t.Tuple[t.List[NodeExecutionFailedError[SchedulingUnit]], t.List[SchedulingUnit]]:
         """Runs precomputed batches of missing intervals.
 
@@ -455,9 +460,12 @@ class Scheduler:
         snapshot_dag = full_dag.subdag(*selected_snapshot_ids_set)
 
         batched_intervals = self.batch_intervals(
-            merged_intervals, deployability_index, environment_naming_info, dag=snapshot_dag
+            merged_intervals,
+            deployability_index,
+            environment_naming_info,
+            dag=snapshot_dag,
+            is_restatement=is_restatement,
         )
-
         self.console.start_evaluation_progress(
             batched_intervals,
             environment_naming_info,
@@ -956,6 +964,7 @@ class Scheduler:
                     python_env=signals.python_env,
                     dialect=snapshot.model.dialect,
                     path=snapshot.model._path,
+                    snapshot=snapshot,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:

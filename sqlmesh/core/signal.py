@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-
+import typing as t
 from sqlmesh.utils import UniqueKeyDict, registry_decorator
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import ExecutionContext
+    from sqlmesh.core.snapshot.definition import Snapshot
+    from sqlmesh.utils.date import DatetimeRanges
+    from sqlmesh.core.snapshot.definition import DeployabilityIndex
 
 
 class signal(registry_decorator):
@@ -33,3 +39,39 @@ class signal(registry_decorator):
 
 
 SignalRegistry = UniqueKeyDict[str, signal]
+
+
+@signal()
+def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionContext) -> bool:
+    adapter = context.engine_adapter
+    if context.is_restatement or not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
+        return True
+
+    deployability_index = context.deployability_index or DeployabilityIndex.all_deployable()
+
+    last_altered_ts = (
+        snapshot.last_altered_ts
+        if deployability_index.is_deployable(snapshot)
+        else snapshot.dev_last_altered_ts
+    )
+    if not last_altered_ts:
+        return True
+
+    parent_snapshots = {context.snapshots[p.name] for p in snapshot.parents}
+    if len(parent_snapshots) != len(snapshot.node.depends_on) or not all(
+        p.is_external for p in parent_snapshots
+    ):
+        # The mismatch can happen if e.g an external model is not registered in the project
+        return True
+
+    # Finding new data means that the upstream depedencies have been altered
+    # since the last time the model was evaluated
+    upstream_dep_has_new_data = any(
+        upstream_last_altered_ts > last_altered_ts
+        for upstream_last_altered_ts in adapter.get_table_last_modified_ts(
+            [p.name for p in parent_snapshots]
+        )
+    )
+
+    # Returning true is a no-op, returning False nullifies the batch so the model will not be evaluated.
+    return upstream_dep_has_new_data

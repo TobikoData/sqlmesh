@@ -119,6 +119,7 @@ class EngineAdapter:
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = None
     ATTACH_CORRELATION_ID = True
     SUPPORTS_QUERY_EXECUTION_TRACKING = False
+    SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS = False
 
     def __init__(
         self,
@@ -2926,6 +2927,9 @@ class EngineAdapter:
                 raise SQLMeshError(
                     f"Identifier name '{name}' (length {name_length}) exceeds {self.dialect.capitalize()}'s max identifier limit of {self.MAX_IDENTIFIER_LENGTH} characters"
                 )
+
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
+        raise NotImplementedError()
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
