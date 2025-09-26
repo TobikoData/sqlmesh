@@ -190,23 +190,23 @@ def test_manifest_filters_standalone_tests_from_models(
     # Should only have "not_null" test, not the "relationships" test
     model1_audit_names = [audit[0] for audit in model1_snapshot.model.audits]
     assert len(model1_audit_names) == 1
-    assert model1_audit_names[0] == "not_null_model1_id"
+    assert model1_audit_names[0] == "local.not_null_model1_id"
 
     # Verify model2 has its non-standalone test
     model2_audit_names = [audit[0] for audit in model2_snapshot.model.audits]
     assert len(model2_audit_names) == 1
-    assert model2_audit_names[0] == "not_null_model2_id"
+    assert model2_audit_names[0] == "local.not_null_model2_id"
 
     # Verify the standalone test (relationships) exists as a StandaloneAudit
     all_non_standalone_audits = [name for name in context._audits]
     assert sorted(all_non_standalone_audits) == [
-        "not_null_model1_id",
-        "not_null_model2_id",
+        "local.not_null_model1_id",
+        "local.not_null_model2_id",
     ]
 
     standalone_audits = [name for name in context._standalone_audits]
     assert len(standalone_audits) == 1
-    assert standalone_audits[0] == "relationships_model1_id__id__ref_model2_"
+    assert standalone_audits[0] == "local.relationships_model1_id__id__ref_model2_"
 
     plan_builder = context.plan_builder()
     dag = plan_builder._build_dag()
