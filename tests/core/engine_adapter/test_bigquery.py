@@ -589,13 +589,14 @@ def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
         execute_mock = execute_mock.execute
     output = []
     for call in execute_mock.call_args_list:
-        value = call[0][0]
-        sql = (
-            value.sql(dialect="bigquery", identify=identify)
-            if isinstance(value, exp.Expression)
-            else str(value)
-        )
-        output.append(sql)
+        values = ensure_list(call[0][0])
+        for value in values:
+            sql = (
+                value.sql(dialect="bigquery", identify=identify)
+                if isinstance(value, exp.Expression)
+                else str(value)
+            )
+            output.append(sql)
     return output
 
 
@@ -1244,25 +1245,23 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     )
     assert executed_sql == expected_sql
 
-    execute_mock.assert_called_once()
-    executed_exprs = execute_mock.call_args[0][0]
-    sql_calls = [expr.sql(dialect="bigquery") for expr in executed_exprs]
+    sql_calls = _to_sql_calls(execute_mock)
 
     assert len(sql_calls) == 4
     assert (
-        "REVOKE `roles/bigquery.dataViewer` ON TABLE project.dataset.test_table FROM 'user:old_analyst@example.com'"
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
         in sql_calls
     )
     assert (
-        "REVOKE `roles/bigquery.admin` ON TABLE project.dataset.test_table FROM 'user:old_admin@example.com'"
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_admin@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataViewer` ON TABLE project.dataset.test_table TO 'user:analyst@example.com', 'group:data-team@example.com'"
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst@example.com', 'group:data-team@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataEditor` ON TABLE project.dataset.test_table TO 'user:admin@example.com'"
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:admin@example.com'"
         in sql_calls
     )
 
@@ -1303,24 +1302,23 @@ def test_sync_grants_config_with_overlaps(
     )
     assert executed_sql == expected_sql
 
-    executed_exprs = execute_mock.call_args[0][0]
-    sql_calls = [expr.sql(dialect="bigquery") for expr in executed_exprs]
+    sql_calls = _to_sql_calls(execute_mock)
 
     assert len(sql_calls) == 4
     assert (
-        "REVOKE `roles/bigquery.dataViewer` ON TABLE project.dataset.test_table FROM 'user:old_analyst@example.com'"
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
         in sql_calls
     )
     assert (
-        "REVOKE `roles/bigquery.admin` ON TABLE project.dataset.test_table FROM 'user:admin@example.com'"
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:admin@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataViewer` ON TABLE project.dataset.test_table TO 'user:analyst2@example.com', 'user:analyst3@example.com'"
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst2@example.com', 'user:analyst3@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataEditor` ON TABLE project.dataset.test_table TO 'user:editor@example.com'"
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:editor@example.com'"
         in sql_calls
     )
 
@@ -1388,19 +1386,18 @@ def test_sync_grants_config_no_schema(
     )
     assert executed_sql == expected_sql
 
-    executed_exprs = execute_mock.call_args[0][0]
-    sql_calls = [expr.sql(dialect="bigquery") for expr in executed_exprs]
+    sql_calls = _to_sql_calls(execute_mock)
 
     assert len(sql_calls) == 3
     assert (
-        "REVOKE `roles/bigquery.admin` ON TABLE test_table FROM 'user:old_admin@example.com'"
+        "REVOKE `roles/bigquery.admin` ON TABLE `test_table` FROM 'user:old_admin@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataViewer` ON TABLE test_table TO 'user:analyst@example.com'"
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `test_table` TO 'user:analyst@example.com'"
         in sql_calls
     )
     assert (
-        "GRANT `roles/bigquery.dataEditor` ON TABLE test_table TO 'user:editor@example.com'"
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `test_table` TO 'user:editor@example.com'"
         in sql_calls
     )
