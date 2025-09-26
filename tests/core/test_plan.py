@@ -26,7 +26,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ModelKindName,
 )
-from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange, ViewKind
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals
 from sqlmesh.core.snapshot import (
@@ -4162,3 +4162,143 @@ def test_plan_ignore_cron_flag(make_snapshot):
             ],
         )
     ]
+
+
+def test_indirect_change_to_materialized_view_is_breaking(make_snapshot):
+    snapshot_a_old = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as col_a"),
+            kind=ViewKind(materialized=True),
+        )
+    )
+    snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b_old = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select col_a from a"),
+            kind=ViewKind(materialized=True),
+        ),
+        nodes={'"a"': snapshot_a_old.model},
+    )
+    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_a_new = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as col_a, 2 as col_b"),
+            kind=ViewKind(materialized=True),
+        )
+    )
+
+    snapshot_a_new.previous_versions = snapshot_a_old.all_versions
+
+    snapshot_b_new = make_snapshot(
+        snapshot_b_old.model,
+        nodes={'"a"': snapshot_a_new.model},
+    )
+    snapshot_b_new.previous_versions = snapshot_b_old.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a_new.name: (snapshot_a_new, snapshot_a_old),
+            snapshot_b_new.name: (snapshot_b_new, snapshot_b_old),
+        },
+        snapshots={
+            snapshot_a_new.snapshot_id: snapshot_a_new,
+            snapshot_b_new.snapshot_id: snapshot_b_new,
+        },
+        new_snapshots={
+            snapshot_a_new.snapshot_id: snapshot_a_new,
+            snapshot_b_new.snapshot_id: snapshot_b_new,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    PlanBuilder(context_diff, forward_only=False).build()
+
+    assert snapshot_b_new.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+
+
+def test_forward_only_indirect_change_to_materialized_view(make_snapshot):
+    snapshot_a_old = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as col_a"),
+        )
+    )
+    snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b_old = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select col_a from a"),
+            kind=ViewKind(materialized=True),
+        ),
+        nodes={'"a"': snapshot_a_old.model},
+    )
+    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_a_new = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as col_a, 2 as col_b"),
+        )
+    )
+
+    snapshot_a_new.previous_versions = snapshot_a_old.all_versions
+
+    snapshot_b_new = make_snapshot(
+        snapshot_b_old.model,
+        nodes={'"a"': snapshot_a_new.model},
+    )
+    snapshot_b_new.previous_versions = snapshot_b_old.all_versions
+
+    context_diff = ContextDiff(
+        environment="test_environment",
+        is_new_environment=True,
+        is_unfinalized_environment=False,
+        normalize_environment_name=True,
+        create_from="prod",
+        create_from_env_exists=True,
+        added=set(),
+        removed_snapshots={},
+        modified_snapshots={
+            snapshot_a_new.name: (snapshot_a_new, snapshot_a_old),
+            snapshot_b_new.name: (snapshot_b_new, snapshot_b_old),
+        },
+        snapshots={
+            snapshot_a_new.snapshot_id: snapshot_a_new,
+            snapshot_b_new.snapshot_id: snapshot_b_new,
+        },
+        new_snapshots={
+            snapshot_a_new.snapshot_id: snapshot_a_new,
+            snapshot_b_new.snapshot_id: snapshot_b_new,
+        },
+        previous_plan_id=None,
+        previously_promoted_snapshot_ids=set(),
+        previous_finalized_snapshots=None,
+        previous_gateway_managed_virtual_layer=False,
+        gateway_managed_virtual_layer=False,
+        environment_statements=[],
+    )
+
+    PlanBuilder(context_diff, forward_only=True).build()
+
+    # Forward-only indirect changes to MVs should not always be classified as indirect breaking.
+    # Instead, we want to preserve the standard categorization.
+    assert snapshot_b_new.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
