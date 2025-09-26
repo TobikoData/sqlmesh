@@ -110,10 +110,6 @@ class TestConfig(GeneralConfig):
         return v.lower()
 
     @property
-    def canonical_name(self) -> str:
-        return f"{self.package_name}.{self.name}" if self.package_name else self.name
-
-    @property
     def is_standalone(self) -> bool:
         # A test is standalone if:
         # 1. It has no model_name (already standalone), OR
