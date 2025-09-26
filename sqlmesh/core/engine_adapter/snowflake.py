@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
     ClusteredByMixin,
     RowDiffMixin,
+    GrantsFromInfoSchemaMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
@@ -35,9 +36,7 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core._typing import SchemaName, SessionProperties, TableName
     from sqlmesh.core.engine_adapter._typing import (
-        DCL,
         DF,
-        GrantsConfig,
         Query,
         QueryOrDF,
         SnowparkSession,
@@ -53,7 +52,9 @@ if t.TYPE_CHECKING:
         "drop_catalog": CatalogSupport.REQUIRES_SET_CATALOG,  # needs a catalog to issue a query to information_schema.databases even though the result is global
     }
 )
-class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixin, RowDiffMixin):
+class SnowflakeEngineAdapter(
+    GetCurrentCatalogFromFunctionMixin, ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchemaMixin
+):
     DIALECT = "snowflake"
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
@@ -81,6 +82,8 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     SNOWPARK = "snowpark"
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SUPPORTS_GRANTS = True
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("CURRENT_ROLE")
+    USE_CATALOG_IN_GRANTS = True
 
     @contextlib.contextmanager
     def session(self, properties: SessionProperties) -> t.Iterator[None]:
@@ -151,101 +154,6 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
         if not result or not result[0]:
             raise SQLMeshError("Unable to determine current schema")
         return str(result[0])
-
-    def _dcl_grants_config_expr(
-        self,
-        dcl_cmd: t.Type[DCL],
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        expressions: t.List[exp.Expression] = []
-        if not grant_config:
-            return expressions
-
-        object_kind = self._grant_object_kind(table_type)
-        for privilege, principals in grant_config.items():
-            for principal in principals:
-                args: t.Dict[str, t.Any] = {
-                    "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
-                    "securable": table.copy(),
-                    "principals": [principal],
-                }
-
-                if object_kind:
-                    args["kind"] = exp.Var(this=object_kind)
-
-                expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
-
-        return expressions
-
-    def _apply_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
-
-    def _revoke_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
-
-    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
-        schema_identifier = table.args.get("db") or normalize_identifiers(
-            exp.to_identifier(self._get_current_schema(), quoted=True), dialect=self.dialect
-        )
-        catalog_identifier = table.args.get("catalog")
-        if not catalog_identifier:
-            current_catalog = self.get_current_catalog()
-            if not current_catalog:
-                raise SQLMeshError("Unable to determine current catalog for fetching grants")
-            catalog_identifier = normalize_identifiers(
-                exp.to_identifier(current_catalog, quoted=True), dialect=self.dialect
-            )
-        catalog_identifier.set("quoted", True)
-        table_identifier = table.args.get("this")
-
-        grant_expr = (
-            exp.select("privilege_type", "grantee")
-            .from_(
-                exp.table_(
-                    "TABLE_PRIVILEGES",
-                    db="INFORMATION_SCHEMA",
-                    catalog=catalog_identifier,
-                )
-            )
-            .where(
-                exp.and_(
-                    exp.column("table_schema").eq(exp.Literal.string(schema_identifier.this)),
-                    exp.column("table_name").eq(exp.Literal.string(table_identifier.this)),  # type: ignore
-                    exp.column("grantor").eq(exp.func("CURRENT_ROLE")),
-                    exp.column("grantee").neq(exp.func("CURRENT_ROLE")),
-                )
-            )
-        )
-
-        results = self.fetchall(grant_expr)
-
-        grants_dict: GrantsConfig = {}
-        for privilege_raw, grantee_raw in results:
-            if privilege_raw is None or grantee_raw is None:
-                continue
-
-            privilege = str(privilege_raw)
-            grantee = str(grantee_raw)
-            if not privilege or not grantee:
-                continue
-
-            grantees = grants_dict.setdefault(privilege, [])
-            if grantee not in grantees:
-                grantees.append(grantee)
-
-        return grants_dict
 
     def _create_catalog(self, catalog_name: exp.Identifier) -> None:
         props = exp.Properties(
@@ -652,13 +560,32 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             for row in df.rename(columns={col: col.lower() for col in df.columns}).itertuples()
         ]
 
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        # Upon execute the catalog in table expressions are properly normalized to handle the case where a user provides
+        # the default catalog in their connection config. This doesn't though update catalogs in strings like when querying
+        # the information schema. So we need to manually replace those here.
+        expression = super()._get_grant_expression(table)
+        for col_exp in expression.find_all(exp.Column):
+            if col_exp.this.name == "table_catalog":
+                and_exp = col_exp.parent
+                assert and_exp is not None, "Expected column expression to have a parent"
+                assert and_exp.expression, "Expected AND expression to have an expression"
+                normalized_catalog = self._normalize_catalog(
+                    exp.table_("placeholder", db="placeholder", catalog=and_exp.expression.this)
+                )
+                and_exp.set(
+                    "expression",
+                    exp.Literal.string(normalized_catalog.args["catalog"].alias_or_name),
+                )
+        return expression
+
     def set_current_catalog(self, catalog: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
 
     def set_current_schema(self, schema: str) -> None:
         self.execute(exp.Use(kind="SCHEMA", this=to_schema(schema)))
 
-    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+    def _normalize_catalog(self, expression: exp.Expression) -> exp.Expression:
         # note: important to use self._default_catalog instead of the self.default_catalog property
         # otherwise we get RecursionError: maximum recursion depth exceeded
         # because it calls get_current_catalog(), which executes a query, which needs the default catalog, which calls get_current_catalog()... etc
@@ -691,8 +618,12 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             # Snowflake connection config. This is because the catalog present on the model gets normalized and quoted to match
             # the source dialect, which isnt always compatible with Snowflake
             expression = expression.transform(catalog_rewriter)
+        return expression
 
-        return super()._to_sql(expression=expression, quote=quote, **kwargs)
+    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+        return super()._to_sql(
+            expression=self._normalize_catalog(expression), quote=quote, **kwargs
+        )
 
     def _create_column_comments(
         self,

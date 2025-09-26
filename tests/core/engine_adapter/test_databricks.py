@@ -128,14 +128,14 @@ def test_get_current_catalog(mocker: MockFixture, make_mocked_engine_adapter: t.
     assert to_sql_calls(adapter) == ["SELECT CURRENT_CATALOG()"]
 
 
-def test_get_current_database(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
+def test_get_current_schema(mocker: MockFixture, make_mocked_engine_adapter: t.Callable):
     mocker.patch(
         "sqlmesh.core.engine_adapter.databricks.DatabricksEngineAdapter.set_current_catalog"
     )
     adapter = make_mocked_engine_adapter(DatabricksEngineAdapter, default_catalog="test_catalog")
     adapter.cursor.fetchone.return_value = ("test_database",)
 
-    assert adapter.get_current_database() == "test_database"
+    assert adapter._get_current_schema() == "test_database"
     assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]
 
 
@@ -260,7 +260,7 @@ def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocke
     executed_query = fetchall_mock.call_args[0][0]
     executed_sql = executed_query.sql(dialect="databricks")
     expected_sql = (
-        "SELECT privilege_type, grantee FROM test_db.information_schema.table_privileges "
+        "SELECT privilege_type, grantee FROM `test_db`.information_schema.table_privileges "
         "WHERE table_catalog = 'test_db' AND table_schema = 'test_schema' AND table_name = 'test_table' "
         "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
     )
@@ -291,7 +291,7 @@ def test_sync_grants_config_no_catalog_or_schema(
         ("REFRESH", "stale"),
     ]
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
-    mocker.patch.object(adapter, "get_current_database", return_value="schema")
+    mocker.patch.object(adapter, "_get_current_schema", return_value="schema")
     mocker.patch.object(adapter, "get_current_catalog", return_value="main_catalog")
 
     adapter.sync_grants_config(relation, new_grants_config)
@@ -300,7 +300,7 @@ def test_sync_grants_config_no_catalog_or_schema(
     executed_query = fetchall_mock.call_args[0][0]
     executed_sql = executed_query.sql(dialect="databricks")
     expected_sql = (
-        "SELECT privilege_type, grantee FROM main_catalog.information_schema.table_privileges "
+        "SELECT privilege_type, grantee FROM `main_catalog`.information_schema.table_privileges "
         "WHERE table_catalog = 'main_catalog' AND table_schema = 'schema' AND table_name = 'test_table' "
         "AND grantor = CURRENT_USER() AND grantee <> CURRENT_USER() AND inherited_from = 'NONE'"
     )

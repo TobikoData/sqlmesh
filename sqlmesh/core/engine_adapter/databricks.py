@@ -7,6 +7,7 @@ from functools import partial
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.mixins import GrantsFromInfoSchemaMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -24,18 +25,19 @@ if t.TYPE_CHECKING:
     import pandas as pd
 
     from sqlmesh.core._typing import SchemaName, TableName, SessionProperties
-    from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query, GrantsConfig, DCL
+    from sqlmesh.core.engine_adapter._typing import DF, PySparkSession, Query
 
 logger = logging.getLogger(__name__)
 
 
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_GRANTS = True
+    USE_CATALOG_IN_GRANTS = True
     SCHEMA_DIFFER_KWARGS = {
         "support_positional_add": True,
         "nested_support": NestedSupport.ALL,
@@ -159,100 +161,19 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             return "MATERIALIZED VIEW"
         return "TABLE"
 
-    def _dcl_grants_config_expr(
-        self,
-        dcl_cmd: t.Type[DCL],
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        expressions: t.List[exp.Expression] = []
-        if not grant_config:
-            return expressions
-
-        object_kind = self._grant_object_kind(table_type)
-        for privilege, principals in grant_config.items():
-            for principal in principals:
-                args: t.Dict[str, t.Any] = {
-                    "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
-                    "securable": table.copy(),
-                    "principals": [exp.to_identifier(principal.lower())],
-                }
-
-                if object_kind:
-                    args["kind"] = exp.Var(this=object_kind)
-
-                expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
-
-        return expressions
-
-    def _apply_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
-
-    def _revoke_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
-
-    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
-        if schema_identifier := table.args.get("db"):
-            schema_name = schema_identifier.this
-        else:
-            schema_name = self.get_current_database()
-        if catalog_identifier := table.args.get("catalog"):
-            catalog_name = catalog_identifier.this
-        else:
-            catalog_name = self.get_current_catalog()
-        table_name = table.args.get("this").this  # type: ignore
-
-        grant_expr = (
-            exp.select("privilege_type", "grantee")
-            .from_(
-                exp.table_(
-                    "table_privileges",
-                    db="information_schema",
-                    catalog=catalog_name,
-                )
-            )
-            .where(
-                exp.and_(
-                    exp.column("table_catalog").eq(exp.Literal.string(catalog_name.lower())),
-                    exp.column("table_schema").eq(exp.Literal.string(schema_name.lower())),
-                    exp.column("table_name").eq(exp.Literal.string(table_name.lower())),
-                    exp.column("grantor").eq(exp.func("current_user")),
-                    exp.column("grantee").neq(exp.func("current_user")),
-                    # We only care about explicitly granted privileges and not inherited ones
-                    # if this is removed you would see grants inherited from the catalog get returned
-                    exp.column("inherited_from").eq(exp.Literal.string("NONE")),
-                )
-            )
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        # We only care about explicitly granted privileges and not inherited ones
+        # if this is removed you would see grants inherited from the catalog get returned
+        expression = super()._get_grant_expression(table)
+        expression.args["where"].set(
+            "this",
+            exp.and_(
+                expression.args["where"].this,
+                exp.column("inherited_from").eq(exp.Literal.string("NONE")),
+                wrap=False,
+            ),
         )
-
-        results = self.fetchall(grant_expr)
-
-        grants_dict: GrantsConfig = {}
-        for privilege_raw, grantee_raw in results:
-            if privilege_raw is None or grantee_raw is None:
-                continue
-
-            privilege = str(privilege_raw)
-            grantee = str(grantee_raw)
-            if not privilege or not grantee:
-                continue
-
-            grantees = grants_dict.setdefault(privilege, [])
-            if grantee not in grantees:
-                grantees.append(grantee)
-
-        return grants_dict
+        return expression
 
     def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""
