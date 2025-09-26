@@ -111,7 +111,7 @@ class TestConfig(GeneralConfig):
 
     @property
     def canonical_name(self) -> str:
-        return f"{self.package_name}.{self.name}" if self.package_name else self.name
+        return f"{self.package_name}.{self.name}".lower() if self.package_name else self.name
 
     @property
     def is_standalone(self) -> bool:
