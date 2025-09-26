@@ -1023,8 +1023,41 @@ def test_target_jinja(sushi_test_project: Project):
         user="user",
         password="password",
         warehouse="warehouse",
+        role="role",
+        threads=1,
     )
+    assert context.render("{{ target.threads }}") == "1"
+    assert context.render("{{ target.database }}") == "test"
     assert context.render("{{ target.warehouse }}") == "warehouse"
+    assert context.render("{{ target.user }}") == "user"
+    assert context.render("{{ target.role }}") == "role"
+    assert context.render("{{ target.account }}") == "account"
+
+    context = DbtContext()
+    context._target = PostgresConfig(
+        name="target",
+        schema="test",
+        database="test",
+        dbname="test",
+        host="host",
+        port=5432,
+        user="user",
+        password="password",
+    )
+    assert context.render("{{ target.dbname }}") == "test"
+    assert context.render("{{ target.host }}") == "host"
+    assert context.render("{{ target.port }}") == "5432"
+
+    context = DbtContext()
+    context._target = BigQueryConfig(
+        name="target",
+        schema="test",
+        database="test",
+        project="project",
+        dataset="dataset",
+    )
+    assert context.render("{{ target.project }}") == "project"
+    assert context.render("{{ target.dataset }}") == "dataset"
 
 
 @pytest.mark.xdist_group("dbt_manifest")
@@ -1965,8 +1998,9 @@ def test_snapshot_json_payload():
     assert snapshot_json["node"]["jinja_macros"]["global_objs"]["target"] == {
         "type": "duckdb",
         "name": "in_memory",
-        "schema": "sushi",
         "database": "memory",
+        "schema": "sushi",
+        "threads": 1,
         "target_name": "in_memory",
     }
 
