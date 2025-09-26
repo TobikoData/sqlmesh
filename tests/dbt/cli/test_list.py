@@ -79,3 +79,26 @@ def test_list_with_vars(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Re
 │   └── depends_on: jaffle_shop.customers"""
         in result.output
     )
+
+
+def test_list_models_mutually_exclusive(
+    jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]
+):
+    result = invoke_cli(["list", "--select", "foo", "--models", "bar"])
+    assert result.exit_code != 0
+    assert '"models" and "select" are mutually exclusive arguments' in result.output
+
+    result = invoke_cli(["list", "--resource-type", "test", "--models", "bar"])
+    assert result.exit_code != 0
+    assert '"models" and "resource_type" are mutually exclusive arguments' in result.output
+
+
+def test_list_models(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
+    result = invoke_cli(["list", "--models", "jaffle_shop"])
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert "─ jaffle_shop.customers" in result.output
+    assert (
+        "─ jaffle_shop.raw_customers" not in result.output
+    )  # should be excluded because dbt --models excludes seeds

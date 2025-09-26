@@ -269,3 +269,61 @@ def test_selection_and_exclusion_by_dbt_names(
     assert sqlmesh_selector
 
     assert selector.expand_model_selections([sqlmesh_selector]) == expected
+
+
+@pytest.mark.parametrize(
+    "input_args,expected",
+    [
+        (
+            dict(select=["jaffle_shop"], models=["jaffle_shop"]),
+            '"models" and "select" are mutually exclusive',
+        ),
+        (
+            dict(models=["jaffle_shop"], resource_type="test"),
+            '"models" and "resource_type" are mutually exclusive',
+        ),
+        (
+            dict(select=["jaffle_shop"], resource_type="test"),
+            (["resource_type:test,jaffle_shop"], []),
+        ),
+        (dict(resource_type="model"), (["resource_type:model"], [])),
+        (dict(models=["stg_customers"]), (["resource_type:model,stg_customers"], [])),
+        (
+            dict(models=["stg_customers"], exclude=["orders"]),
+            (["resource_type:model,stg_customers"], ["orders"]),
+        ),
+    ],
+)
+def test_consolidate(input_args: t.Dict[str, t.Any], expected: t.Union[t.Tuple[str, str], str]):
+    all_input_args: t.Dict[str, t.Any] = dict(select=[], exclude=[], models=[], resource_type=None)
+
+    all_input_args.update(input_args)
+
+    def _do_assert():
+        assert selectors.consolidate(**all_input_args) == expected
+
+    if isinstance(expected, str):
+        with pytest.raises(ValueError, match=expected):
+            _do_assert()
+    else:
+        _do_assert()
+
+
+def test_models_by_dbt_names(jaffle_shop_duckdb_context: Context):
+    ctx = jaffle_shop_duckdb_context
+
+    selector = ctx._new_selector()
+    assert isinstance(selector, DbtSelector)
+
+    selector_expr = selectors.to_sqlmesh(
+        *selectors.consolidate(select=[], exclude=[], models=["jaffle_shop"], resource_type=None)
+    )
+    assert selector_expr
+
+    assert selector.expand_model_selections([selector_expr]) == {
+        '"jaffle_shop"."main"."customers"',
+        '"jaffle_shop"."main"."orders"',
+        '"jaffle_shop"."main"."stg_customers"',
+        '"jaffle_shop"."main"."stg_orders"',
+        '"jaffle_shop"."main"."stg_payments"',
+    }
