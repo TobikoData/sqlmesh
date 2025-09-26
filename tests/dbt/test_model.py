@@ -842,3 +842,14 @@ def test_jinja_config_no_query(create_empty_project):
 
     # loads without error and contains empty query (which will error at runtime)
     assert not context.snapshots['"local"."main"."comment_config_model"'].model.render_query()
+
+
+@pytest.mark.slow
+def test_load_custom_materialisations(sushi_test_dbt_context: Context) -> None:
+    context = sushi_test_dbt_context
+    assert context.get_model("sushi.custom_incremental_model")
+    assert context.get_model("sushi.custom_incremental_with_filter")
+
+    context.load()
+    assert context.get_model("sushi.custom_incremental_model")
+    assert context.get_model("sushi.custom_incremental_with_filter")
