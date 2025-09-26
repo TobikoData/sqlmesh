@@ -748,8 +748,10 @@ class SnapshotEvaluator:
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**render_statements_kwargs)),
         ):
-            if not snapshot.is_dbt_custom:
-                adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+            evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+            evaluation_strategy.run_pre_statements(
+                snapshot=snapshot, render_kwargs=render_statements_kwargs
+            )
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
                 # Only create the empty table if the columns were provided explicitly by the user
@@ -819,8 +821,9 @@ class SnapshotEvaluator:
                 batch_index=batch_index,
             )
 
-            if not snapshot.is_dbt_custom:
-                adapter.execute(model.render_post_statements(**render_statements_kwargs))
+            evaluation_strategy.run_post_statements(
+                snapshot=snapshot, render_kwargs=render_statements_kwargs
+            )
 
             return wap_id
 
@@ -1435,8 +1438,10 @@ class SnapshotEvaluator:
             **create_render_kwargs,
             "table_mapping": {snapshot.name: table_name},
         }
-        if run_pre_post_statements and not snapshot.is_dbt_custom:
-            adapter.execute(snapshot.model.render_pre_statements(**create_render_kwargs))
+        if run_pre_post_statements:
+            evaluation_strategy.run_pre_statements(
+                snapshot=snapshot, render_kwargs=create_render_kwargs
+            )
         evaluation_strategy.create(
             table_name=table_name,
             model=snapshot.model,
@@ -1447,8 +1452,10 @@ class SnapshotEvaluator:
             dry_run=dry_run,
             physical_properties=rendered_physical_properties,
         )
-        if run_pre_post_statements and not snapshot.is_dbt_custom:
-            adapter.execute(snapshot.model.render_post_statements(**create_render_kwargs))
+        if run_pre_post_statements:
+            evaluation_strategy.run_post_statements(
+                snapshot=snapshot, render_kwargs=create_render_kwargs
+            )
 
     def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
         adapter = self.get_adapter(snapshot.model.gateway)
@@ -1548,7 +1555,7 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         if hasattr(snapshot, "model") and isinstance(
             (model_kind := snapshot.model.kind), DbtCustomKind
         ):
-            return DbtCustomMaterialization(
+            return DbtCustomMaterializationStrategy(
                 adapter=adapter,
                 materialization_name=model_kind.materialization,
                 materialization_template=model_kind.definition,
@@ -1696,6 +1703,24 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view in the virtual layer.
         """
 
+    @abc.abstractmethod
+    def run_pre_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        """Executes the snapshot's pre statements.
+
+        Args:
+            snapshot: The target snapshot.
+            render_kwargs: Additional key-value arguments to pass when rendering the statements.
+        """
+
+    @abc.abstractmethod
+    def run_post_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        """Executes the snapshot's post statements.
+
+        Args:
+            snapshot: The target snapshot.
+            render_kwargs: Additional key-value arguments to pass when rendering the statements.
+        """
+
 
 class SymbolicStrategy(EvaluationStrategy):
     def insert(
@@ -1757,6 +1782,12 @@ class SymbolicStrategy(EvaluationStrategy):
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         pass
 
+    def run_pre_statements(self, snapshot: Snapshot, render_kwargs: t.Dict[str, t.Any]) -> None:
+        pass
+
+    def run_post_statements(self, snapshot: Snapshot, render_kwargs: t.Dict[str, t.Any]) -> None:
+        pass
+
 
 class EmbeddedStrategy(SymbolicStrategy):
     def promote(
@@ -1803,6 +1834,12 @@ class PromotableStrategy(EvaluationStrategy, abc.ABC):
     def demote(self, view_name: str, **kwargs: t.Any) -> None:
         logger.info("Dropping view '%s'", view_name)
         self.adapter.drop_view(view_name, cascade=False)
+
+    def run_pre_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
+
+    def run_post_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
 
 class MaterializableStrategy(PromotableStrategy, abc.ABC):
@@ -2610,7 +2647,7 @@ def get_custom_materialization_type_or_raise(
     raise SQLMeshError(f"Custom materialization '{name}' not present in the Python environment")
 
 
-class DbtCustomMaterialization(MaterializableStrategy):
+class DbtCustomMaterializationStrategy(MaterializableStrategy):
     def __init__(
         self,
         adapter: EngineAdapter,
@@ -2674,6 +2711,14 @@ class DbtCustomMaterialization(MaterializableStrategy):
             render_kwargs=render_kwargs,
             **kwargs,
         )
+
+    def run_pre_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        # in dbt custom materialisations it's up to the user when to run the pre hooks
+        pass
+
+    def run_post_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
+        # in dbt custom materialisations it's up to the user when to run the post hooks
+        pass
 
     def _execute_materialization(
         self,
