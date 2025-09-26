@@ -224,7 +224,7 @@ def test_replace_query_self_ref_not_exists(
         lambda self: "spark_catalog",
     )
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._get_current_schema",
         side_effect=lambda: "default",
     )
 
@@ -283,7 +283,7 @@ def test_replace_query_self_ref_exists(
         return_value="spark_catalog",
     )
     mocker.patch(
-        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.get_current_database",
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._get_current_schema",
         return_value="default",
     )
 

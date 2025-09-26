@@ -191,7 +191,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
             for row in df.itertuples()
         ]
 
-    def get_current_schema(self) -> str:
+    def _get_current_schema(self) -> str:
         """Returns the current default schema for the connection."""
         result = self.fetchone(exp.select(self.CURRENT_SCHEMA_EXPRESSION))
         if result and result[0]:

@@ -202,10 +202,10 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
 
-    assert 'GRANT SELECT ON "test_schema"."test_table" TO user1, user2' in sql_calls
-    assert 'GRANT INSERT ON "test_schema"."test_table" TO user3' in sql_calls
-    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM old_user' in sql_calls
-    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM admin_user' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user3"' in sql_calls
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "old_user"' in sql_calls
+    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM "admin_user"' in sql_calls
 
 
 def test_sync_grants_config_with_overlaps(
@@ -238,10 +238,10 @@ def test_sync_grants_config_with_overlaps(
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
 
-    assert 'GRANT SELECT ON "test_schema"."test_table" TO user2, user3' in sql_calls
-    assert 'GRANT INSERT ON "test_schema"."test_table" TO user4' in sql_calls
-    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM user5' in sql_calls
-    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM user3' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user2", "user3"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user4"' in sql_calls
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "user5"' in sql_calls
+    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM "user3"' in sql_calls
 
 
 def test_diff_grants_configs(make_mocked_engine_adapter: t.Callable):
@@ -267,7 +267,7 @@ def test_sync_grants_config_with_default_schema(
 
     currrent_grants = [("UPDATE", "old_user")]
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=currrent_grants)
-    get_schema_mock = mocker.patch.object(adapter, "get_current_schema", return_value="public")
+    get_schema_mock = mocker.patch.object(adapter, "_get_current_schema", return_value="public")
 
     adapter.sync_grants_config(relation, new_grants_config)
 
