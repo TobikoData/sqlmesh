@@ -398,10 +398,6 @@ importers:
         version: 1.13.2
 
   web/common:
-    dependencies:
-      cronstrue:
-        specifier: 3.3.0
-        version: 3.3.0
     devDependencies:
       '@eslint/js':
         specifier: 9.31.0
@@ -466,6 +462,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      cronstrue:
+        specifier: ^3.3.0
+        version: 3.3.0
       dagre:
         specifier: 0.8.5
         version: 0.8.5
