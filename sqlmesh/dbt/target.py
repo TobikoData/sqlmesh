@@ -45,11 +45,24 @@ IncrementalKind = t.Union[
 
 # We only serialize a subset of fields in order to avoid persisting sensitive information
 SERIALIZABLE_FIELDS = {
-    "type",
+    # core
     "name",
-    "database",
     "schema_",
+    "type",
+    "threads",
+    # snowflake
+    "database",
     "warehouse",
+    "user",
+    "role",
+    "account",
+    # postgres/redshift
+    "dbname",
+    "host",
+    "port",
+    # bigquery
+    "project",
+    "dataset",
 }
 
 SCHEMA_DIFFER_OVERRIDES = {
