@@ -1298,15 +1298,24 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     def _session_id(self, value: t.Any) -> None:
         self._connection_pool.set_attribute("session_id", value)
 
+    def _get_bq_dataset_location(self, project: str, dataset: str) -> str:
+        return self._db_call(self.client.get_dataset, dataset_ref=f"{project}.{dataset}").location
+
     def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
         """Returns current grants for a BigQuery table as a dictionary."""
-        dataset = table.db or self.get_current_catalog()
-        table_name = table.name
-        project = self.get_current_catalog()
-        location = self.client.location
+        if not table.db:
+            raise ValueError(
+                f"Table {table.sql(dialect=self.dialect)} does not have a schema (dataset)"
+            )
+        project = table.catalog or self.get_current_catalog()
+        if not project:
+            raise ValueError(
+                f"Table {table.sql(dialect=self.dialect)} does not have a catalog (project)"
+            )
 
-        if not location:
-            raise ValueError("BigQuery client location not set")
+        dataset = table.db
+        table_name = table.name
+        location = self._get_bq_dataset_location(project, dataset)
 
         # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
         # OBJECT_PRIVILEGES is a project-level INFORMATION_SCHEMA view with regional qualifier
@@ -1360,6 +1369,8 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         expressions: t.List[exp.Expression] = []
         if not grant_config:
             return expressions
+
+        # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
 
         def normalize_principal(p: str) -> str:
             if ":" not in p:

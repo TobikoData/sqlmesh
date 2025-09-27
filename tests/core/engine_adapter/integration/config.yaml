@@ -156,7 +156,6 @@ gateways:
       type: bigquery
       method: service-account
       keyfile: {{ env_var('BIGQUERY_KEYFILE') }}
-      location: us
       check_import: false
     state_connection:
       type: duckdb
