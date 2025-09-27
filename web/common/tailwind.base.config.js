@@ -1,5 +1,9 @@
-/** @type {import('tailwindcss').Config} */
-module.exports = {
+import lineageConfig from './tailwind.lineage.config'
+import typography from '@tailwindcss/typography'
+import scrollbar from 'tailwind-scrollbar'
+
+export default {
+  presets: [lineageConfig],
   theme: {
     colors: {},
     extend: {
@@ -148,8 +152,8 @@ module.exports = {
     },
   },
   plugins: [
-    require('@tailwindcss/typography'),
-    require('tailwind-scrollbar')({
+    typography,
+    scrollbar({
       nocompatible: true,
       preferredStrategy: 'pseudoelements',
     }),
