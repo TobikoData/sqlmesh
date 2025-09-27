@@ -218,6 +218,7 @@ class DbtLoader(Loader):
                 context.add_sources(package.sources)
                 context.add_seeds(package.seeds)
                 context.add_models(package.models)
+                context.add_dispatch(package.dispatch, package_name)
                 macros_mtimes.extend(
                     [
                         self._path_mtimes[m.path]

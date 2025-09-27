@@ -50,6 +50,7 @@ class Package(PydanticModel):
     on_run_start: t.Dict[str, HookConfig]
     on_run_end: t.Dict[str, HookConfig]
     files: t.Set[Path]
+    dispatch: t.List[t.Dict[str, t.Any]]
 
     @property
     def macro_infos(self) -> t.Dict[str, MacroInfo]:
@@ -90,6 +91,8 @@ class PackageLoader:
             var: value for var, value in all_variables.items() if not isinstance(value, dict)
         }
 
+        dispatch = project_yaml.get("dispatch") or []
+
         tests = _fix_paths(self._context.manifest.tests(package_name), package_root)
         models = _fix_paths(self._context.manifest.models(package_name), package_root)
         seeds = _fix_paths(self._context.manifest.seeds(package_name), package_root)
@@ -113,6 +116,7 @@ class PackageLoader:
             sources=sources,
             seeds=seeds,
             variables=package_variables,
+            dispatch=dispatch,
             macros=macros,
             files=config_paths,
             on_run_start=on_run_start,
