@@ -1234,6 +1234,10 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     mocker.patch.object(adapter, "get_current_catalog", return_value="project")
     mocker.patch.object(adapter.client, "location", "us-central1")
 
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
     adapter.sync_grants_config(relation, new_grants_config)
 
     fetchall_mock.assert_called_once()
@@ -1291,6 +1295,10 @@ def test_sync_grants_config_with_overlaps(
     mocker.patch.object(adapter, "get_current_catalog", return_value="project")
     mocker.patch.object(adapter.client, "location", "us-central1")
 
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
     adapter.sync_grants_config(relation, new_grants_config)
 
     fetchall_mock.assert_called_once()
@@ -1345,6 +1353,10 @@ def test_sync_grants_config_object_kind(
     mocker.patch.object(adapter, "get_current_catalog", return_value="project")
     mocker.patch.object(adapter.client, "location", "us-central1")
 
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
     adapter.sync_grants_config(
         relation, {"roles/bigquery.dataViewer": ["user:test@example.com"]}, table_type
     )
@@ -1366,38 +1378,5 @@ def test_sync_grants_config_no_schema(
         "roles/bigquery.dataEditor": ["user:editor@example.com"],
     }
 
-    current_grants = [("roles/bigquery.admin", "user:old_admin@example.com")]
-    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
-    execute_mock = mocker.patch.object(adapter, "execute")
-    get_current_catalog_mock = mocker.patch.object(
-        adapter, "get_current_catalog", return_value="project"
-    )
-    mocker.patch.object(adapter.client, "location", "us-central1")
-
-    adapter.sync_grants_config(relation, new_grants_config)
-
-    assert get_current_catalog_mock.call_count == 2
-
-    executed_query = fetchall_mock.call_args[0][0]
-    executed_sql = executed_query.sql(dialect="bigquery")
-    expected_sql = (
-        "SELECT privilege_type, grantee FROM `project`.`region-us-central1`.`INFORMATION_SCHEMA.OBJECT_PRIVILEGES` AS OBJECT_PRIVILEGES "
-        "WHERE object_schema = 'project' AND object_name = 'test_table' AND SPLIT(grantee, ':')[OFFSET(1)] <> session_user()"
-    )
-    assert executed_sql == expected_sql
-
-    sql_calls = _to_sql_calls(execute_mock)
-
-    assert len(sql_calls) == 3
-    assert (
-        "REVOKE `roles/bigquery.admin` ON TABLE `test_table` FROM 'user:old_admin@example.com'"
-        in sql_calls
-    )
-    assert (
-        "GRANT `roles/bigquery.dataViewer` ON TABLE `test_table` TO 'user:analyst@example.com'"
-        in sql_calls
-    )
-    assert (
-        "GRANT `roles/bigquery.dataEditor` ON TABLE `test_table` TO 'user:editor@example.com'"
-        in sql_calls
-    )
+    with pytest.raises(ValueError, match="Table test_table does not have a schema \\(dataset\\)"):
+        adapter.sync_grants_config(relation, new_grants_config)

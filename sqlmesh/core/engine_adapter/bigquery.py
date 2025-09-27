@@ -764,6 +764,14 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         """
         return self._db_call(self.client.get_table, table=self._table_name(table_name))
 
+    def _get_table_location(self, table: exp.Table) -> str:
+        project = table.catalog or self.get_current_catalog()
+        schema = table.db
+        dataset_ref = f"{project}.{schema}"
+        # TODO: Cache this
+        dataset = self._db_call(self.client.get_dataset, dataset_ref=dataset_ref)
+        return dataset.location
+
     def _table_name(self, table_name: TableName) -> str:
         # the api doesn't support backticks, so we can't call exp.table_name or sql
         return ".".join(part.name for part in exp.to_table(table_name).parts)
@@ -1300,13 +1308,14 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
 
     def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
         """Returns current grants for a BigQuery table as a dictionary."""
-        dataset = table.db or self.get_current_catalog()
+        if not table.db:
+            raise ValueError(
+                f"Table {table.sql(dialect=self.dialect)} does not have a schema (dataset)"
+            )
+        schema = table.db
         table_name = table.name
         project = self.get_current_catalog()
-        location = self.client.location
-
-        if not location:
-            raise ValueError("BigQuery client location not set")
+        location = self._get_table_location(table)
 
         # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
         # OBJECT_PRIVILEGES is a project-level INFORMATION_SCHEMA view with regional qualifier
@@ -1319,7 +1328,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
             .from_(object_privileges_table)
             .where(
                 exp.and_(
-                    exp.column("object_schema").eq(exp.Literal.string(dataset)),
+                    exp.column("object_schema").eq(exp.Literal.string(schema)),
                     exp.column("object_name").eq(exp.Literal.string(table_name)),
                     # Filter out current_user
                     # BigQuery grantees format: "user:email" or "group:name"
@@ -1360,6 +1369,8 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         expressions: t.List[exp.Expression] = []
         if not grant_config:
             return expressions
+
+        # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
 
         def normalize_principal(p: str) -> str:
             if ":" not in p:
