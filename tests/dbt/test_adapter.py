@@ -242,7 +242,11 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
     assert renderer("{{ adapter.dispatch('current_engine', 'customers')() }}") == "duckdb"
     assert renderer("{{ adapter.dispatch('current_timestamp')() }}") == "now()"
     assert renderer("{{ adapter.dispatch('current_timestamp', 'dbt')() }}") == "now()"
-    assert renderer("{{ adapter.dispatch('select_distinct', 'customers')() }}") == "distinct"
+
+    # Macros in root project overrides macros in dependent packages
+    assert (
+        renderer("{{ adapter.dispatch('hello_world', 'my_helpers')() }}") == "hello from sushi_test"
+    )
 
     # test with keyword arguments
     assert (
@@ -274,6 +278,14 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
         renderer("{{ adapter.dispatch('current_engine')() }}")
+
+
+@pytest.mark.slow
+def test_adapter_dispatch_search_order(sushi_test_project: Project, runtime_renderer: t.Callable):
+    context = sushi_test_project.context
+    renderer = runtime_renderer(context)
+    assert renderer("{{ adapter.dispatch('current_package', 'my_helpers')() }}") == "my_helpers"
+    assert renderer("{{ adapter.dispatch('current_package', 'customers')() }}") == "my_helpers"
 
 
 @pytest.mark.parametrize("project_dialect", ["duckdb", "bigquery"])

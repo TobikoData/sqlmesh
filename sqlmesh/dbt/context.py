@@ -54,6 +54,7 @@ class DbtContext:
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = field(default_factory=dict)
+    _dispatch: t.Dict[str, t.List[t.Dict[str, t.Any]]] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
 
@@ -134,6 +135,14 @@ class DbtContext:
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: str) -> None:
         self.jinja_macros.add_macros(macros, package=package)
+        self._jinja_environment = None
+
+    @property
+    def dispatch(self) -> t.Dict[str, t.List[t.Dict[str, t.Any]]]:
+        return self._dispatch
+
+    def add_dispatch(self, dispatch: t.List[t.Dict[str, t.Any]], package: str) -> None:
+        self._dispatch[package] = dispatch
         self._jinja_environment = None
 
     @property
@@ -249,6 +258,8 @@ class DbtContext:
         # Pass flat graph structure like dbt
         if self._manifest is not None:
             output["flat_graph"] = AttributeDict(self.manifest.flat_graph)
+        if self._dispatch is not None:
+            output["dispatch"] = AttributeDict(self._dispatch)
         return output
 
     def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:

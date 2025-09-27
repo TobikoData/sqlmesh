@@ -122,48 +122,30 @@ class BaseAdapter(abc.ABC):
     ) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
         target_type = self.jinja_globals["target"]["type"]
-        macro_suffix = f"__{macro_name}"
-
-        def _relevance(package_name_pair: t.Tuple[t.Optional[str], str]) -> t.Tuple[int, int]:
-            """Lower scores more relevant."""
-            macro_package, name = package_name_pair
-
-            package_score = 0 if macro_package == macro_namespace else 1
-            name_score = 1
-
-            if name.startswith("default"):
-                name_score = 2
-            elif name.startswith(target_type):
-                name_score = 0
-
-            return name_score, package_score
 
         jinja_env = self.jinja_macros.build_environment(**self.jinja_globals).globals
 
         packages_to_check: t.List[t.Optional[str]] = [None]
         if macro_namespace is not None:
-            if macro_namespace in jinja_env:
+            if dispatch := self.jinja_globals.get("dispatch"):
+                for entry in dispatch.get(self.jinja_macros.root_package_name, []):
+                    if entry.get("macro_namespace") == macro_namespace:
+                        packages_to_check = entry.get("search_order")
+                        break
+            if packages_to_check == [None] and macro_namespace in jinja_env:
                 packages_to_check = [self.jinja_macros.root_package_name, macro_namespace]
 
         # Add dbt packages as fallback
         packages_to_check.extend(k for k in jinja_env if k.startswith("dbt"))
 
-        candidates = {}
         for macro_package in packages_to_check:
             macros = jinja_env.get(macro_package, {}) if macro_package else jinja_env
             if not isinstance(macros, dict):
                 continue
-            candidates.update(
-                {
-                    (macro_package, macro_name): macro_callable
-                    for macro_name, macro_callable in macros.items()
-                    if macro_name.endswith(macro_suffix)
-                }
-            )
 
-        if candidates:
-            sorted_candidates = sorted(candidates, key=_relevance)
-            return candidates[sorted_candidates[0]]
+            for prefix in (f"{target_type}__", "default__", ""):
+                if macro := macros.get(f"{prefix}{macro_name}"):
+                    return macro
 
         raise ConfigError(f"Macro '{macro_name}', package '{macro_namespace}' was not found.")
 
