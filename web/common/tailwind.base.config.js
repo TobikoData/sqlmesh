@@ -76,6 +76,12 @@ export default {
           background: 'var(--color-badge-background)',
           foreground: 'var(--color-badge-foreground)',
         },
+        'filterable-list': {
+          counter: {
+            background: 'var(--color-filterable-list-counter-background)',
+            foreground: 'var(--color-filterable-list-counter-foreground)',
+          },
+        },
         input: {
           'background-lucid': 'var(--color-input-background-lucid)',
           background: 'var(--color-input-background)',
