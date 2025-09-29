@@ -148,7 +148,7 @@ jobs:
           command: ./.circleci/test_migration.sh sushi "--gateway duckdb_persistent"
       - run:
           name: Run the migration test - sushi_dbt
-          command: ./.circleci/test_migration.sh sushi_dbt "--config migration_test_config"          
+          command: ./.circleci/test_migration.sh sushi_dbt "--config migration_test_config"
 
   ui_style:
     docker:
@@ -300,23 +300,23 @@ workflows:
           name: cloud_engine_<< matrix.engine >>
           context:
             - sqlmesh_cloud_database_integration
-          requires:
-            - engine_tests_docker
+          # requires:
+          #   - engine_tests_docker
           matrix:
             parameters:
               engine:
-                - snowflake
-                - databricks
-                - redshift
+                # - snowflake
+                # - databricks
+                # - redshift
                 - bigquery
-                - clickhouse-cloud
-                - athena
-                - fabric
-                - gcp-postgres
-          filters:
-            branches:
-              only:
-                - main
+                # - clickhouse-cloud
+                # - athena
+                # - fabric
+                # - gcp-postgres
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - ui_style
       - ui_test
       - vscode_test

@@ -1824,19 +1824,29 @@ class EvaluationStrategy(abc.ABC):
             return
 
         model_grants_target_layer = model.grants_target_layer
+        deployable_vde_dev_only = (
+            is_snapshot_deployable and model.virtual_environment_mode.is_dev_only
+        )
+
+        # table_type is always a VIEW in the virtual layer unless model is deployable and VDE is dev_only
+        # in which case we fall back to the model's model_grants_table_type
+        if target_layer == GrantsTargetLayer.VIRTUAL and not deployable_vde_dev_only:
+            model_grants_table_type = DataObjectType.VIEW
+        else:
+            model_grants_table_type = model.grants_table_type
 
         if (
             model_grants_target_layer.is_all
             or model_grants_target_layer == target_layer
             # Always apply grants in production when VDE is dev_only regardless of target_layer
             # since only physical tables are created in production
-            or (is_snapshot_deployable and model.virtual_environment_mode.is_dev_only)
+            or deployable_vde_dev_only
         ):
             logger.info(f"Applying grants for model {model.name} to table {table_name}")
             self.adapter.sync_grants_config(
                 exp.to_table(table_name, dialect=self.adapter.dialect),
                 grants_config,
-                model.grants_table_type,
+                model_grants_table_type,
             )
         else:
             logger.debug(
