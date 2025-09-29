@@ -37,7 +37,7 @@ def test_custom_materialization_manifest_loading():
     assert custom_incremental.name == "custom_incremental"
     assert custom_incremental.adapter == "default"
     assert "make_temp_relation(new_relation)" in custom_incremental.definition
-    assert "run_hooks(pre_hooks, inside_transaction=False)" in custom_incremental.definition
+    assert "run_hooks(pre_hooks)" in custom_incremental.definition
     assert " {{ return({'relations': [new_relation]}) }}" in custom_incremental.definition
 
 

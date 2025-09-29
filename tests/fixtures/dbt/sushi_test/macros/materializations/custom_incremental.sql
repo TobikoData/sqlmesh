@@ -19,7 +19,7 @@
   {%- set time_column = config.get('time_column') -%}
   {%- set interval_config = config.get('interval') -%}
 
-  {{ run_hooks(pre_hooks, inside_transaction=False) }}
+  {{ run_hooks(pre_hooks) }}
 
   {%- if existing_relation is none -%}
     {# The first insert creates new table if it doesn't exist #}
@@ -55,7 +55,7 @@
     {%- endcall -%}
   {%- endif -%}
 
-  {{ run_hooks(post_hooks, inside_transaction=False) }}
+  {{ run_hooks(post_hooks) }}
 
   {{ return({'relations': [new_relation]}) }}
 {%- endmaterialization -%}

@@ -395,6 +395,12 @@ class ManifestHelper:
                 dependencies = dependencies.union(
                     self._extra_dependencies(sql, node.package_name, track_all_model_attrs=True)
                 )
+                for hook in [*node_config.get("pre-hook", []), *node_config.get("post-hook", [])]:
+                    dependencies = dependencies.union(
+                        self._extra_dependencies(
+                            hook["sql"], node.package_name, track_all_model_attrs=True
+                        )
+                    )
                 dependencies = dependencies.union(
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )

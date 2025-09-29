@@ -67,7 +67,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableCleanupTask,
 )
 from sqlmesh.core.snapshot.execution_tracker import QueryExecutionTracker
-from sqlmesh.utils import random_id, CorrelationId
+from sqlmesh.utils import random_id, CorrelationId, AttributeDict
 from sqlmesh.utils.concurrency import (
     concurrent_apply_to_snapshots,
     concurrent_apply_to_values,
@@ -2731,12 +2731,12 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         jinja_macros = model.jinja_macros
-        existing_globals = jinja_macros.global_objs.copy()
 
         # For vdes we need to use the table, since we don't know the schema/table at parse time
         parts = exp.to_table(table_name, dialect=self.adapter.dialect)
 
-        relation_info = existing_globals.pop("this")
+        existing_globals = jinja_macros.global_objs
+        relation_info = existing_globals.get("this")
         if isinstance(relation_info, dict):
             relation_info["database"] = parts.catalog
             relation_info["identifier"] = parts.name
@@ -2750,29 +2750,29 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
             "identifier": parts.name,
             "target": existing_globals.get("target", {"type": self.adapter.dialect}),
             "execution_dt": kwargs.get("execution_time"),
+            "engine_adapter": self.adapter,
+            "sql": str(query_or_df),
+            "is_first_insert": is_first_insert,
+            "create_only": create_only,
+            # FIXME: Add support for transaction=False
+            "pre_hooks": [
+                AttributeDict({"sql": s.this.this, "transaction": True})
+                for s in model.pre_statements
+            ],
+            "post_hooks": [
+                AttributeDict({"sql": s.this.this, "transaction": True})
+                for s in model.post_statements
+            ],
+            "model_instance": model,
+            **kwargs,
         }
 
-        context = jinja_macros._create_builtin_globals(
-            {"engine_adapter": self.adapter, **jinja_globals}
-        )
-
-        context.update(
-            {
-                "sql": str(query_or_df),
-                "is_first_insert": is_first_insert,
-                "create_only": create_only,
-                "pre_hooks": model.render_pre_statements(**render_kwargs),
-                "post_hooks": model.render_post_statements(**render_kwargs),
-                **kwargs,
-            }
-        )
-
         try:
-            jinja_env = jinja_macros.build_environment(**context)
+            jinja_env = jinja_macros.build_environment(**jinja_globals)
             template = jinja_env.from_string(self.materialization_template)
 
             try:
-                template.render(**context)
+                template.render()
             except MacroReturnVal as ret:
                 # this is a successful return from a macro call (dbt uses this list of Relations to update their relation cache)
                 returned_relations = ret.value.get("relations", [])
