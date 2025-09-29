@@ -30,7 +30,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
     COMMENT_CREATION_VIEW = CommentCreationView.COMMENT_COMMAND_ONLY
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["SCHEMA", "TABLE", "VIEW"]
-    CURRENT_SCHEMA_EXPRESSION = exp.func("current_schema")
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
@@ -201,7 +200,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
 
     def _get_current_schema(self) -> str:
         """Returns the current default schema for the connection."""
-        result = self.fetchone(exp.select(self.CURRENT_SCHEMA_EXPRESSION))
+        result = self.fetchone(exp.select(exp.func("current_schema")))
         if result and result[0]:
             return result[0]
         return "public"
