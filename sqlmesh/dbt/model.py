@@ -656,6 +656,9 @@ class ModelConfig(BaseModelConfig):
             # Set allow_partials to True for dbt models to preserve the original semantics.
             allow_partials = True
 
+        # pop begin for all models so we don't pass it through for non-incremental materializations
+        # (happens if model config is microbatch but project config overrides)
+        begin = model_kwargs.pop("begin", None)
         if kind.is_incremental:
             if self.batch_size and isinstance(self.batch_size, str):
                 if "interval_unit" in model_kwargs:
@@ -665,7 +668,7 @@ class ModelConfig(BaseModelConfig):
                 else:
                     model_kwargs["interval_unit"] = self.batch_size
                     self.batch_size = None
-            if begin := model_kwargs.pop("begin", None):
+            if begin:
                 if "start" in model_kwargs:
                     get_console().log_warning(
                         f"Both 'begin' and 'start' are set for model '{self.canonical_name(context)}'. 'start' will be used."
