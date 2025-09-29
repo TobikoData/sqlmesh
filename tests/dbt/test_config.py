@@ -245,6 +245,31 @@ def test_test_to_sqlmesh_fields():
     assert audit.dialect == "bigquery"
 
 
+def test_test_config_canonical_name():
+    test_config_upper_case_package = TestConfig(
+        name="foo_test",
+        package_name="TEST_PACKAGE",
+        sql="SELECT 1",
+    )
+
+    assert test_config_upper_case_package.canonical_name == "test_package.foo_test"
+
+    test_config_mixed_case_package = TestConfig(
+        name="Bar_Test",
+        package_name="MixedCase_Package",
+        sql="SELECT 1",
+    )
+
+    assert test_config_mixed_case_package.canonical_name == "mixedcase_package.bar_test"
+
+    test_config_no_package = TestConfig(
+        name="foo_bar_test",
+        sql="SELECT 1",
+    )
+
+    assert test_config_no_package.canonical_name == "foo_bar_test"
+
+
 def test_singular_test_to_standalone_audit(dbt_dummy_postgres_config: PostgresConfig):
     sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
     test_config = TestConfig(
