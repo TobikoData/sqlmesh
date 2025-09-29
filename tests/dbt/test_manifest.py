@@ -367,3 +367,83 @@ def test_macro_assignment_shadowing(create_empty_project):
     models = helper.models()
     assert "model_using_path_macro" in models
     assert "path" in models["model_using_path_macro"].dependencies.model_attrs.attrs
+
+
+def test_quoting_config(tmp_path: Path):
+    if DBT_VERSION < (1, 10, 0):
+        pytest.skip(
+            "The 'quoting' setting in dbt_projects.yml is not respected for dbt-core < v1.10"
+        )
+
+    # Create dbt_project.yml with quoting config
+    (tmp_path / "dbt_project.yml").write_text("""
+name: 'test_project'
+version: '1.0.0'
+config-version: 2
+profile: 'test_project'
+
+model-paths: ["models"]
+
+models:
+  test_project:
+    +materialized: table
+
+quoting:
+  database: true
+  schema: true
+  identifier: false
+""")
+
+    # Create profiles.yml
+    (tmp_path / "profiles.yml").write_text("""
+test_project:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ':memory:'
+""")
+
+    # Create a simple model without quoting override
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "test_model.sql").write_text("SELECT 1 as id")
+
+    # Create a model with inline quoting override
+    (models_dir / "test_model_with_override.sql").write_text("""
+{{
+  config(
+    quoting={
+      "database": false,
+      "schema": false,
+      "identifier": true
+    }
+  )
+}}
+SELECT 2 as id
+""")
+
+    profile = Profile.load(DbtContext(tmp_path))
+    helper = ManifestHelper(
+        tmp_path,
+        tmp_path,
+        "test_project",
+        profile.target,
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
+    )
+
+    models = helper.models()
+    test_model = models["test_model"]
+
+    # Model should inherit quoting from dbt_project.yml
+    assert test_model.quoting is not None
+    assert test_model.quoting["database"] is True
+    assert test_model.quoting["schema"] is True
+    assert test_model.quoting["identifier"] is False
+
+    # Model with inline override should use its own quoting settings
+    test_model_override = models["test_model_with_override"]
+    assert test_model_override.quoting is not None
+    assert test_model_override.quoting["database"] is False
+    assert test_model_override.quoting["schema"] is False
+    assert test_model_override.quoting["identifier"] is True

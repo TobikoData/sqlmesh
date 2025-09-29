@@ -556,7 +556,7 @@ def test_load_deprecated_incremental_time_column(
     assert model.kind.auto_restatement_intervals is None
     assert model.kind.partition_by_time_column is True
     assert (
-        "Using `time_column` on a model with incremental_strategy 'delete+insert' has been deprecated. Please use `incremental_by_time_range` instead in model 'main.incremental_time_range'."
+        "Using `time_column` on a model with incremental_strategy 'delete+insert' has been deprecated. Please use `incremental_by_time_range` instead in model '\"main\".\"incremental_time_range\"'."
         in caplog.text
     )
 

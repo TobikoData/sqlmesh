@@ -477,14 +477,14 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     assert actual_config == expected_config
 
     context = sushi_test_project.context
-    assert raw_items_seed.canonical_name(context) == "sushi.waiter_names"
-    assert raw_items_seed.to_sqlmesh(context).name == "sushi.waiter_names"
+    assert raw_items_seed.canonical_name(context) == '"sushi"."waiter_names"'
+    assert raw_items_seed.to_sqlmesh(context).name == '"sushi"."waiter_names"'
 
     raw_items_seed.dialect_ = "snowflake"
-    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
+    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == '"sushi"."waiter_names"'
     assert (
         raw_items_seed.to_sqlmesh(sushi_test_project.context).fqn
-        == '"MEMORY"."SUSHI"."WAITER_NAMES"'
+        == '"MEMORY"."sushi"."waiter_names"'
     )
 
     waiter_revenue_semicolon_seed = seed_configs["waiter_revenue_semicolon"]
@@ -499,9 +499,13 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     }
     assert actual_config_semicolon == expected_config_semicolon
 
-    assert waiter_revenue_semicolon_seed.canonical_name(context) == "sushi.waiter_revenue_semicolon"
     assert (
-        waiter_revenue_semicolon_seed.to_sqlmesh(context).name == "sushi.waiter_revenue_semicolon"
+        waiter_revenue_semicolon_seed.canonical_name(context)
+        == '"sushi"."waiter_revenue_semicolon"'
+    )
+    assert (
+        waiter_revenue_semicolon_seed.to_sqlmesh(context).name
+        == '"sushi"."waiter_revenue_semicolon"'
     )
     assert waiter_revenue_semicolon_seed.delimiter == ";"
     assert set(waiter_revenue_semicolon_seed.columns.keys()) == {"waiter_id", "revenue", "quarter"}

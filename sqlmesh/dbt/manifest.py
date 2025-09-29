@@ -390,6 +390,12 @@ class ManifestHelper:
             if node_version:
                 node_name = f"{node_name}_v{node_version}"
 
+            model_kwargs = node_config.copy()
+            if not model_kwargs.get("quoting") and (
+                quoting := getattr(self._manifest.metadata, "quoting", None)
+            ):
+                model_kwargs["quoting"] = quoting.to_dict()
+
             if node.resource_type in {"model", "snapshot"}:
                 sql = node.raw_code if DBT_VERSION >= (1, 3, 0) else node.raw_sql  # type: ignore
                 dependencies = Dependencies(
@@ -408,22 +414,12 @@ class ManifestHelper:
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
 
-                self._models_per_package[node.package_name][node_name] = ModelConfig(
-                    **dict(
-                        node_config,
-                        sql=sql,
-                        dependencies=dependencies,
-                        tests=tests,
-                    )
-                )
+                model_kwargs.update({"sql": sql, "dependencies": dependencies, "tests": tests})
+                self._models_per_package[node.package_name][node_name] = ModelConfig(**model_kwargs)
             else:
-                self._seeds_per_package[node.package_name][node_name] = SeedConfig(
-                    **dict(
-                        node_config,
-                        dependencies=Dependencies(macros=macro_references),
-                        tests=tests,
-                    )
-                )
+                dependencies = Dependencies(macros=macro_references)
+                model_kwargs.update({"dependencies": dependencies, "tests": tests})
+                self._seeds_per_package[node.package_name][node_name] = SeedConfig(**model_kwargs)
 
     def _load_on_run_start_end(self) -> None:
         for node in self._manifest.nodes.values():
