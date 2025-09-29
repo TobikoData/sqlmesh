@@ -265,8 +265,8 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     executed_query = fetchall_mock.call_args[0][0]
     executed_sql = executed_query.sql(dialect="snowflake")
     expected_sql = (
-        'SELECT privilege_type, grantee FROM "TEST_DB".INFORMATION_SCHEMA.TABLE_PRIVILEGES '
-        "WHERE table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
+        "SELECT privilege_type, grantee FROM TEST_DB.INFORMATION_SCHEMA.TABLE_PRIVILEGES "
+        "WHERE table_catalog = 'TEST_DB' AND table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
         "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
     )
     assert executed_sql == expected_sql
@@ -274,15 +274,15 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 5
 
-    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE role1' in sql_calls
-    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE role2' in sql_calls
-    assert 'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE role3' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "ROLE3"' in sql_calls
     assert (
-        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE old_role'
+        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "OLD_ROLE"'
         in sql_calls
     )
     assert (
-        'REVOKE UPDATE ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE legacy_role'
+        'REVOKE UPDATE ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "LEGACY_ROLE"'
         in sql_calls
     )
 
@@ -312,8 +312,8 @@ def test_sync_grants_config_with_overlaps(
     executed_query = fetchall_mock.call_args[0][0]
     executed_sql = executed_query.sql(dialect="snowflake")
     expected_sql = (
-        """SELECT privilege_type, grantee FROM "TEST_DB".INFORMATION_SCHEMA.TABLE_PRIVILEGES """
-        "WHERE table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
+        """SELECT privilege_type, grantee FROM TEST_DB.INFORMATION_SCHEMA.TABLE_PRIVILEGES """
+        "WHERE table_catalog = 'TEST_DB' AND table_schema = 'TEST_SCHEMA' AND table_name = 'TEST_TABLE' "
         "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
     )
     assert executed_sql == expected_sql
@@ -322,11 +322,14 @@ def test_sync_grants_config_with_overlaps(
     assert len(sql_calls) == 3
 
     assert (
-        'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE new_role' in sql_calls
+        'GRANT SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "NEW_ROLE"' in sql_calls
     )
-    assert 'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE writer' in sql_calls
     assert (
-        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE legacy' in sql_calls
+        'GRANT INSERT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" TO ROLE "WRITER"' in sql_calls
+    )
+    assert (
+        'REVOKE SELECT ON TABLE "TEST_DB"."TEST_SCHEMA"."TEST_TABLE" FROM ROLE "LEGACY"'
+        in sql_calls
     )
 
 
@@ -356,7 +359,7 @@ def test_sync_grants_config_object_kind(
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        f'GRANT SELECT ON {expected_keyword} "TEST_DB"."TEST_SCHEMA"."TEST_OBJECT" TO ROLE test'
+        f'GRANT SELECT ON {expected_keyword} "TEST_DB"."TEST_SCHEMA"."TEST_OBJECT" TO ROLE "TEST"'
     ]
 
 
@@ -381,7 +384,7 @@ def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocke
     executed_sql = executed_query.sql(dialect="snowflake")
     expected_sql = (
         """SELECT privilege_type, grantee FROM "test_db".INFORMATION_SCHEMA.TABLE_PRIVILEGES """
-        "WHERE table_schema = 'test_schema' AND table_name = 'test_table' "
+        "WHERE table_catalog = 'test_db' AND table_schema = 'test_schema' AND table_name = 'test_table' "
         "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
     )
     assert executed_sql == expected_sql
@@ -389,15 +392,15 @@ def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocke
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 5
 
-    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE role1' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE role2' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_db"."test_schema"."test_table" TO ROLE role3' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_db"."test_schema"."test_table" TO ROLE "ROLE3"' in sql_calls
     assert (
-        'REVOKE SELECT ON TABLE "test_db"."test_schema"."test_table" FROM ROLE old_role'
+        'REVOKE SELECT ON TABLE "test_db"."test_schema"."test_table" FROM ROLE "OLD_ROLE"'
         in sql_calls
     )
     assert (
-        'REVOKE UPDATE ON TABLE "test_db"."test_schema"."test_table" FROM ROLE legacy_role'
+        'REVOKE UPDATE ON TABLE "test_db"."test_schema"."test_table" FROM ROLE "LEGACY_ROLE"'
         in sql_calls
     )
 
@@ -426,7 +429,7 @@ def test_sync_grants_config_no_catalog_or_schema(
     executed_sql = executed_query.sql(dialect="snowflake")
     expected_sql = (
         """SELECT privilege_type, grantee FROM "caTalog".INFORMATION_SCHEMA.TABLE_PRIVILEGES """
-        "WHERE table_schema = 'sChema' AND table_name = 'TesT_Table' "
+        "WHERE table_catalog = 'caTalog' AND table_schema = 'sChema' AND table_name = 'TesT_Table' "
         "AND grantor = CURRENT_ROLE() AND grantee <> CURRENT_ROLE()"
     )
     assert executed_sql == expected_sql
@@ -434,11 +437,11 @@ def test_sync_grants_config_no_catalog_or_schema(
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 5
 
-    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE role1' in sql_calls
-    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE role2' in sql_calls
-    assert 'GRANT INSERT ON TABLE "TesT_Table" TO ROLE role3' in sql_calls
-    assert 'REVOKE SELECT ON TABLE "TesT_Table" FROM ROLE old_role' in sql_calls
-    assert 'REVOKE UPDATE ON TABLE "TesT_Table" FROM ROLE legacy_role' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE "ROLE1"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TesT_Table" TO ROLE "ROLE2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TesT_Table" TO ROLE "ROLE3"' in sql_calls
+    assert 'REVOKE SELECT ON TABLE "TesT_Table" FROM ROLE "OLD_ROLE"' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "TesT_Table" FROM ROLE "LEGACY_ROLE"' in sql_calls
 
 
 def test_df_to_source_queries_use_schema(

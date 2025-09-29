@@ -7,8 +7,10 @@ from dataclasses import dataclass
 
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.schema_diff import TableAlterOperation
@@ -16,7 +18,12 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import (
+        DCL,
+        DF,
+        GrantsConfig,
+        QueryOrDF,
+    )
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -548,3 +555,137 @@ class RowDiffMixin(EngineAdapter):
 
     def _normalize_boolean_value(self, expr: exp.Expression) -> exp.Expression:
         return exp.cast(expr, "INT")
+
+
+class GrantsFromInfoSchemaMixin(EngineAdapter):
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("current_user")
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = False
+    USE_CATALOG_IN_GRANTS = False
+    GRANT_INFORMATION_SCHEMA_TABLE_NAME = "table_privileges"
+
+    @staticmethod
+    @abc.abstractmethod
+    def _grant_object_kind(table_type: DataObjectType) -> t.Optional[str]:
+        pass
+
+    @abc.abstractmethod
+    def _get_current_schema(self) -> str:
+        pass
+
+    def _dcl_grants_config_expr(
+        self,
+        dcl_cmd: t.Type[DCL],
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        expressions: t.List[exp.Expression] = []
+        if not grant_config:
+            return expressions
+
+        object_kind = self._grant_object_kind(table_type)
+        for privilege, principals in grant_config.items():
+            args: t.Dict[str, t.Any] = {
+                "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
+                "securable": table.copy(),
+            }
+            if object_kind:
+                args["kind"] = exp.Var(this=object_kind)
+            if self.SUPPORTS_MULTIPLE_GRANT_PRINCIPALS:
+                args["principals"] = [
+                    normalize_identifiers(
+                        parse_one(principal, into=exp.GrantPrincipal, dialect=self.dialect),
+                        dialect=self.dialect,
+                    )
+                    for principal in principals
+                ]
+                expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+            else:
+                for principal in principals:
+                    args["principals"] = [
+                        normalize_identifiers(
+                            parse_one(principal, into=exp.GrantPrincipal, dialect=self.dialect),
+                            dialect=self.dialect,
+                        )
+                    ]
+                    expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
+
+        return expressions
+
+    def _apply_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
+
+    def _revoke_grants_config_expr(
+        self,
+        table: exp.Table,
+        grant_config: GrantsConfig,
+        table_type: DataObjectType = DataObjectType.TABLE,
+    ) -> t.List[exp.Expression]:
+        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        schema_identifier = table.args.get("db") or normalize_identifiers(
+            exp.to_identifier(self._get_current_schema(), quoted=True), dialect=self.dialect
+        )
+        schema_name = schema_identifier.this
+        table_name = table.args.get("this").this  # type: ignore
+
+        grant_conditions = [
+            exp.column("table_schema").eq(exp.Literal.string(schema_name)),
+            exp.column("table_name").eq(exp.Literal.string(table_name)),
+            exp.column("grantor").eq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
+            exp.column("grantee").neq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
+        ]
+
+        info_schema_table = normalize_identifiers(
+            exp.table_(self.GRANT_INFORMATION_SCHEMA_TABLE_NAME, db="information_schema"),
+            dialect=self.dialect,
+        )
+        if self.USE_CATALOG_IN_GRANTS:
+            catalog_identifier = table.args.get("catalog")
+            if not catalog_identifier:
+                catalog_name = self.get_current_catalog()
+                if not catalog_name:
+                    raise SQLMeshError(
+                        "Current catalog could not be determined for fetching grants. This is unexpected."
+                    )
+                catalog_identifier = normalize_identifiers(
+                    exp.to_identifier(catalog_name, quoted=True), dialect=self.dialect
+                )
+            catalog_name = catalog_identifier.this
+            info_schema_table.set("catalog", catalog_identifier.copy())
+            grant_conditions.insert(
+                0, exp.column("table_catalog").eq(exp.Literal.string(catalog_name))
+            )
+
+        return (
+            exp.select("privilege_type", "grantee")
+            .from_(info_schema_table)
+            .where(exp.and_(*grant_conditions))
+        )
+
+    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
+        grant_expr = self._get_grant_expression(table)
+
+        results = self.fetchall(grant_expr)
+
+        grants_dict: GrantsConfig = {}
+        for privilege_raw, grantee_raw in results:
+            if privilege_raw is None or grantee_raw is None:
+                continue
+
+            privilege = str(privilege_raw)
+            grantee = str(grantee_raw)
+            if not privilege or not grantee:
+                continue
+
+            grantees = grants_dict.setdefault(privilege, [])
+            if grantee not in grantees:
+                grantees.append(grantee)
+
+        return grants_dict
