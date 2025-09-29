@@ -10,6 +10,7 @@ from sqlglot.transforms import remove_precision_parameterized_types
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.mixins import (
     ClusteredByMixin,
+    GrantsFromInfoSchemaMixin,
     RowDiffMixin,
     TableAlterClusterByOperation,
 )
@@ -54,7 +55,7 @@ NestedFieldsDict = t.Dict[str, t.List[NestedField]]
 
 
 @set_catalog()
-class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
+class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchemaMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -65,6 +66,10 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
     SUPPORTS_GRANTS = True
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.func("session_user")
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = True
+    USE_CATALOG_IN_GRANTS = True
+    GRANT_INFORMATION_SCHEMA_TABLE_NAME = "OBJECT_PRIVILEGES"
     MAX_TABLE_COMMENT_LENGTH = 1024
     MAX_COLUMN_COMMENT_LENGTH = 1024
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
@@ -1298,11 +1303,13 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
     def _session_id(self, value: t.Any) -> None:
         self._connection_pool.set_attribute("session_id", value)
 
+    def _get_current_schema(self) -> str:
+        raise NotImplementedError("BigQuery does not support current schema")
+
     def _get_bq_dataset_location(self, project: str, dataset: str) -> str:
         return self._db_call(self.client.get_dataset, dataset_ref=f"{project}.{dataset}").location
 
-    def _get_current_grants_config(self, table: exp.Table) -> GrantsConfig:
-        """Returns current grants for a BigQuery table as a dictionary."""
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
         if not table.db:
             raise ValueError(
                 f"Table {table.sql(dialect=self.dialect)} does not have a schema (dataset)"
@@ -1320,10 +1327,10 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
         # https://cloud.google.com/bigquery/docs/information-schema-object-privileges
         # OBJECT_PRIVILEGES is a project-level INFORMATION_SCHEMA view with regional qualifier
         object_privileges_table = exp.to_table(
-            f"`{project}`.`region-{location}`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES",
+            f"`{project}`.`region-{location}`.INFORMATION_SCHEMA.{self.GRANT_INFORMATION_SCHEMA_TABLE_NAME}",
             dialect=self.dialect,
         )
-        grant_expr = (
+        return (
             exp.select("privilege_type", "grantee")
             .from_(object_privileges_table)
             .where(
@@ -1334,24 +1341,10 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
                     # BigQuery grantees format: "user:email" or "group:name"
                     exp.func("split", exp.column("grantee"), exp.Literal.string(":"))[
                         exp.func("OFFSET", exp.Literal.number("1"))
-                    ].neq(exp.func("session_user")),
+                    ].neq(self.CURRENT_USER_OR_ROLE_EXPRESSION),
                 )
             )
         )
-        results = self.fetchall(grant_expr)
-
-        grants_dict: t.Dict[str, t.List[str]] = {}
-        for row in results:
-            privilege = str(row[0])
-            grantee = str(row[1])
-
-            if privilege not in grants_dict:
-                grants_dict[privilege] = []
-
-            if grantee not in grants_dict[privilege]:
-                grants_dict[privilege].append(grantee)
-
-        return grants_dict
 
     @staticmethod
     def _grant_object_kind(table_type: DataObjectType) -> str:
@@ -1406,22 +1399,6 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
             expressions.append(dcl_cmd(**args))  # type: ignore[arg-type]
 
         return expressions
-
-    def _apply_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
-
-    def _revoke_grants_config_expr(
-        self,
-        table: exp.Table,
-        grant_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
 
 
 class _ErrorCounter:
