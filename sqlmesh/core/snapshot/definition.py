@@ -2451,6 +2451,7 @@ def check_ready_intervals(
     dialect: DialectType = None,
     path: t.Optional[Path] = None,
     snapshot: t.Optional[Snapshot] = None,
+    parent_intervals: t.Optional[t.List[Intervals]] = None,
     kwargs: t.Optional[t.Dict] = None,
 ) -> Intervals:
     checked_intervals: Intervals = []
@@ -2467,6 +2468,7 @@ def check_ready_intervals(
                 provided_kwargs=(kwargs or {}),
                 context=context,
                 snapshot=snapshot,
+                parent_intervals=parent_intervals,
             )
         except Exception as ex:
             raise SignalEvalError(format_evaluated_code_exception(ex, python_env))

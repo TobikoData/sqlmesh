@@ -373,11 +373,19 @@ class Scheduler:
                 is_restatement=is_restatement,
             )
 
+            parent_intervals = []
+            for parent in snapshot.parents:
+                if parent.snapshot_id not in snapshot_intervals:
+                    continue
+                _, p_intervals = snapshot_intervals[parent.snapshot_id]
+                parent_intervals.append(p_intervals)
+
             intervals = self._check_ready_intervals(
                 snapshot,
                 intervals,
                 context,
                 environment_naming_info,
+                parent_intervals=parent_intervals,
             )
             unready -= set(intervals)
 
@@ -923,6 +931,7 @@ class Scheduler:
         intervals: Intervals,
         context: ExecutionContext,
         environment_naming_info: EnvironmentNamingInfo,
+        parent_intervals: t.Optional[t.List[Intervals]] = None,
     ) -> Intervals:
         """Checks if the intervals are ready for evaluation for the given snapshot.
 
@@ -965,6 +974,7 @@ class Scheduler:
                     dialect=snapshot.model.dialect,
                     path=snapshot.model._path,
                     snapshot=snapshot,
+                    parent_intervals=parent_intervals,
                     kwargs=kwargs,
                 )
             except SQLMeshError as e:
