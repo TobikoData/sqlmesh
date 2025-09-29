@@ -36,6 +36,7 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
         onClick={e => {
           e.stopPropagation()
           copyToClipboard(text)
+          onClick?.(e)
         }}
         disabled={disabled || !!isCopied}
         {...props}
