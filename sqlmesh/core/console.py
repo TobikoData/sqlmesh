@@ -3641,7 +3641,10 @@ class MarkdownConsole(CaptureTerminalConsole):
         msg = f"\nLinter {severity} for `{model._path}`:\n{violations_msg}\n"
 
         self._print(msg)
-        self._errors.append(msg)
+        if is_error:
+            self._errors.append(msg)
+        else:
+            self._warnings.append(msg)
 
     @property
     def captured_warnings(self) -> str:
