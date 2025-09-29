@@ -105,10 +105,10 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
-    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM old_user' in sql_calls
-    assert 'REVOKE UPDATE ON TABLE "test_schema"."test_table" FROM legacy_user' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO user1, user2' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO user3' in sql_calls
+    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM "old_user"' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "test_schema"."test_table" FROM "legacy_user"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO "user3"' in sql_calls
 
 
 def test_sync_grants_config_with_overlaps(
@@ -142,9 +142,9 @@ def test_sync_grants_config_with_overlaps(
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 3
-    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM user_legacy' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO user_new' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO user_writer' in sql_calls
+    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO "user_new"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO "user_writer"' in sql_calls
 
 
 @pytest.mark.parametrize(
@@ -170,7 +170,7 @@ def test_sync_grants_config_object_kind(
 
     sql_calls = to_sql_calls(adapter)
     assert sql_calls == [
-        f'GRANT SELECT ON {expected_keyword} "test_schema"."test_object" TO user_test'
+        f'GRANT SELECT ON {expected_keyword} "test_schema"."test_object" TO "user_test"'
     ]
 
 
@@ -196,10 +196,10 @@ def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocke
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
-    assert 'REVOKE SELECT ON TABLE "TestSchema"."TestTable" FROM user_old' in sql_calls
-    assert 'REVOKE UPDATE ON TABLE "TestSchema"."TestTable" FROM user_legacy' in sql_calls
-    assert 'GRANT SELECT ON TABLE "TestSchema"."TestTable" TO user1, user2' in sql_calls
-    assert 'GRANT INSERT ON TABLE "TestSchema"."TestTable" TO user3' in sql_calls
+    assert 'REVOKE SELECT ON TABLE "TestSchema"."TestTable" FROM "user_old"' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "TestSchema"."TestTable" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "TestSchema"."TestTable" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "TestSchema"."TestTable" TO "user3"' in sql_calls
 
 
 def test_sync_grants_config_no_schema(
@@ -211,7 +211,7 @@ def test_sync_grants_config_no_schema(
 
     current_grants = [("UPDATE", "user_old")]
     fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
-    get_schema_mock = mocker.patch.object(adapter, "get_current_schema", return_value="public")
+    get_schema_mock = mocker.patch.object(adapter, "_get_current_schema", return_value="public")
 
     adapter.sync_grants_config(relation, new_grants_config)
 
@@ -228,9 +228,9 @@ def test_sync_grants_config_no_schema(
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 3
-    assert 'REVOKE UPDATE ON TABLE "test_table" FROM user_old' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_table" TO user1' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_table" TO user2' in sql_calls
+    assert 'REVOKE UPDATE ON TABLE "test_table" FROM "user_old"' in sql_calls
+    assert 'GRANT SELECT ON TABLE "test_table" TO "user1"' in sql_calls
+    assert 'GRANT INSERT ON TABLE "test_table" TO "user2"' in sql_calls
 
 
 def test_create_table_from_query_exists_no_if_not_exists(

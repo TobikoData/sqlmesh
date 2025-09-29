@@ -82,7 +82,7 @@ def test_get_current_schema(make_mocked_engine_adapter: t.Callable, mocker: Mock
     adapter = make_mocked_engine_adapter(BasePostgresEngineAdapter)
 
     fetchone_mock = mocker.patch.object(adapter, "fetchone", return_value=("test_schema",))
-    result = adapter.get_current_schema()
+    result = adapter._get_current_schema()
 
     assert result == "test_schema"
     fetchone_mock.assert_called_once()
@@ -92,10 +92,10 @@ def test_get_current_schema(make_mocked_engine_adapter: t.Callable, mocker: Mock
 
     fetchone_mock.reset_mock()
     fetchone_mock.return_value = None
-    result = adapter.get_current_schema()
+    result = adapter._get_current_schema()
     assert result == "public"
 
     fetchone_mock.reset_mock()
     fetchone_mock.return_value = (None,)  # search_path = '' or 'nonexistent_schema'
-    result = adapter.get_current_schema()
+    result = adapter._get_current_schema()
     assert result == "public"
