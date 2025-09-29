@@ -232,7 +232,7 @@ def test_source_meta_external_location():
     expected = (
         "read_parquet('path/to/external/items.parquet')"
         if DBT_VERSION >= (1, 4, 0)
-        else '"main"."parquet_file".items'
+        else '"memory"."parquet_file".items'
     )
     assert relation.render() == expected
 

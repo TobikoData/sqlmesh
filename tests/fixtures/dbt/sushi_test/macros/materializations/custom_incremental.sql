@@ -24,7 +24,8 @@
   {%- if existing_relation is none -%}
     {# The first insert creates new table if it doesn't exist #}
     {%- call statement('main') -%}
-      {{ create_table_as(False, new_relation, sql) }}
+      CREATE TABLE {{ new_relation }}
+      AS {{ sql }}
     {%- endcall -%}
   {%- else -%}
     {# Incremental load, appending new data with optional time filtering #}
@@ -40,6 +41,8 @@
 
     {%- call statement('create_temp') -%}
       {{ create_table_as(True, temp_relation, filtered_sql) }}
+      CREATE TABLE {{ temp_relation }}
+      AS {{ filtered_sql }}
     {%- endcall -%}
 
     {%- call statement('insert') -%}
