@@ -544,9 +544,9 @@ def create_builtin_globals(
             "load_result": sql_execution.load_result,
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
-            "run_hooks": adapter.run_hooks,
             "graph": adapter.graph,
             "selected_resources": list(jinja_globals.get("selected_models") or []),
+            "write": lambda input: None,  # We don't support writing yet
         }
     )
 

@@ -100,12 +100,6 @@ class BaseAdapter(abc.ABC):
         """Executes the given SQL statement and returns the results as an agate table."""
 
     @abc.abstractmethod
-    def run_hooks(
-        self, hooks: t.List[str | exp.Expression], inside_transaction: bool = True
-    ) -> None:
-        """Executes the given hooks."""
-
-    @abc.abstractmethod
     def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
         """Resolves the relation's schema to its physical schema."""
 
@@ -245,12 +239,6 @@ class ParsetimeAdapter(BaseAdapter):
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Tuple[AdapterResponse, agate.Table]:
         self._raise_parsetime_adapter_call_error("execute SQL")
-        raise
-
-    def run_hooks(
-        self, hooks: t.List[str | exp.Expression], inside_transaction: bool = True
-    ) -> None:
-        self._raise_parsetime_adapter_call_error("run hooks")
         raise
 
     def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
@@ -462,12 +450,6 @@ class RuntimeAdapter(BaseAdapter):
     def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
         identifier = self._map_table_name(self._normalize(self._relation_to_table(relation))).name
         return identifier if identifier else None
-
-    def run_hooks(
-        self, hooks: t.List[str | exp.Expression], inside_transaction: bool = True
-    ) -> None:
-        # inside_transaction not yet supported similarly to transaction
-        self.engine_adapter.execute([exp.maybe_parse(hook) for hook in hooks])
 
     def _map_table_name(self, table: exp.Table) -> exp.Table:
         # Use the default dialect since this is the dialect used to normalize and quote keys in the
