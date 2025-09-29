@@ -381,8 +381,9 @@ class EngineAdapterStateSync(StateSync):
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
+        last_altered_ts: t.Optional[int] = None,
     ) -> None:
-        super().add_interval(snapshot, start, end, is_dev)
+        super().add_interval(snapshot, start, end, is_dev, last_altered_ts)
 
     @transactional()
     def add_snapshots_intervals(self, snapshots_intervals: t.Sequence[SnapshotIntervals]) -> None:

@@ -258,6 +258,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             allow_additive_snapshots=plan.allow_additive_models,
             selected_snapshot_ids=stage.selected_snapshot_ids,
             selected_models=plan.selected_models,
+            is_restatement=bool(plan.restatements),
         )
         if errors:
             raise PlanError("Plan application failed.")

@@ -54,6 +54,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
     SUPPORTS_MANAGED_MODELS = True
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     SUPPORTS_CREATE_DROP_CATALOG = True
+    SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS = True
     SUPPORTED_DROP_CASCADE_OBJECT_KINDS = ["DATABASE", "SCHEMA", "TABLE"]
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
@@ -669,3 +670,18 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin, ClusteredByMixi
             self._connection_pool.set_attribute(self.SNOWPARK, None)
 
         return super().close()
+
+    def get_table_last_modified_ts(self, table_names: t.List[TableName]) -> t.List[int]:
+        from sqlmesh.utils.date import to_timestamp
+
+        num_tables = len(table_names)
+
+        query = "SELECT LAST_ALTERED FROM INFORMATION_SCHEMA.TABLES WHERE"
+        for i, table_name in enumerate(table_names):
+            table = exp.to_table(table_name)
+            query += f"""(TABLE_NAME = '{table.name}' AND TABLE_SCHEMA = '{table.db}' AND TABLE_CATALOG = '{table.catalog}')"""
+            if i < num_tables - 1:
+                query += " OR "
+
+        result = self.fetchall(query)
+        return [to_timestamp(row[0]) for row in result]
