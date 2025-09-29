@@ -1,6 +1,55 @@
 version: 2
 
 models:
+  - name: simple_model_a
+    description: A simple model for testing
+    columns:
+      - name: a
+        data_type: int
+    unit_tests:
+      - name: test_simple_model_a_outputs_one
+        description: Test that simple_model_a outputs 1 as column a
+        model: simple_model_a
+        given: []  # No input models needed
+        expect:
+          format: csv
+          rows: |
+            a
+            1
+  - name: simple_model_b
+    description: Model that references simple_model_a
+    columns:
+      - name: a
+        data_type: int
+    unit_tests:
+      - name: test_simple_model_b_with_mock_input
+        description: Test simple_model_b with mocked simple_model_a input
+        model: simple_model_b
+        given:
+          - input: ref('simple_model_a')
+            format: csv
+            rows: |
+              a
+              10
+              20
+              30
+        expect:
+          format: csv
+          rows: |
+            a
+            10
+            20
+            30
+      - name: test_simple_model_b_with_sql_input
+        description: Test simple_model_b with SQL-defined input data
+        model: simple_model_b
+        given:
+          - input: ref('simple_model_a')
+            format: sql
+            rows: SELECT 42 AS a
+        expect:
+          format: sql
+          rows: SELECT 42 AS a
   - name: top_waiters
     description: description of top waiters
     columns:
