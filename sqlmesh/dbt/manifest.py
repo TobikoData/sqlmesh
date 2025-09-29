@@ -771,7 +771,7 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
 
 
 def _strip_jinja_materialization_tags(materialization_jinja: str) -> str:
-    MATERIALIZATION_TAG_REGEX = r"{%-?\s*materialization\s+[^%]*%}\s*\n?"
+    MATERIALIZATION_TAG_REGEX = r"\s*{%-?\s*materialization\s+[^%]*%}\s*\n?"
     ENDMATERIALIZATION_REGEX = r"{%-?\s*endmaterialization\s*-?%}\s*\n?"
 
     if not re.match(MATERIALIZATION_TAG_REGEX, materialization_jinja):
