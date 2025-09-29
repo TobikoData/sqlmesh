@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import typing as t
 from sqlmesh.utils import UniqueKeyDict, registry_decorator
+from sqlmesh.utils.errors import MissingSourceError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.snapshot.definition import Snapshot
     from sqlmesh.utils.date import DatetimeRanges
     from sqlmesh.core.snapshot.definition import DeployabilityIndex
+    from sqlmesh.core.snapshot.definition import Intervals
 
 
 class signal(registry_decorator):
@@ -42,7 +44,17 @@ SignalRegistry = UniqueKeyDict[str, signal]
 
 
 @signal()
-def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionContext) -> bool:
+def freshness(
+    batch: DatetimeRanges,
+    snapshot: Snapshot,
+    context: ExecutionContext,
+    parent_intervals: t.Optional[t.List[Intervals]] = None,
+) -> bool:
+    """
+    Implements model freshness as a signal, i.e it considers this model to be fresh if:
+    - Any upstream SQLMesh model has available intervals to compute i.e is fresh
+    - Any upstream external model has been altered since the last time the model was evaluated
+    """
     adapter = context.engine_adapter
     if context.is_restatement or not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
         return True
@@ -54,24 +66,38 @@ def freshness(batch: DatetimeRanges, snapshot: Snapshot, context: ExecutionConte
         if deployability_index.is_deployable(snapshot)
         else snapshot.dev_last_altered_ts
     )
+
     if not last_altered_ts:
         return True
 
     parent_snapshots = {context.snapshots[p.name] for p in snapshot.parents}
-    if len(parent_snapshots) != len(snapshot.node.depends_on) or not all(
-        p.is_external for p in parent_snapshots
-    ):
+    if len(parent_snapshots) != len(snapshot.node.depends_on):
         # The mismatch can happen if e.g an external model is not registered in the project
         return True
 
-    # Finding new data means that the upstream depedencies have been altered
-    # since the last time the model was evaluated
-    upstream_dep_has_new_data = any(
-        upstream_last_altered_ts > last_altered_ts
-        for upstream_last_altered_ts in adapter.get_table_last_modified_ts(
-            [p.name for p in parent_snapshots]
-        )
-    )
+    external_parent_snapshots = {p for p in parent_snapshots if p.is_external}
+    upstream_parent_snapshots = parent_snapshots - external_parent_snapshots
 
-    # Returning true is a no-op, returning False nullifies the batch so the model will not be evaluated.
-    return upstream_dep_has_new_data
+    if upstream_parent_snapshots and parent_intervals:
+        # At least one upstream sqlmesh model has intervals to compute (i.e is not fresh),
+        # so the current model should be considered fresh
+        return True
+
+    if external_parent_snapshots:
+        external_last_altered_timestamps = adapter.get_table_last_modified_ts(
+            [sp.name for sp in external_parent_snapshots]
+        )
+
+        if len(external_last_altered_timestamps) != len(external_parent_snapshots):
+            raise MissingSourceError(
+                f"Expected {len(external_parent_snapshots)} sources to be present, but got {len(external_last_altered_timestamps)}."
+            )
+
+        # Finding new data means that the upstream depedencies have been altered
+        # since the last time the model was evaluated
+        return any(
+            upstream_last_altered_ts > last_altered_ts
+            for upstream_last_altered_ts in external_last_altered_timestamps
+        )
+
+    return False
