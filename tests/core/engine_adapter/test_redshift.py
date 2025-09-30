@@ -105,10 +105,10 @@ def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: Mock
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
-    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM "old_user"' in sql_calls
-    assert 'REVOKE UPDATE ON TABLE "test_schema"."test_table" FROM "legacy_user"' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO "user1", "user2"' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO "user3"' in sql_calls
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "old_user"' in sql_calls
+    assert 'REVOKE UPDATE ON "test_schema"."test_table" FROM "legacy_user"' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user3"' in sql_calls
 
 
 def test_sync_grants_config_with_overlaps(
@@ -142,24 +142,23 @@ def test_sync_grants_config_with_overlaps(
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 3
-    assert 'REVOKE SELECT ON TABLE "test_schema"."test_table" FROM "user_legacy"' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_schema"."test_table" TO "user_new"' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_schema"."test_table" TO "user_writer"' in sql_calls
+    assert 'REVOKE SELECT ON "test_schema"."test_table" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON "test_schema"."test_table" TO "user_new"' in sql_calls
+    assert 'GRANT INSERT ON "test_schema"."test_table" TO "user_writer"' in sql_calls
 
 
 @pytest.mark.parametrize(
-    "table_type, expected_keyword",
+    "table_type",
     [
-        (DataObjectType.TABLE, "TABLE"),
-        (DataObjectType.VIEW, "TABLE"),
-        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+        (DataObjectType.TABLE),
+        (DataObjectType.VIEW),
+        (DataObjectType.MATERIALIZED_VIEW),
     ],
 )
 def test_sync_grants_config_object_kind(
     make_mocked_engine_adapter: t.Callable,
     mocker: MockerFixture,
     table_type: DataObjectType,
-    expected_keyword: str,
 ) -> None:
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     relation = exp.to_table("test_schema.test_object", dialect="redshift")
@@ -169,9 +168,8 @@ def test_sync_grants_config_object_kind(
     adapter.sync_grants_config(relation, {"SELECT": ["user_test"]}, table_type)
 
     sql_calls = to_sql_calls(adapter)
-    assert sql_calls == [
-        f'GRANT SELECT ON {expected_keyword} "test_schema"."test_object" TO "user_test"'
-    ]
+    # we don't need to explicitly specify object_type for tables and views
+    assert sql_calls == [f'GRANT SELECT ON "test_schema"."test_object" TO "user_test"']
 
 
 def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
@@ -196,10 +194,10 @@ def test_sync_grants_config_quotes(make_mocked_engine_adapter: t.Callable, mocke
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 4
-    assert 'REVOKE SELECT ON TABLE "TestSchema"."TestTable" FROM "user_old"' in sql_calls
-    assert 'REVOKE UPDATE ON TABLE "TestSchema"."TestTable" FROM "user_legacy"' in sql_calls
-    assert 'GRANT SELECT ON TABLE "TestSchema"."TestTable" TO "user1", "user2"' in sql_calls
-    assert 'GRANT INSERT ON TABLE "TestSchema"."TestTable" TO "user3"' in sql_calls
+    assert 'REVOKE SELECT ON "TestSchema"."TestTable" FROM "user_old"' in sql_calls
+    assert 'REVOKE UPDATE ON "TestSchema"."TestTable" FROM "user_legacy"' in sql_calls
+    assert 'GRANT SELECT ON "TestSchema"."TestTable" TO "user1", "user2"' in sql_calls
+    assert 'GRANT INSERT ON "TestSchema"."TestTable" TO "user3"' in sql_calls
 
 
 def test_sync_grants_config_no_schema(
@@ -228,9 +226,9 @@ def test_sync_grants_config_no_schema(
 
     sql_calls = to_sql_calls(adapter)
     assert len(sql_calls) == 3
-    assert 'REVOKE UPDATE ON TABLE "test_table" FROM "user_old"' in sql_calls
-    assert 'GRANT SELECT ON TABLE "test_table" TO "user1"' in sql_calls
-    assert 'GRANT INSERT ON TABLE "test_table" TO "user2"' in sql_calls
+    assert 'REVOKE UPDATE ON "test_table" FROM "user_old"' in sql_calls
+    assert 'GRANT SELECT ON "test_table" TO "user1"' in sql_calls
+    assert 'GRANT INSERT ON "test_table" TO "user2"' in sql_calls
 
 
 def test_create_table_from_query_exists_no_if_not_exists(

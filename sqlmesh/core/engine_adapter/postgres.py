@@ -6,7 +6,6 @@ import typing as t
 from functools import cached_property, partial
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -19,7 +18,7 @@ from sqlmesh.core.engine_adapter.shared import set_catalog
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, GrantsConfig, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -142,21 +141,3 @@ class PostgresEngineAdapter(
             if match:
                 return int(match.group(1)), int(match.group(2))
         return 0, 0
-
-    def _apply_grants_config_expr(
-        self,
-        table: exp.Table,
-        grants_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        # https://www.postgresql.org/docs/current/sql-grant.html
-        return self._dcl_grants_config_expr(exp.Grant, table, grants_config)
-
-    def _revoke_grants_config_expr(
-        self,
-        table: exp.Table,
-        grants_config: GrantsConfig,
-        table_type: DataObjectType = DataObjectType.TABLE,
-    ) -> t.List[exp.Expression]:
-        # https://www.postgresql.org/docs/current/sql-revoke.html
-        return self._dcl_grants_config_expr(exp.Revoke, table, grants_config)

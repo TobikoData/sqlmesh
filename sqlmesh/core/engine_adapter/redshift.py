@@ -167,12 +167,6 @@ class RedshiftEngineAdapter(
         result = [tuple(row) for row in fetcheddata]
         return pd.DataFrame(result, columns=columns)
 
-    @staticmethod
-    def _grant_object_kind(table_type: DataObjectType) -> str:
-        if table_type == DataObjectType.MATERIALIZED_VIEW:
-            return "MATERIALIZED VIEW"
-        return "TABLE"
-
     def _create_table_from_source_queries(
         self,
         table_name: TableName,
