@@ -39,6 +39,7 @@ def test_file_cache(tmp_path: Path, mocker: MockerFixture):
     loader.assert_called_once()
 
     assert "___test_model_" in cache._cache_entry_path('"test_model"').name
+    assert "客户数据" in cache._cache_entry_path("客户数据").name
 
 
 def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
