@@ -1385,11 +1385,11 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
         self,
         dcl_cmd: t.Type[DCL],
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         expressions: t.List[exp.Expression] = []
-        if not grant_config:
+        if not grants_config:
             return expressions
 
         # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
@@ -1411,7 +1411,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
             return f"{label}:{principal.lower()}"
 
         object_kind = self._grant_object_kind(table_type)
-        for privilege, principals in grant_config.items():
+        for privilege, principals in grants_config.items():
             if not principals:
                 continue
 

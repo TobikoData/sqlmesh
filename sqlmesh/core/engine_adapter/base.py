@@ -3133,14 +3133,14 @@ class EngineAdapter:
     def _apply_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         """Returns SQLGlot Grant expressions to apply grants to a table.
 
         Args:
             table: The table/view to grant permissions on.
-            grant_config: Dictionary mapping permissions to lists of grantees.
+            grants_config: Dictionary mapping permissions to lists of grantees.
             table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
 
         Returns:
@@ -3156,14 +3156,14 @@ class EngineAdapter:
     def _revoke_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         """Returns SQLGlot expressions to revoke grants from a table.
 
         Args:
             table: The table/view to revoke permissions from.
-            grant_config: Dictionary mapping permissions to lists of grantees.
+            grants_config: Dictionary mapping permissions to lists of grantees.
             table_type: The type of database object (TABLE, VIEW, MATERIALIZED_VIEW).
 
         Returns:

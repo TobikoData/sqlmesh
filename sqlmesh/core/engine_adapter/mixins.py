@@ -576,15 +576,15 @@ class GrantsFromInfoSchemaMixin(EngineAdapter):
         self,
         dcl_cmd: t.Type[DCL],
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         expressions: t.List[exp.Expression] = []
-        if not grant_config:
+        if not grants_config:
             return expressions
 
         object_kind = self._grant_object_kind(table_type)
-        for privilege, principals in grant_config.items():
+        for privilege, principals in grants_config.items():
             args: t.Dict[str, t.Any] = {
                 "privileges": [exp.GrantPrivilege(this=exp.Var(this=privilege))],
                 "securable": table.copy(),
@@ -615,18 +615,18 @@ class GrantsFromInfoSchemaMixin(EngineAdapter):
     def _apply_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Grant, table, grant_config, table_type)
+        return self._dcl_grants_config_expr(exp.Grant, table, grants_config, table_type)
 
     def _revoke_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
-        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config, table_type)
+        return self._dcl_grants_config_expr(exp.Revoke, table, grants_config, table_type)
 
     def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
         schema_identifier = table.args.get("db") or normalize_identifiers(

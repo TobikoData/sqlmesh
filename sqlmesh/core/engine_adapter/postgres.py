@@ -146,17 +146,17 @@ class PostgresEngineAdapter(
     def _apply_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         # https://www.postgresql.org/docs/current/sql-grant.html
-        return self._dcl_grants_config_expr(exp.Grant, table, grant_config)
+        return self._dcl_grants_config_expr(exp.Grant, table, grants_config)
 
     def _revoke_grants_config_expr(
         self,
         table: exp.Table,
-        grant_config: GrantsConfig,
+        grants_config: GrantsConfig,
         table_type: DataObjectType = DataObjectType.TABLE,
     ) -> t.List[exp.Expression]:
         # https://www.postgresql.org/docs/current/sql-revoke.html
-        return self._dcl_grants_config_expr(exp.Revoke, table, grant_config)
+        return self._dcl_grants_config_expr(exp.Revoke, table, grants_config)
