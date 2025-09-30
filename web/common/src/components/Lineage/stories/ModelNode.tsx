@@ -16,7 +16,6 @@ import { NodeAppendix } from '../node/NodeAppendix'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodeBase } from '../node/NodeBase'
 import { NodeContainer } from '../node/NodeContainer'
-import { NodeDivider } from '../node/NodeDivider'
 import { NodeHandleIcon } from '../node/NodeHandleIcon'
 import { NodeHandles } from '../node/NodeHandles'
 import { NodeHeader } from '../node/NodeHeader'
@@ -40,7 +39,6 @@ import {
 import { Tooltip } from '@/components/Tooltip/Tooltip'
 import type { ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/ColumnLevelLineageContext'
 import { ModelName } from '@/components/ModelName/ModelName'
-import { Metadata } from '@/components/Metadata/Metadata'
 import { Badge } from '@/components/Badge/Badge'
 import { NodePorts } from '../node/NodePorts'
 
@@ -331,26 +329,3 @@ export const ModelNode = React.memo(function ModelNode({
     </NodeContainer>
   )
 })
-
-export function NodeDetail({
-  label,
-  value,
-  hasDivider = true,
-  className,
-}: {
-  label: string
-  value: string
-  hasDivider?: boolean
-  className?: string
-}) {
-  return (
-    <>
-      {hasDivider && <NodeDivider />}
-      <Metadata
-        label={label}
-        value={value}
-        className={cn('px-2 text-xs shrink-0 h-6', className)}
-      />
-    </>
-  )
-}

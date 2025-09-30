@@ -2,6 +2,8 @@ import { cn } from '@/utils'
 import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 
+import './MessageContainer.css'
+
 export interface MessageContainerProps {
   children: React.ReactNode
   className?: string
@@ -19,7 +21,7 @@ export function MessageContainer({
     <HorizontalContainer
       data-component="MessageContainer"
       className={cn(
-        'h-auto justify-center items-center p-4 bg-message-lucid rounded-2xl',
+        'h-auto justify-center items-center p-4 bg-message-translucid rounded-2xl',
         className,
       )}
     >

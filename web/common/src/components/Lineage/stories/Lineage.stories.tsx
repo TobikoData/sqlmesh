@@ -64,14 +64,8 @@ export const LineageModel = () => {
           --color-lineage-model-column-icon: rgba(0, 0, 0, 1);
           --color-lineage-model-column-icon-active: rgba(0, 0, 0, 1);
 
-
-          --color-input-background: var(--vscode-input-background)!;
-          --color-input-foreground: var(--vscode-input-foreground)!;
-          --color-input-placeholder: var(--vscode-input-placeholderForeground)!;
-          --color-input-border: var(--vscode-input-border)!;
-
           --color-filterable-list-counter-background: rgba(200, 0, 0, 1);
-          --color-filterable-list-counter-foreground: rgba(200, 0, 0, 1);
+          --color-filterable-list-counter-foreground: rgba(200, 200, 200, 1);
         }
       `}</style>
       <ModelLineage
