@@ -510,10 +510,11 @@ class ModelConfig(BaseModelConfig):
         physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            if isinstance(kind, ViewKind):
+            if isinstance(kind, (ViewKind, EmbeddedKind)):
                 logger.warning(
-                    "Ignoring partition_by config for model '%s'; partition_by is not supported for views.",
+                    "Ignoring partition_by config for model '%s'; partition_by is not supported for %s.",
                     self.name,
+                    "views" if isinstance(kind, ViewKind) else "ephemeral models",
                 )
             else:
                 partitioned_by = []
