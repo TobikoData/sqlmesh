@@ -1377,7 +1377,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     @staticmethod
     def _grant_object_kind(table_type: DataObjectType) -> str:
-        if table_type == DataObjectType.VIEW:
+        if table_type == DataObjectType.VIEW or table_type == DataObjectType.MATERIALIZED_VIEW:
             return "VIEW"
         return "TABLE"
 
