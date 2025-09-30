@@ -358,12 +358,12 @@ def test_create_managed_table(make_mocked_engine_adapter: t.Callable, mocker: Mo
 def test_drop_managed_table(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(SnowflakeEngineAdapter)
 
-    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=False)
-    adapter.drop_managed_table(table_name=exp.parse_identifier("foo"), exists=True)
+    adapter.drop_managed_table(table_name="foo.bar", exists=False)
+    adapter.drop_managed_table(table_name="foo.bar", exists=True)
 
     assert to_sql_calls(adapter) == [
-        'DROP DYNAMIC TABLE "foo"',
-        'DROP DYNAMIC TABLE IF EXISTS "foo"',
+        'DROP DYNAMIC TABLE "foo"."bar"',
+        'DROP DYNAMIC TABLE IF EXISTS "foo"."bar"',
     ]
 
 

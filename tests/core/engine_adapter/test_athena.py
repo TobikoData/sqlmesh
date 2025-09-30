@@ -312,6 +312,7 @@ def test_replace_query(adapter: AthenaEngineAdapter, mocker: MockerFixture):
     )
     mocker.patch.object(adapter, "_get_data_objects", return_value=[])
     adapter.cursor.execute.reset_mock()
+    adapter._clear_data_object_cache()
 
     adapter.s3_warehouse_location = "s3://foo"
     adapter.replace_query(

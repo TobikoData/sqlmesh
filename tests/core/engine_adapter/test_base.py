@@ -3695,3 +3695,264 @@ def test_casted_columns(
     assert [
         x.sql() for x in EngineAdapter._casted_columns(columns_to_types, source_columns)
     ] == expected
+
+
+def test_data_object_cache_get_data_objects(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table1 = DataObject(catalog=None, schema="test_schema", name="table1", type="table")
+    table2 = DataObject(catalog=None, schema="test_schema", name="table2", type="table")
+
+    mock_get_data_objects = mocker.patch.object(
+        adapter, "_get_data_objects", return_value=[table1, table2]
+    )
+
+    result1 = adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert len(result1) == 2
+    assert mock_get_data_objects.call_count == 1
+
+    result2 = adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert len(result2) == 2
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+    result3 = adapter.get_data_objects("test_schema", {"table1"})
+    assert len(result3) == 1
+    assert result3[0].name == "table1"
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+
+def test_data_object_cache_get_data_object(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table = DataObject(catalog=None, schema="test_schema", name="test_table", type="table")
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[table])
+
+    result1 = adapter.get_data_object("test_schema.test_table")
+    assert result1 is not None
+    assert result1.name == "test_table"
+    assert mock_get_data_objects.call_count == 1
+
+    result2 = adapter.get_data_object("test_schema.test_table")
+    assert result2 is not None
+    assert result2.name == "test_table"
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+
+def test_data_object_cache_cleared_on_drop_table(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table = DataObject(catalog=None, schema="test_schema", name="test_table", type="table")
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[table])
+
+    adapter.get_data_object("test_schema.test_table")
+    assert mock_get_data_objects.call_count == 1
+
+    adapter.drop_table("test_schema.test_table")
+
+    mock_get_data_objects.return_value = []
+    result = adapter.get_data_object("test_schema.test_table")
+    assert result is None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_cleared_on_drop_view(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    view = DataObject(catalog=None, schema="test_schema", name="test_view", type="view")
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[view])
+
+    adapter.get_data_object("test_schema.test_view")
+    assert mock_get_data_objects.call_count == 1
+
+    adapter.drop_view("test_schema.test_view")
+
+    mock_get_data_objects.return_value = []
+    result = adapter.get_data_object("test_schema.test_view")
+    assert result is None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_cleared_on_drop_data_object(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table = DataObject(catalog=None, schema="test_schema", name="test_table", type="table")
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[table])
+
+    adapter.get_data_object("test_schema.test_table")
+    assert mock_get_data_objects.call_count == 1
+
+    adapter.drop_data_object(table)
+
+    mock_get_data_objects.return_value = []
+    result = adapter.get_data_object("test_schema.test_table")
+    assert result is None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_cleared_on_create_table(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    from sqlglot import exp
+
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    # Initially cache that table doesn't exist
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+    result = adapter.get_data_object("test_schema.test_table")
+    assert result is None
+    assert mock_get_data_objects.call_count == 1
+
+    # Create the table
+    table = DataObject(catalog=None, schema="test_schema", name="test_table", type="table")
+    mock_get_data_objects.return_value = [table]
+    adapter.create_table(
+        "test_schema.test_table",
+        {"col1": exp.DataType.build("INT")},
+    )
+
+    # Cache should be cleared, so next get_data_object should call _get_data_objects again
+    result = adapter.get_data_object("test_schema.test_table")
+    assert result is not None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_cleared_on_create_view(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    from sqlglot import parse_one
+
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    # Initially cache that view doesn't exist
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+    result = adapter.get_data_object("test_schema.test_view")
+    assert result is None
+    assert mock_get_data_objects.call_count == 1
+
+    # Create the view
+    view = DataObject(catalog=None, schema="test_schema", name="test_view", type="view")
+    mock_get_data_objects.return_value = [view]
+    adapter.create_view(
+        "test_schema.test_view",
+        parse_one("SELECT 1 AS col1"),
+    )
+
+    # Cache should be cleared, so next get_data_object should call _get_data_objects again
+    result = adapter.get_data_object("test_schema.test_view")
+    assert result is not None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_cleared_on_clone_table(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
+
+    adapter = make_mocked_engine_adapter(
+        SnowflakeEngineAdapter, patch_get_data_objects=False, default_catalog="test_catalog"
+    )
+
+    # Initially cache that target table doesn't exist
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+    result = adapter.get_data_object("test_schema.test_target")
+    assert result is None
+    assert mock_get_data_objects.call_count == 1
+
+    # Clone the table
+    target_table = DataObject(
+        catalog="test_catalog", schema="test_schema", name="test_target", type="table"
+    )
+    mock_get_data_objects.return_value = [target_table]
+    adapter.clone_table("test_schema.test_target", "test_schema.test_source")
+
+    # Cache should be cleared, so next get_data_object should call _get_data_objects again
+    result = adapter.get_data_object("test_schema.test_target")
+    assert result is not None
+    assert mock_get_data_objects.call_count == 2
+
+
+def test_data_object_cache_with_catalog(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
+
+    adapter = make_mocked_engine_adapter(
+        SnowflakeEngineAdapter, patch_get_data_objects=False, default_catalog="test_catalog"
+    )
+
+    table = DataObject(
+        catalog="test_catalog", schema="test_schema", name="test_table", type="table"
+    )
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[table])
+
+    result1 = adapter.get_data_object("test_catalog.test_schema.test_table")
+    assert result1 is not None
+    assert result1.catalog == "test_catalog"
+    assert mock_get_data_objects.call_count == 1
+
+    result2 = adapter.get_data_object("test_catalog.test_schema.test_table")
+    assert result2 is not None
+    assert result2.catalog == "test_catalog"
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+
+def test_data_object_cache_partial_cache_hit(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table1 = DataObject(catalog=None, schema="test_schema", name="table1", type="table")
+    table2 = DataObject(catalog=None, schema="test_schema", name="table2", type="table")
+    table3 = DataObject(catalog=None, schema="test_schema", name="table3", type="table")
+
+    mock_get_data_objects = mocker.patch.object(
+        adapter, "_get_data_objects", return_value=[table1, table2]
+    )
+
+    adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert mock_get_data_objects.call_count == 1
+
+    mock_get_data_objects.return_value = [table3]
+    result = adapter.get_data_objects("test_schema", {"table1", "table3"})
+
+    assert len(result) == 2
+    assert {obj.name for obj in result} == {"table1", "table3"}
+    assert mock_get_data_objects.call_count == 2  # Called again for table3
+
+
+def test_data_object_cache_get_data_objects_missing_objects(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table1 = DataObject(catalog=None, schema="test_schema", name="table1", type="table")
+    table2 = DataObject(catalog=None, schema="test_schema", name="table2", type="table")
+
+    mock_get_data_objects = mocker.patch.object(adapter, "_get_data_objects", return_value=[])
+
+    result1 = adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert not result1
+    assert mock_get_data_objects.call_count == 1
+
+    result2 = adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert not result2
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+    result3 = adapter.get_data_objects("test_schema", {"table1"})
+    assert not result3
+    assert mock_get_data_objects.call_count == 1  # Should not increase

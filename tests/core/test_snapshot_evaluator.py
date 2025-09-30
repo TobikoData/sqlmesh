@@ -1344,6 +1344,7 @@ def test_promote_deployable(mocker: MockerFixture, make_snapshot):
     )
     adapter_mock.create_table.assert_not_called()
 
+    adapter_mock.get_data_objects.return_value = []
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
     adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
@@ -4188,6 +4189,7 @@ def test_multiple_engine_promotion(mocker: MockerFixture, adapter_mock, make_sna
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
     adapter.with_settings = lambda **kwargs: adapter  # type: ignore
+    adapter._get_data_objects = lambda *args, **kwargs: []  # type: ignore
     engine_adapters = {"default": adapter_mock, "secondary": adapter}
 
     def columns(table_name):

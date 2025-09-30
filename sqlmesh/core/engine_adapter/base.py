@@ -161,6 +161,7 @@ class EngineAdapter:
         self.correlation_id = correlation_id
         self._schema_differ_overrides = schema_differ_overrides
         self._query_execution_tracker = query_execution_tracker
+        self._data_object_cache: t.Dict[str, t.Optional[DataObject]] = {}
 
     def with_settings(self, **kwargs: t.Any) -> EngineAdapter:
         extra_kwargs = {
@@ -983,6 +984,13 @@ class EngineAdapter:
             ),
             track_rows_processed=track_rows_processed,
         )
+        # Extract table name to clear cache
+        table_name = (
+            table_name_or_schema.this
+            if isinstance(table_name_or_schema, exp.Schema)
+            else table_name_or_schema
+        )
+        self._clear_data_object_cache(table_name)
 
     def _build_create_table_exp(
         self,
@@ -1074,6 +1082,7 @@ class EngineAdapter:
                 **kwargs,
             )
         )
+        self._clear_data_object_cache(target_table_name)
 
     def drop_data_object(self, data_object: DataObject, ignore_if_not_exists: bool = True) -> None:
         """Drops a data object of arbitrary type.
@@ -1139,6 +1148,7 @@ class EngineAdapter:
             drop_args["cascade"] = cascade
 
         self.execute(exp.Drop(this=exp.to_table(name), kind=kind, exists=exists, **drop_args))
+        self._clear_data_object_cache(name)
 
     def get_alter_operations(
         self,
@@ -1328,6 +1338,8 @@ class EngineAdapter:
                 ),
                 quote_identifiers=self.QUOTE_IDENTIFIERS_IN_VIEWS,
             )
+
+        self._clear_data_object_cache(view_name)
 
         # Register table comment with commands if the engine doesn't support doing it in CREATE
         if (
@@ -2278,14 +2290,52 @@ class EngineAdapter:
         if object_names is not None:
             if not object_names:
                 return []
-            object_names_list = list(object_names)
-            batches = [
-                object_names_list[i : i + self.DATA_OBJECT_FILTER_BATCH_SIZE]
-                for i in range(0, len(object_names_list), self.DATA_OBJECT_FILTER_BATCH_SIZE)
-            ]
-            return [
-                obj for batch in batches for obj in self._get_data_objects(schema_name, set(batch))
-            ]
+
+            # Check cache for each object name
+            target_schema = to_schema(schema_name)
+            cached_objects = []
+            missing_names = set()
+
+            for name in object_names:
+                cache_key = _get_data_object_cache_key(
+                    target_schema.catalog, target_schema.db, name
+                )
+                if cache_key in self._data_object_cache:
+                    data_object = self._data_object_cache[cache_key]
+                    # If the object is none, then the table was previously looked for but not found
+                    if data_object:
+                        cached_objects.append(data_object)
+                else:
+                    missing_names.add(name)
+
+            # Fetch missing objects from database
+            if missing_names:
+                object_names_list = list(missing_names)
+                batches = [
+                    object_names_list[i : i + self.DATA_OBJECT_FILTER_BATCH_SIZE]
+                    for i in range(0, len(object_names_list), self.DATA_OBJECT_FILTER_BATCH_SIZE)
+                ]
+                fetched_objects = [
+                    obj
+                    for batch in batches
+                    for obj in self._get_data_objects(schema_name, set(batch))
+                ]
+
+                # Cache the fetched objects
+                for obj in fetched_objects:
+                    cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
+                    self._data_object_cache[cache_key] = obj
+
+                fetched_object_names = {obj.name for obj in fetched_objects}
+                for missing_name in missing_names - fetched_object_names:
+                    cache_key = _get_data_object_cache_key(
+                        target_schema.catalog, target_schema.db, missing_name
+                    )
+                    self._data_object_cache[cache_key] = None
+
+                return cached_objects + fetched_objects
+
+            return cached_objects
         return self._get_data_objects(schema_name)
 
     def fetchone(
@@ -2693,6 +2743,15 @@ class EngineAdapter:
 
         return expression.sql(**sql_gen_kwargs, copy=False)  # type: ignore
 
+    def _clear_data_object_cache(self, table_name: t.Optional[TableName] = None) -> None:
+        """Clears the cache entry for the given table name, or clears the entire cache if table_name is None."""
+        if table_name is None:
+            self._data_object_cache.clear()
+        else:
+            table = exp.to_table(table_name)
+            cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+            self._data_object_cache.pop(cache_key, None)
+
     def _get_data_objects(
         self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
     ) -> t.List[DataObject]:
@@ -2940,3 +2999,11 @@ def _decoded_str(value: t.Union[str, bytes]) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8")
     return value
+
+
+def _get_data_object_cache_key(catalog: t.Optional[str], schema_name: str, object_name: str) -> str:
+    """Returns a cache key for a data object based on its fully qualified name."""
+    catalog_part = catalog.lower() if catalog else ""
+    schema_part = schema_name.lower()
+    object_part = object_name.lower()
+    return f"{catalog_part}.{schema_part}.{object_part}"
