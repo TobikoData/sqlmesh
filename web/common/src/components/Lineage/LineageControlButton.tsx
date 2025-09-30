@@ -12,7 +12,7 @@ export function LineageControlButton({
 }: {
   text: string
   children: React.ReactNode
-  onClick?: () => void
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
   disabled?: boolean
   className?: string
 }) {

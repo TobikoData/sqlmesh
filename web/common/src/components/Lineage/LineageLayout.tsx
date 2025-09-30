@@ -355,6 +355,7 @@ function LineageLayoutBase<
         )}
         <Controls
           showInteractive={false}
+          showFitView={false}
           position="top-right"
         >
           {currentNode && (
