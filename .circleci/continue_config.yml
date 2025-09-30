@@ -300,8 +300,8 @@ workflows:
           name: cloud_engine_<< matrix.engine >>
           context:
             - sqlmesh_cloud_database_integration
-          requires:
-            - engine_tests_docker
+#          requires:
+#            - engine_tests_docker
           matrix:
             parameters:
               engine:
@@ -313,10 +313,10 @@ workflows:
                 - athena
                 - fabric
                 - gcp-postgres
-          filters:
-            branches:
-              only:
-                - main
+#          filters:
+#            branches:
+#              only:
+#                - main
       - ui_style
       - ui_test
       - vscode_test

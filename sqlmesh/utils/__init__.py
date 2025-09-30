@@ -13,6 +13,7 @@ import traceback
 import types
 import typing as t
 import uuid
+import unicodedata
 from dataclasses import dataclass
 from collections import defaultdict
 from contextlib import contextmanager
@@ -289,11 +290,13 @@ def sqlglot_dialects() -> str:
     return "'" + "', '".join(Dialects.__members__.values()) + "'"
 
 
-NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
+NON_WORD = re.compile(r"\W", flags=re.UNICODE)
 
 
 def sanitize_name(name: str) -> str:
-    return NON_ALNUM.sub("_", name)
+    s = unicodedata.normalize("NFC", name)
+    s = NON_WORD.sub("_", s)
+    return s
 
 
 def groupby(

@@ -3990,3 +3990,32 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
         was_evaluated=True,
         day_delta=4,
     )
+
+
+def test_unicode_characters(ctx: TestContext, tmp_path: Path):
+    if ctx.dialect in ["spark", "trino"]:
+        # It is possible that Trino could support this if we changed `QUOTE_IDENTIFIERS_IN_VIEWS` but that would
+        # break the compatibility it has when be mixed with Spark for compute
+        pytest.skip("Skipping as these engines have issues with unicode characters in model names")
+
+    model_name = "客户数据"
+    table = ctx.table(model_name).sql(dialect=ctx.dialect)
+    (tmp_path / "models").mkdir(exist_ok=True)
+
+    model_def = f"""
+    MODEL (
+        name {table},
+        kind FULL,
+        dialect '{ctx.dialect}'
+    );
+    SELECT 1 as id
+    """
+
+    (tmp_path / "models" / "客户数据.sql").write_text(model_def)
+
+    context = ctx.create_context(path=tmp_path)
+    context.plan(auto_apply=True, no_prompts=True)
+
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 1
+    assert results.views[0].lower() == model_name

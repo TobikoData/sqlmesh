@@ -34,6 +34,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
+    # Spark has this set to false for compatibility when mixing with Trino but that isn't a concern with Databricks
+    QUOTE_IDENTIFIERS_IN_VIEWS = True
     SCHEMA_DIFFER_KWARGS = {
         "support_positional_add": True,
         "nested_support": NestedSupport.ALL,
