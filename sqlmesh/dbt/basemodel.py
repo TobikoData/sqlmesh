@@ -57,6 +57,12 @@ class Materialization(str, Enum):
     # Snowflake, https://docs.getdbt.com/reference/resource-configs/snowflake-configs#dynamic-tables
     DYNAMIC_TABLE = "dynamic_table"
 
+    CUSTOM = "custom"
+
+    @classmethod
+    def _missing_(cls, value):  # type: ignore
+        return cls.CUSTOM
+
 
 class SnapshotStrategy(str, Enum):
     """DBT snapshot strategies"""
@@ -294,6 +300,14 @@ class BaseModelConfig(GeneralConfig):
             # Include ALL variables as dependencies since we couldn't determine
             # precisely which variables are referenced in the model
             dependencies.variables |= set(context.variables)
+
+        if (
+            getattr(self, "model_materialization", None) == Materialization.CUSTOM
+            and hasattr(self, "_get_custom_materialization")
+            and (custom_mat := self._get_custom_materialization(context))
+        ):
+            # include custom materialization dependencies as they might use macros
+            dependencies = dependencies.union(custom_mat.dependencies)
 
         model_dialect = self.dialect(context)
         model_context = context.context_for_dependencies(
