@@ -169,8 +169,6 @@ class RedshiftEngineAdapter(
 
     @staticmethod
     def _grant_object_kind(table_type: DataObjectType) -> str:
-        if table_type == DataObjectType.VIEW:
-            return "VIEW"
         if table_type == DataObjectType.MATERIALIZED_VIEW:
             return "MATERIALIZED VIEW"
         return "TABLE"

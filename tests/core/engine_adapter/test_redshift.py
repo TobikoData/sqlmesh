@@ -151,7 +151,7 @@ def test_sync_grants_config_with_overlaps(
     "table_type, expected_keyword",
     [
         (DataObjectType.TABLE, "TABLE"),
-        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.VIEW, "TABLE"),
         (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
     ],
 )
