@@ -1377,8 +1377,13 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
     @staticmethod
     def _grant_object_kind(table_type: DataObjectType) -> str:
-        if table_type == DataObjectType.VIEW or table_type == DataObjectType.MATERIALIZED_VIEW:
+        if table_type == DataObjectType.VIEW:
             return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            # We actually need to use "MATERIALIZED VIEW" here even though it's not listed
+            # as a supported resource_type in the BigQuery DCL doc:
+            # https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
+            return "MATERIALIZED VIEW"
         return "TABLE"
 
     def _dcl_grants_config_expr(

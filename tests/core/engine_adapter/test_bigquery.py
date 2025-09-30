@@ -1336,7 +1336,7 @@ def test_sync_grants_config_with_overlaps(
     [
         (DataObjectType.TABLE, "TABLE"),
         (DataObjectType.VIEW, "VIEW"),
-        (DataObjectType.MATERIALIZED_VIEW, "TABLE"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
     ],
 )
 def test_sync_grants_config_object_kind(
