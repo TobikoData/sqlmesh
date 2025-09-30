@@ -3990,3 +3990,40 @@ def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_p
         was_evaluated=True,
         day_delta=4,
     )
+
+
+def test_unicode_characters(ctx: TestContext, tmp_path: Path):
+    # Engines that don't quote identifiers in views are incompatible with unicode characters in model names
+    # at the time of writing this is Spark/Trino and they do this for compatibility reasons.
+    # I also think Spark may not support unicode in general but that would need to be verified.
+    if not ctx.engine_adapter.QUOTE_IDENTIFIERS_IN_VIEWS:
+        pytest.skip("Skipping as these engines have issues with unicode characters in model names")
+
+    model_name = "客户数据"
+    table = ctx.table(model_name).sql(dialect=ctx.dialect)
+    (tmp_path / "models").mkdir(exist_ok=True)
+
+    model_def = f"""
+    MODEL (
+        name {table},
+        kind FULL,
+        dialect '{ctx.dialect}'
+    );
+    SELECT 1 as id
+    """
+
+    (tmp_path / "models" / "客户数据.sql").write_text(model_def)
+
+    context = ctx.create_context(path=tmp_path)
+    context.plan(auto_apply=True, no_prompts=True)
+
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 1
+    assert results.views[0].lower() == model_name
+
+    schema = d.to_schema(ctx.schema(), dialect=ctx.dialect)
+    schema_name = schema.args["db"].this
+    schema.args["db"].set("this", "sqlmesh__" + schema_name)
+    table_results = ctx.get_metadata_results(schema)
+    assert len(table_results.tables) == 1
+    assert table_results.tables[0].lower().startswith(schema_name.lower() + "________")
