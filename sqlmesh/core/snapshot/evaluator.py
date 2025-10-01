@@ -2894,6 +2894,7 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
         model: Model,
         is_table_deployable: bool,
         render_kwargs: t.Dict[str, t.Any],
+        skip_grants: bool,
         **kwargs: t.Any,
     ) -> None:
         original_query = model.render_query_or_raise(**render_kwargs)
