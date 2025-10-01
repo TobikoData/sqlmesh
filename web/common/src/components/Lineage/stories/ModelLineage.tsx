@@ -120,7 +120,7 @@ export const ModelLineage = ({
   }, [adjacencyListKeysColumnLevel, adjacencyList])
 
   const transformNode = React.useCallback(
-    (nodeId: ModelNodeId, _: ModelName, detail: ModelLineageNodeDetails) => {
+    (nodeId: ModelNodeId, detail: ModelLineageNodeDetails) => {
       const columns = detail.columns
 
       const node = createNode('node', nodeId, {

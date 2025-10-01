@@ -38,12 +38,7 @@ export function getTransformedNodes<
 >(
   adjacencyListKeys: TAdjacencyListKey[],
   lineageDetails: LineageDetails<TAdjacencyListKey, TDetailsNode>,
-  transformNode: TransformNodeFn<
-    TDetailsNode,
-    TNodeData,
-    TAdjacencyListKey,
-    TNodeID
-  >,
+  transformNode: TransformNodeFn<TDetailsNode, TNodeData, TNodeID>,
 ): LineageNodesMap<TNodeData, TNodeID> {
   const nodesCount = adjacencyListKeys.length
   const nodesMap: LineageNodesMap<TNodeData, TNodeID> = Object.create(null)
@@ -53,7 +48,6 @@ export function getTransformedNodes<
     const encodedNodeId = toNodeID<TNodeID>(adjacencyListKey)
     nodesMap[encodedNodeId] = transformNode(
       encodedNodeId,
-      adjacencyListKey,
       lineageDetails[adjacencyListKey],
     )
   }

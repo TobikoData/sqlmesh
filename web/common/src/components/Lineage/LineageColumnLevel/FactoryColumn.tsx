@@ -65,7 +65,10 @@ export function FactoryColumn<
     error?: Error | null
     renderError?: (error: Error) => React.ReactNode
     renderExpression?: (expression: string) => React.ReactNode
-    renderSource?: (source: string) => React.ReactNode
+    renderSource?: (
+      source: string,
+      expression?: string | null,
+    ) => React.ReactNode
     onClick?: () => void
     onCancel?: () => void
   }) {
@@ -155,7 +158,7 @@ export function FactoryColumn<
               className="p-0 min-w-[30rem] max-w-xl bg-lineage-model-column-source-background"
               delayDuration={0}
             >
-              {renderSource(column.source)}
+              {renderSource(column.source, column.expression)}
             </Tooltip>
           )}
           {column?.expression && renderExpression && (

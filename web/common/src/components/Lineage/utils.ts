@@ -55,13 +55,8 @@ export type PathType = 'bezier' | 'smoothstep' | 'step' | 'straight'
 export type TransformNodeFn<
   TData,
   TNodeData extends LineageNodeData = LineageNodeData,
-  TAdjacencyListKey extends string = string,
   TNodeID extends string = NodeId,
-> = (
-  nodeId: TNodeID,
-  adjacencyListKey: TAdjacencyListKey,
-  data: TData,
-) => LineageNode<TNodeData, TNodeID>
+> = (nodeId: TNodeID, data: TData) => LineageNode<TNodeData, TNodeID>
 
 export type TransformEdgeFn<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
