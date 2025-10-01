@@ -27,7 +27,7 @@ import {
   createEdge,
   createNode,
   getOnlySelectedNodes,
-  getTransformedModelEdges,
+  getTransformedModelEdgesSourceTargets,
   getTransformedNodes,
 } from '../help'
 import {
@@ -120,7 +120,7 @@ export const ModelLineage = ({
   }, [adjacencyListKeysColumnLevel, adjacencyList])
 
   const transformNode = React.useCallback(
-    (nodeId: ModelNodeId, detail: ModelLineageNodeDetails) => {
+    (nodeId: ModelNodeId, _: ModelName, detail: ModelLineageNodeDetails) => {
       const columns = detail.columns
 
       const node = createNode('node', nodeId, {
@@ -248,7 +248,7 @@ export const ModelLineage = ({
   const transformedEdges = React.useMemo(() => {
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
-      : getTransformedModelEdges<
+      : getTransformedModelEdgesSourceTargets<
           ModelName,
           EdgeData,
           ModelNodeId,

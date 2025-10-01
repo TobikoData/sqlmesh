@@ -47,7 +47,7 @@ export default {
           info: 'var(--color-typography-info)',
         },
         message: {
-          lucid: 'var(--color-message-translucid)',
+          translucid: 'var(--color-message-translucid)',
         },
         link: {
           underline: 'var(--color-link-underline)',
@@ -89,7 +89,7 @@ export default {
           },
         },
         input: {
-          'background-lucid': 'var(--color-input-background-lucid)',
+          'background-translucid': 'var(--color-input-background-translucid)',
           background: 'var(--color-input-background)',
           foreground: 'var(--color-input-foreground)',
           placeholder: 'var(--color-input-placeholder)',

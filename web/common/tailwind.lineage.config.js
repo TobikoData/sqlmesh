@@ -16,9 +16,20 @@ export default {
               background: 'var(--color-lineage-control-icon-background)',
               foreground: 'var(--color-lineage-control-icon-foreground)',
             },
+            button: {
+              tooltip: {
+                background:
+                  'var(--color-lineage-control-button-tooltip-background)',
+                foreground:
+                  'var(--color-lineage-control-button-tooltip-foreground)',
+              },
+            },
           },
           grid: {
             dot: 'var(--color-lineage-grid-dot)',
+          },
+          edge: {
+            DEFAULT: 'var(--color-lineage-edge)',
           },
           node: {
             background: 'var(--color-lineage-node-background)',
@@ -36,20 +47,6 @@ export default {
             },
             appendix: {
               background: 'var(--color-lineage-node-appendix-background)',
-            },
-            type: {
-              background: {
-                sql: 'var(--color-lineage-node-type-background-sql)',
-                python: 'var(--color-lineage-node-type-background-python)',
-              },
-              foreground: {
-                sql: 'var(--color-lineage-node-type-foreground-sql)',
-                python: 'var(--color-lineage-node-type-foreground-python)',
-              },
-              border: {
-                sql: 'var(--color-lineage-node-type-border-sql)',
-                python: 'var(--color-lineage-node-type-border-python)',
-              },
             },
             handle: {
               icon: {

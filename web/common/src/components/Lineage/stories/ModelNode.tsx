@@ -29,6 +29,7 @@ import {
   type ModelColumn,
   type ModelNodeId,
   type ModelColumnID,
+  type NodeType,
 } from './ModelLineageContext'
 import { ModelNodeColumn } from './ModelNodeColumn'
 import {
@@ -93,8 +94,7 @@ export const ModelNode = React.memo(function ModelNode({
 
   const shouldShowColumns =
     showNodeColumns || hasSelectedColumns || hasFetchingColumns || isHovered
-  // const modelType = data.model_type?.toLowerCase() as NodeType
-  const modelType = 'sql'
+  const modelType = data.model_type?.toLowerCase() as NodeType
   const hasColumnsFilter =
     shouldShowColumns && columns.length > MAX_COLUMNS_TO_DISPLAY
   // We are not including the footer, because we need actual height to dynamically adjust node container height

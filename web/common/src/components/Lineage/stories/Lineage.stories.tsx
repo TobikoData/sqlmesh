@@ -17,8 +17,12 @@ export const LineageModel = () => {
     >
       <style>{`
         :root {
+
+          --color-lineage-control-button-tooltip-background: rgba(150, 150, 150, 1);
+          --color-lineage-control-button-tooltip-foreground: rgba(255, 255, 255, 1);
+
           --color-lineage-divider: rgba(0, 0, 0, 0.1);
-          --color-lineage-background: rgba(0, 0, 0, 0);
+          --color-lineage-background: rgba(255, 255, 255, 1);
           --color-lineage-border: rgba(0, 0, 0, 0.1);
 
           --color-lineage-control-background: rgba(250, 250, 250, 1);

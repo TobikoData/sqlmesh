@@ -5,6 +5,8 @@ import {
   getOnlySelectedNodes,
   getTransformedNodes,
   getTransformedModelEdges,
+  getTransformedModelEdgesSourceTargets,
+  getTransformedModelEdgesTargetSources,
   createNode,
   calculateNodeBaseHeight,
   calculateNodeDetailsHeight,
@@ -92,6 +94,7 @@ describe('Lineage Help Functions', () => {
 
       const transformNode = (
         nodeId: NodeId,
+        adjacencyListKey: string,
         data: { name: string; type: string },
       ) =>
         ({
@@ -125,7 +128,11 @@ describe('Lineage Help Functions', () => {
     test('should handle empty adjacency list', () => {
       const adjacencyListKeys: string[] = []
       const lineageDetails: LineageDetails<string, { name: string }> = {}
-      const transformNode = (nodeId: NodeId, data: { name: string }) =>
+      const transformNode = (
+        nodeId: NodeId,
+        adjacencyListKey: string,
+        data: { name: string },
+      ) =>
         ({
           id: nodeId,
           position: { x: 0, y: 0 },
@@ -274,6 +281,288 @@ describe('Lineage Help Functions', () => {
       })
 
       const result = getTransformedModelEdges(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  describe('getTransformedModelEdgesSourceTargets', () => {
+    test('should transform edges from source to targets using the provided transform function', () => {
+      const adjacencyListKeys = ['model1', 'model2', 'model3']
+      const lineageAdjacencyList: LineageAdjacencyList = {
+        model1: ['model2', 'model3'],
+        model2: ['model3'],
+        model3: [],
+      }
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesSourceTargets(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(3)
+
+      const model1Id = toNodeID('model1')
+      const model2Id = toNodeID('model2')
+      const model3Id = toNodeID('model3')
+
+      expect(result[0]).toEqual({
+        id: toEdgeID('model1', 'model2'),
+        source: model1Id,
+        target: model2Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+      expect(result[1]).toEqual({
+        id: toEdgeID('model1', 'model3'),
+        source: model1Id,
+        target: model3Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+      expect(result[2]).toEqual({
+        id: toEdgeID('model2', 'model3'),
+        source: model2Id,
+        target: model3Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+    })
+
+    test('should skip edges where target is not in adjacency list', () => {
+      const adjacencyListKeys = ['model1']
+      const lineageAdjacencyList: LineageAdjacencyList = {
+        model1: ['model2'], // model2 is not in the adjacency list
+      }
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesSourceTargets(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+
+    test('should handle empty adjacency list', () => {
+      const adjacencyListKeys: string[] = []
+      const lineageAdjacencyList: LineageAdjacencyList = {}
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesSourceTargets(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+
+    test('should handle nodes with no targets', () => {
+      const adjacencyListKeys = ['model1', 'model2']
+      const lineageAdjacencyList = {
+        model1: [],
+        model2: null,
+      } as unknown as LineageAdjacencyList
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesSourceTargets(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  describe('getTransformedModelEdgesTargetSources', () => {
+    test('should transform edges from target to sources using the provided transform function', () => {
+      const adjacencyListKeys = ['model1', 'model2', 'model3']
+      const lineageAdjacencyList: LineageAdjacencyList = {
+        model1: [],
+        model2: ['model1'],
+        model3: ['model1', 'model2'],
+      }
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesTargetSources(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(3)
+
+      const model1Id = toNodeID('model1')
+      const model2Id = toNodeID('model2')
+      const model3Id = toNodeID('model3')
+
+      expect(result[0]).toEqual({
+        id: toEdgeID('model1', 'model2'),
+        source: model1Id,
+        target: model2Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+      expect(result[1]).toEqual({
+        id: toEdgeID('model1', 'model3'),
+        source: model1Id,
+        target: model3Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+      expect(result[2]).toEqual({
+        id: toEdgeID('model2', 'model3'),
+        source: model2Id,
+        target: model3Id,
+        type: 'edge',
+        zIndex: 1,
+      })
+    })
+
+    test('should skip edges where source is not in adjacency list', () => {
+      const adjacencyListKeys = ['model2']
+      const lineageAdjacencyList: LineageAdjacencyList = {
+        model2: ['model1'], // model1 is not in the adjacency list
+      }
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesTargetSources(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+
+    test('should handle empty adjacency list', () => {
+      const adjacencyListKeys: string[] = []
+      const lineageAdjacencyList: LineageAdjacencyList = {}
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesTargetSources(
+        adjacencyListKeys,
+        lineageAdjacencyList,
+        transformEdge,
+      )
+
+      expect(result).toHaveLength(0)
+    })
+
+    test('should handle nodes with no sources', () => {
+      const adjacencyListKeys = ['model1', 'model2']
+      const lineageAdjacencyList = {
+        model1: [],
+        model2: null,
+      } as unknown as LineageAdjacencyList
+
+      const transformEdge = (
+        type: string,
+        edgeId: EdgeId,
+        sourceId: NodeId,
+        targetId: NodeId,
+      ) => ({
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        type,
+        zIndex: 1,
+      })
+
+      const result = getTransformedModelEdgesTargetSources(
         adjacencyListKeys,
         lineageAdjacencyList,
         transformEdge,

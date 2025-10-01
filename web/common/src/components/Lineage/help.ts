@@ -38,17 +38,23 @@ export function getTransformedNodes<
 >(
   adjacencyListKeys: TAdjacencyListKey[],
   lineageDetails: LineageDetails<TAdjacencyListKey, TDetailsNode>,
-  transformNode: TransformNodeFn<TDetailsNode, TNodeData, TNodeID>,
+  transformNode: TransformNodeFn<
+    TDetailsNode,
+    TNodeData,
+    TAdjacencyListKey,
+    TNodeID
+  >,
 ): LineageNodesMap<TNodeData, TNodeID> {
   const nodesCount = adjacencyListKeys.length
   const nodesMap: LineageNodesMap<TNodeData, TNodeID> = Object.create(null)
 
   for (let i = 0; i < nodesCount; i++) {
-    const nodeId = adjacencyListKeys[i]
-    const encodedNodeId = toNodeID<TNodeID>(nodeId)
+    const adjacencyListKey = adjacencyListKeys[i]
+    const encodedNodeId = toNodeID<TNodeID>(adjacencyListKey)
     nodesMap[encodedNodeId] = transformNode(
       encodedNodeId,
-      lineageDetails[nodeId],
+      adjacencyListKey,
+      lineageDetails[adjacencyListKey],
     )
   }
 
@@ -90,6 +96,92 @@ export function getTransformedModelEdges<
       edges.push(
         transformEdge('edge', edgeId, nodeId, toNodeID<TNodeID>(target)),
       )
+    }
+  }
+
+  return edges
+}
+
+export function getTransformedModelEdgesSourceTargets<
+  TAdjacencyListKey extends string,
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+>(
+  adjacencyListKeys: TAdjacencyListKey[],
+  lineageAdjacencyList: LineageAdjacencyList<TAdjacencyListKey>,
+  transformEdge: TransformEdgeFn<TEdgeData, TNodeID, TEdgeID, TPortID>,
+) {
+  const nodesCount = adjacencyListKeys.length
+
+  if (nodesCount === 0) return []
+
+  const edges = []
+
+  for (let i = 0; i < nodesCount; i++) {
+    const sourceAdjacencyListKey = adjacencyListKeys[i]
+    const sourceNodeId = toNodeID<TNodeID>(sourceAdjacencyListKey)
+    const targets = lineageAdjacencyList[sourceAdjacencyListKey]
+    const targetsCount = targets?.length || 0
+
+    if (targets == null || targetsCount < 1) continue
+
+    for (let j = 0; j < targetsCount; j++) {
+      const targetAdjacencyListKey = targets[j]
+
+      if (!(targetAdjacencyListKey in lineageAdjacencyList)) continue
+
+      const edgeId = toEdgeID<TEdgeID>(
+        sourceAdjacencyListKey,
+        targetAdjacencyListKey,
+      )
+      const targetNodeId = toNodeID<TNodeID>(targetAdjacencyListKey)
+
+      edges.push(transformEdge('edge', edgeId, sourceNodeId, targetNodeId))
+    }
+  }
+
+  return edges
+}
+
+export function getTransformedModelEdgesTargetSources<
+  TAdjacencyListKey extends string,
+  TEdgeData extends LineageEdgeData = LineageEdgeData,
+  TNodeID extends string = NodeId,
+  TEdgeID extends string = EdgeId,
+  TPortID extends string = PortId,
+>(
+  adjacencyListKeys: TAdjacencyListKey[],
+  lineageAdjacencyList: LineageAdjacencyList<TAdjacencyListKey>,
+  transformEdge: TransformEdgeFn<TEdgeData, TNodeID, TEdgeID, TPortID>,
+) {
+  const nodesCount = adjacencyListKeys.length
+
+  if (nodesCount === 0) return []
+
+  const edges = []
+
+  for (let i = 0; i < nodesCount; i++) {
+    const targetAdjacencyListKey = adjacencyListKeys[i]
+    const targetNodeId = toNodeID<TNodeID>(targetAdjacencyListKey)
+    const sources = lineageAdjacencyList[targetAdjacencyListKey]
+    const sourcesCount = sources?.length || 0
+
+    if (sources == null || sourcesCount < 1) continue
+
+    for (let j = 0; j < sourcesCount; j++) {
+      const sourceAdjacencyListKey = sources[j]
+
+      if (!(sourceAdjacencyListKey in lineageAdjacencyList)) continue
+
+      const edgeId = toEdgeID<TEdgeID>(
+        sourceAdjacencyListKey,
+        targetAdjacencyListKey,
+      )
+      const sourceNodeId = toNodeID<TNodeID>(sourceAdjacencyListKey)
+
+      edges.push(transformEdge('edge', edgeId, sourceNodeId, targetNodeId))
     }
   }
 
