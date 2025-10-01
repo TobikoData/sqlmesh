@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 
 from sqlglot import exp
 
@@ -13,6 +14,7 @@ from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
     MERGE_SOURCE_ALIAS,
     MERGE_TARGET_ALIAS,
+    _get_data_object_cache_key,
 )
 from sqlmesh.core.engine_adapter.mixins import (
     GetCurrentCatalogFromFunctionMixin,
@@ -34,6 +36,9 @@ from sqlmesh.utils import get_source_columns_to_types
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
+
+
+logger = logging.getLogger(__name__)
 
 
 @set_catalog()
@@ -144,6 +149,10 @@ class MSSQLEngineAdapter(
     def table_exists(self, table_name: TableName) -> bool:
         """MsSql doesn't support describe so we query information_schema."""
         table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
 
         sql = (
             exp.select("1")

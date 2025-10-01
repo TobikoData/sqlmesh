@@ -3723,6 +3723,27 @@ def test_data_object_cache_get_data_objects(
     assert mock_get_data_objects.call_count == 1  # Should not increase
 
 
+def test_data_object_cache_get_data_objects_no_object_names(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter, patch_get_data_objects=False)
+
+    table1 = DataObject(catalog=None, schema="test_schema", name="table1", type="table")
+    table2 = DataObject(catalog=None, schema="test_schema", name="table2", type="table")
+
+    mock_get_data_objects = mocker.patch.object(
+        adapter, "_get_data_objects", return_value=[table1, table2]
+    )
+
+    result1 = adapter.get_data_objects("test_schema")
+    assert len(result1) == 2
+    assert mock_get_data_objects.call_count == 1
+
+    result2 = adapter.get_data_objects("test_schema", {"table1", "table2"})
+    assert len(result2) == 2
+    assert mock_get_data_objects.call_count == 1  # Should not increase
+
+
 def test_data_object_cache_get_data_object(
     make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
 ):

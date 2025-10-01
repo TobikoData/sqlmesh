@@ -34,7 +34,7 @@ class PostgresEngineAdapter(
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
-    MAX_IDENTIFIER_LENGTH = 63
+    MAX_IDENTIFIER_LENGTH: t.Optional[int] = 63
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {

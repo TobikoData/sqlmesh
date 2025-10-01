@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.base import _get_data_object_cache_key
 from sqlmesh.core.engine_adapter.mixins import (
     ClusteredByMixin,
     RowDiffMixin,
@@ -744,6 +745,12 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin):
             )
 
     def table_exists(self, table_name: TableName) -> bool:
+        table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
+
         try:
             from google.cloud.exceptions import NotFound
         except ModuleNotFoundError:

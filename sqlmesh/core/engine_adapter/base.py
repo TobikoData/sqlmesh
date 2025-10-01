@@ -1470,8 +1470,14 @@ class EngineAdapter:
         }
 
     def table_exists(self, table_name: TableName) -> bool:
+        table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
+
         try:
-            self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
+            self.execute(exp.Describe(this=table, kind="TABLE"))
             return True
         except Exception:
             return False
@@ -2301,11 +2307,13 @@ class EngineAdapter:
                     target_schema.catalog, target_schema.db, name
                 )
                 if cache_key in self._data_object_cache:
+                    logger.debug("Data object cache hit: %s", cache_key)
                     data_object = self._data_object_cache[cache_key]
                     # If the object is none, then the table was previously looked for but not found
                     if data_object:
                         cached_objects.append(data_object)
                 else:
+                    logger.debug("Data object cache miss: %s", cache_key)
                     missing_names.add(name)
 
             # Fetch missing objects from database
@@ -2321,7 +2329,6 @@ class EngineAdapter:
                     for obj in self._get_data_objects(schema_name, set(batch))
                 ]
 
-                # Cache the fetched objects
                 for obj in fetched_objects:
                     cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
                     self._data_object_cache[cache_key] = obj
@@ -2336,7 +2343,12 @@ class EngineAdapter:
                 return cached_objects + fetched_objects
 
             return cached_objects
-        return self._get_data_objects(schema_name)
+
+        fetched_objects = self._get_data_objects(schema_name)
+        for obj in fetched_objects:
+            cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
+            self._data_object_cache[cache_key] = obj
+        return fetched_objects
 
     def fetchone(
         self,
@@ -2746,10 +2758,12 @@ class EngineAdapter:
     def _clear_data_object_cache(self, table_name: t.Optional[TableName] = None) -> None:
         """Clears the cache entry for the given table name, or clears the entire cache if table_name is None."""
         if table_name is None:
+            logger.debug("Clearing entire data object cache")
             self._data_object_cache.clear()
         else:
             table = exp.to_table(table_name)
             cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+            logger.debug("Clearing data object cache key: %s", cache_key)
             self._data_object_cache.pop(cache_key, None)
 
     def _get_data_objects(
@@ -3003,7 +3017,5 @@ def _decoded_str(value: t.Union[str, bytes]) -> str:
 
 def _get_data_object_cache_key(catalog: t.Optional[str], schema_name: str, object_name: str) -> str:
     """Returns a cache key for a data object based on its fully qualified name."""
-    catalog_part = catalog.lower() if catalog else ""
-    schema_part = schema_name.lower()
-    object_part = object_name.lower()
-    return f"{catalog_part}.{schema_part}.{object_part}"
+    catalog = catalog or ""
+    return f"{catalog}.{schema_name}.{object_name}"
