@@ -855,12 +855,42 @@ class GenericContext(BaseContext, t.Generic[C]):
         return completion_status
 
     @python_api_analytics
-    def run_janitor(self, ignore_ttl: bool) -> bool:
+    def run_janitor(
+        self,
+        ignore_ttl: bool,
+        batch_start: t.Optional[TimeLike] = None,
+        batch_size_seconds: t.Optional[int] = None,
+    ) -> bool:
         success = False
 
         if self.console.start_cleanup(ignore_ttl):
             try:
-                self._run_janitor(ignore_ttl)
+                if batch_size_seconds is not None:
+                    if batch_size_seconds <= 0:
+                        raise SQLMeshError("batch_size_seconds must be a positive integer.")
+                    if batch_start is None:
+                        raise SQLMeshError(
+                            "batch_start must be provided when batch_size_seconds is set."
+                        )
+
+                current_ts = now_timestamp()
+
+                if batch_start is not None:
+                    batch_start = to_timestamp(batch_start)
+                    next_batch_ts = batch_start
+                else:
+                    next_batch_ts = current_ts
+
+                batch_delta_ms = None if batch_size_seconds is None else batch_size_seconds * 1000
+
+                while True:
+                    self._run_janitor(ignore_ttl, current_ts=next_batch_ts)
+
+                    if batch_delta_ms is None or next_batch_ts >= current_ts:
+                        break
+
+                    next_batch_ts = min(next_batch_ts + batch_delta_ms, current_ts)
+
                 success = True
             finally:
                 self.console.stop_cleanup(success=success)
@@ -2846,8 +2876,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
         return True
 
-    def _run_janitor(self, ignore_ttl: bool = False) -> None:
-        current_ts = now_timestamp()
+    def _run_janitor(self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None) -> None:
+        current_ts = current_ts or now_timestamp()
 
         # Clean up expired environments by removing their views and schemas
         self._cleanup_environments(current_ts=current_ts)

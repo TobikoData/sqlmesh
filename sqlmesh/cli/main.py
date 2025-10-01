@@ -631,16 +631,35 @@ def invalidate(ctx: click.Context, environment: str, **kwargs: t.Any) -> None:
     is_flag=True,
     help="Cleanup snapshots that are not referenced in any environment, regardless of when they're set to expire",
 )
+@click.option(
+    "--batch-start",
+    help="The batch start datetime to start processing expired snapshots to avoid large requests.",
+)
+@click.option(
+    "--batch-seconds",
+    "batch_size_seconds",
+    type=int,
+    help="When provided with --batch-start, runs the janitor in batches by incrementing the timestamp by this many seconds until reaching the current time.",
+)
 @click.pass_context
 @error_handler
 @cli_analytics
-def janitor(ctx: click.Context, ignore_ttl: bool, **kwargs: t.Any) -> None:
+def janitor(
+    ctx: click.Context,
+    ignore_ttl: bool,
+    batch_start: t.Optional[TimeLike],
+    batch_size_seconds: t.Optional[int],
+) -> None:
     """
     Run the janitor process on-demand.
 
     The janitor cleans up old environments and expired snapshots.
     """
-    ctx.obj.run_janitor(ignore_ttl, **kwargs)
+    ctx.obj.run_janitor(
+        ignore_ttl,
+        batch_start=batch_start,
+        batch_size_seconds=batch_size_seconds,
+    )
 
 
 @cli.command("destroy")

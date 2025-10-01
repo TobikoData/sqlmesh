@@ -309,6 +309,15 @@ Usage: sqlmesh janitor [OPTIONS]
 Options:
   --ignore-ttl  Cleanup snapshots that are not referenced in any environment,
                 regardless of when they're set to expire
+  --batch-start TEXT
+                Optional datetime (for example, "2024-12-01" or "2 days ago")
+                to begin evaluating expired snapshots. When omitted the
+                janitor starts at the current time.
+  --batch-seconds INTEGER
+                When provided alongside --batch-start, reruns the janitor in
+                batches by advancing the evaluation time in the given number
+                of seconds until it catches up to "now". Use this to throttle
+                large cleanup jobs.
   --help        Show this message and exit.
 ```
 

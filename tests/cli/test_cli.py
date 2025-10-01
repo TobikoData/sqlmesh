@@ -14,7 +14,7 @@ from click import ClickException
 from click.testing import CliRunner
 from sqlmesh import RuntimeEnv
 from sqlmesh.cli.project_init import ProjectTemplate, init_example_project
-from sqlmesh.cli.main import cli
+from sqlmesh.cli.main import cli, janitor
 from sqlmesh.core.context import Context
 from sqlmesh.integrations.dlt import generate_dlt_models
 from sqlmesh.utils.date import now_ds, time_like_to_str, timedelta, to_datetime, yesterday_ds
@@ -125,6 +125,40 @@ def init_prod_and_backfill(runner, temp_dir) -> None:
     )
     assert_plan_success(result)
     assert path.exists(temp_dir / "db.db")
+
+
+def test_cli_janitor_batch_string(runner: CliRunner, mocker) -> None:
+    context_mock = mocker.MagicMock()
+
+    result = runner.invoke(
+        janitor,
+        ["--ignore-ttl", "--batch-start", "2025-01-01", "--batch-seconds", "60"],
+        obj=context_mock,
+    )
+
+    assert result.exit_code == 0
+    context_mock.run_janitor.assert_called_once_with(
+        True,
+        batch_start="2025-01-01",
+        batch_size_seconds=60,
+    )
+
+
+def test_cli_janitor_batch_int(runner: CliRunner, mocker) -> None:
+    context_mock = mocker.MagicMock()
+
+    result = runner.invoke(
+        janitor,
+        ["--ignore-ttl", "--batch-start", "1735862400000", "--batch-seconds", "60"],
+        obj=context_mock,
+    )
+
+    assert result.exit_code == 0
+    context_mock.run_janitor.assert_called_once_with(
+        True,
+        batch_start="1735862400000",
+        batch_size_seconds=60,
+    )
 
 
 def assert_duckdb_test(result) -> None:

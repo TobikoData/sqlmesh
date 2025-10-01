@@ -1057,6 +1057,87 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     )
 
 
+@time_machine.travel("2025-01-03 00:00:00 UTC", tick=False)
+def test_run_janitor_default_timestamp(sushi_context: Context, mocker: MockerFixture) -> None:
+    context = sushi_context
+    mocker.patch.object(context.console, "start_cleanup", return_value=True)
+    stop_cleanup = mocker.patch.object(context.console, "stop_cleanup")
+    run_janitor = mocker.patch.object(context, "_run_janitor")
+
+    result = context.run_janitor(ignore_ttl=False)
+
+    assert result is True
+    run_janitor.assert_called_once_with(False, current_ts=1735862400000)
+    stop_cleanup.assert_called_once_with(success=True)
+
+
+@time_machine.travel("2025-01-03 00:00:00 UTC", tick=False)
+def test_run_janitor_no_batch_size_seconds(sushi_context: Context, mocker: MockerFixture) -> None:
+    context = sushi_context
+    mocker.patch.object(context.console, "start_cleanup", return_value=True)
+    stop_cleanup = mocker.patch.object(context.console, "stop_cleanup")
+    run_janitor = mocker.patch.object(context, "_run_janitor")
+
+    result = context.run_janitor(
+        ignore_ttl=False,
+        batch_start="2 days ago",
+    )
+
+    assert result is True
+    assert run_janitor.call_args_list == [
+        call(False, current_ts=1735689600000),
+    ]
+    stop_cleanup.assert_called_once_with(success=True)
+
+
+@time_machine.travel("2025-01-03 00:00:00 UTC", tick=False)
+def test_run_janitor_batches(sushi_context: Context, mocker: MockerFixture) -> None:
+    context = sushi_context
+    mocker.patch.object(context.console, "start_cleanup", return_value=True)
+    stop_cleanup = mocker.patch.object(context.console, "stop_cleanup")
+    run_janitor = mocker.patch.object(context, "_run_janitor")
+
+    result = context.run_janitor(
+        ignore_ttl=False,
+        batch_start="2 days ago",
+        batch_size_seconds=60 * 60 * 24,  # 1 day
+    )
+
+    assert result is True
+    assert run_janitor.call_args_list == [
+        call(False, current_ts=1735689600000),
+        call(False, current_ts=1735776000000),
+        call(False, current_ts=1735862400000),
+    ]
+    stop_cleanup.assert_called_once_with(success=True)
+
+
+def test_run_janitor_batch_requires_current_ts(
+    sushi_context: Context, mocker: MockerFixture
+) -> None:
+    context = sushi_context
+    mocker.patch.object(context.console, "start_cleanup", return_value=True)
+    stop_cleanup = mocker.patch.object(context.console, "stop_cleanup")
+
+    with pytest.raises(SQLMeshError, match="batch_start must be provided"):
+        context.run_janitor(ignore_ttl=False, batch_size_seconds=60)
+
+    stop_cleanup.assert_called_once_with(success=False)
+
+
+def test_run_janitor_batch_requires_positive_seconds(
+    sushi_context: Context, mocker: MockerFixture
+) -> None:
+    context = sushi_context
+    mocker.patch.object(context.console, "start_cleanup", return_value=True)
+    stop_cleanup = mocker.patch.object(context.console, "stop_cleanup")
+
+    with pytest.raises(SQLMeshError, match="positive integer"):
+        context.run_janitor(ignore_ttl=False, batch_start=100, batch_size_seconds=0)
+
+    stop_cleanup.assert_called_once_with(success=False)
+
+
 @pytest.mark.slow
 def test_plan_default_end(sushi_context_pre_scheduling: Context):
     prod_plan_builder = sushi_context_pre_scheduling.plan_builder("prod")
