@@ -307,6 +307,9 @@ class SnapshotEvaluator:
         ]
         self._create_schemas(gateway_table_pairs=gateway_table_pairs)
 
+        # Fetch the view data objects for the promoted snapshots to get them cached
+        self._get_virtual_data_objects(target_snapshots, environment_naming_info)
+
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -425,7 +428,9 @@ class SnapshotEvaluator:
             target_snapshots: Target snapshots.
             deployability_index: Determines snapshots that are deployable / representative in the context of this creation.
         """
-        existing_data_objects = self._get_data_objects(target_snapshots, deployability_index)
+        existing_data_objects = self._get_physical_data_objects(
+            target_snapshots, deployability_index
+        )
         snapshots_to_create = []
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
@@ -482,7 +487,7 @@ class SnapshotEvaluator:
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        target_data_objects = self._get_data_objects(target_snapshots, deployability_index)
+        target_data_objects = self._get_physical_data_objects(target_snapshots, deployability_index)
         if not target_data_objects:
             return
 
@@ -1472,7 +1477,7 @@ class SnapshotEvaluator:
             and adapter.table_exists(snapshot.table_name())
         )
 
-    def _get_data_objects(
+    def _get_physical_data_objects(
         self,
         target_snapshots: t.Iterable[Snapshot],
         deployability_index: DeployabilityIndex,
@@ -1488,6 +1493,59 @@ class SnapshotEvaluator:
             A dictionary of snapshot IDs to existing data objects of their physical tables. If the data object
             for a snapshot is not found, it will not be included in the dictionary.
         """
+        return self._get_data_objects(
+            target_snapshots,
+            lambda s: exp.to_table(
+                s.table_name(deployability_index.is_deployable(s)), dialect=s.model.dialect
+            ),
+        )
+
+    def _get_virtual_data_objects(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> t.Dict[SnapshotId, DataObject]:
+        """Returns a dictionary of snapshot IDs to existing data objects of their virtual views.
+
+        Args:
+            target_snapshots: Target snapshots.
+             environment_naming_info: The environment naming info of the target virtual environment.
+
+        Returns:
+            A dictionary of snapshot IDs to existing data objects of their virtual views. If the data object
+            for a snapshot is not found, it will not be included in the dictionary.
+        """
+
+        def _get_view_name(s: Snapshot) -> exp.Table:
+            adapter = (
+                self.get_adapter(s.model_gateway)
+                if environment_naming_info.gateway_managed
+                else self.adapter
+            )
+            return exp.to_table(
+                s.qualified_view_name.for_environment(
+                    environment_naming_info, dialect=adapter.dialect
+                ),
+                dialect=adapter.dialect,
+            )
+
+        return self._get_data_objects(target_snapshots, _get_view_name)
+
+    def _get_data_objects(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        table_name_callable: t.Callable[[Snapshot], exp.Table],
+    ) -> t.Dict[SnapshotId, DataObject]:
+        """Returns a dictionary of snapshot IDs to existing data objects.
+
+        Args:
+            target_snapshots: Target snapshots.
+            table_name_callable: A function that takes a snapshot and returns the table to look for.
+
+        Returns:
+            A dictionary of snapshot IDs to existing data objects. If the data object for a snapshot is not found,
+            it will not be included in the dictionary.
+        """
         tables_by_gateway_and_schema: t.Dict[t.Union[str, None], t.Dict[exp.Table, set[str]]] = (
             defaultdict(lambda: defaultdict(set))
         )
@@ -1495,8 +1553,7 @@ class SnapshotEvaluator:
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
-            is_deployable = deployability_index.is_deployable(snapshot)
-            table = exp.to_table(snapshot.table_name(is_deployable), dialect=snapshot.model.dialect)
+            table = table_name_callable(snapshot)
             table_schema = d.schema_(table.db, catalog=table.catalog)
             tables_by_gateway_and_schema[snapshot.model_gateway][table_schema].add(table.name)
             snapshots_by_table_name[table.name] = snapshot
@@ -1507,7 +1564,9 @@ class SnapshotEvaluator:
             gateway: t.Optional[str] = None,
         ) -> t.List[DataObject]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            return self.get_adapter(gateway).get_data_objects(schema, object_names)
+            return self.get_adapter(gateway).get_data_objects(
+                schema, object_names, safe_to_cache=True
+            )
 
         with self.concurrent_context():
             existing_objects: t.List[DataObject] = []

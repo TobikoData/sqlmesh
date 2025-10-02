@@ -34,7 +34,7 @@ class PostgresEngineAdapter(
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
-    MAX_IDENTIFIER_LENGTH = 63
+    MAX_IDENTIFIER_LENGTH: t.Optional[int] = 63
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
@@ -79,11 +79,11 @@ class PostgresEngineAdapter(
             self._connection_pool.commit()
         return df
 
-    def create_table_like(
+    def _create_table_like(
         self,
         target_table_name: TableName,
         source_table_name: TableName,
-        exists: bool = True,
+        exists: bool,
         **kwargs: t.Any,
     ) -> None:
         self.execute(

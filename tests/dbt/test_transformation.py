@@ -122,10 +122,10 @@ def test_dbt_custom_materialization():
     selected_model = list(plan.selected_models)[0]
     assert selected_model == "model.sushi.custom_incremental_model"
 
-    qoery = "SELECT * FROM sushi.custom_incremental_model ORDER BY created_at"
+    query = "SELECT * FROM sushi.custom_incremental_model ORDER BY created_at"
     hook_table = "SELECT * FROM hook_table ORDER BY id"
     sushi_context.apply(plan)
-    result = sushi_context.engine_adapter.fetchdf(qoery)
+    result = sushi_context.engine_adapter.fetchdf(query)
     assert len(result) == 1
     assert {"created_at", "id"}.issubset(result.columns)
 
@@ -140,7 +140,7 @@ def test_dbt_custom_materialization():
     tomorrow = datetime.now() + timedelta(days=1)
     sushi_context.run(select_models=["sushi.custom_incremental_model"], execution_time=tomorrow)
 
-    result_after_run = sushi_context.engine_adapter.fetchdf(qoery)
+    result_after_run = sushi_context.engine_adapter.fetchdf(query)
     assert {"created_at", "id"}.issubset(result_after_run.columns)
 
     # this should have added new unique values for the new row

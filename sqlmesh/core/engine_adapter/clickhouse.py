@@ -224,7 +224,7 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         target_columns_to_types = target_columns_to_types or self.columns(target_table)
 
         temp_table = self._get_temp_table(target_table)
-        self._create_table_like(temp_table, target_table)
+        self.create_table_like(temp_table, target_table)
 
         # REPLACE BY KEY: extract kwargs if present
         dynamic_key = kwargs.get("dynamic_key")
@@ -456,7 +456,11 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
         )
 
     def _create_table_like(
-        self, target_table_name: TableName, source_table_name: TableName
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool,
+        **kwargs: t.Any,
     ) -> None:
         """Create table with identical structure as source table"""
         self.execute(
@@ -632,16 +636,15 @@ class ClickhouseEngineAdapter(EngineAdapterWithIndexSupport, LogicalMergeMixin):
             kind: What kind of object to drop. Defaults to TABLE
             **drop_args: Any extra arguments to set on the Drop expression
         """
-        self.execute(
-            exp.Drop(
-                this=exp.to_table(name),
-                kind=kind,
-                exists=exists,
-                cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
-                if self.engine_run_mode.is_cluster
-                else None,
-                **drop_args,
-            )
+        super()._drop_object(
+            name=name,
+            exists=exists,
+            kind=kind,
+            cascade=cascade,
+            cluster=exp.OnCluster(this=exp.to_identifier(self.cluster))
+            if self.engine_run_mode.is_cluster
+            else None,
+            **drop_args,
         )
 
     def _build_partitioned_by_exp(

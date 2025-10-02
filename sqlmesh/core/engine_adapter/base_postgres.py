@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import typing as t
+import logging
 
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter, _get_data_object_cache_key
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     CommentCreationTable,
@@ -18,6 +19,9 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+
+
+logger = logging.getLogger(__name__)
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
@@ -75,6 +79,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
         Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
         """
         table = exp.to_table(table_name)
+        data_object_cache_key = _get_data_object_cache_key(table.catalog, table.db, table.name)
+        if data_object_cache_key in self._data_object_cache:
+            logger.debug("Table existence cache hit: %s", data_object_cache_key)
+            return self._data_object_cache[data_object_cache_key] is not None
 
         sql = (
             exp.select("1")
