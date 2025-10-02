@@ -24,7 +24,7 @@ dependencies = [
     "requests",
     "rich[jupyter]",
     "ruamel.yaml",
-    "sqlglot[rs]~=27.19.0",
+    "sqlglot[rs]~=27.20.0",
     "tenacity",
     "time-machine",
     "json-stream"

@@ -21,6 +21,7 @@ from enum import IntEnum, Enum
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
+import unicodedata
 from sqlglot import exp
 from sqlglot.dialects.dialect import Dialects
 
@@ -291,8 +292,14 @@ def sqlglot_dialects() -> str:
 
 NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
 
+NON_ALUM_INCLUDE_UNICODE = re.compile(r"\W", flags=re.UNICODE)
 
-def sanitize_name(name: str) -> str:
+
+def sanitize_name(name: str, *, include_unicode: bool = False) -> str:
+    if include_unicode:
+        s = unicodedata.normalize("NFC", name)
+        s = NON_ALUM_INCLUDE_UNICODE.sub("_", s)
+        return s
     return NON_ALNUM.sub("_", name)
 
 

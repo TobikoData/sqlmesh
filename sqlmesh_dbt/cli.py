@@ -33,14 +33,38 @@ vars_option = click.option(
 
 select_option = click.option(
     "-s",
-    "-m",
     "--select",
-    "--models",
-    "--model",
     multiple=True,
     help="Specify the nodes to include.",
 )
+model_option = click.option(
+    "-m",
+    "--models",
+    "--model",
+    multiple=True,
+    help="Specify the model nodes to include; other nodes are excluded.",
+)
 exclude_option = click.option("--exclude", multiple=True, help="Specify the nodes to exclude.")
+
+# TODO: expand this out into --resource-type/--resource-types and --exclude-resource-type/--exclude-resource-types
+resource_types = [
+    "metric",
+    "semantic_model",
+    "saved_query",
+    "source",
+    "analysis",
+    "model",
+    "test",
+    "unit_test",
+    "exposure",
+    "snapshot",
+    "seed",
+    "default",
+    "all",
+]
+resource_type_option = click.option(
+    "--resource-type", type=click.Choice(resource_types, case_sensitive=False)
+)
 
 
 @click.group(cls=ErrorHandlingGroup, invoke_without_command=True)
@@ -86,7 +110,9 @@ def dbt(
 
 @dbt.command()
 @select_option
+@model_option
 @exclude_option
+@resource_type_option
 @click.option(
     "-f",
     "--full-refresh",
@@ -116,7 +142,9 @@ def run(
 
 @dbt.command(name="list")
 @select_option
+@model_option
 @exclude_option
+@resource_type_option
 @vars_option
 @click.pass_context
 def list_(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], **kwargs: t.Any) -> None:

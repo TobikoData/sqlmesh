@@ -31,6 +31,7 @@ from sqlmesh.core.model.kind import (
     OnAdditiveChange,
     on_destructive_change_validator,
     on_additive_change_validator,
+    DbtCustomKind,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization, SnapshotStrategy
 from sqlmesh.dbt.common import SqlStr, sql_str_validator
@@ -40,6 +41,7 @@ from sqlmesh.utils.pydantic import field_validator
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit.definition import ModelAudit
     from sqlmesh.dbt.context import DbtContext
+    from sqlmesh.dbt.package import MaterializationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -444,6 +446,19 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.DYNAMIC_TABLE:
             return ManagedKind()
 
+        if materialization == Materialization.CUSTOM:
+            if custom_materialization := self._get_custom_materialization(context):
+                return DbtCustomKind(
+                    materialization=self.materialized,
+                    adapter=custom_materialization.adapter,
+                    dialect=self.dialect(context),
+                    definition=custom_materialization.definition,
+                )
+
+            raise ConfigError(
+                f"Unknown materialization '{self.materialized}'. Custom materializations must be defined in your dbt project."
+            )
+
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     def _big_query_partition_by_expr(self, context: DbtContext) -> exp.Expression:
@@ -483,6 +498,18 @@ class ModelConfig(BaseModelConfig):
             dialect="bigquery",
         )
 
+    def _get_custom_materialization(self, context: DbtContext) -> t.Optional[MaterializationConfig]:
+        materializations = context.manifest.materializations()
+        name, target_adapter = self.materialized, context.target.dialect
+
+        adapter_specific_key = f"{name}_{target_adapter}"
+        default_key = f"{name}_default"
+        if adapter_specific_key in materializations:
+            return materializations[adapter_specific_key]
+        if default_key in materializations:
+            return materializations[default_key]
+        return None
+
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return super().sqlmesh_config_fields | {
@@ -510,10 +537,11 @@ class ModelConfig(BaseModelConfig):
         physical_properties: t.Dict[str, t.Any] = {}
 
         if self.partition_by:
-            if isinstance(kind, ViewKind):
+            if isinstance(kind, (ViewKind, EmbeddedKind)):
                 logger.warning(
-                    "Ignoring partition_by config for model '%s'; partition_by is not supported for views.",
+                    "Ignoring partition_by config for model '%s'; partition_by is not supported for %s.",
                     self.name,
+                    "views" if isinstance(kind, ViewKind) else "ephemeral models",
                 )
             else:
                 partitioned_by = []

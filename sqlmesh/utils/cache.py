@@ -133,7 +133,7 @@ class FileCache(t.Generic[T]):
 
     def _cache_entry_path(self, name: str, entry_id: str = "") -> Path:
         entry_file_name = "__".join(p for p in (self._cache_version, name, entry_id) if p)
-        full_path = self._path / sanitize_name(entry_file_name)
+        full_path = self._path / sanitize_name(entry_file_name, include_unicode=True)
         if IS_WINDOWS:
             # handle paths longer than 260 chars
             full_path = fix_windows_path(full_path)

@@ -4,7 +4,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def to_sqlmesh(dbt_select: t.Collection[str], dbt_exclude: t.Collection[str]) -> t.Optional[str]:
+def consolidate(
+    select: t.List[str],
+    exclude: t.List[str],
+    models: t.List[str],
+    resource_type: t.Optional[str],
+) -> t.Tuple[t.List[str], t.List[str]]:
+    """
+    Given a bunch of dbt CLI arguments that may or may not be defined:
+        --select, --exclude, --models, --resource-type
+
+    Combine them into a single set of --select/--exclude node selectors, throwing an error if mutually exclusive combinations are provided
+    Note that the returned value is still in dbt format, pass it to to_sqlmesh() to create a selector for the sqlmesh selector engine
+    """
+    if models and select:
+        raise ValueError('"models" and "select" are mutually exclusive arguments')
+
+    if models and resource_type:
+        raise ValueError('"models" and "resource_type" are mutually exclusive arguments')
+
+    if models:
+        # --models implies resource_type:model
+        resource_type = "model"
+
+    if resource_type:
+        resource_type_selector = f"resource_type:{resource_type}"
+        all_selectors = [*select, *models]
+        select = (
+            [
+                f"resource_type:{resource_type},{original_selector}"
+                for original_selector in all_selectors
+            ]
+            if all_selectors
+            else [resource_type_selector]
+        )
+
+    return select, exclude
+
+
+def to_sqlmesh(dbt_select: t.List[str], dbt_exclude: t.List[str]) -> t.Optional[str]:
     """
     Given selectors defined in the format of the dbt cli --select and --exclude arguments, convert them into a selector expression that
     the SQLMesh selector engine can understand.

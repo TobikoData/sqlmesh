@@ -16,6 +16,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import update_model_schemas
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.git import GitClient
@@ -25,6 +26,7 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from typing_extensions import Literal as Lit  # noqa
     from sqlmesh.core.model import Model
+    from sqlmesh.core.node import Node
     from sqlmesh.core.state_sync import StateReader
 
 
@@ -167,7 +169,7 @@ class Selector(abc.ABC):
         return models
 
     def expand_model_selections(
-        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Model]] = None
+        self, model_selections: t.Iterable[str], models: t.Optional[t.Dict[str, Node]] = None
     ) -> t.Set[str]:
         """Expands a set of model selections into a set of model fqns that can be looked up in the Context.
 
@@ -180,7 +182,7 @@ class Selector(abc.ABC):
 
         node = parse(" | ".join(f"({s})" for s in model_selections))
 
-        all_models = models or self._models
+        all_models: t.Dict[str, Node] = models or dict(self._models)
         models_by_tags: t.Dict[str, t.Set[str]] = {}
 
         for fqn, model in all_models.items():
@@ -226,6 +228,13 @@ class Selector(abc.ABC):
                         if fnmatch.fnmatchcase(tag, pattern)
                     }
                 return models_by_tags.get(pattern, set())
+            if isinstance(node, ResourceType):
+                resource_type = node.name.lower()
+                return {
+                    fqn
+                    for fqn, model in all_models.items()
+                    if self._matches_resource_type(resource_type, model)
+                }
             if isinstance(node, Direction):
                 selected = set()
 
@@ -243,36 +252,49 @@ class Selector(abc.ABC):
         return evaluate(node)
 
     @abc.abstractmethod
-    def _model_name(self, model: Model) -> str:
+    def _model_name(self, model: Node) -> str:
         """Given a model, return the name that a selector pattern contining wildcards should be fnmatch'd on"""
         pass
 
     @abc.abstractmethod
-    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
         """Given a pattern, return the keys of the matching models from :all_models"""
+        pass
+
+    @abc.abstractmethod
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        """Indicate whether or not the supplied model matches the supplied resource type"""
         pass
 
 
 class NativeSelector(Selector):
     """Implementation of selectors that matches objects based on SQLMesh native names"""
 
-    def _model_name(self, model: Model) -> str:
+    def _model_name(self, model: Node) -> str:
         return model.name
 
-    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
         fqn = normalize_model_name(pattern, self._default_catalog, self._dialect)
         return {fqn} if fqn in all_models else set()
+
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        if resource_type == "model":
+            return model.is_model
+        if resource_type == "audit":
+            return isinstance(model, StandaloneAudit)
+
+        raise SQLMeshError(f"Unsupported resource type: {resource_type}")
 
 
 class DbtSelector(Selector):
     """Implementation of selectors that matches objects based on the DBT names instead of the SQLMesh native names"""
 
-    def _model_name(self, model: Model) -> str:
+    def _model_name(self, model: Node) -> str:
         if dbt_fqn := model.dbt_fqn:
             return dbt_fqn
         raise SQLMeshError("dbt node information must be populated to use dbt selectors")
 
-    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Model]) -> t.Set[str]:
+    def _pattern_to_model_fqns(self, pattern: str, all_models: t.Dict[str, Node]) -> t.Set[str]:
         # a pattern like "staging.customers" should match a model called "jaffle_shop.staging.customers"
         # but not a model called "jaffle_shop.customers.staging"
         # also a pattern like "aging" should not match "staging" so we need to consider components; not substrings
@@ -306,6 +328,40 @@ class DbtSelector(Selector):
                 matches.add(fqn)
         return matches
 
+    def _matches_resource_type(self, resource_type: str, model: Node) -> bool:
+        """
+        ref: https://docs.getdbt.com/reference/node-selection/methods#resource_type
+
+        # supported by SQLMesh
+        "model"
+        "seed"
+        "source" # external model
+        "test" # standalone audit
+
+        # not supported by SQLMesh yet, commented out to throw an error if someone tries to use them
+        "analysis"
+        "exposure"
+        "metric"
+        "saved_query"
+        "semantic_model"
+        "snapshot"
+        "unit_test"
+        """
+        if resource_type not in ("model", "seed", "source", "test"):
+            raise SQLMeshError(f"Unsupported resource type: {resource_type}")
+
+        if isinstance(model, StandaloneAudit):
+            return resource_type == "test"
+
+        if resource_type == "model":
+            return model.is_model and not model.kind.is_external and not model.kind.is_seed
+        if resource_type == "source":
+            return model.kind.is_external
+        if resource_type == "seed":
+            return model.kind.is_seed
+
+        return False
+
 
 class SelectorDialect(Dialect):
     IDENTIFIERS_CAN_START_WITH_DIGIT = True
@@ -333,6 +389,10 @@ class Git(exp.Expression):
 
 
 class Tag(exp.Expression):
+    pass
+
+
+class ResourceType(exp.Expression):
     pass
 
 
@@ -388,7 +448,8 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
         upstream = _match(TokenType.PLUS)
         downstream = None
         tag = _parse_kind("tag")
-        git = False if tag else _parse_kind("git")
+        resource_type = False if tag else _parse_kind("resource_type")
+        git = False if resource_type else _parse_kind("git")
         lstar = "*" if _match(TokenType.STAR) else ""
         directions = {}
 
@@ -414,6 +475,8 @@ def parse(selector: str, dialect: DialectType = None) -> exp.Expression:
 
         if tag:
             this = Tag(this=this)
+        if resource_type:
+            this = ResourceType(this=this)
         if git:
             this = Git(this=this)
         if directions:

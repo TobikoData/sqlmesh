@@ -369,6 +369,7 @@ class JinjaMacroRegistry(PydanticModel):
         context.update(builtin_globals)
         context.update(root_macros)
         context.update(package_macros)
+        context["render"] = lambda input: env.from_string(input).render()
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)
