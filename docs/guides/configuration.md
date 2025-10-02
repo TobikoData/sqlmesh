@@ -21,6 +21,9 @@ The sources have the following order of precedence:
 2. `config.yaml` or `config.py` in the `~/.sqlmesh` folder.
 3. `config.yaml` or `config.py` in a project folder. [LOWEST PRECEDENCE]
 
+!!! note
+    To relocate the `.sqlmesh` folder, set the `SQLMESH_HOME` environment variable to your preferred directory path.
+
 ### File type
 
 You can specify a SQLMesh configuration in either YAML or Python.

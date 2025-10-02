@@ -8,7 +8,7 @@ from pathlib import Path
 
 SQLMESH = "sqlmesh"
 SQLMESH_MANAGED = "sqlmesh_managed"
-SQLMESH_PATH = Path.home() / ".sqlmesh"
+SQLMESH_PATH = Path(os.getenv("SQLMESH_HOME") or Path.home() / ".sqlmesh")
 
 PROD = "prod"
 """Prod"""

@@ -669,7 +669,7 @@ def test_replace_table_catalog_support(
 
     adapter.replace_query(
         table_name=".".join([catalog_name, "schema", "test_table"]),
-        query_or_df=parse_one("SELECT 1 AS col"),
+        query_or_df=t.cast(exp.Query, parse_one("SELECT 1 AS col")),
     )
 
     sql_calls = to_sql_calls(adapter)
@@ -705,7 +705,7 @@ def test_insert_overwrite_time_partition_hive(
 
     adapter.insert_overwrite_by_time_partition(
         table_name=".".join(["my_catalog", "schema", "test_table"]),
-        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        query_or_df=t.cast(exp.Query, parse_one("SELECT a, b FROM tbl")),
         start="2022-01-01",
         end="2022-01-02",
         time_column="b",
@@ -743,7 +743,7 @@ def test_insert_overwrite_time_partition_iceberg(
 
     adapter.insert_overwrite_by_time_partition(
         table_name=".".join(["my_catalog", "schema", "test_table"]),
-        query_or_df=parse_one("SELECT a, b FROM tbl"),
+        query_or_df=t.cast(exp.Query, parse_one("SELECT a, b FROM tbl")),
         start="2022-01-01",
         end="2022-01-02",
         time_column="b",
