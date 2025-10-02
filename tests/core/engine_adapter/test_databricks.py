@@ -195,7 +195,7 @@ def test_materialized_view_properties(mocker: MockFixture, make_mocked_engine_ad
     sql_calls = to_sql_calls(adapter)
     # https://docs.databricks.com/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view.html#syntax
     assert sql_calls == [
-        "CREATE OR REPLACE MATERIALIZED VIEW test_table PARTITIONED BY (ds) AS SELECT 1",
+        "CREATE OR REPLACE MATERIALIZED VIEW `test_table` PARTITIONED BY (`ds`) AS SELECT 1",
     ]
 
 
