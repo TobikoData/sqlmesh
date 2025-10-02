@@ -1,4 +1,8 @@
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  useVirtualizer,
+  Virtualizer,
+  type VirtualItem,
+} from '@tanstack/react-virtual'
 import React from 'react'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 import { cn } from '@/utils'
@@ -9,7 +13,11 @@ import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 export interface VirtualListProps<TItem> {
   items: TItem[]
   estimatedListItemHeight: number
-  renderListItem: (item: TItem) => React.ReactNode
+  renderListItem: (
+    item: TItem,
+    virtualItem?: VirtualItem,
+    virtualizer?: Virtualizer<HTMLDivElement, Element>,
+  ) => React.ReactNode
   isSelected?: (item: TItem) => boolean
   className?: string
 }

@@ -3,6 +3,8 @@ import { cn } from '@/utils'
 import type { Size } from '@/types'
 import { cva } from 'class-variance-authority'
 
+import './Input.css'
+
 export interface InputProps extends React.ComponentProps<'input'> {
   inputSize?: Size
 }
@@ -15,9 +17,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         className={cn(
           inputVariants({ size: inputSize }),
           'border items-center border-input-border bg-input-background text-input-foreground transition-colors placeholder:text-input-placeholder',
-          'file:border-0 file:h-fit file:bg-background-lucid file:rounded-sm file:flex-col file:mt-0.5',
+          'file:border-0 file:h-fit file:bg-background-translucid file:rounded-sm file:flex-col file:mt-0.5',
           type === 'file' &&
-            'bg-input-background-lucid border-[transparent] pl-1',
+            'bg-input-background-translucid border-[transparent] pl-1',
           className,
         )}
         ref={ref}

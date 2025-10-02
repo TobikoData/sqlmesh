@@ -1,5 +1,9 @@
-/** @type {import('tailwindcss').Config} */
-module.exports = {
+import lineageConfig from './tailwind.lineage.config'
+import typography from '@tailwindcss/typography'
+import scrollbar from 'tailwind-scrollbar'
+
+export default {
+  presets: [lineageConfig],
   theme: {
     colors: {},
     extend: {
@@ -43,7 +47,7 @@ module.exports = {
           info: 'var(--color-typography-info)',
         },
         message: {
-          lucid: 'var(--color-message-lucid)',
+          translucid: 'var(--color-message-translucid)',
         },
         link: {
           underline: 'var(--color-link-underline)',
@@ -72,8 +76,20 @@ module.exports = {
           background: 'var(--color-badge-background)',
           foreground: 'var(--color-badge-foreground)',
         },
+        'filterable-list': {
+          counter: {
+            background: 'var(--color-filterable-list-counter-background)',
+            foreground: 'var(--color-filterable-list-counter-foreground)',
+          },
+          input: {
+            background: 'var(--color-filterable-list-input-background)',
+            foreground: 'var(--color-filterable-list-input-foreground)',
+            placeholder: 'var(--color-filterable-list-input-placeholder)',
+            border: 'var(--color-filterable-list-input-border)',
+          },
+        },
         input: {
-          'background-lucid': 'var(--color-input-background-lucid)',
+          'background-translucid': 'var(--color-input-background-translucid)',
           background: 'var(--color-input-background)',
           foreground: 'var(--color-input-foreground)',
           placeholder: 'var(--color-input-placeholder)',
@@ -121,6 +137,10 @@ module.exports = {
           background: 'var(--color-tooltip-background)',
           foreground: 'var(--color-tooltip-foreground)',
         },
+        metadata: {
+          label: 'var(--color-metadata-label)',
+          value: 'var(--color-metadata-value)',
+        },
       },
       borderRadius: {
         '2xs': 'var(--radius-xs)',
@@ -148,8 +168,8 @@ module.exports = {
     },
   },
   plugins: [
-    require('@tailwindcss/typography'),
-    require('tailwind-scrollbar')({
+    typography,
+    scrollbar({
       nocompatible: true,
       preferredStrategy: 'pseudoelements',
     }),

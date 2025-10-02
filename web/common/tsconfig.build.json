@@ -15,6 +15,7 @@
     "declarationMap": true,
     "declarationDir": "./dist",
     "emitDeclarationOnly": false,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "rootDir": "./src"
   }
 }

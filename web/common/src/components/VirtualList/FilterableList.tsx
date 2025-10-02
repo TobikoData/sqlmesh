@@ -8,6 +8,8 @@ import { cn } from '@/utils'
 import { MessageContainer } from '../MessageContainer/MessageContainer'
 import { Input } from '../Input/Input'
 
+import './FilterableList.css'
+
 export interface FilterableListProps<TItem> {
   items: TItem[]
   filterOptions?: IFuseOptions<TItem>
@@ -83,7 +85,10 @@ function Counter({
   return (
     <Badge
       size="2xs"
-      className={cn('flex items-center gap-1 h-full', className)}
+      className={cn(
+        'flex items-center gap-1 h-full bg-filterable-list-counter-background text-filterable-list-counter-foreground',
+        className,
+      )}
     >
       {itemsLength !== filteredItemsLength && (
         <>
