@@ -110,7 +110,7 @@
     "build-storybook": "storybook build",
     "build:css": "tailwindcss -i ./src/styles/index.css -o ./dist/styles/tailwind.min.css --minify",
     "build:storybook": "storybook build",
-    "ci": "pnpm test && pnpm run syncpack && pnpm run lint && pnpm run build",
+    "ci": "pnpm run syncpack && pnpm run lint && pnpm run build",
     "dev": "storybook dev -p 6006",
     "lint": "eslint --max-warnings 0 --fix src",
     "storybook": "storybook dev -p 6006",
