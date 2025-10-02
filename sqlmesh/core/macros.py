@@ -331,6 +331,11 @@ class MacroEvaluator:
         base_mapping = {
             k.lower(): convert_sql(v, self.dialect)
             for k, v in chain(self.variables.items(), self.locals.items(), local_variables.items())
+            if k.lower()
+            not in (
+                "engine_adapter",
+                "snapshot",
+            )
         }
         return MacroStrTemplate(str(text)).safe_substitute(CaseInsensitiveMapping(base_mapping))
 
