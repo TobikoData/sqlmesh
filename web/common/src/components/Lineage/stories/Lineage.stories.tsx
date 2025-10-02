@@ -17,32 +17,55 @@ export const LineageModel = () => {
     >
       <style>{`
         :root {
+          --color-metadata-label: rgba(100, 100, 100, 1);
+          --color-metadata-value: rgba(10, 10, 10, 1);
 
-          --color-lineage-control-button-tooltip-background: rgba(150, 150, 150, 1);
-          --color-lineage-control-button-tooltip-foreground: rgba(255, 255, 255, 1);
+          --color-tooltip-background: rgba(150, 150, 150, 1);
+          --color-tooltip-foreground: rgba(255, 255, 255, 1);
 
-          --color-lineage-divider: rgba(0, 0, 0, 0.1);
-          --color-lineage-background: rgba(255, 255, 255, 1);
-          --color-lineage-border: rgba(0, 0, 0, 0.1);
+          --color-filterable-list-counter-background: rgba(200, 0, 0, 1);
+          --color-filterable-list-counter-foreground: rgba(255, 255, 255, 1);
+          --color-filterable-list-input-background: rgba(250, 250, 250, 1);
+          --color-filterable-list-input-foreground: rgba(0, 0, 0, 1);
+          --color-filterable-list-input-placeholder: rgba(100, 100, 100, 1);
+          --color-filterable-list-input-border: rgba(100, 100, 100, 1);
 
           --color-lineage-control-background: rgba(250, 250, 250, 1);
           --color-lineage-control-background-hover: rgba(245, 245, 245, 1);
           --color-lineage-control-icon-background: rgba(0, 0, 0, 1);
           --color-lineage-control-icon-foreground: rgba(255, 255, 255, 1);
+          --color-lineage-control-button-tooltip-background: rgba(150, 150, 150, 1);
+          --color-lineage-control-button-tooltip-foreground: rgba(255, 255, 255, 1);
 
-          --color-lineage-grid-dot: rgba(0, 0, 0, 1);
+          --color-model-name-grayscale-link-underline: rgba(125, 125, 125, 1);
+          --color-model-name-grayscale-link-underline-hover: rgba(125, 125, 125, 1);
+          --color-model-name-link-underline: rgba(0, 0, 0, 1);
+          --color-model-name-link-underline-hover: rgba(0, 0, 0, 1);
+          --color-model-name-catalog: rgba(0, 0, 0, 1);
+          --color-model-name-schema: rgba(0, 0, 0, 1);
+          --color-model-name-model: rgba(0, 0, 0, 1);
+          --color-model-name-grayscale-catalog: rgba(100, 100, 100, 1);
+          --color-model-name-grayscale-schema: rgba(50, 50, 50, 1);
+          --color-model-name-grayscale-model: rgba(10, 10, 10, 1);
+          --color-model-name-copy-icon: rgba(100, 100, 100, 1);
+          --color-model-name-copy-icon-hover: rgba(125, 125, 125, 1);
 
-          --color-lineage-node-appendix-background: transparent;
-          
+          --color-lineage-background: rgba(255, 255, 255, 1);
+          --color-lineage-divider: rgba(0, 0, 0, 0.1);
+          --color-lineage-border: rgba(0, 0, 0, 0.1);
+
+          --color-lineage-grid-dot: rgba(0, 0, 0, 0.1);
+
           --color-lineage-node-background: rgba(255, 255, 255, 1);
           --color-lineage-node-foreground: rgba(0, 0, 0, 0.75);
+          --color-lineage-node-selected-border: rgba(0, 120, 120, 0.5);
           --color-lineage-node-border: rgba(0, 0, 0, 0.1);
           --color-lineage-node-border-hover: rgba(0, 0, 0, 0.2);
 
-          --color-lineage-node-selected-border: rgba(0, 120, 120, 0.5);
-
-          --color-lineage-node-badge-background: rgba(240, 240, 240, 1);
+          --color-lineage-node-badge-background: rgba(200, 200, 200, 1);
           --color-lineage-node-badge-foreground: rgba(0, 0, 0, 1);
+
+          --color-lineage-node-appendix-background: transparent;
 
           --color-lineage-node-type-background-sql: rgba(0, 0, 120, 1);
           --color-lineage-node-type-foreground-sql: rgba(0, 0, 120, 1);
@@ -52,7 +75,18 @@ export const LineageModel = () => {
           --color-lineage-node-type-foreground-python: rgba(120, 0, 120, 1);
           --color-lineage-node-type-border-python: rgba(120, 0, 120, 1);
 
+          --color-lineage-node-type-background-source: rgba(120, 120, 0, 1);
+          --color-lineage-node-type-foreground-source: rgba(120, 120, 0, 1);
+          --color-lineage-node-type-border-source: rgba(120, 120, 0, 1);
+
+          --color-lineage-node-type-background-cte-subquery: rgba(120, 120, 120, 1);
+          --color-lineage-node-type-foreground-cte-subquery: rgba(120, 120, 120, 1);
+          --color-lineage-node-type-border-cte-subquery: rgba(120, 120, 120, 1);
+
           --color-lineage-node-type-handle-icon-background: rgba(255, 255, 255, 1);
+          --color-lineage-node-type-handle-icon-foreground: rgba(0, 0, 0, 1);
+
+          --color-lineage-edge: rgba(0, 0, 0, 0.1);
 
           --color-lineage-node-port-background: rgba(70, 0, 0, 0.05);
           --color-lineage-node-port-handle-source: rgba(70, 0, 0, 1);
@@ -61,15 +95,12 @@ export const LineageModel = () => {
           --color-lineage-node-port-edge-target: rgba(130, 0, 0, 1);
 
           --color-lineage-model-column-error-background: rgba(255, 0, 0, 1);
-          --color-lineage-model-column-source-background: rgba(200, 0, 0, 1);
-          --color-lineage-model-column-expression-background: rgba(100, 0, 0, 1);
+          --color-lineage-model-column-source-background: rgba(0, 200, 200, 1);
+          --color-lineage-model-column-expression-background: rgba(0, 10, 100, 1);
           --color-lineage-model-column-error-icon: rgba(255, 0, 0, 1);
           --color-lineage-model-column-active: rgba(70, 0, 0, 0.1);
           --color-lineage-model-column-icon: rgba(0, 0, 0, 1);
           --color-lineage-model-column-icon-active: rgba(0, 0, 0, 1);
-
-          --color-filterable-list-counter-background: rgba(200, 0, 0, 1);
-          --color-filterable-list-counter-foreground: rgba(200, 200, 200, 1);
         }
       `}</style>
       <ModelLineage

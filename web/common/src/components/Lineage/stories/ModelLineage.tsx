@@ -1,5 +1,5 @@
 import { debounce } from 'lodash'
-import { Focus, Rows2, Rows3 } from 'lucide-react'
+import { Focus, LockOpen, Rows2, Rows3, Lock } from 'lucide-react'
 import React from 'react'
 
 import { type ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/ColumnLevelLineageContext'
@@ -74,6 +74,7 @@ export const ModelLineage = ({
 }) => {
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
+  const [nodesDraggable, setNodesDraggable] = React.useState(false)
   const [edges, setEdges] = React.useState<
     LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[]
   >([])
@@ -388,6 +389,7 @@ export const ModelLineage = ({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         className={className}
+        nodesDraggable={nodesDraggable}
         controls={
           <>
             <LineageControlButton
@@ -407,6 +409,13 @@ export const ModelLineage = ({
               disabled={isBuildingLayout}
             >
               <LineageControlIcon Icon={Focus} />
+            </LineageControlButton>
+            <LineageControlButton
+              text={nodesDraggable ? 'Lock nodes' : 'Unlock nodes'}
+              onClick={() => setNodesDraggable(prev => !prev)}
+              disabled={isBuildingLayout}
+            >
+              <LineageControlIcon Icon={nodesDraggable ? Lock : LockOpen} />
             </LineageControlButton>
           </>
         }
