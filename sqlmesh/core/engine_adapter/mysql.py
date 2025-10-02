@@ -164,11 +164,11 @@ class MySQLEngineAdapter(
                         exc_info=True,
                     )
 
-    def create_table_like(
+    def _create_table_like(
         self,
         target_table_name: TableName,
         source_table_name: TableName,
-        exists: bool = True,
+        exists: bool,
         **kwargs: t.Any,
     ) -> None:
         self.execute(

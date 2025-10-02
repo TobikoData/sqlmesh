@@ -1046,7 +1046,8 @@ class EngineAdapter:
             target_table_name: The name of the table to create. Can be fully qualified or just table name.
             source_table_name: The name of the table to base the new table on.
         """
-        self.create_table(target_table_name, self.columns(source_table_name), exists=exists)
+        self._create_table_like(target_table_name, source_table_name, exists=exists, **kwargs)
+        self._clear_data_object_cache(target_table_name)
 
     def clone_table(
         self,
@@ -2271,24 +2272,34 @@ class EngineAdapter:
                     "Tried to rename table across catalogs which is not supported"
                 )
         self._rename_table(old_table_name, new_table_name)
+        self._clear_data_object_cache(old_table_name)
+        self._clear_data_object_cache(new_table_name)
 
-    def get_data_object(self, target_name: TableName) -> t.Optional[DataObject]:
+    def get_data_object(
+        self, target_name: TableName, safe_to_cache: bool = False
+    ) -> t.Optional[DataObject]:
         target_table = exp.to_table(target_name)
         existing_data_objects = self.get_data_objects(
-            schema_(target_table.db, target_table.catalog), {target_table.name}
+            schema_(target_table.db, target_table.catalog),
+            {target_table.name},
+            safe_to_cache=safe_to_cache,
         )
         if existing_data_objects:
             return existing_data_objects[0]
         return None
 
     def get_data_objects(
-        self, schema_name: SchemaName, object_names: t.Optional[t.Set[str]] = None
+        self,
+        schema_name: SchemaName,
+        object_names: t.Optional[t.Set[str]] = None,
+        safe_to_cache: bool = False,
     ) -> t.List[DataObject]:
         """Lists all data objects in the target schema.
 
         Args:
             schema_name: The name of the schema to list data objects from.
             object_names: If provided, only return data objects with these names.
+            safe_to_cache: Whether it is safe to cache the results of this call.
 
         Returns:
             A list of data objects in the target schema.
@@ -2323,31 +2334,36 @@ class EngineAdapter:
                     object_names_list[i : i + self.DATA_OBJECT_FILTER_BATCH_SIZE]
                     for i in range(0, len(object_names_list), self.DATA_OBJECT_FILTER_BATCH_SIZE)
                 ]
-                fetched_objects = [
-                    obj
-                    for batch in batches
-                    for obj in self._get_data_objects(schema_name, set(batch))
-                ]
 
-                for obj in fetched_objects:
-                    cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
-                    self._data_object_cache[cache_key] = obj
+                fetched_objects = []
+                fetched_object_names = set()
+                for batch in batches:
+                    objects = self._get_data_objects(schema_name, set(batch))
+                    for obj in objects:
+                        if safe_to_cache:
+                            cache_key = _get_data_object_cache_key(
+                                obj.catalog, obj.schema_name, obj.name
+                            )
+                            self._data_object_cache[cache_key] = obj
+                        fetched_objects.append(obj)
+                        fetched_object_names.add(obj.name)
 
-                fetched_object_names = {obj.name for obj in fetched_objects}
-                for missing_name in missing_names - fetched_object_names:
-                    cache_key = _get_data_object_cache_key(
-                        target_schema.catalog, target_schema.db, missing_name
-                    )
-                    self._data_object_cache[cache_key] = None
+                if safe_to_cache:
+                    for missing_name in missing_names - fetched_object_names:
+                        cache_key = _get_data_object_cache_key(
+                            target_schema.catalog, target_schema.db, missing_name
+                        )
+                        self._data_object_cache[cache_key] = None
 
                 return cached_objects + fetched_objects
 
             return cached_objects
 
         fetched_objects = self._get_data_objects(schema_name)
-        for obj in fetched_objects:
-            cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
-            self._data_object_cache[cache_key] = obj
+        if safe_to_cache:
+            for obj in fetched_objects:
+                cache_key = _get_data_object_cache_key(obj.catalog, obj.schema_name, obj.name)
+                self._data_object_cache[cache_key] = obj
         return fetched_objects
 
     def fetchone(
@@ -2951,6 +2967,15 @@ class EngineAdapter:
                     exc_info=True,
                 )
 
+    def _create_table_like(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        self.create_table(target_table_name, self.columns(source_table_name), exists=exists)
+
     def _rename_table(
         self,
         old_table_name: TableName,
@@ -3017,5 +3042,5 @@ def _decoded_str(value: t.Union[str, bytes]) -> str:
 
 def _get_data_object_cache_key(catalog: t.Optional[str], schema_name: str, object_name: str) -> str:
     """Returns a cache key for a data object based on its fully qualified name."""
-    catalog = catalog or ""
-    return f"{catalog}.{schema_name}.{object_name}"
+    catalog = f"{catalog}." if catalog else ""
+    return f"{catalog}{schema_name}.{object_name}"

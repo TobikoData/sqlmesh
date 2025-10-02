@@ -1564,7 +1564,9 @@ class SnapshotEvaluator:
             gateway: t.Optional[str] = None,
         ) -> t.List[DataObject]:
             logger.info("Listing data objects in schema %s", schema.sql())
-            return self.get_adapter(gateway).get_data_objects(schema, object_names)
+            return self.get_adapter(gateway).get_data_objects(
+                schema, object_names, safe_to_cache=True
+            )
 
         with self.concurrent_context():
             existing_objects: t.List[DataObject] = []

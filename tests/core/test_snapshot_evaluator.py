@@ -888,6 +888,7 @@ def test_create_prod_table_exists(mocker: MockerFixture, adapter_mock, make_snap
         {
             f"test_schema__test_model__{snapshot.version}",
         },
+        safe_to_cache=True,
     )
 
 
@@ -974,6 +975,7 @@ def test_create_only_dev_table_exists(mocker: MockerFixture, adapter_mock, make_
         {
             f"test_schema__test_model__{snapshot.version}__dev",
         },
+        safe_to_cache=True,
     )
 
 
@@ -1023,6 +1025,7 @@ def test_create_new_forward_only_model(mocker: MockerFixture, adapter_mock, make
         {
             f"test_schema__test_model__{snapshot.dev_version}__dev",
         },
+        safe_to_cache=True,
     )
 
 
@@ -1113,6 +1116,7 @@ def test_create_tables_exist(
     adapter_mock.get_data_objects.assert_called_once_with(
         schema_("sqlmesh__db"),
         {table_name},
+        safe_to_cache=True,
     )
     adapter_mock.create_schema.assert_not_called()
     adapter_mock.create_table.assert_not_called()
@@ -1150,6 +1154,7 @@ def test_create_prod_table_exists_forward_only(mocker: MockerFixture, adapter_mo
         {
             f"test_schema__test_model__{snapshot.version}",
         },
+        safe_to_cache=True,
     )
 
     adapter_mock.create_table.assert_not_called()
@@ -1341,6 +1346,7 @@ def test_promote_deployable(mocker: MockerFixture, make_snapshot):
         {
             f"test_schema__test_model__{snapshot.version}",
         },
+        safe_to_cache=True,
     )
     adapter_mock.create_table.assert_not_called()
 
