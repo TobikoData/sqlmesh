@@ -14,8 +14,6 @@ import {
   getOutgoers,
   useReactFlow,
   useViewport,
-  useEdgesState,
-  useNodesState,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react'
@@ -340,8 +338,6 @@ function LineageLayoutBase<
   React.useEffect(() => {
     if (currentNode?.id) {
       setSelectedNodeId(currentNode.id)
-    } else if (selectedNodeId) {
-      // setSelectedNodeId(selectedNodeId);
     } else {
       const node = nodes.length > 0 ? nodes[nodes.length - 1] : null
 
