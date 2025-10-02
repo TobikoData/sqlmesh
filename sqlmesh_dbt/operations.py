@@ -26,12 +26,16 @@ class DbtOperations:
         self,
         select: t.Optional[t.List[str]] = None,
         exclude: t.Optional[t.List[str]] = None,
+        models: t.Optional[t.List[str]] = None,
+        resource_type: t.Optional[str] = None,
     ) -> None:
         # dbt list prints:
         # - models
         # - "data tests" (audits) for those models
         # it also applies selectors which is useful for testing selectors
-        selected_models = list(self._selected_models(select, exclude).values())
+        selected_models = list(
+            self._selected_models(select, exclude, models, resource_type).values()
+        )
         self.console.list_models(
             selected_models, {k: v.node for k, v in self.context.snapshots.items()}
         )
@@ -41,13 +45,19 @@ class DbtOperations:
         environment: t.Optional[str] = None,
         select: t.Optional[t.List[str]] = None,
         exclude: t.Optional[t.List[str]] = None,
+        models: t.Optional[t.List[str]] = None,
+        resource_type: t.Optional[str] = None,
         full_refresh: bool = False,
         empty: bool = False,
     ) -> Plan:
+        consolidated_select, consolidated_exclude = selectors.consolidate(
+            select or [], exclude or [], models or [], resource_type
+        )
+
         plan_builder = self._plan_builder(
             environment=environment,
-            select=select,
-            exclude=exclude,
+            select=consolidated_select,
+            exclude=consolidated_exclude,
             full_refresh=full_refresh,
             empty=empty,
         )
@@ -86,9 +96,15 @@ class DbtOperations:
         )
 
     def _selected_models(
-        self, select: t.Optional[t.List[str]] = None, exclude: t.Optional[t.List[str]] = None
+        self,
+        select: t.Optional[t.List[str]] = None,
+        exclude: t.Optional[t.List[str]] = None,
+        models: t.Optional[t.List[str]] = None,
+        resource_type: t.Optional[str] = None,
     ) -> t.Dict[str, Model]:
-        if sqlmesh_selector := selectors.to_sqlmesh(select or [], exclude or []):
+        if sqlmesh_selector := selectors.to_sqlmesh(
+            *selectors.consolidate(select or [], exclude or [], models or [], resource_type)
+        ):
             if self.debug:
                 self.console.print(f"dbt --select: {select}")
                 self.console.print(f"dbt --exclude: {exclude}")
