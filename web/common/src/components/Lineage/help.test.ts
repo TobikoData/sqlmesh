@@ -94,7 +94,6 @@ describe('Lineage Help Functions', () => {
 
       const transformNode = (
         nodeId: NodeId,
-        adjacencyListKey: string,
         data: { name: string; type: string },
       ) =>
         ({
@@ -128,11 +127,7 @@ describe('Lineage Help Functions', () => {
     test('should handle empty adjacency list', () => {
       const adjacencyListKeys: string[] = []
       const lineageDetails: LineageDetails<string, { name: string }> = {}
-      const transformNode = (
-        nodeId: NodeId,
-        adjacencyListKey: string,
-        data: { name: string },
-      ) =>
+      const transformNode = (nodeId: NodeId, data: { name: string }) =>
         ({
           id: nodeId,
           position: { x: 0, y: 0 },
