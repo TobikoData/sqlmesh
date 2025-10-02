@@ -2,7 +2,9 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  type EdgeChange,
   type EdgeTypes,
+  type NodeChange,
   type NodeTypes,
   ReactFlow,
   ReactFlowProvider,
@@ -12,6 +14,10 @@ import {
   getOutgoers,
   useReactFlow,
   useViewport,
+  useEdgesState,
+  useNodesState,
+  applyNodeChanges,
+  applyEdgeChanges,
 } from '@xyflow/react'
 
 import '@xyflow/react/dist/style.css'
@@ -55,6 +61,8 @@ export function LineageLayout<
   edgeTypes,
   className,
   controls,
+  nodesDraggable,
+  nodesConnectable,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
@@ -69,6 +77,8 @@ export function LineageLayout<
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
+  nodesDraggable?: boolean
+  nodesConnectable?: boolean
   controls?:
     | React.ReactNode
     | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
@@ -86,6 +96,8 @@ export function LineageLayout<
       <LineageLayoutBase
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        nodesDraggable={nodesDraggable}
+        nodesConnectable={nodesConnectable}
         className={className}
         controls={controls}
         useLineage={useLineage}
@@ -107,6 +119,8 @@ function LineageLayoutBase<
   edgeTypes,
   className,
   controls,
+  nodesDraggable = false,
+  nodesConnectable = false,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
@@ -118,6 +132,8 @@ function LineageLayoutBase<
     TEdgeID,
     TPortID
   >
+  nodesDraggable?: boolean
+  nodesConnectable?: boolean
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
@@ -140,8 +156,8 @@ function LineageLayoutBase<
     isBuildingLayout,
     currentNode,
     zoom,
-    nodes,
-    edges,
+    nodes: initialNodes,
+    edges: initialEdges,
     nodesMap,
     showOnlySelectedNodes,
     selectedNodeId,
@@ -151,6 +167,32 @@ function LineageLayoutBase<
     setSelectedNodes,
     setSelectedEdges,
   } = useLineage()
+
+  const [nodes, setNodes] = React.useState(initialNodes)
+  const [edges, setEdges] = React.useState(initialEdges)
+
+  const onNodesChange = React.useCallback(
+    (changes: NodeChange<LineageNode<TNodeData, TNodeID>>[]) => {
+      setNodes(
+        applyNodeChanges<LineageNode<TNodeData, TNodeID>>(changes, nodes),
+      )
+    },
+    [nodes, setNodes],
+  )
+
+  const onEdgesChange = React.useCallback(
+    (
+      changes: EdgeChange<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>>[],
+    ) => {
+      setEdges(
+        applyEdgeChanges<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>>(
+          changes,
+          edges,
+        ),
+      )
+    },
+    [edges, setEdges],
+  )
 
   const updateZoom = React.useMemo(() => debounce(setZoom, 200), [setZoom])
 
@@ -220,6 +262,14 @@ function LineageLayoutBase<
     },
     [nodes, edges],
   )
+
+  React.useEffect(() => {
+    setNodes(initialNodes)
+  }, [initialNodes])
+
+  React.useEffect(() => {
+    setEdges(initialEdges)
+  }, [initialEdges])
 
   React.useEffect(() => {
     if (selectedNodeId == null) {
@@ -332,8 +382,10 @@ function LineageLayoutBase<
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={false}
-        nodesConnectable={false}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodesDraggable={nodesDraggable}
+        nodesConnectable={nodesConnectable}
         zoomOnDoubleClick={false}
         panOnScroll={true}
         zoomOnScroll={true}
