@@ -23,7 +23,9 @@ export function getOnlySelectedNodes<
   TNodeData extends LineageNodeData = LineageNodeData,
   TNodeID extends string = NodeId,
 >(nodeMaps: LineageNodesMap<TNodeData, TNodeID>, selectedNodes: Set<TNodeID>) {
-  return (Object.values(nodeMaps) as LineageNode<TNodeData, TNodeID>[]).reduce(
+  return (
+    Object.values(nodeMaps) satisfies LineageNode<TNodeData, TNodeID>[]
+  ).reduce(
     (acc, node) =>
       selectedNodes.has(node.id) ? { ...acc, [node.id]: node } : acc,
     {} as LineageNodesMap<TNodeData, TNodeID>,

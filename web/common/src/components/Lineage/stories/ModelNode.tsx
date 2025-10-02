@@ -254,7 +254,7 @@ export const ModelNode = React.memo(function ModelNode({
                     className="p-1 first:border-t-0 h-6"
                     columnLineageData={
                       (
-                        column as Column & {
+                        column satisfies Column & {
                           columnLineageData?: ColumnLevelLineageAdjacencyList<
                             ModelNameType,
                             ColumnName
@@ -287,7 +287,7 @@ export const ModelNode = React.memo(function ModelNode({
                     className="p-1 border-t border-lineage-divider first:border-t-0 h-6"
                     columnLineageData={
                       (
-                        column as Column & {
+                        column satisfies Column & {
                           columnLineageData?: ColumnLevelLineageAdjacencyList<
                             ModelNameType,
                             ColumnName
