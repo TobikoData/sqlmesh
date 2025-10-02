@@ -652,6 +652,23 @@ def test_model_kind():
         == ManagedKind()
     )
 
+    assert ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        updated_at="updated_at::timestamp",
+        strategy="timestamp",
+        dialect="redshift",
+    ).model_kind(context) == SCDType2ByTimeKind(
+        unique_key=["id"],
+        valid_from_name="dbt_valid_from",
+        valid_to_name="dbt_valid_to",
+        updated_at_as_valid_from=True,
+        updated_at_name="updated_at",
+        dialect="redshift",
+        on_destructive_change=OnDestructiveChange.IGNORE,
+        on_additive_change=OnAdditiveChange.ALLOW,
+    )
+
 
 def test_model_kind_snapshot_bigquery():
     context = DbtContext()

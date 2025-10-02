@@ -172,6 +172,17 @@ class ModelConfig(BaseModelConfig):
             return "*"
         return ensure_list(v)
 
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def _validate_updated_at(cls, v: t.Optional[str]) -> t.Optional[str]:
+        if v is None:
+            return None
+        parsed = d.parse_one(v)
+        if isinstance(parsed, exp.Cast) and isinstance(parsed.this, exp.Column):
+            return parsed.this.name
+
+        return v
+
     @field_validator("sql", mode="before")
     @classmethod
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
