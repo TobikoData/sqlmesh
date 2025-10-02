@@ -14,7 +14,7 @@
   ],
   "semverGroups": [
     {
-      "label": "Use caret ranges for all dependencies",
+      "label": "Use exact versions for all dependencies",
       "dependencies": [
         "**"
       ],
@@ -23,7 +23,7 @@
         "peer",
         "prod"
       ],
-      "range": "^"
+      "range": ""
     }
   ]
 }
