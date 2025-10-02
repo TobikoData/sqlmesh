@@ -175,6 +175,11 @@ class ModelConfig(BaseModelConfig):
     @field_validator("updated_at", mode="before")
     @classmethod
     def _validate_updated_at(cls, v: t.Optional[str]) -> t.Optional[str]:
+        """
+        Extract column name if updated_at contains a cast.
+
+        SCDType2ByTimeKind and SCDType2ByColumnKind expect a column, and the casting is done later.
+        """
         if v is None:
             return None
         parsed = d.parse_one(v)
