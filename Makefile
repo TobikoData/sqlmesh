@@ -107,7 +107,7 @@ ui-build:
 clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
 
-clean-caches:
+clear-caches:
 	find . -type d -name ".cache" -exec rm -rf {} + 2>/dev/null && echo "Successfully removed all .cache directories"
 
 dev-publish: ui-build clean-build publish
