@@ -348,7 +348,7 @@ function LineageLayoutBase<
         })
       }
     }
-  }, [currentNode?.id, setSelectedNodeId, nodes, setCenter])
+  }, [currentNode?.id, setSelectedNodeId, setCenter])
 
   return (
     <VerticalContainer
