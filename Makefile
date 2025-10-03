@@ -126,7 +126,7 @@ slow-test:
 	pytest -n auto -m "(fast or slow) and not cicdonly" && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
 
 cicd-test:
-	pytest -n auto -m "fast or slow" --junitxml=test-results/junit-cicd.xml && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
+	pytest -n auto -m "fast or slow" -s --junitxml=test-results/junit-cicd.xml && pytest -m "isolated" && pytest -m "registry_isolation" && pytest -m "dialect_isolated"
 
 core-fast-test:
 	pytest -n auto -m "fast and not web and not github and not dbt and not jupyter"
