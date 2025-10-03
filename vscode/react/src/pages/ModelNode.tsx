@@ -1,4 +1,3 @@
-import { type Node, type NodeProps } from '@xyflow/react'
 import cronstrue from 'cronstrue'
 import React from 'react'
 
@@ -32,6 +31,7 @@ import {
   NodeBadge,
   type ColumnLevelLineageAdjacencyList,
   NodePorts,
+  type NodeProps,
 } from '@tobikodata/sqlmesh-common/lineage'
 import {
   getNodeTypeBorderColor,
@@ -54,7 +54,7 @@ export const ModelNode = React.memo(function ModelNode({
   id,
   data,
   ...props
-}: NodeProps<Node<NodeData>>) {
+}: NodeProps<NodeData>) {
   const {
     selectedColumns,
     zoom,
