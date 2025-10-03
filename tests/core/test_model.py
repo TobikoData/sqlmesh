@@ -7583,6 +7583,107 @@ def test_forward_only_on_destructive_change_config() -> None:
     assert context_model.on_destructive_change.is_allow
 
 
+def test_batch_concurrency_config() -> None:
+    # No batch_concurrency default for incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.batch_concurrency is None
+
+    # batch_concurrency specified in model defaults applies to incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb", batch_concurrency=5))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.batch_concurrency == 5
+
+    # batch_concurrency specified in model definition overrides default
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb", batch_concurrency=5))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column c,
+                batch_concurrency 10
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.batch_concurrency == 10
+
+    # batch_concurrency default does not apply to non-incremental models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb", batch_concurrency=5))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind FULL,
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.batch_concurrency is None
+
+    # batch_concurrency default does not apply to INCREMENTAL_BY_UNIQUE_KEY models
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb", batch_concurrency=5))
+    context = Context(config=config)
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.db.table,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key a
+            ),
+        );
+        SELECT a, b, c FROM source_table;
+        """
+    )
+    model = load_sql_based_model(expressions, defaults=config.model_defaults.dict())
+    context.upsert_model(model)
+    context_model = context.get_model("memory.db.table")
+    assert context_model.batch_concurrency == 1
+
+
 def test_model_meta_on_additive_change_property() -> None:
     """Test that ModelMeta has on_additive_change property that works like on_destructive_change."""
     from sqlmesh.core.model.kind import IncrementalByTimeRangeKind, OnAdditiveChange
