@@ -3050,9 +3050,10 @@ SELECT * FROM test_db.uppercase_gateway_table;
     # Check that the column types are properly loaded (not UNKNOWN)
     external_model = gateway_specific_models[0]
     column_types = {name: str(dtype) for name, dtype in external_model.columns_to_types.items()}
-    assert column_types == {"id": "INT", "name": "TEXT"}, (
-        f"External model column types should not be UNKNOWN, got: {column_types}"
-    )
+    assert column_types == {
+        "id": "INT",
+        "name": "TEXT",
+    }, f"External model column types should not be UNKNOWN, got: {column_types}"
 
     # Test that when using a different case for the gateway parameter, we get the same results
     context_mixed_case = Context(
@@ -3177,3 +3178,55 @@ def test_lint_model_projections(tmp_path: Path):
 
     with pytest.raises(LinterError, match=config_err):
         prod_plan = context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_grants_through_plan_apply(sushi_context, mocker):
+    from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
+    from sqlmesh.core.model.meta import GrantsTargetLayer
+
+    model = sushi_context.get_model("sushi.waiter_revenue_by_day")
+
+    mocker.patch.object(DuckDBEngineAdapter, "SUPPORTS_GRANTS", True)
+    sync_grants_mock = mocker.patch.object(DuckDBEngineAdapter, "sync_grants_config")
+
+    model_with_grants = model.copy(
+        update={
+            "grants": {"select": ["analyst", "reporter"]},
+            "grants_target_layer": GrantsTargetLayer.ALL,
+        }
+    )
+    sushi_context.upsert_model(model_with_grants)
+
+    sushi_context.plan("dev", no_prompts=True, auto_apply=True)
+
+    # When planning for dev env w/ metadata only changes,
+    # only virtual layer is updated, so no physical grants are applied
+    assert sync_grants_mock.call_count == 1
+    assert all(
+        call[0][1] == {"select": ["analyst", "reporter"]}
+        for call in sync_grants_mock.call_args_list
+    )
+
+    sync_grants_mock.reset_mock()
+
+    new_grants = ({"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]},)
+    model_updated = model_with_grants.copy(
+        update={
+            "query": parse_one(model.query.sql() + " LIMIT 1000"),
+            "grants": new_grants,
+            # force model update, hence new physical table creation
+            "stamp": "update model and grants",
+        }
+    )
+    sushi_context.upsert_model(model_updated)
+    sushi_context.plan("dev", no_prompts=True, auto_apply=True)
+
+    # Applies grants 2 times: 1 x physical, 1 x virtual
+    assert sync_grants_mock.call_count == 2
+    assert all(call[0][1] == new_grants for call in sync_grants_mock.call_args_list)
+
+    sync_grants_mock.reset_mock()
+
+    # plan for prod
+    sushi_context.plan(no_prompts=True, auto_apply=True)
+    assert sync_grants_mock.call_count == 2

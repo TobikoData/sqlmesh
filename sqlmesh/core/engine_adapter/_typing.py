@@ -30,3 +30,5 @@ if t.TYPE_CHECKING:
     ]
 
     QueryOrDF = t.Union[Query, DF]
+    GrantsConfig = t.Dict[str, t.List[str]]
+    DCL = t.TypeVar("DCL", exp.Grant, exp.Revoke)

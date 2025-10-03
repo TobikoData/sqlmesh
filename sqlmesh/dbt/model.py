@@ -679,6 +679,12 @@ class ModelConfig(BaseModelConfig):
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
 
+        kind = self.model_kind(context)
+
+        # A falsy grants config (None or {}) is considered as unmanaged per dbt semantics
+        if self.grants and kind.supports_grants:
+            model_kwargs["grants"] = self.grants
+
         allow_partials = model_kwargs.pop("allow_partials", None)
         if allow_partials is None:
             # Set allow_partials to True for dbt models to preserve the original semantics.

@@ -5,7 +5,9 @@ import typing as t
 from functools import partial
 
 from sqlglot import exp
+
 from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.mixins import GrantsFromInfoSchemaMixin
 from sqlmesh.core.engine_adapter.shared import (
     CatalogSupport,
     DataObject,
@@ -28,12 +30,14 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SUPPORTS_CLONING = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
+    SUPPORTS_GRANTS = True
+    USE_CATALOG_IN_GRANTS = True
     # Spark has this set to false for compatibility when mixing with Trino but that isn't a concern with Databricks
     QUOTE_IDENTIFIERS_IN_VIEWS = True
     SCHEMA_DIFFER_KWARGS = {
@@ -150,6 +154,28 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     @property
     def catalog_support(self) -> CatalogSupport:
         return CatalogSupport.FULL_SUPPORT
+
+    @staticmethod
+    def _grant_object_kind(table_type: DataObjectType) -> str:
+        if table_type == DataObjectType.VIEW:
+            return "VIEW"
+        if table_type == DataObjectType.MATERIALIZED_VIEW:
+            return "MATERIALIZED VIEW"
+        return "TABLE"
+
+    def _get_grant_expression(self, table: exp.Table) -> exp.Expression:
+        # We only care about explicitly granted privileges and not inherited ones
+        # if this is removed you would see grants inherited from the catalog get returned
+        expression = super()._get_grant_expression(table)
+        expression.args["where"].set(
+            "this",
+            exp.and_(
+                expression.args["where"].this,
+                exp.column("inherited_from").eq(exp.Literal.string("NONE")),
+                wrap=False,
+            ),
+        )
+        return expression
 
     def _begin_session(self, properties: SessionProperties) -> t.Any:
         """Begin a new session."""

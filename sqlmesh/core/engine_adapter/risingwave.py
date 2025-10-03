@@ -32,6 +32,7 @@ class RisingwaveEngineAdapter(PostgresEngineAdapter):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_TRANSACTIONS = False
     MAX_IDENTIFIER_LENGTH = None
+    SUPPORTS_GRANTS = False
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False

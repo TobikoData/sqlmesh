@@ -13,6 +13,7 @@ from sqlglot.helper import ensure_list
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
+from sqlmesh.core.engine_adapter.shared import DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import SQLMeshError
@@ -588,13 +589,14 @@ def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
         execute_mock = execute_mock.execute
     output = []
     for call in execute_mock.call_args_list:
-        value = call[0][0]
-        sql = (
-            value.sql(dialect="bigquery", identify=identify)
-            if isinstance(value, exp.Expression)
-            else str(value)
-        )
-        output.append(sql)
+        values = ensure_list(call[0][0])
+        for value in values:
+            sql = (
+                value.sql(dialect="bigquery", identify=identify)
+                if isinstance(value, exp.Expression)
+                else str(value)
+            )
+            output.append(sql)
     return output
 
 
@@ -1213,3 +1215,168 @@ def test_scd_type_2_by_partitioning(adapter: BigQueryEngineAdapter):
     # Both calls should contain the partition logic (the scd logic is already covered by other tests)
     assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[0]
     assert "PARTITION BY TIMESTAMP_TRUNC(`valid_from`, DAY)" in calls[1]
+
+
+def test_sync_grants_config(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": ["user:analyst@example.com", "group:data-team@example.com"],
+        "roles/bigquery.dataEditor": ["user:admin@example.com"],
+    }
+    current_grants = [
+        ("roles/bigquery.dataViewer", "user:old_analyst@example.com"),
+        ("roles/bigquery.admin", "user:old_admin@example.com"),
+    ]
+
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="bigquery")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `project`.`region-us-central1`.`INFORMATION_SCHEMA.OBJECT_PRIVILEGES` AS OBJECT_PRIVILEGES "
+        "WHERE object_schema = 'dataset' AND object_name = 'test_table' AND SPLIT(grantee, ':')[OFFSET(1)] <> session_user()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = _to_sql_calls(execute_mock)
+
+    assert len(sql_calls) == 4
+    assert (
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
+        in sql_calls
+    )
+    assert (
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_admin@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst@example.com', 'group:data-team@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:admin@example.com'"
+        in sql_calls
+    )
+
+
+def test_sync_grants_config_with_overlaps(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": [
+            "user:analyst1@example.com",
+            "user:analyst2@example.com",
+            "user:analyst3@example.com",
+        ],
+        "roles/bigquery.dataEditor": ["user:analyst2@example.com", "user:editor@example.com"],
+    }
+    current_grants = [
+        ("roles/bigquery.dataViewer", "user:analyst1@example.com"),  # Keep
+        ("roles/bigquery.dataViewer", "user:old_analyst@example.com"),  # Remove
+        ("roles/bigquery.dataEditor", "user:analyst2@example.com"),  # Keep
+        ("roles/bigquery.admin", "user:admin@example.com"),  # Remove
+    ]
+
+    fetchall_mock = mocker.patch.object(adapter, "fetchall", return_value=current_grants)
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(relation, new_grants_config)
+
+    fetchall_mock.assert_called_once()
+    executed_query = fetchall_mock.call_args[0][0]
+    executed_sql = executed_query.sql(dialect="bigquery")
+    expected_sql = (
+        "SELECT privilege_type, grantee FROM `project`.`region-us-central1`.`INFORMATION_SCHEMA.OBJECT_PRIVILEGES` AS OBJECT_PRIVILEGES "
+        "WHERE object_schema = 'dataset' AND object_name = 'test_table' AND SPLIT(grantee, ':')[OFFSET(1)] <> session_user()"
+    )
+    assert executed_sql == expected_sql
+
+    sql_calls = _to_sql_calls(execute_mock)
+
+    assert len(sql_calls) == 4
+    assert (
+        "REVOKE `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` FROM 'user:old_analyst@example.com'"
+        in sql_calls
+    )
+    assert (
+        "REVOKE `roles/bigquery.admin` ON TABLE `project`.`dataset`.`test_table` FROM 'user:admin@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataViewer` ON TABLE `project`.`dataset`.`test_table` TO 'user:analyst2@example.com', 'user:analyst3@example.com'"
+        in sql_calls
+    )
+    assert (
+        "GRANT `roles/bigquery.dataEditor` ON TABLE `project`.`dataset`.`test_table` TO 'user:editor@example.com'"
+        in sql_calls
+    )
+
+
+@pytest.mark.parametrize(
+    "table_type, expected_keyword",
+    [
+        (DataObjectType.TABLE, "TABLE"),
+        (DataObjectType.VIEW, "VIEW"),
+        (DataObjectType.MATERIALIZED_VIEW, "MATERIALIZED VIEW"),
+    ],
+)
+def test_sync_grants_config_object_kind(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+    table_type: DataObjectType,
+    expected_keyword: str,
+) -> None:
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("project.dataset.test_object", dialect="bigquery")
+
+    mocker.patch.object(adapter, "fetchall", return_value=[])
+    execute_mock = mocker.patch.object(adapter, "execute")
+    mocker.patch.object(adapter, "get_current_catalog", return_value="project")
+    mocker.patch.object(adapter.client, "location", "us-central1")
+
+    mock_dataset = mocker.Mock()
+    mock_dataset.location = "us-central1"
+    mocker.patch.object(adapter, "_db_call", return_value=mock_dataset)
+
+    adapter.sync_grants_config(
+        relation, {"roles/bigquery.dataViewer": ["user:test@example.com"]}, table_type
+    )
+
+    executed_exprs = execute_mock.call_args[0][0]
+    sql_calls = [expr.sql(dialect="bigquery") for expr in executed_exprs]
+    assert sql_calls == [
+        f"GRANT `roles/bigquery.dataViewer` ON {expected_keyword} project.dataset.test_object TO 'user:test@example.com'"
+    ]
+
+
+def test_sync_grants_config_no_schema(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+    relation = exp.to_table("test_table", dialect="bigquery")
+    new_grants_config = {
+        "roles/bigquery.dataViewer": ["user:analyst@example.com"],
+        "roles/bigquery.dataEditor": ["user:editor@example.com"],
+    }
+
+    with pytest.raises(ValueError, match="Table test_table does not have a schema \\(dataset\\)"):
+        adapter.sync_grants_config(relation, new_grants_config)

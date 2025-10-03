@@ -14,6 +14,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
     logical_merge,
+    GrantsFromInfoSchemaMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
     CommentCreationView,
@@ -40,12 +41,15 @@ class RedshiftEngineAdapter(
     NonTransactionalTruncateMixin,
     VarcharSizeWorkaroundMixin,
     RowDiffMixin,
+    GrantsFromInfoSchemaMixin,
 ):
     DIALECT = "redshift"
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
     # Redshift doesn't support comments for VIEWs WITH NO SCHEMA BINDING (which we always use)
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    SUPPORTS_GRANTS = True
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = True
 
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
