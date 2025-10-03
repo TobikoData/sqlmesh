@@ -124,8 +124,8 @@ importers:
         specifier: ^1.129.8
         version: 1.129.8(@tanstack/react-router@1.129.8(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(vite@6.3.5(@types/node@24.1.0)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0))(webpack@5.99.8(esbuild@0.25.8))
       '@tobikodata/sqlmesh-common':
-        specifier: 0.0.17
-        version: 0.0.17(@radix-ui/react-slot@1.2.3(@types/react@18.3.23)(react@18.3.1))(@radix-ui/react-tooltip@1.2.8(@types/react-dom@18.3.7(@types/react@18.3.23))(@types/react@18.3.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tailwindcss/typography@0.5.16(tailwindcss@3.4.17))(@tanstack/react-virtual@3.13.12(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@xyflow/react@12.8.4(@types/react@18.3.23)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(class-variance-authority@0.7.1)(clsx@2.1.1)(cronstrue@3.3.0)(dagre@0.8.5)(deepmerge@4.3.1)(fuse.js@7.1.0)(lodash@4.17.21)(lucide-react@0.542.0(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwind-merge@3.3.1)(tailwind-scrollbar@3.1.0(tailwindcss@3.4.17))(tailwindcss@3.4.17)
+        specifier: file:../../web/common
+        version: link:../../web/common
       apache-arrow:
         specifier: ^19.0.1
         version: 19.0.1
@@ -2399,28 +2399,6 @@ packages:
 
   '@textlint/types@15.2.0':
     resolution: {integrity: sha512-wpF+xjGJgJK2JiwUdYjuNZrbuas3KfC9VDnHKac6aBLFyrI1iXuXtuxKXQDFi5/hebACactSJOuVVbuQbdJZ1Q==}
-
-  '@tobikodata/sqlmesh-common@0.0.17':
-    resolution: {integrity: sha512-64zQd5E2bpxxhee5hWnE0MuAt+la+ZTEBRQHJ17wzDaCHfz1JVfOkyistIEhHzIlDYWQr0JmPSt+zC0kdn3PYQ==}
-    peerDependencies:
-      '@radix-ui/react-slot': 1.2.3
-      '@radix-ui/react-tooltip': 1.2.8
-      '@tailwindcss/typography': 0.5.16
-      '@tanstack/react-virtual': 3.13.12
-      '@xyflow/react': 12.8.4
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      cronstrue: 3.3.0
-      dagre: 0.8.5
-      deepmerge: 4.3.1
-      fuse.js: 7.1.0
-      lodash: 4.17.21
-      lucide-react: 0.542.0
-      react: 18.3.1
-      react-dom: 18.3.1
-      tailwind-merge: 3.3.1
-      tailwind-scrollbar: 3.1.0
-      tailwindcss: 3.4.17
 
   '@types/argparse@1.0.38':
     resolution: {integrity: sha512-ebDJ9b0e702Yr7pWgB0jzm+CX4Srzz8RcXtLJDJB+BSccqMa36uyH/zUsSYao5+BD1ytv3k3rPYCq4mAE1hsXA==}
@@ -6962,7 +6940,7 @@ snapshots:
       '@babel/traverse': 7.28.0
       '@babel/types': 7.28.1
       convert-source-map: 2.0.0
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -7130,7 +7108,7 @@ snapshots:
       '@babel/parser': 7.28.0
       '@babel/template': 7.27.2
       '@babel/types': 7.28.1
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -7682,7 +7660,7 @@ snapshots:
       ajv: 8.17.1
       chalk: 4.1.2
       compare-versions: 6.1.1
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       esbuild: 0.25.8
       esutils: 2.0.3
       fs-extra: 11.3.0
@@ -9036,27 +9014,6 @@ snapshots:
     dependencies:
       '@textlint/ast-node-types': 15.2.0
 
-  '@tobikodata/sqlmesh-common@0.0.17(@radix-ui/react-slot@1.2.3(@types/react@18.3.23)(react@18.3.1))(@radix-ui/react-tooltip@1.2.8(@types/react-dom@18.3.7(@types/react@18.3.23))(@types/react@18.3.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@tailwindcss/typography@0.5.16(tailwindcss@3.4.17))(@tanstack/react-virtual@3.13.12(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@xyflow/react@12.8.4(@types/react@18.3.23)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(class-variance-authority@0.7.1)(clsx@2.1.1)(cronstrue@3.3.0)(dagre@0.8.5)(deepmerge@4.3.1)(fuse.js@7.1.0)(lodash@4.17.21)(lucide-react@0.542.0(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(tailwind-merge@3.3.1)(tailwind-scrollbar@3.1.0(tailwindcss@3.4.17))(tailwindcss@3.4.17)':
-    dependencies:
-      '@radix-ui/react-slot': 1.2.3(@types/react@18.3.23)(react@18.3.1)
-      '@radix-ui/react-tooltip': 1.2.8(@types/react-dom@18.3.7(@types/react@18.3.23))(@types/react@18.3.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tailwindcss/typography': 0.5.16(tailwindcss@3.4.17)
-      '@tanstack/react-virtual': 3.13.12(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@xyflow/react': 12.8.4(@types/react@18.3.23)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      cronstrue: 3.3.0
-      dagre: 0.8.5
-      deepmerge: 4.3.1
-      fuse.js: 7.1.0
-      lodash: 4.17.21
-      lucide-react: 0.542.0(react@18.3.1)
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      tailwind-merge: 3.3.1
-      tailwind-scrollbar: 3.1.0(tailwindcss@3.4.17)
-      tailwindcss: 3.4.17
-
   '@types/argparse@1.0.38': {}
 
   '@types/aria-query@5.0.4': {}
@@ -9277,6 +9234,7 @@ snapshots:
   '@types/node@24.1.0':
     dependencies:
       undici-types: 7.8.0
+    optional: true
 
   '@types/normalize-package-data@2.4.4': {}
 
@@ -9537,7 +9495,7 @@ snapshots:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 1.0.2
       ast-v8-to-istanbul: 0.3.3
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
       istanbul-lib-source-maps: 5.0.6
@@ -9622,7 +9580,7 @@ snapshots:
       sirv: 3.0.1
       tinyglobby: 0.2.14
       tinyrainbow: 2.0.0
-      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@24.1.0)(@vitest/browser@3.2.3)(@vitest/ui@3.2.4)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0)
+      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@20.11.25)(@vitest/browser@3.2.4)(@vitest/ui@3.2.4)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0)
 
   '@vitest/utils@3.2.3':
     dependencies:
@@ -10470,10 +10428,6 @@ snapshots:
 
   de-indent@1.0.2: {}
 
-  debug@4.4.1:
-    dependencies:
-      ms: 2.1.3
-
   debug@4.4.1(supports-color@8.1.1):
     dependencies:
       ms: 2.1.3
@@ -10747,7 +10701,7 @@ snapshots:
 
   esbuild-register@3.6.0(esbuild@0.25.8):
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       esbuild: 0.25.8
     transitivePeerDependencies:
       - supports-color
@@ -11241,7 +11195,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -11250,7 +11204,7 @@ snapshots:
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -11479,7 +11433,7 @@ snapshots:
   istanbul-lib-source-maps@5.0.6:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.29
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       istanbul-lib-coverage: 3.2.2
     transitivePeerDependencies:
       - supports-color
@@ -11507,7 +11461,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 24.1.0
+      '@types/node': 20.11.25
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -13684,7 +13638,8 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici-types@7.8.0: {}
+  undici-types@7.8.0:
+    optional: true
 
   undici@7.12.0: {}
 
@@ -13828,7 +13783,7 @@ snapshots:
   vite-node@3.2.4(@types/node@24.1.0)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 6.3.5(@types/node@24.1.0)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0)
@@ -13968,7 +13923,7 @@ snapshots:
       '@vitest/spy': 3.2.4
       '@vitest/utils': 3.2.4
       chai: 5.2.1
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@8.1.1)
       expect-type: 1.2.2
       magic-string: 0.30.17
       pathe: 2.0.3

@@ -24,7 +24,9 @@
 
   --color-model-name-grayscale-model: var(--vscode-foreground);
   --color-model-name-copy-icon: var(--vscode-foreground);
-  --color-model-name-copy-icon-hover: rgba(0, 0, 0, 0.1);
+  --color-model-name-copy-icon-hover: var(--vscode-foreground);
+  --color-model-name-copy-icon-background: transparent;
+  --color-model-name-copy-icon-background-hover: rgba(255, 255, 255, 0.1);
 
   --color-filterable-list-counter-background: var(--vscode-input-background);
   --color-filterable-list-counter-foreground: var(--vscode-input-foreground);
