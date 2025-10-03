@@ -32,7 +32,7 @@ def mock_runtime_env(monkeypatch):
 
 @pytest.fixture(scope="session")
 def runner() -> CliRunner:
-    return CliRunner()
+    return CliRunner(env={"COLUMNS": "80"})
 
 
 @contextmanager
@@ -1887,7 +1887,9 @@ def test_init_interactive_cli_mode_simple(runner: CliRunner, tmp_path: Path):
     assert "no_diff: true" in config_path.read_text()
 
 
-def test_init_interactive_engine_install_msg(runner: CliRunner, tmp_path: Path):
+def test_init_interactive_engine_install_msg(runner: CliRunner, tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("sqlmesh.utils.rich.console.width", 80)
+
     # Engine install text should not appear for built-in engines like DuckDB
     # Input: 1 (DEFAULT template), 1 (duckdb engine), 1 (DEFAULT CLI mode)
     result = runner.invoke(
