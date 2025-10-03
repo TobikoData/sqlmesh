@@ -23,7 +23,7 @@ import {
   createEdge,
   getEdgesFromColumnLineage,
   getOnlySelectedNodes,
-  getTransformedModelEdgesSourceTargets,
+  getTransformedModelEdgesTargetSources,
   getTransformedNodes,
   MAX_COLUMNS_TO_DISPLAY,
   toNodeID,
@@ -249,7 +249,7 @@ export const ModelLineage = ({
   const transformedEdges = React.useMemo(() => {
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
-      : getTransformedModelEdgesSourceTargets<
+      : getTransformedModelEdgesTargetSources<
           ModelName,
           EdgeData,
           ModelNodeId,

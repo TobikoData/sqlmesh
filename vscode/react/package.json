@@ -23,7 +23,7 @@
     "@tanstack/react-router-devtools": "^1.131.26",
     "@tanstack/react-virtual": "^3.13.12",
     "@tanstack/router-plugin": "^1.129.8",
-    "@tobikodata/sqlmesh-common": "0.0.17",
+    "@tobikodata/sqlmesh-common": "file:../../web/common",
     "apache-arrow": "^19.0.1",
     "clsx": "^2.1.1",
     "cronstrue": "3.3.0",
