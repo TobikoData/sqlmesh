@@ -5,6 +5,8 @@ import { EventBusProvider } from './hooks/eventBus.tsx'
 import { TableDiffPage } from './pages/tablediff.tsx'
 import { LineagePage } from './pages/lineage.tsx'
 
+import './App.css'
+
 // Detect panel type
 declare global {
   interface Window {

@@ -1,20 +1,16 @@
-import '../App.css'
 import {
   QueryCache,
   QueryClient,
   QueryClientProvider,
   useQueryClient,
 } from '@tanstack/react-query'
-import { useApiModels } from '@/api'
-import LineageFlowProvider from '@/components/graph/context'
-import { ModelLineage } from '@/components/graph/ModelLineage'
-import { useVSCode } from '@/hooks/vscode'
+import { useApiModelLineage, useApiModels } from '@/api'
 import React, { useState } from 'react'
 import { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
-import type { Model } from '@/api/client'
+import type { Model, ModelLineageApiLineageModelNameGet200 } from '@/api/client'
 import { useRpc } from '@/utils/rpc'
 import {
   type ModelPath,
@@ -22,6 +18,15 @@ import {
   type ModelName,
   type ModelEncodedFQN,
 } from '@/domain/models'
+
+import { ModelLineage } from './ModelLineage'
+import type { ModelLineageNodeDetails, ColumnName } from './ModelLineageContext'
+import type {
+  Column,
+  LineageAdjacencyList,
+  LineageDetails,
+} from '@tobikodata/sqlmesh-common/lineage'
+import { useVSCode } from '@/hooks/vscode'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -95,7 +100,7 @@ function Lineage() {
       const activeFile = await rpc('get_active_file', {})
       // @ts-ignore
       if (!activeFile.fileUri) {
-        return models[0].name
+        return models[0].fqn
       }
       // @ts-ignore
       const fileUri: string = activeFile.fileUri
@@ -107,7 +112,7 @@ function Lineage() {
         return URI.file(m.full_path).path === filePath
       })
       if (model) {
-        return model.name
+        return model.fqn
       }
       return undefined
     }
@@ -116,7 +121,7 @@ function Lineage() {
         if (modelName && selectedModel === undefined) {
           setSelectedModel(modelName)
         } else {
-          setSelectedModel(models[0].name)
+          setSelectedModel(models[0].fqn)
         }
       })
     }
@@ -126,7 +131,7 @@ function Lineage() {
     Array.isArray(models) &&
     models.reduce(
       (acc, model) => {
-        acc[model.name] = model
+        acc[model.fqn] = model
         return acc
       },
       {} as Record<string, Model>,
@@ -139,7 +144,7 @@ function Lineage() {
         m => URI.file(m.full_path).path === full_path,
       )
       if (model) {
-        setSelectedModel(model.name)
+        setSelectedModel(model.fqn)
       }
     }
 
@@ -222,17 +227,64 @@ export function LineageComponentFromWeb({
     full_path: model.full_path as ModelFullPath,
   })
 
+  const { refetch: getModelLineage } = useApiModelLineage(model?.name ?? '')
+
+  const [modelLineage, setModelLineage] = useState<
+    ModelLineageApiLineageModelNameGet200 | undefined
+  >(undefined)
+
+  React.useEffect(() => {
+    if (model === undefined) return
+
+    getModelLineage()
+      .then(({ data }) => {
+        setModelLineage(data)
+      })
+      .catch(handleError)
+  }, [model?.name, model?.hash])
+
+  const adjacencyList = modelLineage as LineageAdjacencyList<ModelName>
+  const lineageDetails = Object.values(models).reduce(
+    (acc, model) => {
+      const modelName = model.fqn as ModelName
+      acc[modelName] = {
+        name: modelName,
+        display_name: model.name,
+        model_type: model.type,
+        identifier: undefined,
+        version: undefined,
+        dialect: model.dialect,
+        cron: model.details?.cron,
+        owner: model.details?.owner,
+        kind: model.details?.kind,
+        tags: [],
+        columns: model.columns.reduce(
+          (acc, column) => {
+            const columnName = decodeURI(column.name) as ColumnName
+            acc[columnName] = {
+              data_type: column.type,
+              description: column.description,
+            }
+            return acc
+          },
+          {} as Record<ColumnName, Column>,
+        ),
+      }
+      return acc
+    },
+    {} as LineageDetails<ModelName, ModelLineageNodeDetails>,
+  )
+
   return (
-    <div className="h-[100vh] w-[100vw]">
-      <LineageFlowProvider
-        showColumns={true}
-        handleClickModel={handleClickModel}
-        handleError={handleError}
-        models={models}
-        showControls={false}
-      >
-        <ModelLineage model={sqlmModel} />
-      </LineageFlowProvider>
-    </div>
+    adjacencyList &&
+    lineageDetails && (
+      <ModelLineage
+        className="h-[98vh] w-[97vw]"
+        onNodeClick={(_, node) => handleClickModel(node.id)}
+        selectedModelName={model.fqn as ModelName}
+        adjacencyList={adjacencyList}
+        lineageDetails={lineageDetails}
+      />
+    )
   )
 }
