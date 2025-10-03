@@ -13,6 +13,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -87,7 +88,7 @@ class Hook(DbtConfig):
     """
 
     sql: SqlStr
-    transaction: bool = True  # TODO not yet supported
+    transaction: bool = True
 
     _sql_validator = sql_str_validator
 
@@ -339,8 +340,14 @@ class BaseModelConfig(GeneralConfig):
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
-            "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
+            "pre_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.pre_hook
+            ],
+            "post_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.post_hook
+            ],
             "tags": self.tags,
             "physical_schema_mapping": context.sqlmesh_config.physical_schema_mapping,
             "default_catalog": context.target.database,

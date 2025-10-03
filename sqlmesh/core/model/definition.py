@@ -363,6 +363,7 @@ class _Model(ModelMeta, frozen=True):
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
+        inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders pre-statements for a model.
@@ -384,7 +385,11 @@ class _Model(ModelMeta, frozen=True):
             The list of rendered expressions.
         """
         return self._render_statements(
-            self.pre_statements,
+            [
+                stmt
+                for stmt in self.pre_statements
+                if stmt.args.get("transaction", True) == inside_transaction
+            ],
             start=start,
             end=end,
             execution_time=execution_time,
@@ -405,6 +410,7 @@ class _Model(ModelMeta, frozen=True):
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
+        inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders post-statements for a model.
@@ -420,13 +426,18 @@ class _Model(ModelMeta, frozen=True):
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
             deployability_index: Determines snapshots that are deployable in the context of this render.
+            inside_transaction: Whether to render hooks with transaction=True (inside) or transaction=False (outside).
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The list of rendered expressions.
         """
         return self._render_statements(
-            self.post_statements,
+            [
+                stmt
+                for stmt in self.post_statements
+                if stmt.args.get("transaction", True) == inside_transaction
+            ],
             start=start,
             end=end,
             execution_time=execution_time,
@@ -567,6 +578,8 @@ class _Model(ModelMeta, frozen=True):
         result = []
         for v in value:
             parsed = v.parse(self.dialect)
+            if getattr(v, "transaction", None) is not None:
+                parsed.set("transaction", v.transaction)
             if not isinstance(parsed, exp.Semicolon):
                 result.append(parsed)
         return result
@@ -2592,9 +2605,17 @@ def _create_model(
         if statement_field in kwargs:
             # Macros extracted from these statements need to be treated as metadata only
             is_metadata = statement_field == "on_virtual_update"
-            statements.extend((stmt, is_metadata) for stmt in kwargs[statement_field])
+            for stmt in kwargs[statement_field]:
+                # Extract the expression if it's ParsableSql already
+                expr = stmt.parse(dialect) if isinstance(stmt, ParsableSql) else stmt
+                statements.append((expr, is_metadata))
             kwargs[statement_field] = [
-                ParsableSql.from_parsed_expression(stmt, dialect, use_meta_sql=use_original_sql)
+                # this to retain the transaction information
+                stmt
+                if isinstance(stmt, ParsableSql)
+                else ParsableSql.from_parsed_expression(
+                    stmt, dialect, use_meta_sql=use_original_sql
+                )
                 for stmt in kwargs[statement_field]
             ]
 

@@ -750,13 +750,19 @@ class SnapshotEvaluator:
             **render_statements_kwargs
         )
 
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+        evaluation_strategy.run_pre_statements(
+            snapshot=snapshot,
+            render_kwargs={**render_statements_kwargs, "inside_transaction": False},
+        )
+
         with (
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**render_statements_kwargs)),
         ):
-            evaluation_strategy = _evaluation_strategy(snapshot, adapter)
             evaluation_strategy.run_pre_statements(
-                snapshot=snapshot, render_kwargs=render_statements_kwargs
+                snapshot=snapshot,
+                render_kwargs={**render_statements_kwargs, "inside_transaction": True},
             )
 
             if not target_table_exists or (model.is_seed and not snapshot.intervals):
@@ -828,10 +834,16 @@ class SnapshotEvaluator:
             )
 
             evaluation_strategy.run_post_statements(
-                snapshot=snapshot, render_kwargs=render_statements_kwargs
+                snapshot=snapshot,
+                render_kwargs={**render_statements_kwargs, "inside_transaction": True},
             )
 
-            return wap_id
+        evaluation_strategy.run_post_statements(
+            snapshot=snapshot,
+            render_kwargs={**render_statements_kwargs, "inside_transaction": False},
+        )
+
+        return wap_id
 
     def create_snapshot(
         self,
@@ -865,6 +877,11 @@ class SnapshotEvaluator:
             deployability_index=deployability_index,
         )
 
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+        evaluation_strategy.run_pre_statements(
+            snapshot=snapshot, render_kwargs={**create_render_kwargs, "inside_transaction": False}
+        )
+
         with (
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**create_render_kwargs)),
@@ -895,6 +912,10 @@ class SnapshotEvaluator:
                     rendered_physical_properties=rendered_physical_properties,
                     dry_run=True,
                 )
+
+        evaluation_strategy.run_post_statements(
+            snapshot=snapshot, render_kwargs={**create_render_kwargs, "inside_transaction": False}
+        )
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -1097,6 +1118,11 @@ class SnapshotEvaluator:
         )
         target_table_name = snapshot.table_name()
 
+        evaluation_strategy = _evaluation_strategy(snapshot, adapter)
+        evaluation_strategy.run_pre_statements(
+            snapshot=snapshot, render_kwargs={**render_kwargs, "inside_transaction": False}
+        )
+
         with (
             adapter.transaction(),
             adapter.session(snapshot.model.render_session_properties(**render_kwargs)),
@@ -1133,6 +1159,10 @@ class SnapshotEvaluator:
                     rendered_physical_properties=rendered_physical_properties,
                     dry_run=True,
                 )
+
+        evaluation_strategy.run_post_statements(
+            snapshot=snapshot, render_kwargs={**render_kwargs, "inside_transaction": False}
+        )
 
     # Retry in case when the table is migrated concurrently from another plan application
     @retry(
@@ -1454,7 +1484,8 @@ class SnapshotEvaluator:
         }
         if run_pre_post_statements:
             evaluation_strategy.run_pre_statements(
-                snapshot=snapshot, render_kwargs=create_render_kwargs
+                snapshot=snapshot,
+                render_kwargs={**create_render_kwargs, "inside_transaction": True},
             )
         evaluation_strategy.create(
             table_name=table_name,
@@ -1471,7 +1502,8 @@ class SnapshotEvaluator:
         )
         if run_pre_post_statements:
             evaluation_strategy.run_post_statements(
-                snapshot=snapshot, render_kwargs=create_render_kwargs
+                snapshot=snapshot,
+                render_kwargs={**create_render_kwargs, "inside_transaction": True},
             )
 
     def _can_clone(self, snapshot: Snapshot, deployability_index: DeployabilityIndex) -> bool:
@@ -2944,12 +2976,20 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
         )
 
     def run_pre_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
-        # in dbt custom materialisations it's up to the user when to run the pre hooks
-        pass
+        # in dbt custom materialisations it's up to the user to run the pre hooks inside the transaction
+        if not render_kwargs.get("inside_transaction", True):
+            super().run_pre_statements(
+                snapshot=snapshot,
+                render_kwargs=render_kwargs,
+            )
 
     def run_post_statements(self, snapshot: Snapshot, render_kwargs: t.Any) -> None:
-        # in dbt custom materialisations it's up to the user when to run the post hooks
-        pass
+        # in dbt custom materialisations it's up to the user to run the post hooks inside the transaction
+        if not render_kwargs.get("inside_transaction", True):
+            super().run_post_statements(
+                snapshot=snapshot,
+                render_kwargs=render_kwargs,
+            )
 
     def _execute_materialization(
         self,
@@ -2985,14 +3025,15 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
             "sql": str(query_or_df),
             "is_first_insert": is_first_insert,
             "create_only": create_only,
-            # FIXME: Add support for transaction=False
             "pre_hooks": [
-                AttributeDict({"sql": s.this.this, "transaction": True})
+                AttributeDict({"sql": s.this.this, "transaction": transaction})
                 for s in model.pre_statements
+                if (transaction := s.args.get("transaction", True))
             ],
             "post_hooks": [
-                AttributeDict({"sql": s.this.this, "transaction": True})
+                AttributeDict({"sql": s.this.this, "transaction": transaction})
                 for s in model.post_statements
+                if (transaction := s.args.get("transaction", True))
             ],
             "model_instance": model,
             **kwargs,
