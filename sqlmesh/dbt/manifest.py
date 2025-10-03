@@ -61,6 +61,7 @@ from sqlmesh.utils.jinja import (
     extract_call_names,
     jinja_call_arg_name,
 )
+from sqlglot.helper import ensure_list
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -353,15 +354,17 @@ class ManifestHelper:
             )
 
             test_model = _test_model(node)
+            node_config = _node_base_config(node)
+            node_config["name"] = _build_test_name(node, dependencies)
 
             test = TestConfig(
                 sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
-                **_node_base_config(node),
+                **node_config,
             )
-            self._tests_per_package[node.package_name][node.name.lower()] = test
+            self._tests_per_package[node.package_name][node.unique_id] = test
             if test_model:
                 self._tests_by_owner[test_model].append(test)
 
@@ -798,3 +801,54 @@ def _strip_jinja_materialization_tags(materialization_jinja: str) -> str:
     )
 
     return materialization_jinja.strip()
+
+
+def _build_test_name(node: ManifestNode, dependencies: Dependencies) -> str:
+    """
+    Build a user-friendly test name that includes the test's model/source, column,
+    and args for tests with custom user names. Needed because dbt only generates these
+    names for tests that do not specify the "name" field in their YAML definition.
+
+    Name structure
+    - Model test:  [namespace]_[test name]_[model name]_[column name]__[arg values]
+    - Source test: [namespace]_source_[test name]_[source name]_[table name]_[column name]__[arg values]
+    """
+    # standalone test
+    if not hasattr(node, "test_metadata"):
+        return node.name
+
+    model_name = _test_model(node)
+    source_name = None
+    if not model_name and dependencies.sources:
+        # extract source and table names
+        source_parts = list(dependencies.sources)[0].split(".")
+        source_name = "_".join(source_parts) if len(source_parts) == 2 else source_parts[-1]
+    entity_name = model_name or source_name or ""
+
+    name_prefix = ""
+    if namespace := getattr(node.test_metadata, "namespace", None):
+        name_prefix += f"{namespace}_"
+    if source_name and not model_name:
+        name_prefix += "source_"
+
+    name_suffix = f"_{entity_name}"
+    if column_name := getattr(node, "column_name", None):
+        name_suffix += f"_{column_name}"
+
+    metadata_kwargs = node.test_metadata.kwargs
+    arg_val_parts = []
+    for arg, val in sorted(metadata_kwargs.items()):
+        if arg in ("model", "column_name"):
+            continue
+        if isinstance(val, dict):
+            val = list(val.values())
+        val = [re.sub("[^0-9a-zA-Z_]+", "_", str(v)) for v in ensure_list(val)]
+        arg_val_parts.extend(val)
+    arg_vals = ("__" + "__".join(arg_val_parts)) if arg_val_parts else ""
+
+    auto_name = f"{name_prefix}{node.test_metadata.name}{name_suffix}{arg_vals}"
+
+    if node.name == auto_name:
+        return node.name
+
+    return f"{name_prefix}{node.name}{name_suffix}{arg_vals}"
