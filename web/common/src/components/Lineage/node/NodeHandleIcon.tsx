@@ -11,6 +11,7 @@ export function NodeHandleIcon({
 }) {
   return (
     <ArrowRight
+      data-component="NodeHandleIcon"
       size={iconSize}
       className={cn(
         'flex-shrink-0 p-0.5 border-2 rounded-full bg-lineage-node-handle-icon-background',

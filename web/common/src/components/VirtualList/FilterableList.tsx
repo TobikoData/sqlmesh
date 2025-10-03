@@ -57,7 +57,7 @@ export function FilterableList<TItem>({
             setSearch(e.target.value)
           }
           inputSize="xs"
-          className="w-full"
+          className="FilterableList__Input w-full"
         />
         <Counter
           itemsLength={items.length}

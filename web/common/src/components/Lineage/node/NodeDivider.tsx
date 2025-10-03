@@ -1,3 +1,8 @@
 export function NodeDivider() {
-  return <div className="border-t border-lineage-divider" />
+  return (
+    <div
+      data-component="NodeDivider"
+      className="border-t border-lineage-divider"
+    />
+  )
 }

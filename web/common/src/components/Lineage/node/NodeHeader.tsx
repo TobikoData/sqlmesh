@@ -14,6 +14,7 @@ export const NodeHeader = forwardRef<HTMLElement, NodeHeaderProps>(
   ({ className, ...props }, ref) => {
     return (
       <header
+        data-component="NodeHeader"
         ref={ref}
         {...props}
         className={cn(

@@ -21,6 +21,8 @@ import { HorizontalContainer } from '@/components/HorizontalContainer/Horizontal
 import { Information } from '@/components/Typography/Information'
 import { LoadingContainer } from '@/components/LoadingContainer/LoadingContainer'
 
+import './FactoryColumn.css'
+
 export function FactoryColumn<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
@@ -184,7 +186,7 @@ export function FactoryColumn<
     function renderColumn() {
       return (
         <Metadata
-          data-component="ModelColumn"
+          data-component="FactoryColumn"
           onClick={handleSelectColumn}
           label={
             <LoadingContainer
@@ -196,7 +198,10 @@ export function FactoryColumn<
               >
                 {renderColumnStates()}
                 {description ? (
-                  <Information info={description}>
+                  <Information
+                    className="FactoryColumn__Information"
+                    info={description}
+                  >
                     <DisplayColumName name={name} />
                   </Information>
                 ) : (
@@ -205,9 +210,11 @@ export function FactoryColumn<
               </HorizontalContainer>
             </LoadingContainer>
           }
-          value={<NodeBadge>{type}</NodeBadge>}
+          value={
+            <NodeBadge className="FactoryColumn__NodeBadge">{type}</NodeBadge>
+          }
           className={cn(
-            'relative overflow-visible group p-0',
+            'FactoryColumn__Metadata relative overflow-visible group p-0',
             isDisabledColumn && 'cursor-not-allowed',
             className,
           )}

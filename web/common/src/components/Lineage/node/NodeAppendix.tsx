@@ -32,6 +32,7 @@ export const NodeAppendix = forwardRef<HTMLDivElement, NodeAppendixProps>(
     return (
       <div
         ref={ref}
+        data-component="NodeAppendix"
         className={cn(appendixVariants({ position }), className)}
         {...props}
       >
