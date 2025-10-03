@@ -28,6 +28,7 @@ export const LineageControlIcon = React.forwardRef<
     return (
       <Icon
         ref={ref}
+        data-component="LineageControlIcon"
         size={size}
         className={cn(
           'text-lineage-control-icon-foreground stroke-lineage-control-icon-background',

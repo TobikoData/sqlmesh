@@ -18,6 +18,7 @@ export const NodeHandle = React.memo(function NodeHandle({
 }) {
   return (
     <BaseHandle
+      data-component="NodeHandle"
       type={type}
       position={type === 'target' ? Position.Left : Position.Right}
       id={id}

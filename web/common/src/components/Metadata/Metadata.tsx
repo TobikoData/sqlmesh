@@ -14,7 +14,7 @@ export const Metadata = React.forwardRef<HTMLDivElement, MetadataProps>(
         ref={ref}
         data-component="Metadata"
         className={cn(
-          'justify-between gap-2 items-center whitespace-nowrap h-auto',
+          'Metadata justify-between gap-2 items-center whitespace-nowrap h-auto',
           className,
         )}
         {...props}

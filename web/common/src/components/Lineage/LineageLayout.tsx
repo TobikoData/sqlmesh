@@ -352,6 +352,7 @@ function LineageLayoutBase<
 
   return (
     <VerticalContainer
+      data-component="LineageLayout"
       className={cn(
         'border-2 border-lineage-border bg-lineage-background relative h-full',
         className,
