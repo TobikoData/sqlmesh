@@ -65,6 +65,12 @@ def test_run_with_changes_and_full_refresh(
         "select a, b, 'changed' as c from {{ ref('model_a') }}"
     )
 
+    # Clear dbt's partial parse cache to ensure file changes are detected
+    # Without it dbt may use stale cached model definitions, causing flakiness
+    partial_parse_file = project_path / "target" / "sqlmesh_partial_parse.msgpack"
+    if partial_parse_file.exists():
+        partial_parse_file.unlink()
+
     # run with --full-refresh. this should:
     # - fully refresh model_a (pick up the new records from external_table)
     # - deploy the local change to model_b (introducing the 'changed' column)
