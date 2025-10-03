@@ -1,6 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  presets: [
+    require('@tobikodata/sqlmesh-common/configs/tailwind.base.config.js'),
+  ],
+  content: [
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
+    './node_modules/@tobikodata/sqlmesh-common/**/*.{js,ts,jsx,tsx}',
+  ],
   darkMode: ['class', '[mode="dark"]'],
   theme: {
     colors: {
@@ -176,6 +183,33 @@ module.exports = {
         700: 'var(--color-warning-700)',
         800: 'var(--color-warning-800)',
         900: 'var(--color-warning-900)',
+      },
+      lineage: {
+        node: {
+          type: {
+            background: {
+              sql: 'var(--color-lineage-node-type-background-sql)',
+              python: 'var(--color-lineage-node-type-background-python)',
+              'cte-subquery':
+                'var(--color-lineage-node-type-background-cte-subquery)',
+              source: 'var(--color-lineage-node-type-background-source)',
+            },
+            foreground: {
+              sql: 'var(--color-lineage-node-type-foreground-sql)',
+              python: 'var(--color-lineage-node-type-foreground-python)',
+              'cte-subquery':
+                'var(--color-lineage-node-type-foreground-cte-subquery)',
+              source: 'var(--color-lineage-node-type-foreground-source)',
+            },
+            border: {
+              sql: 'var(--color-lineage-node-type-border-sql)',
+              python: 'var(--color-lineage-node-type-border-python)',
+              'cte-subquery':
+                'var(--color-lineage-node-type-border-cte-subquery)',
+              source: 'var(--color-lineage-node-type-border-source)',
+            },
+          },
+        },
       },
     },
     fontFamily: {

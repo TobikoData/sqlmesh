@@ -1,5 +1,153 @@
-@import 'tailwindcss';
-@config "../tailwind.config.cjs";
+@import url('@tobikodata/sqlmesh-common/design/index.css');
+@import url('@tobikodata/sqlmesh-common/styles/sqlmesh-common.min.css');
+
+:root {
+  /*
+    Keep commented for reference.
+
+    --color-metadata-label: rgba(100, 100, 100, 1);
+    --color-metadata-value: rgba(10, 10, 10, 1);
+
+    --color-tooltip-background: rgba(150, 150, 150, 1);
+    --color-tooltip-foreground: rgba(255, 255, 255, 1);
+
+    --color-model-name-grayscale-link-underline: rgb(24, 13, 13);
+    --color-model-name-grayscale-link-underline-hover: rgba(125, 125, 125, 1);
+    --color-model-name-link-underline: rgba(0, 0, 0, 1);
+    --color-model-name-link-underline-hover: rgba(0, 0, 0, 1);
+    --color-model-name-catalog: rgba(0, 0, 0, 1);
+    --color-model-name-schema: rgba(0, 0, 0, 1);
+    --color-model-name-model: rgba(0, 0, 0, 1);
+    --color-model-name-grayscale-catalog: rgba(100, 100, 100, 1);
+    --color-model-name-grayscale-schema: rgba(50, 50, 50, 1);
+  */
+
+  --color-model-name-grayscale-model: var(--vscode-foreground);
+  --color-model-name-copy-icon: var(--vscode-foreground);
+  --color-model-name-copy-icon-hover: rgba(0, 0, 0, 0.1);
+
+  --color-filterable-list-counter-background: var(--vscode-input-background);
+  --color-filterable-list-counter-foreground: var(--vscode-input-foreground);
+
+  --color-filterable-list-input-background: var(--vscode-input-background);
+  --color-filterable-list-input-foreground: var(--vscode-input-foreground);
+  --color-filterable-list-input-placeholder: var(
+    --vscode-input-placeholderForeground
+  );
+  --color-filterable-list-input-border: var(--vscode-input-border);
+
+  --color-lineage-background: transparent;
+  --color-lineage-foreground: var(--vscode-foreground);
+  --color-lineage-border: var(--vscode-editor-background);
+  --color-lineage-divider: var(--vscode-text-separatorForeground);
+
+  --color-lineage-grid-dot: rgba(0, 0, 0, 0.1);
+
+  --color-lineage-control-background: var(--vscode-editor-background);
+  --color-lineage-control-background-hover: var(--vscode-editor-background);
+  --color-lineage-control-icon-background: var(--vscode-foreground);
+  --color-lineage-control-icon-foreground: var(--vscode-editor-background);
+  --color-lineage-control-button-tooltip-background: var(
+    --vscode-editor-background
+  );
+  --color-lineage-control-button-tooltip-foreground: var(--vscode-foreground);
+
+  --xy-controls-button-background-color: var(--vscode-editor-background);
+  --xy-controls-button-background-color-hover-default: var(
+    --vscode-editor-background
+  );
+  --xy-controls-button-background-color-hover-props: var(
+    --vscode-editor-background
+  );
+  --xy-controls-button-color-default: var(--vscode-foreground);
+  --xy-attribution-background-color: var(--vscode-editor-background);
+  --xy-controls-button-border-color-default: var(--vscode-editor-background);
+  --xy-controls-button-border-color-props: var(--vscode-editor-background);
+  --xy-controls-button-border-color: var(--vscode-editor-background);
+
+  --color-lineage-node-background: var(--vscode-editor-background);
+  --color-lineage-node-foreground: var(--vscode-foreground);
+  --color-lineage-node-border: var(--vscode-text-separatorForeground);
+  --color-lineage-node-border-hover: var(--vscode-text-separatorForeground);
+
+  --color-lineage-node-selected-border: var(
+    --vscode-editorLightBulb-foreground
+  );
+
+  --color-lineage-node-badge-background: var(--vscode-badge-background);
+  --color-lineage-node-badge-foreground: var(--vscode-badge-foreground);
+
+  --color-lineage-node-appendix-background: transparent;
+
+  --color-lineage-node-type-background-sql: var(--vscode-errorForeground);
+  --color-lineage-node-type-foreground-sql: var(--vscode-errorForeground);
+  --color-lineage-node-type-border-sql: var(--vscode-errorForeground);
+
+  --color-lineage-node-type-background-python: var(
+    --vscode-list-warningForeground
+  );
+  --color-lineage-node-type-foreground-python: var(
+    --vscode-list-warningForeground
+  );
+  --color-lineage-node-type-border-python: var(--vscode-list-warningForeground);
+
+  --color-lineage-node-type-background-source: var(
+    --vscode-minimap-infoHighlight
+  );
+  --color-lineage-node-type-foreground-source: var(
+    --vscode-minimap-infoHighlight
+  );
+  --color-lineage-node-type-border-source: var(--vscode-minimap-infoHighlight);
+
+  --color-lineage-node-type-background-cte-subquery: var(
+    --vscode-minimap-selectionOccurrenceHighlight
+  );
+  --color-lineage-node-type-foreground-cte-subquery: var(
+    --vscode-minimap-selectionOccurrenceHighlight
+  );
+  --color-lineage-node-type-border-cte-subquery: var(
+    --vscode-minimap-selectionOccurrenceHighlight
+  );
+
+  --color-lineage-node-type-handle-icon-background: var(
+    --vscode-editor-background
+  );
+  --color-lineage-node-type-handle-icon-foreground: var(--vscode-foreground);
+
+  --color-lineage-edge: rgba(0, 0, 0, 0.1);
+
+  --color-lineage-node-port-background: rgba(0, 0, 0, 0.1);
+  --color-lineage-node-port-handle-source: var(--vscode-progressBar-background);
+  --color-lineage-node-port-handle-target: var(--vscode-progressBar-background);
+  --color-lineage-node-port-edge-source: var(--vscode-progressBar-background);
+  --color-lineage-node-port-edge-target: var(--vscode-progressBar-background);
+
+  --color-lineage-model-column-error-background: var(
+    --vscode-editor-background
+  );
+  --color-lineage-model-column-source-background: var(
+    --vscode-editor-background
+  );
+  --color-lineage-model-column-expression-background: var(
+    --vscode-editor-background
+  );
+  --color-lineage-model-column-error-icon: var(
+    --vscode-activityErrorBadge-background
+  );
+  --color-lineage-model-column-active: rgba(0, 0, 0, 0.1);
+  --color-lineage-model-column-icon: var(--vscode-text-separatorForeground);
+  --color-lineage-model-column-icon-active: var(--vscode-foreground);
+
+  --color-lineage-model-column-badge-background: var(--vscode-input-background);
+  --color-lineage-model-column-badge-foreground: var(--vscode-input-foreground);
+
+  --color-lineage-model-column-metadata-label: var(
+    --vscode-input-placeholderForeground
+  );
+  --color-lineage-model-column-metadata-value: var(--vscode-input-foreground);
+
+  --color-lineage-model-column-information-info: var(--vscode-input-foreground);
+}
 
 @tailwind base;
 @tailwind components;
@@ -64,11 +212,4 @@
   .input-ring:focus {
     @apply outline-none ring-offset-2 ring-4;
   }
-}
-
-:root {
-  --color-graph-edge-secondary: var(--vscode-disabledForeground);
-  --color-graph-edge-main: var(--vscode-disabledForeground);
-  --color-graph-edge-selected: var(--vscode-textLink-foreground);
-  --color-graph-edge-direct: var(--vscode-disabledForeground);
 }
