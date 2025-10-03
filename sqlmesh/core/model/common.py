@@ -663,6 +663,7 @@ depends_on_validator: t.Callable = field_validator(
 
 class ParsableSql(PydanticModel):
     sql: str
+    transaction: t.Optional[bool] = None
 
     _parsed: t.Optional[exp.Expression] = None
     _parsed_dialect: t.Optional[str] = None
