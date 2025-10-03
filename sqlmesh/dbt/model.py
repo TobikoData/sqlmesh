@@ -157,12 +157,18 @@ class ModelConfig(BaseModelConfig):
 
     @field_validator(
         "unique_key",
-        "cluster_by",
         "tags",
         mode="before",
     )
     @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
+        return ensure_list(v)
+
+    @field_validator("cluster_by", mode="before")
+    @classmethod
+    def _validate_cluster_by(cls, v: t.Union[str, t.List[str]]) -> t.Union[str, t.List[str]]:
+        if isinstance(v, str):
+            return [c.strip() for c in v.split(",")]
         return ensure_list(v)
 
     @field_validator("check_cols", mode="before")
