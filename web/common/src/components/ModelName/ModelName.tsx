@@ -200,7 +200,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
             size="2xs"
             variant="transparent"
             text={name}
-            className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover"
+            className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover bg-model-name-copy-icon-background hover:bg-model-name-copy-icon-background-hover active:bg-model-name-copy-icon-background-hover"
           >
             {copied =>
               copied ? (

@@ -14,4 +14,6 @@
 
   --color-model-name-copy-icon: var(--color-neutral-600);
   --color-model-name-copy-icon-hover: var(--color-neutral-100);
+  --color-model-name-copy-icon-background: var(--color-neutral-100);
+  --color-model-name-copy-icon-background-hover: var(--color-neutral-200);
 }
