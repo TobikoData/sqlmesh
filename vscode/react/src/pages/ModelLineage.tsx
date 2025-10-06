@@ -350,7 +350,6 @@ export const ModelLineage = ({
         selectedNodes,
         selectedEdges,
         selectedNodeId,
-        isBuildingLayout,
         zoom,
         edges,
         nodes,
@@ -363,7 +362,6 @@ export const ModelLineage = ({
         setSelectedNodes,
         setSelectedEdges,
         setSelectedNodeId,
-        setIsBuildingLayout,
         setZoom,
         setEdges,
         setNodesMap,
@@ -381,6 +379,7 @@ export const ModelLineage = ({
         edgeTypes={edgeTypes}
         className={className}
         onNodeClick={onNodeClick}
+        isBuildingLayout={isBuildingLayout}
         controls={
           <>
             <LineageControlButton

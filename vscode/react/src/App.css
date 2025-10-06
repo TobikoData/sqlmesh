@@ -81,13 +81,9 @@
 
   --color-lineage-node-appendix-background: transparent;
 
-  --color-lineage-node-type-background-sql: var(
-    --vscode-minimap-errorHighlight
-  );
-  --color-lineage-node-type-foreground-sql: var(
-    --vscode-minimap-errorHighlight
-  );
-  --color-lineage-node-type-border-sql: var(--vscode-minimap-errorHighlight);
+  --color-lineage-node-type-background-sql: var(--vscode-minimap-infoHighlight);
+  --color-lineage-node-type-foreground-sql: var(--vscode-minimap-infoHighlight);
+  --color-lineage-node-type-border-sql: var(--vscode-minimap-infoHighlight);
 
   --color-lineage-node-type-background-python: var(
     --vscode-editorWarning-foreground
@@ -100,12 +96,12 @@
   );
 
   --color-lineage-node-type-background-source: var(
-    --vscode-minimap-infoHighlight
+    --vscode-minimap-errorHighlight
   );
   --color-lineage-node-type-foreground-source: var(
-    --vscode-minimap-infoHighlight
+    --vscode-minimap-errorHighlight
   );
-  --color-lineage-node-type-border-source: var(--vscode-minimap-infoHighlight);
+  --color-lineage-node-type-border-source: var(--vscode-minimap-errorHighlight);
 
   --color-lineage-node-type-background-cte-subquery: var(
     --vscode-minimap-selectionOccurrenceHighlight
