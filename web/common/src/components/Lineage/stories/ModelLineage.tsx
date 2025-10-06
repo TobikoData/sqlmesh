@@ -383,6 +383,7 @@ export const ModelLineage = ({
         ModelEdgeId,
         ModelColumnID
       >
+        isBuildingLayout={isBuildingLayout}
         useLineage={useModelLineage}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

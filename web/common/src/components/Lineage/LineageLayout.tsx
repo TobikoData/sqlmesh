@@ -66,13 +66,15 @@ export function LineageLayout<
 }) {
   return (
     <ReactFlowProvider>
-      <LineageLayoutContainer isBuildingLayout={isBuildingLayout}>
+      <LineageLayoutContainer
+        isBuildingLayout={isBuildingLayout}
+        className={className}
+      >
         <LineageLayoutBase
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           nodesDraggable={nodesDraggable}
           nodesConnectable={nodesConnectable}
-          className={className}
           controls={controls}
           useLineage={useLineage}
           onNodeClick={onNodeClick}
