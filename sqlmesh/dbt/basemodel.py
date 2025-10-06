@@ -130,7 +130,7 @@ class BaseModelConfig(GeneralConfig):
     unique_id: str = ""
     name: str = ""
     package_name: str = ""
-    fqn: t.List[str] = []
+    fqn_: t.List[str] = Field(default_factory=list, alias="fqn")
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
@@ -282,14 +282,16 @@ class BaseModelConfig(GeneralConfig):
         ]
 
     @property
+    def fqn(self) -> str:
+        return ".".join(self.fqn_)
+
+    @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
 
     @property
     def node_info(self) -> DbtNodeInfo:
-        return DbtNodeInfo(
-            unique_id=self.unique_id, name=self.name, fqn=".".join(self.fqn), alias=self.alias
-        )
+        return DbtNodeInfo(unique_id=self.unique_id, name=self.name, fqn=self.fqn, alias=self.alias)
 
     def sqlmesh_model_kwargs(
         self,
@@ -327,7 +329,14 @@ class BaseModelConfig(GeneralConfig):
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
-            }.union({source.canonical_name(context) for source in model_context.sources.values()}),
+            }.union(
+                {
+                    source.canonical_name(context)
+                    for source in model_context.sources.values()
+                    if source.fqn not in context.models_by_fqn
+                    # Allow dbt projects to reference a model as a source without causing a cycle
+                },
+            ),
             "jinja_macros": jinja_macros,
             "path": self.path,
             "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
