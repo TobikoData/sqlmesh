@@ -122,7 +122,14 @@ class TestConfig(GeneralConfig):
             return True
 
         # Check if test has references to other models
-        other_refs = {ref for ref in self.dependencies.refs if ref != self.model_name}
+        # For versioned models, refs include version (e.g., "model_name_v1") but model_name may not
+        self_refs = {self.model_name}
+        for ref in self.dependencies.refs:
+            # versioned models end in _vX
+            if ref.startswith(f"{self.model_name}_v"):
+                self_refs.add(ref)
+
+        other_refs = {ref for ref in self.dependencies.refs if ref not in self_refs}
         return bool(other_refs)
 
     @property
