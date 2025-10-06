@@ -333,7 +333,7 @@ class BaseModelConfig(GeneralConfig):
                 {
                     source.canonical_name(context)
                     for source in model_context.sources.values()
-                    if source.fqn not in context.models_by_fqn
+                    if source.fqn not in context.model_fqns
                     # Allow dbt projects to reference a model as a source without causing a cycle
                 },
             ),
