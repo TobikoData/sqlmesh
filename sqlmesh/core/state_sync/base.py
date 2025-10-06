@@ -72,6 +72,50 @@ MIGRATIONS = [
 SCHEMA_VERSION: int = MIN_SCHEMA_VERSION + len(MIGRATIONS) - 1
 
 
+class BatchBoundary(PydanticModel):
+    updated_ts: int
+    name: str
+    identifier: str
+
+    def to_upper_batch_boundary(self) -> UpperBatchBoundary:
+        return UpperBatchBoundary(
+            updated_ts=self.updated_ts,
+            name=self.name,
+            identifier=self.identifier,
+        )
+
+    def to_lower_batch_boundary(self, batch_size: int) -> LowerBatchBoundary:
+        return LowerBatchBoundary(
+            updated_ts=self.updated_ts,
+            name=self.name,
+            identifier=self.identifier,
+            batch_size=batch_size,
+        )
+
+
+class UpperBatchBoundary(BatchBoundary):
+    @classmethod
+    def include_all_boundary(cls) -> UpperBatchBoundary:
+        # 9999-12-31T23:59:59.999Z in epoch milliseconds
+        return UpperBatchBoundary(updated_ts=253_402_300_799_999, name="", identifier="")
+
+
+class LowerBatchBoundary(BatchBoundary):
+    batch_size: int
+
+    @classmethod
+    def init_batch_boundary(cls, batch_size: int) -> LowerBatchBoundary:
+        return LowerBatchBoundary(updated_ts=0, name="", identifier="", batch_size=batch_size)
+
+
+class ExpiredSnapshotBatch(PydanticModel):
+    """A batch of expired snapshots to be cleaned up."""
+
+    expired_snapshot_ids: t.Set[SnapshotId]
+    cleanup_tasks: t.List[SnapshotTableCleanupTask]
+    batch_boundary: BatchBoundary
+
+
 class PromotionResult(PydanticModel):
     added: t.List[SnapshotTableInfo]
     removed: t.List[SnapshotTableInfo]
@@ -315,15 +359,23 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_expired_snapshots(
-        self, current_ts: t.Optional[int] = None, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
-        """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
+        self,
+        *,
+        batch_boundary: BatchBoundary,
+        current_ts: t.Optional[int] = None,
+        ignore_ttl: bool = False,
+    ) -> t.Optional[ExpiredSnapshotBatch]:
+        """Returns a single batch of expired snapshots ordered by (updated_ts, name, identifier).
 
-        Expired snapshots are snapshots that have exceeded their time-to-live
-        and are no longer in use within an environment.
+        Args:
+            current_ts: Timestamp used to evaluate expiration.
+            ignore_ttl: If True, include snapshots regardless of TTL (only checks if unreferenced).
+            batch_boundary: If provided, gets snapshot relative to the given boundary.
+                If lower boundary then snapshots later than that will be returned (exclusive).
+                If upper boundary then snapshots earlier than that will be returned (inclusive).
 
         Returns:
-           The list of table cleanup tasks.
+            A batch describing expired snapshots or None if no snapshots are pending cleanup.
         """
 
     @abc.abstractmethod
@@ -363,7 +415,10 @@ class StateSync(StateReader, abc.ABC):
 
     @abc.abstractmethod
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
+        self,
+        ignore_ttl: bool = False,
+        current_ts: t.Optional[int] = None,
+        upper_batch_boundary: t.Optional[UpperBatchBoundary] = None,
     ) -> None:
         """Removes expired snapshots.
 
@@ -373,6 +428,9 @@ class StateSync(StateReader, abc.ABC):
         Args:
             ignore_ttl: Ignore the TTL on the snapshot when considering it expired. This has the effect of deleting
                 all snapshots that are not referenced in any environment
+            current_ts: Timestamp used to evaluate expiration.
+            upper_batch_boundary: The upper boundary to delete expired snapshots till (inclusive). If not provided,
+                deletes all expired snapshots.
         """
 
     @abc.abstractmethod
