@@ -81,17 +81,23 @@
 
   --color-lineage-node-appendix-background: transparent;
 
-  --color-lineage-node-type-background-sql: var(--vscode-errorForeground);
-  --color-lineage-node-type-foreground-sql: var(--vscode-errorForeground);
-  --color-lineage-node-type-border-sql: var(--vscode-errorForeground);
+  --color-lineage-node-type-background-sql: var(
+    --vscode-minimap-errorHighlight
+  );
+  --color-lineage-node-type-foreground-sql: var(
+    --vscode-minimap-errorHighlight
+  );
+  --color-lineage-node-type-border-sql: var(--vscode-minimap-errorHighlight);
 
   --color-lineage-node-type-background-python: var(
-    --vscode-list-warningForeground
+    --vscode-editorWarning-foreground
   );
   --color-lineage-node-type-foreground-python: var(
-    --vscode-list-warningForeground
+    --vscode-editorWarning-foreground
   );
-  --color-lineage-node-type-border-python: var(--vscode-list-warningForeground);
+  --color-lineage-node-type-border-python: var(
+    --vscode-editorWarning-foreground
+  );
 
   --color-lineage-node-type-background-source: var(
     --vscode-minimap-infoHighlight
