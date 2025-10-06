@@ -83,3 +83,11 @@ def test_run_with_changes_and_full_refresh(
         ("foo", "bar", "changed"),
         ("baz", "bing", "changed"),
     ]
+
+
+def test_run_with_threads(jaffle_shop_duckdb: Path, invoke_cli: t.Callable[..., Result]):
+    result = invoke_cli(["run", "--threads", "4"])
+    assert result.exit_code == 0
+    assert not result.exception
+
+    assert "Model batches executed" in result.output

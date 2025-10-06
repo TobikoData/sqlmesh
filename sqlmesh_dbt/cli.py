@@ -8,11 +8,13 @@ from sqlmesh_dbt.options import YamlParamType
 import functools
 
 
-def _get_dbt_operations(ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]]) -> DbtOperations:
+def _get_dbt_operations(
+    ctx: click.Context, vars: t.Optional[t.Dict[str, t.Any]], threads: t.Optional[int] = None
+) -> DbtOperations:
     if not isinstance(ctx.obj, functools.partial):
         raise ValueError(f"Unexpected click context object: {type(ctx.obj)}")
 
-    dbt_operations = ctx.obj(vars=vars)
+    dbt_operations = ctx.obj(vars=vars, threads=threads)
 
     if not isinstance(dbt_operations, DbtOperations):
         raise ValueError(f"Unexpected dbt operations type: {type(dbt_operations)}")
@@ -128,16 +130,22 @@ def dbt(
 @click.option(
     "--empty/--no-empty", default=False, help="If specified, limit input refs and sources"
 )
+@click.option(
+    "--threads",
+    type=int,
+    help="Specify number of threads to use while executing models. Overrides settings in profiles.yml.",
+)
 @vars_option
 @click.pass_context
 def run(
     ctx: click.Context,
     vars: t.Optional[t.Dict[str, t.Any]],
+    threads: t.Optional[int],
     env: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> None:
     """Compile SQL and execute against the current target database."""
-    _get_dbt_operations(ctx, vars).run(environment=env, **kwargs)
+    _get_dbt_operations(ctx, vars, threads).run(environment=env, **kwargs)
 
 
 @dbt.command(name="list")

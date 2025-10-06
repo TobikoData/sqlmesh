@@ -177,6 +177,7 @@ def load_config_from_paths(
                 dbt_profile_name=kwargs.pop("profile", None),
                 dbt_target_name=kwargs.pop("target", None),
                 variables=variables,
+                threads=kwargs.pop("threads", None),
             )
             if type(dbt_python_config) != config_type:
                 dbt_python_config = convert_config_type(dbt_python_config, config_type)

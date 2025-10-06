@@ -333,3 +333,33 @@ def test_run_option_full_refresh_with_selector(jaffle_shop_duckdb: Path):
     assert not plan.empty_backfill
     assert not plan.skip_backfill
     assert plan.models_to_backfill == set(['"jaffle_shop"."main"."stg_customers"'])
+
+
+def test_create_sets_concurrent_tasks_based_on_threads(create_empty_project: EmptyProjectCreator):
+    project_dir, _ = create_empty_project(project_name="test")
+
+    # add a postgres target because duckdb overrides to concurrent_tasks=1 regardless of what gets specified
+    profiles_yml_file = project_dir / "profiles.yml"
+    profiles_yml = yaml.load(profiles_yml_file)
+    profiles_yml["test"]["outputs"]["postgres"] = {
+        "type": "postgres",
+        "host": "localhost",
+        "port": 5432,
+        "user": "postgres",
+        "password": "postgres",
+        "dbname": "test",
+        "schema": "test",
+    }
+    profiles_yml_file.write_text(yaml.dump(profiles_yml))
+
+    operations = create(project_dir=project_dir, target="postgres")
+
+    assert operations.context.concurrent_tasks == 1  # 1 is the default
+
+    operations = create(project_dir=project_dir, threads=16, target="postgres")
+
+    assert operations.context.concurrent_tasks == 16
+    assert all(
+        g.connection and g.connection.concurrent_tasks == 16
+        for g in operations.context.config.gateways.values()
+    )

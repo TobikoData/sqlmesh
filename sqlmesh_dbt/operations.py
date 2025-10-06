@@ -235,6 +235,7 @@ def create(
     profile: t.Optional[str] = None,
     target: t.Optional[str] = None,
     vars: t.Optional[t.Dict[str, t.Any]] = None,
+    threads: t.Optional[int] = None,
     debug: bool = False,
 ) -> DbtOperations:
     with Progress(transient=True) as progress:
@@ -265,7 +266,9 @@ def create(
 
         sqlmesh_context = Context(
             paths=[project_dir],
-            config_loader_kwargs=dict(profile=profile, target=target, variables=vars),
+            config_loader_kwargs=dict(
+                profile=profile, target=target, variables=vars, threads=threads
+            ),
             load=True,
             # DbtSelector selects based on dbt model fqn's rather than SQLMesh model names
             selector=DbtSelector,
