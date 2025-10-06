@@ -19,7 +19,7 @@ export function LineageLayoutContainer({
 }) {
   return (
     <VerticalContainer
-      data-component="LineageLayout"
+      data-component="LineageLayoutContainer"
       className={cn(
         'border-2 border-lineage-border bg-lineage-background relative h-full',
         className,
