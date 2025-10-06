@@ -11,6 +11,7 @@ from sqlmesh.core.config import (
     ConnectionConfig,
     GatewayConfig,
     ModelDefaultsConfig,
+    DbtConfigInfo,
 )
 from sqlmesh.core.environment import EnvironmentStatements
 from sqlmesh.core.loader import CacheBase, LoadedProject, Loader
@@ -71,11 +72,20 @@ def sqlmesh_config(
     if threads is not None:
         # the to_sqlmesh() function on TargetConfig maps self.threads -> concurrent_tasks
         profile.target.threads = threads
+        
+    if context.profile_name is None:
+        # Note: Profile.load() mutates `context` and will have already raised an exception if profile_name is not set,
+        # but mypy doesnt know this because the field is defined as t.Optional[str]
+        raise ConfigError(f"profile name must be set")
 
     return Config(
         loader=loader,
         model_defaults=model_defaults,
         variables=variables or {},
+        dbt_config_info=DbtConfigInfo(
+            profile_name=dbt_profile_name or context.profile_name,
+            target_name=dbt_target_name or profile.target_name,
+        ),
         **{
             "default_gateway": profile.target_name if "gateways" not in kwargs else "",
             "gateways": {

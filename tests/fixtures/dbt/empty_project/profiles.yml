@@ -3,7 +3,7 @@ empty_project:
   target: __DEFAULT_TARGET__
 
   outputs:
-    duckdb:
+    __DEFAULT_TARGET__:
       type: duckdb
       path: 'empty_project.duckdb'
       threads: 4

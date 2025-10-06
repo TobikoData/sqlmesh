@@ -140,3 +140,17 @@ class BaseConfig(PydanticModel):
             setattr(updated, field, value)
 
         return updated
+
+
+class DbtConfigInfo(PydanticModel):
+    """
+    This is like DbtNodeInfo except it applies to config instead of DAG nodes.
+
+    It's intended to capture information from a dbt project loaded by the DbtLoader so that it can be used for things like
+    variable substitutions in regular project config.
+    """
+
+    profile_name: str
+    """Which profile in the dbt project is being used"""
+    target_name: str
+    """Which target of the specified profile is being used"""

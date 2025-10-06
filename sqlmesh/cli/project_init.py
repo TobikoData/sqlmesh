@@ -116,7 +116,13 @@ linter:
     - invalidselectstarexpansion
     - noambiguousprojections
 """,
-        ProjectTemplate.DBT: f"""# --- Virtual Data Environment Mode ---
+        ProjectTemplate.DBT: f"""# --- State ---
+# This default configuration ensures that each dbt target gets its own isolated state.
+# If this is undesirable, you may configure the state connection manually.
+# https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/?h=dbt#selecting-a-different-state-connection
+state_schema_naming_pattern: sqlmesh_state_@{{dbt_profile_name}}_@{{dbt_target_name}}
+
+# --- Virtual Data Environment Mode ---
 # Enable Virtual Data Environments (VDE) for *development* environments.
 # Note that the production environment in dbt projects is not virtual by default to maintain compatibility with existing tooling.
 # https://sqlmesh.readthedocs.io/en/stable/guides/configuration/#virtual-data-environment-modes
