@@ -744,7 +744,12 @@ def _test_model(node: ManifestNode) -> t.Optional[str]:
     attached_node = getattr(node, "attached_node", None)
     if attached_node:
         pieces = attached_node.split(".")
-        return pieces[-1] if pieces[0] in ["model", "seed"] else None
+        if pieces[0] in ["model", "seed"]:
+            # versioned models have format "model.package.model_name.v1" (4 parts)
+            if len(pieces) == 4:
+                return f"{pieces[2]}_{pieces[3]}"
+            return pieces[-1]
+        return None
 
     key_name = getattr(node, "file_key_name", None)
     if key_name:
@@ -824,6 +829,7 @@ def _build_test_name(node: ManifestNode, dependencies: Dependencies) -> str:
         source_parts = list(dependencies.sources)[0].split(".")
         source_name = "_".join(source_parts) if len(source_parts) == 2 else source_parts[-1]
     entity_name = model_name or source_name or ""
+    entity_name = f"_{entity_name}" if entity_name else ""
 
     name_prefix = ""
     if namespace := getattr(node.test_metadata, "namespace", None):
@@ -831,24 +837,22 @@ def _build_test_name(node: ManifestNode, dependencies: Dependencies) -> str:
     if source_name and not model_name:
         name_prefix += "source_"
 
-    name_suffix = f"_{entity_name}"
-    if column_name := getattr(node, "column_name", None):
-        name_suffix += f"_{column_name}"
-
     metadata_kwargs = node.test_metadata.kwargs
     arg_val_parts = []
     for arg, val in sorted(metadata_kwargs.items()):
-        if arg in ("model", "column_name"):
+        if arg == "model":
             continue
         if isinstance(val, dict):
             val = list(val.values())
         val = [re.sub("[^0-9a-zA-Z_]+", "_", str(v)) for v in ensure_list(val)]
         arg_val_parts.extend(val)
-    arg_vals = ("__" + "__".join(arg_val_parts)) if arg_val_parts else ""
+    unique_args = "__".join(arg_val_parts) if arg_val_parts else ""
+    unique_args = f"_{unique_args}" if unique_args else ""
 
-    auto_name = f"{name_prefix}{node.test_metadata.name}{name_suffix}{arg_vals}"
+    auto_name = f"{name_prefix}{node.test_metadata.name}{entity_name}{unique_args}"
 
     if node.name == auto_name:
         return node.name
 
-    return f"{name_prefix}{node.name}{name_suffix}{arg_vals}"
+    custom_prefix = name_prefix if source_name and not model_name else ""
+    return f"{custom_prefix}{node.name}{entity_name}{unique_args}"
