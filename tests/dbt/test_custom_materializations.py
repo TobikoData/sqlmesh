@@ -7,6 +7,7 @@ import pytest
 
 from sqlmesh import Context
 from sqlmesh.core.config import ModelDefaultsConfig
+from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.core.model.kind import DbtCustomKind
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
@@ -719,3 +720,58 @@ WHERE e.computed_value >= 0
     # Dev and prod should have the same data as they share physical data
     assert dev_analytics_result["count"][0] == prod_analytics_result["count"][0]
     assert dev_analytics_result["unique_waiters"][0] == prod_analytics_result["unique_waiters"][0]
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_custom_materialization_grants(copy_to_temp_path: t.Callable, mocker):
+    path = copy_to_temp_path("tests/fixtures/dbt/sushi_test")
+    temp_project = path[0]
+
+    models_dir = temp_project / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    grants_model_content = """
+{{ config(
+    materialized='custom_incremental',
+    grants={
+        'select': ['user1', 'user2'],
+        'insert': ['writer']
+    }
+) }}
+
+SELECT
+    CURRENT_TIMESTAMP as created_at,
+    1 as id,
+    'grants_test' as test_type
+""".strip()
+
+    (models_dir / "test_grants_model.sql").write_text(grants_model_content)
+
+    mocker.patch.object(DuckDBEngineAdapter, "SUPPORTS_GRANTS", True)
+    mocker.patch.object(DuckDBEngineAdapter, "_get_current_grants_config", return_value={})
+
+    sync_grants_calls = []
+
+    def mock_sync_grants(*args, **kwargs):
+        sync_grants_calls.append((args, kwargs))
+
+    mocker.patch.object(DuckDBEngineAdapter, "sync_grants_config", side_effect=mock_sync_grants)
+
+    context = Context(paths=path)
+
+    model = context.get_model("sushi.test_grants_model")
+    assert isinstance(model.kind, DbtCustomKind)
+    plan = context.plan(select_models=["sushi.test_grants_model"])
+    context.apply(plan)
+
+    assert len(sync_grants_calls) == 1
+    args = sync_grants_calls[0][0]
+    assert args
+
+    table = args[0]
+    grants_config = args[1]
+    assert table.sql(dialect="duckdb") == "memory.sushi.test_grants_model"
+    assert grants_config == {
+        "select": ["user1", "user2"],
+        "insert": ["writer"],
+    }
