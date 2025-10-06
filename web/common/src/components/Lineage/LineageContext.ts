@@ -30,8 +30,6 @@ export interface LineageContextValue<
   setSelectedNodeId: React.Dispatch<React.SetStateAction<TNodeID | null>>
 
   // Layout
-  isBuildingLayout: boolean
-  setIsBuildingLayout: React.Dispatch<React.SetStateAction<boolean>>
   zoom: number
   setZoom: React.Dispatch<React.SetStateAction<number>>
 
@@ -66,8 +64,6 @@ export function getInitial<
     nodes: [],
     nodesMap: {},
     setNodesMap: () => {},
-    isBuildingLayout: false,
-    setIsBuildingLayout: () => {},
     currentNode: null,
   }
 }

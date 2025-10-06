@@ -58,6 +58,9 @@ export function FilterableList<TItem>({
           }
           inputSize="xs"
           className="FilterableList__Input w-full"
+          onClick={(e: React.MouseEvent<HTMLInputElement>) => {
+            e.stopPropagation()
+          }}
         />
         <Counter
           itemsLength={items.length}
