@@ -22,7 +22,6 @@ import {
   ZOOM_THRESHOLD,
   NodeContainer,
   NodeBase,
-  NodeDivider,
   NodeHandleIcon,
   NodeHandles,
   NodeHeader,
@@ -33,16 +32,11 @@ import {
   NodePorts,
   type NodeProps,
 } from '@tobikodata/sqlmesh-common/lineage'
-import {
-  getNodeTypeBorderColor,
-  getNodeTypeColor,
-  getNodeTypeTextColor,
-} from './help'
+import { getNodeTypeColor } from './help'
 import {
   Badge,
   cn,
   HorizontalContainer,
-  Metadata,
   ModelName,
   Tooltip,
   VerticalContainer,
@@ -189,7 +183,6 @@ export const ModelNode = React.memo(function ModelNode({
           isSelected
             ? 'ring-2 ring-lineage-node-selected-border ring-offset-lineage-node-background'
             : 'hover:ring-2 hover:ring-lineage-node-border-hover',
-          getNodeTypeBorderColor(modelType),
         )}
       >
         <VerticalContainer
@@ -204,32 +197,11 @@ export const ModelNode = React.memo(function ModelNode({
             <NodeHandles
               leftId={leftId}
               rightId={rightId}
-              leftIcon={
-                <NodeHandleIcon
-                  className={cn(
-                    'ml-0.5',
-                    getNodeTypeTextColor(modelType),
-                    getNodeTypeBorderColor(modelType),
-                  )}
-                />
-              }
-              rightIcon={
-                <NodeHandleIcon
-                  className={cn(
-                    'mr-0.5',
-                    getNodeTypeTextColor(modelType),
-                    getNodeTypeBorderColor(modelType),
-                  )}
-                />
-              }
+              leftIcon={<NodeHandleIcon className="ml-0.5" />}
+              rightIcon={<NodeHandleIcon className="mr-0.5" />}
               handleClassName="top-4"
             >
-              <HorizontalContainer
-                className={cn(
-                  'gap-2 items-center pl-4 pr-2',
-                  getNodeTypeBorderColor(modelType),
-                )}
-              >
+              <HorizontalContainer className="gap-2 items-center pl-4 pr-2">
                 <ModelName
                   showTooltip
                   hideCatalog
@@ -340,26 +312,3 @@ export const ModelNode = React.memo(function ModelNode({
     </NodeContainer>
   )
 })
-
-export function NodeDetail({
-  label,
-  value,
-  hasDivider = true,
-  className,
-}: {
-  label: string
-  value: string
-  hasDivider?: boolean
-  className?: string
-}) {
-  return (
-    <>
-      {hasDivider && <NodeDivider />}
-      <Metadata
-        label={label}
-        value={value}
-        className={cn('px-2 text-xs shrink-0 h-6', className)}
-      />
-    </>
-  )
-}
