@@ -2849,7 +2849,7 @@ def test_dbt_hooks_with_transaction_flag_execution(sushi_test_dbt_context: Conte
     assert shared_table["hook_name"][2] == "after_commit"
     assert shared_table["execution_order"][2] == 3
 
-    # the timestamps also should be monotonically increasing for teh same reason
+    # the timestamps also should be monotonically increasing for the same reason
     for i in range(len(shared_table) - 1):
         assert shared_table["created_at"][i] <= shared_table["created_at"][i + 1]
 
