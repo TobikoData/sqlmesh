@@ -192,7 +192,6 @@ export const ModelNode = React.memo(function ModelNode({
         >
           <NodeHeader
             className={cn(zoom > ZOOM_THRESHOLD ? 'shrink-0 h-7' : 'h-full')}
-            onClick={toggleSelectedNode}
           >
             <NodeHandles
               leftId={leftId}
@@ -211,7 +210,7 @@ export const ModelNode = React.memo(function ModelNode({
                   name={data.displayName}
                   grayscale
                   className={cn(
-                    'w-full overflow-hidden cursor-default truncate',
+                    'w-full overflow-hidden truncate',
                     zoom > ZOOM_THRESHOLD
                       ? ' text-xs'
                       : 'text-2xl justify-center',
@@ -279,7 +278,7 @@ export const ModelNode = React.memo(function ModelNode({
                       }
                     />
                   )}
-                  className="border-t border-lineage-divider"
+                  className="border-t border-lineage-divider cursor-default"
                 />
               )}
             </>
