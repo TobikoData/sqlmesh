@@ -53,6 +53,7 @@ from sqlmesh.dbt.column import (
 )
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.relation import Policy
 from sqlmesh.dbt.seed import SeedConfig
@@ -2678,3 +2679,31 @@ def test_selected_resources_context_variable(
 
     result = context.render(test_condition, selected_resources=selected_resources)
     assert result.strip() == "has_resources"
+
+
+def test_ignore_source_depends_on_when_also_model(dbt_dummy_postgres_config: PostgresConfig):
+    context = DbtContext()
+    context._target = dbt_dummy_postgres_config
+
+    source_a = SourceConfig(
+        name="source_a",
+        fqn=["package", "schema", "model_a"],
+    )
+    source_a._canonical_name = "schema.source_a"
+    source_b = SourceConfig(
+        name="source_b",
+        fqn=["package", "schema", "source_b"],
+    )
+    source_b._canonical_name = "schema.source_b"
+    context.sources = {"source_a": source_a, "source_b": source_b}
+
+    model = ModelConfig(
+        dependencies=Dependencies(sources={"source_a", "source_b"}),
+        fqn=["package", "schema", "test_model"],
+    )
+    context.models = {
+        "test_model": model,
+        "model_a": ModelConfig(name="model_a", fqn=["package", "schema", "model_a"]),
+    }
+
+    assert model.sqlmesh_model_kwargs(context)["depends_on"] == {"schema.source_b"}

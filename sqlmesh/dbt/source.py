@@ -36,6 +36,7 @@ class SourceConfig(GeneralConfig):
     # DBT configuration fields
     name: str = ""
     source_name_: str = Field("", alias="source_name")
+    fqn_: t.List[str] = Field(default_factory=list, alias="fqn")
     database: t.Optional[str] = None
     schema_: t.Optional[str] = Field(None, alias="schema")
     identifier: t.Optional[str] = None
@@ -63,6 +64,10 @@ class SourceConfig(GeneralConfig):
     @property
     def config_name(self) -> str:
         return f"{self.source_name_}.{self.name}"
+
+    @property
+    def fqn(self) -> str:
+        return ".".join(self.fqn_)
 
     def canonical_name(self, context: DbtContext) -> str:
         if self._canonical_name is None:
