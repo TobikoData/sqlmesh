@@ -186,6 +186,10 @@ module.exports = {
       },
       lineage: {
         node: {
+          current: {
+            background: 'var(--color-lineage-node-current-background)',
+            foreground: 'var(--color-lineage-node-current-foreground)',
+          },
           type: {
             background: {
               sql: 'var(--color-lineage-node-type-background-sql)',

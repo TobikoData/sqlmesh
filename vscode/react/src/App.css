@@ -46,6 +46,7 @@
   --color-lineage-grid-dot: rgba(0, 0, 0, 0.1);
 
   --color-lineage-control-background: var(--vscode-editor-background);
+  --color-lineage-control-border: var(--vscode-foreground);
   --color-lineage-control-background-hover: var(--vscode-editor-background);
   --color-lineage-control-icon-background: var(--vscode-foreground);
   --color-lineage-control-icon-foreground: var(--vscode-editor-background);
@@ -53,6 +54,7 @@
     --vscode-editor-background
   );
   --color-lineage-control-button-tooltip-foreground: var(--vscode-foreground);
+  --color-lineage-control-button-tooltip-border: var(--vscode-foreground);
 
   --xy-controls-button-background-color: var(--vscode-editor-background);
   --xy-controls-button-background-color-hover-default: var(
@@ -71,6 +73,11 @@
   --color-lineage-node-foreground: var(--vscode-foreground);
   --color-lineage-node-border: var(--vscode-text-separatorForeground);
   --color-lineage-node-border-hover: var(--vscode-text-separatorForeground);
+
+  --color-lineage-node-current-background: var(
+    --vscode-editorLightBulb-foreground
+  );
+  --color-lineage-node-current-foreground: var(--vscode-editor-background);
 
   --color-lineage-node-selected-border: var(
     --vscode-editorLightBulb-foreground
@@ -138,7 +145,12 @@
   --color-lineage-model-column-error-icon: var(
     --vscode-activityErrorBadge-background
   );
-  --color-lineage-model-column-active: rgba(0, 0, 0, 0.1);
+  --color-lineage-model-column-active-background: var(
+    --vscode-selection-background
+  );
+  --color-lineage-model-column-active-foreground: var(
+    --vscode-editorLightBulb-foreground
+  );
   --color-lineage-model-column-icon: var(--vscode-text-separatorForeground);
   --color-lineage-model-column-icon-active: var(--vscode-foreground);
 
