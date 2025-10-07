@@ -202,10 +202,22 @@ export function FactoryColumn<
                     className="FactoryColumn__Information"
                     info={description}
                   >
-                    <DisplayColumName name={name} />
+                    <DisplayColumName
+                      name={name}
+                      className={cn(
+                        isTriggeredColumn &&
+                          'text-lineage-model-column-active-foreground',
+                      )}
+                    />
                   </Information>
                 ) : (
-                  <DisplayColumName name={name} />
+                  <DisplayColumName
+                    name={name}
+                    className={cn(
+                      isTriggeredColumn &&
+                        'text-lineage-model-column-active-foreground',
+                    )}
+                  />
                 )}
               </HorizontalContainer>
             </LoadingContainer>
@@ -214,7 +226,7 @@ export function FactoryColumn<
             <NodeBadge className="FactoryColumn__NodeBadge">{type}</NodeBadge>
           }
           className={cn(
-            'FactoryColumn__Metadata relative overflow-visible group p-0',
+            'FactoryColumn__Metadata relative overflow-visible group',
             isDisabledColumn && 'cursor-not-allowed',
             className,
           )}
@@ -240,8 +252,8 @@ export function FactoryColumn<
         id={id}
         nodeId={nodeId}
         className={cn(
-          'border-t border-lineage-divider first:border-t-0 px-2',
-          isTriggeredColumn && 'bg-lineage-model-column-active',
+          'border-t border-lineage-divider first:border-t-0',
+          isTriggeredColumn && 'bg-lineage-model-column-active-background',
         )}
       >
         {renderColumn()}
@@ -252,11 +264,20 @@ export function FactoryColumn<
   })
 }
 
-function DisplayColumName({ name }: { name: string }) {
+function DisplayColumName({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}) {
   return (
     <span
       title={name}
-      className="text-xs font-mono font-semibold w-full truncate"
+      className={cn(
+        'text-xs font-mono font-semibold w-full truncate',
+        className,
+      )}
     >
       {name}
     </span>
