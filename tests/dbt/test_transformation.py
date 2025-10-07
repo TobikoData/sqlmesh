@@ -2707,3 +2707,180 @@ def test_ignore_source_depends_on_when_also_model(dbt_dummy_postgres_config: Pos
     }
 
     assert model.sqlmesh_model_kwargs(context)["depends_on"] == {"schema.source_b"}
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_dbt_hooks_with_transaction_flag(sushi_test_dbt_context: Context):
+    model_fqn = '"memory"."sushi"."model_with_transaction_hooks"'
+    assert model_fqn in sushi_test_dbt_context.models
+
+    model = sushi_test_dbt_context.models[model_fqn]
+
+    pre_statements = model.pre_statements_
+    assert pre_statements is not None
+    assert len(pre_statements) >= 3
+
+    # we need to check the expected SQL but more importantly that the transaction flags are there
+    assert any(
+        s.sql == 'JINJA_STATEMENT_BEGIN;\n{{ log("pre-hook") }}\nJINJA_END;'
+        and s.transaction is True
+        for s in pre_statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS hook_outside_pre_table" in s.sql and s.transaction is False
+        for s in pre_statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS shared_hook_table" in s.sql and s.transaction is False
+        for s in pre_statements
+    )
+    assert any(
+        "{{ insert_into_shared_hook_table('inside_pre') }}" in s.sql and s.transaction is True
+        for s in pre_statements
+    )
+
+    post_statements = model.post_statements_
+    assert post_statements is not None
+    assert len(post_statements) >= 4
+    assert any(
+        s.sql == 'JINJA_STATEMENT_BEGIN;\n{{ log("post-hook") }}\nJINJA_END;'
+        and s.transaction is True
+        for s in post_statements
+    )
+    assert any(
+        "{{ insert_into_shared_hook_table('inside_post') }}" in s.sql and s.transaction is True
+        for s in post_statements
+    )
+    assert any(
+        "CREATE TABLE IF NOT EXISTS hook_outside_post_table" in s.sql and s.transaction is False
+        for s in post_statements
+    )
+    assert any(
+        "{{ insert_into_shared_hook_table('after_commit') }}" in s.sql and s.transaction is False
+        for s in post_statements
+    )
+
+    # render_pre_statements with inside_transaction=True should only return inserrt
+    inside_pre_statements = model.render_pre_statements(inside_transaction=True)
+    assert len(inside_pre_statements) == 1
+    assert (
+        inside_pre_statements[0].sql()
+        == """INSERT INTO "shared_hook_table" ("id", "hook_name", "execution_order", "created_at") VALUES ((SELECT COALESCE(MAX("id"), 0) + 1 FROM "shared_hook_table"), 'inside_pre', (SELECT COALESCE(MAX("id"), 0) + 1 FROM "shared_hook_table"), NOW())"""
+    )
+
+    # while for render_pre_statements with inside_transaction=False the create statements
+    outside_pre_statements = model.render_pre_statements(inside_transaction=False)
+    assert len(outside_pre_statements) == 2
+    assert "CREATE" in outside_pre_statements[0].sql()
+    assert "hook_outside_pre_table" in outside_pre_statements[0].sql()
+    assert "CREATE" in outside_pre_statements[1].sql()
+    assert "shared_hook_table" in outside_pre_statements[1].sql()
+
+    # similarly for post statements
+    inside_post_statements = model.render_post_statements(inside_transaction=True)
+    assert len(inside_post_statements) == 1
+    assert (
+        inside_post_statements[0].sql()
+        == """INSERT INTO "shared_hook_table" ("id", "hook_name", "execution_order", "created_at") VALUES ((SELECT COALESCE(MAX("id"), 0) + 1 FROM "shared_hook_table"), 'inside_post', (SELECT COALESCE(MAX("id"), 0) + 1 FROM "shared_hook_table"), NOW())"""
+    )
+
+    outside_post_statements = model.render_post_statements(inside_transaction=False)
+    assert len(outside_post_statements) == 2
+    assert "CREATE" in outside_post_statements[0].sql()
+    assert "hook_outside_post_table" in outside_post_statements[0].sql()
+    assert "INSERT" in outside_post_statements[1].sql()
+    assert "shared_hook_table" in outside_post_statements[1].sql()
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_dbt_hooks_with_transaction_flag_execution(sushi_test_dbt_context: Context):
+    model_fqn = '"memory"."sushi"."model_with_transaction_hooks"'
+    assert model_fqn in sushi_test_dbt_context.models
+
+    plan = sushi_test_dbt_context.plan(select_models=["sushi.model_with_transaction_hooks"])
+    sushi_test_dbt_context.apply(plan)
+
+    result = sushi_test_dbt_context.engine_adapter.fetchdf(
+        "SELECT * FROM sushi.model_with_transaction_hooks"
+    )
+    assert len(result) == 1
+    assert result["id"][0] == 1
+    assert result["name"][0] == "test"
+
+    # ensure the outside pre-hook and post-hook table were created
+    pre_outside = sushi_test_dbt_context.engine_adapter.fetchdf(
+        "SELECT * FROM hook_outside_pre_table"
+    )
+    assert len(pre_outside) == 1
+    assert pre_outside["id"][0] == 1
+    assert pre_outside["location"][0] == "outside"
+    assert pre_outside["execution_order"][0] == 1
+
+    post_outside = sushi_test_dbt_context.engine_adapter.fetchdf(
+        "SELECT * FROM hook_outside_post_table"
+    )
+    assert len(post_outside) == 1
+    assert post_outside["id"][0] == 5
+    assert post_outside["location"][0] == "outside"
+    assert post_outside["execution_order"][0] == 5
+
+    # verify the shared table that was created by before_begin and populated by all hooks
+    shared_table = sushi_test_dbt_context.engine_adapter.fetchdf(
+        "SELECT * FROM shared_hook_table ORDER BY execution_order"
+    )
+    assert len(shared_table) == 3
+    assert shared_table["execution_order"].is_monotonic_increasing
+
+    # The order of creation and insertion will verify the following order of execution
+    # 1. before_begin (transaction=false) ran BEFORE the transaction started and created the table
+    # 2. inside_pre (transaction=true) ran INSIDE the transaction and could insert into the table
+    # 3. inside_post (transaction=true) ran INSIDE the transaction and could insert into the table (but after pre statement)
+    # 4. after_commit (transaction=false) ran AFTER the transaction committed
+
+    assert shared_table["id"][0] == 1
+    assert shared_table["hook_name"][0] == "inside_pre"
+    assert shared_table["execution_order"][0] == 1
+
+    assert shared_table["id"][1] == 2
+    assert shared_table["hook_name"][1] == "inside_post"
+    assert shared_table["execution_order"][1] == 2
+
+    assert shared_table["id"][2] == 3
+    assert shared_table["hook_name"][2] == "after_commit"
+    assert shared_table["execution_order"][2] == 3
+
+    # the timestamps also should be monotonically increasing for the same reason
+    for i in range(len(shared_table) - 1):
+        assert shared_table["created_at"][i] <= shared_table["created_at"][i + 1]
+
+    # the tables using the alternate syntax should have correct order as well
+    assert pre_outside["created_at"][0] < shared_table["created_at"][0]
+    assert post_outside["created_at"][0] > shared_table["created_at"][1]
+
+    # running with execution time one day in the future to simulate a run
+    tomorrow = datetime.now() + timedelta(days=1)
+    sushi_test_dbt_context.run(
+        select_models=["sushi.model_with_transaction_hooks"], execution_time=tomorrow
+    )
+
+    # to verify that the transaction information persists in state and is respected
+    shared_table = sushi_test_dbt_context.engine_adapter.fetchdf(
+        "SELECT * FROM shared_hook_table ORDER BY execution_order"
+    )
+
+    # and the execution order for run is similar
+    assert shared_table["execution_order"].is_monotonic_increasing
+    assert shared_table["id"][3] == 4
+    assert shared_table["hook_name"][3] == "inside_pre"
+    assert shared_table["execution_order"][3] == 4
+
+    assert shared_table["id"][4] == 5
+    assert shared_table["hook_name"][4] == "inside_post"
+    assert shared_table["execution_order"][4] == 5
+
+    assert shared_table["id"][5] == 6
+    assert shared_table["hook_name"][5] == "after_commit"
+    assert shared_table["execution_order"][5] == 6
+
+    for i in range(len(shared_table) - 1):
+        assert shared_table["created_at"][i] <= shared_table["created_at"][i + 1]
