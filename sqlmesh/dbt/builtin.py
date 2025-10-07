@@ -482,7 +482,7 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = Var(variables)
 
-    builtin_globals["config"] = Config(jinja_globals.pop("config", {}))
+    builtin_globals["config"] = Config(jinja_globals.pop("config", {"tags": []}))
 
     deployability_index = (
         jinja_globals.get("deployability_index") or DeployabilityIndex.all_deployable()
