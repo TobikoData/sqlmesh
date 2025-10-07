@@ -1,15 +1,38 @@
-import type { ModelName } from '@/domain/models'
-import type { Branded } from '@tobikodata/sqlmesh-common'
+import type { ModelType } from '@/api/client'
+import type { ModelFQN, ModelName } from '@/domain/models'
+import type { Branded, BrandedString } from '@bus/brand'
 import {
   type Column,
-  type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextValue,
   type LineageContextValue,
   type PathType,
   getInitial as getLineageContextInitial,
   getColumnLevelLineageContextInitial,
   createLineageContext,
+  type LineageAdjacencyList,
+  type LineageDetails,
+  type ColumnLevelLineageAdjacencyList,
 } from '@tobikodata/sqlmesh-common/lineage'
+
+export type BrandedLineageAdjacencyList<K extends BrandedString> =
+  LineageAdjacencyList<K> & {
+    readonly __adjacencyListKeyBrand: K
+  }
+
+export type BrandedLineageDetails<K extends BrandedString, V> = LineageDetails<
+  K,
+  V
+> & {
+  readonly __lineageDetailsKeyBrand: K
+}
+
+export type BrandedColumnLevelLineageAdjacencyList<
+  K extends BrandedString,
+  V extends BrandedString,
+> = ColumnLevelLineageAdjacencyList<K, V> & {
+  readonly __columnLevelLineageAdjacencyListKeyBrand: K
+  readonly __columnLevelLineageAdjacencyListColumnKeyBrand: V
+}
 
 export type ColumnName = Branded<string, 'ColumnName'>
 export type ModelColumnID = Branded<string, 'ModelColumnID'>
@@ -18,14 +41,12 @@ export type ModelEdgeId = Branded<string, 'ModelEdgeId'>
 export type ModelColumn = Column & {
   id: ModelColumnID
   name: ColumnName
-  columnLineageData?: ColumnLevelLineageAdjacencyList<ModelName, ColumnName>
 }
 
-export type NodeType = 'sql' | 'python'
 export type ModelLineageNodeDetails = {
-  name: ModelName
-  display_name: string
-  model_type: string
+  name: ModelFQN
+  display_name: ModelName
+  model_type: ModelType
   identifier?: string | null
   version?: string | null
   dialect?: string | null
@@ -37,9 +58,9 @@ export type ModelLineageNodeDetails = {
 }
 
 export type NodeData = {
-  name: ModelName
-  displayName: string
-  model_type: NodeType
+  name: ModelFQN
+  displayName: ModelName
+  model_type: ModelType
   identifier?: string | null
   version?: string | null
   kind?: string | null
@@ -58,7 +79,7 @@ export type EdgeData = {
 }
 
 export type ModelLineageContextValue = ColumnLevelLineageContextValue<
-  ModelName,
+  ModelFQN,
   ColumnName,
   ModelColumnID
 > &
@@ -72,11 +93,7 @@ export type ModelLineageContextValue = ColumnLevelLineageContextValue<
 
 export const initial = {
   ...getLineageContextInitial<ModelNodeId, ModelEdgeId>(),
-  ...getColumnLevelLineageContextInitial<
-    ModelName,
-    ColumnName,
-    ModelColumnID
-  >(),
+  ...getColumnLevelLineageContextInitial<ModelFQN, ColumnName, ModelColumnID>(),
 }
 
 export const { Provider, useLineage } = createLineageContext<

@@ -8,7 +8,6 @@ import {
   type ModelColumn,
   type ModelColumnID,
   type ColumnName,
-  type NodeType,
 } from './ModelLineageContext'
 import {
   calculateColumnsHeight,
@@ -31,7 +30,6 @@ import {
   NodePorts,
   type NodeProps,
 } from '@tobikodata/sqlmesh-common/lineage'
-import { getNodeTypeColor } from './help'
 import {
   Badge,
   cn,
@@ -41,7 +39,9 @@ import {
   VerticalContainer,
 } from '@tobikodata/sqlmesh-common'
 import { ModelNodeColumn } from './ModelNodeColumn'
-import type { ModelName as ModelNameType } from '@/domain/models'
+import type { ModelFQN } from '@/domain/models'
+import { NODE_TYPE_COLOR } from './help'
+import type { ModelType } from '@/api/client'
 
 export const ModelNode = React.memo(function ModelNode({
   id,
@@ -75,7 +75,7 @@ export const ModelNode = React.memo(function ModelNode({
     columns,
     selectedColumns: modelSelectedColumns,
     columnNames,
-  } = useColumns<ModelNameType, ColumnName, Column, ModelColumnID>(
+  } = useColumns<ModelFQN, ColumnName, Column, ModelColumnID>(
     selectedColumns,
     data.name,
     data.columns,
@@ -90,7 +90,7 @@ export const ModelNode = React.memo(function ModelNode({
 
   const shouldShowColumns =
     showNodeColumns || hasSelectedColumns || hasFetchingColumns || isHovered
-  const modelType = data.model_type?.toLowerCase() as NodeType
+  const modelType = data.model_type?.toLowerCase() as ModelType
   const hasColumnsFilter =
     shouldShowColumns && columns.length > MAX_COLUMNS_TO_DISPLAY
   // We are not including the footer, because we need actual height to dynamically adjust node container height
@@ -280,7 +280,7 @@ export const ModelNode = React.memo(function ModelNode({
               size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
               className={cn(
                 'text-[white] font-black',
-                getNodeTypeColor(modelType),
+                NODE_TYPE_COLOR[modelType],
               )}
             >
               {modelType.toUpperCase()}
