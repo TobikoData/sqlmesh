@@ -2940,6 +2940,13 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
             **kwargs,
         )
 
+        # Apply grants after dbt custom materialization table creation
+        if not skip_grants:
+            is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
+            self._apply_grants(
+                model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable
+            )
+
     def insert(
         self,
         table_name: str,
@@ -2957,6 +2964,13 @@ class DbtCustomMaterializationStrategy(MaterializableStrategy):
             render_kwargs=render_kwargs,
             **kwargs,
         )
+
+        # Apply grants after custom materialization insert (only on first insert)
+        if is_first_insert:
+            is_snapshot_deployable = kwargs.get("is_snapshot_deployable", False)
+            self._apply_grants(
+                model, table_name, GrantsTargetLayer.PHYSICAL, is_snapshot_deployable
+            )
 
     def append(
         self,
