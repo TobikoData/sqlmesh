@@ -279,7 +279,7 @@ export const ModelLineage = ({
         setNodesMap(nodesMap)
         setIsBuildingLayout(false)
       },
-      0,
+      200,
     )
   }, [])
 
@@ -331,10 +331,13 @@ export const ModelLineage = ({
   }, [currentNodeId])
 
   React.useEffect(() => {
-    if (selectedNodeId == null || selectedColumns.size === 0) {
+    if (
+      (selectedColumns.size === 0 && currentNode?.id !== selectedNodeId) ||
+      selectedNodeId == null
+    ) {
       setSelectedNodeId(currentNode?.id || null)
     }
-  }, [selectedNodeId, selectedColumns])
+  }, [selectedColumns, currentNode?.id, selectedNodeId])
 
   function toggleColumns() {
     setShowColumns(prev => !prev)
