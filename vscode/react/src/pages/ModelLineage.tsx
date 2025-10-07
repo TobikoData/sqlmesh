@@ -73,6 +73,10 @@ export const ModelLineage = ({
     node: LineageNode<NodeData, ModelNodeId>,
   ) => void
 }) => {
+  const currentNodeId = selectedModelName
+    ? toNodeID<ModelNodeId>(selectedModelName)
+    : null
+
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
   const [edges, setEdges] = React.useState<
@@ -275,7 +279,7 @@ export const ModelLineage = ({
         setNodesMap(nodesMap)
         setIsBuildingLayout(false)
       },
-      200,
+      0,
     )
   }, [])
 
@@ -284,10 +288,8 @@ export const ModelLineage = ({
   }, [nodesMap])
 
   const currentNode = React.useMemo(() => {
-    return selectedModelName
-      ? nodesMap[toNodeID<ModelNodeId>(selectedModelName)]
-      : null
-  }, [selectedModelName, nodesMap])
+    return currentNodeId ? nodesMap[currentNodeId] : null
+  }, [currentNodeId, nodesMap])
 
   const handleReset = React.useCallback(() => {
     setShowColumns(false)
@@ -323,16 +325,16 @@ export const ModelLineage = ({
   ])
 
   React.useEffect(() => {
-    const currentNodeId = selectedModelName
-      ? toNodeID<ModelNodeId>(selectedModelName)
-      : undefined
-
-    if (currentNodeId && currentNodeId in nodesMap) {
+    if (currentNodeId) {
       setSelectedNodeId(currentNodeId)
-    } else {
-      handleReset()
     }
-  }, [handleReset, selectedModelName])
+  }, [currentNodeId])
+
+  React.useEffect(() => {
+    if (selectedNodeId == null || selectedColumns.size === 0) {
+      setSelectedNodeId(currentNode?.id || null)
+    }
+  }, [selectedNodeId, selectedColumns])
 
   function toggleColumns() {
     setShowColumns(prev => !prev)

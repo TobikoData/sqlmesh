@@ -28,7 +28,6 @@ import {
   type Column,
   NodeAppendix,
   NodeBadge,
-  type ColumnLevelLineageAdjacencyList,
   NodePorts,
   type NodeProps,
 } from '@tobikodata/sqlmesh-common/lineage'
@@ -57,7 +56,6 @@ export const ModelNode = React.memo(function ModelNode({
     selectedNodes,
     showColumns,
     fetchingColumns,
-    setSelectedNodeId,
   } = useModelLineage()
 
   const [showNodeColumns, setShowNodeColumns] = React.useState(showColumns)
@@ -68,6 +66,7 @@ export const ModelNode = React.memo(function ModelNode({
   const {
     leftId,
     rightId,
+    isCurrent,
     isSelected, // if selected from inside the lineage and node is selcted
     isActive, // if selected from inside the lineage and node is not selected but in path
   } = useNodeMetadata(nodeId, currentNode, selectedNodeId, selectedNodes)
@@ -88,10 +87,6 @@ export const ModelNode = React.memo(function ModelNode({
   React.useEffect(() => {
     setShowNodeColumns(showColumns || isSelected)
   }, [columnNames, isSelected, showColumns])
-
-  function toggleSelectedNode() {
-    setSelectedNodeId(prev => (prev === nodeId ? null : nodeId))
-  }
 
   const shouldShowColumns =
     showNodeColumns || hasSelectedColumns || hasFetchingColumns || isHovered
@@ -145,6 +140,11 @@ export const ModelNode = React.memo(function ModelNode({
         className="bg-lineage-node-appendix-background"
       >
         <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
+          {isCurrent && (
+            <NodeBadge className="bg-lineage-node-current-background text-lineage-node-current-foreground">
+              current
+            </NodeBadge>
+          )}
           {zoom > ZOOM_THRESHOLD && (
             <>
               {data.kind && <NodeBadge>{data.kind.toUpperCase()}</NodeBadge>}
@@ -232,17 +232,7 @@ export const ModelNode = React.memo(function ModelNode({
                       name={column.name}
                       description={column.description}
                       type={column.data_type}
-                      className="p-1 first:border-t-0 h-6"
-                      columnLineageData={
-                        (
-                          column as Column & {
-                            columnLineageData?: ColumnLevelLineageAdjacencyList<
-                              ModelNameType,
-                              ColumnName
-                            >
-                          }
-                        ).columnLineageData
-                      }
+                      className="py-1 px-3 first:border-t-0 h-6"
                     />
                   ))}
                 </VerticalContainer>
@@ -265,17 +255,7 @@ export const ModelNode = React.memo(function ModelNode({
                       name={column.name}
                       description={column.description}
                       type={column.data_type}
-                      className="p-1 border-t border-lineage-divider first:border-t-0 h-6"
-                      columnLineageData={
-                        (
-                          column as Column & {
-                            columnLineageData?: ColumnLevelLineageAdjacencyList<
-                              ModelNameType,
-                              ColumnName
-                            >
-                          }
-                        ).columnLineageData
-                      }
+                      className="py-1 px-3 border-t border-lineage-divider first:border-t-0 h-6"
                     />
                   )}
                   className="border-t border-lineage-divider cursor-default"

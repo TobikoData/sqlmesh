@@ -11,7 +11,9 @@ import {
   type ModelNodeId,
   type ColumnName,
 } from './ModelLineageContext'
+import { cn } from '@tobikodata/sqlmesh-common'
 import type { ModelName } from '@/domain/models'
+import { useApiColumnLineage } from '@/api/index'
 
 const ModelColumn = FactoryColumn<
   ModelName,
@@ -28,7 +30,6 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   description,
   type,
   className,
-  columnLineageData,
 }: {
   id: ModelColumnID
   nodeId: ModelNodeId
@@ -37,11 +38,22 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   type: string
   description?: string | null
   className?: string
-  columnLineageData?: ColumnLevelLineageAdjacencyList<ModelName, ColumnName>
 }) {
-  const { selectedColumns, setColumnLevelLineage } = useModelLineage()
+  const {
+    selectedColumns,
+    setColumnLevelLineage,
+    setFetchingColumns,
+    setSelectedNodeId,
+  } = useModelLineage()
 
   const isSelectedColumn = selectedColumns.has(id)
+
+  const {
+    data: columnLineageData,
+    refetch: getColumnLineage,
+    isFetching: isColumnLineageFetching,
+    error: columnLineageError,
+  } = useApiColumnLineage(nodeId, name, { models_only: true })
 
   async function toggleSelectedColumn() {
     if (isSelectedColumn) {
@@ -50,8 +62,34 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
         return new Map(prev)
       })
     } else {
-      if (columnLineageData != null) {
-        setColumnLevelLineage(prev => new Map(prev).set(id, columnLineageData))
+      setSelectedNodeId(nodeId)
+
+      let columnLevelLineage =
+        columnLineageData as ColumnLevelLineageAdjacencyList<
+          ModelName,
+          ColumnName
+        >
+
+      if (columnLineageData == null) {
+        setTimeout(() => {
+          setFetchingColumns(prev => new Set(prev.add(id)))
+        })
+
+        const { data } = await getColumnLineage()
+
+        columnLevelLineage = data as ColumnLevelLineageAdjacencyList<
+          ModelName,
+          ColumnName
+        >
+
+        setFetchingColumns(prev => {
+          prev.delete(id)
+          return new Set(prev)
+        })
+      }
+
+      if (columnLevelLineage != null) {
+        setColumnLevelLineage(prev => new Map(prev).set(id, columnLevelLineage))
       }
     }
   }
@@ -64,15 +102,21 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
       name={name}
       type={type}
       description={description}
-      className={className}
-      data={columnLineageData}
-      error={null}
-      isFetching={false}
+      className={cn(
+        'ModelNodeColumn',
+        isSelectedColumn && 'bg-lineage-model-column-active-background',
+        className,
+      )}
+      data={
+        columnLineageData as ColumnLevelLineageAdjacencyList<
+          ModelName,
+          ColumnName
+        >
+      }
+      isFetching={isColumnLineageFetching}
+      error={columnLineageError as Error | null}
       onClick={toggleSelectedColumn}
-      onCancel={() => console.log('cancel')}
       renderError={error => <div>Error: {error.message}</div>}
-      renderExpression={expression => <div>{expression}</div>}
-      renderSource={source => <div>{source}</div>}
     />
   )
 })
