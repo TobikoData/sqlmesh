@@ -580,7 +580,19 @@ def copy_to_temp_path(tmp_path: Path) -> t.Callable:
                 # shutil.copytree just doesnt work properly with the symlinks on Windows, regardless of the `symlinks` setting
                 src = str(path.absolute())
                 dst = str(temp_dir.absolute())
-                os.system(f"robocopy {src} {dst} /E /COPYALL")
+
+                # Robocopy flag reference: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#copy-options
+                # /E:      Copy subdirectories, including empty directories
+                # /COPY:D  Copy "data" only. In particular, this avoids copying auditing information, which can throw
+                #          an error like "ERROR : You do not have the Manage Auditing user right"
+                robocopy_cmd = f"robocopy {src} {dst} /E /COPY:D"
+                exit_code = os.system(robocopy_cmd)
+
+                # exit code reference: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#exit-return-codes
+                if exit_code > 8:
+                    raise Exception(
+                        f"robocopy command: '{robocopy_cmd}' failed with exit code: {exit_code}"
+                    )
 
                 # after copying, delete the files that would have been ignored
                 for root, dirs, _ in os.walk(temp_dir):

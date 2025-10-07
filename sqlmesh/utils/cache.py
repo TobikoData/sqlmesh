@@ -59,6 +59,10 @@ class FileCache(t.Generic[T]):
         threshold = to_datetime("1 week ago").timestamp()
         # delete all old cache files
         for file in self._path.glob("*"):
+            if IS_WINDOWS:
+                # the file.stat() call below will fail on windows if the :file name is longer than 260 chars
+                file = fix_windows_path(file)
+
             if not file.stem.startswith(self._cache_version) or file.stat().st_atime < threshold:
                 file.unlink(missing_ok=True)
 
