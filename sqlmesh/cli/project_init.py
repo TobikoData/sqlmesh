@@ -119,7 +119,7 @@ linter:
         ProjectTemplate.DBT: f"""# --- DBT-specific options ---
 dbt:
   # This configuration ensures that each dbt target gets its own isolated state.
-  # The inferred state schemas are named "sqlmesh_state_<project name>_<target schema>", eg "sqlmesh_state_jaffle_shop_dev"
+  # The inferred state schemas are named "sqlmesh_state_<profile name>_<target schema>", eg "sqlmesh_state_jaffle_shop_dev"
   # If this is undesirable, you may manually configure the gateway to use a specific state schema name
   # https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#selecting-a-different-state-connection
   infer_state_schema_name: True
