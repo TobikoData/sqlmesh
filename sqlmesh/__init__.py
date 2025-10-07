@@ -126,6 +126,8 @@ def is_cicd_environment() -> bool:
 
 
 def is_interactive_environment() -> bool:
+    if sys.stdin is None or sys.stdout is None:
+        return False
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
