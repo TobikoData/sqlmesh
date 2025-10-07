@@ -20,7 +20,7 @@ from sqlmesh.core.config.common import (
     TableNamingConvention,
     VirtualEnvironmentMode,
 )
-from sqlmesh.core.config.base import BaseConfig, UpdateStrategy, DbtConfigInfo
+from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.common import variables_validator, compile_regex_mapping
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
@@ -37,6 +37,7 @@ from sqlmesh.core.config.naming import NameInferenceConfig as NameInferenceConfi
 from sqlmesh.core.config.linter import LinterConfig as LinterConfig
 from sqlmesh.core.config.plan import PlanConfig
 from sqlmesh.core.config.run import RunConfig
+from sqlmesh.core.config.dbt import DbtConfig
 from sqlmesh.core.config.scheduler import (
     BuiltInSchedulerConfig,
     SchedulerConfig,
@@ -99,8 +100,6 @@ class Config(BaseConfig):
         default_test_connection: The default connection to use for tests if one is not specified in a gateway.
         default_scheduler: The default scheduler configuration to use if one is not specified in a gateway.
         default_gateway: The default gateway.
-        state_schema_naming_pattern: A pattern supporting variable substitutions to determine the state schema name, rather than just using 'sqlmesh'.
-            Only applies when the state schema is not explicitly set in the gateway config
         notification_targets: The notification targets to use.
         project: The project name of this config. Used for multi-repo setups.
         snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
@@ -133,7 +132,6 @@ class Config(BaseConfig):
         before_all: SQL statements or macros to be executed at the start of the `sqlmesh plan` and `sqlmesh run` commands.
         after_all: SQL statements or macros to be executed at the end of the `sqlmesh plan` and `sqlmesh run` commands.
         cache_dir: The directory to store the SQLMesh cache. Defaults to .cache in the project folder.
-        dbt_config_info: Dbt-specific properties (such as profile and target) for dbt projects loaded by the dbt loader
     """
 
     gateways: GatewayDict = {"": GatewayConfig()}
@@ -143,7 +141,6 @@ class Config(BaseConfig):
     )
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     default_gateway: str = ""
-    state_schema_naming_pattern: t.Optional[str] = None
     notification_targets: t.List[NotificationTarget] = []
     project: str = ""
     snapshot_ttl: NoPastTTLString = c.DEFAULT_SNAPSHOT_TTL
@@ -180,7 +177,7 @@ class Config(BaseConfig):
     linter: LinterConfig = LinterConfig()
     janitor: JanitorConfig = JanitorConfig()
     cache_dir: t.Optional[str] = None
-    dbt_config_info: t.Optional[DbtConfigInfo] = None
+    dbt: t.Optional[DbtConfig] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.NESTED_UPDATE,
@@ -199,6 +196,7 @@ class Config(BaseConfig):
         "before_all": UpdateStrategy.EXTEND,
         "after_all": UpdateStrategy.EXTEND,
         "linter": UpdateStrategy.NESTED_UPDATE,
+        "dbt": UpdateStrategy.NESTED_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
@@ -352,27 +350,8 @@ class Config(BaseConfig):
     def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:
         return self.get_gateway(gateway_name).scheduler or self.default_scheduler
 
-    def get_state_schema(self, gateway_name: t.Optional[str] = None) -> str:
-        state_schema = self.get_gateway(gateway_name).state_schema
-
-        if state_schema is None and self.state_schema_naming_pattern:
-            substitutions = {}
-            if dbt := self.dbt_config_info:
-                # TODO: keeping this simple for now rather than trying to set up a Jinja or SQLMesh Macro rendering context
-                substitutions.update(
-                    {
-                        "@{dbt_profile_name}": dbt.profile_name,
-                        # TODO @iaroslav: what was the problem with using target name instead of the default schema name again?
-                        "@{dbt_target_name}": dbt.target_name,
-                    }
-                )
-            state_schema = self.state_schema_naming_pattern
-            for pattern, value in substitutions.items():
-                state_schema = state_schema.replace(pattern, value)
-
-            logger.info("Inferring state schema: %s", state_schema)
-
-        return state_schema or c.SQLMESH
+    def get_state_schema(self, gateway_name: t.Optional[str] = None) -> t.Optional[str]:
+        return self.get_gateway(gateway_name).state_schema
 
     @property
     def default_gateway_name(self) -> str:

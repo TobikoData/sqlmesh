@@ -625,14 +625,14 @@ def test_state_schema_isolation_per_target(jaffle_shop_duckdb: Path):
 
     # start off with the prod target
     prod_ctx = Context(paths=[jaffle_shop_duckdb], config_loader_kwargs={"target": "prod"})
-    assert prod_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_prod"
+    assert prod_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_prod_schema"
     assert all("prod_schema" in fqn for fqn in prod_ctx.models)
     assert prod_ctx.plan(auto_apply=True).has_changes
     assert not prod_ctx.plan(auto_apply=True).has_changes
 
     # dev target should have changes - new state separate from prod
     dev_ctx = Context(paths=[jaffle_shop_duckdb], config_loader_kwargs={"target": "dev"})
-    assert dev_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev"
+    assert dev_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev_schema"
     assert all("dev_schema" in fqn for fqn in dev_ctx.models)
     assert dev_ctx.plan(auto_apply=True).has_changes
     assert not dev_ctx.plan(auto_apply=True).has_changes
@@ -640,6 +640,15 @@ def test_state_schema_isolation_per_target(jaffle_shop_duckdb: Path):
     # no explicitly specified target should use dev because that's what's set for the default in the profiles.yml
     assert profiles_yml["jaffle_shop"]["target"] == "dev"
     default_ctx = Context(paths=[jaffle_shop_duckdb])
-    assert default_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev"
+    assert default_ctx.config.get_state_schema() == "sqlmesh_state_jaffle_shop_dev_schema"
     assert all("dev_schema" in fqn for fqn in default_ctx.models)
     assert not default_ctx.plan(auto_apply=True).has_changes
+
+    # an explicit state schema override set in `sqlmesh.yaml` should use that
+    sqlmesh_yaml_file = jaffle_shop_duckdb / "sqlmesh.yaml"
+    sqlmesh_yaml = yaml_load(sqlmesh_yaml_file)
+    sqlmesh_yaml["gateways"] = {"dev": {"state_schema": "sqlmesh_dev_state_override"}}
+    sqlmesh_yaml_file.write_text(yaml_dump(sqlmesh_yaml))
+    default_ctx = Context(paths=[jaffle_shop_duckdb])
+    assert default_ctx.config.get_state_schema() == "sqlmesh_dev_state_override"
+    assert all("dev_schema" in fqn for fqn in default_ctx.models)

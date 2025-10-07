@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.common import variables_validator
@@ -32,7 +33,7 @@ class GatewayConfig(BaseConfig):
     state_connection: t.Optional[SerializableConnectionConfig] = None
     test_connection: t.Optional[SerializableConnectionConfig] = None
     scheduler: t.Optional[SchedulerConfig] = None
-    state_schema: t.Optional[str] = None
+    state_schema: t.Optional[str] = c.SQLMESH
     variables: t.Dict[str, t.Any] = {}
     model_defaults: t.Optional[ModelDefaultsConfig] = None
 

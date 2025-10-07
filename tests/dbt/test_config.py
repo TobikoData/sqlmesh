@@ -1215,23 +1215,24 @@ test_empty_vars:
     assert project.context.variables == {}
 
 
-def test_state_schema_naming_pattern(create_empty_project: EmptyProjectCreator):
+def test_infer_state_schema_name(create_empty_project: EmptyProjectCreator):
     project_dir, _ = create_empty_project("test_foo", "dev")
 
-    # no state_schema_naming_pattern, creating python config manually doesnt take into account
-    # any config yaml files that may be present, so we get the default state schema
+    # infer_state_schema_name defaults to False if omitted
     config = sqlmesh_config(project_root=project_dir)
-    assert not config.state_schema_naming_pattern
+    assert config.dbt
+    assert not config.dbt.infer_state_schema_name
     assert config.get_state_schema() == "sqlmesh"
 
     # create_empty_project() uses the default dbt template for sqlmesh yaml config which
-    # sets state_schema_naming_pattern
+    # sets infer_state_schema_name=True
     ctx = Context(paths=[project_dir])
-    assert ctx.config.state_schema_naming_pattern
-    assert ctx.config.get_state_schema() == "sqlmesh_state_test_foo_dev"
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
+    assert ctx.config.get_state_schema() == "sqlmesh_state_test_foo_main"
     assert isinstance(ctx.state_sync, CachingStateSync)
     assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
-    assert ctx.state_sync.state_sync.schema == "sqlmesh_state_test_foo_dev"
+    assert ctx.state_sync.state_sync.schema == "sqlmesh_state_test_foo_main"
 
     # If the user delberately overrides state_schema then we should respect this choice
     config_file = project_dir / "sqlmesh.yaml"
@@ -1240,7 +1241,8 @@ def test_state_schema_naming_pattern(create_empty_project: EmptyProjectCreator):
     config_file.write_text(yaml_dump(config_yaml))
 
     ctx = Context(paths=[project_dir])
-    assert ctx.config.state_schema_naming_pattern
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
     assert ctx.config.get_state_schema() == "state_override"
     assert isinstance(ctx.state_sync, CachingStateSync)
     assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
