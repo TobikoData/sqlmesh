@@ -21,7 +21,7 @@ export function LineageControlButton({
       side="left"
       sideOffset={8}
       delayDuration={0}
-      className="px-2 py-1 text-xs rounded-sm font-semibold bg-lineage-control-button-tooltip-background text-lineage-control-button-tooltip-foreground"
+      className="px-2 py-1 text-xs rounded-sm font-semibold bg-lineage-control-button-tooltip-background text-lineage-control-button-tooltip-foreground border-2 border-lineage-control-button-tooltip-border"
       trigger={
         <div data-component="LineageControlButton">
           <ControlButton

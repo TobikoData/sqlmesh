@@ -8,6 +8,7 @@ export default {
           divider: 'var(--color-lineage-divider)',
           border: 'var(--color-lineage-border)',
           control: {
+            border: 'var(--color-lineage-control-border)',
             background: {
               DEFAULT: 'var(--color-lineage-control-background)',
               hover: 'var(--color-lineage-control-background-hover)',
@@ -18,6 +19,7 @@ export default {
             },
             button: {
               tooltip: {
+                border: 'var(--color-lineage-control-button-tooltip-border)',
                 background:
                   'var(--color-lineage-control-button-tooltip-background)',
                 foreground:
@@ -68,6 +70,12 @@ export default {
           },
           model: {
             column: {
+              active: {
+                background:
+                  'var(--color-lineage-model-column-active-background)',
+                foreground:
+                  'var(--color-lineage-model-column-active-foreground)',
+              },
               source: {
                 background:
                   'var(--color-lineage-model-column-source-background)',
@@ -81,7 +89,6 @@ export default {
                   'var(--color-lineage-model-column-error-background)',
                 icon: 'var(--color-lineage-model-column-error-icon)',
               },
-              active: 'var(--color-lineage-model-column-active)',
               icon: {
                 DEFAULT: 'var(--color-lineage-model-column-icon)',
                 active: 'var(--color-lineage-model-column-icon-active)',

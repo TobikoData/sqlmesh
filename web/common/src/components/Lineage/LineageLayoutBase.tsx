@@ -275,21 +275,6 @@ export function LineageLayoutBase<
     updateZoom(viewportZoom)
   }, [updateZoom, viewportZoom])
 
-  React.useEffect(() => {
-    if (currentNode?.id) {
-      setSelectedNodeId(currentNode.id)
-    } else {
-      const node = nodes.length > 0 ? nodes[nodes.length - 1] : null
-
-      if (node) {
-        setCenter(node.position.x, node.position.y, {
-          zoom: zoom,
-          duration: 0,
-        })
-      }
-    }
-  }, [currentNode?.id, setSelectedNodeId, setCenter])
-
   return (
     <ReactFlow<
       LineageNode<TNodeData, TNodeID>,
@@ -327,6 +312,7 @@ export function LineageLayoutBase<
         showInteractive={false}
         showFitView={false}
         position="top-right"
+        className="m-1 border-2 border-lineage-control-border rounded-sm overflow-hidden"
       >
         {currentNode && (
           <LineageControlButton

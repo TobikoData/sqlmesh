@@ -338,7 +338,7 @@ export const ModelLineage = ({
     } else {
       handleReset()
     }
-  }, [handleReset, selectedModelName])
+  }, [handleReset, selectedModelName, nodesMap])
 
   // Cleanup worker on unmount
   React.useEffect(() => () => cleanupLayoutWorker(), [])

@@ -53,7 +53,7 @@ export const NodePort = React.memo(function NodePort<
       leftId={leftId}
       rightId={rightId}
       className={cn(
-        'relative overflow-visible group p-0 bg-lineage-node-port-background h-auto',
+        'relative overflow-visible group bg-lineage-node-port-background h-auto',
         className,
       )}
       handleClassName="absolute"
