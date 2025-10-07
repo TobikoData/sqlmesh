@@ -222,7 +222,9 @@ class BaseModelConfig(GeneralConfig):
             )
             if relation.database == context.target.database:
                 relation = relation.include(database=False)
-            self._canonical_name = relation.render()
+            self._canonical_name = d.normalize_model_name(
+                relation.render(), context.target.database, context.default_dialect
+            )
         return self._canonical_name
 
     @property
@@ -334,7 +336,7 @@ class BaseModelConfig(GeneralConfig):
                 {
                     source.canonical_name(context)
                     for source in model_context.sources.values()
-                    if source.fqn not in context.model_fqns
+                    if source.canonical_name(context) not in context.model_canonical_names
                     # Allow dbt projects to reference a model as a source without causing a cycle
                 },
             ),

@@ -4,6 +4,7 @@ import typing as t
 
 from pydantic import Field
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
@@ -89,7 +90,9 @@ class SourceConfig(GeneralConfig):
             )
             if relation.database == context.target.database:
                 relation = relation.include(database=False)
-            self._canonical_name = relation.render()
+            self._canonical_name = d.normalize_model_name(
+                relation.render(), context.target.database, context.default_dialect
+            )
         return self._canonical_name
 
     @property

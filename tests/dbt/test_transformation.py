@@ -2687,23 +2687,23 @@ def test_ignore_source_depends_on_when_also_model(dbt_dummy_postgres_config: Pos
 
     source_a = SourceConfig(
         name="source_a",
-        fqn=["package", "schema", "model_a"],
     )
-    source_a._canonical_name = "schema.source_a"
+    source_a._canonical_name = "schema.model_a"
     source_b = SourceConfig(
         name="source_b",
-        fqn=["package", "schema", "source_b"],
     )
     source_b._canonical_name = "schema.source_b"
     context.sources = {"source_a": source_a, "source_b": source_b}
 
     model = ModelConfig(
         dependencies=Dependencies(sources={"source_a", "source_b"}),
-        fqn=["package", "schema", "test_model"],
     )
+    model._canonical_name = "schema.test_model"
+    model_a = ModelConfig(name="model_a")
+    model_a._canonical_name = "schema.model_a"
     context.models = {
         "test_model": model,
-        "model_a": ModelConfig(name="model_a", fqn=["package", "schema", "model_a"]),
+        "model_a": model_a,
     }
 
     assert model.sqlmesh_model_kwargs(context)["depends_on"] == {"schema.source_b"}
