@@ -10,7 +10,7 @@ import React from 'react'
 import { cn } from '@/utils'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodePort } from '../node/NodePort'
-import { type NodeId, type PortId } from '../utils'
+import { type NodeId, type PortHandleId, type PortId } from '../utils'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextHook,
@@ -28,11 +28,21 @@ export function FactoryColumn<
   TAdjacencyListColumnKey extends string,
   TNodeID extends string = NodeId,
   TColumnID extends string = PortId,
+  TLeftPortHandleId extends string = PortHandleId,
+  TRightPortHandleId extends string = PortHandleId,
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 >(
   useLineage: ColumnLevelLineageContextHook<
     TAdjacencyListKey,
     TAdjacencyListColumnKey,
-    TColumnID
+    TColumnID,
+    TColumnLevelLineageAdjacencyList
   >,
 ) {
   return React.memo(function FactoryColumn({
@@ -59,10 +69,7 @@ export function FactoryColumn<
     type: string
     description?: string | null
     className?: string
-    data?: ColumnLevelLineageAdjacencyList<
-      TAdjacencyListKey,
-      TAdjacencyListColumnKey
-    >
+    data?: TColumnLevelLineageAdjacencyList
     isFetching?: boolean
     error?: Error | null
     renderError?: (error: Error) => React.ReactNode
@@ -248,7 +255,7 @@ export function FactoryColumn<
     }
 
     return isSelectedColumn ? (
-      <NodePort
+      <NodePort<TColumnID, TNodeID, TLeftPortHandleId, TRightPortHandleId>
         id={id}
         nodeId={nodeId}
         className={cn(

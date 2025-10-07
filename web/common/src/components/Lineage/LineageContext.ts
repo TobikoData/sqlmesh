@@ -17,7 +17,10 @@ export interface LineageContextValue<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 > {
   // Node selection
   showOnlySelectedNodes: boolean
@@ -34,9 +37,25 @@ export interface LineageContextValue<
   setZoom: React.Dispatch<React.SetStateAction<number>>
 
   // Nodes and Edges
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
+  edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[]
   setEdges: React.Dispatch<
-    React.SetStateAction<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]>
+    React.SetStateAction<
+      LineageEdge<
+        TEdgeData,
+        TEdgeID,
+        TSourceID,
+        TTargetID,
+        TSourceHandleID,
+        TTargetHandleID
+      >[]
+    >
   >
   nodes: LineageNode<TNodeData, TNodeID>[]
   nodesMap: LineageNodesMap<TNodeData, TNodeID>
@@ -73,22 +92,49 @@ export type LineageContextHook<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
-> = () => LineageContextValue<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
+> = () => LineageContextValue<
+  TNodeData,
+  TEdgeData,
+  TNodeID,
+  TEdgeID,
+  TSourceID,
+  TTargetID,
+  TSourceHandleID,
+  TTargetHandleID
+>
 
 export function createLineageContext<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
   TLineageContextValue extends LineageContextValue<
     TNodeData,
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
-  > = LineageContextValue<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  > = LineageContextValue<
+    TNodeData,
+    TEdgeData,
+    TNodeID,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >,
 >(initial: TLineageContextValue) {
   const LineageContext = React.createContext(initial)
 

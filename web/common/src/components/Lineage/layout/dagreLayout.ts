@@ -13,14 +13,23 @@ import dagre from 'dagre'
 export function buildLayout<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >({
   edges,
   nodesMap,
 }: {
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
+  edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[]
   nodesMap: LineageNodesMap<TNodeData>
 }) {
   const nodes = Object.values(nodesMap)

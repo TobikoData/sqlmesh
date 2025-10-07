@@ -16,7 +16,6 @@ export const BaseHandle: ForwardRefExoticComponent<
           'fixed flex justify-center items-center border-none transition',
           className,
         )}
-        {...props}
       >
         {children}
       </Handle>

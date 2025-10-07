@@ -66,6 +66,8 @@ export { cn, truncate } from '@/utils'
 export type {
   Brand,
   Branded,
+  BrandedString,
+  BrandedRecord,
   Size,
   HeadlineLevel,
   Side,
