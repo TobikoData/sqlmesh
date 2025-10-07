@@ -10,23 +10,26 @@ import { ModelSQLMeshModel } from '@/domain/sqlmesh-model'
 import { useEventBus } from '@/hooks/eventBus'
 import type { VSCodeEvent } from '@bus/callbacks'
 import { URI } from 'vscode-uri'
-import type { Model, ModelLineageApiLineageModelNameGet200 } from '@/api/client'
+import type { Model } from '@/api/client'
 import { useRpc } from '@/utils/rpc'
 import {
   type ModelPath,
   type ModelFullPath,
   type ModelName,
   type ModelEncodedFQN,
+  type ModelFQN,
 } from '@/domain/models'
 
 import { ModelLineage } from './ModelLineage'
-import type { ModelLineageNodeDetails, ColumnName } from './ModelLineageContext'
 import type {
-  Column,
-  LineageAdjacencyList,
-  LineageDetails,
-} from '@tobikodata/sqlmesh-common/lineage'
+  ModelLineageNodeDetails,
+  ColumnName,
+  BrandedLineageAdjacencyList,
+  BrandedLineageDetails,
+} from './ModelLineageContext'
+import type { Column } from '@tobikodata/sqlmesh-common/lineage'
 import { useVSCode } from '@/hooks/vscode'
+import type { BrandedRecord, BrandedString } from '@bus/brand'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -78,7 +81,7 @@ export function LineagePage() {
 }
 
 function Lineage() {
-  const [selectedModel, setSelectedModel] = useState<string | undefined>(
+  const [selectedModel, setSelectedModel] = useState<ModelFQN | undefined>(
     undefined,
   )
   const { on } = useEventBus()
@@ -91,16 +94,16 @@ function Lineage() {
   } = useApiModels()
   const rpc = useRpc()
   React.useEffect(() => {
-    const fetchFirstTimeModelIfNotSet = async (
+    const fetchFirstTimeModelIfNotSet = async <T extends BrandedString>(
       models: Model[],
-    ): Promise<string | undefined> => {
+    ): Promise<T | undefined> => {
       if (!Array.isArray(models)) {
         return undefined
       }
       const activeFile = await rpc('get_active_file', {})
       // @ts-ignore
       if (!activeFile.fileUri) {
-        return models[0].fqn
+        return models[0].fqn as T
       }
       // @ts-ignore
       const fileUri: string = activeFile.fileUri
@@ -112,16 +115,16 @@ function Lineage() {
         return URI.file(m.full_path).path === filePath
       })
       if (model) {
-        return model.fqn
+        return model.fqn as T
       }
       return undefined
     }
     if (selectedModel === undefined && Array.isArray(models)) {
-      fetchFirstTimeModelIfNotSet(models).then(modelName => {
+      fetchFirstTimeModelIfNotSet<ModelFQN>(models).then(modelName => {
         if (modelName && selectedModel === undefined) {
           setSelectedModel(modelName)
         } else {
-          setSelectedModel(models[0].fqn)
+          setSelectedModel(models[0].fqn as ModelFQN)
         }
       })
     }
@@ -131,20 +134,20 @@ function Lineage() {
     Array.isArray(models) &&
     models.reduce(
       (acc, model) => {
-        acc[model.fqn] = model
+        acc[model.fqn as ModelFQN] = model
         return acc
       },
-      {} as Record<string, Model>,
+      {} as BrandedRecord<ModelFQN, Model>,
     )
 
   React.useEffect(() => {
     const handleChangeFocusedFile = (fileUri: { fileUri: string }) => {
       const full_path = URI.parse(fileUri.fileUri).path
-      const model = Object.values(modelsRecord).find(
+      const model: Model | undefined = Object.values(modelsRecord).find(
         m => URI.file(m.full_path).path === full_path,
       )
       if (model) {
-        setSelectedModel(model.fqn)
+        setSelectedModel(model.fqn as ModelFQN)
       }
     }
 
@@ -193,13 +196,15 @@ export function LineageComponentFromWeb({
   selectedModel,
   models,
 }: {
-  selectedModel: string
-  models: Record<string, Model>
-}): JSX.Element {
+  selectedModel: ModelFQN
+  models: BrandedRecord<ModelFQN, Model>
+}) {
   const vscode = useVSCode()
   function handleClickModel(id: string): void {
     const decodedId = decodeURIComponent(id)
-    const model = Object.values(models).find(m => m.fqn === decodedId)
+    const model = (Object.values(models) as Model[]).find(
+      m => m.fqn === decodedId,
+    )
     if (!model) {
       throw new Error('Model not found')
     }
@@ -230,7 +235,7 @@ export function LineageComponentFromWeb({
   const { refetch: getModelLineage } = useApiModelLineage(model?.name ?? '')
 
   const [modelLineage, setModelLineage] = useState<
-    ModelLineageApiLineageModelNameGet200 | undefined
+    BrandedLineageAdjacencyList<ModelFQN> | undefined
   >(undefined)
 
   React.useEffect(() => {
@@ -238,18 +243,19 @@ export function LineageComponentFromWeb({
 
     getModelLineage()
       .then(({ data }) => {
-        setModelLineage(data)
+        setModelLineage(
+          data as unknown as BrandedLineageAdjacencyList<ModelFQN>,
+        )
       })
       .catch(handleError)
   }, [model?.name, model?.hash])
 
-  const adjacencyList = modelLineage as LineageAdjacencyList<ModelName>
-  const lineageDetails = Object.values(models).reduce(
+  const lineageDetails = (Object.values(models) as Model[]).reduce(
     (acc, model) => {
-      const modelName = model.fqn as ModelName
-      acc[modelName] = {
-        name: modelName,
-        display_name: model.name,
+      const modelFQN = model.fqn as ModelFQN
+      acc[modelFQN] = {
+        name: modelFQN,
+        display_name: model.name as ModelName,
         model_type: model.type,
         identifier: undefined,
         version: undefined,
@@ -267,24 +273,25 @@ export function LineageComponentFromWeb({
             }
             return acc
           },
-          {} as Record<ColumnName, Column>,
+          {} as BrandedRecord<ColumnName, Column>,
         ),
       }
       return acc
     },
-    {} as LineageDetails<ModelName, ModelLineageNodeDetails>,
+    {} as BrandedLineageDetails<ModelFQN, ModelLineageNodeDetails>,
   )
 
+  if (!modelLineage || !lineageDetails) {
+    return null
+  }
+
   return (
-    adjacencyList &&
-    lineageDetails && (
-      <ModelLineage
-        className="h-[98vh] w-[97vw]"
-        onNodeClick={(_, node) => handleClickModel(node.id)}
-        selectedModelName={model.fqn as ModelName}
-        adjacencyList={adjacencyList}
-        lineageDetails={lineageDetails}
-      />
-    )
+    <ModelLineage
+      className="h-[98vh] w-[97vw]"
+      onNodeClick={(_, node) => handleClickModel(node.id)}
+      selectedModelName={model.fqn as ModelFQN}
+      adjacencyList={modelLineage}
+      lineageDetails={lineageDetails}
+    />
   )
 }

@@ -1,12 +1,9 @@
 import React from 'react'
 
-import { debounce } from 'lodash'
 import { Focus, Rows2, Rows3 } from 'lucide-react'
 import {
   FactoryEdgeWithGradient,
   EdgeWithGradient,
-  type LineageAdjacencyList,
-  type LineageDetails,
   ZOOM_THRESHOLD,
   type LineageEdge,
   type LineageNodesMap,
@@ -34,6 +31,8 @@ import {
 } from '@tobikodata/sqlmesh-common/lineage'
 
 import {
+  type BrandedLineageAdjacencyList,
+  type BrandedLineageDetails,
   type ColumnName,
   type EdgeData,
   type ModelColumnID,
@@ -41,13 +40,12 @@ import {
   type ModelLineageNodeDetails,
   type ModelNodeId,
   type NodeData,
-  type NodeType,
   ModelLineageContext,
 } from './ModelLineageContext'
 import { ModelNode } from './ModelNode'
 import { useModelLineage } from './ModelLineageContext'
-import type { ModelName } from '@/domain/models'
-import { getNodeTypeColorVar } from './help'
+import type { ModelFQN } from '@/domain/models'
+import { NODE_TYPE_COLOR_VAR } from './help'
 
 const nodeTypes = {
   node: ModelNode,
@@ -64,9 +62,9 @@ export const ModelLineage = ({
   className,
   onNodeClick,
 }: {
-  adjacencyList: LineageAdjacencyList<ModelName>
-  lineageDetails: LineageDetails<ModelName, ModelLineageNodeDetails>
-  selectedModelName?: ModelName
+  adjacencyList: BrandedLineageAdjacencyList<ModelFQN>
+  lineageDetails: BrandedLineageDetails<ModelFQN, ModelLineageNodeDetails>
+  selectedModelName?: ModelFQN
   className?: string
   onNodeClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
@@ -98,7 +96,7 @@ export const ModelLineage = ({
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
-    Map<ModelColumnID, ColumnLevelLineageAdjacencyList<ModelName, ColumnName>>
+    Map<ModelColumnID, ColumnLevelLineageAdjacencyList<ModelFQN, ColumnName>>
   >(new Map())
   const [fetchingColumns, setFetchingColumns] = React.useState<
     Set<ModelColumnID>
@@ -108,17 +106,17 @@ export const ModelLineage = ({
     adjacencyListColumnLevel,
     selectedColumns,
     adjacencyListKeysColumnLevel,
-  } = useColumnLevelLineage<ModelName, ColumnName, ModelColumnID>(
+  } = useColumnLevelLineage<ModelFQN, ColumnName, ModelColumnID>(
     columnLevelLineage,
   )
 
   const adjacencyListKeys = React.useMemo(() => {
-    let keys: ModelName[] = []
+    let keys: ModelFQN[] = []
 
     if (adjacencyListKeysColumnLevel.length > 0) {
       keys = adjacencyListKeysColumnLevel
     } else {
-      keys = Object.keys(adjacencyList) as ModelName[]
+      keys = Object.keys(adjacencyList) as ModelFQN[]
     }
 
     return keys
@@ -131,7 +129,7 @@ export const ModelLineage = ({
       const node = createNode('node', nodeId, {
         name: detail.name,
         displayName: detail.display_name,
-        model_type: detail.model_type as NodeType,
+        model_type: detail.model_type,
         identifier: detail.identifier,
         kind: detail.kind,
         cron: detail.cron,
@@ -177,7 +175,7 @@ export const ModelLineage = ({
 
   const transformedNodesMap = React.useMemo(() => {
     return getTransformedNodes<
-      ModelName,
+      ModelFQN,
       ModelLineageNodeDetails,
       NodeData,
       ModelNodeId
@@ -201,9 +199,7 @@ export const ModelLineage = ({
         data.startColor = 'var(--color-lineage-node-port-edge-source)'
       } else {
         if (sourceNode?.data?.model_type) {
-          data.startColor = getNodeTypeColorVar(
-            sourceNode.data.model_type as NodeType,
-          )
+          data.startColor = NODE_TYPE_COLOR_VAR[sourceNode.data.model_type]
         }
       }
 
@@ -211,9 +207,7 @@ export const ModelLineage = ({
         data.endColor = 'var(--color-lineage-node-port-edge-target)'
       } else {
         if (targetNode?.data?.model_type) {
-          data.endColor = getNodeTypeColorVar(
-            targetNode.data.model_type as NodeType,
-          )
+          data.endColor = NODE_TYPE_COLOR_VAR[targetNode.data.model_type]
         }
       }
 
@@ -237,7 +231,7 @@ export const ModelLineage = ({
   const edgesColumnLevel = React.useMemo(
     () =>
       getEdgesFromColumnLineage<
-        ModelName,
+        ModelFQN,
         ColumnName,
         EdgeData,
         ModelEdgeId,
@@ -254,7 +248,7 @@ export const ModelLineage = ({
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
       : getTransformedModelEdgesTargetSources<
-          ModelName,
+          ModelFQN,
           EdgeData,
           ModelNodeId,
           ModelEdgeId,
@@ -262,26 +256,24 @@ export const ModelLineage = ({
         >(adjacencyListKeys, adjacencyList, transformEdge)
   }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
-  const calculateLayout = React.useMemo(() => {
-    return debounce(
-      (
-        eds: LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[],
-        nds: LineageNodesMap<NodeData>,
-      ) => {
-        const { edges, nodesMap } = buildLayout<
-          NodeData,
-          EdgeData,
-          ModelNodeId,
-          ModelEdgeId,
-          ModelColumnID
-        >({ edges: eds, nodesMap: nds })
-        setEdges(edges)
-        setNodesMap(nodesMap)
-        setIsBuildingLayout(false)
-      },
-      200,
-    )
-  }, [])
+  const calculateLayout = React.useCallback(
+    (
+      eds: LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[],
+      nds: LineageNodesMap<NodeData>,
+    ) => {
+      const { edges, nodesMap } = buildLayout<
+        NodeData,
+        EdgeData,
+        ModelNodeId,
+        ModelEdgeId,
+        ModelColumnID
+      >({ edges: eds, nodesMap: nds })
+      setEdges(edges)
+      setNodesMap(nodesMap)
+      setIsBuildingLayout(false)
+    },
+    [edges, nodesMap, setEdges, setNodesMap, setIsBuildingLayout],
+  )
 
   const nodes = React.useMemo(() => {
     return Object.values(nodesMap)
@@ -317,27 +309,25 @@ export const ModelLineage = ({
     } else {
       calculateLayout(transformedEdges, transformedNodesMap)
     }
-  }, [
-    calculateLayout,
-    showOnlySelectedNodes,
-    transformedEdges,
-    transformedNodesMap,
-  ])
+  }, [showOnlySelectedNodes, transformedEdges, transformedNodesMap])
 
+  // currentNodeId is passed from the parent component
+  // we it change we need to reset the selectedNodeId
   React.useEffect(() => {
     if (currentNodeId) {
       setSelectedNodeId(currentNodeId)
     }
   }, [currentNodeId])
 
+  // When the selectedColumns is empty it measn we dont have any selected columns
+  // so we need to set the selectedNodeId back to the currentNode.id
+  // where currentNode derived from currentNodeId if present in nodesMap
+  // if the currentNode is null we need to set the selectedNodeId to null
   React.useEffect(() => {
-    if (
-      (selectedColumns.size === 0 && currentNode?.id !== selectedNodeId) ||
-      selectedNodeId == null
-    ) {
+    if (selectedColumns.size === 0 && selectedNodeId != currentNode?.id) {
       setSelectedNodeId(currentNode?.id || null)
     }
-  }, [selectedColumns, currentNode?.id, selectedNodeId])
+  }, [selectedColumns, currentNode?.id])
 
   function toggleColumns() {
     setShowColumns(prev => !prev)
