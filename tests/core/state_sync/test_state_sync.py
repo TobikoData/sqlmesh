@@ -43,8 +43,13 @@ from sqlmesh.core.state_sync import (
 from sqlmesh.core.state_sync.base import (
     SCHEMA_VERSION,
     SQLGLOT_VERSION,
-    PromotionResult,
     Versions,
+)
+from sqlmesh.core.state_sync.common import (
+    ExpiredBatchRange,
+    LimitBoundary,
+    PromotionResult,
+    RowBoundary,
 )
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError, StateMigrationError
@@ -58,11 +63,9 @@ def _get_cleanup_tasks(
     limit: int = 1000,
     ignore_ttl: bool = False,
 ) -> t.List[SnapshotTableCleanupTask]:
-    from sqlmesh.core.state_sync.base import LowerBatchBoundary
-
     batch = state_sync.get_expired_snapshots(
         ignore_ttl=ignore_ttl,
-        batch_boundary=LowerBatchBoundary.init_batch_boundary(batch_size=limit),
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=limit),
     )
     return [] if batch is None else batch.cleanup_tasks
 
@@ -1175,14 +1178,12 @@ def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snaps
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
 
 
 def test_get_expired_snapshot_batch(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
-    from sqlmesh.core.state_sync.base import LowerBatchBoundary
-
     now_ts = now_timestamp()
 
     snapshots = []
@@ -1201,31 +1202,41 @@ def test_get_expired_snapshot_batch(state_sync: EngineAdapterStateSync, make_sna
     state_sync.push_snapshots(snapshots)
 
     batch = state_sync.get_expired_snapshots(
-        batch_boundary=LowerBatchBoundary.init_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
     )
     assert batch is not None
     assert len(batch.expired_snapshot_ids) == 2
     assert len(batch.cleanup_tasks) == 2
 
-    # Delete first batch using new API
     state_sync.delete_expired_snapshots(
-        upper_batch_boundary=batch.batch_boundary.to_upper_batch_boundary(),
+        batch_range=ExpiredBatchRange(
+            start=RowBoundary.lowest_boundary(),
+            end=batch.batch_range.end,
+        ),
     )
 
     next_batch = state_sync.get_expired_snapshots(
-        batch_boundary=batch.batch_boundary.to_lower_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange(
+            start=batch.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
     )
     assert next_batch is not None
     assert len(next_batch.expired_snapshot_ids) == 1
 
-    # Delete second batch using new API
     state_sync.delete_expired_snapshots(
-        upper_batch_boundary=next_batch.batch_boundary.to_upper_batch_boundary(),
+        batch_range=ExpiredBatchRange(
+            start=next_batch.batch_range.start,
+            end=next_batch.batch_range.end,
+        ),
     )
 
     assert (
         state_sync.get_expired_snapshots(
-            batch_boundary=next_batch.batch_boundary.to_lower_batch_boundary(batch_size=2),
+            batch_range=ExpiredBatchRange(
+                start=next_batch.batch_range.end,
+                end=LimitBoundary(batch_size=2),
+            ),
         )
         is None
     )
@@ -1235,8 +1246,6 @@ def test_get_expired_snapshot_batch_same_timestamp(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     """Test that pagination works correctly when multiple snapshots have the same updated_ts."""
-    from sqlmesh.core.state_sync.base import LowerBatchBoundary
-
     now_ts = now_timestamp()
     same_timestamp = now_ts - 20000
 
@@ -1258,7 +1267,7 @@ def test_get_expired_snapshot_batch_same_timestamp(
 
     # Fetch first batch of 2
     batch1 = state_sync.get_expired_snapshots(
-        batch_boundary=LowerBatchBoundary.init_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
     )
     assert batch1 is not None
     assert len(batch1.expired_snapshot_ids) == 2
@@ -1269,7 +1278,10 @@ def test_get_expired_snapshot_batch_same_timestamp(
 
     # Fetch second batch of 2 using cursor from batch1
     batch2 = state_sync.get_expired_snapshots(
-        batch_boundary=batch1.batch_boundary.to_lower_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
     )
     assert batch2 is not None
     assert len(batch2.expired_snapshot_ids) == 2
@@ -1280,7 +1292,10 @@ def test_get_expired_snapshot_batch_same_timestamp(
 
     # Fetch third batch of 2 using cursor from batch2
     batch3 = state_sync.get_expired_snapshots(
-        batch_boundary=batch2.batch_boundary.to_lower_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
     )
     assert batch3 is not None
     assert sorted([x.name for x in batch3.expired_snapshot_ids]) == [
@@ -1292,8 +1307,6 @@ def test_delete_expired_snapshots_batching_with_deletion(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     """Test that delete_expired_snapshots properly deletes batches as it pages through them."""
-    from sqlmesh.core.state_sync.base import LowerBatchBoundary
-
     now_ts = now_timestamp()
 
     # Create 5 expired snapshots with different timestamps
@@ -1317,14 +1330,17 @@ def test_delete_expired_snapshots_batching_with_deletion(
 
     # Get first batch of 2
     batch1 = state_sync.get_expired_snapshots(
-        batch_boundary=LowerBatchBoundary.init_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange.init_batch_range(batch_size=2),
     )
     assert batch1 is not None
     assert len(batch1.expired_snapshot_ids) == 2
 
-    # Delete the first batch using upper_batch_boundary
+    # Delete the first batch using batch_range
     state_sync.delete_expired_snapshots(
-        upper_batch_boundary=batch1.batch_boundary.to_upper_batch_boundary(),
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.start,
+            end=batch1.batch_range.end,
+        ),
     )
 
     # Verify first 2 snapshots (model_0 and model_1, the oldest) are deleted and last 3 remain
@@ -1338,14 +1354,20 @@ def test_delete_expired_snapshots_batching_with_deletion(
 
     # Get next batch of 2 (should start after batch1's boundary)
     batch2 = state_sync.get_expired_snapshots(
-        batch_boundary=batch1.batch_boundary.to_lower_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange(
+            start=batch1.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
     )
     assert batch2 is not None
     assert len(batch2.expired_snapshot_ids) == 2
 
     # Delete the second batch
     state_sync.delete_expired_snapshots(
-        upper_batch_boundary=batch2.batch_boundary.to_upper_batch_boundary(),
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.start,
+            end=batch2.batch_range.end,
+        ),
     )
 
     # Verify only the last snapshot remains
@@ -1359,14 +1381,20 @@ def test_delete_expired_snapshots_batching_with_deletion(
 
     # Get final batch
     batch3 = state_sync.get_expired_snapshots(
-        batch_boundary=batch2.batch_boundary.to_lower_batch_boundary(batch_size=2),
+        batch_range=ExpiredBatchRange(
+            start=batch2.batch_range.end,
+            end=LimitBoundary(batch_size=2),
+        ),
     )
     assert batch3 is not None
     assert len(batch3.expired_snapshot_ids) == 1
 
     # Delete the final batch
     state_sync.delete_expired_snapshots(
-        upper_batch_boundary=batch3.batch_boundary.to_upper_batch_boundary(),
+        batch_range=ExpiredBatchRange(
+            start=batch3.batch_range.start,
+            end=batch3.batch_range.end,
+        ),
     )
 
     # Verify all snapshots are deleted
@@ -1375,7 +1403,10 @@ def test_delete_expired_snapshots_batching_with_deletion(
     # Verify no more expired snapshots exist
     assert (
         state_sync.get_expired_snapshots(
-            batch_boundary=batch3.batch_boundary.to_lower_batch_boundary(batch_size=2),
+            batch_range=ExpiredBatchRange(
+                start=batch3.batch_range.end,
+                end=LimitBoundary(batch_size=2),
+            ),
         )
         is None
     )
@@ -1431,12 +1462,74 @@ def test_iterator_expired_snapshot_batch(
     assert all_processed_ids == expected_ids
 
 
+@pytest.mark.parametrize(
+    "start_boundary,end_boundary,expected_sql",
+    [
+        # Test with GT only (when end is LimitBoundary)
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            LimitBoundary(batch_size=100),
+            "updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')",
+        ),
+        # Test with GT and LTE (when both are RowBoundary)
+        (
+            RowBoundary(updated_ts=1000, name="model_a", identifier="abc"),
+            RowBoundary(updated_ts=2000, name="model_z", identifier="xyz"),
+            "(updated_ts > 1000 OR (updated_ts = 1000 AND name > 'model_a') OR (updated_ts = 1000 AND name = 'model_a' AND identifier > 'abc')) AND (updated_ts < 2000 OR (updated_ts = 2000 AND name < 'model_z') OR (updated_ts = 2000 AND name = 'model_z' AND identifier <= 'xyz'))",
+        ),
+        # Test with zero timestamp
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            RowBoundary(updated_ts=1234567890, name="model_x", identifier="id_123"),
+            "(updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')) AND (updated_ts < 1234567890 OR (updated_ts = 1234567890 AND name < 'model_x') OR (updated_ts = 1234567890 AND name = 'model_x' AND identifier <= 'id_123'))",
+        ),
+        # Test with same timestamp, different names
+        (
+            RowBoundary(updated_ts=5000, name="model_a", identifier="id_1"),
+            RowBoundary(updated_ts=5000, name="model_b", identifier="id_2"),
+            "(updated_ts > 5000 OR (updated_ts = 5000 AND name > 'model_a') OR (updated_ts = 5000 AND name = 'model_a' AND identifier > 'id_1')) AND (updated_ts < 5000 OR (updated_ts = 5000 AND name < 'model_b') OR (updated_ts = 5000 AND name = 'model_b' AND identifier <= 'id_2'))",
+        ),
+        # Test with same timestamp and name, different identifiers
+        (
+            RowBoundary(updated_ts=7000, name="model_x", identifier="id_a"),
+            RowBoundary(updated_ts=7000, name="model_x", identifier="id_b"),
+            "(updated_ts > 7000 OR (updated_ts = 7000 AND name > 'model_x') OR (updated_ts = 7000 AND name = 'model_x' AND identifier > 'id_a')) AND (updated_ts < 7000 OR (updated_ts = 7000 AND name < 'model_x') OR (updated_ts = 7000 AND name = 'model_x' AND identifier <= 'id_b'))",
+        ),
+        # Test all_batch_range use case
+        (
+            RowBoundary(updated_ts=0, name="", identifier=""),
+            RowBoundary(updated_ts=253_402_300_799_999, name="", identifier=""),
+            "(updated_ts > 0 OR (updated_ts = 0 AND name > '') OR (updated_ts = 0 AND name = '' AND identifier > '')) AND (updated_ts < 253402300799999 OR (updated_ts = 253402300799999 AND name < '') OR (updated_ts = 253402300799999 AND name = '' AND identifier <= ''))",
+        ),
+    ],
+)
+def test_expired_batch_range_where_filter(start_boundary, end_boundary, expected_sql):
+    """Test ExpiredBatchRange.where_filter generates correct SQL for various boundary combinations."""
+    batch_range = ExpiredBatchRange(start=start_boundary, end=end_boundary)
+    result = batch_range.where_filter
+    assert result.sql() == expected_sql
+
+
+def test_expired_batch_range_where_filter_with_limit():
+    """Test that where_filter correctly handles LimitBoundary (only start condition, no end condition)."""
+    batch_range = ExpiredBatchRange(
+        start=RowBoundary(updated_ts=1000, name="model_a", identifier="abc"),
+        end=LimitBoundary(batch_size=50),
+    )
+    result = batch_range.where_filter
+    # When end is LimitBoundary, should only have the start (GT) condition
+    assert (
+        result.sql()
+        == "updated_ts > 1000 OR (updated_ts = 1000 AND name > 'model_a') OR (updated_ts = 1000 AND name = 'model_a' AND identifier > 'abc')"
+    )
+
+
 def test_delete_expired_snapshots_common_function_batching(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
 ):
     """Test that the common delete_expired_snapshots function properly pages through batches and deletes them."""
     from sqlmesh.core.state_sync.common import delete_expired_snapshots
-    from sqlmesh.core.state_sync.base import LowerBatchBoundary, UpperBatchBoundary
+    from sqlmesh.core.state_sync.common import ExpiredBatchRange, RowBoundary, LimitBoundary
     from unittest.mock import MagicMock
 
     now_ts = now_timestamp()
@@ -1474,86 +1567,103 @@ def test_delete_expired_snapshots_common_function_batching(
     )
 
     # Verify get_expired_snapshots was called the correct number of times:
-    # - 3 batches (2+2+1): each batch triggers 2 calls (one from for_each loop, one from delete_expired_snapshots)
+    # - 3 batches (2+2+1): each batch triggers 2 calls (one from iter_expired_snapshot_batches, one from delete_expired_snapshots)
     # - Plus 1 final call that returns empty to exit the loop
     # Total: 3 * 2 + 1 = 7 calls
     assert get_expired_spy.call_count == 7
 
-    # Verify the progression of batch_boundary calls from the for_each loop
-    # (calls at indices 0, 2, 4, 6 are from for_each_expired_snapshot_batch)
+    # Verify the progression of batch_range calls from the iter_expired_snapshot_batches loop
+    # (calls at indices 0, 2, 4, 6 are from iter_expired_snapshot_batches)
     # (calls at indices 1, 3, 5 are from delete_expired_snapshots in facade.py)
     calls = get_expired_spy.call_args_list
 
-    # First call from for_each should have a LowerBatchBoundary starting from the beginning
+    # First call from iterator should have a batch_range starting from the beginning
     first_call_kwargs = calls[0][1]
-    assert "batch_boundary" in first_call_kwargs
-    first_boundary = first_call_kwargs["batch_boundary"]
-    assert isinstance(first_boundary, LowerBatchBoundary)
-    assert first_boundary.batch_size == 2
-    assert first_boundary.updated_ts == 0
-    assert first_boundary.name == ""
-    assert first_boundary.identifier == ""
+    assert "batch_range" in first_call_kwargs
+    first_range = first_call_kwargs["batch_range"]
+    assert isinstance(first_range, ExpiredBatchRange)
+    assert isinstance(first_range.start, RowBoundary)
+    assert isinstance(first_range.end, LimitBoundary)
+    assert first_range.end.batch_size == 2
+    assert first_range.start.updated_ts == 0
+    assert first_range.start.name == ""
+    assert first_range.start.identifier == ""
 
-    # Third call (second batch from for_each) should have a LowerBatchBoundary from the first batch's boundary
+    # Third call (second batch from iterator) should have a batch_range from the first batch's range
     third_call_kwargs = calls[2][1]
-    assert "batch_boundary" in third_call_kwargs
-    second_boundary = third_call_kwargs["batch_boundary"]
-    assert isinstance(second_boundary, LowerBatchBoundary)
-    assert second_boundary.batch_size == 2
+    assert "batch_range" in third_call_kwargs
+    second_range = third_call_kwargs["batch_range"]
+    assert isinstance(second_range, ExpiredBatchRange)
+    assert isinstance(second_range.start, RowBoundary)
+    assert isinstance(second_range.end, LimitBoundary)
+    assert second_range.end.batch_size == 2
     # Should have progressed from the first batch
-    assert second_boundary.updated_ts > 0
-    assert second_boundary.name == '"model_3"'
+    assert second_range.start.updated_ts > 0
+    assert second_range.start.name == '"model_3"'
 
-    # Fifth call (third batch from for_each) should have a LowerBatchBoundary from the second batch's boundary
+    # Fifth call (third batch from iterator) should have a batch_range from the second batch's range
     fifth_call_kwargs = calls[4][1]
-    assert "batch_boundary" in fifth_call_kwargs
-    third_boundary = fifth_call_kwargs["batch_boundary"]
-    assert isinstance(third_boundary, LowerBatchBoundary)
-    assert third_boundary.batch_size == 2
+    assert "batch_range" in fifth_call_kwargs
+    third_range = fifth_call_kwargs["batch_range"]
+    assert isinstance(third_range, ExpiredBatchRange)
+    assert isinstance(third_range.start, RowBoundary)
+    assert isinstance(third_range.end, LimitBoundary)
+    assert third_range.end.batch_size == 2
     # Should have progressed from the second batch
-    assert third_boundary.updated_ts >= second_boundary.updated_ts
-    assert third_boundary.name == '"model_1"'
+    assert third_range.start.updated_ts >= second_range.start.updated_ts
+    assert third_range.start.name == '"model_1"'
 
-    # Seventh call (final call from for_each) should have a LowerBatchBoundary from the third batch's boundary
+    # Seventh call (final call from iterator) should have a batch_range from the third batch's range
     seventh_call_kwargs = calls[6][1]
-    assert "batch_boundary" in seventh_call_kwargs
-    fourth_boundary = seventh_call_kwargs["batch_boundary"]
-    assert isinstance(fourth_boundary, LowerBatchBoundary)
-    assert fourth_boundary.batch_size == 2
+    assert "batch_range" in seventh_call_kwargs
+    fourth_range = seventh_call_kwargs["batch_range"]
+    assert isinstance(fourth_range, ExpiredBatchRange)
+    assert isinstance(fourth_range.start, RowBoundary)
+    assert isinstance(fourth_range.end, LimitBoundary)
+    assert fourth_range.end.batch_size == 2
     # Should have progressed from the third batch
-    assert fourth_boundary.updated_ts >= third_boundary.updated_ts
-    assert fourth_boundary.name == '"model_0"'
+    assert fourth_range.start.updated_ts >= third_range.start.updated_ts
+    assert fourth_range.start.name == '"model_0"'
 
     # Verify delete_expired_snapshots was called 3 times (once per batch)
     assert delete_expired_spy.call_count == 3
 
-    # Verify each delete call used an UpperBatchBoundary
+    # Verify each delete call used a batch_range
     delete_calls = delete_expired_spy.call_args_list
 
-    # First call should have an UpperBatchBoundary matching the first batch
+    # First call should have a batch_range matching the first batch
     first_delete_kwargs = delete_calls[0][1]
-    assert "upper_batch_boundary" in first_delete_kwargs
-    first_delete_boundary = first_delete_kwargs["upper_batch_boundary"]
-    assert isinstance(first_delete_boundary, UpperBatchBoundary)
-    assert first_delete_boundary.updated_ts == second_boundary.updated_ts
-    assert first_delete_boundary.name == second_boundary.name
-    assert first_delete_boundary.identifier == second_boundary.identifier
+    assert "batch_range" in first_delete_kwargs
+    first_delete_range = first_delete_kwargs["batch_range"]
+    assert isinstance(first_delete_range, ExpiredBatchRange)
+    assert isinstance(first_delete_range.start, RowBoundary)
+    assert first_delete_range.start.updated_ts == 0
+    assert isinstance(first_delete_range.end, RowBoundary)
+    assert first_delete_range.end.updated_ts == second_range.start.updated_ts
+    assert first_delete_range.end.name == second_range.start.name
+    assert first_delete_range.end.identifier == second_range.start.identifier
 
     second_delete_kwargs = delete_calls[1][1]
-    assert "upper_batch_boundary" in second_delete_kwargs
-    second_delete_boundary = second_delete_kwargs["upper_batch_boundary"]
-    assert isinstance(second_delete_boundary, UpperBatchBoundary)
-    assert second_delete_boundary.updated_ts == third_boundary.updated_ts
-    assert second_delete_boundary.name == third_boundary.name
-    assert second_delete_boundary.identifier == third_boundary.identifier
+    assert "batch_range" in second_delete_kwargs
+    second_delete_range = second_delete_kwargs["batch_range"]
+    assert isinstance(second_delete_range, ExpiredBatchRange)
+    assert isinstance(second_delete_range.start, RowBoundary)
+    assert second_delete_range.start.updated_ts == 0
+    assert isinstance(second_delete_range.end, RowBoundary)
+    assert second_delete_range.end.updated_ts == third_range.start.updated_ts
+    assert second_delete_range.end.name == third_range.start.name
+    assert second_delete_range.end.identifier == third_range.start.identifier
 
     third_delete_kwargs = delete_calls[2][1]
-    assert "upper_batch_boundary" in third_delete_kwargs
-    third_delete_boundary = third_delete_kwargs["upper_batch_boundary"]
-    assert isinstance(third_delete_boundary, UpperBatchBoundary)
-    assert third_delete_boundary.updated_ts == fourth_boundary.updated_ts
-    assert third_delete_boundary.name == fourth_boundary.name
-    assert third_delete_boundary.identifier == fourth_boundary.identifier
+    assert "batch_range" in third_delete_kwargs
+    third_delete_range = third_delete_kwargs["batch_range"]
+    assert isinstance(third_delete_range, ExpiredBatchRange)
+    assert isinstance(third_delete_range.start, RowBoundary)
+    assert third_delete_range.start.updated_ts == 0
+    assert isinstance(third_delete_range.end, RowBoundary)
+    assert third_delete_range.end.updated_ts == fourth_range.start.updated_ts
+    assert third_delete_range.end.name == fourth_range.start.name
+    assert third_delete_range.end.identifier == fourth_range.start.identifier
     # Verify the cleanup method was called for each batch that had cleanup tasks
     assert mock_evaluator.cleanup.call_count >= 1
 
@@ -1587,7 +1697,7 @@ def test_delete_expired_snapshots_seed(
     assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1629,7 +1739,7 @@ def test_delete_expired_snapshots_batching(
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=False),
         SnapshotTableCleanupTask(snapshot=snapshot_b.table_info, dev_table_only=False),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not state_sync.get_snapshots(all_snapshots)
 
@@ -1663,7 +1773,7 @@ def test_delete_expired_snapshots_promoted(
 
     all_snapshots = [snapshot]
     assert not _get_cleanup_tasks(state_sync)
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert set(state_sync.get_snapshots(all_snapshots)) == {snapshot.snapshot_id}
 
     env.snapshots_ = []
@@ -1675,7 +1785,7 @@ def test_delete_expired_snapshots_promoted(
     assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots(all_snapshots)
 
 
@@ -1715,7 +1825,7 @@ def test_delete_expired_snapshots_dev_table_cleanup_only(
     assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
@@ -1755,7 +1865,7 @@ def test_delete_expired_snapshots_shared_dev_table(
     }
 
     assert not _get_cleanup_tasks(state_sync)  # No dev table cleanup
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert set(state_sync.get_snapshots(all_snapshots)) == {new_snapshot.snapshot_id}
 
 
@@ -1801,7 +1911,7 @@ def test_delete_expired_snapshots_ignore_ttl(
 
     # default TTL = 1 week, nothing to clean up yet if we take TTL into account
     assert not _get_cleanup_tasks(state_sync)
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert state_sync.snapshots_exist([snapshot_c.snapshot_id]) == {snapshot_c.snapshot_id}
 
     # If we ignore TTL, only snapshot_c should get cleaned up because snapshot_a and snapshot_b are part of an environment
@@ -1809,7 +1919,9 @@ def test_delete_expired_snapshots_ignore_ttl(
     assert _get_cleanup_tasks(state_sync, ignore_ttl=True) == [
         SnapshotTableCleanupTask(snapshot=snapshot_c.table_info, dev_table_only=False)
     ]
-    state_sync.delete_expired_snapshots(ignore_ttl=True)
+    state_sync.delete_expired_snapshots(
+        batch_range=ExpiredBatchRange.all_batch_range(), ignore_ttl=True
+    )
     assert not state_sync.snapshots_exist([snapshot_c.snapshot_id])
 
 
@@ -1877,7 +1989,7 @@ def test_delete_expired_snapshots_cleanup_intervals(
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
         SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert not get_snapshot_intervals(snapshot)
 
@@ -1964,7 +2076,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_version(
     assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -2082,7 +2194,7 @@ def test_delete_expired_snapshots_cleanup_intervals_shared_dev_version(
 
     # Delete the expired snapshot
     assert not _get_cleanup_tasks(state_sync)
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
     assert not state_sync.get_snapshots([snapshot])
 
     # Check new snapshot's intervals
@@ -2178,7 +2290,7 @@ def test_compact_intervals_after_cleanup(
     assert _get_cleanup_tasks(state_sync) == [
         SnapshotTableCleanupTask(snapshot=snapshot_a.table_info, dev_table_only=True),
     ]
-    state_sync.delete_expired_snapshots()
+    state_sync.delete_expired_snapshots(batch_range=ExpiredBatchRange.all_batch_range())
 
     assert state_sync.engine_adapter.fetchone("SELECT COUNT(*) FROM sqlmesh._intervals")[0] == 5  # type: ignore
 

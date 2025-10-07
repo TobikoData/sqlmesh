@@ -42,12 +42,8 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
 )
 from sqlmesh.core.state_sync.base import (
-    ExpiredSnapshotBatch,
-    PromotionResult,
     StateSync,
     Versions,
-    BatchBoundary,
-    UpperBatchBoundary,
 )
 from sqlmesh.core.state_sync.common import (
     EnvironmentsChunk,
@@ -57,6 +53,9 @@ from sqlmesh.core.state_sync.common import (
     StateStream,
     chunk_iterable,
     EnvironmentWithStatements,
+    ExpiredSnapshotBatch,
+    PromotionResult,
+    ExpiredBatchRange,
 )
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
@@ -265,7 +264,7 @@ class EngineAdapterStateSync(StateSync):
     def get_expired_snapshots(
         self,
         *,
-        batch_boundary: BatchBoundary,
+        batch_range: ExpiredBatchRange,
         current_ts: t.Optional[int] = None,
         ignore_ttl: bool = False,
     ) -> t.Optional[ExpiredSnapshotBatch]:
@@ -274,7 +273,7 @@ class EngineAdapterStateSync(StateSync):
             environments=self.environment_state.get_environments(),
             current_ts=current_ts,
             ignore_ttl=ignore_ttl,
-            batch_boundary=batch_boundary,
+            batch_range=batch_range,
         )
 
     def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
@@ -283,15 +282,14 @@ class EngineAdapterStateSync(StateSync):
     @transactional()
     def delete_expired_snapshots(
         self,
+        batch_range: ExpiredBatchRange,
         ignore_ttl: bool = False,
         current_ts: t.Optional[int] = None,
-        upper_batch_boundary: t.Optional[UpperBatchBoundary] = None,
     ) -> None:
-        upper_batch_boundary = upper_batch_boundary or UpperBatchBoundary.include_all_boundary()
         batch = self.get_expired_snapshots(
             ignore_ttl=ignore_ttl,
             current_ts=current_ts,
-            batch_boundary=upper_batch_boundary,
+            batch_range=batch_range,
         )
         if batch and batch.expired_snapshot_ids:
             self.snapshot_state.delete_snapshots(batch.expired_snapshot_ids)

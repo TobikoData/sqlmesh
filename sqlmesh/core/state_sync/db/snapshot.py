@@ -29,7 +29,12 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotFingerprint,
 )
-from sqlmesh.core.state_sync.base import ExpiredSnapshotBatch, BatchBoundary, LowerBatchBoundary
+from sqlmesh.core.state_sync.common import (
+    RowBoundary,
+    ExpiredSnapshotBatch,
+    ExpiredBatchRange,
+    LimitBoundary,
+)
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
 from sqlmesh.utils import unique
@@ -164,7 +169,7 @@ class SnapshotState:
         environments: t.Iterable[Environment],
         current_ts: int,
         ignore_ttl: bool,
-        batch_boundary: BatchBoundary,
+        batch_range: ExpiredBatchRange,
     ) -> t.Optional[ExpiredSnapshotBatch]:
         expired_query = exp.select("name", "identifier", "version", "updated_ts").from_(
             self.snapshots_table
@@ -175,26 +180,7 @@ class SnapshotState:
                 (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
             )
 
-        # Use tuple comparison for proper cursor-based pagination
-        operation = exp.GT if isinstance(batch_boundary, LowerBatchBoundary) else exp.LTE
-        expired_query = expired_query.where(
-            operation(
-                this=exp.Tuple(
-                    expressions=[
-                        exp.column("updated_ts"),
-                        exp.column("name"),
-                        exp.column("identifier"),
-                    ]
-                ),
-                expression=exp.Tuple(
-                    expressions=[
-                        exp.Literal.number(batch_boundary.updated_ts),
-                        exp.Literal.string(batch_boundary.name),
-                        exp.Literal.string(batch_boundary.identifier),
-                    ]
-                ),
-            )
-        )
+        expired_query = expired_query.where(batch_range.where_filter)
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -217,8 +203,8 @@ class SnapshotState:
             exp.column("updated_ts"), exp.column("name"), exp.column("identifier")
         )
 
-        if isinstance(batch_boundary, LowerBatchBoundary):
-            expired_query = expired_query.limit(batch_boundary.batch_size)
+        if isinstance(batch_range.end, LimitBoundary):
+            expired_query = expired_query.limit(batch_range.end.batch_size)
 
         rows = fetchall(self.engine_adapter, expired_query)
 
@@ -242,10 +228,15 @@ class SnapshotState:
 
         # Extract cursor values from last row for pagination
         last_row = rows[-1]
-        batch_boundary = BatchBoundary(
+        last_row_boundary = RowBoundary(
             updated_ts=last_row[3],
             name=last_row[0],
             identifier=last_row[1],
+        )
+        # The returned batch_range represents the actual range of rows in this batch
+        result_batch_range = ExpiredBatchRange(
+            start=batch_range.start,
+            end=last_row_boundary,
         )
 
         unique_expired_versions = unique(expired_candidates.values())
@@ -298,7 +289,7 @@ class SnapshotState:
             return ExpiredSnapshotBatch(
                 expired_snapshot_ids=expired_snapshot_ids,
                 cleanup_tasks=cleanup_tasks,
-                batch_boundary=batch_boundary,
+                batch_range=result_batch_range,
             )
 
         return None
