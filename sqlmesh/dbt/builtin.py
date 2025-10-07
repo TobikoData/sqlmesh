@@ -50,6 +50,22 @@ class Exceptions:
         return ""
 
 
+def try_or_compiler_error(
+    message_if_exception: str, func: t.Callable, *args: t.Any, **kwargs: t.Any
+) -> t.Any:
+    try:
+        return func(*args, **kwargs)
+    except Exception:
+        if DBT_VERSION >= (1, 4, 0):
+            from dbt.exceptions import CompilationError
+
+            raise CompilationError(message_if_exception)
+        else:
+            from dbt.exceptions import CompilationException  # type: ignore
+
+            raise CompilationException(message_if_exception)
+
+
 class Api:
     def __init__(self, dialect: t.Optional[str]) -> None:
         if dialect:
@@ -411,6 +427,7 @@ BUILTIN_GLOBALS = {
     "sqlmesh_incremental": True,
     "tojson": to_json,
     "toyaml": to_yaml,
+    "try_or_compiler_error": try_or_compiler_error,
     "zip": do_zip,
     "zip_strict": lambda *args: list(zip(*args)),
 }
