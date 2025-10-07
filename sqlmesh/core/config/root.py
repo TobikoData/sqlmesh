@@ -4,7 +4,6 @@ import pickle
 import re
 import typing as t
 import zlib
-import logging
 
 from pydantic import Field
 from pydantic.functional_validators import BeforeValidator
@@ -50,8 +49,6 @@ from sqlmesh.core.user import User
 from sqlmesh.utils.date import to_timestamp, now
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import model_validator
-
-logger = logging.getLogger(__name__)
 
 
 def validate_no_past_ttl(v: str) -> str:
