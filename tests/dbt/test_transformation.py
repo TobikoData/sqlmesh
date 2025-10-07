@@ -164,7 +164,7 @@ def test_dbt_custom_materialization_with_time_filter_and_macro():
     today = datetime.now()
 
     # select both custom materialiasation models with the wildcard
-    selector = ["sushi.custom_incremental*"]
+    selector = ['"sushi"."custom_incremental*']
     plan_builder = sushi_context.plan_builder(select_models=selector, execution_time=today)
     plan = plan_builder.build()
 
@@ -191,6 +191,7 @@ def test_dbt_custom_materialization_with_time_filter_and_macro():
 
     # - run ONE DAY LATER
     a_day_later = today + timedelta(days=1)
+    selector = ['"sushi"."custom_incremental*']
     sushi_context.run(select_models=selector, execution_time=a_day_later)
     result_after_run = sushi_context.engine_adapter.fetchdf(select_daily)
 
@@ -2712,7 +2713,7 @@ def test_selected_resources_with_selectors():
     assert any("customers" in model for model in plan.selected_models)
 
     # Test wildcard selection
-    plan_builder = sushi_context.plan_builder(select_models=["sushi.waiter_*"])
+    plan_builder = sushi_context.plan_builder(select_models=['"sushi"."waiter_*'])
     plan = plan_builder.build()
     assert plan.selected_models is not None
     assert len(plan.selected_models) >= 4
