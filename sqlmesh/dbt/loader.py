@@ -49,6 +49,7 @@ def sqlmesh_config(
     dbt_profile_name: t.Optional[str] = None,
     dbt_target_name: t.Optional[str] = None,
     variables: t.Optional[t.Dict[str, t.Any]] = None,
+    threads: t.Optional[int] = None,
     register_comments: t.Optional[bool] = None,
     **kwargs: t.Any,
 ) -> Config:
@@ -66,6 +67,10 @@ def sqlmesh_config(
     loader = kwargs.pop("loader", DbtLoader)
     if not issubclass(loader, DbtLoader):
         raise ConfigError("The loader must be a DbtLoader.")
+
+    if threads is not None:
+        # the to_sqlmesh() function on TargetConfig maps self.threads -> concurrent_tasks
+        profile.target.threads = threads
 
     return Config(
         loader=loader,
