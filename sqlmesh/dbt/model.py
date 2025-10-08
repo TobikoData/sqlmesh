@@ -215,6 +215,14 @@ class ModelConfig(BaseModelConfig):
             ):
                 granularity = v["granularity"]
                 raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
+            if "data_type" in v and v["data_type"].lower() not in (
+                "timestamp",
+                "date",
+                "datetime",
+                "int64",
+            ):
+                data_type = v["data_type"]
+                raise ConfigError(f"Unexpected data_type '{data_type}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 

@@ -1881,6 +1881,17 @@ def test_partition_by(sushi_test_project: Project):
     )
     assert model_config.to_sqlmesh(context).partitioned_by == []
 
+    with pytest.raises(ConfigError, match="Unexpected data_type 'string' in partition_by"):
+        ModelConfig(
+            name="model",
+            alias="model",
+            schema="test",
+            package_name="package",
+            materialized="table",
+            partition_by={"field": "ds", "data_type": "string"},
+            sql="""SELECT 1 AS one, ds FROM foo""",
+        )
+
 
 @pytest.mark.xdist_group("dbt_manifest")
 def test_partition_by_none(sushi_test_project: Project):
