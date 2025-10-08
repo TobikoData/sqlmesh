@@ -9,7 +9,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot.definition import Snapshot
     from sqlmesh.utils.date import DatetimeRanges
     from sqlmesh.core.snapshot.definition import DeployabilityIndex
-    from sqlmesh.core.snapshot.definition import Intervals
 
 
 class signal(registry_decorator):
@@ -48,7 +47,6 @@ def freshness(
     batch: DatetimeRanges,
     snapshot: Snapshot,
     context: ExecutionContext,
-    parent_intervals: t.Optional[t.List[Intervals]] = None,
 ) -> bool:
     """
     Implements model freshness as a signal, i.e it considers this model to be fresh if:
@@ -71,33 +69,30 @@ def freshness(
         return True
 
     parent_snapshots = {context.snapshots[p.name] for p in snapshot.parents}
-    if len(parent_snapshots) != len(snapshot.node.depends_on):
-        # The mismatch can happen if e.g an external model is not registered in the project
+
+    upstream_parent_snapshots = {p for p in parent_snapshots if not p.is_external}
+    external_parents = snapshot.node.depends_on - {p.name for p in upstream_parent_snapshots}
+
+    if context.parent_intervals:
+        # At least one upstream sqlmesh model has intervals to compute (i.e is fresh),
+        # so the current model is considered fresh too
         return True
 
-    external_parent_snapshots = {p for p in parent_snapshots if p.is_external}
-    upstream_parent_snapshots = parent_snapshots - external_parent_snapshots
-
-    if upstream_parent_snapshots and parent_intervals:
-        # At least one upstream sqlmesh model has intervals to compute (i.e is not fresh),
-        # so the current model should be considered fresh
-        return True
-
-    if external_parent_snapshots:
+    if external_parents:
         external_last_altered_timestamps = adapter.get_table_last_modified_ts(
-            [sp.name for sp in external_parent_snapshots]
+            list(external_parents)
         )
 
-        if len(external_last_altered_timestamps) != len(external_parent_snapshots):
+        if len(external_last_altered_timestamps) != len(external_parents):
             raise MissingSourceError(
-                f"Expected {len(external_parent_snapshots)} sources to be present, but got {len(external_last_altered_timestamps)}."
+                f"Expected {len(external_parents)} sources to be present, but got {len(external_last_altered_timestamps)}."
             )
 
         # Finding new data means that the upstream depedencies have been altered
         # since the last time the model was evaluated
         return any(
-            upstream_last_altered_ts > last_altered_ts
-            for upstream_last_altered_ts in external_last_altered_timestamps
+            external_last_altered_ts > last_altered_ts
+            for external_last_altered_ts in external_last_altered_timestamps
         )
 
     return False
