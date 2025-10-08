@@ -14,7 +14,7 @@ from sqlmesh.core.engine_adapter.shared import (
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
-
+from sqlmesh.core.schema_diff import TableAlterOperation
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +153,17 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
             raise SQLMeshError(
                 f"Unable to switch catalog to {catalog_name}, catalog ended up as {catalog_after_switch}"
             )
+
+    def alter_table(
+        self,
+        alter_expressions: t.Union[t.List[exp.Alter], t.List[TableAlterOperation]],
+    ) -> None:
+        """
+        Disables ALTER TABLE for Fabric since it has limited support.
+        By making this a no-op, we signal to the caller to fall back 
+        to a more reliable drop-and-recreate strategy to apply schema changes.
+        """
+        return
 
 
 class FabricHttpClient:
