@@ -95,7 +95,7 @@ def test_alter_table_is_noop(adapter: FabricEngineAdapter):
     Tests that alter_table is a no-op for Fabric.
 
     The adapter should not execute any SQL, signaling to the caller
-    that it should use the fallback strategy (like drop/add)
+    that it should use the fallback strategy (drop/add)
     to apply schema changes.
     """
     alter_expression = exp.Alter(
