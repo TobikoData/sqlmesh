@@ -16,6 +16,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.connection_pool import ConnectionPool
 from sqlmesh.core.schema_diff import TableAlterOperation
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,7 +161,7 @@ class FabricEngineAdapter(LogicalMergeMixin, MSSQLEngineAdapter):
     ) -> None:
         """
         Disables ALTER TABLE for Fabric since it has limited support.
-        By making this a no-op, we signal to the caller to fall back to a 
+        By making this a no-op, we signal to the caller to fall back to a
         more reliable drop/add strategy for columns to apply schema changes.
         """
         return
