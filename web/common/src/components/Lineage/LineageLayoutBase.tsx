@@ -20,7 +20,6 @@ import {
 import '@xyflow/react/dist/style.css'
 import './Lineage.css'
 
-import { debounce } from 'lodash'
 import { CircuitBoard, Crosshair, LocateFixed, RotateCcw } from 'lucide-react'
 import React from 'react'
 
@@ -39,8 +38,8 @@ import {
   NODES_TRESHOLD_ZOOM,
   type NodeId,
   type EdgeId,
-  ZOOM_THRESHOLD,
   type PortId,
+  ZOOM_THRESHOLD,
 } from './utils'
 
 import '@xyflow/react/dist/style.css'
@@ -50,9 +49,12 @@ import { cn } from '@/utils'
 export function LineageLayoutBase<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TNodeID extends string = NodeId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >({
   nodeTypes,
   edgeTypes,
@@ -69,7 +71,10 @@ export function LineageLayoutBase<
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
   >
   nodesDraggable?: boolean
   nodesConnectable?: boolean
@@ -106,8 +111,19 @@ export function LineageLayoutBase<
     setSelectedEdges,
   } = useLineage()
 
-  const [nodes, setNodes] = React.useState(initialNodes)
-  const [edges, setEdges] = React.useState(initialEdges)
+  const [nodes, setNodes] = React.useState<LineageNode<TNodeData, TNodeID>[]>(
+    [],
+  )
+  const [edges, setEdges] = React.useState<
+    LineageEdge<
+      TEdgeData,
+      TEdgeID,
+      TSourceID,
+      TTargetID,
+      TSourceHandleID,
+      TTargetHandleID
+    >[]
+  >([])
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange<LineageNode<TNodeData, TNodeID>>[]) => {
@@ -120,13 +136,28 @@ export function LineageLayoutBase<
 
   const onEdgesChange = React.useCallback(
     (
-      changes: EdgeChange<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>>[],
+      changes: EdgeChange<
+        LineageEdge<
+          TEdgeData,
+          TEdgeID,
+          TSourceID,
+          TTargetID,
+          TSourceHandleID,
+          TTargetHandleID
+        >
+      >[],
     ) => {
       setEdges(
-        applyEdgeChanges<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>>(
-          changes,
-          edges,
-        ),
+        applyEdgeChanges<
+          LineageEdge<
+            TEdgeData,
+            TEdgeID,
+            TSourceID,
+            TTargetID,
+            TSourceHandleID,
+            TTargetHandleID
+          >
+        >(changes, edges),
       )
     },
     [edges, setEdges],
@@ -235,12 +266,23 @@ export function LineageLayoutBase<
 
     const connectedEdges = getConnectedEdges<
       LineageNode<TNodeData, TNodeID>,
-      LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+      LineageEdge<
+        TEdgeData,
+        TEdgeID,
+        TSourceID,
+        TTargetID,
+        TSourceHandleID,
+        TTargetHandleID
+      >
     >(connectedNodes, edges)
     const selectedNodes = new Set<TNodeID>(connectedNodes.map(node => node.id))
     const selectedEdges = new Set(
       connectedEdges.reduce((acc, edge) => {
-        if ([edge.source, edge.target].every(id => selectedNodes.has(id))) {
+        if (
+          [edge.source, edge.target].every(id =>
+            selectedNodes.has(id as unknown as TNodeID),
+          )
+        ) {
           edge.zIndex = 2
           acc.add(edge.id)
         } else {
@@ -278,7 +320,14 @@ export function LineageLayoutBase<
   return (
     <ReactFlow<
       LineageNode<TNodeData, TNodeID>,
-      LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+      LineageEdge<
+        TEdgeData,
+        TEdgeID,
+        TSourceID,
+        TTargetID,
+        TSourceHandleID,
+        TTargetHandleID
+      >
     >
       className={cn('shrink-0', className)}
       nodes={nodes}
@@ -350,4 +399,12 @@ export function LineageLayoutBase<
       </Controls>
     </ReactFlow>
   )
+}
+
+function debounce<T extends CallableFunction>(func: T, wait: number) {
+  let timeout: NodeJS.Timeout
+  return (...args: unknown[]) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
 }

@@ -26,7 +26,10 @@ export function LineageLayout<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >({
   nodeTypes,
   edgeTypes,
@@ -44,7 +47,10 @@ export function LineageLayout<
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
   >
   isBuildingLayout?: boolean
   nodeTypes?: NodeTypes

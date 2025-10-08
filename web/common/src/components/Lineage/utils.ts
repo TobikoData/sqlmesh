@@ -4,6 +4,8 @@ import { type Edge, type Node } from '@xyflow/react'
 export type NodeId = Branded<string, 'NodeId'>
 export type EdgeId = Branded<string, 'EdgeId'>
 export type PortId = Branded<string, 'PortId'>
+export type HandleId = Branded<string, 'HandleId'>
+export type PortHandleId = Branded<string, 'PortHandleId'>
 
 export type LineageNodeData = Record<string, unknown>
 export type LineageEdgeData = Record<string, unknown>
@@ -29,25 +31,36 @@ export interface LineageNode<
 
 export interface LineageEdge<
   TEdgeData extends LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 > extends Edge<TEdgeData> {
   id: TEdgeID
-  source: TNodeID
-  target: TNodeID
-  sourceHandle?: TPortID
-  targetHandle?: TPortID
+  source: TSourceID
+  target: TTargetID
+  sourceHandle?: TSourceHandleID
+  targetHandle?: TTargetHandleID
 }
 
 export type LayoutedGraph<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 > = {
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
+  edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[]
   nodesMap: LineageNodesMap<TNodeData>
 }
 
@@ -60,17 +73,26 @@ export type TransformNodeFn<
 
 export type TransformEdgeFn<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 > = (
   edgeType: string,
   edgeId: TEdgeID,
-  sourceId: TNodeID,
-  targetId: TNodeID,
-  sourceColumnId?: TPortID,
-  targetColumnId?: TPortID,
-) => LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>
+  sourceId: TSourceID,
+  targetId: TTargetID,
+  sourceHandleId?: TSourceHandleID,
+  targetHandleId?: TTargetHandleID,
+) => LineageEdge<
+  TEdgeData,
+  TEdgeID,
+  TSourceID,
+  TTargetID,
+  TSourceHandleID,
+  TTargetHandleID
+>
 
 export const DEFAULT_NODE_HEIGHT = 32
 export const DEFAULT_NODE_WIDTH = 300
