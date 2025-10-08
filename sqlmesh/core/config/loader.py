@@ -172,12 +172,17 @@ def load_config_from_paths(
         if dbt_project_file:
             from sqlmesh.dbt.loader import sqlmesh_config
 
+            infer_state_schema_name = False
+            if dbt := non_python_config.dbt:
+                infer_state_schema_name = dbt.infer_state_schema_name
+
             dbt_python_config = sqlmesh_config(
                 project_root=dbt_project_file.parent,
                 dbt_profile_name=kwargs.pop("profile", None),
                 dbt_target_name=kwargs.pop("target", None),
                 variables=variables,
                 threads=kwargs.pop("threads", None),
+                infer_state_schema_name=infer_state_schema_name,
             )
             if type(dbt_python_config) != config_type:
                 dbt_python_config = convert_config_type(dbt_python_config, config_type)
