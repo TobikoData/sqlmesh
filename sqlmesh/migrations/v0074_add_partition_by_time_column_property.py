@@ -2,9 +2,9 @@
 (default: True to keep the original behaviour)"""
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     pass
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     pass

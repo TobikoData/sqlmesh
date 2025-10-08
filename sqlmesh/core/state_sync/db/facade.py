@@ -35,7 +35,6 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersion,
-    SnapshotTableCleanupTask,
     SnapshotTableInfo,
     start_date,
 )
@@ -43,7 +42,6 @@ from sqlmesh.core.snapshot.definition import (
     Interval,
 )
 from sqlmesh.core.state_sync.base import (
-    PromotionResult,
     StateSync,
     Versions,
 )
@@ -55,6 +53,9 @@ from sqlmesh.core.state_sync.common import (
     StateStream,
     chunk_iterable,
     EnvironmentWithStatements,
+    ExpiredSnapshotBatch,
+    PromotionResult,
+    ExpiredBatchRange,
 )
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
@@ -261,11 +262,18 @@ class EngineAdapterStateSync(StateSync):
         self.environment_state.invalidate_environment(name, protect_prod)
 
     def get_expired_snapshots(
-        self, current_ts: t.Optional[int] = None, ignore_ttl: bool = False
-    ) -> t.List[SnapshotTableCleanupTask]:
+        self,
+        *,
+        batch_range: ExpiredBatchRange,
+        current_ts: t.Optional[int] = None,
+        ignore_ttl: bool = False,
+    ) -> t.Optional[ExpiredSnapshotBatch]:
         current_ts = current_ts or now_timestamp()
         return self.snapshot_state.get_expired_snapshots(
-            self.environment_state.get_environments(), current_ts=current_ts, ignore_ttl=ignore_ttl
+            environments=self.environment_state.get_environments(),
+            current_ts=current_ts,
+            ignore_ttl=ignore_ttl,
+            batch_range=batch_range,
         )
 
     def get_expired_environments(self, current_ts: int) -> t.List[EnvironmentSummary]:
@@ -273,14 +281,19 @@ class EngineAdapterStateSync(StateSync):
 
     @transactional()
     def delete_expired_snapshots(
-        self, ignore_ttl: bool = False, current_ts: t.Optional[int] = None
+        self,
+        batch_range: ExpiredBatchRange,
+        ignore_ttl: bool = False,
+        current_ts: t.Optional[int] = None,
     ) -> None:
-        current_ts = current_ts or now_timestamp()
-        for expired_snapshot_ids, cleanup_targets in self.snapshot_state._get_expired_snapshots(
-            self.environment_state.get_environments(), ignore_ttl=ignore_ttl, current_ts=current_ts
-        ):
-            self.snapshot_state.delete_snapshots(expired_snapshot_ids)
-            self.interval_state.cleanup_intervals(cleanup_targets, expired_snapshot_ids)
+        batch = self.get_expired_snapshots(
+            ignore_ttl=ignore_ttl,
+            current_ts=current_ts,
+            batch_range=batch_range,
+        )
+        if batch and batch.expired_snapshot_ids:
+            self.snapshot_state.delete_snapshots(batch.expired_snapshot_ids)
+            self.interval_state.cleanup_intervals(batch.cleanup_tasks, batch.expired_snapshot_ids)
 
     @transactional()
     def delete_expired_environments(
@@ -456,7 +469,7 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         self.migrator.migrate(
-            self,
+            self.schema,
             skip_backup=skip_backup,
             promoted_snapshots_only=promoted_snapshots_only,
         )

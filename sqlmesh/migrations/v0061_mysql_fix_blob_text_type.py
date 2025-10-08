@@ -9,12 +9,9 @@ from sqlglot import exp
 from sqlmesh.utils.migration import blob_text_type
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     if engine_adapter.dialect != "mysql":
         return
-
-    schema = state_sync.schema
     environments_table = "_environments"
     snapshots_table = "_snapshots"
 
@@ -46,5 +43,5 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
         engine_adapter.execute(alter_table_exp)
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     pass

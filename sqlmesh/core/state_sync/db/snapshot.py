@@ -14,7 +14,6 @@ from sqlmesh.core.state_sync.db.utils import (
     snapshot_id_filter,
     fetchone,
     fetchall,
-    create_batches,
 )
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel, ModelKindName
@@ -30,6 +29,12 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotFingerprint,
 )
+from sqlmesh.core.state_sync.common import (
+    RowBoundary,
+    ExpiredSnapshotBatch,
+    ExpiredBatchRange,
+    LimitBoundary,
+)
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 from sqlmesh.utils.date import now_timestamp, TimeLike, to_timestamp
 from sqlmesh.utils import unique
@@ -43,9 +48,6 @@ logger = logging.getLogger(__name__)
 
 class SnapshotState:
     SNAPSHOT_BATCH_SIZE = 1000
-    # Use a smaller batch size for expired snapshots to account for fetching
-    # of all snapshots that share the same version.
-    EXPIRED_SNAPSHOT_BATCH_SIZE = 200
 
     def __init__(
         self,
@@ -166,47 +168,19 @@ class SnapshotState:
         self,
         environments: t.Iterable[Environment],
         current_ts: int,
-        ignore_ttl: bool = False,
-    ) -> t.List[SnapshotTableCleanupTask]:
-        """Aggregates the id's of the expired snapshots and creates a list of table cleanup tasks.
-
-        Expired snapshots are snapshots that have exceeded their time-to-live
-        and are no longer in use within an environment.
-
-        Returns:
-            The set of expired snapshot ids.
-            The list of table cleanup tasks.
-        """
-        all_cleanup_targets = []
-        for _, cleanup_targets in self._get_expired_snapshots(
-            environments=environments,
-            current_ts=current_ts,
-            ignore_ttl=ignore_ttl,
-        ):
-            all_cleanup_targets.extend(cleanup_targets)
-        return all_cleanup_targets
-
-    def _get_expired_snapshots(
-        self,
-        environments: t.Iterable[Environment],
-        current_ts: int,
-        ignore_ttl: bool = False,
-    ) -> t.Iterator[t.Tuple[t.Set[SnapshotId], t.List[SnapshotTableCleanupTask]]]:
-        expired_query = exp.select("name", "identifier", "version").from_(self.snapshots_table)
+        ignore_ttl: bool,
+        batch_range: ExpiredBatchRange,
+    ) -> t.Optional[ExpiredSnapshotBatch]:
+        expired_query = exp.select("name", "identifier", "version", "updated_ts").from_(
+            self.snapshots_table
+        )
 
         if not ignore_ttl:
             expired_query = expired_query.where(
                 (exp.column("updated_ts") + exp.column("ttl_ms")) <= current_ts
             )
 
-        expired_candidates = {
-            SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
-                name=name, version=version
-            )
-            for name, identifier, version in fetchall(self.engine_adapter, expired_query)
-        }
-        if not expired_candidates:
-            return
+        expired_query = expired_query.where(batch_range.where_filter)
 
         promoted_snapshot_ids = {
             snapshot.snapshot_id
@@ -214,63 +188,111 @@ class SnapshotState:
             for snapshot in environment.snapshots
         }
 
+        if promoted_snapshot_ids:
+            not_in_conditions = [
+                exp.not_(condition)
+                for condition in snapshot_id_filter(
+                    self.engine_adapter,
+                    promoted_snapshot_ids,
+                    batch_size=self.SNAPSHOT_BATCH_SIZE,
+                )
+            ]
+            expired_query = expired_query.where(exp.and_(*not_in_conditions))
+
+        expired_query = expired_query.order_by(
+            exp.column("updated_ts"), exp.column("name"), exp.column("identifier")
+        )
+
+        if isinstance(batch_range.end, LimitBoundary):
+            expired_query = expired_query.limit(batch_range.end.batch_size)
+
+        rows = fetchall(self.engine_adapter, expired_query)
+
+        if not rows:
+            return None
+
+        expired_candidates = {
+            SnapshotId(name=name, identifier=identifier): SnapshotNameVersion(
+                name=name, version=version
+            )
+            for name, identifier, version, _ in rows
+        }
+        if not expired_candidates:
+            return None
+
         def _is_snapshot_used(snapshot: SnapshotIdAndVersion) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or snapshot.snapshot_id not in expired_candidates
             )
 
-        unique_expired_versions = unique(expired_candidates.values())
-        version_batches = create_batches(
-            unique_expired_versions, batch_size=self.EXPIRED_SNAPSHOT_BATCH_SIZE
+        # Extract cursor values from last row for pagination
+        last_row = rows[-1]
+        last_row_boundary = RowBoundary(
+            updated_ts=last_row[3],
+            name=last_row[0],
+            identifier=last_row[1],
         )
-        for versions_batch in version_batches:
-            snapshots = self._get_snapshots_with_same_version(versions_batch)
+        # The returned batch_range represents the actual range of rows in this batch
+        result_batch_range = ExpiredBatchRange(
+            start=batch_range.start,
+            end=last_row_boundary,
+        )
 
-            snapshots_by_version = defaultdict(set)
-            snapshots_by_dev_version = defaultdict(set)
-            for s in snapshots:
-                snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
-                snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
+        unique_expired_versions = unique(expired_candidates.values())
+        expired_snapshot_ids: t.Set[SnapshotId] = set()
+        cleanup_tasks: t.List[SnapshotTableCleanupTask] = []
 
-            expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
-            all_expired_snapshot_ids = {s.snapshot_id for s in expired_snapshots}
+        snapshots = self._get_snapshots_with_same_version(unique_expired_versions)
 
-            cleanup_targets: t.List[t.Tuple[SnapshotId, bool]] = []
-            for snapshot in expired_snapshots:
-                shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
-                shared_version_snapshots.discard(snapshot.snapshot_id)
+        snapshots_by_version = defaultdict(set)
+        snapshots_by_dev_version = defaultdict(set)
+        for s in snapshots:
+            snapshots_by_version[(s.name, s.version)].add(s.snapshot_id)
+            snapshots_by_dev_version[(s.name, s.dev_version)].add(s.snapshot_id)
 
-                shared_dev_version_snapshots = snapshots_by_dev_version[
-                    (snapshot.name, snapshot.dev_version)
-                ]
-                shared_dev_version_snapshots.discard(snapshot.snapshot_id)
+        expired_snapshots = [s for s in snapshots if not _is_snapshot_used(s)]
+        all_expired_snapshot_ids = {s.snapshot_id for s in expired_snapshots}
 
-                if not shared_dev_version_snapshots:
-                    dev_table_only = bool(shared_version_snapshots)
-                    cleanup_targets.append((snapshot.snapshot_id, dev_table_only))
+        cleanup_targets: t.List[t.Tuple[SnapshotId, bool]] = []
+        for snapshot in expired_snapshots:
+            shared_version_snapshots = snapshots_by_version[(snapshot.name, snapshot.version)]
+            shared_version_snapshots.discard(snapshot.snapshot_id)
 
-            snapshot_ids_to_cleanup = [snapshot_id for snapshot_id, _ in cleanup_targets]
-            for snapshot_id_batch in create_batches(
-                snapshot_ids_to_cleanup, batch_size=self.SNAPSHOT_BATCH_SIZE
-            ):
-                snapshot_id_batch_set = set(snapshot_id_batch)
-                full_snapshots = self._get_snapshots(snapshot_id_batch_set)
-                cleanup_tasks = [
+            shared_dev_version_snapshots = snapshots_by_dev_version[
+                (snapshot.name, snapshot.dev_version)
+            ]
+            shared_dev_version_snapshots.discard(snapshot.snapshot_id)
+
+            if not shared_dev_version_snapshots:
+                dev_table_only = bool(shared_version_snapshots)
+                cleanup_targets.append((snapshot.snapshot_id, dev_table_only))
+
+        snapshot_ids_to_cleanup = [snapshot_id for snapshot_id, _ in cleanup_targets]
+        full_snapshots = self._get_snapshots(snapshot_ids_to_cleanup)
+        for snapshot_id, dev_table_only in cleanup_targets:
+            if snapshot_id in full_snapshots:
+                cleanup_tasks.append(
                     SnapshotTableCleanupTask(
                         snapshot=full_snapshots[snapshot_id].table_info,
                         dev_table_only=dev_table_only,
                     )
-                    for snapshot_id, dev_table_only in cleanup_targets
-                    if snapshot_id in full_snapshots
-                ]
-                all_expired_snapshot_ids -= snapshot_id_batch_set
-                yield snapshot_id_batch_set, cleanup_tasks
+                )
+                expired_snapshot_ids.add(snapshot_id)
+                all_expired_snapshot_ids.discard(snapshot_id)
 
-            if all_expired_snapshot_ids:
-                # Remaining expired snapshots for which there are no tables
-                # to cleanup
-                yield all_expired_snapshot_ids, []
+        # Add any remaining expired snapshots that don't require cleanup
+        if all_expired_snapshot_ids:
+            expired_snapshot_ids.update(all_expired_snapshot_ids)
+
+        if expired_snapshot_ids or cleanup_tasks:
+            return ExpiredSnapshotBatch(
+                expired_snapshot_ids=expired_snapshot_ids,
+                cleanup_tasks=cleanup_tasks,
+                batch_range=result_batch_range,
+            )
+
+        return None
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         """Deletes snapshots.

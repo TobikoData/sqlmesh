@@ -7,9 +7,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type, blob_text_type
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
-    schema = state_sync.schema
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     snapshots_table = "_snapshots"
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
@@ -42,11 +40,9 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter.execute(add_fingerprint_exp)
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     import pandas as pd
 
-    engine_adapter = state_sync.engine_adapter
-    schema = state_sync.schema
     snapshots_table = "_snapshots"
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
