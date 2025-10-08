@@ -3,11 +3,10 @@
 from sqlglot import exp
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     environments_table = "_environments"
-    if state_sync.schema:
-        environments_table = f"{state_sync.schema}.{environments_table}"
+    if schema:
+        environments_table = f"{schema}.{environments_table}"
 
     alter_table_exp = exp.Alter(
         this=exp.to_table(environments_table),
@@ -22,13 +21,12 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter.execute(alter_table_exp)
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     environments_table = "_environments"
-    if state_sync.schema:
-        environments_table = f"{state_sync.schema}.{environments_table}"
+    if schema:
+        environments_table = f"{schema}.{environments_table}"
 
-    state_sync.engine_adapter.update_table(
+    engine_adapter.update_table(
         environments_table,
         {"gateway_managed": False},
         where=exp.true(),

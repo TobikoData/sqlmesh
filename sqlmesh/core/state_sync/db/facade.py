@@ -469,7 +469,7 @@ class EngineAdapterStateSync(StateSync):
     ) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         self.migrator.migrate(
-            self,
+            self.schema,
             skip_backup=skip_backup,
             promoted_snapshots_only=promoted_snapshots_only,
         )
