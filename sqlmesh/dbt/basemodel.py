@@ -317,6 +317,10 @@ class BaseModelConfig(GeneralConfig):
             dependencies = dependencies.union(custom_mat.dependencies)
 
         model_dialect = self.dialect(context)
+
+        # Only keep refs and sources that exist in the context to match dbt behavior
+        dependencies.refs.intersection_update(context.refs)
+        dependencies.sources.intersection_update(context.sources)
         model_context = context.context_for_dependencies(
             dependencies.union(self.tests_ref_source_dependencies)
         )
