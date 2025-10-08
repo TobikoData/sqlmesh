@@ -9,7 +9,6 @@ from sqlglot import exp, parse_one
 from sqlmesh.core.engine_adapter import FabricEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
 from sqlmesh.core.engine_adapter.shared import DataObject
-from sqlmesh.core.schema_diff import TableAlterOperation
 
 pytestmark = [pytest.mark.engine, pytest.mark.fabric]
 
@@ -96,23 +95,19 @@ def test_alter_table_is_noop(adapter: FabricEngineAdapter):
     Tests that alter_table is a no-op for Fabric.
 
     The adapter should not execute any SQL, signaling to the caller
-    that it should use a fallback strategy (like drop/recreate)
+    that it should use the fallback strategy (like drop/add)
     to apply schema changes.
     """
-    adapter.alter_table(
-        [
-            TableAlterOperation(
-                expression=exp.AlterTable(
-                    this=exp.to_table("test_table"),
-                    actions=[
-                        exp.AddColumn(
-                            this=exp.to_column("new_col"),
-                            def_col_type=exp.DataType(this=exp.DataType.Type.INT),
-                        )
-                    ],
-                )
+    alter_expression = exp.Alter(
+        this=exp.to_table("test_table"),
+        actions=[
+            exp.ColumnDef(
+                this=exp.to_column("new_col"),
+                kind=exp.DataType(this=exp.DataType.Type.INT),
             )
-        ]
+        ],
     )
+
+    adapter.alter_table([alter_expression])
 
     adapter.cursor.execute.assert_not_called()
