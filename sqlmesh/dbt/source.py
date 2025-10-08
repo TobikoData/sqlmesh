@@ -79,7 +79,7 @@ class SourceConfig(GeneralConfig):
                 relation = source(self.source_name_, self.name)
             except Exception as e:
                 raise ConfigError(
-                    f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
+                    f"'source' macro failed for '{self.config_name}' with exception '{e}'."
                 )
 
             relation = relation.quote(
