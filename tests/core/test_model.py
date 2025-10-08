@@ -919,7 +919,7 @@ def test_json_serde():
 
     assert (
         SqlModel.parse_obj(model_json_parsed).render_query().sql("duckdb")
-        == 'SELECT REGEXP_MATCHES("x", "y") AS "c"'
+        == 'SELECT REGEXP_FULL_MATCH("x", "y") AS "c"'
     )
 
 
