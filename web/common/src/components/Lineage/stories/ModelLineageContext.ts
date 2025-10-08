@@ -18,19 +18,14 @@ import {
 
 export type ModelName = Branded<string, 'ModelName'>
 export type ModelDisplayName = Branded<string, 'ModelDisplayName'>
-
 export type ColumnName = Branded<string, 'ColumnName'>
-
 export type ModelColumnID = Branded<string, 'ModelColumnID'>
 export type ModelEdgeId = Branded<string, 'ModelEdgeId'>
-
 export type LeftHandleId = Branded<string, 'LeftHandleId'>
 export type RightHandleId = Branded<string, 'RightHandleId'>
-
+export type ModelNodeId = LeftHandleId | RightHandleId
 export type LeftPortHandleId = Branded<string, 'LeftPortHandleId'>
 export type RightPortHandleId = Branded<string, 'RightPortHandleId'>
-
-export type ModelNodeId = LeftHandleId | RightHandleId
 
 export type BrandedColumnLevelLineageAdjacencyList =
   ColumnLevelLineageAdjacencyList<ModelName, ColumnName> & {
