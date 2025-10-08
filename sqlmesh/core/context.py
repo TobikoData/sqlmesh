@@ -107,9 +107,8 @@ from sqlmesh.core.state_sync import (
     CachingStateSync,
     StateReader,
     StateSync,
-    cleanup_expired_views,
 )
-from sqlmesh.core.state_sync.common import delete_expired_snapshots
+from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTextTestResult,
