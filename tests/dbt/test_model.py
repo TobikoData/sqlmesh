@@ -18,6 +18,7 @@ from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, PostgresConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.yaml import YAML
 from sqlmesh.utils.date import to_ds
+import typing as t
 
 pytestmark = pytest.mark.dbt
 
@@ -1028,3 +1029,58 @@ def test_ephemeral_model_ignores_grants() -> None:
 
     assert sqlmesh_model.kind.is_embedded
     assert sqlmesh_model.grants is None  # grants config is skipped for ephemeral / embedded models
+
+
+def test_conditional_ref_in_unexecuted_branch(copy_to_temp_path: t.Callable):
+    path = copy_to_temp_path("tests/fixtures/dbt/sushi_test")
+    temp_project = path[0]
+
+    models_dir = temp_project / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    test_model_content = """
+{{ config(
+    materialized='table',
+) }}
+
+{% if true %}
+    WITH source AS (
+        SELECT *
+        FROM {{ ref('simple_model_a') }}
+    )
+{% else %}
+    WITH source AS (
+        SELECT *
+        FROM {{ ref('nonexistent_model') }} -- this doesn't exist but is in unexecuted branch
+    )
+{% endif %}
+
+SELECT * FROM source
+""".strip()
+
+    (models_dir / "conditional_ref_model.sql").write_text(test_model_content)
+    sushi_context = Context(paths=[str(temp_project)])
+
+    # the model should load successfully without raising MissingModelError
+    model = sushi_context.get_model("sushi.conditional_ref_model")
+    assert model is not None
+
+    # Verify only the executed ref is in the dependencies
+    assert len(model.depends_on) == 1
+    assert '"memory"."sushi"."simple_model_a"' in model.depends_on
+
+    # Also the model can be rendered successfully with the executed ref
+    rendered = model.render_query()
+    assert rendered is not None
+    assert (
+        rendered.sql()
+        == 'WITH "source" AS (SELECT "simple_model_a"."a" AS "a" FROM "memory"."sushi"."simple_model_a" AS "simple_model_a") SELECT "source"."a" AS "a" FROM "source" AS "source"'
+    )
+
+    # And run plan with this conditional model for good measure
+    plan = sushi_context.plan(select_models=["sushi.conditional_ref_model", "sushi.simple_model_a"])
+    sushi_context.apply(plan)
+    upstream_ref = sushi_context.engine_adapter.fetchone("SELECT * FROM sushi.simple_model_a")
+    assert upstream_ref == (1,)
+    result = sushi_context.engine_adapter.fetchone("SELECT * FROM sushi.conditional_ref_model")
+    assert result == (1,)
