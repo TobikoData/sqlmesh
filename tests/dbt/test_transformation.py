@@ -1593,6 +1593,29 @@ def test_exceptions(sushi_test_project: Project):
 
 
 @pytest.mark.xdist_group("dbt_manifest")
+def test_try_or_compiler_error(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    result = context.render(
+        '{{ try_or_compiler_error("Error message", modules.datetime.datetime.strptime, "2023-01-15", "%Y-%m-%d") }}'
+    )
+    assert "2023-01-15" in result
+
+    with pytest.raises(CompilationError, match="Invalid date format"):
+        context.render(
+            '{{ try_or_compiler_error("Invalid date format", modules.datetime.datetime.strptime, "invalid", "%Y-%m-%d") }}'
+        )
+
+    # built-in macro calling try_or_compiler_error works
+    result = context.render(
+        '{{ dbt.dates_in_range("2023-01-01", "2023-01-03", "%Y-%m-%d", "%Y-%m-%d") }}'
+    )
+    assert "2023-01-01" in result
+    assert "2023-01-02" in result
+    assert "2023-01-03" in result
+
+
+@pytest.mark.xdist_group("dbt_manifest")
 def test_modules(sushi_test_project: Project):
     context = sushi_test_project.context
 
