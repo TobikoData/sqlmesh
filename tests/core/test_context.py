@@ -62,6 +62,7 @@ from sqlmesh.utils.errors import (
     NoChangesPlanError,
 )
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
@@ -698,6 +699,45 @@ def test_clear_caches(tmp_path: pathlib.Path):
     # This should not raise an exception
     context.clear_caches()
     assert not cache_dir.exists()
+
+
+def test_clear_caches_with_long_base_path(tmp_path: pathlib.Path):
+    base_path = tmp_path / ("abcde" * 50)
+    assert (
+        len(str(base_path.absolute())) > 260
+    )  # Paths longer than 260 chars trigger problems on Windows
+
+    default_cache_dir = base_path / c.CACHE
+    custom_cache_dir = base_path / ".test_cache"
+
+    # note: we create the Context here so it doesnt get passed any "fixed" paths
+    ctx = Context(config=Config(cache_dir=str(custom_cache_dir)), paths=base_path)
+
+    if IS_WINDOWS:
+        # fix these so we can use them in this test
+        default_cache_dir = fix_windows_path(default_cache_dir)
+        custom_cache_dir = fix_windows_path(custom_cache_dir)
+
+    default_cache_dir.mkdir(parents=True)
+    custom_cache_dir.mkdir(parents=True)
+
+    default_cache_file = default_cache_dir / "cache.txt"
+    custom_cache_file = custom_cache_dir / "cache.txt"
+
+    default_cache_file.write_text("test")
+    custom_cache_file.write_text("test")
+
+    assert default_cache_file.exists()
+    assert custom_cache_file.exists()
+    assert default_cache_dir.exists()
+    assert custom_cache_dir.exists()
+
+    ctx.clear_caches()
+
+    assert not default_cache_file.exists()
+    assert not custom_cache_file.exists()
+    assert not default_cache_dir.exists()
+    assert not custom_cache_dir.exists()
 
 
 def test_cache_path_configurations(tmp_path: pathlib.Path):

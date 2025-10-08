@@ -139,6 +139,7 @@ from sqlmesh.utils.errors import (
 )
 from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 
 if t.TYPE_CHECKING:
     import pandas as pd
@@ -2590,12 +2591,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def clear_caches(self) -> None:
-        for path in self.configs:
-            cache_path = path / c.CACHE
-            if cache_path.exists():
-                rmtree(cache_path)
-        if self.cache_dir.exists():
-            rmtree(self.cache_dir)
+        paths_to_remove = [path / c.CACHE for path in self.configs]
+        paths_to_remove.append(self.cache_dir)
+
+        if IS_WINDOWS:
+            paths_to_remove = [fix_windows_path(path) for path in paths_to_remove]
+
+        for path in paths_to_remove:
+            if path.exists():
+                rmtree(path)
 
         if isinstance(self._state_sync, CachingStateSync):
             self._state_sync.clear_cache()
