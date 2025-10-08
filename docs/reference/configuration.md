@@ -125,9 +125,10 @@ Formatting settings for the `sqlmesh format` command and UI.
 
 Configuration for the `sqlmesh janitor` command.
 
-| Option                   | Description                                                                                                                | Type    | Required |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
-| `warn_on_delete_failure` | Whether to warn instead of erroring if the janitor fails to delete the expired environment schema / views (Default: False) | boolean | N        |
+| Option                          | Description                                                                                                                | Type    | Required |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------------|:-------:|:--------:|
+| `warn_on_delete_failure`        | Whether to warn instead of erroring if the janitor fails to delete the expired environment schema / views (Default: False) | boolean | N        |
+| `expired_snapshots_batch_size`  | Maximum number of expired snapshots to clean in a single batch (Default: 200)                                              | int     | N        |
 
 
 ## UI
