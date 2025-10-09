@@ -1695,7 +1695,7 @@ def test_delete_expired_snapshots_previous_finalized_snapshots(
     )
     state_sync.promote(env)
 
-    # Manually update the snapshtos updated_ts to simulate expiration
+    # Manually update the snapshots updated_ts to simulate expiration
     state_sync.engine_adapter.execute(
         f"UPDATE sqlmesh._snapshots SET updated_ts = {now_ts - 15000} WHERE name = '{old_snapshot.name}' AND identifier = '{old_snapshot.identifier}'"
     )
