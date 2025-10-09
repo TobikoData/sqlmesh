@@ -1,13 +1,15 @@
 import React from 'react'
 
-import { Focus, Rows2, Rows3 } from 'lucide-react'
+import { Focus, LockOpen, Lock, Rows2, Rows3 } from 'lucide-react'
+
 import {
-  FactoryEdgeWithGradient,
-  EdgeWithGradient,
-  ZOOM_THRESHOLD,
+  type LineageNode,
   type LineageEdge,
   type LineageNodesMap,
-  type ColumnLevelLineageAdjacencyList,
+  MAX_COLUMNS_TO_DISPLAY,
+  ZOOM_THRESHOLD,
+  FactoryEdgeWithGradient,
+  EdgeWithGradient,
   useColumnLevelLineage,
   createNode,
   toPortID,
@@ -22,20 +24,21 @@ import {
   getOnlySelectedNodes,
   getTransformedModelEdgesTargetSources,
   getTransformedNodes,
-  MAX_COLUMNS_TO_DISPLAY,
   toNodeID,
-  LineageLayout,
-  type LineageNode,
   LineageControlButton,
   LineageControlIcon,
-} from '@tobikodata/sqlmesh-common/lineage'
+  LineageLayout,
+} from '@sqlmesh-common/components/Lineage'
 
 import {
+  type BrandedColumnLevelLineageAdjacencyList,
   type BrandedLineageAdjacencyList,
   type BrandedLineageDetails,
-  type ColumnName,
+  type ModelColumnName,
   type EdgeData,
   type ModelColumnID,
+  type ModelColumnLeftHandleId,
+  type ModelColumnRightHandleId,
   type ModelEdgeId,
   type ModelLineageNodeDetails,
   type ModelNodeId,
@@ -62,8 +65,8 @@ export const ModelLineage = ({
   className,
   onNodeClick,
 }: {
-  adjacencyList: BrandedLineageAdjacencyList<ModelFQN>
-  lineageDetails: BrandedLineageDetails<ModelFQN, ModelLineageNodeDetails>
+  adjacencyList: BrandedLineageAdjacencyList
+  lineageDetails: BrandedLineageDetails
   selectedModelName?: ModelFQN
   className?: string
   onNodeClick?: (
@@ -77,8 +80,16 @@ export const ModelLineage = ({
 
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
+  const [nodesDraggable, setNodesDraggable] = React.useState(false)
   const [edges, setEdges] = React.useState<
-    LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[]
+    LineageEdge<
+      EdgeData,
+      ModelEdgeId,
+      ModelNodeId,
+      ModelNodeId,
+      ModelColumnRightHandleId,
+      ModelColumnLeftHandleId
+    >[]
   >([])
   const [nodesMap, setNodesMap] = React.useState<
     LineageNodesMap<NodeData, ModelNodeId>
@@ -92,11 +103,11 @@ export const ModelLineage = ({
     new Set(),
   )
   const [selectedNodeId, setSelectedNodeId] =
-    React.useState<ModelNodeId | null>(null)
+    React.useState<ModelNodeId | null>(currentNodeId)
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
-    Map<ModelColumnID, ColumnLevelLineageAdjacencyList<ModelFQN, ColumnName>>
+    Map<ModelColumnID, BrandedColumnLevelLineageAdjacencyList>
   >(new Map())
   const [fetchingColumns, setFetchingColumns] = React.useState<
     Set<ModelColumnID>
@@ -106,9 +117,12 @@ export const ModelLineage = ({
     adjacencyListColumnLevel,
     selectedColumns,
     adjacencyListKeysColumnLevel,
-  } = useColumnLevelLineage<ModelFQN, ColumnName, ModelColumnID>(
-    columnLevelLineage,
-  )
+  } = useColumnLevelLineage<
+    ModelFQN,
+    ModelColumnName,
+    ModelColumnID,
+    BrandedColumnLevelLineageAdjacencyList
+  >(columnLevelLineage)
 
   const adjacencyListKeys = React.useMemo(() => {
     let keys: ModelFQN[] = []
@@ -126,7 +140,7 @@ export const ModelLineage = ({
     (nodeId: ModelNodeId, detail: ModelLineageNodeDetails) => {
       const columns = detail.columns
 
-      const node = createNode('node', nodeId, {
+      const node = createNode<NodeData, ModelNodeId>('node', nodeId, {
         name: detail.name,
         displayName: detail.display_name,
         model_type: detail.model_type,
@@ -188,8 +202,8 @@ export const ModelLineage = ({
       edgeId: ModelEdgeId,
       sourceId: ModelNodeId,
       targetId: ModelNodeId,
-      sourceHandleId?: ModelColumnID,
-      targetHandleId?: ModelColumnID,
+      sourceHandleId?: ModelColumnRightHandleId,
+      targetHandleId?: ModelColumnLeftHandleId,
     ) => {
       const sourceNode = transformedNodesMap[sourceId]
       const targetNode = transformedNodesMap[targetId]
@@ -215,7 +229,14 @@ export const ModelLineage = ({
         data.strokeWidth = 2
       }
 
-      return createEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>(
+      return createEdge<
+        EdgeData,
+        ModelEdgeId,
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
+      >(
         edgeType,
         edgeId,
         sourceId,
@@ -232,11 +253,14 @@ export const ModelLineage = ({
     () =>
       getEdgesFromColumnLineage<
         ModelFQN,
-        ColumnName,
+        ModelColumnName,
         EdgeData,
         ModelEdgeId,
         ModelNodeId,
-        ModelColumnID
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId,
+        BrandedColumnLevelLineageAdjacencyList
       >({
         columnLineage: adjacencyListColumnLevel,
         transformEdge,
@@ -250,38 +274,49 @@ export const ModelLineage = ({
       : getTransformedModelEdgesTargetSources<
           ModelFQN,
           EdgeData,
-          ModelNodeId,
           ModelEdgeId,
-          ModelColumnID
+          ModelNodeId,
+          ModelNodeId,
+          ModelColumnRightHandleId,
+          ModelColumnLeftHandleId
         >(adjacencyListKeys, adjacencyList, transformEdge)
   }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
   const calculateLayout = React.useCallback(
     (
-      eds: LineageEdge<EdgeData, ModelNodeId, ModelEdgeId, ModelColumnID>[],
-      nds: LineageNodesMap<NodeData>,
+      eds: LineageEdge<
+        EdgeData,
+        ModelEdgeId,
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
+      >[],
+      nds: LineageNodesMap<NodeData, ModelNodeId>,
     ) => {
-      const { edges, nodesMap } = buildLayout<
+      const layoutNodesMap = buildLayout<
         NodeData,
         EdgeData,
-        ModelNodeId,
         ModelEdgeId,
-        ModelColumnID
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
       >({ edges: eds, nodesMap: nds })
-      setEdges(edges)
-      setNodesMap(nodesMap)
+
+      setEdges(eds)
+      setNodesMap(layoutNodesMap)
       setIsBuildingLayout(false)
     },
-    [edges, nodesMap, setEdges, setNodesMap, setIsBuildingLayout],
+    [],
   )
 
   const nodes = React.useMemo(() => {
     return Object.values(nodesMap)
   }, [nodesMap])
 
-  const currentNode = React.useMemo(() => {
-    return currentNodeId ? nodesMap[currentNodeId] : null
-  }, [currentNodeId, nodesMap])
+  const currentNode = currentNodeId ? nodesMap[currentNodeId] : null
+  const selectedNode = selectedNodeId ? nodesMap[selectedNodeId] : null
 
   const handleReset = React.useCallback(() => {
     setShowColumns(false)
@@ -314,9 +349,7 @@ export const ModelLineage = ({
   // currentNodeId is passed from the parent component
   // we it change we need to reset the selectedNodeId
   React.useEffect(() => {
-    if (currentNodeId) {
-      setSelectedNodeId(currentNodeId)
-    }
+    setSelectedNodeId(currentNodeId)
   }, [currentNodeId])
 
   // When the selectedColumns is empty it measn we dont have any selected columns
@@ -345,11 +378,13 @@ export const ModelLineage = ({
         selectedNodes,
         selectedEdges,
         selectedNodeId,
+        selectedNode,
+        currentNodeId,
+        currentNode,
         zoom,
         edges,
         nodes,
         nodesMap,
-        currentNode,
         setFetchingColumns,
         setColumnLevelLineage,
         setShowColumns,
@@ -367,7 +402,10 @@ export const ModelLineage = ({
         EdgeData,
         ModelNodeId,
         ModelEdgeId,
-        ModelColumnID
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
       >
         useLineage={useModelLineage}
         nodeTypes={nodeTypes}
@@ -375,6 +413,8 @@ export const ModelLineage = ({
         className={className}
         onNodeClick={onNodeClick}
         isBuildingLayout={isBuildingLayout}
+        showControlOnlySelectedNodes={selectedColumns.size === 0}
+        nodesDraggable={nodesDraggable}
         controls={
           <>
             <LineageControlButton
@@ -394,6 +434,13 @@ export const ModelLineage = ({
               disabled={isBuildingLayout}
             >
               <LineageControlIcon Icon={Focus} />
+            </LineageControlButton>
+            <LineageControlButton
+              text={nodesDraggable ? 'Lock nodes' : 'Unlock nodes'}
+              onClick={() => setNodesDraggable(prev => !prev)}
+              disabled={isBuildingLayout}
+            >
+              <LineageControlIcon Icon={nodesDraggable ? Lock : LockOpen} />
             </LineageControlButton>
           </>
         }

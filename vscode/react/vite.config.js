@@ -16,6 +16,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@bus': resolve(__dirname, '../bus/src'),
+      '@sqlmesh-common': resolve(__dirname, '../../web/common/src'),
     },
   },
 

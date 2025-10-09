@@ -5,6 +5,8 @@ import { EventBusProvider } from './hooks/eventBus.tsx'
 import { TableDiffPage } from './pages/tablediff.tsx'
 import { LineagePage } from './pages/lineage.tsx'
 
+import '@sqlmesh-common/styles/index.css'
+
 import './App.css'
 
 // Detect panel type
