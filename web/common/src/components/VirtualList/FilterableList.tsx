@@ -4,7 +4,7 @@ import React from 'react'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 import { Badge } from '../Badge/Badge'
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { MessageContainer } from '../MessageContainer/MessageContainer'
 import { Input } from '../Input/Input'
 

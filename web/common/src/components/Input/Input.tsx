@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { cn } from '@/utils'
-import type { Size } from '@/types'
+import { cn } from '@sqlmesh-common/utils'
+import type { Size } from '@sqlmesh-common/types'
 import { cva } from 'class-variance-authority'
 
 import './Input.css'

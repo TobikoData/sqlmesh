@@ -1,7 +1,7 @@
-import { useNodeConnections, useUpdateNodeInternals } from '@xyflow/react'
+import { useNodeConnections } from '@xyflow/react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { type NodeId, type PortHandleId } from '../utils'
 import { NodeHandles } from './NodeHandles'
 
@@ -21,8 +21,6 @@ export function NodePort<
   className?: string
   children: React.ReactNode
 }) {
-  const updateNodeInternals = useUpdateNodeInternals()
-
   const sources = useNodeConnections({
     id: nodeId,
     handleType: 'source',
@@ -44,12 +42,6 @@ export function NodePort<
 
   const leftId = isLeftHandleId(id) ? id : undefined
   const rightId = isRightHandleId(id) ? id : undefined
-
-  React.useEffect(() => {
-    if (leftId || rightId) {
-      updateNodeInternals(nodeId)
-    }
-  }, [updateNodeInternals, nodeId, leftId, rightId])
 
   return (
     <NodeHandles<TLeftPortHandleId, TRightPortHandleId>

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodePort } from '../node/NodePort'
 import { type NodeId, type PortHandleId, type PortId } from '../utils'
@@ -15,11 +15,11 @@ import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextHook,
 } from './ColumnLevelLineageContext'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
-import { Metadata } from '@/components/Metadata/Metadata'
-import { HorizontalContainer } from '@/components/HorizontalContainer/HorizontalContainer'
-import { Information } from '@/components/Typography/Information'
-import { LoadingContainer } from '@/components/LoadingContainer/LoadingContainer'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
+import { Metadata } from '@sqlmesh-common/components/Metadata/Metadata'
+import { HorizontalContainer } from '@sqlmesh-common/components/HorizontalContainer/HorizontalContainer'
+import { Information } from '@sqlmesh-common/components/Typography/Information'
+import { LoadingContainer } from '@sqlmesh-common/components/LoadingContainer/LoadingContainer'
 
 import './FactoryColumn.css'
 

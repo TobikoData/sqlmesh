@@ -5,7 +5,7 @@ import {
 } from '@tanstack/react-virtual'
 import React from 'react'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { Button } from '../Button/Button'
 import { ScrollContainer } from '../ScrollContainer/ScrollContainer'
 import { VerticalContainer } from '../VerticalContainer/VerticalContainer'

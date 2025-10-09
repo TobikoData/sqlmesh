@@ -1,6 +1,6 @@
 import { ArrowRight } from 'lucide-react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 export function NodeHandleIcon({
   className,

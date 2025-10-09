@@ -1,4 +1,4 @@
-import type { Branded, BrandedRecord } from '@/types'
+import type { Branded, BrandedRecord } from '@sqlmesh-common/types'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextValue,

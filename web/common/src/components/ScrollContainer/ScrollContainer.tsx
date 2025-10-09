@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { cn } from '@/utils'
-import type { LayoutDirection } from '@/types'
+import { cn } from '@sqlmesh-common/utils'
+import type { LayoutDirection } from '@sqlmesh-common/types'
 
 import './ScrollContainer.css'
 

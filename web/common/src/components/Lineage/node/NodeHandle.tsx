@@ -1,7 +1,7 @@
 import { Position } from '@xyflow/react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { BaseHandle } from './base-handle'
 import type { HandleId } from '../utils'
 

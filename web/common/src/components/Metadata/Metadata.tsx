@@ -1,6 +1,6 @@
 import React from 'react'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 export interface MetadataProps extends React.HTMLAttributes<HTMLDivElement> {
   label: React.ReactNode

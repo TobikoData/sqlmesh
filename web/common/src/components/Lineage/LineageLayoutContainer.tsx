@@ -1,4 +1,4 @@
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 import React from 'react'
 

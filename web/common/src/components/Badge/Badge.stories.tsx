@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 
-import type { Shape, Size } from '@/types'
+import type { Shape, Size } from '@sqlmesh-common/types'
 import { Badge } from './Badge'
 
 const meta: Meta<typeof Badge> = {

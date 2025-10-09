@@ -36,11 +36,7 @@ export function buildLayout<
   const nodeCount = nodes.length
   const edgeCount = edges.length
 
-  if (nodeCount === 0)
-    return {
-      edges: [],
-      nodesMap: {},
-    }
+  if (nodeCount === 0) return {}
 
   const g = new dagre.graphlib.Graph({
     compound: true,
@@ -92,8 +88,5 @@ export function buildLayout<
     }
   }
 
-  return {
-    edges,
-    nodesMap,
-  }
+  return { ...nodesMap }
 }

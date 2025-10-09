@@ -1,4 +1,4 @@
-:root {
+:where(:root) {
   --color-filterable-list-counter-background: var(--color-badge-background);
   --color-filterable-list-counter-foreground: var(--color-badge-foreground);
 
