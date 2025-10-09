@@ -215,6 +215,7 @@ def test_exclude_by_dbt_names(
     ctx = jaffle_shop_duckdb_context
     ctx.load()
     assert '"jaffle_shop"."main"."agg_orders"' in ctx.models
+    assert ctx.get_model('"jaffle_shop"."main"."agg_orders"').tags == ["agg"]
 
     selector = ctx._new_selector()
     assert isinstance(selector, DbtSelector)
