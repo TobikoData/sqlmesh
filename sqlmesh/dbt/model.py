@@ -157,18 +157,12 @@ class ModelConfig(BaseModelConfig):
 
     @field_validator(
         "unique_key",
+        "cluster_by",
         "tags",
         mode="before",
     )
     @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
-        return ensure_list(v)
-
-    @field_validator("cluster_by", mode="before")
-    @classmethod
-    def _validate_cluster_by(cls, v: t.Union[str, t.List[str]]) -> t.Union[str, t.List[str]]:
-        if isinstance(v, str):
-            return [c.strip() for c in v.split(",")]
         return ensure_list(v)
 
     @field_validator("check_cols", mode="before")
@@ -607,7 +601,13 @@ class ModelConfig(BaseModelConfig):
                 clustered_by = []
                 for c in self.cluster_by:
                     try:
-                        clustered_by.append(d.parse_one(c, dialect=model_dialect))
+                        cluster_expr = exp.maybe_parse(
+                            c, into=exp.Cluster, prefix="CLUSTER BY", dialect=model_dialect
+                        )
+                        for expr in cluster_expr.expressions:
+                            clustered_by.append(
+                                expr.this if isinstance(expr, exp.Ordered) else expr
+                            )
                     except SqlglotError as e:
                         raise ConfigError(
                             f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
