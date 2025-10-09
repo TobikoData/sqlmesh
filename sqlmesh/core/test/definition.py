@@ -454,6 +454,9 @@ class ModelTest(unittest.TestCase):
         query = outputs.get("query")
         partial = outputs.pop("partial", None)
 
+        if ctes is None and query is None:
+            _raise_error("Incomplete test, outputs must contain 'query' or 'ctes'", self.path)
+
         def _normalize_rows(
             values: t.List[Row] | t.Dict,
             name: str,
