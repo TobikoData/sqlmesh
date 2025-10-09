@@ -1,23 +1,27 @@
 import React from 'react'
 
-import { FactoryColumn } from '@tobikodata/sqlmesh-common/lineage'
-
+import { FactoryColumn } from '@sqlmesh-common/components/Lineage'
+import { cn } from '@sqlmesh-common/utils'
 import {
   useModelLineage,
   type ModelColumnID,
   type ModelNodeId,
-  type ColumnName,
+  type ModelColumnName,
   type BrandedColumnLevelLineageAdjacencyList,
+  type ModelColumnRightHandleId,
+  type ModelColumnLeftHandleId,
 } from './ModelLineageContext'
-import { cn } from '@tobikodata/sqlmesh-common'
 import { useApiColumnLineage } from '@/api/index'
 import type { ModelFQN } from '@/domain/models'
 
 const ModelColumn = FactoryColumn<
   ModelFQN,
-  ColumnName,
+  ModelColumnName,
   ModelNodeId,
-  ModelColumnID
+  ModelColumnID,
+  ModelColumnLeftHandleId,
+  ModelColumnRightHandleId,
+  BrandedColumnLevelLineageAdjacencyList
 >(useModelLineage)
 
 export const ModelNodeColumn = React.memo(function ModelNodeColumn({
@@ -32,7 +36,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   id: ModelColumnID
   nodeId: ModelNodeId
   modelName: ModelFQN
-  name: ColumnName
+  name: ModelColumnName
   type: string
   description?: string | null
   className?: string
@@ -53,7 +57,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   } = useApiColumnLineage(nodeId, name, { models_only: true })
 
   const [columnLineageData, setColumnLineageData] = React.useState<
-    BrandedColumnLevelLineageAdjacencyList<ModelFQN, ColumnName> | undefined
+    BrandedColumnLevelLineageAdjacencyList | undefined
   >(undefined)
 
   const toggleSelectedColumn = React.useCallback(async () => {
@@ -71,9 +75,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
         })
 
         const { data } = (await getColumnLineage()) as {
-          data:
-            | BrandedColumnLevelLineageAdjacencyList<ModelFQN, ColumnName>
-            | undefined
+          data: BrandedColumnLevelLineageAdjacencyList | undefined
         }
 
         setColumnLineageData(data)

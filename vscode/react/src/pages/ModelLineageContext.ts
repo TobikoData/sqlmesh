@@ -1,6 +1,6 @@
 import type { ModelType } from '@/api/client'
 import type { ModelFQN, ModelName } from '@/domain/models'
-import type { Branded, BrandedString } from '@bus/brand'
+import type { Branded } from '@bus/brand'
 import {
   type Column,
   type ColumnLevelLineageContextValue,
@@ -12,36 +12,40 @@ import {
   type LineageAdjacencyList,
   type LineageDetails,
   type ColumnLevelLineageAdjacencyList,
-} from '@tobikodata/sqlmesh-common/lineage'
+} from '@sqlmesh-common/components/Lineage'
 
-export type BrandedLineageAdjacencyList<K extends BrandedString> =
-  LineageAdjacencyList<K> & {
-    readonly __adjacencyListKeyBrand: K
-  }
-
-export type BrandedLineageDetails<K extends BrandedString, V> = LineageDetails<
-  K,
-  V
-> & {
-  readonly __lineageDetailsKeyBrand: K
-}
-
-export type BrandedColumnLevelLineageAdjacencyList<
-  K extends BrandedString,
-  V extends BrandedString,
-> = ColumnLevelLineageAdjacencyList<K, V> & {
-  readonly __columnLevelLineageAdjacencyListKeyBrand: K
-  readonly __columnLevelLineageAdjacencyListColumnKeyBrand: V
-}
-
-export type ColumnName = Branded<string, 'ColumnName'>
+export type ModelColumnName = Branded<string, 'ModelColumnName'>
 export type ModelColumnID = Branded<string, 'ModelColumnID'>
 export type ModelNodeId = Branded<string, 'ModelNodeId'>
 export type ModelEdgeId = Branded<string, 'ModelEdgeId'>
 export type ModelColumn = Column & {
   id: ModelColumnID
-  name: ColumnName
+  name: ModelColumnName
 }
+export type ModelColumnLeftHandleId = Branded<string, 'ModelColumnLeftHandleId'>
+export type ModelColumnRightHandleId = Branded<
+  string,
+  'ModelColumnRightHandleId'
+>
+
+export type BrandedLineageAdjacencyList = LineageAdjacencyList<ModelFQN> & {
+  readonly __adjacencyListKeyBrand: ModelFQN
+}
+
+export type BrandedLineageDetails = LineageDetails<
+  ModelFQN,
+  ModelLineageNodeDetails
+> & {
+  readonly __lineageDetailsKeyBrand: ModelFQN
+}
+
+export type BrandedModelColumns = Record<ModelColumnName, Column>
+
+export type BrandedColumnLevelLineageAdjacencyList =
+  ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName> & {
+    readonly __columnLevelLineageAdjacencyListKeyBrand: ModelFQN
+    readonly __columnLevelLineageAdjacencyListColumnKeyBrand: ModelColumnName
+  }
 
 export type ModelLineageNodeDetails = {
   name: ModelFQN
@@ -54,7 +58,7 @@ export type ModelLineageNodeDetails = {
   owner?: string | null
   kind?: string | null
   tags?: string[]
-  columns?: Record<ColumnName, Column>
+  columns?: BrandedModelColumns
 }
 
 export type NodeData = {
@@ -68,7 +72,7 @@ export type NodeData = {
   owner?: string | null
   dialect?: string | null
   tags?: string[]
-  columns?: Record<ColumnName, Column>
+  columns?: BrandedModelColumns
 }
 
 export type EdgeData = {
@@ -80,20 +84,29 @@ export type EdgeData = {
 
 export type ModelLineageContextValue = ColumnLevelLineageContextValue<
   ModelFQN,
-  ColumnName,
-  ModelColumnID
+  ModelColumnName,
+  ModelColumnID,
+  BrandedColumnLevelLineageAdjacencyList
 > &
   LineageContextValue<
     NodeData,
     EdgeData,
     ModelNodeId,
     ModelEdgeId,
-    ModelColumnID
+    ModelNodeId,
+    ModelNodeId,
+    ModelColumnRightHandleId,
+    ModelColumnLeftHandleId
   >
 
 export const initial = {
   ...getLineageContextInitial<ModelNodeId, ModelEdgeId>(),
-  ...getColumnLevelLineageContextInitial<ModelFQN, ColumnName, ModelColumnID>(),
+  ...getColumnLevelLineageContextInitial<
+    ModelFQN,
+    ModelColumnName,
+    ModelColumnID,
+    BrandedColumnLevelLineageAdjacencyList
+  >(),
 }
 
 export const { Provider, useLineage } = createLineageContext<
@@ -101,7 +114,10 @@ export const { Provider, useLineage } = createLineageContext<
   EdgeData,
   ModelNodeId,
   ModelEdgeId,
-  ModelColumnID,
+  ModelNodeId,
+  ModelNodeId,
+  ModelColumnRightHandleId,
+  ModelColumnLeftHandleId,
   ModelLineageContextValue
 >(initial)
 

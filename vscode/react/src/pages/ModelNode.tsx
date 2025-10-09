@@ -7,7 +7,7 @@ import {
   type NodeData,
   type ModelColumn,
   type ModelColumnID,
-  type ColumnName,
+  type ModelColumnName,
 } from './ModelLineageContext'
 import {
   calculateColumnsHeight,
@@ -29,7 +29,7 @@ import {
   NodeBadge,
   NodePorts,
   type NodeProps,
-} from '@tobikodata/sqlmesh-common/lineage'
+} from '@sqlmesh-common/components/Lineage'
 import {
   Badge,
   cn,
@@ -37,7 +37,7 @@ import {
   ModelName,
   Tooltip,
   VerticalContainer,
-} from '@tobikodata/sqlmesh-common'
+} from '@sqlmesh-common/index'
 import { ModelNodeColumn } from './ModelNodeColumn'
 import type { ModelFQN } from '@/domain/models'
 import { NODE_TYPE_COLOR } from './help'
@@ -75,7 +75,7 @@ export const ModelNode = React.memo(function ModelNode({
     columns,
     selectedColumns: modelSelectedColumns,
     columnNames,
-  } = useColumns<ModelFQN, ColumnName, Column, ModelColumnID>(
+  } = useColumns<ModelFQN, ModelColumnName, Column, ModelColumnID>(
     selectedColumns,
     data.name,
     data.columns,

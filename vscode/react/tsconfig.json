@@ -23,7 +23,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@bus/*": ["../bus/src/*"]
+      "@bus/*": ["../bus/src/*"],
+      "@sqlmesh-common/*": ["../../web/common/src/*"]
     }
   }
 }

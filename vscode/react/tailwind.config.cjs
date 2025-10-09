@@ -1,12 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  presets: [
-    require('@tobikodata/sqlmesh-common/configs/tailwind.base.config.js'),
-  ],
+  presets: [require('../../web/common/tailwind.base.config.js')],
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
-    './node_modules/@tobikodata/sqlmesh-common/**/*.{js,ts,jsx,tsx}',
+    '../../web/common/src/**/*.{js,ts,jsx,tsx}',
   ],
   darkMode: ['class', '[mode="dark"]'],
   theme: {

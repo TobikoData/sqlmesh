@@ -22,12 +22,13 @@ import {
 
 import { ModelLineage } from './ModelLineage'
 import type {
-  ModelLineageNodeDetails,
-  ColumnName,
+  ModelColumnName,
   BrandedLineageAdjacencyList,
   BrandedLineageDetails,
+  ModelNodeId,
+  NodeData,
 } from './ModelLineageContext'
-import type { Column } from '@tobikodata/sqlmesh-common/lineage'
+import type { Column, LineageNode } from '@sqlmesh-common/components/Lineage'
 import { useVSCode } from '@/hooks/vscode'
 import type { BrandedRecord, BrandedString } from '@bus/brand'
 
@@ -200,19 +201,6 @@ export function LineageComponentFromWeb({
   models: BrandedRecord<ModelFQN, Model>
 }) {
   const vscode = useVSCode()
-  function handleClickModel(id: string): void {
-    const decodedId = decodeURIComponent(id)
-    const model = (Object.values(models) as Model[]).find(
-      m => m.fqn === decodedId,
-    )
-    if (!model) {
-      throw new Error('Model not found')
-    }
-    if (!model.full_path) {
-      return
-    }
-    vscode('openFile', { uri: URI.file(model.full_path).toString() })
-  }
 
   function handleError(error: any): void {
     console.error(error)
@@ -235,17 +223,37 @@ export function LineageComponentFromWeb({
   const { refetch: getModelLineage } = useApiModelLineage(model?.name ?? '')
 
   const [modelLineage, setModelLineage] = useState<
-    BrandedLineageAdjacencyList<ModelFQN> | undefined
+    BrandedLineageAdjacencyList | undefined
   >(undefined)
+
+  const handleNodeClick = React.useCallback(
+    (
+      event: React.MouseEvent<Element, MouseEvent>,
+      node: LineageNode<NodeData, ModelNodeId>,
+    ) => {
+      event.stopPropagation()
+
+      const decodedId = decodeURIComponent(node.id)
+      const model = (Object.values(models) as Model[]).find(
+        m => m.fqn === decodedId,
+      )
+      if (!model) {
+        throw new Error('Model not found')
+      }
+      if (!model.full_path) {
+        return
+      }
+      vscode('openFile', { uri: URI.file(model.full_path).toString() })
+    },
+    [models, vscode],
+  )
 
   React.useEffect(() => {
     if (model === undefined) return
 
     getModelLineage()
       .then(({ data }) => {
-        setModelLineage(
-          data as unknown as BrandedLineageAdjacencyList<ModelFQN>,
-        )
+        setModelLineage(data as unknown as BrandedLineageAdjacencyList)
       })
       .catch(handleError)
   }, [model?.name, model?.hash])
@@ -266,19 +274,19 @@ export function LineageComponentFromWeb({
         tags: [],
         columns: model.columns.reduce(
           (acc, column) => {
-            const columnName = decodeURI(column.name) as ColumnName
+            const columnName = decodeURI(column.name) as ModelColumnName
             acc[columnName] = {
               data_type: column.type,
               description: column.description,
             }
             return acc
           },
-          {} as BrandedRecord<ColumnName, Column>,
+          {} as BrandedRecord<ModelColumnName, Column>,
         ),
       }
       return acc
     },
-    {} as BrandedLineageDetails<ModelFQN, ModelLineageNodeDetails>,
+    {} as BrandedLineageDetails,
   )
 
   if (!modelLineage || !lineageDetails) {
@@ -288,7 +296,7 @@ export function LineageComponentFromWeb({
   return (
     <ModelLineage
       className="h-[98vh] w-[97vw]"
-      onNodeClick={(_, node) => handleClickModel(node.id)}
+      onNodeClick={handleNodeClick}
       selectedModelName={model.fqn as ModelFQN}
       adjacencyList={modelLineage}
       lineageDetails={lineageDetails}
