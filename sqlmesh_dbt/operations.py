@@ -237,6 +237,7 @@ def create(
     vars: t.Optional[t.Dict[str, t.Any]] = None,
     threads: t.Optional[int] = None,
     debug: bool = False,
+    log_level: t.Optional[str] = None,
 ) -> DbtOperations:
     with Progress(transient=True) as progress:
         # Indeterminate progress bar before SQLMesh import to provide feedback to the user that something is indeed happening
@@ -256,7 +257,7 @@ def create(
         while root_logger.hasHandlers():
             root_logger.removeHandler(root_logger.handlers[0])
 
-        configure_logging(force_debug=debug)
+        configure_logging(force_debug=debug, log_level=log_level)
         set_console(DbtCliConsole())
 
         progress.update(load_task_id, description="Loading project", total=None)

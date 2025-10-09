@@ -188,6 +188,7 @@ def configure_logging(
     write_to_file: bool = True,
     log_file_dir: t.Optional[t.Union[str, Path]] = None,
     ignore_warnings: bool = False,
+    log_level: t.Optional[t.Union[str, int]] = None,
 ) -> None:
     # Remove noisy grpc logs that are not useful for users
     os.environ["GRPC_VERBOSITY"] = os.environ.get("GRPC_VERBOSITY", "NONE")
@@ -195,8 +196,15 @@ def configure_logging(
     logger = logging.getLogger()
     debug = force_debug or debug_mode_enabled()
 
-    # base logger needs to be the lowest level that we plan to log
-    level = logging.DEBUG if debug else logging.INFO
+    if log_level is not None:
+        if isinstance(log_level, str):
+            level = logging._nameToLevel.get(log_level.upper()) or logging.INFO
+        else:
+            level = log_level
+    else:
+        # base logger needs to be the lowest level that we plan to log
+        level = logging.DEBUG if debug else logging.INFO
+
     logger.setLevel(level)
 
     if debug:
