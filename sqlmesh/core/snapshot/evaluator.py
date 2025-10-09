@@ -1593,14 +1593,14 @@ class SnapshotEvaluator:
         tables_by_gateway_and_schema: t.Dict[t.Union[str, None], t.Dict[exp.Table, set[str]]] = (
             defaultdict(lambda: defaultdict(set))
         )
-        snapshots_by_table_name: t.Dict[str, Snapshot] = {}
+        snapshots_by_table_name: t.Dict[t.Tuple[str, str, str], Snapshot] = {}
         for snapshot in target_snapshots:
             if not snapshot.is_model or snapshot.is_symbolic:
                 continue
             table = table_name_callable(snapshot)
             table_schema = d.schema_(table.db, catalog=table.catalog)
             tables_by_gateway_and_schema[snapshot.model_gateway][table_schema].add(table.name)
-            snapshots_by_table_name[table.name] = snapshot
+            snapshots_by_table_name[(table.catalog, table.db, table.name)] = snapshot
 
         def _get_data_objects_in_schema(
             schema: exp.Table,
@@ -1629,7 +1629,10 @@ class SnapshotEvaluator:
                 ]
                 existing_objects.extend(objs_for_gateway)
 
-        return {snapshots_by_table_name[obj.name].snapshot_id: obj for obj in existing_objects}
+        return {
+            snapshots_by_table_name[(obj.catalog or "", obj.schema_name, obj.name)].snapshot_id: obj
+            for obj in existing_objects
+        }
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
