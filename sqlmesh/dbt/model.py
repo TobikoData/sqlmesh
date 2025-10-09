@@ -569,7 +569,13 @@ class ModelConfig(BaseModelConfig):
                 )
             else:
                 partitioned_by = []
-                if isinstance(self.partition_by, list):
+                if context.target.dialect == "snowflake":
+                    logger.warning(
+                        "Ignoring partition_by config for model '%s' targeting %s. The partition_by config is not supported for Snowflake.",
+                        self.name,
+                        context.target.dialect,
+                    )
+                elif isinstance(self.partition_by, list):
                     for p in self.partition_by:
                         try:
                             partitioned_by.append(d.parse_one(p, dialect=model_dialect))
