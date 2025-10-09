@@ -1928,6 +1928,11 @@ def test_partition_by(sushi_test_project: Project):
     context.target = DuckDbConfig(name="target", schema="foo")
     assert model_config.to_sqlmesh(context).partitioned_by == []
 
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+
     model_config = ModelConfig(
         name="model",
         alias="model",
