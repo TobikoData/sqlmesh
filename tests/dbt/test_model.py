@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.errors import SchemaError
 from sqlmesh import Context
+from sqlmesh.core.console import NoopConsole, get_console
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
@@ -537,6 +538,7 @@ def test_load_deprecated_incremental_time_column(
         f.write(incremental_time_range_contents)
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
+    assert isinstance(get_console(), NoopConsole)
     context = Context(paths=project_dir)
     model = context.snapshots[snapshot_fqn].model
     # Validate model-level attributes
