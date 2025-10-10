@@ -23,7 +23,7 @@ from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
     SQLGlotColumn,
-    SQLGlotListOfColumnsOrStar,
+    SQLGlotListOfFieldsOrStar,
     SQLGlotListOfFields,
     SQLGlotPositiveInt,
     SQLGlotString,
@@ -852,7 +852,7 @@ class SCDType2ByTimeKind(_SCDType2Kind):
 
 class SCDType2ByColumnKind(_SCDType2Kind):
     name: t.Literal[ModelKindName.SCD_TYPE_2_BY_COLUMN] = ModelKindName.SCD_TYPE_2_BY_COLUMN
-    columns: SQLGlotListOfColumnsOrStar
+    columns: SQLGlotListOfFieldsOrStar
     execution_time_as_valid_from: SQLGlotBool = False
     updated_at_name: t.Optional[SQLGlotColumn] = None
 
