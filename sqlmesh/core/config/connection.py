@@ -509,12 +509,12 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
         return None
 
     def _mask_sensitive_data(self, string: str) -> str:
-        # Mask MotherDuck tokens
+        # Mask MotherDuck tokens with fixed number of asterisks
         result = MOTHERDUCK_TOKEN_REGEX.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string
+            lambda m: f"{m.group(1)}{m.group(2)}{'*' * 8 if m.group(3) else ''}", string
         )
-        # Mask PostgreSQL and MySQL passwords
-        result = PASSWORD_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", result)
+        # Mask PostgreSQL/MySQL passwords with fixed number of asterisks
+        result = PASSWORD_REGEX.sub(lambda m: f"{m.group(1)}{'*' * 8}", result)
         return result
 
 

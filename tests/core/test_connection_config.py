@@ -949,33 +949,33 @@ def test_motherduck_token_mask(make_config):
     assert config_1._mask_sensitive_data(config_1.database) == "whodunnit"
     assert (
         config_1._mask_sensitive_data(f"md:{config_1.database}?motherduck_token={config_1.token}")
-        == "md:whodunnit?motherduck_token=*****"
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
         config_1._mask_sensitive_data(
             f"md:{config_1.database}?attach_mode=single&motherduck_token={config_1.token}"
         )
-        == "md:whodunnit?attach_mode=single&motherduck_token=*****"
+        == "md:whodunnit?attach_mode=single&motherduck_token=********"
     )
     assert (
         config_2._mask_sensitive_data(f"md:{config_2.database}?motherduck_token={config_2.token}")
-        == "md:whodunnit?motherduck_token=******************"
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
         config_3._mask_sensitive_data(f"md:?motherduck_token={config_3.token}")
-        == "md:?motherduck_token=**********"
+        == "md:?motherduck_token=********"
     )
     assert (
         config_1._mask_sensitive_data("?motherduck_token=secret1235")
-        == "?motherduck_token=**********"
+        == "?motherduck_token=********"
     )
     assert (
         config_1._mask_sensitive_data("md:whodunnit?motherduck_token=short")
-        == "md:whodunnit?motherduck_token=*****"
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
         config_1._mask_sensitive_data("md:whodunnit?motherduck_token=longtoken123456789")
-        == "md:whodunnit?motherduck_token=******************"
+        == "md:whodunnit?motherduck_token=********"
     )
     assert (
         config_1._mask_sensitive_data("md:whodunnit?motherduck_token=")
@@ -988,25 +988,25 @@ def test_motherduck_token_mask(make_config):
         config_1._mask_sensitive_data(
             "postgres:dbname=mydb user=myuser password=secret123 host=localhost"
         )
-        == "postgres:dbname=mydb user=myuser password=********* host=localhost"
+        == "postgres:dbname=mydb user=myuser password=******** host=localhost"
     )
 
     assert (
         config_1._mask_sensitive_data(
             "dbname=postgres user=postgres password=pg_secret host=127.0.0.1"
         )
-        == "dbname=postgres user=postgres password=********* host=127.0.0.1"
+        == "dbname=postgres user=postgres password=******** host=127.0.0.1"
     )
     assert (
         config_1._mask_sensitive_data(
             "postgres:dbname=testdb password=verylongpassword123 user=admin"
         )
-        == "postgres:dbname=testdb password=******************* user=admin"
+        == "postgres:dbname=testdb password=******** user=admin"
     )
-    assert config_1._mask_sensitive_data("postgres:password=short") == "postgres:password=*****"
+    assert config_1._mask_sensitive_data("postgres:password=short") == "postgres:password=********"
     assert (
         config_1._mask_sensitive_data("postgres:host=localhost password=p@ssw0rd! dbname=db")
-        == "postgres:host=localhost password=********* dbname=db"
+        == "postgres:host=localhost password=******** dbname=db"
     )
 
     assert (
@@ -1016,7 +1016,7 @@ def test_motherduck_token_mask(make_config):
 
     assert (
         config_1._mask_sensitive_data("md:db?motherduck_token=token123 postgres:password=secret")
-        == "md:db?motherduck_token=******** postgres:password=******"
+        == "md:db?motherduck_token=******** postgres:password=********"
     )
 
     # MySQL format
