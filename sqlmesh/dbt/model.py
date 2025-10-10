@@ -745,11 +745,10 @@ class ModelConfig(BaseModelConfig):
                     )
                 else:
                     model_kwargs["start"] = begin
-            # If user explicitly disables concurrent batches then we want to set depends on past to true which we
-            # will do by including the model in the depends_on
+            # If user explicitly disables concurrent batches then force sequential execution by setting batch_concurrency to 1
             if self.concurrent_batches is not None and self.concurrent_batches is False:
-                depends_on = model_kwargs.get("depends_on", set())
-                depends_on.add(self.canonical_name(context))
+                if hasattr(kind, "batch_concurrency"):
+                    kind.batch_concurrency = 1
 
         model_kwargs["start"] = model_kwargs.get(
             "start", context.sqlmesh_config.model_defaults.start
@@ -768,6 +767,7 @@ class ModelConfig(BaseModelConfig):
             allow_partials=allow_partials,
             virtual_environment_mode=virtual_environment_mode,
             dbt_node_info=self.node_info,
+            optimize_query=False,
             **optional_kwargs,
             **model_kwargs,
         )
