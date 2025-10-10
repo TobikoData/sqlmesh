@@ -274,6 +274,7 @@ def test_load_invalid_ref_audit_constraints(
     with open(model_schema_file, "w", encoding="utf-8") as f:
         yaml.dump(model_schema, f)
 
+    assert isinstance(get_console(), NoopConsole)
     context = Context(paths=project_dir)
     assert (
         "Skipping audit 'relationships_full_model_cola__cola__ref_not_real_model_' because model 'not_real_model' is not a valid ref"
