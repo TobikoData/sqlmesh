@@ -36,8 +36,8 @@
   --color-filterable-list-input-border: var(--vscode-input-border);
 
   --color-lineage-background: transparent;
+  --color-lineage-border: transparent;
   --color-lineage-foreground: var(--vscode-foreground);
-  --color-lineage-border: var(--vscode-editor-background);
   --color-lineage-divider: var(--vscode-text-separatorForeground);
 
   --color-lineage-grid-dot: rgba(0, 0, 0, 0.1);
@@ -106,16 +106,6 @@
     --vscode-minimap-errorHighlight
   );
   --color-lineage-node-type-border-source: var(--vscode-minimap-errorHighlight);
-
-  --color-lineage-node-type-background-cte-subquery: var(
-    --vscode-minimap-selectionOccurrenceHighlight
-  );
-  --color-lineage-node-type-foreground-cte-subquery: var(
-    --vscode-minimap-selectionOccurrenceHighlight
-  );
-  --color-lineage-node-type-border-cte-subquery: var(
-    --vscode-minimap-selectionOccurrenceHighlight
-  );
 
   --color-lineage-node-type-handle-icon-background: var(
     --vscode-editor-background

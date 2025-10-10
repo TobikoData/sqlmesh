@@ -41,12 +41,8 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   description?: string | null
   className?: string
 }) {
-  const {
-    selectedColumns,
-    setColumnLevelLineage,
-    setFetchingColumns,
-    setSelectedNodeId,
-  } = useModelLineage()
+  const { selectedColumns, setColumnLevelLineage, setFetchingColumns } =
+    useModelLineage()
 
   const isSelectedColumn = selectedColumns.has(id)
 
@@ -67,8 +63,6 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
         return new Map(prev)
       })
     } else {
-      setSelectedNodeId(nodeId)
-
       if (columnLineageData == null) {
         setTimeout(() => {
           setFetchingColumns(prev => new Set(prev.add(id)))
@@ -108,7 +102,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
       type={type}
       description={description}
       className={cn(
-        'ModelNodeColumn',
+        'ModelNodeColumn cursor-pointer',
         isSelectedColumn && 'bg-lineage-model-column-active-background',
         className,
       )}

@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { Focus, LockOpen, Lock, Rows2, Rows3 } from 'lucide-react'
+import { Focus, Rows2, Rows3 } from 'lucide-react'
 
 import {
   type LineageNode,
@@ -78,9 +78,11 @@ export const ModelLineage = ({
     ? toNodeID<ModelNodeId>(selectedModelName)
     : null
 
+  // Store all nodes to keep track of the position and to reuse nodes
+  const allNodesMap = React.useRef<LineageNodesMap<NodeData, ModelNodeId>>({})
+
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
-  const [nodesDraggable, setNodesDraggable] = React.useState(false)
   const [edges, setEdges] = React.useState<
     LineageEdge<
       EdgeData,
@@ -153,6 +155,7 @@ export const ModelLineage = ({
         tags: detail.tags || [],
         columns,
       })
+
       const selectedColumnsCount = new Set(
         Object.keys(columns ?? {}).map(k => toPortID(detail.name, k)),
       ).intersection(selectedColumns).size
@@ -160,7 +163,7 @@ export const ModelLineage = ({
       const nodeBaseHeight = calculateNodeBaseHeight({
         includeNodeFooterHeight: false,
         includeCeilingHeight: true,
-        includeFloorHeight: true,
+        includeFloorHeight: false,
       })
       const nodeDetailsHeight = calculateNodeDetailsHeight({
         nodeDetailsCount: 0,
@@ -193,7 +196,7 @@ export const ModelLineage = ({
       ModelLineageNodeDetails,
       NodeData,
       ModelNodeId
-    >(adjacencyListKeys, lineageDetails, transformNode)
+    >(adjacencyListKeys, lineageDetails, transformNode, allNodesMap.current)
   }, [adjacencyListKeys, lineageDetails, transformNode])
 
   const transformEdge = React.useCallback(
@@ -293,7 +296,10 @@ export const ModelLineage = ({
         ModelColumnLeftHandleId
       >[],
       nds: LineageNodesMap<NodeData, ModelNodeId>,
+      buildingLayoutId: NodeJS.Timeout,
     ) => {
+      clearTimeout(buildingLayoutId)
+
       const layoutNodesMap = buildLayout<
         NodeData,
         EdgeData,
@@ -304,19 +310,22 @@ export const ModelLineage = ({
         ModelColumnLeftHandleId
       >({ edges: eds, nodesMap: nds })
 
+      allNodesMap.current = { ...allNodesMap.current, ...layoutNodesMap }
+
       setEdges(eds)
       setNodesMap(layoutNodesMap)
       setIsBuildingLayout(false)
     },
-    [],
+    [allNodesMap.current],
   )
 
   const nodes = React.useMemo(() => {
     return Object.values(nodesMap)
   }, [nodesMap])
 
-  const currentNode = currentNodeId ? nodesMap[currentNodeId] : null
-  const selectedNode = selectedNodeId ? nodesMap[selectedNodeId] : null
+  const selectedNode = selectedNodeId
+    ? allNodesMap.current[selectedNodeId]
+    : null
 
   const handleReset = React.useCallback(() => {
     setShowColumns(false)
@@ -325,12 +334,14 @@ export const ModelLineage = ({
     setShowOnlySelectedNodes(false)
     setSelectedNodes(new Set())
     setSelectedEdges(new Set())
-    setSelectedNodeId(null)
+    setSelectedNodeId(currentNodeId)
     setColumnLevelLineage(new Map())
-  }, [])
+  }, [currentNodeId])
 
   React.useEffect(() => {
-    setIsBuildingLayout(true)
+    const buildingLayoutId = setTimeout(() => {
+      setIsBuildingLayout(true)
+    }, 500)
 
     if (showOnlySelectedNodes) {
       const onlySelectedNodesMap = getOnlySelectedNodes<NodeData, ModelNodeId>(
@@ -340,27 +351,15 @@ export const ModelLineage = ({
       const onlySelectedEdges = transformedEdges.filter(edge =>
         selectedEdges.has(edge.id as ModelEdgeId),
       )
-      calculateLayout(onlySelectedEdges, onlySelectedNodesMap)
+      calculateLayout(onlySelectedEdges, onlySelectedNodesMap, buildingLayoutId)
     } else {
-      calculateLayout(transformedEdges, transformedNodesMap)
+      calculateLayout(transformedEdges, transformedNodesMap, buildingLayoutId)
     }
   }, [showOnlySelectedNodes, transformedEdges, transformedNodesMap])
 
-  // currentNodeId is passed from the parent component
-  // we it change we need to reset the selectedNodeId
   React.useEffect(() => {
-    setSelectedNodeId(currentNodeId)
-  }, [currentNodeId])
-
-  // When the selectedColumns is empty it measn we dont have any selected columns
-  // so we need to set the selectedNodeId back to the currentNode.id
-  // where currentNode derived from currentNodeId if present in nodesMap
-  // if the currentNode is null we need to set the selectedNodeId to null
-  React.useEffect(() => {
-    if (selectedColumns.size === 0 && selectedNodeId != currentNode?.id) {
-      setSelectedNodeId(currentNode?.id || null)
-    }
-  }, [selectedColumns, currentNode?.id])
+    handleReset()
+  }, [handleReset])
 
   function toggleColumns() {
     setShowColumns(prev => !prev)
@@ -380,7 +379,6 @@ export const ModelLineage = ({
         selectedNodeId,
         selectedNode,
         currentNodeId,
-        currentNode,
         zoom,
         edges,
         nodes,
@@ -414,7 +412,6 @@ export const ModelLineage = ({
         onNodeClick={onNodeClick}
         isBuildingLayout={isBuildingLayout}
         showControlOnlySelectedNodes={selectedColumns.size === 0}
-        nodesDraggable={nodesDraggable}
         controls={
           <>
             <LineageControlButton
@@ -434,13 +431,6 @@ export const ModelLineage = ({
               disabled={isBuildingLayout}
             >
               <LineageControlIcon Icon={Focus} />
-            </LineageControlButton>
-            <LineageControlButton
-              text={nodesDraggable ? 'Lock nodes' : 'Unlock nodes'}
-              onClick={() => setNodesDraggable(prev => !prev)}
-              disabled={isBuildingLayout}
-            >
-              <LineageControlIcon Icon={nodesDraggable ? Lock : LockOpen} />
             </LineageControlButton>
           </>
         }
