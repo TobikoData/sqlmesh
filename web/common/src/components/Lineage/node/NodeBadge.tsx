@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { cn } from '@/utils'
-import { Badge, type BadgeProps } from '@/components/Badge/Badge'
+import { cn } from '@sqlmesh-common/utils'
+import { Badge, type BadgeProps } from '@sqlmesh-common/components/Badge/Badge'
 
 export const NodeBadge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, children, ...props }, ref) => {

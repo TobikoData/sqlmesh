@@ -28,7 +28,7 @@
     /* Paths */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@sqlmesh-common/*": ["./src/*"]
     }
   }
 }

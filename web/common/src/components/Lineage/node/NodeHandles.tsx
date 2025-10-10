@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { cn } from '@/utils'
-import { HorizontalContainer } from '@/components/HorizontalContainer/HorizontalContainer'
+import { cn } from '@sqlmesh-common/utils'
+import { HorizontalContainer } from '@sqlmesh-common/components/HorizontalContainer/HorizontalContainer'
 import { NodeHandle } from './NodeHandle'
 import type { HandleId } from '../utils'
 

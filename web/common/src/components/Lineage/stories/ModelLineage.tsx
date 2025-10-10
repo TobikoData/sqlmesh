@@ -55,7 +55,7 @@ import { EdgeWithGradient } from '../edge/EdgeWithGradient'
 import { cleanupLayoutWorker, getLayoutedGraph } from '../layout/help'
 import { LineageControlButton } from '../LineageControlButton'
 import { LineageControlIcon } from '../LineageControlIcon'
-import type { BrandedRecord } from '@/types'
+import type { BrandedRecord } from '@sqlmesh-common/types'
 
 const nodeTypes = {
   node: ModelNode,
@@ -76,6 +76,10 @@ export const ModelLineage = ({
   selectedModelName?: ModelName
   className?: string
 }) => {
+  const currentNodeId = selectedModelName
+    ? toNodeID<ModelNodeId>(selectedModelName)
+    : null
+
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
   const [nodesDraggable, setNodesDraggable] = React.useState(false)
@@ -101,7 +105,7 @@ export const ModelLineage = ({
     new Set(),
   )
   const [selectedNodeId, setSelectedNodeId] =
-    React.useState<ModelNodeId | null>(null)
+    React.useState<ModelNodeId | null>(currentNodeId)
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
@@ -320,11 +324,8 @@ export const ModelLineage = ({
     return Object.values(nodesMap)
   }, [nodesMap])
 
-  const currentNode = React.useMemo(() => {
-    return selectedModelName
-      ? nodesMap[toNodeID<LeftHandleId | RightHandleId>(selectedModelName)]
-      : null
-  }, [selectedModelName, nodesMap])
+  const currentNode = currentNodeId ? nodesMap[currentNodeId] : null
+  const selectedNode = selectedNodeId ? nodesMap[selectedNodeId] : null
 
   const handleReset = React.useCallback(() => {
     setShowColumns(false)
@@ -354,6 +355,10 @@ export const ModelLineage = ({
     }
   }, [showOnlySelectedNodes, transformedEdges, transformedNodesMap])
 
+  React.useEffect(() => {
+    setSelectedNodeId(currentNodeId)
+  }, [currentNodeId])
+
   // Cleanup worker on unmount
   React.useEffect(() => () => cleanupLayoutWorker(), [])
 
@@ -373,6 +378,8 @@ export const ModelLineage = ({
         selectedNodes,
         selectedEdges,
         selectedNodeId,
+        selectedNode,
+        currentNodeId,
         zoom,
         edges,
         nodes,

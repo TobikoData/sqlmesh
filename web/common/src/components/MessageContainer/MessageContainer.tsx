@@ -1,4 +1,4 @@
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { LoadingContainer } from '../LoadingContainer/LoadingContainer'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
 

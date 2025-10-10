@@ -1,4 +1,4 @@
-import type { Branded } from '@/types'
+import type { Branded } from '@sqlmesh-common/types'
 import { type Edge, type Node } from '@xyflow/react'
 
 export type NodeId = Branded<string, 'NodeId'>

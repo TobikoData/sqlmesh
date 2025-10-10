@@ -129,7 +129,7 @@ export const LineageModel = () => {
       }}
     >
       <style>{`
-        :root {
+        :where(:root) {
           --color-metadata-label: rgba(100, 100, 100, 1);
           --color-metadata-value: rgba(10, 10, 10, 1);
 
