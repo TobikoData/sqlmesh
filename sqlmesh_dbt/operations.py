@@ -232,6 +232,7 @@ class DbtOperations:
 
 def create(
     project_dir: t.Optional[Path] = None,
+    profiles_dir: t.Optional[Path] = None,
     profile: t.Optional[str] = None,
     target: t.Optional[str] = None,
     vars: t.Optional[t.Dict[str, t.Any]] = None,
@@ -268,7 +269,11 @@ def create(
         sqlmesh_context = Context(
             paths=[project_dir],
             config_loader_kwargs=dict(
-                profile=profile, target=target, variables=vars, threads=threads
+                profile=profile,
+                target=target,
+                variables=vars,
+                threads=threads,
+                profiles_dir=profiles_dir,
             ),
             load=True,
             # DbtSelector selects based on dbt model fqn's rather than SQLMesh model names

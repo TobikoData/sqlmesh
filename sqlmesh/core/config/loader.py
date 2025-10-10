@@ -178,6 +178,7 @@ def load_config_from_paths(
 
             dbt_python_config = sqlmesh_config(
                 project_root=dbt_project_file.parent,
+                profiles_dir=kwargs.pop("profiles_dir", None),
                 dbt_profile_name=kwargs.pop("profile", None),
                 dbt_target_name=kwargs.pop("target", None),
                 variables=variables,

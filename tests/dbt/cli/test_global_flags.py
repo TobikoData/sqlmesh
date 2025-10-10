@@ -107,3 +107,77 @@ def test_log_level(invoke_cli: t.Callable[..., Result], create_empty_project: Em
     result = invoke_cli(["--log-level", "debug", "list"])
     assert result.exit_code == 0
     assert logging.getLogger("sqlmesh").getEffectiveLevel() == logging.DEBUG
+
+
+def test_profiles_dir(
+    invoke_cli: t.Callable[..., Result], create_empty_project: EmptyProjectCreator, tmp_path: Path
+):
+    project_dir, _ = create_empty_project(project_name="test_profiles_dir")
+
+    orig_profiles_yml = project_dir / "profiles.yml"
+    assert orig_profiles_yml.exists()
+
+    new_profiles_yml = tmp_path / "some_other_place" / "profiles.yml"
+    new_profiles_yml.parent.mkdir(parents=True)
+
+    orig_profiles_yml.rename(new_profiles_yml)
+    assert not orig_profiles_yml.exists()
+    assert new_profiles_yml.exists()
+
+    # should fail if we don't specify --profiles-dir
+    result = invoke_cli(["list"])
+    assert result.exit_code > 0, result.output
+    assert "profiles.yml not found" in result.output
+
+    # should pass if we specify --profiles-dir
+    result = invoke_cli(["--profiles-dir", str(new_profiles_yml.parent), "list"])
+    assert result.exit_code == 0, result.output
+    assert "Models in project" in result.output
+
+
+def test_project_dir(
+    invoke_cli: t.Callable[..., Result], create_empty_project: EmptyProjectCreator
+):
+    orig_project_dir, _ = create_empty_project(project_name="test_project_dir")
+
+    orig_project_yml = orig_project_dir / "dbt_project.yml"
+    assert orig_project_yml.exists()
+
+    new_project_yml = orig_project_dir / "nested" / "dbt_project.yml"
+    new_project_yml.parent.mkdir(parents=True)
+
+    orig_project_yml.rename(new_project_yml)
+    assert not orig_project_yml.exists()
+    assert new_project_yml.exists()
+
+    # should fail if we don't specify --project-dir
+    result = invoke_cli(["list"])
+    assert result.exit_code != 0, result.output
+    assert "Error:" in result.output
+
+    # should fail if the profiles.yml also doesnt exist at that --project-dir
+    result = invoke_cli(["--project-dir", str(new_project_yml.parent), "list"])
+    assert result.exit_code != 0, result.output
+    assert "profiles.yml not found" in result.output
+
+    # should pass if it can find both files, either because we specified --profiles-dir explicitly or the profiles.yml was found in --project-dir
+    result = invoke_cli(
+        [
+            "--project-dir",
+            str(new_project_yml.parent),
+            "--profiles-dir",
+            str(orig_project_dir),
+            "list",
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Models in project" in result.output
+
+    orig_profiles_yml = orig_project_dir / "profiles.yml"
+    new_profiles_yml = new_project_yml.parent / "profiles.yml"
+    assert orig_profiles_yml.exists()
+    orig_profiles_yml.rename(new_profiles_yml)
+
+    result = invoke_cli(["--project-dir", str(new_project_yml.parent), "list"])
+    assert result.exit_code == 0, result.output
+    assert "Models in project" in result.output
