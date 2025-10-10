@@ -2490,7 +2490,7 @@ def test_insert_into_scd_type_2_by_column(
         target_columns_to_types=table_columns,
         table_format=None,
         unique_key=[exp.to_column("id", quoted=True)],
-        check_columns=exp.Star(),
+        check_columns=[exp.Star()],
         valid_from_col=exp.column("valid_from", quoted=True),
         valid_to_col=exp.column("valid_to", quoted=True),
         execution_time="2020-01-02",

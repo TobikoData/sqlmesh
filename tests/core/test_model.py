@@ -949,7 +949,7 @@ def test_scd_type_2_by_col_serde():
     model_json_parsed = json.loads(model.json())
     assert model_json_parsed["kind"]["dialect"] == "bigquery"
     assert model_json_parsed["kind"]["unique_key"] == ["`a`"]
-    assert model_json_parsed["kind"]["columns"] == "*"
+    assert model_json_parsed["kind"]["columns"] == ["*"]
     # Bigquery converts TIMESTAMP -> DATETIME
     assert model_json_parsed["kind"]["time_data_type"] == "DATETIME"
 
@@ -5427,7 +5427,7 @@ def test_scd_type_2_python_model() -> None:
             '["col1"]',
             [exp.to_column("col1", quoted=True)],
         ),
-        ("*", exp.Star()),
+        ("*", [exp.Star()]),
     ],
 )
 def test_check_column_variants(input_columns, expected_columns):
@@ -8360,7 +8360,7 @@ on_additive_change 'ALLOW'
         .kind.to_expression()
         .sql()
         == """SCD_TYPE_2_BY_COLUMN (
-columns *,
+columns (*),
 execution_time_as_valid_from FALSE,
 unique_key ("a", "b"),
 valid_from_name "valid_from",
