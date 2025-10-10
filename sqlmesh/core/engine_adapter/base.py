@@ -1885,8 +1885,14 @@ class EngineAdapter:
         # they are equal or not, the extra check is not a problem and we gain simplified logic here.
         # If we want to change this, then we just need to check the expressions in unique_key and pull out the
         # column names and then remove them from the unmanaged_columns
-        if check_columns and check_columns == exp.Star():
-            check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
+        if check_columns:
+            # Handle both Star directly and [Star()] (which can happen during serialization/deserialization)
+            if isinstance(check_columns, exp.Star) or (
+                isinstance(check_columns, list)
+                and len(check_columns) == 1
+                and isinstance(check_columns[0], exp.Star)
+            ):
+                check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
         execution_ts = (
             exp.cast(execution_time, time_data_type, dialect=self.dialect)
             if isinstance(execution_time, exp.Column)
@@ -1923,7 +1929,8 @@ class EngineAdapter:
                 col_qualified.set("table", exp.to_identifier("joined"))
 
                 t_col = col_qualified.copy()
-                t_col.this.set("this", f"t_{col.name}")
+                for column in t_col.find_all(exp.Column):
+                    column.this.set("this", f"t_{column.name}")
 
                 row_check_conditions.extend(
                     [
