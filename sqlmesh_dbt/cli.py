@@ -84,6 +84,16 @@ resource_type_option = click.option(
     type=click.Choice(["debug", "info", "warn", "error", "none"]),
     help="Specify the minimum severity of events that are logged to the console and the log file.",
 )
+@click.option(
+    "--profiles-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Which directory to look in for the profiles.yml file. If not set, dbt will look in the current working directory first, then HOME/.dbt/",
+)
+@click.option(
+    "--project-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Which directory to look in for the dbt_project.yml file. Default is the current working directory and its parents.",
+)
 @click.pass_context
 @cli_global_error_handler
 def dbt(
@@ -92,6 +102,8 @@ def dbt(
     target: t.Optional[str] = None,
     debug: bool = False,
     log_level: t.Optional[str] = None,
+    profiles_dir: t.Optional[Path] = None,
+    project_dir: t.Optional[Path] = None,
 ) -> None:
     """
     An ELT tool for managing your SQL transformations and data models, powered by the SQLMesh engine.
@@ -105,7 +117,8 @@ def dbt(
     # that need to be known before we attempt to load the project
     ctx.obj = functools.partial(
         create,
-        project_dir=Path.cwd(),
+        project_dir=project_dir,
+        profiles_dir=profiles_dir,
         profile=profile,
         target=target,
         debug=debug,
