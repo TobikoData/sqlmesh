@@ -261,9 +261,12 @@ def rescope_lineage_cache(request):
 
 @pytest.fixture(autouse=True)
 def reset_console():
-    from sqlmesh.core.console import set_console, NoopConsole
+    from sqlmesh.core.console import set_console, NoopConsole, get_console
 
+    orig_console = get_console()
     set_console(NoopConsole())
+    yield
+    set_console(orig_console)
 
 
 @pytest.fixture
