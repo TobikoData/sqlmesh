@@ -51,7 +51,7 @@ class DbtContext:
     _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
-    _model_fqns: t.Set[str] = field(default_factory=set)
+    _model_canonical_names: t.Set[str] = field(default_factory=set)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = field(default_factory=dict)
@@ -145,7 +145,7 @@ class DbtContext:
     def models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._models = {}
         self._refs = {}
-        self._model_fqns = set()
+        self._model_canonical_names = set()
         self.add_models(models)
 
     def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
@@ -154,10 +154,12 @@ class DbtContext:
         self._jinja_environment = None
 
     @property
-    def model_fqns(self) -> t.Set[str]:
-        if not self._model_fqns:
-            self._model_fqns = {model.fqn for model in self._models.values()}
-        return self._model_fqns
+    def model_canonical_names(self) -> t.Set[str]:
+        if not self._model_canonical_names:
+            self._model_canonical_names = {
+                model.canonical_name(self) for model in self._models.values()
+            }
+        return self._model_canonical_names
 
     @property
     def seeds(self) -> t.Dict[str, SeedConfig]:
