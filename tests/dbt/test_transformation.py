@@ -292,6 +292,32 @@ def test_model_kind():
         on_additive_change=OnAdditiveChange.ALLOW,
     )
 
+    check_cols_with_cast = ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        strategy="check",
+        check_cols=["created_at::TIMESTAMPTZ"],
+    ).model_kind(context)
+    assert isinstance(check_cols_with_cast, SCDType2ByColumnKind)
+    assert check_cols_with_cast.execution_time_as_valid_from is True
+    assert len(check_cols_with_cast.columns) == 1
+    assert isinstance(check_cols_with_cast.columns[0], exp.Cast)
+    assert check_cols_with_cast.columns[0].sql() == 'CAST("created_at" AS TIMESTAMPTZ)'
+
+    check_cols_multiple_expr = ModelConfig(
+        materialized=Materialization.SNAPSHOT,
+        unique_key=["id"],
+        strategy="check",
+        check_cols=["created_at::TIMESTAMPTZ", "COALESCE(status, 'active')"],
+    ).model_kind(context)
+    assert isinstance(check_cols_multiple_expr, SCDType2ByColumnKind)
+    assert len(check_cols_multiple_expr.columns) == 2
+    assert isinstance(check_cols_multiple_expr.columns[0], exp.Cast)
+    assert isinstance(check_cols_multiple_expr.columns[1], exp.Coalesce)
+
+    assert check_cols_multiple_expr.columns[0].sql() == 'CAST("created_at" AS TIMESTAMPTZ)'
+    assert check_cols_multiple_expr.columns[1].sql() == "COALESCE(\"status\", 'active')"
+
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         context
     ) == IncrementalByTimeRangeKind(

@@ -302,7 +302,7 @@ class TrinoEngineAdapter(
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
-        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Expression]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
