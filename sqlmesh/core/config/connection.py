@@ -58,6 +58,7 @@ FORBIDDEN_STATE_SYNC_ENGINES = {
     "clickhouse",
 }
 MOTHERDUCK_TOKEN_REGEX = re.compile(r"(\?|\&)(motherduck_token=)(\S*)")
+PASSWORD_REGEX = re.compile(r"(password=)(\S+)")
 
 
 def _get_engine_import_validator(
@@ -479,13 +480,13 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             adapter = BaseDuckDBConnectionConfig._data_file_to_adapter.get(key)
             if adapter is not None:
                 logger.info(
-                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_motherduck_token(key)}"
+                    f"Using existing DuckDB adapter due to overlapping data file: {self._mask_sensitive_data(key)}"
                 )
                 return adapter
 
         if data_files:
             masked_files = {
-                self._mask_motherduck_token(file if isinstance(file, str) else file.path)
+                self._mask_sensitive_data(file if isinstance(file, str) else file.path)
                 for file in data_files
             }
             logger.info(f"Creating new DuckDB adapter for data files: {masked_files}")
@@ -507,10 +508,14 @@ class BaseDuckDBConnectionConfig(ConnectionConfig):
             return list(self.catalogs)[0]
         return None
 
-    def _mask_motherduck_token(self, string: str) -> str:
-        return MOTHERDUCK_TOKEN_REGEX.sub(
+    def _mask_sensitive_data(self, string: str) -> str:
+        # Mask MotherDuck tokens
+        result = MOTHERDUCK_TOKEN_REGEX.sub(
             lambda m: f"{m.group(1)}{m.group(2)}{'*' * len(m.group(3))}", string
         )
+        # Mask PostgreSQL and MySQL passwords
+        result = PASSWORD_REGEX.sub(lambda m: f"{m.group(1)}{'*' * len(m.group(2))}", result)
+        return result
 
 
 class MotherDuckConnectionConfig(BaseDuckDBConnectionConfig):
