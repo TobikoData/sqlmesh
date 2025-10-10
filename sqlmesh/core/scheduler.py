@@ -364,6 +364,13 @@ class Scheduler:
 
             adapter = self.snapshot_evaluator.get_adapter(snapshot.model_gateway)
 
+            parent_intervals = []
+            for parent in snapshot.parents:
+                if parent.snapshot_id not in snapshot_intervals:
+                    continue
+                _, p_intervals = snapshot_intervals[parent.snapshot_id]
+                parent_intervals.append(p_intervals)
+
             context = ExecutionContext(
                 adapter,
                 self.snapshots_by_name,
@@ -371,6 +378,7 @@ class Scheduler:
                 default_dialect=adapter.dialect,
                 default_catalog=self.default_catalog,
                 is_restatement=is_restatement,
+                parent_intervals=parent_intervals,
             )
 
             intervals = self._check_ready_intervals(
