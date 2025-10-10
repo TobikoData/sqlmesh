@@ -1192,13 +1192,13 @@ def test_target_jinja(sushi_test_project: Project):
     context = DbtContext()
     context._target = BigQueryConfig(
         name="target",
-        schema="test",
-        database="test",
-        project="project",
-        dataset="dataset",
+        schema="test_value",
+        database="test_project",
     )
-    assert context.render("{{ target.project }}") == "project"
-    assert context.render("{{ target.dataset }}") == "dataset"
+    assert context.render("{{ target.project }}") == "test_project"
+    assert context.render("{{ target.database }}") == "test_project"
+    assert context.render("{{ target.schema }}") == "test_value"
+    assert context.render("{{ target.dataset }}") == "test_value"
 
 
 @pytest.mark.xdist_group("dbt_manifest")
