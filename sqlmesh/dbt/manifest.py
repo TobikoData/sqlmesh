@@ -42,7 +42,6 @@ except ImportError:
 from dbt.tracking import do_not_track
 
 from sqlmesh.core import constants as c
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS, OVERRIDDEN_MACROS
 from sqlmesh.dbt.common import Dependencies
@@ -462,10 +461,7 @@ class ManifestHelper:
     @property
     def _manifest(self) -> Manifest:
         if not self.__manifest:
-            try:
-                self.__manifest = self._load_manifest()
-            except Exception as ex:
-                raise SQLMeshError(f"Failed to load dbt manifest: {ex}") from ex
+            self.__manifest = self._load_manifest()
         return self.__manifest
 
     def _load_manifest(self) -> Manifest:
@@ -485,6 +481,14 @@ class ManifestHelper:
             target=self.target.name,
             macro_debugging=False,
             REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES=True,
+        )
+        logger.error(
+            "\nDBT RuntimeConfig args\nprofile: %s\nproject_dir: %s\nprofiles_dir: %s\ntarget: %s\nvars: %s\n",
+            args.profile,
+            args.project_dir,
+            args.profiles_dir,
+            args.target,
+            args.vars,
         )
         flags.set_from_args(args, None)
 
