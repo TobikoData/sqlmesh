@@ -51,7 +51,7 @@ export const ModelNode = React.memo(function ModelNode({
   const {
     selectedColumns,
     zoom,
-    currentNode,
+    currentNodeId,
     selectedNodeId,
     selectedNodes,
     showColumns,
@@ -69,7 +69,7 @@ export const ModelNode = React.memo(function ModelNode({
     isCurrent,
     isSelected, // if selected from inside the lineage and node is selcted
     isActive, // if selected from inside the lineage and node is not selected but in path
-  } = useNodeMetadata(nodeId, currentNode, selectedNodeId, selectedNodes)
+  } = useNodeMetadata(nodeId, currentNodeId, selectedNodeId, selectedNodes)
 
   const {
     columns,
@@ -93,6 +93,7 @@ export const ModelNode = React.memo(function ModelNode({
   const modelType = data.model_type?.toLowerCase() as ModelType
   const hasColumnsFilter =
     shouldShowColumns && columns.length > MAX_COLUMNS_TO_DISPLAY
+
   // We are not including the footer, because we need actual height to dynamically adjust node container height
   const nodeBaseHeight = calculateNodeBaseHeight({
     includeNodeFooterHeight: false,
@@ -126,8 +127,8 @@ export const ModelNode = React.memo(function ModelNode({
   return (
     <NodeContainer
       className={cn(
-        'hover:opacity-100 group',
-        selectedNodeId == null || isActive || isSelected
+        'hover:opacity-100',
+        isActive || isSelected || hasSelectedColumns
           ? 'opacity-100'
           : 'opacity-10',
       )}
@@ -140,10 +141,16 @@ export const ModelNode = React.memo(function ModelNode({
         className="bg-lineage-node-appendix-background"
       >
         <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
-          {isCurrent && (
-            <NodeBadge className="bg-lineage-node-current-background text-lineage-node-current-foreground">
-              current
-            </NodeBadge>
+          {modelType && (
+            <Badge
+              size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
+              className={cn(
+                'text-[white] font-black',
+                NODE_TYPE_COLOR[modelType],
+              )}
+            >
+              {modelType.toUpperCase()}
+            </Badge>
           )}
           {zoom > ZOOM_THRESHOLD && (
             <>
@@ -180,7 +187,7 @@ export const ModelNode = React.memo(function ModelNode({
         {...props}
         className={cn(
           'ring-offset-2 z-10',
-          isSelected
+          isCurrent || isSelected
             ? 'ring-2 ring-lineage-node-selected-border ring-offset-lineage-node-background'
             : 'hover:ring-2 hover:ring-lineage-node-border-hover',
         )}
@@ -232,7 +239,7 @@ export const ModelNode = React.memo(function ModelNode({
                       name={column.name}
                       description={column.description}
                       type={column.data_type}
-                      className="py-1 px-3 first:border-t-0 h-6"
+                      className="px-2 first:border-t-0 h-6"
                     />
                   ))}
                 </VerticalContainer>
@@ -255,39 +262,16 @@ export const ModelNode = React.memo(function ModelNode({
                       name={column.name}
                       description={column.description}
                       type={column.data_type}
-                      className="py-1 px-3 border-t border-lineage-divider first:border-t-0 h-6"
+                      className="border-t border-lineage-divider first:border-t-0 h-6"
                     />
                   )}
-                  className="border-t border-lineage-divider cursor-default"
+                  className="border-t border-lineage-divider"
                 />
               )}
             </>
           )}
         </VerticalContainer>
       </NodeBase>
-      {modelType && (
-        <NodeAppendix
-          position="bottom"
-          className="bg-lineage-node-appendix-background"
-        >
-          <HorizontalContainer
-            className={cn(
-              'gap-1 items-center overflow-visible',
-              zoom > ZOOM_THRESHOLD ? 'h-5' : 'h-8',
-            )}
-          >
-            <Badge
-              size={zoom > ZOOM_THRESHOLD ? '2xs' : 'm'}
-              className={cn(
-                'text-[white] font-black',
-                NODE_TYPE_COLOR[modelType],
-              )}
-            >
-              {modelType.toUpperCase()}
-            </Badge>
-          </HorizontalContainer>
-        </NodeAppendix>
-      )}
     </NodeContainer>
   )
 })

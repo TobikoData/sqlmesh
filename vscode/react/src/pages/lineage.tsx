@@ -30,7 +30,7 @@ import type {
 } from './ModelLineageContext'
 import type { Column, LineageNode } from '@sqlmesh-common/components/Lineage'
 import { useVSCode } from '@/hooks/vscode'
-import type { BrandedRecord, BrandedString } from '@bus/brand'
+import type { BrandedRecord } from '@bus/brand'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -95,16 +95,16 @@ function Lineage() {
   } = useApiModels()
   const rpc = useRpc()
   React.useEffect(() => {
-    const fetchFirstTimeModelIfNotSet = async <T extends BrandedString>(
+    const fetchFirstTimeModelIfNotSet = async (
       models: Model[],
-    ): Promise<T | undefined> => {
+    ): Promise<ModelFQN | undefined> => {
       if (!Array.isArray(models)) {
         return undefined
       }
       const activeFile = await rpc('get_active_file', {})
       // @ts-ignore
       if (!activeFile.fileUri) {
-        return models[0].fqn as T
+        return models[0].fqn as ModelFQN
       }
       // @ts-ignore
       const fileUri: string = activeFile.fileUri
@@ -116,12 +116,12 @@ function Lineage() {
         return URI.file(m.full_path).path === filePath
       })
       if (model) {
-        return model.fqn as T
+        return model.fqn as ModelFQN
       }
       return undefined
     }
     if (selectedModel === undefined && Array.isArray(models)) {
-      fetchFirstTimeModelIfNotSet<ModelFQN>(models).then(modelName => {
+      fetchFirstTimeModelIfNotSet(models).then(modelName => {
         if (modelName && selectedModel === undefined) {
           setSelectedModel(modelName)
         } else {
