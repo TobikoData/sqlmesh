@@ -99,7 +99,7 @@ export const DEFAULT_NODE_WIDTH = 300
 export const DEFAULT_ZOOM = 0.85
 export const MIN_ZOOM = 0.01
 export const MAX_ZOOM = 1.75
-export const ZOOM_THRESHOLD = 0.75
+export const ZOOM_THRESHOLD = 0.5
 export const NODES_TRESHOLD = 200
 export const NODES_TRESHOLD_ZOOM = 0.1
 

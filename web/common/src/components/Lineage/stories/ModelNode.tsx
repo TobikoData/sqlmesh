@@ -51,7 +51,7 @@ export const ModelNode = React.memo(function ModelNode({
   const {
     selectedColumns,
     zoom,
-    currentNode,
+    currentNodeId,
     selectedNodeId,
     selectedNodes,
     showColumns,
@@ -70,7 +70,7 @@ export const ModelNode = React.memo(function ModelNode({
     isCurrent,
     isSelected, // if selected from inside the lineage and node is selcted
     isActive, // if selected from inside the lineage and node is not selected but in path
-  } = useNodeMetadata(nodeId, currentNode, selectedNodeId, selectedNodes)
+  } = useNodeMetadata(nodeId, currentNodeId, selectedNodeId, selectedNodes)
 
   const {
     columns,
@@ -132,7 +132,7 @@ export const ModelNode = React.memo(function ModelNode({
     <NodeContainer
       className={cn(
         'hover:opacity-100 group',
-        selectedNodeId == null || isActive || isSelected
+        isActive || isSelected || hasSelectedColumns
           ? 'opacity-100'
           : 'opacity-10',
       )}

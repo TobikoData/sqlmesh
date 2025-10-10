@@ -35,14 +35,11 @@ export function LineageLayout<
   edgeTypes,
   className,
   controls,
-  nodesDraggable,
-  nodesConnectable,
   isBuildingLayout,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
   showControlOnlySelectedNodes,
-  showControlZoomToCurrentNode,
   showControlZoomToSelectedNode,
 }: {
   useLineage: LineageContextHook<
@@ -59,10 +56,7 @@ export function LineageLayout<
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
-  nodesDraggable?: boolean
-  nodesConnectable?: boolean
   showControlOnlySelectedNodes?: boolean
-  showControlZoomToCurrentNode?: boolean
   showControlZoomToSelectedNode?: boolean
   controls?:
     | React.ReactNode
@@ -85,14 +79,11 @@ export function LineageLayout<
         <LineageLayoutBase
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          nodesDraggable={nodesDraggable}
-          nodesConnectable={nodesConnectable}
           controls={controls}
           useLineage={useLineage}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
           showControlOnlySelectedNodes={showControlOnlySelectedNodes}
-          showControlZoomToCurrentNode={showControlZoomToCurrentNode}
           showControlZoomToSelectedNode={showControlZoomToSelectedNode}
         />
       </LineageLayoutContainer>

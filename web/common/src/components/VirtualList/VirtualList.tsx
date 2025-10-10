@@ -106,7 +106,7 @@ export function VirtualList<TItem>({
       )}
       <ScrollContainer
         ref={scrollableAreaRef}
-        className="h-auto"
+        className="h-auto overflow-auto"
       >
         <div
           style={{
