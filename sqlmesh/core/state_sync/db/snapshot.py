@@ -185,7 +185,12 @@ class SnapshotState:
         promoted_snapshot_ids = {
             snapshot.snapshot_id
             for environment in environments
-            for snapshot in environment.snapshots
+            for snapshot in (
+                environment.snapshots
+                if environment.finalized_ts is not None
+                # If the environment is not finalized, check both the current snapshots and the previous finalized snapshots
+                else [*environment.snapshots, *(environment.previous_finalized_snapshots or [])]
+            )
         }
 
         if promoted_snapshot_ids:
