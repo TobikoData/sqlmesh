@@ -28,25 +28,6 @@ export type ModelColumnRightHandleId = Branded<
   'ModelColumnRightHandleId'
 >
 
-export type BrandedLineageAdjacencyList = LineageAdjacencyList<ModelFQN> & {
-  readonly __adjacencyListKeyBrand: ModelFQN
-}
-
-export type BrandedLineageDetails = LineageDetails<
-  ModelFQN,
-  ModelLineageNodeDetails
-> & {
-  readonly __lineageDetailsKeyBrand: ModelFQN
-}
-
-export type BrandedModelColumns = Record<ModelColumnName, Column>
-
-export type BrandedColumnLevelLineageAdjacencyList =
-  ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName> & {
-    readonly __columnLevelLineageAdjacencyListKeyBrand: ModelFQN
-    readonly __columnLevelLineageAdjacencyListColumnKeyBrand: ModelColumnName
-  }
-
 export type ModelLineageNodeDetails = {
   name: ModelFQN
   display_name: ModelName
@@ -58,7 +39,7 @@ export type ModelLineageNodeDetails = {
   owner?: string | null
   kind?: string | null
   tags?: string[]
-  columns?: BrandedModelColumns
+  columns?: Record<ModelColumnName, Column>
 }
 
 export type NodeData = {
@@ -72,7 +53,7 @@ export type NodeData = {
   owner?: string | null
   dialect?: string | null
   tags?: string[]
-  columns?: BrandedModelColumns
+  columns?: Record<ModelColumnName, Column>
 }
 
 export type EdgeData = {
@@ -86,7 +67,7 @@ export type ModelLineageContextValue = ColumnLevelLineageContextValue<
   ModelFQN,
   ModelColumnName,
   ModelColumnID,
-  BrandedColumnLevelLineageAdjacencyList
+  ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
 > &
   LineageContextValue<
     NodeData,
@@ -105,7 +86,7 @@ export const initial = {
     ModelFQN,
     ModelColumnName,
     ModelColumnID,
-    BrandedColumnLevelLineageAdjacencyList
+    ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
   >(),
 }
 

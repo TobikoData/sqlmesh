@@ -1,13 +1,15 @@
 import React from 'react'
 
-import { FactoryColumn } from '@sqlmesh-common/components/Lineage'
+import {
+  FactoryColumn,
+  type ColumnLevelLineageAdjacencyList,
+} from '@sqlmesh-common/components/Lineage'
 import { cn } from '@sqlmesh-common/utils'
 import {
   useModelLineage,
   type ModelColumnID,
   type ModelNodeId,
   type ModelColumnName,
-  type BrandedColumnLevelLineageAdjacencyList,
   type ModelColumnRightHandleId,
   type ModelColumnLeftHandleId,
 } from './ModelLineageContext'
@@ -21,7 +23,7 @@ const ModelColumn = FactoryColumn<
   ModelColumnID,
   ModelColumnLeftHandleId,
   ModelColumnRightHandleId,
-  BrandedColumnLevelLineageAdjacencyList
+  ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
 >(useModelLineage)
 
 export const ModelNodeColumn = React.memo(function ModelNodeColumn({
@@ -53,7 +55,7 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
   } = useApiColumnLineage(nodeId, name, { models_only: true })
 
   const [columnLineageData, setColumnLineageData] = React.useState<
-    BrandedColumnLevelLineageAdjacencyList | undefined
+    ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName> | undefined
   >(undefined)
 
   const toggleSelectedColumn = React.useCallback(async () => {
@@ -69,7 +71,9 @@ export const ModelNodeColumn = React.memo(function ModelNodeColumn({
         })
 
         const { data } = (await getColumnLineage()) as {
-          data: BrandedColumnLevelLineageAdjacencyList | undefined
+          data:
+            | ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
+            | undefined
         }
 
         setColumnLineageData(data)

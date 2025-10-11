@@ -23,14 +23,17 @@ import {
 import { ModelLineage } from './ModelLineage'
 import type {
   ModelColumnName,
-  BrandedLineageAdjacencyList,
-  BrandedLineageDetails,
+  ModelLineageNodeDetails,
   ModelNodeId,
   NodeData,
 } from './ModelLineageContext'
-import type { Column, LineageNode } from '@sqlmesh-common/components/Lineage'
+import type {
+  Column,
+  LineageAdjacencyList,
+  LineageDetails,
+  LineageNode,
+} from '@sqlmesh-common/components/Lineage'
 import { useVSCode } from '@/hooks/vscode'
-import type { BrandedRecord } from '@bus/brand'
 
 export function LineagePage() {
   const { emit } = useEventBus()
@@ -138,7 +141,7 @@ function Lineage() {
         acc[model.fqn as ModelFQN] = model
         return acc
       },
-      {} as BrandedRecord<ModelFQN, Model>,
+      {} as Record<ModelFQN, Model>,
     )
 
   React.useEffect(() => {
@@ -198,7 +201,7 @@ export function LineageComponentFromWeb({
   models,
 }: {
   selectedModel: ModelFQN
-  models: BrandedRecord<ModelFQN, Model>
+  models: Record<ModelFQN, Model>
 }) {
   const vscode = useVSCode()
 
@@ -223,7 +226,7 @@ export function LineageComponentFromWeb({
   const { refetch: getModelLineage } = useApiModelLineage(model?.name ?? '')
 
   const [modelLineage, setModelLineage] = useState<
-    BrandedLineageAdjacencyList | undefined
+    LineageAdjacencyList<ModelFQN> | undefined
   >(undefined)
 
   const handleNodeClick = React.useCallback(
@@ -253,7 +256,7 @@ export function LineageComponentFromWeb({
 
     getModelLineage()
       .then(({ data }) => {
-        setModelLineage(data as unknown as BrandedLineageAdjacencyList)
+        setModelLineage(data as unknown as LineageAdjacencyList<ModelFQN>)
       })
       .catch(handleError)
   }, [model?.name, model?.hash])
@@ -281,12 +284,12 @@ export function LineageComponentFromWeb({
             }
             return acc
           },
-          {} as BrandedRecord<ModelColumnName, Column>,
+          {} as Record<ModelColumnName, Column>,
         ),
       }
       return acc
     },
-    {} as BrandedLineageDetails,
+    {} as LineageDetails<ModelFQN, ModelLineageNodeDetails>,
   )
 
   if (!modelLineage || !lineageDetails) {

@@ -17,26 +17,3 @@ type Brand<B> = { [__brand]: B }
  * userId == userName -> compile error
  */
 export type Branded<T, B> = T & Brand<B>
-
-/**
- * Constraint that only accepts branded string types
- */
-export type BrandedString = string & Brand<string>
-
-/**
- * BrandedRecord is a type that creates a branded Record type with strict key checking.
- * This ensures that Record<BrandedKey1, V> is NOT assignable to Record<BrandedKey2, V>
- *
- * @example
- * type ModelFQN = Branded<string, 'ModelFQN'>
- * type ModelName = Branded<string, 'ModelName'>
- *
- * type FQNMap = BrandedRecord<ModelFQN, string>
- * type NameMap = BrandedRecord<ModelName, string>
- *
- * const fqnMap: FQNMap = {}
- * const nameMap: NameMap = fqnMap // TypeScript error!
- */
-export type BrandedRecord<K extends BrandedString, V> = Record<K, V> & {
-  readonly __recordKeyBrand: K
-}
