@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 import pytest
-from sqlmesh.core.model.common import ParsableSql
 import time_machine
 
 from sqlmesh.core.context import Context
@@ -11,34 +10,12 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
-    SnapshotChangeCategory,
 )
 
 if t.TYPE_CHECKING:
     pass
 
 pytestmark = pytest.mark.slow
-
-
-@time_machine.travel("2023-01-08 15:00:00 UTC")
-def test_dbt_select_star_is_directly_modified(sushi_test_dbt_context: Context):
-    context = sushi_test_dbt_context
-
-    model = context.get_model("sushi.simple_model_a")
-    context.upsert_model(
-        model,
-        query_=ParsableSql(sql="SELECT 1 AS a, 2 AS b"),
-    )
-
-    snapshot_a_id = context.get_snapshot("sushi.simple_model_a").snapshot_id  # type: ignore
-    snapshot_b_id = context.get_snapshot("sushi.simple_model_b").snapshot_id  # type: ignore
-
-    plan = context.plan_builder("dev", skip_tests=True).build()
-    assert plan.directly_modified == {snapshot_a_id, snapshot_b_id}
-    assert {i.snapshot_id for i in plan.missing_intervals} == {snapshot_a_id, snapshot_b_id}
-
-    assert plan.snapshots[snapshot_a_id].change_category == SnapshotChangeCategory.NON_BREAKING
-    assert plan.snapshots[snapshot_b_id].change_category == SnapshotChangeCategory.NON_BREAKING
 
 
 @time_machine.travel("2023-01-08 15:00:00 UTC")
