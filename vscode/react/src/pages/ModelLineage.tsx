@@ -28,12 +28,12 @@ import {
   LineageControlButton,
   LineageControlIcon,
   LineageLayout,
+  type LineageAdjacencyList,
+  type LineageDetails,
+  type ColumnLevelLineageAdjacencyList,
 } from '@sqlmesh-common/components/Lineage'
 
 import {
-  type BrandedColumnLevelLineageAdjacencyList,
-  type BrandedLineageAdjacencyList,
-  type BrandedLineageDetails,
   type ModelColumnName,
   type EdgeData,
   type ModelColumnID,
@@ -65,8 +65,8 @@ export const ModelLineage = ({
   className,
   onNodeClick,
 }: {
-  adjacencyList: BrandedLineageAdjacencyList
-  lineageDetails: BrandedLineageDetails
+  adjacencyList: LineageAdjacencyList<ModelFQN>
+  lineageDetails: LineageDetails<ModelFQN, ModelLineageNodeDetails>
   selectedModelName?: ModelFQN
   className?: string
   onNodeClick?: (
@@ -109,7 +109,7 @@ export const ModelLineage = ({
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
-    Map<ModelColumnID, BrandedColumnLevelLineageAdjacencyList>
+    Map<ModelColumnID, ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>>
   >(new Map())
   const [fetchingColumns, setFetchingColumns] = React.useState<
     Set<ModelColumnID>
@@ -123,7 +123,7 @@ export const ModelLineage = ({
     ModelFQN,
     ModelColumnName,
     ModelColumnID,
-    BrandedColumnLevelLineageAdjacencyList
+    ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
   >(columnLevelLineage)
 
   const adjacencyListKeys = React.useMemo(() => {
@@ -263,7 +263,7 @@ export const ModelLineage = ({
         ModelNodeId,
         ModelColumnRightHandleId,
         ModelColumnLeftHandleId,
-        BrandedColumnLevelLineageAdjacencyList
+        ColumnLevelLineageAdjacencyList<ModelFQN, ModelColumnName>
       >({
         columnLineage: adjacencyListColumnLevel,
         transformEdge,
@@ -275,14 +275,14 @@ export const ModelLineage = ({
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
       : getTransformedModelEdgesTargetSources<
-          ModelFQN,
-          EdgeData,
-          ModelEdgeId,
-          ModelNodeId,
-          ModelNodeId,
-          ModelColumnRightHandleId,
-          ModelColumnLeftHandleId
-        >(adjacencyListKeys, adjacencyList, transformEdge)
+        ModelFQN,
+        EdgeData,
+        ModelEdgeId,
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
+      >(adjacencyListKeys, adjacencyList, transformEdge)
   }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
   const calculateLayout = React.useCallback(
