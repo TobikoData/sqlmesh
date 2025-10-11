@@ -78,8 +78,8 @@ export function LineageLayoutBase<
   showControlOnlySelectedNodes?: boolean
   showControlZoomToSelectedNode?: boolean
   controls?:
-  | React.ReactNode
-  | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
+    | React.ReactNode
+    | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
   onNodeClick?: (
     event: React.MouseEvent<Element, MouseEvent>,
     node: LineageNode<TNodeData, TNodeID>,
