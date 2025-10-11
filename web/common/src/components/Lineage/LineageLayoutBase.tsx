@@ -2,9 +2,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  type EdgeChange,
   type EdgeTypes,
-  type NodeChange,
   type NodeTypes,
   ReactFlow,
   type SetCenter,
@@ -13,14 +11,12 @@ import {
   getOutgoers,
   useReactFlow,
   useViewport,
-  applyNodeChanges,
-  applyEdgeChanges,
 } from '@xyflow/react'
 
 import '@xyflow/react/dist/style.css'
 import './Lineage.css'
 
-import { CircuitBoard, Crosshair, LocateFixed, RotateCcw } from 'lucide-react'
+import { CircuitBoard, LocateFixed, RotateCcw } from 'lucide-react'
 import React from 'react'
 
 import { type LineageContextHook } from './LineageContext'
@@ -60,13 +56,10 @@ export function LineageLayoutBase<
   edgeTypes,
   className,
   controls,
-  nodesDraggable = false,
-  nodesConnectable = false,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
   showControlOnlySelectedNodes = true,
-  showControlZoomToCurrentNode = true,
   showControlZoomToSelectedNode = true,
 }: {
   useLineage: LineageContextHook<
@@ -79,13 +72,10 @@ export function LineageLayoutBase<
     TSourceHandleID,
     TTargetHandleID
   >
-  nodesDraggable?: boolean
-  nodesConnectable?: boolean
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
   showControlOnlySelectedNodes?: boolean
-  showControlZoomToCurrentNode?: boolean
   showControlZoomToSelectedNode?: boolean
   controls?:
     | React.ReactNode
@@ -103,73 +93,19 @@ export function LineageLayoutBase<
   const { setCenter } = useReactFlow()
 
   const {
-    currentNode,
     zoom,
-    nodes: initialNodes,
+    nodes,
     edges,
-    setEdges,
     selectedNode,
     showOnlySelectedNodes,
     selectedNodeId,
     setZoom,
-    setSelectedNodeId,
     setShowOnlySelectedNodes,
     setSelectedNodes,
     setSelectedEdges,
   } = useLineage()
 
-  const [nodes, setNodes] =
-    React.useState<LineageNode<TNodeData, TNodeID>[]>(initialNodes)
-
-  const onNodesChange = React.useCallback(
-    (changes: NodeChange<LineageNode<TNodeData, TNodeID>>[]) => {
-      setNodes(applyNodeChanges(changes, nodes))
-    },
-    [nodes],
-  )
-
-  const onEdgesChange = React.useCallback(
-    (
-      changes: EdgeChange<
-        LineageEdge<
-          TEdgeData,
-          TEdgeID,
-          TSourceID,
-          TTargetID,
-          TSourceHandleID,
-          TTargetHandleID
-        >
-      >[],
-    ) => {
-      setEdges(
-        applyEdgeChanges<
-          LineageEdge<
-            TEdgeData,
-            TEdgeID,
-            TSourceID,
-            TTargetID,
-            TSourceHandleID,
-            TTargetHandleID
-          >
-        >(changes, edges),
-      )
-    },
-    [edges],
-  )
-
   const updateZoom = React.useMemo(() => debounce(setZoom, 200), [setZoom])
-
-  const zoomToCurrentNode = React.useCallback(
-    (zoom: number = DEFAULT_ZOOM) => {
-      if (currentNode) {
-        setCenter(currentNode.position.x, currentNode.position.y, {
-          zoom,
-          duration: 0,
-        })
-      }
-    },
-    [currentNode?.position.x, currentNode?.position.y],
-  )
 
   const zoomToSelectedNode = React.useCallback(
     (zoom: number = DEFAULT_ZOOM) => {
@@ -195,13 +131,13 @@ export function LineageLayoutBase<
       return Array.from(
         new Set<LineageNode<TNodeData, TNodeID>>([
           node,
-          ...getIncomers(node, initialNodes, edges)
+          ...getIncomers(node, nodes, edges)
             .map(n => getAllIncomers(n, visited))
             .flat(),
         ]),
       )
     },
-    [initialNodes, edges],
+    [nodes, edges],
   )
 
   const getAllOutgoers = React.useCallback(
@@ -216,13 +152,13 @@ export function LineageLayoutBase<
       return Array.from(
         new Set<LineageNode<TNodeData, TNodeID>>([
           node,
-          ...getOutgoers(node, initialNodes, edges)
+          ...getOutgoers(node, nodes, edges)
             .map(n => getAllOutgoers(n, visited))
             .flat(),
         ]),
       )
     },
-    [initialNodes, edges],
+    [nodes, edges],
   )
 
   const connectedNodes = React.useMemo(() => {
@@ -233,12 +169,8 @@ export function LineageLayoutBase<
       ...getAllOutgoers(selectedNode),
     ]
 
-    if (currentNode) {
-      all.push(currentNode)
-    }
-
     return all
-  }, [selectedNode, currentNode, getAllIncomers, getAllOutgoers])
+  }, [selectedNode, getAllIncomers, getAllOutgoers])
 
   const connectedEdges = React.useMemo(() => {
     return getConnectedEdges<
@@ -255,18 +187,10 @@ export function LineageLayoutBase<
   }, [connectedNodes, edges])
 
   React.useEffect(() => {
-    setNodes(initialNodes)
-  }, [initialNodes])
-
-  React.useEffect(() => {
     if (selectedNodeId == null) {
       setShowOnlySelectedNodes(false)
       setSelectedNodes(new Set())
       setSelectedEdges(new Set())
-    } else {
-      if (selectedNode == null) {
-        setSelectedNodeId(null)
-      }
     }
   }, [selectedNodeId, selectedNode])
 
@@ -317,17 +241,12 @@ export function LineageLayoutBase<
       edges={edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      nodesDraggable={nodesDraggable}
-      nodesConnectable={nodesConnectable}
       zoomOnDoubleClick={false}
       panOnScroll={true}
       zoomOnScroll={true}
       minZoom={nodes.length > NODES_TRESHOLD ? NODES_TRESHOLD_ZOOM : MIN_ZOOM}
       maxZoom={MAX_ZOOM}
       fitView={false}
-      nodeOrigin={[0.5, 0.5]}
       onlyRenderVisibleElements
       onNodeClick={onNodeClick}
       onNodeDoubleClick={onNodeDoubleClick}
@@ -346,14 +265,6 @@ export function LineageLayoutBase<
         position="top-right"
         className="m-1 border-2 border-lineage-control-border rounded-sm overflow-hidden"
       >
-        {currentNode && showControlZoomToCurrentNode && (
-          <LineageControlButton
-            text="Zoom to current node"
-            onClick={() => zoomToCurrentNode(DEFAULT_ZOOM)}
-          >
-            <LineageControlIcon Icon={Crosshair} />
-          </LineageControlButton>
-        )}
         {selectedNodeId && (
           <>
             {showControlOnlySelectedNodes && (

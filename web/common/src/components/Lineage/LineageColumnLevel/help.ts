@@ -236,9 +236,9 @@ export function calculateColumnsHeight({
   const hasColumns = columnsCount > 0
   const columnHeight = 24 // tailwind h-6
   const columnsTopSeparator = 1
-  const columnSeparator = 1
+  const columnSeparator = 0
   const columnsContainerPadding = 4
-  const columnsPadding = 4
+  const columnsPadding = 0
   const columnsFilterHeight = hasColumnsFilter && hasColumns ? columnHeight : 0
   const columnsSeparators = columnsCount > 1 ? columnsCount - 1 : 0
 

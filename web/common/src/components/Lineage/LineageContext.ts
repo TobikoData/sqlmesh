@@ -64,7 +64,6 @@ export interface LineageContextValue<
   >
   currentNodeId: TNodeID | null
   selectedNode: LineageNode<TNodeData, TNodeID> | null
-  currentNode: LineageNode<TNodeData, TNodeID> | null
 }
 
 export function getInitial<
@@ -89,7 +88,6 @@ export function getInitial<
     selectedNodeId: null,
     selectedNode: null,
     currentNodeId: null,
-    currentNode: null,
   }
 }
 

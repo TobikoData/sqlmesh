@@ -1,5 +1,3 @@
-import type { LineageAdjacencyList, LineageDetails } from '../utils'
-
 import { ModelLineage } from './ModelLineage'
 import type {
   BrandedLineageAdjacencyList,

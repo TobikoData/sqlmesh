@@ -233,7 +233,7 @@ export function FactoryColumn<
             <NodeBadge className="FactoryColumn__NodeBadge">{type}</NodeBadge>
           }
           className={cn(
-            'FactoryColumn__Metadata relative overflow-visible group',
+            'FactoryColumn__Metadata relative overflow-visible',
             isDisabledColumn && 'cursor-not-allowed',
             className,
           )}
