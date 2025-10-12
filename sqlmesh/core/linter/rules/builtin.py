@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import typing as t
 
-from ruamel.yaml import YAML
 from sqlglot.expressions import Star
 from sqlglot.helper import subclasses
 
@@ -138,25 +137,7 @@ class NoMissingUnitTest(Rule):
         if isinstance(model, ExternalModel):
             return None
 
-        test_dir = self.context.path / "tests"
-        found_test = False
-
-        yaml_parser = YAML(typ="safe")
-        for test_file in test_dir.rglob("*.yaml"):
-            try:
-                test_data = yaml_parser.load(test_file) or {}
-            except Exception:
-                # Skip files with Jinja templating or other parse errors
-                continue
-
-            for _, test_config in test_data.items():
-                if test_config.get("model") == model.name:
-                    found_test = True
-                    break
-            if found_test:
-                break
-
-        if not found_test:
+        if model.name not in self.context.models_with_tests:
             return self.violation(
                 violation_msg=f"Model {model.name} is missing unit test(s). Please add in the tests/ directory."
             )
