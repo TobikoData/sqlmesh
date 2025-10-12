@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import concurrent.futures
 import glob
 import itertools
 import linecache
@@ -10,11 +11,10 @@ import typing as t
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from pydantic import ValidationError
-import concurrent.futures
 
-from sqlglot.errors import SqlglotError
+from pydantic import ValidationError
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 from sqlglot.helper import subclasses
 
 from sqlmesh.core import constants as c
@@ -22,8 +22,8 @@ from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit, load_multiple
 from sqlmesh.core.console import Console
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import EnvironmentStatements
-from sqlmesh.core.linter.rule import Rule
 from sqlmesh.core.linter.definition import RuleSet
+from sqlmesh.core.linter.rule import Rule
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -40,10 +40,10 @@ from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.metaprogramming import import_python_file
-from sqlmesh.utils.pydantic import validation_error_message
 from sqlmesh.utils.process import create_process_pool_executor
-from sqlmesh.utils.yaml import YAML, load as yaml_load
-
+from sqlmesh.utils.pydantic import validation_error_message
+from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import GenericContext
@@ -64,6 +64,8 @@ class LoadedProject:
     excluded_requirements: t.Set[str]
     environment_statements: t.List[EnvironmentStatements]
     user_rules: RuleSet
+    model_test_metadata: t.List[ModelTestMetadata]
+    models_with_tests: t.Set[str]
 
 
 class CacheBase(abc.ABC):
@@ -243,6 +245,14 @@ class Loader(abc.ABC):
 
             user_rules = self._load_linting_rules()
 
+            model_test_metadata = self.load_model_tests()
+
+            models_with_tests = {
+                model_test_metadata.model_name for model_test_metadata in model_test_metadata
+            }
+
+            self._models_with_tests = models_with_tests
+
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
@@ -254,6 +264,8 @@ class Loader(abc.ABC):
                 excluded_requirements=excluded_requirements,
                 environment_statements=environment_statements,
                 user_rules=user_rules,
+                model_test_metadata=model_test_metadata,
+                models_with_tests=models_with_tests,
             )
             return project
 
