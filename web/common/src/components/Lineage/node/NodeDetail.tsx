@@ -1,4 +1,4 @@
-import { Metadata, cn } from '@tobikodata/sqlmesh-common'
+import { Metadata, cn } from '@sqlmesh-common/index'
 
 import { NodeDivider } from './NodeDivider'
 
@@ -17,6 +17,7 @@ export function NodeDetail({
     <>
       {hasDivider && <NodeDivider />}
       <Metadata
+        data-component="NodeDetail"
         label={label}
         value={value}
         className={cn('px-2 text-xs shrink-0 h-6', className)}

@@ -7,30 +7,42 @@ import {
 } from 'lucide-react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { NodeBadge } from '../node/NodeBadge'
 import { NodePort } from '../node/NodePort'
-import { type NodeId, type PortId } from '../utils'
+import { type NodeId, type PortHandleId, type PortId } from '../utils'
 import {
   type ColumnLevelLineageAdjacencyList,
   type ColumnLevelLineageContextHook,
 } from './ColumnLevelLineageContext'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
-import { Metadata } from '@/components/Metadata/Metadata'
-import { HorizontalContainer } from '@/components/HorizontalContainer/HorizontalContainer'
-import { Information } from '@/components/Typography/Information'
-import { LoadingContainer } from '@/components/LoadingContainer/LoadingContainer'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
+import { Metadata } from '@sqlmesh-common/components/Metadata/Metadata'
+import { HorizontalContainer } from '@sqlmesh-common/components/HorizontalContainer/HorizontalContainer'
+import { Information } from '@sqlmesh-common/components/Typography/Information'
+import { LoadingContainer } from '@sqlmesh-common/components/LoadingContainer/LoadingContainer'
+
+import './FactoryColumn.css'
 
 export function FactoryColumn<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TNodeID extends string = NodeId,
   TColumnID extends string = PortId,
+  TLeftPortHandleId extends string = PortHandleId,
+  TRightPortHandleId extends string = PortHandleId,
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 >(
   useLineage: ColumnLevelLineageContextHook<
     TAdjacencyListKey,
     TAdjacencyListColumnKey,
-    TColumnID
+    TColumnID,
+    TColumnLevelLineageAdjacencyList
   >,
 ) {
   return React.memo(function FactoryColumn({
@@ -57,10 +69,7 @@ export function FactoryColumn<
     type: string
     description?: string | null
     className?: string
-    data?: ColumnLevelLineageAdjacencyList<
-      TAdjacencyListKey,
-      TAdjacencyListColumnKey
-    >
+    data?: TColumnLevelLineageAdjacencyList
     isFetching?: boolean
     error?: Error | null
     renderError?: (error: Error) => React.ReactNode
@@ -184,7 +193,7 @@ export function FactoryColumn<
     function renderColumn() {
       return (
         <Metadata
-          data-component="ModelColumn"
+          data-component="FactoryColumn"
           onClick={handleSelectColumn}
           label={
             <LoadingContainer
@@ -196,18 +205,35 @@ export function FactoryColumn<
               >
                 {renderColumnStates()}
                 {description ? (
-                  <Information info={description}>
-                    <DisplayColumName name={name} />
+                  <Information
+                    className="FactoryColumn__Information"
+                    info={description}
+                  >
+                    <DisplayColumName
+                      name={name}
+                      className={cn(
+                        isTriggeredColumn &&
+                          'text-lineage-model-column-active-foreground',
+                      )}
+                    />
                   </Information>
                 ) : (
-                  <DisplayColumName name={name} />
+                  <DisplayColumName
+                    name={name}
+                    className={cn(
+                      isTriggeredColumn &&
+                        'text-lineage-model-column-active-foreground',
+                    )}
+                  />
                 )}
               </HorizontalContainer>
             </LoadingContainer>
           }
-          value={<NodeBadge>{type}</NodeBadge>}
+          value={
+            <NodeBadge className="FactoryColumn__NodeBadge">{type}</NodeBadge>
+          }
           className={cn(
-            'relative overflow-visible group p-0',
+            'FactoryColumn__Metadata relative overflow-visible',
             isDisabledColumn && 'cursor-not-allowed',
             className,
           )}
@@ -229,12 +255,12 @@ export function FactoryColumn<
     }
 
     return isSelectedColumn ? (
-      <NodePort
+      <NodePort<TColumnID, TNodeID, TLeftPortHandleId, TRightPortHandleId>
         id={id}
         nodeId={nodeId}
         className={cn(
-          'border-t border-lineage-divider first:border-t-0 px-2',
-          isTriggeredColumn && 'bg-lineage-model-column-active',
+          'border-t border-lineage-divider first:border-t-0',
+          isTriggeredColumn && 'bg-lineage-model-column-active-background',
         )}
       >
         {renderColumn()}
@@ -245,11 +271,20 @@ export function FactoryColumn<
   })
 }
 
-function DisplayColumName({ name }: { name: string }) {
+function DisplayColumName({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}) {
   return (
     <span
       title={name}
-      className="text-xs font-mono font-semibold w-full truncate"
+      className={cn(
+        'text-xs font-mono font-semibold w-full truncate',
+        className,
+      )}
     >
       {name}
     </span>

@@ -9,28 +9,26 @@ import {
   type PortId,
   type TransformEdgeFn,
 } from '../utils'
-import {
-  type ColumnLevelConnections,
-  type ColumnLevelDetails,
-  type ColumnLevelLineageAdjacencyList,
-} from './ColumnLevelLineageContext'
+import { type ColumnLevelLineageAdjacencyList } from './ColumnLevelLineageContext'
 
 export const MAX_COLUMNS_TO_DISPLAY = 5
 
 export function getAdjacencyListKeysFromColumnLineage<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
->(
-  columnLineage: ColumnLevelLineageAdjacencyList<
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
     TAdjacencyListKey,
     TAdjacencyListColumnKey
   >,
-) {
+>(columnLineage: TColumnLevelLineageAdjacencyList) {
   const adjacencyListKeys = new Set<TAdjacencyListKey>()
 
   const targets = Object.entries(columnLineage) as [
     TAdjacencyListKey,
-    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
+    TColumnLevelLineageAdjacencyList[TAdjacencyListKey],
   ][]
 
   for (const [sourceModelName, targetColumns] of targets) {
@@ -38,7 +36,7 @@ export function getAdjacencyListKeysFromColumnLineage<
 
     const targetConnections = Object.entries(targetColumns) as [
       TAdjacencyListColumnKey,
-      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
+      TColumnLevelLineageAdjacencyList[TAdjacencyListKey][TAdjacencyListColumnKey],
     ][]
 
     for (const [, { models: sourceModels }] of targetConnections) {
@@ -58,32 +56,52 @@ export function getEdgesFromColumnLineage<
   TAdjacencyListColumnKey extends string,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TEdgeID extends string = EdgeId,
-  TNodeID extends string = NodeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 >({
   columnLineage,
   transformEdge,
 }: {
-  columnLineage: ColumnLevelLineageAdjacencyList<
-    TAdjacencyListKey,
-    TAdjacencyListColumnKey
+  columnLineage: TColumnLevelLineageAdjacencyList
+  transformEdge: TransformEdgeFn<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
   >
-  transformEdge: TransformEdgeFn<TEdgeData, TNodeID, TEdgeID, TPortID>
 }) {
-  const edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[] = []
-  const modelLevelEdgeIDs = new Map<TEdgeID, [TNodeID, TNodeID]>()
+  const edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[] = []
+  const modelLevelEdgeIDs = new Map<TEdgeID, [TSourceID, TTargetID]>()
   const targets = Object.entries(columnLineage || {}) as [
     TAdjacencyListKey,
-    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
+    TColumnLevelLineageAdjacencyList[TAdjacencyListKey],
   ][]
 
   for (const [targetModelName, targetColumns] of targets) {
     const targetConnections = Object.entries(targetColumns) as [
       TAdjacencyListColumnKey,
-      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
+      TColumnLevelLineageAdjacencyList[TAdjacencyListKey][TAdjacencyListColumnKey],
     ][]
 
-    const targetNodeId = toNodeID<TNodeID>(targetModelName)
+    const targetNodeId = toNodeID<TTargetID>(targetModelName)
 
     for (const [
       targetColumnName,
@@ -95,7 +113,7 @@ export function getEdgesFromColumnLineage<
       ][]
 
       for (const [sourceModelName, sourceColumns] of sources) {
-        const sourceNodeId = toNodeID<TNodeID>(sourceModelName)
+        const sourceNodeId = toNodeID<TSourceID>(sourceModelName)
 
         modelLevelEdgeIDs.set(
           toEdgeID<TEdgeID>(sourceModelName, targetModelName),
@@ -109,11 +127,11 @@ export function getEdgesFromColumnLineage<
             targetModelName,
             targetColumnName,
           )
-          const sourceColumnId = toPortID<TPortID>(
+          const sourceColumnId = toPortID<TSourceHandleID>(
             sourceModelName,
             sourceColumnName,
           )
-          const targetColumnId = toPortID<TPortID>(
+          const targetColumnId = toPortID<TTargetHandleID>(
             targetModelName,
             targetColumnName,
           )
@@ -145,22 +163,24 @@ export function getConnectedColumnsIDs<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,
->(
-  adjacencyList: ColumnLevelLineageAdjacencyList<
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
     TAdjacencyListKey,
     TAdjacencyListColumnKey
   >,
-) {
+>(adjacencyList: TColumnLevelLineageAdjacencyList) {
   const connectedColumns = new Set<TColumnID>()
   const targets = Object.entries(adjacencyList) as [
     TAdjacencyListKey,
-    ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>,
+    TColumnLevelLineageAdjacencyList[TAdjacencyListKey],
   ][]
 
   for (const [sourceModelName, targetColumns] of targets) {
     const targetConnections = Object.entries(targetColumns) as [
       TAdjacencyListColumnKey,
-      ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>,
+      TColumnLevelLineageAdjacencyList[TAdjacencyListKey][TAdjacencyListColumnKey],
     ][]
 
     for (const [
@@ -216,9 +236,9 @@ export function calculateColumnsHeight({
   const hasColumns = columnsCount > 0
   const columnHeight = 24 // tailwind h-6
   const columnsTopSeparator = 1
-  const columnSeparator = 1
+  const columnSeparator = 0
   const columnsContainerPadding = 4
-  const columnsPadding = 4
+  const columnsPadding = 0
   const columnsFilterHeight = hasColumnsFilter && hasColumns ? columnHeight : 0
   const columnsSeparators = columnsCount > 1 ? columnsCount - 1 : 0
 

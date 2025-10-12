@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority'
 import { forwardRef, type HTMLAttributes } from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 const appendixVariants = cva(
   'node-appendix absolute flex w-full flex-col items-center',
@@ -32,6 +32,7 @@ export const NodeAppendix = forwardRef<HTMLDivElement, NodeAppendixProps>(
     return (
       <div
         ref={ref}
+        data-component="NodeAppendix"
         className={cn(appendixVariants({ position }), className)}
         {...props}
       >

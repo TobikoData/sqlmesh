@@ -154,6 +154,11 @@ class ModelKindMixin:
     def supports_python_models(self) -> bool:
         return True
 
+    @property
+    def supports_grants(self) -> bool:
+        """Whether this model kind supports grants configuration."""
+        return self.is_materialized or self.is_view
+
 
 class ModelKindName(str, ModelKindMixin, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
@@ -1099,6 +1104,18 @@ def create_model_kind(v: t.Any, dialect: str, defaults: t.Dict[str, t.Any]) -> M
                     and defaults.get(on_change_property) is not None
                 ):
                     props[on_change_property] = defaults.get(on_change_property)
+
+        # only pass the batch_concurrency user default to models inheriting from _IncrementalBy
+        # that don't explicitly set it in the model definition, but ignore subclasses of _IncrementalBy
+        # that hardcode a specific batch_concurrency
+        if issubclass(kind_type, _IncrementalBy):
+            BATCH_CONCURRENCY: t.Final = "batch_concurrency"
+            if (
+                props.get(BATCH_CONCURRENCY) is None
+                and defaults.get(BATCH_CONCURRENCY) is not None
+                and kind_type.all_field_infos()[BATCH_CONCURRENCY].default is None
+            ):
+                props[BATCH_CONCURRENCY] = defaults.get(BATCH_CONCURRENCY)
 
         if kind_type == CustomKind:
             # load the custom materialization class and check if it uses a custom kind type

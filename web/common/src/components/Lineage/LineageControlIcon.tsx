@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 export interface LineageControlIconProps extends React.SVGProps<SVGSVGElement> {
   Icon: React.ElementType
@@ -28,6 +28,7 @@ export const LineageControlIcon = React.forwardRef<
     return (
       <Icon
         ref={ref}
+        data-component="LineageControlIcon"
         size={size}
         className={cn(
           'text-lineage-control-icon-foreground stroke-lineage-control-icon-background',

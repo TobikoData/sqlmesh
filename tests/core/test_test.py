@@ -1185,6 +1185,27 @@ test_foo:
     )
 
 
+def test_invalid_outputs_error() -> None:
+    with pytest.raises(TestError, match="Incomplete test, outputs must contain 'query' or 'ctes'"):
+        _create_test(
+            body=load_yaml(
+                """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+  outputs:
+    rows:
+      - id: 1
+                """
+            ),
+            test_name="test_foo",
+            model=_create_model("SELECT id FROM raw"),
+            context=Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))),
+        )
+
+
 def test_empty_rows(sushi_context: Context) -> None:
     _check_successful_or_raise(
         _create_test(

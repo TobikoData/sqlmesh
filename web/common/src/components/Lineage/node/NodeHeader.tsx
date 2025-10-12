@@ -1,6 +1,6 @@
 import { type HTMLAttributes, forwardRef } from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 /* NODE HEADER -------------------------------------------------------------- */
 
@@ -14,6 +14,7 @@ export const NodeHeader = forwardRef<HTMLElement, NodeHeaderProps>(
   ({ className, ...props }, ref) => {
     return (
       <header
+        data-component="NodeHeader"
         ref={ref}
         {...props}
         className={cn(

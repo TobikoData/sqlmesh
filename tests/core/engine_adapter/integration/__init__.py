@@ -5,10 +5,12 @@ import pathlib
 import sys
 import typing as t
 import time
+from contextlib import contextmanager
 
 import pandas as pd  # noqa: TID253
 import pytest
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
@@ -743,6 +745,106 @@ class TestContext:
         assert isinstance(model, SqlModel)
         self._context.upsert_model(model)
         return self._context, model
+
+    def _get_create_user_or_role(
+        self, username: str, password: t.Optional[str] = None
+    ) -> t.Tuple[str, t.Optional[str]]:
+        password = password or random_id()
+        if self.dialect in ["postgres", "redshift"]:
+            return username, f"CREATE USER \"{username}\" WITH PASSWORD '{password}'"
+        if self.dialect == "snowflake":
+            return username, f"CREATE ROLE {username}"
+        if self.dialect == "databricks":
+            # Creating an account-level group in Databricks requires making REST API calls so we are going to
+            # use a pre-created group instead. We assume the suffix on the name is the unique id
+            return "_".join(username.split("_")[:-1]), None
+        if self.dialect == "bigquery":
+            # BigQuery uses IAM service accounts that need to be pre-created
+            # Pre-created GCP service accounts:
+            # - sqlmesh-test-admin@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-analyst@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-etl-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-reader@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-user@{project-id}.iam.gserviceaccount.com
+            # - sqlmesh-test-writer@{project-id}.iam.gserviceaccount.com
+            role_name = (
+                username.replace(f"_{self.test_id}", "").replace("test_", "").replace("_", "-")
+            )
+            project_id = self.engine_adapter.get_current_catalog()
+            service_account = f"sqlmesh-test-{role_name}@{project_id}.iam.gserviceaccount.com"
+            return f"serviceAccount:{service_account}", None
+        raise ValueError(f"User creation not supported for dialect: {self.dialect}")
+
+    def _create_user_or_role(self, username: str, password: t.Optional[str] = None) -> str:
+        username, create_user_sql = self._get_create_user_or_role(username, password)
+        if create_user_sql:
+            self.engine_adapter.execute(create_user_sql)
+        return username
+
+    @contextmanager
+    def create_users_or_roles(self, *role_names: str) -> t.Iterator[t.Dict[str, str]]:
+        created_users = []
+        roles = {}
+
+        try:
+            for role_name in role_names:
+                user_name = normalize_identifiers(
+                    self.add_test_suffix(f"test_{role_name}"), dialect=self.dialect
+                ).sql(dialect=self.dialect)
+                password = random_id()
+                if self.dialect == "redshift":
+                    password += (
+                        "A"  # redshift requires passwords to have at least one uppercase letter
+                    )
+                user_name = self._create_user_or_role(user_name, password)
+                created_users.append(user_name)
+                roles[role_name] = user_name
+
+            yield roles
+
+        finally:
+            for user_name in created_users:
+                self._cleanup_user_or_role(user_name)
+
+    def get_select_privilege(self) -> str:
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataViewer"
+        return "SELECT"
+
+    def get_insert_privilege(self) -> str:
+        if self.dialect == "databricks":
+            # This would really be "MODIFY" but for the purposes of having this be unique from UPDATE
+            # we return "MANAGE" instead
+            return "MANAGE"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataEditor"
+        return "INSERT"
+
+    def get_update_privilege(self) -> str:
+        if self.dialect == "databricks":
+            return "MODIFY"
+        if self.dialect == "bigquery":
+            return "roles/bigquery.dataOwner"
+        return "UPDATE"
+
+    def _cleanup_user_or_role(self, user_name: str) -> None:
+        """Helper function to clean up a user/role and all their dependencies."""
+        try:
+            if self.dialect in ["postgres", "redshift"]:
+                self.engine_adapter.execute(f"""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE usename = '{user_name}' AND pid <> pg_backend_pid()
+                """)
+                self.engine_adapter.execute(f'DROP OWNED BY "{user_name}"')
+                self.engine_adapter.execute(f'DROP USER IF EXISTS "{user_name}"')
+            elif self.dialect == "snowflake":
+                self.engine_adapter.execute(f"DROP ROLE IF EXISTS {user_name}")
+            elif self.dialect in ["databricks", "bigquery"]:
+                # For Databricks and BigQuery, we use pre-created accounts that should not be deleted
+                pass
+        except Exception:
+            pass
 
 
 def wait_until(fn: t.Callable[..., bool], attempts=3, wait=5) -> None:

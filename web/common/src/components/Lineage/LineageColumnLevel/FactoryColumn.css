@@ -1,0 +1,31 @@
+:where(:root) {
+  --color-lineage-model-column-badge-background: var(
+    --color-lineage-node-badge-background
+  );
+  --color-lineage-model-column-badge-foreground: var(
+    --color-lineage-node-badge-foreground
+  );
+
+  --color-lineage-model-column-metadata-label: var(--color-metadata-label);
+  --color-lineage-model-column-metadata-value: var(--color-metadata-value);
+
+  --color-lineage-model-column-information-info: var(--color-information-info);
+}
+
+.FactoryColumn__Metadata {
+  --color-metadata-label: var(--color-lineage-model-column-metadata-label);
+  --color-metadata-value: var(--color-lineage-model-column-metadata-value);
+}
+
+.FactoryColumn__NodeBadge {
+  --color-lineage-node-badge-background: var(
+    --color-lineage-model-column-badge-background
+  );
+  --color-lineage-node-badge-foreground: var(
+    --color-lineage-model-column-badge-foreground
+  );
+}
+
+.FactoryColumn__Information {
+  --color-typography-info: var(--color-lineage-model-column-information-info);
+}

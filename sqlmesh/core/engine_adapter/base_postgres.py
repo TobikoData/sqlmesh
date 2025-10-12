@@ -62,6 +62,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
             raise SQLMeshError(
                 f"Could not get columns for table '{table.sql(dialect=self.dialect)}'. Table not found."
             )
+
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
@@ -196,3 +197,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
             )
             for row in df.itertuples()
         ]
+
+    def _get_current_schema(self) -> str:
+        """Returns the current default schema for the connection."""
+        result = self.fetchone(exp.select(exp.func("current_schema")))
+        if result and result[0]:
+            return result[0]
+        return "public"

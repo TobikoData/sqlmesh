@@ -2,8 +2,8 @@ import React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva } from 'class-variance-authority'
 
-import { cn } from '@/utils'
-import type { Shape, Size } from '@/types'
+import { cn } from '@sqlmesh-common/utils'
+import type { Shape, Size } from '@sqlmesh-common/types'
 
 import './Button.css'
 

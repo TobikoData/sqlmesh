@@ -397,7 +397,7 @@ class SparkEngineAdapter(
     def set_current_catalog(self, catalog_name: str) -> None:
         self.connection.set_current_catalog(catalog_name)
 
-    def get_current_database(self) -> str:
+    def _get_current_schema(self) -> str:
         if self._use_spark_session:
             return self.spark.catalog.currentDatabase()
         return self.fetchone(exp.select(exp.func("current_database")))[0]  # type: ignore
@@ -539,7 +539,7 @@ class SparkEngineAdapter(
         if not table.catalog:
             table.set("catalog", self.get_current_catalog())
         if not table.db:
-            table.set("db", self.get_current_database())
+            table.set("db", self._get_current_schema())
         return table
 
     def _build_create_comment_column_exp(

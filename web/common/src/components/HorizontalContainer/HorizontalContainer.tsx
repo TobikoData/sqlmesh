@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { ScrollContainer } from '../ScrollContainer/ScrollContainer'
 
 export interface HorizontalContainerProps

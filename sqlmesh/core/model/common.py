@@ -641,6 +641,7 @@ properties_validator: t.Callable = field_validator(
     "physical_properties_",
     "virtual_properties_",
     "materialization_properties_",
+    "grants_",
     mode="before",
     check_fields=False,
 )(parse_properties)
@@ -662,6 +663,7 @@ depends_on_validator: t.Callable = field_validator(
 
 class ParsableSql(PydanticModel):
     sql: str
+    transaction: t.Optional[bool] = None
 
     _parsed: t.Optional[exp.Expression] = None
     _parsed_dialect: t.Optional[str] = None

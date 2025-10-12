@@ -15,14 +15,20 @@ export function FactoryEdgeWithGradient<
   TEdgeData extends EdgeData = EdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >(
   useLineage: LineageContextHook<
     TNodeData,
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
   >,
 ) {
   return React.memo(({ data, id, ...props }: EdgeProps<Edge<TEdgeData>>) => {

@@ -1,4 +1,4 @@
-:root {
+:where(:root) {
   --color-button-primary-background: var(--color-action);
   --color-button-primary-foreground: var(--color-light);
   --color-button-primary-hover: var(--color-action-hover);

@@ -1,10 +1,14 @@
 import React from 'react'
 
-import { cn } from '@/utils'
-import { HorizontalContainer } from '@/components/HorizontalContainer/HorizontalContainer'
+import { cn } from '@sqlmesh-common/utils'
+import { HorizontalContainer } from '@sqlmesh-common/components/HorizontalContainer/HorizontalContainer'
 import { NodeHandle } from './NodeHandle'
+import type { HandleId } from '../utils'
 
-export const NodeHandles = React.memo(function NodeHandles({
+export function NodeHandles<
+  TLeftHandleId extends string = HandleId,
+  TRightHandleId extends string = HandleId,
+>({
   leftIcon,
   rightIcon,
   leftId,
@@ -13,8 +17,8 @@ export const NodeHandles = React.memo(function NodeHandles({
   handleClassName,
   children,
 }: {
-  leftId?: string
-  rightId?: string
+  leftId?: TLeftHandleId
+  rightId?: TRightHandleId
   className?: string
   handleClassName?: string
   children: React.ReactNode
@@ -27,7 +31,7 @@ export const NodeHandles = React.memo(function NodeHandles({
       data-component="NodeHandles"
     >
       {leftId && (
-        <NodeHandle
+        <NodeHandle<TLeftHandleId>
           type="target"
           id={leftId}
           className={cn('left-0', handleClassName)}
@@ -37,7 +41,7 @@ export const NodeHandles = React.memo(function NodeHandles({
       )}
       {children}
       {rightId && (
-        <NodeHandle
+        <NodeHandle<TRightHandleId>
           type="source"
           id={rightId}
           className={cn('right-0', handleClassName)}
@@ -47,4 +51,4 @@ export const NodeHandles = React.memo(function NodeHandles({
       )}
     </HorizontalContainer>
   )
-})
+}

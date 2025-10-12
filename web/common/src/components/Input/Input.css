@@ -1,4 +1,4 @@
-:root {
+:where(:root) {
   --color-input-background: var(--color-light);
   --color-input-background-translucid: var(--color-neutral-5);
   --color-input-foreground: var(--color-prose);

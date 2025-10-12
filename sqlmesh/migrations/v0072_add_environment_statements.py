@@ -5,9 +5,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
-    engine_adapter = state_sync.engine_adapter
-    schema = state_sync.schema
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     environment_statements_table = "_environment_statements"
 
     if schema:
@@ -27,5 +25,5 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
     )
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     pass

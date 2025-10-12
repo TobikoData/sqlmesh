@@ -1,9 +1,9 @@
 import { Info } from 'lucide-react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { getTextSize } from './help'
-import type { Size } from '@/types'
+import type { Size } from '@sqlmesh-common/types'
 import { Tooltip } from '../Tooltip/Tooltip'
 
 export interface InformationProps {

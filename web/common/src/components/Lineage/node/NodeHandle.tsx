@@ -1,10 +1,11 @@
 import { Position } from '@xyflow/react'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { BaseHandle } from './base-handle'
+import type { HandleId } from '../utils'
 
-export const NodeHandle = React.memo(function NodeHandle({
+export function NodeHandle<THandleId extends string = HandleId>({
   type,
   id,
   children,
@@ -12,12 +13,13 @@ export const NodeHandle = React.memo(function NodeHandle({
   ...props
 }: {
   type: 'target' | 'source'
-  id: string
+  id: THandleId
   children: React.ReactNode
   className?: string
 }) {
   return (
     <BaseHandle
+      data-component="NodeHandle"
       type={type}
       position={type === 'target' ? Position.Left : Position.Right}
       id={id}
@@ -28,4 +30,4 @@ export const NodeHandle = React.memo(function NodeHandle({
       {children}
     </BaseHandle>
   )
-})
+}

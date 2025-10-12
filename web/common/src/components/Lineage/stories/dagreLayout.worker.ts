@@ -20,7 +20,7 @@ self.onmessage = <
   >,
 ) => {
   try {
-    const { edges, nodesMap } = buildLayout<
+    const nodesMap = buildLayout<
       TNodeData,
       TEdgeData,
       TNodeID,
@@ -29,7 +29,7 @@ self.onmessage = <
     >(event.data)
 
     self.postMessage({
-      edges,
+      edges: event.data.edges,
       nodesMap,
     } satisfies LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>)
   } catch (error) {

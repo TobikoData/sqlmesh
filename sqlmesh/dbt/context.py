@@ -37,6 +37,8 @@ class DbtContext:
     """Context for DBT environment"""
 
     project_root: Path = Path()
+    profiles_dir: t.Optional[Path] = None
+    """Optional override to specify the directory where profiles.yml is located, if not at the :project_root"""
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
@@ -51,6 +53,7 @@ class DbtContext:
     _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
+    _model_fqns: t.Set[str] = field(default_factory=set)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = field(default_factory=dict)
@@ -144,12 +147,19 @@ class DbtContext:
     def models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._models = {}
         self._refs = {}
+        self._model_fqns = set()
         self.add_models(models)
 
     def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._refs = {}
         self._models.update(models)
         self._jinja_environment = None
+
+    @property
+    def model_fqns(self) -> t.Set[str]:
+        if not self._model_fqns:
+            self._model_fqns = {model.fqn for model in self._models.values()}
+        return self._model_fqns
 
     @property
     def seeds(self) -> t.Dict[str, SeedConfig]:

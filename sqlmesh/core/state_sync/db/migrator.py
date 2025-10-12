@@ -30,7 +30,6 @@ from sqlmesh.core.state_sync.base import (
     MIN_SCHEMA_VERSION,
     MIN_SQLMESH_VERSION,
 )
-from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.db.environment import EnvironmentState
 from sqlmesh.core.state_sync.db.interval import IntervalState
 from sqlmesh.core.state_sync.db.snapshot import SnapshotState
@@ -85,7 +84,7 @@ class StateMigrator:
 
     def migrate(
         self,
-        state_sync: StateSync,
+        schema: t.Optional[str],
         skip_backup: bool = False,
         promoted_snapshots_only: bool = True,
     ) -> None:
@@ -94,7 +93,7 @@ class StateMigrator:
         migration_start_ts = time.perf_counter()
 
         try:
-            migrate_rows = self._apply_migrations(state_sync, skip_backup)
+            migrate_rows = self._apply_migrations(schema, skip_backup)
 
             if not migrate_rows and major_minor(SQLMESH_VERSION) == versions.minor_sqlmesh_version:
                 return
@@ -153,7 +152,7 @@ class StateMigrator:
 
     def _apply_migrations(
         self,
-        state_sync: StateSync,
+        schema: t.Optional[str],
         skip_backup: bool,
     ) -> bool:
         versions = self.version_state.get_versions()
@@ -184,10 +183,10 @@ class StateMigrator:
 
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
-            migration.migrate_schemas(state_sync)
+            migration.migrate_schemas(engine_adapter=self.engine_adapter, schema=schema)
             if state_table_exist:
                 # No need to run DML for the initial migration since all tables are empty
-                migration.migrate_rows(state_sync)
+                migration.migrate_rows(engine_adapter=self.engine_adapter, schema=schema)
 
         snapshot_count_after = self.snapshot_state.count()
 

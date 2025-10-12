@@ -1,6 +1,6 @@
-import { cn } from '@/utils'
-import { VirtualList } from '@/components/VirtualList/VirtualList'
-import { FilterableList } from '@/components/VirtualList/FilterableList'
+import { cn } from '@sqlmesh-common/utils'
+import { VirtualList } from '@sqlmesh-common/components/VirtualList/VirtualList'
+import { FilterableList } from '@sqlmesh-common/components/VirtualList/FilterableList'
 import type { IFuseOptions } from 'fuse.js'
 
 export function NodePorts<TPort>({

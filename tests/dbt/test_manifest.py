@@ -324,3 +324,46 @@ def test_macro_depenency_none_str():
 
     # "None" macro shouldn't raise a KeyError
     _macro_references(helper._manifest, node)
+
+
+@pytest.mark.xdist_group("dbt_manifest")
+def test_macro_assignment_shadowing(create_empty_project):
+    project_name = "local"
+    project_path, models_path = create_empty_project(project_name=project_name)
+
+    macros_path = project_path / "macros"
+    macros_path.mkdir()
+
+    (macros_path / "model_path_macro.sql").write_text("""
+{% macro model_path_macro() %}
+  {% if execute %}
+    {% set model = model.path.split('/')[-1].replace('.sql', '') %}
+    SELECT '{{ model }}' as model_name
+  {% else %}
+    SELECT 'placeholder' as placeholder
+  {% endif %}
+{% endmacro %}
+""")
+
+    (models_path / "model_using_path_macro.sql").write_text("""
+{{ model_path_macro() }}
+""")
+
+    context = DbtContext(project_path)
+    profile = Profile.load(context)
+
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        project_name,
+        profile.target,
+        model_defaults=ModelDefaultsConfig(start="2020-01-01"),
+    )
+
+    macros = helper.macros(project_name)
+    assert "model_path_macro" in macros
+    assert "path" in macros["model_path_macro"].dependencies.model_attrs.attrs
+
+    models = helper.models()
+    assert "model_using_path_macro" in models
+    assert "path" in models["model_using_path_macro"].dependencies.model_attrs.attrs

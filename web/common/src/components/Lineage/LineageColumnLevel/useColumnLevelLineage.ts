@@ -12,19 +12,18 @@ export function useColumnLevelLineage<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,
->(
-  columnLevelLineage: Map<
-    TColumnID,
-    ColumnLevelLineageAdjacencyList<TAdjacencyListKey, TAdjacencyListColumnKey>
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
   >,
-) {
+>(columnLevelLineage: Map<TColumnID, TColumnLevelLineageAdjacencyList>) {
   const adjacencyListColumnLevel = React.useMemo(() => {
     return merge.all(Array.from(columnLevelLineage.values()), {
       arrayMerge: (dest, source) => Array.from(new Set([...dest, ...source])),
-    }) as ColumnLevelLineageAdjacencyList<
-      TAdjacencyListKey,
-      TAdjacencyListColumnKey
-    >
+    }) as TColumnLevelLineageAdjacencyList
   }, [columnLevelLineage])
 
   const selectedColumns = React.useMemo(() => {
@@ -37,7 +36,11 @@ export function useColumnLevelLineage<
 
   const adjacencyListKeysColumnLevel = React.useMemo(() => {
     return adjacencyListColumnLevel != null
-      ? getAdjacencyListKeysFromColumnLineage(adjacencyListColumnLevel)
+      ? getAdjacencyListKeysFromColumnLineage<
+          TAdjacencyListKey,
+          TAdjacencyListColumnKey,
+          TColumnLevelLineageAdjacencyList
+        >(adjacencyListColumnLevel)
       : []
   }, [adjacencyListColumnLevel])
 

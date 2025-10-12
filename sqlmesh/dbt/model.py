@@ -172,6 +172,22 @@ class ModelConfig(BaseModelConfig):
             return "*"
         return ensure_list(v)
 
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def _validate_updated_at(cls, v: t.Optional[str]) -> t.Optional[str]:
+        """
+        Extract column name if updated_at contains a cast.
+
+        SCDType2ByTimeKind and SCDType2ByColumnKind expect a column, and the casting is done later.
+        """
+        if v is None:
+            return None
+        parsed = d.parse_one(v)
+        if isinstance(parsed, exp.Cast) and isinstance(parsed.this, exp.Column):
+            return parsed.this.name
+
+        return v
+
     @field_validator("sql", mode="before")
     @classmethod
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
@@ -199,6 +215,14 @@ class ModelConfig(BaseModelConfig):
             ):
                 granularity = v["granularity"]
                 raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
+            if "data_type" in v and v["data_type"].lower() not in (
+                "timestamp",
+                "date",
+                "datetime",
+                "int64",
+            ):
+                data_type = v["data_type"]
+                raise ConfigError(f"Unexpected data_type '{data_type}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
@@ -577,7 +601,13 @@ class ModelConfig(BaseModelConfig):
                 clustered_by = []
                 for c in self.cluster_by:
                     try:
-                        clustered_by.append(d.parse_one(c, dialect=model_dialect))
+                        cluster_expr = exp.maybe_parse(
+                            c, into=exp.Cluster, prefix="CLUSTER BY", dialect=model_dialect
+                        )
+                        for expr in cluster_expr.expressions:
+                            clustered_by.append(
+                                expr.this if isinstance(expr, exp.Ordered) else expr
+                            )
                     except SqlglotError as e:
                         raise ConfigError(
                             f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"
@@ -678,6 +708,12 @@ class ModelConfig(BaseModelConfig):
 
             if physical_properties:
                 model_kwargs["physical_properties"] = physical_properties
+
+        kind = self.model_kind(context)
+
+        # A falsy grants config (None or {}) is considered as unmanaged per dbt semantics
+        if self.grants and kind.supports_grants:
+            model_kwargs["grants"] = self.grants
 
         allow_partials = model_kwargs.pop("allow_partials", None)
         if allow_partials is None:

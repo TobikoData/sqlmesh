@@ -24,14 +24,33 @@ export function getWorker(url: URL): Worker {
 export async function getLayoutedGraph<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
-  TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = NodeId,
+  TTargetID extends string = NodeId,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >(
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[],
+  edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[],
   nodesMap: LineageNodesMap<TNodeData>,
   workerUrl: URL,
-): Promise<LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>> {
+): Promise<
+  LayoutedGraph<
+    TNodeData,
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >
+> {
   let timeoutId: NodeJS.Timeout | null = null
 
   return new Promise((resolve, reject) => {
@@ -56,9 +75,11 @@ export async function getLayoutedGraph<
       worker.postMessage({ edges, nodesMap } as LayoutedGraph<
         TNodeData,
         TEdgeData,
-        TNodeID,
         TEdgeID,
-        TPortID
+        TSourceID,
+        TTargetID,
+        TSourceHandleID,
+        TTargetHandleID
       >)
     } catch (postError) {
       errorHandler(postError as ErrorEvent)
@@ -66,7 +87,15 @@ export async function getLayoutedGraph<
 
     function handler(
       event: MessageEvent<
-        LayoutedGraph<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID> & {
+        LayoutedGraph<
+          TNodeData,
+          TEdgeData,
+          TEdgeID,
+          TSourceID,
+          TTargetID,
+          TSourceHandleID,
+          TTargetHandleID
+        > & {
           error: ErrorEvent
         }
       >,

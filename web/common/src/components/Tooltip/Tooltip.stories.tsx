@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
-import { Button } from '@/components/Button/Button'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
+import { Button } from '@sqlmesh-common/components/Button/Button'
 
 const meta: Meta<typeof Tooltip> = {
   title: 'Components/Tooltip',

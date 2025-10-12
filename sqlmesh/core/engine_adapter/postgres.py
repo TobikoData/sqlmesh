@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
     RowDiffMixin,
     logical_merge,
+    GrantsFromInfoSchemaMixin,
 )
 from sqlmesh.core.engine_adapter.shared import set_catalog
 
@@ -28,14 +29,19 @@ class PostgresEngineAdapter(
     PandasNativeFetchDFSupportMixin,
     GetCurrentCatalogFromFunctionMixin,
     RowDiffMixin,
+    GrantsFromInfoSchemaMixin,
 ):
     DIALECT = "postgres"
+    SUPPORTS_GRANTS = True
     SUPPORTS_INDEXES = True
     HAS_VIEW_BINDING = True
     CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
     SUPPORTS_REPLACE_TABLE = False
     MAX_IDENTIFIER_LENGTH: t.Optional[int] = 63
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
+    GRANT_INFORMATION_SCHEMA_TABLE_NAME = "role_table_grants"
+    CURRENT_USER_OR_ROLE_EXPRESSION: exp.Expression = exp.column("current_role")
+    SUPPORTS_MULTIPLE_GRANT_PRINCIPALS = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
             # DECIMAL without precision is "up to 131072 digits before the decimal point; up to 16383 digits after the decimal point"

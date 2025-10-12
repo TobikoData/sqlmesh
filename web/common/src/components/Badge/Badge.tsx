@@ -1,8 +1,8 @@
 import { Slot } from '@radix-ui/react-slot'
 import React from 'react'
 
-import type { Shape, Size } from '@/types'
-import { cn } from '@/utils'
+import type { Shape, Size } from '@sqlmesh-common/types'
+import { cn } from '@sqlmesh-common/utils'
 import { cva } from 'class-variance-authority'
 
 import './Badge.css'

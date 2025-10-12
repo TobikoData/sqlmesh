@@ -1,7 +1,7 @@
 import cronstrue from 'cronstrue'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { HorizontalContainer } from '../../HorizontalContainer/HorizontalContainer'
 import { VerticalContainer } from '../../VerticalContainer/VerticalContainer'
 import {
@@ -37,10 +37,10 @@ import {
   getNodeTypeColor,
   getNodeTypeTextColor,
 } from './help'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
 import type { ColumnLevelLineageAdjacencyList } from '../LineageColumnLevel/ColumnLevelLineageContext'
-import { ModelName } from '@/components/ModelName/ModelName'
-import { Badge } from '@/components/Badge/Badge'
+import { ModelName } from '@sqlmesh-common/components/ModelName/ModelName'
+import { Badge } from '@sqlmesh-common/components/Badge/Badge'
 import { NodePorts } from '../node/NodePorts'
 
 export const ModelNode = React.memo(function ModelNode({
@@ -51,7 +51,7 @@ export const ModelNode = React.memo(function ModelNode({
   const {
     selectedColumns,
     zoom,
-    currentNode,
+    currentNodeId,
     selectedNodeId,
     selectedNodes,
     showColumns,
@@ -67,9 +67,10 @@ export const ModelNode = React.memo(function ModelNode({
   const {
     leftId,
     rightId,
+    isCurrent,
     isSelected, // if selected from inside the lineage and node is selcted
     isActive, // if selected from inside the lineage and node is not selected but in path
-  } = useNodeMetadata(nodeId, currentNode, selectedNodeId, selectedNodes)
+  } = useNodeMetadata(nodeId, currentNodeId, selectedNodeId, selectedNodes)
 
   const {
     columns,
@@ -131,7 +132,7 @@ export const ModelNode = React.memo(function ModelNode({
     <NodeContainer
       className={cn(
         'hover:opacity-100 group',
-        selectedNodeId == null || isActive || isSelected
+        isActive || isSelected || hasSelectedColumns
           ? 'opacity-100'
           : 'opacity-10',
       )}
@@ -146,6 +147,11 @@ export const ModelNode = React.memo(function ModelNode({
         className="bg-lineage-node-appendix-background"
       >
         <HorizontalContainer className="gap-1 items-center overflow-visible h-5">
+          {isCurrent && (
+            <NodeBadge className="bg-lineage-node-current-background text-lineage-node-current-foreground">
+              current
+            </NodeBadge>
+          )}
           {zoom > ZOOM_THRESHOLD && (
             <>
               <NodeBadge>{data.kind?.toUpperCase()}</NodeBadge>

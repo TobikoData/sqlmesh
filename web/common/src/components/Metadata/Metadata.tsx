@@ -1,6 +1,6 @@
 import React from 'react'
 import { HorizontalContainer } from '../HorizontalContainer/HorizontalContainer'
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 export interface MetadataProps extends React.HTMLAttributes<HTMLDivElement> {
   label: React.ReactNode
@@ -14,7 +14,7 @@ export const Metadata = React.forwardRef<HTMLDivElement, MetadataProps>(
         ref={ref}
         data-component="Metadata"
         className={cn(
-          'justify-between gap-2 items-center whitespace-nowrap h-auto',
+          'Metadata justify-between gap-2 items-center whitespace-nowrap h-auto',
           className,
         )}
         {...props}

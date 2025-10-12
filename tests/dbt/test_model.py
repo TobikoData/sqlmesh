@@ -6,16 +6,20 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.errors import SchemaError
 from sqlmesh import Context
+from sqlmesh.core.console import NoopConsole, get_console
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
+from sqlmesh.core.config.common import VirtualEnvironmentMode
+from sqlmesh.core.model.meta import GrantsTargetLayer
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.target import PostgresConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, PostgresConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.yaml import YAML
 from sqlmesh.utils.date import to_ds
+import typing as t
 
 pytestmark = pytest.mark.dbt
 
@@ -534,6 +538,7 @@ def test_load_deprecated_incremental_time_column(
         f.write(incremental_time_range_contents)
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
+    assert isinstance(get_console(), NoopConsole)
     context = Context(paths=project_dir)
     model = context.snapshots[snapshot_fqn].model
     # Validate model-level attributes
@@ -853,3 +858,231 @@ def test_load_custom_materialisations(sushi_test_dbt_context: Context) -> None:
     context.load()
     assert context.get_model("sushi.custom_incremental_model")
     assert context.get_model("sushi.custom_incremental_with_filter")
+
+
+def test_model_grants_to_sqlmesh_grants_config() -> None:
+    grants_config = {
+        "select": ["user1", "user2"],
+        "insert": ["admin_user"],
+        "update": ["power_user"],
+    }
+    model_config = ModelConfig(
+        name="test_model",
+        sql="SELECT 1 as id",
+        grants=grants_config,
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    model_grants = sqlmesh_model.grants
+    assert model_grants == grants_config
+
+    assert sqlmesh_model.grants_target_layer == GrantsTargetLayer.default
+
+
+def test_model_grants_empty_permissions() -> None:
+    model_config = ModelConfig(
+        name="test_model_empty",
+        sql="SELECT 1 as id",
+        grants={"select": [], "insert": ["admin_user"]},
+        path=Path("test_model_empty.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    model_grants = sqlmesh_model.grants
+    expected_grants = {"select": [], "insert": ["admin_user"]}
+    assert model_grants == expected_grants
+
+
+def test_model_no_grants() -> None:
+    model_config = ModelConfig(
+        name="test_model_no_grants",
+        sql="SELECT 1 as id",
+        path=Path("test_model_no_grants.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is None
+
+
+def test_model_empty_grants() -> None:
+    model_config = ModelConfig(
+        name="test_model_empty_grants",
+        sql="SELECT 1 as id",
+        grants={},
+        path=Path("test_model_empty_grants.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is None
+
+
+def test_model_grants_valid_special_characters() -> None:
+    valid_grantees = [
+        "user@domain.com",
+        "service-account@project.iam.gserviceaccount.com",
+        "group:analysts",
+        '"quoted user"',
+        "`backtick user`",
+        "user_with_underscores",
+        "user.with.dots",
+    ]
+
+    model_config = ModelConfig(
+        name="test_model_special_chars",
+        sql="SELECT 1 as id",
+        grants={"select": valid_grantees},
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert "select" in grants_config
+    assert grants_config["select"] == valid_grantees
+
+
+def test_model_grants_engine_specific_bigquery() -> None:
+    model_config = ModelConfig(
+        name="test_model_bigquery",
+        sql="SELECT 1 as id",
+        grants={
+            "bigquery.dataviewer": ["user@domain.com"],
+            "select": ["analyst@company.com"],
+        },
+        path=Path("test_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = BigQueryConfig(
+        name="bigquery_target",
+        project="test-project",
+        dataset="test_dataset",
+        location="US",
+        database="test-project",
+        schema="test_dataset",
+    )
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    grants_config = sqlmesh_model.grants
+    assert grants_config is not None
+    assert grants_config["bigquery.dataviewer"] == ["user@domain.com"]
+    assert grants_config["select"] == ["analyst@company.com"]
+
+
+def test_ephemeral_model_ignores_grants() -> None:
+    """Test that ephemeral models ignore grants configuration."""
+    model_config = ModelConfig(
+        name="ephemeral_model",
+        sql="SELECT 1 as id",
+        materialized="ephemeral",
+        grants={"select": ["reporter", "analyst"]},
+        path=Path("ephemeral_model.sql"),
+    )
+
+    context = DbtContext()
+    context.project_name = "test_project"
+    context.target = DuckDbConfig(name="target", schema="test_schema")
+
+    sqlmesh_model = model_config.to_sqlmesh(
+        context, virtual_environment_mode=VirtualEnvironmentMode.FULL
+    )
+
+    assert sqlmesh_model.kind.is_embedded
+    assert sqlmesh_model.grants is None  # grants config is skipped for ephemeral / embedded models
+
+
+def test_conditional_ref_in_unexecuted_branch(copy_to_temp_path: t.Callable):
+    path = copy_to_temp_path("tests/fixtures/dbt/sushi_test")
+    temp_project = path[0]
+
+    models_dir = temp_project / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    test_model_content = """
+{{ config(
+    materialized='table',
+) }}
+
+{% if true %}
+    WITH source AS (
+        SELECT *
+        FROM {{ ref('simple_model_a') }}
+    )
+{% else %}
+    WITH source AS (
+        SELECT *
+        FROM {{ ref('nonexistent_model') }} -- this doesn't exist but is in unexecuted branch
+    )
+{% endif %}
+
+SELECT * FROM source
+""".strip()
+
+    (models_dir / "conditional_ref_model.sql").write_text(test_model_content)
+    sushi_context = Context(paths=[str(temp_project)])
+
+    # the model should load successfully without raising MissingModelError
+    model = sushi_context.get_model("sushi.conditional_ref_model")
+    assert model is not None
+
+    # Verify only the executed ref is in the dependencies
+    assert len(model.depends_on) == 1
+    assert '"memory"."sushi"."simple_model_a"' in model.depends_on
+
+    # Also the model can be rendered successfully with the executed ref
+    rendered = model.render_query()
+    assert rendered is not None
+    assert (
+        rendered.sql()
+        == 'WITH "source" AS (SELECT "simple_model_a"."a" AS "a" FROM "memory"."sushi"."simple_model_a" AS "simple_model_a") SELECT "source"."a" AS "a" FROM "source" AS "source"'
+    )
+
+    # And run plan with this conditional model for good measure
+    plan = sushi_context.plan(select_models=["sushi.conditional_ref_model", "sushi.simple_model_a"])
+    sushi_context.apply(plan)
+    upstream_ref = sushi_context.engine_adapter.fetchone("SELECT * FROM sushi.simple_model_a")
+    assert upstream_ref == (1,)
+    result = sushi_context.engine_adapter.fetchone("SELECT * FROM sushi.conditional_ref_model")
+    assert result == (1,)

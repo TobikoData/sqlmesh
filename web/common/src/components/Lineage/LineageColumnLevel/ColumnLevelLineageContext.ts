@@ -2,64 +2,36 @@ import React from 'react'
 
 import { type PortId } from '../utils'
 
-export type LineageColumn = {
-  source?: string | null
-  expression?: string | null
-  models: Record<string, string[]>
-}
-
-export type ColumnLevelModelConnections<
-  TAdjacencyListKey extends string,
-  TAdjacencyListColumnKey extends string,
-> = Record<TAdjacencyListKey, TAdjacencyListColumnKey[]>
-export type ColumnLevelDetails<
-  TAdjacencyListKey extends string,
-  TAdjacencyListColumnKey extends string,
-> = Omit<LineageColumn, 'models'> & {
-  models: ColumnLevelModelConnections<
-    TAdjacencyListKey,
-    TAdjacencyListColumnKey
-  >
-}
-export type ColumnLevelConnections<
-  TAdjacencyListKey extends string,
-  TAdjacencyListColumnKey extends string,
-> = Record<
-  TAdjacencyListColumnKey,
-  ColumnLevelDetails<TAdjacencyListKey, TAdjacencyListColumnKey>
->
 export type ColumnLevelLineageAdjacencyList<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
-> = Record<
-  TAdjacencyListKey,
-  ColumnLevelConnections<TAdjacencyListKey, TAdjacencyListColumnKey>
->
+> = {
+  [K in TAdjacencyListKey]: {
+    [C in TAdjacencyListColumnKey]: {
+      source?: string | null
+      expression?: string | null
+      models: Record<TAdjacencyListKey, TAdjacencyListColumnKey[]>
+    }
+  }
+}
 
 export type ColumnLevelLineageContextValue<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,
-> = {
-  adjacencyListColumnLevel: ColumnLevelLineageAdjacencyList<
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
     TAdjacencyListKey,
     TAdjacencyListColumnKey
-  >
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
+> = {
+  adjacencyListColumnLevel: TColumnLevelLineageAdjacencyList
   selectedColumns: Set<TColumnID>
-  columnLevelLineage: Map<
-    TColumnID,
-    ColumnLevelLineageAdjacencyList<TAdjacencyListKey, TAdjacencyListColumnKey>
-  >
+  columnLevelLineage: Map<TColumnID, TColumnLevelLineageAdjacencyList>
   setColumnLevelLineage: React.Dispatch<
-    React.SetStateAction<
-      Map<
-        TColumnID,
-        ColumnLevelLineageAdjacencyList<
-          TAdjacencyListKey,
-          TAdjacencyListColumnKey
-        >
-      >
-    >
+    React.SetStateAction<Map<TColumnID, TColumnLevelLineageAdjacencyList>>
   >
   showColumns: boolean
   setShowColumns: React.Dispatch<React.SetStateAction<boolean>>
@@ -71,16 +43,17 @@ export function getColumnLevelLineageContextInitial<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 >() {
   return {
-    adjacencyListColumnLevel: {},
-    columnLevelLineage: new Map<
-      TColumnID,
-      ColumnLevelLineageAdjacencyList<
-        TAdjacencyListKey,
-        TAdjacencyListColumnKey
-      >
-    >(),
+    adjacencyListColumnLevel: {} as TColumnLevelLineageAdjacencyList,
+    columnLevelLineage: new Map<TColumnID, TColumnLevelLineageAdjacencyList>(),
     setColumnLevelLineage: () => {},
     showColumns: false,
     setShowColumns: () => {},
@@ -94,8 +67,16 @@ export type ColumnLevelLineageContextHook<
   TAdjacencyListKey extends string,
   TAdjacencyListColumnKey extends string,
   TColumnID extends string = PortId,
+  TColumnLevelLineageAdjacencyList extends ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  > = ColumnLevelLineageAdjacencyList<
+    TAdjacencyListKey,
+    TAdjacencyListColumnKey
+  >,
 > = () => ColumnLevelLineageContextValue<
   TAdjacencyListKey,
   TAdjacencyListColumnKey,
-  TColumnID
+  TColumnID,
+  TColumnLevelLineageAdjacencyList
 >

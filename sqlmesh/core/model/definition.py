@@ -67,6 +67,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter.shared import DataObjectType
     from sqlmesh.core.linter.rule import Rule
     from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
@@ -362,6 +363,7 @@ class _Model(ModelMeta, frozen=True):
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
+        inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders pre-statements for a model.
@@ -383,7 +385,11 @@ class _Model(ModelMeta, frozen=True):
             The list of rendered expressions.
         """
         return self._render_statements(
-            self.pre_statements,
+            [
+                stmt
+                for stmt in self.pre_statements
+                if stmt.args.get("transaction", True) == inside_transaction
+            ],
             start=start,
             end=end,
             execution_time=execution_time,
@@ -404,6 +410,7 @@ class _Model(ModelMeta, frozen=True):
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
+        inside_transaction: t.Optional[bool] = True,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders post-statements for a model.
@@ -419,13 +426,18 @@ class _Model(ModelMeta, frozen=True):
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
             deployability_index: Determines snapshots that are deployable in the context of this render.
+            inside_transaction: Whether to render hooks with transaction=True (inside) or transaction=False (outside).
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The list of rendered expressions.
         """
         return self._render_statements(
-            self.post_statements,
+            [
+                stmt
+                for stmt in self.post_statements
+                if stmt.args.get("transaction", True) == inside_transaction
+            ],
             start=start,
             end=end,
             execution_time=execution_time,
@@ -566,6 +578,8 @@ class _Model(ModelMeta, frozen=True):
         result = []
         for v in value:
             parsed = v.parse(self.dialect)
+            if getattr(v, "transaction", None) is not None:
+                parsed.set("transaction", v.transaction)
             if not isinstance(parsed, exp.Semicolon):
                 result.append(parsed)
         return result
@@ -1186,6 +1200,8 @@ class _Model(ModelMeta, frozen=True):
                 gen(self.session_properties_) if self.session_properties_ else None,
                 *[gen(g) for g in self.grains],
                 *self._audit_metadata_hash_values(),
+                json.dumps(self.grants, sort_keys=True) if self.grants else None,
+                self.grants_target_layer,
             ]
 
             for key, value in (self.virtual_properties or {}).items():
@@ -1209,6 +1225,24 @@ class _Model(ModelMeta, frozen=True):
     def is_model(self) -> bool:
         """Return True if this is a model node"""
         return True
+
+    @property
+    def grants_table_type(self) -> DataObjectType:
+        """Get the table type for grants application (TABLE, VIEW, MATERIALIZED_VIEW).
+
+        Returns:
+            The DataObjectType that should be used when applying grants to this model.
+        """
+        from sqlmesh.core.engine_adapter.shared import DataObjectType
+
+        if self.kind.is_view:
+            if hasattr(self.kind, "materialized") and getattr(self.kind, "materialized", False):
+                return DataObjectType.MATERIALIZED_VIEW
+            return DataObjectType.VIEW
+        if self.kind.is_managed:
+            return DataObjectType.MANAGED_TABLE
+        # All other materialized models are tables
+        return DataObjectType.TABLE
 
     @property
     def _additional_metadata(self) -> t.List[str]:
@@ -1823,6 +1857,12 @@ class SeedModel(_Model):
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
+
+        # Include grants in data hash for seed models to force recreation on grant changes
+        # since seed models don't support migration
+        data.append(json.dumps(self.grants, sort_keys=True) if self.grants else "")
+        data.append(self.grants_target_layer)
+
         return data
 
 
@@ -2565,9 +2605,17 @@ def _create_model(
         if statement_field in kwargs:
             # Macros extracted from these statements need to be treated as metadata only
             is_metadata = statement_field == "on_virtual_update"
-            statements.extend((stmt, is_metadata) for stmt in kwargs[statement_field])
+            for stmt in kwargs[statement_field]:
+                # Extract the expression if it's ParsableSql already
+                expr = stmt.parse(dialect) if isinstance(stmt, ParsableSql) else stmt
+                statements.append((expr, is_metadata))
             kwargs[statement_field] = [
-                ParsableSql.from_parsed_expression(stmt, dialect, use_meta_sql=use_original_sql)
+                # this to retain the transaction information
+                stmt
+                if isinstance(stmt, ParsableSql)
+                else ParsableSql.from_parsed_expression(
+                    stmt, dialect, use_meta_sql=use_original_sql
+                )
                 for stmt in kwargs[statement_field]
             ]
 
@@ -3023,6 +3071,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "optimize_query": str,
     "virtual_environment_mode": lambda value: exp.Literal.string(value.value),
     "dbt_node_info_": lambda value: value.to_expression(),
+    "grants_": lambda value: value,
+    "grants_target_layer": lambda value: exp.Literal.string(value.value),
 }
 
 

@@ -4,15 +4,12 @@ from sqlglot import exp
 from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
-def migrate_schemas(state_sync, **kwargs):  # type: ignore
-    schema = state_sync.schema
-    engine_adapter = state_sync.engine_adapter
-
+def migrate_schemas(engine_adapter, schema, **kwargs):  # type: ignore
     intervals_table = "_intervals"
     snapshots_table = "_snapshots"
     environments_table = "_environments"
     versions_table = "_versions"
-    if state_sync.schema:
+    if schema:
         engine_adapter.create_schema(schema)
         intervals_table = f"{schema}.{intervals_table}"
         snapshots_table = f"{schema}.{snapshots_table}"
@@ -94,5 +91,5 @@ def migrate_schemas(state_sync, **kwargs):  # type: ignore
     engine_adapter.create_index(intervals_table, "_intervals_name_version_idx", ("name", "version"))
 
 
-def migrate_rows(state_sync, **kwargs):  # type: ignore
+def migrate_rows(engine_adapter, schema, **kwargs):  # type: ignore
     pass

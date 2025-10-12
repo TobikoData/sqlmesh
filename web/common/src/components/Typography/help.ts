@@ -1,4 +1,4 @@
-import type { HeadlineLevel, Size } from '@/types'
+import type { HeadlineLevel, Size } from '@sqlmesh-common/types'
 
 export function getHeadlineTextSize(level: HeadlineLevel) {
   return {

@@ -1,5 +1,5 @@
-import type { Side } from '@/types'
-import { cn } from '@/utils'
+import type { Side } from '@sqlmesh-common/types'
+import { cn } from '@sqlmesh-common/utils'
 import React from 'react'
 import { LoadingIcon } from './LoadingIcon'
 

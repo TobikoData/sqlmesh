@@ -17,7 +17,10 @@ export interface LineageContextValue<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 > {
   // Node selection
   showOnlySelectedNodes: boolean
@@ -30,20 +33,37 @@ export interface LineageContextValue<
   setSelectedNodeId: React.Dispatch<React.SetStateAction<TNodeID | null>>
 
   // Layout
-  isBuildingLayout: boolean
-  setIsBuildingLayout: React.Dispatch<React.SetStateAction<boolean>>
   zoom: number
   setZoom: React.Dispatch<React.SetStateAction<number>>
 
   // Nodes and Edges
-  edges: LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]
+  edges: LineageEdge<
+    TEdgeData,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >[]
   setEdges: React.Dispatch<
-    React.SetStateAction<LineageEdge<TEdgeData, TNodeID, TEdgeID, TPortID>[]>
+    React.SetStateAction<
+      LineageEdge<
+        TEdgeData,
+        TEdgeID,
+        TSourceID,
+        TTargetID,
+        TSourceHandleID,
+        TTargetHandleID
+      >[]
+    >
   >
   nodes: LineageNode<TNodeData, TNodeID>[]
   nodesMap: LineageNodesMap<TNodeData, TNodeID>
-  setNodesMap: React.Dispatch<React.SetStateAction<LineageNodesMap<TNodeData>>>
-  currentNode: LineageNode<TNodeData, TNodeID> | null
+  setNodesMap: React.Dispatch<
+    React.SetStateAction<LineageNodesMap<TNodeData, TNodeID>>
+  >
+  currentNodeId: TNodeID | null
+  selectedNode: LineageNode<TNodeData, TNodeID> | null
 }
 
 export function getInitial<
@@ -57,7 +77,6 @@ export function getInitial<
     setSelectedNodes: () => {},
     selectedEdges: new Set<TEdgeID>(),
     setSelectedEdges: () => {},
-    selectedNodeId: null,
     setSelectedNodeId: () => {},
     zoom: ZOOM_THRESHOLD,
     setZoom: () => {},
@@ -66,9 +85,9 @@ export function getInitial<
     nodes: [],
     nodesMap: {},
     setNodesMap: () => {},
-    isBuildingLayout: false,
-    setIsBuildingLayout: () => {},
-    currentNode: null,
+    selectedNodeId: null,
+    selectedNode: null,
+    currentNodeId: null,
   }
 }
 
@@ -77,22 +96,49 @@ export type LineageContextHook<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
-> = () => LineageContextValue<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
+> = () => LineageContextValue<
+  TNodeData,
+  TEdgeData,
+  TNodeID,
+  TEdgeID,
+  TSourceID,
+  TTargetID,
+  TSourceHandleID,
+  TTargetHandleID
+>
 
 export function createLineageContext<
   TNodeData extends LineageNodeData = LineageNodeData,
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
   TLineageContextValue extends LineageContextValue<
     TNodeData,
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
-  > = LineageContextValue<TNodeData, TEdgeData, TNodeID, TEdgeID, TPortID>,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  > = LineageContextValue<
+    TNodeData,
+    TEdgeData,
+    TNodeID,
+    TEdgeID,
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
+  >,
 >(initial: TLineageContextValue) {
   const LineageContext = React.createContext(initial)
 

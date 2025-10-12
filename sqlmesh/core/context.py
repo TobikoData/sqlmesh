@@ -107,8 +107,8 @@ from sqlmesh.core.state_sync import (
     CachingStateSync,
     StateReader,
     StateSync,
-    cleanup_expired_views,
 )
+from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTestMetadata,
@@ -139,6 +139,7 @@ from sqlmesh.utils.errors import (
     UncategorizedPlanError,
 )
 from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 
 if t.TYPE_CHECKING:
     import pandas as pd
@@ -2597,12 +2598,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def clear_caches(self) -> None:
-        for path in self.configs:
-            cache_path = path / c.CACHE
-            if cache_path.exists():
-                rmtree(cache_path)
-        if self.cache_dir.exists():
-            rmtree(self.cache_dir)
+        paths_to_remove = [path / c.CACHE for path in self.configs]
+        paths_to_remove.append(self.cache_dir)
+
+        if IS_WINDOWS:
+            paths_to_remove = [fix_windows_path(path) for path in paths_to_remove]
+
+        for path in paths_to_remove:
+            if path.exists():
+                rmtree(path)
 
         if isinstance(self._state_sync, CachingStateSync):
             self._state_sync.clear_cache()
@@ -2859,19 +2863,14 @@ class GenericContext(BaseContext, t.Generic[C]):
         # Clean up expired environments by removing their views and schemas
         self._cleanup_environments(current_ts=current_ts)
 
-        cleanup_targets = self.state_sync.get_expired_snapshots(
-            ignore_ttl=ignore_ttl, current_ts=current_ts
+        delete_expired_snapshots(
+            self.state_sync,
+            self.snapshot_evaluator,
+            current_ts=current_ts,
+            ignore_ttl=ignore_ttl,
+            console=self.console,
+            batch_size=self.config.janitor.expired_snapshots_batch_size,
         )
-
-        # Remove the expired snapshots tables
-        self.snapshot_evaluator.cleanup(
-            target_snapshots=cleanup_targets,
-            on_complete=self.console.update_cleanup_progress,
-        )
-
-        # Delete the expired snapshot records from the state sync
-        self.state_sync.delete_expired_snapshots(ignore_ttl=ignore_ttl, current_ts=current_ts)
-
         self.state_sync.compact_intervals()
 
     def _cleanup_environments(self, current_ts: t.Optional[int] = None) -> None:

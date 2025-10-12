@@ -83,6 +83,7 @@ def use_terminal_console(func):
         orig_console = get_console()
         try:
             new_console = TerminalConsole()
+            new_console.console.width = 80
             new_console.console.no_color = True
             set_console(new_console)
             func(*args, **kwargs)

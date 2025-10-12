@@ -1,8 +1,8 @@
 import { Box, Check, Copy } from 'lucide-react'
 import { useMemo } from 'react'
 
-import { cn, truncate } from '@/utils'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
+import { cn, truncate } from '@sqlmesh-common/utils'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
 import React from 'react'
 
 import './ModelName.css'
@@ -200,7 +200,7 @@ export const ModelName = React.forwardRef<HTMLDivElement, ModelNameProps>(
             size="2xs"
             variant="transparent"
             text={name}
-            className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover"
+            className="ml-2 w-6 hover:text-model-name-copy-icon-hover active:text-model-name-copy-icon-hover bg-model-name-copy-icon-background hover:bg-model-name-copy-icon-background-hover active:bg-model-name-copy-icon-background-hover"
           >
             {copied =>
               copied ? (

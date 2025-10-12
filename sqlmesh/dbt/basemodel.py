@@ -13,6 +13,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.common import ParsableSql
 from sqlmesh.core.node import DbtNodeInfo
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -87,7 +88,7 @@ class Hook(DbtConfig):
     """
 
     sql: SqlStr
-    transaction: bool = True  # TODO not yet supported
+    transaction: bool = True
 
     _sql_validator = sql_str_validator
 
@@ -130,7 +131,7 @@ class BaseModelConfig(GeneralConfig):
     unique_id: str = ""
     name: str = ""
     package_name: str = ""
-    fqn: t.List[str] = []
+    fqn_: t.List[str] = Field(default_factory=list, alias="fqn")
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
@@ -165,7 +166,11 @@ class BaseModelConfig(GeneralConfig):
 
     @field_validator("grants", mode="before")
     @classmethod
-    def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
+    def _validate_grants(
+        cls, v: t.Optional[t.Dict[str, str]]
+    ) -> t.Optional[t.Dict[str, t.List[str]]]:
+        if v is None:
+            return None
         return {key: ensure_list(value) for key, value in v.items()}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -278,14 +283,16 @@ class BaseModelConfig(GeneralConfig):
         ]
 
     @property
+    def fqn(self) -> str:
+        return ".".join(self.fqn_)
+
+    @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
 
     @property
     def node_info(self) -> DbtNodeInfo:
-        return DbtNodeInfo(
-            unique_id=self.unique_id, name=self.name, fqn=".".join(self.fqn), alias=self.alias
-        )
+        return DbtNodeInfo(unique_id=self.unique_id, name=self.name, fqn=self.fqn, alias=self.alias)
 
     def sqlmesh_model_kwargs(
         self,
@@ -310,6 +317,10 @@ class BaseModelConfig(GeneralConfig):
             dependencies = dependencies.union(custom_mat.dependencies)
 
         model_dialect = self.dialect(context)
+
+        # Only keep refs and sources that exist in the context to match dbt behavior
+        dependencies.refs.intersection_update(context.refs)
+        dependencies.sources.intersection_update(context.sources)
         model_context = context.context_for_dependencies(
             dependencies.union(self.tests_ref_source_dependencies)
         )
@@ -323,11 +334,24 @@ class BaseModelConfig(GeneralConfig):
             "column_descriptions": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {
                 model.canonical_name(context) for model in model_context.refs.values()
-            }.union({source.canonical_name(context) for source in model_context.sources.values()}),
+            }.union(
+                {
+                    source.canonical_name(context)
+                    for source in model_context.sources.values()
+                    if source.fqn not in context.model_fqns
+                    # Allow dbt projects to reference a model as a source without causing a cycle
+                },
+            ),
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
-            "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
+            "pre_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.pre_hook
+            ],
+            "post_statements": [
+                ParsableSql(sql=d.jinja_statement(hook.sql).sql(), transaction=hook.transaction)
+                for hook in self.post_hook
+            ],
             "tags": self.tags,
             "physical_schema_mapping": context.sqlmesh_config.physical_schema_mapping,
             "default_catalog": context.target.database,

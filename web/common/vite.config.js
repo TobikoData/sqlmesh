@@ -31,7 +31,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@sqlmesh-common': path.resolve(__dirname, './src'),
     },
   },
   build: {
@@ -61,6 +61,7 @@ export default defineConfig({
         '@radix-ui/react-slot',
         'tailwindcss',
         '@tailwindcss/typography',
+        '@xyflow/react',
       ],
       output: {
         globals: {
@@ -70,6 +71,7 @@ export default defineConfig({
           'tailwind-merge': 'tailwindMerge',
           'class-variance-authority': 'classVarianceAuthority',
           '@radix-ui/react-slot': 'radixSlot',
+          '@xyflow/react': 'xyflowReact',
         },
         assetFileNames: assetInfo => {
           if (assetInfo.name && assetInfo.name.endsWith('.css')) {

@@ -62,6 +62,7 @@ from sqlmesh.utils.errors import (
     NoChangesPlanError,
 )
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 from tests.utils.test_helpers import use_terminal_console
 from tests.utils.test_filesystem import create_temp_file
 
@@ -700,6 +701,45 @@ def test_clear_caches(tmp_path: pathlib.Path):
     assert not cache_dir.exists()
 
 
+def test_clear_caches_with_long_base_path(tmp_path: pathlib.Path):
+    base_path = tmp_path / ("abcde" * 50)
+    assert (
+        len(str(base_path.absolute())) > 260
+    )  # Paths longer than 260 chars trigger problems on Windows
+
+    default_cache_dir = base_path / c.CACHE
+    custom_cache_dir = base_path / ".test_cache"
+
+    # note: we create the Context here so it doesnt get passed any "fixed" paths
+    ctx = Context(config=Config(cache_dir=str(custom_cache_dir)), paths=base_path)
+
+    if IS_WINDOWS:
+        # fix these so we can use them in this test
+        default_cache_dir = fix_windows_path(default_cache_dir)
+        custom_cache_dir = fix_windows_path(custom_cache_dir)
+
+    default_cache_dir.mkdir(parents=True)
+    custom_cache_dir.mkdir(parents=True)
+
+    default_cache_file = default_cache_dir / "cache.txt"
+    custom_cache_file = custom_cache_dir / "cache.txt"
+
+    default_cache_file.write_text("test")
+    custom_cache_file.write_text("test")
+
+    assert default_cache_file.exists()
+    assert custom_cache_file.exists()
+    assert default_cache_dir.exists()
+    assert custom_cache_dir.exists()
+
+    ctx.clear_caches()
+
+    assert not default_cache_file.exists()
+    assert not custom_cache_file.exists()
+    assert not default_cache_dir.exists()
+    assert not custom_cache_dir.exists()
+
+
 def test_cache_path_configurations(tmp_path: pathlib.Path):
     project_dir = tmp_path / "project"
     project_dir.mkdir(parents=True)
@@ -1030,7 +1070,7 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     sushi_context._engine_adapter = adapter_mock
     sushi_context.engine_adapters = {sushi_context.config.default_gateway: adapter_mock}
     sushi_context._state_sync = state_sync_mock
-    state_sync_mock.get_expired_snapshots.return_value = []
+    state_sync_mock.get_expired_snapshots.return_value = None
 
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
@@ -3050,9 +3090,10 @@ SELECT * FROM test_db.uppercase_gateway_table;
     # Check that the column types are properly loaded (not UNKNOWN)
     external_model = gateway_specific_models[0]
     column_types = {name: str(dtype) for name, dtype in external_model.columns_to_types.items()}
-    assert column_types == {"id": "INT", "name": "TEXT"}, (
-        f"External model column types should not be UNKNOWN, got: {column_types}"
-    )
+    assert column_types == {
+        "id": "INT",
+        "name": "TEXT",
+    }, f"External model column types should not be UNKNOWN, got: {column_types}"
 
     # Test that when using a different case for the gateway parameter, we get the same results
     context_mixed_case = Context(
@@ -3177,3 +3218,55 @@ def test_lint_model_projections(tmp_path: Path):
 
     with pytest.raises(LinterError, match=config_err):
         prod_plan = context.plan(no_prompts=True, auto_apply=True)
+
+
+def test_grants_through_plan_apply(sushi_context, mocker):
+    from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
+    from sqlmesh.core.model.meta import GrantsTargetLayer
+
+    model = sushi_context.get_model("sushi.waiter_revenue_by_day")
+
+    mocker.patch.object(DuckDBEngineAdapter, "SUPPORTS_GRANTS", True)
+    sync_grants_mock = mocker.patch.object(DuckDBEngineAdapter, "sync_grants_config")
+
+    model_with_grants = model.copy(
+        update={
+            "grants": {"select": ["analyst", "reporter"]},
+            "grants_target_layer": GrantsTargetLayer.ALL,
+        }
+    )
+    sushi_context.upsert_model(model_with_grants)
+
+    sushi_context.plan("dev", no_prompts=True, auto_apply=True)
+
+    # When planning for dev env w/ metadata only changes,
+    # only virtual layer is updated, so no physical grants are applied
+    assert sync_grants_mock.call_count == 1
+    assert all(
+        call[0][1] == {"select": ["analyst", "reporter"]}
+        for call in sync_grants_mock.call_args_list
+    )
+
+    sync_grants_mock.reset_mock()
+
+    new_grants = ({"select": ["analyst", "reporter", "manager"], "insert": ["etl_user"]},)
+    model_updated = model_with_grants.copy(
+        update={
+            "query": parse_one(model.query.sql() + " LIMIT 1000"),
+            "grants": new_grants,
+            # force model update, hence new physical table creation
+            "stamp": "update model and grants",
+        }
+    )
+    sushi_context.upsert_model(model_updated)
+    sushi_context.plan("dev", no_prompts=True, auto_apply=True)
+
+    # Applies grants 2 times: 1 x physical, 1 x virtual
+    assert sync_grants_mock.call_count == 2
+    assert all(call[0][1] == new_grants for call in sync_grants_mock.call_args_list)
+
+    sync_grants_mock.reset_mock()
+
+    # plan for prod
+    sushi_context.plan(no_prompts=True, auto_apply=True)
+    assert sync_grants_mock.call_count == 2

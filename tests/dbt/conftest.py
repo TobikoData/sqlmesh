@@ -127,3 +127,26 @@ def dbt_dummy_postgres_config() -> PostgresConfig:
         port=5432,
         schema="schema",
     )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def reset_dbt_globals():
+    # This fixture is used to clear the memoized cache for _get_package_with_retries
+    # in dbt.clients.registry. This is necessary because the cache is shared across
+    # tests and can cause unexpected behavior if not cleared as some tests depend on
+    # the deprecation warning that _get_package_with_retries fires
+    yield
+    # https://github.com/dbt-labs/dbt-core/blob/main/tests/functional/conftest.py#L9
+    try:
+        from dbt.clients.registry import _get_cached
+
+        _get_cached.cache = {}
+    except Exception:
+        pass
+    # https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/tests/util.py#L82
+    try:
+        from dbt_common.events.functions import reset_metadata_vars
+
+        reset_metadata_vars()
+    except Exception:
+        pass

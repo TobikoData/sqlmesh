@@ -71,6 +71,10 @@ export default {
           model: 'var(--color-model-name-model)',
           'copy-icon': 'var(--color-model-name-copy-icon)',
           'copy-icon-hover': 'var(--color-model-name-copy-icon-hover)',
+          'copy-icon-background':
+            'var(--color-model-name-copy-icon-background)',
+          'copy-icon-background-hover':
+            'var(--color-model-name-copy-icon-background-hover)',
         },
         badge: {
           background: 'var(--color-badge-background)',

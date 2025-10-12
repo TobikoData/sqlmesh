@@ -15,6 +15,7 @@ from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
 from sqlmesh.dbt.builtin import Api
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import Dependencies
@@ -46,7 +47,8 @@ from sqlmesh.dbt.target import (
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import load as yaml_load
+from sqlmesh.utils.yaml import load as yaml_load, dump as yaml_dump
+from tests.dbt.conftest import EmptyProjectCreator
 
 pytestmark = pytest.mark.dbt
 
@@ -1211,3 +1213,37 @@ test_empty_vars:
     # Verify the variables are empty (not causing any issues)
     assert project.packages["test_empty_vars"].variables == {}
     assert project.context.variables == {}
+
+
+def test_infer_state_schema_name(create_empty_project: EmptyProjectCreator):
+    project_dir, _ = create_empty_project("test_foo", "dev")
+
+    # infer_state_schema_name defaults to False if omitted
+    config = sqlmesh_config(project_root=project_dir)
+    assert config.dbt
+    assert not config.dbt.infer_state_schema_name
+    assert config.get_state_schema() == "sqlmesh"
+
+    # create_empty_project() uses the default dbt template for sqlmesh yaml config which
+    # sets infer_state_schema_name=True
+    ctx = Context(paths=[project_dir])
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
+    assert ctx.config.get_state_schema() == "sqlmesh_state_test_foo_main"
+    assert isinstance(ctx.state_sync, CachingStateSync)
+    assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
+    assert ctx.state_sync.state_sync.schema == "sqlmesh_state_test_foo_main"
+
+    # If the user delberately overrides state_schema then we should respect this choice
+    config_file = project_dir / "sqlmesh.yaml"
+    config_yaml = yaml_load(config_file)
+    config_yaml["gateways"] = {"dev": {"state_schema": "state_override"}}
+    config_file.write_text(yaml_dump(config_yaml))
+
+    ctx = Context(paths=[project_dir])
+    assert ctx.config.dbt
+    assert ctx.config.dbt.infer_state_schema_name
+    assert ctx.config.get_state_schema() == "state_override"
+    assert isinstance(ctx.state_sync, CachingStateSync)
+    assert isinstance(ctx.state_sync.state_sync, EngineAdapterStateSync)
+    assert ctx.state_sync.state_sync.schema == "state_override"
