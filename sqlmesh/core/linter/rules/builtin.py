@@ -9,23 +9,23 @@ from sqlglot.helper import subclasses
 
 from sqlmesh.core.constants import EXTERNAL_MODELS_YAML
 from sqlmesh.core.dialect import normalize_model_name
-from sqlmesh.core.linter.definition import RuleSet
 from sqlmesh.core.linter.helpers import (
     TokenPositionDetails,
     get_range_of_model_block,
     read_range_from_string,
 )
 from sqlmesh.core.linter.rule import (
-    CreateFile,
-    Fix,
-    Position,
-    Range,
     Rule,
     RuleViolation,
+    Range,
+    Fix,
     TextEdit,
+    Position,
+    CreateFile,
 )
-from sqlmesh.core.model import ExternalModel, Model, SqlModel
-from sqlmesh.utils.lineage import ExternalModelReference, extract_references_from_query
+from sqlmesh.core.linter.definition import RuleSet
+from sqlmesh.core.model import Model, SqlModel, ExternalModel
+from sqlmesh.utils.lineage import extract_references_from_query, ExternalModelReference
 
 
 class NoSelectStar(Rule):

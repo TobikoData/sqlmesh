@@ -40,13 +40,13 @@ import sys
 import time
 import traceback
 import typing as t
-from datetime import datetime
 from functools import cached_property
 from io import StringIO
 from itertools import chain
 from pathlib import Path
 from shutil import rmtree
 from types import MappingProxyType
+from datetime import datetime
 
 from sqlglot import Dialect, exp
 from sqlglot.helper import first
@@ -63,7 +63,6 @@ from sqlmesh.core.config import (
 )
 from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.core.config.loader import C
-from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.root import RegexKeyDict
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -77,24 +76,24 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
-from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
+from sqlmesh.core.loader import Loader
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation, Linter
 from sqlmesh.core.linter.rules import BUILTIN_RULES
-from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import ExecutableOrMacro, macro
 from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model, update_model_schemas
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
     NotificationTargetManager,
 )
-from sqlmesh.core.plan import Plan, PlanBuilder, PlanExplainer, SnapshotIntervals
+from sqlmesh.core.plan import Plan, PlanBuilder, SnapshotIntervals, PlanExplainer
 from sqlmesh.core.plan.definition import UserProvidedFlags
 from sqlmesh.core.reference import ReferenceGraph
-from sqlmesh.core.scheduler import CompletionStatus, Scheduler
+from sqlmesh.core.scheduler import Scheduler, CompletionStatus
 from sqlmesh.core.schema_loader import create_external_models_file
-from sqlmesh.core.selector import NativeSelector, Selector
+from sqlmesh.core.selector import Selector, NativeSelector
 from sqlmesh.core.snapshot import (
     DeployabilityIndex,
     Snapshot,
@@ -109,36 +108,37 @@ from sqlmesh.core.state_sync import (
     StateReader,
     StateSync,
 )
+from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
-    ModelTestMetadata,
     ModelTextTestResult,
-    filter_tests_by_patterns,
+    ModelTestMetadata,
     generate_test,
     run_tests,
+    filter_tests_by_patterns,
 )
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, Verbosity
 from sqlmesh.utils.concurrency import concurrent_apply_to_values
-from sqlmesh.utils.config import print_config
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    format_tz_datetime,
-    make_exclusive,
-    now,
-    now_timestamp,
-    to_datetime,
     to_timestamp,
+    format_tz_datetime,
+    now_timestamp,
+    now,
+    to_datetime,
+    make_exclusive,
 )
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
-    LinterError,
     PlanError,
     SQLMeshError,
     UncategorizedPlanError,
+    LinterError,
 )
+from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 
