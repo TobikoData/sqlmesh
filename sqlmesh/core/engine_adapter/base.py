@@ -18,7 +18,7 @@ from functools import cached_property, partial
 
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
-from sqlglot.helper import ensure_list
+from sqlglot.helper import ensure_list, seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import (
@@ -1887,11 +1887,7 @@ class EngineAdapter:
         # column names and then remove them from the unmanaged_columns
         if check_columns:
             # Handle both Star directly and [Star()] (which can happen during serialization/deserialization)
-            if isinstance(check_columns, exp.Star) or (
-                isinstance(check_columns, list)
-                and len(check_columns) == 1
-                and isinstance(check_columns[0], exp.Star)
-            ):
+            if isinstance(seq_get(ensure_list(check_columns), 0), exp.Star):
                 check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
         execution_ts = (
             exp.cast(execution_time, time_data_type, dialect=self.dialect)
