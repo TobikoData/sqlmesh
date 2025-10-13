@@ -18,7 +18,7 @@ from functools import cached_property, partial
 
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
-from sqlglot.helper import ensure_list
+from sqlglot.helper import ensure_list, seq_get
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import (
@@ -1772,7 +1772,7 @@ class EngineAdapter:
         valid_from_col: exp.Column,
         valid_to_col: exp.Column,
         execution_time: t.Union[TimeLike, exp.Column],
-        check_columns: t.Union[exp.Star, t.Sequence[exp.Column]],
+        check_columns: t.Union[exp.Star, t.Sequence[exp.Expression]],
         invalidate_hard_deletes: bool = True,
         execution_time_as_valid_from: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1810,7 +1810,7 @@ class EngineAdapter:
         execution_time: t.Union[TimeLike, exp.Column],
         invalidate_hard_deletes: bool = True,
         updated_at_col: t.Optional[exp.Column] = None,
-        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Column]]] = None,
+        check_columns: t.Optional[t.Union[exp.Star, t.Sequence[exp.Expression]]] = None,
         updated_at_as_valid_from: bool = False,
         execution_time_as_valid_from: bool = False,
         target_columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -1885,8 +1885,10 @@ class EngineAdapter:
         # they are equal or not, the extra check is not a problem and we gain simplified logic here.
         # If we want to change this, then we just need to check the expressions in unique_key and pull out the
         # column names and then remove them from the unmanaged_columns
-        if check_columns and check_columns == exp.Star():
-            check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
+        if check_columns:
+            # Handle both Star directly and [Star()] (which can happen during serialization/deserialization)
+            if isinstance(seq_get(ensure_list(check_columns), 0), exp.Star):
+                check_columns = [exp.column(col) for col in unmanaged_columns_to_types]
         execution_ts = (
             exp.cast(execution_time, time_data_type, dialect=self.dialect)
             if isinstance(execution_time, exp.Column)
@@ -1923,7 +1925,8 @@ class EngineAdapter:
                 col_qualified.set("table", exp.to_identifier("joined"))
 
                 t_col = col_qualified.copy()
-                t_col.this.set("this", f"t_{col.name}")
+                for column in t_col.find_all(exp.Column):
+                    column.this.set("this", f"t_{column.name}")
 
                 row_check_conditions.extend(
                     [
