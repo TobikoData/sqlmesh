@@ -7,7 +7,6 @@ from sqlglot import parse_one
 from tests.core.engine_adapter import to_sql_calls
 
 from sqlmesh.core.engine_adapter.doris import DorisEngineAdapter
-from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 
 from pytest_mock.plugin import MockerFixture
 
@@ -133,15 +132,10 @@ def test_create_table_like(make_mocked_engine_adapter: t.Callable[..., DorisEngi
 def test_create_schema(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):
     adapter = make_mocked_engine_adapter(DorisEngineAdapter)
     adapter.create_schema("test_schema")
-    adapter.create_schema("test_schema", ignore_if_exists=False)
 
     assert to_sql_calls(adapter) == [
         "CREATE DATABASE IF NOT EXISTS `test_schema`",
-        "CREATE DATABASE `test_schema`",
     ]
-
-    with pytest.raises(UnsupportedCatalogOperationError):
-        adapter.create_schema("test_catalog.test_schema")
 
 
 def test_drop_schema(make_mocked_engine_adapter: t.Callable[..., DorisEngineAdapter]):

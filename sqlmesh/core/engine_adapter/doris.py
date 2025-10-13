@@ -17,7 +17,6 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
-    CatalogSupport,
     CommentCreationTable,
     CommentCreationView,
     DataObject,
@@ -55,10 +54,8 @@ class DorisEngineAdapter(
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CREATE_DROP_CATALOG = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
-
-    @property
-    def catalog_support(self) -> CatalogSupport:
-        return CatalogSupport.FULL_SUPPORT
+    # default setting `enable_unicode_name_support=false` so it is incompatible with unicode characters in model names
+    QUOTE_IDENTIFIERS_IN_VIEWS = False
 
     def create_schema(
         self,
