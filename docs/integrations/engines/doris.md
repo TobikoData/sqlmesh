@@ -6,7 +6,7 @@
 
 SQLMesh supports Doris through its MySQL-compatible protocol, while providing Doris-specific optimizations for table models, indexing, partitioning, and other features. The adapter is designed to leverage Doris's strengths for analytical workloads, with sensible defaults and support for advanced configuration.
 
-## Connection Configuration
+## Connection Configuration Example
 
 ```yaml
 doris:
@@ -21,13 +21,8 @@ doris:
     charset: utf8mb4
     connect_timeout: 60
   state_connection:
-    # Use postgres as state connection
-    type: postgres
-    host: 127.0.0.1
-    port: 5432
-    user: your_user
-    password: your_password
-    database: your_database
+    # Use duckdb as state connection
+    type: duckdb
 ```
 
 ## Table Models
@@ -35,13 +30,6 @@ doris:
 Doris supports three table models: DUPLICATE, UNIQUE, and AGGREGATE. SQLMesh supports **DUPLICATE** and **UNIQUE** models through the `physical_properties` configuration.
 
 ### DUPLICATE Model (Default)
-
-The DUPLICATE model allows duplicate data and is optimized for high-throughput scenarios like log data and streaming ingestion.
-
-**Features:**
-- **High Write Performance**: Optimized for append-only workloads
-- **No Deduplication**: Allows duplicate records
-- **Streaming Friendly**: Ideal for real-time data ingestion
 
 **Example Configuration:**
 ```sql
@@ -61,17 +49,10 @@ MODEL (
 
 ### UNIQUE Model
 
-The UNIQUE model is ideal for dimension tables and scenarios requiring data updates. It ensures key uniqueness and supports efficient UPSERT operations.
-
-**Features:**
-- **Primary Key Updates**: New data overwrites existing records with matching keys
-- **Merge-on-Write**: Can be enabled for better query performance
-- **Automatic Deduplication**: Ensures data uniqueness based on specified key columns
-
 **Example Configuration:**
 ```sql
 MODEL (
-  name dim_users,
+  name user_events,
   kind FULL,
   physical_properties (
     unique_key 'user_id',
@@ -79,8 +60,7 @@ MODEL (
       kind = 'HASH',
       expressions = 'user_id',
       buckets = 16
-    ),
-    enable_unique_key_merge_on_write = 'true'
+    )
   )
 );
 ```
@@ -139,7 +119,7 @@ MODEL (
 
 ### Partitioning
 
-Doris supports range partitioning and list partitioning to improve query performance.
+Doris table supports range partitioning and list partitioning to improve query performance.
 
 **Custom Partition Expression:**
 ```sql
@@ -325,47 +305,6 @@ SELECT
   MAX(event_time) as last_event
 FROM user_events
 GROUP BY user_id;
-```
-
-## Schema Management
-
-### Creating Schemas
-
-```sql
--- Schemas in Doris are databases
-CREATE DATABASE IF NOT EXISTS my_schema;
-```
-
-### Dropping Schemas
-
-```sql
--- Doris doesn't support CASCADE clause
-DROP DATABASE my_schema;
-```
-
-## Data Operations
-
-### Table Operations
-
-**Create Table Like:**
-```sql
--- Create a new table with the same structure as an existing table
-CREATE TABLE new_table LIKE existing_table;
-```
-
-**Rename Table:**
-```sql
--- Rename a table
-ALTER TABLE old_table_name RENAME new_table_name;
-```
-
-**Delete Operations:**
-```sql
--- Delete specific records
-DELETE FROM table_name WHERE condition;
-
--- Full table deletion uses TRUNCATE for better performance
-DELETE FROM table_name WHERE TRUE;  -- Executes as TRUNCATE TABLE
 ```
 
 ## Dependencies
