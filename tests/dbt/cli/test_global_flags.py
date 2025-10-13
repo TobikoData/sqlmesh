@@ -127,7 +127,9 @@ def test_profiles_dir(
     # should fail if we don't specify --profiles-dir
     result = invoke_cli(["list"])
     assert result.exit_code > 0, result.output
-    assert "profiles.yml not found" in result.output
+
+    # alternative ~/.dbt/profiles.yml might exist but doesn't contain the profile
+    assert "profiles.yml not found" in result.output or "not found in profiles" in result.output
 
     # should pass if we specify --profiles-dir
     result = invoke_cli(["--profiles-dir", str(new_profiles_yml.parent), "list"])
@@ -158,7 +160,9 @@ def test_project_dir(
     # should fail if the profiles.yml also doesnt exist at that --project-dir
     result = invoke_cli(["--project-dir", str(new_project_yml.parent), "list"])
     assert result.exit_code != 0, result.output
-    assert "profiles.yml not found" in result.output
+
+    # profiles.yml might exist but doesn't contain the profile
+    assert "profiles.yml not found" in result.output or "not found in profiles" in result.output
 
     # should pass if it can find both files, either because we specified --profiles-dir explicitly or the profiles.yml was found in --project-dir
     result = invoke_cli(
