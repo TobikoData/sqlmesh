@@ -272,7 +272,7 @@ markers = [
     "pyspark: test for PySpark that need to run separately from the other spark tests",
     "trino: test for Trino (all connectors)",
     "risingwave: test for Risingwave",
-    "doris: test for Doris",,
+    "doris: test for Doris",
 
     # Other
     "set_default_connection",

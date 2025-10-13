@@ -139,7 +139,7 @@ MODEL (
   kind FULL,
   partitioned_by RANGE(event_date),
   physical_properties (
-    partitioned_by_expr = (
+    partitions = (
       'PARTITION `p2023` VALUES [("2023-01-01"), ("2024-01-01"))', 
       'PARTITION `p2024` VALUES [("2024-01-01"), ("2025-01-01"))', 
       'PARTITION `p2025` VALUES [("2025-01-01"), ("2026-01-01"))', 

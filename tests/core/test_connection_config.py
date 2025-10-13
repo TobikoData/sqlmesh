@@ -11,6 +11,7 @@ from sqlmesh.core.config.connection import (
     ClickhouseConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
+    DorisConnectionConfig,
     DuckDBAttachOptions,
     FabricConnectionConfig,
     DuckDBConnectionConfig,

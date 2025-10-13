@@ -6,7 +6,7 @@ import re
 
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import to_schema, transform_values
+from sqlmesh.core.dialect import to_schema
 
 from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
@@ -17,21 +17,21 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import (
+    CatalogSupport,
     CommentCreationTable,
     CommentCreationView,
     DataObject,
     DataObjectType,
     set_catalog,
 )
-from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import random_id, get_source_columns_to_types
+from sqlmesh.utils import random_id
 from sqlmesh.utils.errors import (
     SQLMeshError,
 )
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF, Query
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
     from sqlmesh.core.node import IntervalUnit
 
 logger = logging.getLogger(__name__)
@@ -48,12 +48,17 @@ class DorisEngineAdapter(
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
     MAX_TABLE_COMMENT_LENGTH = 2048
     MAX_COLUMN_COMMENT_LENGTH = 255
-    SUPPORTS_REPLACE_TABLE = False 
+    SUPPORTS_INDEXES = True
+    SUPPORTS_REPLACE_TABLE = False
     MAX_IDENTIFIER_LENGTH = 64
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CREATE_DROP_CATALOG = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
+
+    @property
+    def catalog_support(self) -> CatalogSupport:
+        return CatalogSupport.FULL_SUPPORT
 
     def create_schema(
         self,
@@ -289,7 +294,6 @@ class DorisEngineAdapter(
         """
         Drop view in Doris.
         """
-        # Remove cascade from kwargs as Doris doesn't support it
         if materialized and kwargs.get("view_properties"):
             view_properties = kwargs.pop("view_properties")
             if view_properties.get("materialized_type") == "SYNC" and view_properties.get(

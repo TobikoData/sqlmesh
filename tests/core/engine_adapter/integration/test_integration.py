@@ -21,6 +21,7 @@ import pandas as pd  # noqa: TID253
 import pytest
 import pytz
 import time_machine
+from tenacity import Retrying, stop_after_delay, wait_fixed, retry_if_exception_type
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -426,8 +427,22 @@ def test_materialized_view(ctx_query_and_df: TestContext):
     source_table = ctx.table("source_table")
     ctx.engine_adapter.ctas(source_table, ctx.input_data(input_data), ctx.columns_to_types)
     view = ctx.table("test_view")
-    view_query = exp.select(*ctx.columns_to_types).from_(source_table)
-    ctx.engine_adapter.create_view(view, view_query, materialized=True)
+    # For Doris synchronized materialized views, we need to use only the table name without schema and add the source table name to the table properties
+    if ctx.engine_adapter.dialect == "doris":
+        view = exp.to_table(view.name)
+        # For Doris, select only the first column name from columns_to_types.
+        # Otherwise, Doris will raise an error if the materialized view has the same schema as the base table.
+        first_column = next(iter(ctx.columns_to_types))
+        view_query = exp.select(first_column).from_(source_table)
+        ctx.engine_adapter.create_view(
+            view,
+            view_query,
+            materialized=True,
+            view_properties={"materialized_type": "SYNC", "source_table": source_table},
+        )
+    else:
+        view_query = exp.select(*ctx.columns_to_types).from_(source_table)
+        ctx.engine_adapter.create_view(view, view_query, materialized=True)
     results = ctx.get_metadata_results()
     # Redshift considers the underlying dataset supporting materialized views as a table therefore we get 2
     # tables in the result
@@ -436,13 +451,30 @@ def test_materialized_view(ctx_query_and_df: TestContext):
     else:
         assert len(results.tables) == 1
     assert len(results.views) == 0
-    assert len(results.materialized_views) == 1
-    assert results.materialized_views[0] == view.name
-    ctx.compare_with_current(view, input_data)
+    # Doris information_schema.tables does not show materialized views and cannot query the synchronized materialized view
+    if not ctx.engine_adapter.dialect == "doris":
+        assert len(results.materialized_views) == 1
+        assert results.materialized_views[0] == view.name
+        ctx.compare_with_current(view, input_data)
     # Make sure that dropping a materialized view also works
-    ctx.engine_adapter.drop_view(view, materialized=True)
-    results = ctx.get_metadata_results()
-    assert len(results.materialized_views) == 0
+    if ctx.engine_adapter.dialect == "doris":
+        # Wait for the materialized view to be created by retrying drop until it succeeds
+        for attempt in Retrying(
+            stop=stop_after_delay(5),
+            wait=wait_fixed(1),
+            retry=retry_if_exception_type(Exception),
+            reraise=True,
+        ):
+            with attempt:
+                ctx.engine_adapter.drop_view(
+                    view,
+                    materialized=True,
+                    view_properties={"materialized_type": "SYNC", "source_table": source_table},
+                )
+    else:
+        ctx.engine_adapter.drop_view(view, materialized=True)
+        results = ctx.get_metadata_results()
+        assert len(results.materialized_views) == 0
 
 
 def test_drop_schema(ctx: TestContext):
@@ -815,16 +847,18 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     )
     input_data = pd.DataFrame(
         [
-            {"id": 1, ctx.time_column: "2022-01-01"},
-            {"id": 2, ctx.time_column: "2022-01-02"},
-            {"id": 3, ctx.time_column: "2022-01-03"},
+            {"id": 1, ctx.time_column: date_1},
+            {"id": 2, ctx.time_column: date_2},
+            {"id": 3, ctx.time_column: date_3},
         ]
     )
+    if ctx.dialect == "doris":
+        ctx.engine_adapter.execute("SET enable_insert_strict = false;")
     ctx.engine_adapter.insert_overwrite_by_time_partition(
         table,
         ctx.input_data(input_data),
-        start="2022-01-02",
-        end="2022-01-03",
+        start=date_2,
+        end=date_3,
         time_formatter=ctx.time_formatter,
         time_column=ctx.time_column,
         target_columns_to_types=ctx.columns_to_types,
@@ -844,16 +878,16 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     if ctx.test_type == "df":
         overwrite_data = pd.DataFrame(
             [
-                {"id": 10, ctx.time_column: "2022-01-03"},
-                {"id": 4, ctx.time_column: "2022-01-04"},
-                {"id": 5, ctx.time_column: "2022-01-05"},
+                {"id": 10, ctx.time_column: date_3},
+                {"id": 4, ctx.time_column: date_4},
+                {"id": 5, ctx.time_column: date_5},
             ]
         )
         ctx.engine_adapter.insert_overwrite_by_time_partition(
             table,
             ctx.input_data(overwrite_data),
-            start="2022-01-03",
-            end="2022-01-05",
+            start=date_3,
+            end=date_5,
             time_formatter=ctx.time_formatter,
             time_column=ctx.time_column,
             target_columns_to_types=ctx.columns_to_types,
@@ -871,10 +905,10 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
             table,
             pd.DataFrame(
                 [
-                    {"id": 2, ctx.time_column: "2022-01-02"},
-                    {"id": 10, ctx.time_column: "2022-01-03"},
-                    {"id": 4, ctx.time_column: "2022-01-04"},
-                    {"id": 5, ctx.time_column: "2022-01-05"},
+                    {"id": 2, ctx.time_column: date_2},
+                    {"id": 10, ctx.time_column: date_3},
+                    {"id": 4, ctx.time_column: date_4},
+                    {"id": 5, ctx.time_column: date_5},
                 ]
             ),
         )
@@ -927,16 +961,18 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     )
     input_data = pd.DataFrame(
         [
-            {"id": 1, ctx.time_column: "2022-01-01", "ignored_source": "ignored_value"},
-            {"id": 2, ctx.time_column: "2022-01-02", "ignored_source": "ignored_value"},
-            {"id": 3, ctx.time_column: "2022-01-03", "ignored_source": "ignored_value"},
+            {"id": 1, ctx.time_column: date_1, "ignored_source": "ignored_value"},
+            {"id": 2, ctx.time_column: date_2, "ignored_source": "ignored_value"},
+            {"id": 3, ctx.time_column: date_3, "ignored_source": "ignored_value"},
         ]
     )
+    if ctx.dialect == "doris":
+        ctx.engine_adapter.execute("SET enable_insert_strict = false;")
     ctx.engine_adapter.insert_overwrite_by_time_partition(
         table,
         ctx.input_data(input_data),
-        start="2022-01-02",
-        end="2022-01-03",
+        start=date_2,
+        end=date_3,
         time_formatter=ctx.time_formatter,
         time_column=ctx.time_column,
         target_columns_to_types=columns_to_types,
@@ -962,16 +998,16 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     if ctx.test_type == "df":
         overwrite_data = pd.DataFrame(
             [
-                {"id": 10, ctx.time_column: "2022-01-03", "ignored_source": "ignored_value"},
-                {"id": 4, ctx.time_column: "2022-01-04", "ignored_source": "ignored_value"},
-                {"id": 5, ctx.time_column: "2022-01-05", "ignored_source": "ignored_value"},
+                {"id": 10, ctx.time_column: date_3, "ignored_source": "ignored_value"},
+                {"id": 4, ctx.time_column: date_4, "ignored_source": "ignored_value"},
+                {"id": 5, ctx.time_column: date_5, "ignored_source": "ignored_value"},
             ]
         )
         ctx.engine_adapter.insert_overwrite_by_time_partition(
             table,
             ctx.input_data(overwrite_data),
-            start="2022-01-03",
-            end="2022-01-05",
+            start=date_3,
+            end=date_5,
             time_formatter=ctx.time_formatter,
             time_column=ctx.time_column,
             target_columns_to_types=columns_to_types,
@@ -990,10 +1026,10 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
             table,
             pd.DataFrame(
                 [
-                    {"id": 2, "ignored_column": None, ctx.time_column: "2022-01-02"},
-                    {"id": 10, "ignored_column": None, ctx.time_column: "2022-01-03"},
-                    {"id": 4, "ignored_column": None, ctx.time_column: "2022-01-04"},
-                    {"id": 5, "ignored_column": None, ctx.time_column: "2022-01-05"},
+                    {"id": 2, "ignored_column": None, ctx.time_column: date_2},
+                    {"id": 10, "ignored_column": None, ctx.time_column: date_3},
+                    {"id": 4, "ignored_column": None, ctx.time_column: date_4},
+                    {"id": 5, "ignored_column": None, ctx.time_column: date_5},
                 ]
             ),
         )
@@ -1009,8 +1045,12 @@ def test_merge(ctx_query_and_df: TestContext):
     # Athena only supports MERGE on Iceberg tables
     # And it cant fall back to a logical merge on Hive tables because it cant delete records
     table_format = "iceberg" if ctx.dialect == "athena" else None
+    # Doris needs to have a UNIQUE KEY to use MERGE
+    table_properties = {"unique_key": "id"} if ctx.dialect == "doris" else None
 
-    ctx.engine_adapter.create_table(table, ctx.columns_to_types, table_format=table_format)
+    ctx.engine_adapter.create_table(
+        table, ctx.columns_to_types, table_format=table_format, table_properties=table_properties
+    )
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -1075,6 +1115,8 @@ def test_merge_source_columns(ctx_query_and_df: TestContext):
     # Athena only supports MERGE on Iceberg tables
     # And it cant fall back to a logical merge on Hive tables because it cant delete records
     table_format = "iceberg" if ctx.dialect == "athena" else None
+    # Doris needs to have a UNIQUE KEY to use MERGE
+    table_properties = {"unique_key": "id"} if ctx.dialect == "doris" else None
 
     columns_to_types = ctx.columns_to_types.copy()
     columns_to_types["ignored_column"] = exp.DataType.build("int")
@@ -2622,6 +2664,7 @@ def test_dialects(ctx: TestContext):
                 "mysql": pd.Timestamp("2020-01-01 00:00:00"),
                 "spark": pd.Timestamp("2020-01-01 00:00:00"),
                 "databricks": pd.Timestamp("2020-01-01 00:00:00"),
+                "doris": pd.Timestamp("2020-01-01 00:00:00"),
             },
         ),
         (
@@ -2725,6 +2768,7 @@ def test_batch_size_on_incremental_by_unique_key_model(ctx: TestContext):
                         unique_key item_id,
                         batch_size 1
                     ),
+                    dialect {ctx.dialect},
                     {table_format}
                     start '2020-01-01',
                     end '2020-01-07',

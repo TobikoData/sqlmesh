@@ -210,6 +210,7 @@ risingwave-test: engine-risingwave-up
 	
 doris-test: engine-doris-up
 	pytest -n auto -m "doris" --reruns 3 --junitxml=test-results/junit-doris.xml
+
 #################
 # Cloud Engines #
 #################
