@@ -841,6 +841,28 @@ def test_seed_column_types():
     sqlmesh_seed = seed.to_sqlmesh(context)
     assert sqlmesh_seed.columns_to_types == expected_column_types
 
+    seed = SeedConfig(
+        name="foo",
+        package="package",
+        path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
+        column_types={
+            "id": "TEXT",
+            "name": "TEXT NOT NULL",
+        },
+        quote_columns=True,
+    )
+
+    expected_column_types = {
+        "id": exp.DataType.build("text"),
+        "name": exp.DataType.build("text"),
+    }
+
+    logger = logging.getLogger("sqlmesh.dbt.column")
+    with patch.object(logger, "warning") as mock_logger:
+        sqlmesh_seed = seed.to_sqlmesh(context)
+    assert "Ignoring unsupported constraints" in mock_logger.call_args[0][0]
+    assert sqlmesh_seed.columns_to_types == expected_column_types
+
 
 def test_seed_column_inference(tmp_path):
     seed_csv = tmp_path / "seed.csv"
