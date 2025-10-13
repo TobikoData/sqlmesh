@@ -181,3 +181,40 @@ def test_project_dir(
     result = invoke_cli(["--project-dir", str(new_project_yml.parent), "list"])
     assert result.exit_code == 0, result.output
     assert "Models in project" in result.output
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        # dbt only allows after subcommand
+        ("--project-dir", "."),
+        ("--profiles-dir", "."),
+        # dbt allows both before and after subcommand
+        ("--profile", "jaffle_shop"),
+        ("--log-level", "debug"),
+        ("--target", "dev"),
+        ("--debug",),
+    ],
+)
+def test_global_options_top_level_and_sub_level(
+    invoke_cli: t.Callable[..., Result], jaffle_shop_duckdb: Path, flag: t.Tuple[str, ...]
+):
+    """
+    This test checks that the parameterized options can be specified as both:
+
+    > sqlmesh_dbt <option> <subcommand>
+
+    and
+
+    > sqlmesh_dbt <subcommand> <option>
+
+    since by default, Click will only allow one and error on the other depending on where the @click.option decorator is positioned
+    """
+
+    result = invoke_cli([*flag, "list"])
+    assert result.exit_code == 0, result.output
+    assert not result.exception
+
+    result = invoke_cli(["list", *flag])
+    assert result.exit_code == 0, result.output
+    assert not result.exception
