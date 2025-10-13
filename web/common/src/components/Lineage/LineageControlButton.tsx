@@ -31,6 +31,7 @@ export function LineageControlButton({
               className,
             )}
             disabled={disabled}
+            title={text}
           >
             {children}
           </ControlButton>
