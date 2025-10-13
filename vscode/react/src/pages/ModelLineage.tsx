@@ -278,14 +278,14 @@ export const ModelLineage = ({
     return edgesColumnLevel.length > 0
       ? edgesColumnLevel
       : getTransformedModelEdgesTargetSources<
-          ModelFQN,
-          EdgeData,
-          ModelEdgeId,
-          ModelNodeId,
-          ModelNodeId,
-          ModelColumnRightHandleId,
-          ModelColumnLeftHandleId
-        >(adjacencyListKeys, adjacencyList, transformEdge)
+        ModelFQN,
+        EdgeData,
+        ModelEdgeId,
+        ModelNodeId,
+        ModelNodeId,
+        ModelColumnRightHandleId,
+        ModelColumnLeftHandleId
+      >(adjacencyListKeys, adjacencyList, transformEdge)
   }, [adjacencyListKeys, adjacencyList, transformEdge, edgesColumnLevel])
 
   const calculateLayout = React.useCallback(

@@ -48,7 +48,7 @@ test('Settings button is visible in the lineage view', async ({
         try {
           await activeFrame
             .getByRole('button', {
-              name: 'Settings',
+              name: 'Reset',
             })
             .waitFor({ timeout: 1000 })
           settingsCount++
