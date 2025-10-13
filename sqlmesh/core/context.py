@@ -77,6 +77,7 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo, EnvironmentStatements
+from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
 from sqlmesh.core.linter.definition import AnnotatedRuleViolation, Linter
 from sqlmesh.core.linter.rules import BUILTIN_RULES
 from sqlmesh.core.loader import Loader
@@ -108,11 +109,11 @@ from sqlmesh.core.state_sync import (
     StateReader,
     StateSync,
 )
-from sqlmesh.core.janitor import cleanup_expired_views, delete_expired_snapshots
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import (
     ModelTestMetadata,
     ModelTextTestResult,
+    filter_tests_by_patterns,
     generate_test,
     run_tests,
 )
@@ -399,6 +400,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             "standaloneaudits"
         )
         self._models_with_tests: t.Set[str] = set()
+        self._model_test_metadata: t.List[ModelTestMetadata] = []
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -649,6 +651,7 @@ class GenericContext(BaseContext, t.Generic[C]):
             self._excluded_requirements.update(project.excluded_requirements)
             self._environment_statements.extend(project.environment_statements)
             self._models_with_tests.update(project.models_with_tests)
+            self._model_test_metadata.extend(project.model_test_metadata)
 
             config = loader.config
             self._linters[config.project] = Linter.from_rules(
@@ -2227,7 +2230,10 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        test_meta = self.load_model_tests(tests=tests, patterns=match_patterns)
+        loaded_test_meta = self._model_test_metadata
+        test_meta = self._filter_preloaded_tests(
+            test_meta=loaded_test_meta, tests=tests, patterns=match_patterns
+        )
 
         result = run_tests(
             model_test_metadata=test_meta,
@@ -2788,6 +2794,35 @@ class GenericContext(BaseContext, t.Generic[C]):
                 return adapter
             raise SQLMeshError(f"Gateway '{gateway}' not found in the available engine adapters.")
         return self.engine_adapter
+
+    def _filter_preloaded_tests(
+        self,
+        test_meta: t.List[ModelTestMetadata],
+        tests: t.Optional[t.List[str]] = None,
+        patterns: t.Optional[t.List[str]] = None,
+    ) -> t.List[ModelTestMetadata]:
+        """Filter pre-loaded test metadata based on tests and patterns."""
+
+        if tests:
+            filtered_tests = []
+            for test in tests:
+                if "::" in test:
+                    filename, test_name = test.split("::", maxsplit=1)
+                    filtered_tests.extend(
+                        [
+                            t
+                            for t in test_meta
+                            if str(t.path) == filename and t.test_name == test_name
+                        ]
+                    )
+                else:
+                    filtered_tests.extend([t for t in test_meta if str(t.path) == test])
+            test_meta = filtered_tests
+
+        if patterns:
+            test_meta = filter_tests_by_patterns(test_meta, patterns)
+
+        return test_meta
 
     def _snapshots(
         self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
