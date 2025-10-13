@@ -352,7 +352,7 @@ class Scheduler:
             )
             for snapshot, intervals in merged_intervals.items()
         }
-        snapshot_batches = {}
+        snapshot_batches: t.Dict[Snapshot, Intervals] = {}
         all_unready_intervals: t.Dict[str, set[Interval]] = {}
         for snapshot_id in dag:
             if snapshot_id not in snapshot_intervals:
@@ -364,12 +364,13 @@ class Scheduler:
 
             adapter = self.snapshot_evaluator.get_adapter(snapshot.model_gateway)
 
-            parent_intervals = []
-            for parent in snapshot.parents:
-                if parent.snapshot_id not in snapshot_intervals:
+            parent_intervals: Intervals = []
+            for parent_id in snapshot.parents:
+                parent_snapshot, _ = snapshot_intervals.get(parent_id, (None, []))
+                if not parent_snapshot or parent_snapshot.is_external:
                     continue
-                _, p_intervals = snapshot_intervals[parent.snapshot_id]
-                parent_intervals.append(p_intervals)
+
+                parent_intervals.extend(snapshot_batches[parent_snapshot])
 
             context = ExecutionContext(
                 adapter,
