@@ -2230,9 +2230,8 @@ class GenericContext(BaseContext, t.Generic[C]):
 
             pd.set_option("display.max_columns", None)
 
-        loaded_test_meta = self._model_test_metadata
         test_meta = self._filter_preloaded_tests(
-            test_meta=loaded_test_meta, tests=tests, patterns=match_patterns
+            test_meta=self._model_test_metadata, tests=tests, patterns=match_patterns
         )
 
         result = run_tests(

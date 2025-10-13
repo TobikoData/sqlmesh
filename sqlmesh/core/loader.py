@@ -251,8 +251,6 @@ class Loader(abc.ABC):
                 model_test_metadata.model_name for model_test_metadata in model_test_metadata
             }
 
-            self._models_with_tests = models_with_tests
-
             project = LoadedProject(
                 macros=macros,
                 jinja_macros=jinja_macros,
