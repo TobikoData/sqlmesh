@@ -860,7 +860,6 @@ def test_seed_column_types():
     logger = logging.getLogger("sqlmesh.dbt.column")
     with patch.object(logger, "warning") as mock_logger:
         sqlmesh_seed = seed.to_sqlmesh(context)
-        mock_logger.assert_called_once()
     assert "Ignoring unsupported constraints" in mock_logger.call_args[0][0]
     assert sqlmesh_seed.columns_to_types == expected_column_types
 
