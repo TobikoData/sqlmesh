@@ -9,8 +9,6 @@ import {
   getInitial as getLineageContextInitial,
   getColumnLevelLineageContextInitial,
   createLineageContext,
-  type LineageAdjacencyList,
-  type LineageDetails,
   type ColumnLevelLineageAdjacencyList,
 } from '@sqlmesh-common/components/Lineage'
 
