@@ -278,7 +278,7 @@ class ExecutionContext(BaseContext):
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
         is_restatement: t.Optional[bool] = None,
-        parent_intervals: t.Optional[t.List[Intervals]] = None,
+        parent_intervals: t.Optional[Intervals] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
@@ -320,7 +320,7 @@ class ExecutionContext(BaseContext):
         return self._is_restatement
 
     @property
-    def parent_intervals(self) -> t.Optional[t.List[Intervals]]:
+    def parent_intervals(self) -> t.Optional[Intervals]:
         return self._parent_intervals
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
