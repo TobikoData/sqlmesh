@@ -194,7 +194,7 @@ export function LineageLayoutBase<
     }
   }, [selectedNodeId, selectedNode])
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const selectedNodes = new Set<TNodeID>(connectedNodes.map(node => node.id))
     const selectedEdges = new Set(
       connectedEdges.reduce((acc, edge) => {
@@ -216,7 +216,7 @@ export function LineageLayoutBase<
     setSelectedEdges(selectedEdges)
   }, [connectedNodes, connectedEdges])
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     zoomToSelectedNode()
   }, [zoomToSelectedNode])
 
