@@ -247,7 +247,7 @@ def rescope_duckdb_classvar(request):
     yield
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def rescope_log_handlers():
     logging.getLogger().handlers.clear()
     yield
