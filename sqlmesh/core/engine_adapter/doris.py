@@ -41,7 +41,7 @@ class DorisEngineAdapter(
     LogicalMergeMixin, PandasNativeFetchDFSupportMixin, NonTransactionalTruncateMixin
 ):
     DIALECT = "doris"
-    DEFAULT_BATCH_SIZE = 200
+    DEFAULT_BATCH_SIZE = 5000
     SUPPORTS_TRANSACTIONS = False
     COMMENT_CREATION_TABLE = CommentCreationTable.IN_SCHEMA_DEF_NO_CTAS
     COMMENT_CREATION_VIEW = CommentCreationView.IN_SCHEMA_DEF_NO_COMMANDS
@@ -54,8 +54,6 @@ class DorisEngineAdapter(
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CREATE_DROP_CATALOG = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
-    # default setting `enable_unicode_name_support=false` so it is incompatible with unicode characters in model names
-    QUOTE_IDENTIFIERS_IN_VIEWS = False
 
     def create_schema(
         self,
@@ -936,33 +934,6 @@ class DorisEngineAdapter(
                     add_partition = False
             if add_partition:
                 partitions = table_properties_copy.pop("partitions", None)
-
-                # If partitioned_by is provided but partitions is not, add dynamic partition properties
-                # Skip dynamic partitions for materialized views as they use different partitioning
-                if partitioned_by and not partitions and not is_materialized_view:
-                    # Define the required dynamic partition properties
-                    dynamic_partition_props = {
-                        "dynamic_partition.enable": "true",
-                        "dynamic_partition.time_unit": "DAY",
-                        "dynamic_partition.start": "-490",
-                        "dynamic_partition.end": "10",
-                        "dynamic_partition.prefix": "p",
-                        "dynamic_partition.buckets": "32",
-                        "dynamic_partition.create_history_partition": "true",
-                    }
-
-                    # Use partition_interval_unit if provided to set the time_unit
-                    if partition_interval_unit:
-                        if hasattr(partition_interval_unit, "value"):
-                            time_unit = partition_interval_unit.value.upper()
-                        else:
-                            time_unit = str(partition_interval_unit).upper()
-                        dynamic_partition_props["dynamic_partition.time_unit"] = time_unit
-
-                    # Add missing dynamic partition properties to table_properties_copy
-                    for key, value in dynamic_partition_props.items():
-                        if key not in table_properties_copy:
-                            table_properties_copy[key] = value
 
                 # Build partition expression - different for materialized views vs tables
                 if is_materialized_view:

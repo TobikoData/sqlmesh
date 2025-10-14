@@ -266,6 +266,7 @@ class TestContext:
             for k, v in self.columns_to_types.items()
             if v.sql().lower().startswith("timestamp")
             or (v.sql().lower() == "datetime" and self.dialect == "bigquery")
+            or (v.sql().lower() == "datetime" and self.dialect == "doris")
         ]
 
     @property

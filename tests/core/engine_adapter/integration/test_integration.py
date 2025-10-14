@@ -21,7 +21,6 @@ import pandas as pd  # noqa: TID253
 import pytest
 import pytz
 import time_machine
-from tenacity import Retrying, stop_after_delay, wait_fixed, retry_if_exception_type
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -459,18 +458,18 @@ def test_materialized_view(ctx_query_and_df: TestContext):
     # Make sure that dropping a materialized view also works
     if ctx.engine_adapter.dialect == "doris":
         # Wait for the materialized view to be created by retrying drop until it succeeds
-        for attempt in Retrying(
-            stop=stop_after_delay(5),
-            wait=wait_fixed(1),
-            retry=retry_if_exception_type(Exception),
-            reraise=True,
-        ):
-            with attempt:
+        def drop_view_success():
+            try:
                 ctx.engine_adapter.drop_view(
                     view,
                     materialized=True,
                     view_properties={"materialized_type": "SYNC", "source_table": source_table},
                 )
+                return True
+            except Exception:
+                return False
+
+        wait_until(drop_view_success, attempts=5, wait=1)
     else:
         ctx.engine_adapter.drop_view(view, materialized=True)
         results = ctx.get_metadata_results()
@@ -813,24 +812,16 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
     if ctx.dialect == "tsql":
         ds_type = "varchar(max)"
     if ctx.dialect == "doris":
-        ds_type = "date"
+        ds_type = "datetime"
 
-    # Get current year and create dates for testing. Doris cannot have more than 500 history partitions.
-    current_year = datetime.now().year
-    current_date = datetime(current_year, 1, 1)
-    if ctx.dialect == "doris":
-        # For Doris with DATE type, use pandas date objects
-        date_1 = current_date.date()
-        date_2 = (current_date + timedelta(days=1)).date()
-        date_3 = (current_date + timedelta(days=2)).date()
-        date_4 = (current_date + timedelta(days=3)).date()
-        date_5 = (current_date + timedelta(days=4)).date()
-    else:
-        date_1 = current_date.strftime("%Y-%m-%d")
-        date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
-        date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
-        date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    # Get current create date for testing.
+    current_date = datetime.now()
+    date_1 = current_date.strftime("%Y-%m-%d")
+    date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
+    date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
+    date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    date_6 = (current_date + timedelta(days=5)).strftime("%Y-%m-%d")
 
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     table = ctx.table("test_table")
@@ -838,12 +829,20 @@ def test_insert_overwrite_by_time_partition(ctx_query_and_df: TestContext):
         partitioned_by = ["DATE(ds)"]
     else:
         partitioned_by = ctx.partitioned_by  # type: ignore
+    if ctx.dialect == "doris":
+        table_properties = {
+            "partitions": f"FROM ('{date_1}') TO ('{date_6}') INTERVAL 1 DAY",
+        }
+    else:
+        table_properties = {}
+
     ctx.engine_adapter.create_table(
         table,
         ctx.columns_to_types,
         partitioned_by=partitioned_by,
         partition_interval_unit="DAY",
         table_format=ctx.default_table_format,
+        table_properties=table_properties,
     )
     input_data = pd.DataFrame(
         [
@@ -922,24 +921,16 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
     if ctx.dialect == "tsql":
         ds_type = "varchar(max)"
     if ctx.dialect == "doris":
-        ds_type = "date"
+        ds_type = "datetime"
 
-    # Get current year and create dates for testing. Doris cannot have more than 500 history partitions.
-    current_year = datetime.now().year
-    current_date = datetime(current_year, 1, 1)
-    if ctx.dialect == "doris":
-        # For Doris with DATE type, use pandas date objects
-        date_1 = current_date.date()
-        date_2 = (current_date + timedelta(days=1)).date()
-        date_3 = (current_date + timedelta(days=2)).date()
-        date_4 = (current_date + timedelta(days=3)).date()
-        date_5 = (current_date + timedelta(days=4)).date()
-    else:
-        date_1 = current_date.strftime("%Y-%m-%d")
-        date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
-        date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
-        date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    # Get current create date for testing.
+    current_date = datetime.now()
+    date_1 = current_date.strftime("%Y-%m-%d")
+    date_2 = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    date_3 = (current_date + timedelta(days=2)).strftime("%Y-%m-%d")
+    date_4 = (current_date + timedelta(days=3)).strftime("%Y-%m-%d")
+    date_5 = (current_date + timedelta(days=4)).strftime("%Y-%m-%d")
+    date_6 = (current_date + timedelta(days=5)).strftime("%Y-%m-%d")
 
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     columns_to_types = {
@@ -952,12 +943,20 @@ def test_insert_overwrite_by_time_partition_source_columns(ctx_query_and_df: Tes
         partitioned_by = ["DATE(ds)"]
     else:
         partitioned_by = ctx.partitioned_by  # type: ignore
+    if ctx.dialect == "doris":
+        table_properties = {
+            "partitions": f"FROM ('{date_1}') TO ('{date_6}') INTERVAL 1 DAY",
+        }
+    else:
+        table_properties = {}
+
     ctx.engine_adapter.create_table(
         table,
         columns_to_types,
         partitioned_by=partitioned_by,
         partition_interval_unit="DAY",
         table_format=ctx.default_table_format,
+        table_properties=table_properties,
     )
     input_data = pd.DataFrame(
         [
@@ -2180,6 +2179,18 @@ def test_sushi(
                 update={"table_format": ctx.default_table_format}
             )
             context._models.update({model_key: model})
+
+    # Doris requires partitions to be set in physical_properties for INCREMENTAL_BY_TIME_RANGE models
+    if ctx.dialect == "doris":
+        for model_key, model in context._models.items():
+            if model.kind.name == "INCREMENTAL_BY_TIME_RANGE":
+                end_plus_1day = to_date(end + timedelta(days=1))
+                partitions = f"FROM ('{start.strftime('%Y-%m-%d')}') TO ('{end_plus_1day.strftime('%Y-%m-%d')}') INTERVAL 1 DAY"
+
+                model_physical_props = model.copy(
+                    update={"physical_properties": {"partitions": partitions}}
+                )
+                context._models.update({model_key: model_physical_props})
 
     plan: Plan = context.plan(
         environment="test_prod",
@@ -4086,6 +4097,11 @@ def test_unicode_characters(ctx: TestContext, tmp_path: Path):
     # I also think Spark may not support unicode in general but that would need to be verified.
     if not ctx.engine_adapter.QUOTE_IDENTIFIERS_IN_VIEWS:
         pytest.skip("Skipping as these engines have issues with unicode characters in model names")
+    # Doris default setting `enable_unicode_name_support=false` so it is incompatible with unicode characters in model names
+    if ctx.dialect == "doris":
+        pytest.skip(
+            "Skipping as Doris default setting has issues with unicode characters in model names"
+        )
 
     model_name = "客户数据"
     table = ctx.table(model_name).sql(dialect=ctx.dialect)
