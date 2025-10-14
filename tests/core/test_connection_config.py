@@ -1050,12 +1050,18 @@ def test_bigquery(make_config):
         check_import=False,
     )
     assert isinstance(config_with_reservation, BigQueryConnectionConfig)
-    assert config_with_reservation.reservation_id == "projects/my-project/locations/us-central1/reservations/my-reservation"
-    
+    assert (
+        config_with_reservation.reservation_id
+        == "projects/my-project/locations/us-central1/reservations/my-reservation"
+    )
+
     # Test that reservation_id is included in _extra_engine_config
     extra_config = config_with_reservation._extra_engine_config
     assert "reservation_id" in extra_config
-    assert extra_config["reservation_id"] == "projects/my-project/locations/us-central1/reservations/my-reservation"
+    assert (
+        extra_config["reservation_id"]
+        == "projects/my-project/locations/us-central1/reservations/my-reservation"
+    )
 
     with pytest.raises(ConfigError, match="you must also specify the `project` field"):
         make_config(type="bigquery", execution_project="execution_project", check_import=False)

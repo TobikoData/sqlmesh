@@ -1108,7 +1108,7 @@ class BigQueryEngineAdapter(ClusteredByMixin, RowDiffMixin, GrantsFromInfoSchema
 
         # Create job config with reservation support
         job_config = QueryJobConfig(**self._job_params, connection_properties=connection_properties)
-        
+
         # Set reservation directly on the job_config object if specified
         reservation_id = self._extra_config.get("reservation_id")
         if reservation_id:
