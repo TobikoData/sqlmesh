@@ -1885,7 +1885,7 @@ def test_parsetime_adapter_call(
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_partition_by(sushi_test_project: Project):
+def test_partition_by(sushi_test_project: Project, caplog):
     context = sushi_test_project.context
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
@@ -1927,6 +1927,15 @@ def test_partition_by(sushi_test_project: Project):
 
     context.target = DuckDbConfig(name="target", schema="foo")
     assert model_config.to_sqlmesh(context).partitioned_by == []
+
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+    assert (
+        "Ignoring partition_by config for model 'model' targeting snowflake. The partition_by config is not supported for Snowflake."
+        in caplog.text
+    )
 
     model_config = ModelConfig(
         name="model",

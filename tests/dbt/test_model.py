@@ -1,4 +1,6 @@
 import datetime
+import logging
+
 import pytest
 
 from pathlib import Path
@@ -274,7 +276,9 @@ def test_load_invalid_ref_audit_constraints(
     with open(model_schema_file, "w", encoding="utf-8") as f:
         yaml.dump(model_schema, f)
 
-    context = Context(paths=project_dir)
+    assert isinstance(get_console(), NoopConsole)
+    with caplog.at_level(logging.DEBUG):
+        context = Context(paths=project_dir)
     assert (
         "Skipping audit 'relationships_full_model_cola__cola__ref_not_real_model_' because model 'not_real_model' is not a valid ref"
         in caplog.text
@@ -539,7 +543,8 @@ def test_load_deprecated_incremental_time_column(
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
     assert isinstance(get_console(), NoopConsole)
-    context = Context(paths=project_dir)
+    with caplog.at_level(logging.DEBUG):
+        context = Context(paths=project_dir)
     model = context.snapshots[snapshot_fqn].model
     # Validate model-level attributes
     assert to_ds(model.start or "") == "2025-01-01"
