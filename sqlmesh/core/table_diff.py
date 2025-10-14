@@ -367,8 +367,8 @@ class TableDiff:
                 column_type = matched_columns[name]
                 qualified_column = exp.column(name, table)
 
-                if column_type.is_type(*exp.DataType.FLOAT_TYPES):
-                    return exp.func("ROUND", qualified_column, exp.Literal.number(self.decimals))
+                if column_type.is_type(*exp.DataType.REAL_TYPES):
+                    return self.adapter._normalize_decimal_value(qualified_column, self.decimals)
                 if column_type.is_type(*exp.DataType.NESTED_TYPES):
                     return self.adapter._normalize_nested_value(qualified_column)
 
