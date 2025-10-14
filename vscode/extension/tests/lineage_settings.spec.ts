@@ -47,9 +47,22 @@ test('Settings button is visible in the lineage view', async ({
       if (activeFrame) {
         try {
           await activeFrame
-            .getByRole('button', {
-              name: 'Reset',
-            })
+            .getByRole('button', { name: 'Zoom In' })
+            .waitFor({ timeout: 1000 })
+          await activeFrame
+            .getByRole('button', { name: 'Zoom Out' })
+            .waitFor({ timeout: 1000 })
+          await activeFrame
+            .getByRole('button', { name: 'Only selected nodes' })
+            .waitFor({ timeout: 1000 })
+          await activeFrame
+            .getByRole('button', { name: 'Zoom to selected node' })
+            .waitFor({ timeout: 1000 })
+          await activeFrame
+            .getByRole('button', { name: 'Show columns' })
+            .waitFor({ timeout: 1000 })
+          await activeFrame
+            .getByRole('button', { name: 'Reset' })
             .waitFor({ timeout: 1000 })
           settingsCount++
         } catch {
