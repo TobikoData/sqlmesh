@@ -2185,7 +2185,13 @@ class MaterializableStrategy(PromotableStrategy, abc.ABC):
         if model.on_destructive_change.is_ignore or model.on_additive_change.is_ignore:
             # We need to identify the columns that are only in the source so we create an empty table with
             # the user query to determine that
-            with self.adapter.temp_table(model.ctas_query(**render_kwargs)) as temp_table:
+            temp_table_name = exp.table_(
+                "diff",
+                db=model.physical_schema,
+            )
+            with self.adapter.temp_table(
+                model.ctas_query(**render_kwargs), name=temp_table_name
+            ) as temp_table:
                 source_columns = list(self.adapter.columns(temp_table))
         else:
             source_columns = None
