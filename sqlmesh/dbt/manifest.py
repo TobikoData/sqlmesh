@@ -519,7 +519,7 @@ class ManifestHelper:
         else:
             register_adapter(runtime_config)  # type: ignore
 
-        manifest = ManifestLoader.get_full_manifest(runtime_config)
+        manifest = ManifestLoader.get_full_manifest(runtime_config, reset=True)
         # This adapter doesn't care about semantic models so we clear them out to avoid issues
         manifest.semantic_models = {}
         reset_adapters()
