@@ -482,14 +482,6 @@ class ManifestHelper:
             macro_debugging=False,
             REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES=True,
         )
-        logger.error(
-            "\nDBT RuntimeConfig args\nprofile: %s\nproject_dir: %s\nprofiles_dir: %s\ntarget: %s\nvars: %s\n",
-            args.profile,
-            args.project_dir,
-            args.profiles_dir,
-            args.target,
-            args.vars,
-        )
         flags.set_from_args(args, None)
 
         if DBT_VERSION >= (1, 8, 0):
@@ -519,7 +511,7 @@ class ManifestHelper:
         else:
             register_adapter(runtime_config)  # type: ignore
 
-        manifest = ManifestLoader.get_full_manifest(runtime_config, reset=True)
+        manifest = ManifestLoader.get_full_manifest(runtime_config)
         # This adapter doesn't care about semantic models so we clear them out to avoid issues
         manifest.semantic_models = {}
         reset_adapters()
