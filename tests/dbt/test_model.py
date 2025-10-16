@@ -373,7 +373,8 @@ def test_load_microbatch_all_defined_diff_values(
         column=exp.to_column("blah", quoted=True), format="%Y-%m-%d"
     )
     assert model.kind.batch_size == 1
-    assert model.depends_on_self is True
+    assert model.kind.batch_concurrency == 1
+    assert model.depends_on_self is False
 
 
 @pytest.mark.slow
@@ -630,7 +631,7 @@ def test_load_microbatch_with_ref(
     )
     assert (
         context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
-        == 'SELECT "_q_0"."cola" AS "cola", "_q_0"."ds" AS "ds" FROM (SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch" WHERE "microbatch"."ds" < \'2025-01-11 00:00:00+00:00\' AND "microbatch"."ds" >= \'2025-01-01 00:00:00+00:00\') AS "_q_0"'
+        == 'SELECT "cola" AS "cola", "ds" AS "ds" FROM (SELECT * FROM "local"."main"."microbatch" AS "microbatch" WHERE "ds" >= \'2025-01-01 00:00:00+00:00\' AND "ds" < \'2025-01-11 00:00:00+00:00\') AS "_q_0"'
     )
 
 
@@ -696,7 +697,7 @@ def test_load_microbatch_with_ref_no_filter(
     )
     assert (
         context.render(microbatch_two_snapshot_fqn, start="2025-01-01", end="2025-01-10").sql()
-        == 'SELECT "microbatch"."cola" AS "cola", "microbatch"."ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch"'
+        == 'SELECT "cola" AS "cola", "ds" AS "ds" FROM "local"."main"."microbatch" AS "microbatch"'
     )
 
 
@@ -1104,7 +1105,7 @@ SELECT * FROM source
     assert rendered is not None
     assert (
         rendered.sql()
-        == 'WITH "source" AS (SELECT "simple_model_a"."a" AS "a" FROM "memory"."sushi"."simple_model_a" AS "simple_model_a") SELECT "source"."a" AS "a" FROM "source" AS "source"'
+        == 'WITH "source" AS (SELECT * FROM "memory"."sushi"."simple_model_a" AS "simple_model_a") SELECT * FROM "source" AS "source"'
     )
 
     # And run plan with this conditional model for good measure

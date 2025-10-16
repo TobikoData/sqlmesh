@@ -413,7 +413,7 @@ def test_multi_hybrid(mocker):
     sqlmesh_rendered = (
         'SELECT "e"."col_a" AS "col_a", "e"."col_b" AS "col_b" FROM "memory"."dbt_repo"."e" AS "e"'
     )
-    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("b"."col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
+    dbt_rendered = 'SELECT DISTINCT ROUND(CAST(("col_a" / NULLIF(100, 0)) AS DECIMAL(16, 2)), 2) AS "rounded_col_a" FROM "memory"."sqlmesh_repo"."b" AS "b"'
     assert sqlmesh_model_a.render_query().sql() == sqlmesh_rendered
     assert dbt_model_c.render_query().sql() == dbt_rendered
 
