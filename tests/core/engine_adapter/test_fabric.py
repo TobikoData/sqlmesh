@@ -88,3 +88,26 @@ def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
         "TRUNCATE TABLE [test_table];",
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]
+
+
+def test_alter_table_is_noop(adapter: FabricEngineAdapter):
+    """
+    Tests that alter_table is a no-op for Fabric.
+
+    The adapter should not execute any SQL, signaling to the caller
+    that it should use the fallback strategy (drop/add)
+    to apply schema changes.
+    """
+    alter_expression = exp.Alter(
+        this=exp.to_table("test_table"),
+        actions=[
+            exp.ColumnDef(
+                this=exp.to_column("new_col"),
+                kind=exp.DataType(this=exp.DataType.Type.INT),
+            )
+        ],
+    )
+
+    adapter.alter_table([alter_expression])
+
+    adapter.cursor.execute.assert_not_called()
