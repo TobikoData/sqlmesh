@@ -1418,7 +1418,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot, make_mocked_engine_adapte
         "get_data_objects",
         return_value=[
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model__{snapshot.version}",
                 type="table",
             )
@@ -1500,7 +1500,7 @@ def test_migrate_view(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.get_data_objects",
         return_value=[
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model__{snapshot.version}",
                 type="view",
             )
@@ -1950,7 +1950,7 @@ def test_on_destructive_change_runtime_check(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.get_data_objects",
         return_value=[
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model__{snapshot.version}",
                 type=DataObjectType.TABLE,
             )
@@ -2037,7 +2037,7 @@ def test_on_additive_change_runtime_check(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.get_data_objects",
         return_value=[
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model__{snapshot.version}",
                 type=DataObjectType.TABLE,
             )
@@ -4016,7 +4016,7 @@ def test_migrate_snapshot(snapshot: Snapshot, mocker: MockerFixture, adapter_moc
 
     adapter_mock.get_data_objects.return_value = [
         DataObject(
-            schema="test_schema",
+            schema="sqlmesh__db",
             name=f"db__model__{new_snapshot.version}",
             type=DataObjectType.TABLE,
         )
@@ -4154,7 +4154,7 @@ def test_migrate_managed(adapter_mock, make_snapshot, mocker: MockerFixture):
 
     adapter_mock.get_data_objects.return_value = [
         DataObject(
-            schema="test_schema",
+            schema="sqlmesh__test_schema",
             name=f"test_schema__test_model__{snapshot.version}",
             type=DataObjectType.MANAGED_TABLE,
         )
@@ -4380,12 +4380,12 @@ def test_multiple_engine_migration(
         "sqlmesh.core.engine_adapter.base.EngineAdapter.get_data_objects",
         return_value=[
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model__{snapshot_1.version}",
                 type=DataObjectType.TABLE,
             ),
             DataObject(
-                schema="test_schema",
+                schema="sqlmesh__test_schema",
                 name=f"test_schema__test_model_2__{snapshot_2.version}",
                 type=DataObjectType.TABLE,
             ),
