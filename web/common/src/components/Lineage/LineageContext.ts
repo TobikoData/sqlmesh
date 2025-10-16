@@ -59,8 +59,11 @@ export interface LineageContextValue<
   >
   nodes: LineageNode<TNodeData, TNodeID>[]
   nodesMap: LineageNodesMap<TNodeData, TNodeID>
-  setNodesMap: React.Dispatch<React.SetStateAction<LineageNodesMap<TNodeData>>>
-  currentNode: LineageNode<TNodeData, TNodeID> | null
+  setNodesMap: React.Dispatch<
+    React.SetStateAction<LineageNodesMap<TNodeData, TNodeID>>
+  >
+  currentNodeId: TNodeID | null
+  selectedNode: LineageNode<TNodeData, TNodeID> | null
 }
 
 export function getInitial<
@@ -74,7 +77,6 @@ export function getInitial<
     setSelectedNodes: () => {},
     selectedEdges: new Set<TEdgeID>(),
     setSelectedEdges: () => {},
-    selectedNodeId: null,
     setSelectedNodeId: () => {},
     zoom: ZOOM_THRESHOLD,
     setZoom: () => {},
@@ -83,7 +85,9 @@ export function getInitial<
     nodes: [],
     nodesMap: {},
     setNodesMap: () => {},
-    currentNode: null,
+    selectedNodeId: null,
+    selectedNode: null,
+    currentNodeId: null,
   }
 }
 

@@ -1,4 +1,4 @@
-:root {
+:where(:root) {
   --color-lineage-model-column-badge-background: var(
     --color-lineage-node-badge-background
   );

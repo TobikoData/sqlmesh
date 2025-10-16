@@ -37,6 +37,8 @@ class DbtContext:
     """Context for DBT environment"""
 
     project_root: Path = Path()
+    profiles_dir: t.Optional[Path] = None
+    """Optional override to specify the directory where profiles.yml is located, if not at the :project_root"""
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None

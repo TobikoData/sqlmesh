@@ -41,17 +41,17 @@ export function getTransformedNodes<
   adjacencyListKeys: TAdjacencyListKey[],
   lineageDetails: LineageDetails<TAdjacencyListKey, TDetailsNode>,
   transformNode: TransformNodeFn<TDetailsNode, TNodeData, TNodeID>,
+  allNodesMap?: LineageNodesMap<TNodeData, TNodeID>,
 ): LineageNodesMap<TNodeData, TNodeID> {
   const nodesCount = adjacencyListKeys.length
   const nodesMap: LineageNodesMap<TNodeData, TNodeID> = Object.create(null)
 
   for (let i = 0; i < nodesCount; i++) {
     const adjacencyListKey = adjacencyListKeys[i]
-    const encodedNodeId = toNodeID<TNodeID>(adjacencyListKey)
-    nodesMap[encodedNodeId] = transformNode(
-      encodedNodeId,
-      lineageDetails[adjacencyListKey],
-    )
+    const nodeId = toNodeID<TNodeID>(adjacencyListKey)
+    nodesMap[nodeId] =
+      allNodesMap?.[nodeId] ||
+      transformNode(nodeId, lineageDetails[adjacencyListKey])
   }
 
   return nodesMap

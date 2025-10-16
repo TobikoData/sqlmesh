@@ -1,6 +1,6 @@
 import { ControlButton } from '@xyflow/react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 import { Tooltip } from '../Tooltip/Tooltip'
 
 export function LineageControlButton({
@@ -31,6 +31,7 @@ export function LineageControlButton({
               className,
             )}
             disabled={disabled}
+            title={text}
           >
             {children}
           </ControlButton>

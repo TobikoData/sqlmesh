@@ -35,12 +35,12 @@ export function LineageLayout<
   edgeTypes,
   className,
   controls,
-  nodesDraggable,
-  nodesConnectable,
   isBuildingLayout,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
+  showControlOnlySelectedNodes,
+  showControlZoomToSelectedNode,
 }: {
   useLineage: LineageContextHook<
     TNodeData,
@@ -56,8 +56,8 @@ export function LineageLayout<
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
-  nodesDraggable?: boolean
-  nodesConnectable?: boolean
+  showControlOnlySelectedNodes?: boolean
+  showControlZoomToSelectedNode?: boolean
   controls?:
     | React.ReactNode
     | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
@@ -79,12 +79,12 @@ export function LineageLayout<
         <LineageLayoutBase
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          nodesDraggable={nodesDraggable}
-          nodesConnectable={nodesConnectable}
           controls={controls}
           useLineage={useLineage}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          showControlOnlySelectedNodes={showControlOnlySelectedNodes}
+          showControlZoomToSelectedNode={showControlZoomToSelectedNode}
         />
       </LineageLayoutContainer>
     </ReactFlowProvider>

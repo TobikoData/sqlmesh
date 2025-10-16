@@ -1,4 +1,4 @@
-import { Metadata, cn } from '@tobikodata/sqlmesh-common'
+import { Metadata, cn } from '@sqlmesh-common/index'
 
 import { NodeDivider } from './NodeDivider'
 

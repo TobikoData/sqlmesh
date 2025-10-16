@@ -7,7 +7,7 @@ import {
 } from '@radix-ui/react-tooltip'
 import React from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 import './Tooltip.css'
 

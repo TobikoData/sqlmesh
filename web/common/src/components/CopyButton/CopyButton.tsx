@@ -1,7 +1,10 @@
 import React from 'react'
 
-import { Button, type ButtonProps } from '@/components/Button/Button'
-import { useCopyClipboard } from '@/hooks/useCopyClipboard'
+import {
+  Button,
+  type ButtonProps,
+} from '@sqlmesh-common/components/Button/Button'
+import { useCopyClipboard } from '@sqlmesh-common/hooks/useCopyClipboard'
 
 export interface CopyButtonProps extends Omit<ButtonProps, 'children'> {
   text: string

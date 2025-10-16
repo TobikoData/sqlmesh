@@ -1,8 +1,8 @@
 import { type NodeProps } from '@xyflow/react'
 import React from 'react'
 
-import { BaseNode } from '@/components/Lineage/node/base-node'
-import { cn } from '@/utils'
+import { BaseNode } from '@sqlmesh-common/components/Lineage/node/base-node'
+import { cn } from '@sqlmesh-common/utils'
 
 export interface NodeBaseProps extends NodeProps {
   className?: string

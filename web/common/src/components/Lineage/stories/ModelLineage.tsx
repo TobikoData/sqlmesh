@@ -1,4 +1,4 @@
-import { Focus, LockOpen, Rows2, Rows3, Lock } from 'lucide-react'
+import { Focus, Rows2, Rows3 } from 'lucide-react'
 import React from 'react'
 
 import {
@@ -55,7 +55,7 @@ import { EdgeWithGradient } from '../edge/EdgeWithGradient'
 import { cleanupLayoutWorker, getLayoutedGraph } from '../layout/help'
 import { LineageControlButton } from '../LineageControlButton'
 import { LineageControlIcon } from '../LineageControlIcon'
-import type { BrandedRecord } from '@/types'
+import type { BrandedRecord } from '@sqlmesh-common/types'
 
 const nodeTypes = {
   node: ModelNode,
@@ -76,9 +76,12 @@ export const ModelLineage = ({
   selectedModelName?: ModelName
   className?: string
 }) => {
+  const currentNodeId = selectedModelName
+    ? toNodeID<ModelNodeId>(selectedModelName)
+    : null
+
   const [zoom, setZoom] = React.useState(ZOOM_THRESHOLD)
   const [isBuildingLayout, setIsBuildingLayout] = React.useState(false)
-  const [nodesDraggable, setNodesDraggable] = React.useState(false)
   const [edges, setEdges] = React.useState<
     LineageEdge<
       EdgeData,
@@ -101,7 +104,7 @@ export const ModelLineage = ({
     new Set(),
   )
   const [selectedNodeId, setSelectedNodeId] =
-    React.useState<ModelNodeId | null>(null)
+    React.useState<ModelNodeId | null>(currentNodeId)
 
   const [showColumns, setShowColumns] = React.useState(false)
   const [columnLevelLineage, setColumnLevelLineage] = React.useState<
@@ -307,6 +310,7 @@ export const ModelLineage = ({
         })
         .catch(error => {
           console.error('Layout processing failed:', error)
+
           setEdges([])
           setNodesMap({})
         })
@@ -320,11 +324,7 @@ export const ModelLineage = ({
     return Object.values(nodesMap)
   }, [nodesMap])
 
-  const currentNode = React.useMemo(() => {
-    return selectedModelName
-      ? nodesMap[toNodeID<LeftHandleId | RightHandleId>(selectedModelName)]
-      : null
-  }, [selectedModelName, nodesMap])
+  const selectedNode = selectedNodeId ? nodesMap[selectedNodeId] : null
 
   const handleReset = React.useCallback(() => {
     setShowColumns(false)
@@ -354,6 +354,10 @@ export const ModelLineage = ({
     }
   }, [showOnlySelectedNodes, transformedEdges, transformedNodesMap])
 
+  React.useEffect(() => {
+    setSelectedNodeId(currentNodeId)
+  }, [currentNodeId])
+
   // Cleanup worker on unmount
   React.useEffect(() => () => cleanupLayoutWorker(), [])
 
@@ -373,11 +377,12 @@ export const ModelLineage = ({
         selectedNodes,
         selectedEdges,
         selectedNodeId,
+        selectedNode,
+        currentNodeId,
         zoom,
         edges,
         nodes,
         nodesMap,
-        currentNode,
         setFetchingColumns,
         setColumnLevelLineage,
         setShowColumns,
@@ -405,7 +410,6 @@ export const ModelLineage = ({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         className={className}
-        nodesDraggable={nodesDraggable}
         controls={
           <>
             <LineageControlButton
@@ -425,13 +429,6 @@ export const ModelLineage = ({
               disabled={isBuildingLayout}
             >
               <LineageControlIcon Icon={Focus} />
-            </LineageControlButton>
-            <LineageControlButton
-              text={nodesDraggable ? 'Lock nodes' : 'Unlock nodes'}
-              onClick={() => setNodesDraggable(prev => !prev)}
-              disabled={isBuildingLayout}
-            >
-              <LineageControlIcon Icon={nodesDraggable ? Lock : LockOpen} />
             </LineageControlButton>
           </>
         }
