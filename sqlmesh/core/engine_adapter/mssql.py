@@ -438,7 +438,7 @@ class MSSQLEngineAdapter(
                 **kwargs,
             )
 
-        # For conditional overwrites or when mssql_merge_exists is set, use MERGE from InsertOverwriteWithMergeMixin
+        # For conditional overwrites or when mssql_merge_exists is set use MERGE
         return super()._insert_overwrite_by_condition(
             table_name=table_name,
             source_queries=source_queries,
