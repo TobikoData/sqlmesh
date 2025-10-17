@@ -1744,6 +1744,49 @@ def python_func(**kwargs):
     assert adapter_mock.insert_overwrite_by_time_partition.call_args[0][1].to_dict() == output_dict
 
 
+def test_snapshot_evaluator_yield_empty_pd(adapter_mock, make_snapshot):
+    adapter_mock.is_pyspark_df.return_value = False
+    adapter_mock.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    adapter_mock.try_get_df = lambda x: x
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    snapshot = make_snapshot(
+        PythonModel(
+            name="db.model",
+            entrypoint="python_func",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds", format="%Y-%m-%d")),
+            columns={
+                "a": "INT",
+                "ds": "STRING",
+            },
+            python_env={
+                "python_func": Executable(
+                    name="python_func",
+                    alias="python_func",
+                    path="test_snapshot_evaluator.py",
+                    payload="""def python_func(**kwargs):
+    yield from ()""",
+                )
+            },
+        )
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot], {})
+
+    # This should not raise a TypeError from reduce() with empty sequence
+    evaluator.evaluate(
+        snapshot,
+        start="2023-01-01",
+        end="2023-01-09",
+        execution_time="2023-01-09",
+        snapshots={},
+    )
+
+    # When there are no dataframes to process, insert_overwrite_by_time_partition should not be called
+    adapter_mock.insert_overwrite_by_time_partition.assert_not_called()
+
+
 def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.SUPPORTS_CLONING = True
     adapter_mock.get_alter_operations.return_value = []

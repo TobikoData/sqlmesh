@@ -1021,6 +1021,11 @@ class SnapshotEvaluator:
         ):
             import pandas as pd
 
+            try:
+                first_query_or_df = next(queries_or_dfs)
+            except StopIteration:
+                return
+
             query_or_df = reduce(
                 lambda a, b: (
                     pd.concat([a, b], ignore_index=True)  # type: ignore
@@ -1028,6 +1033,7 @@ class SnapshotEvaluator:
                     else a.union_all(b)  # type: ignore
                 ),  # type: ignore
                 queries_or_dfs,
+                first_query_or_df,
             )
             apply(query_or_df, index=0)
         else:
