@@ -2081,16 +2081,20 @@ def missing_intervals(
                 continue
             snapshot_end_date = existing_interval_end
 
+        snapshot_start_date = max(
+            to_datetime(snapshot_start_date),
+            to_datetime(start_date(snapshot, snapshots, cache, relative_to=snapshot_end_date)),
+        )
+        if snapshot_start_date > to_datetime(snapshot_end_date):
+            continue
+
         missing_interval_end_date = snapshot_end_date
         node_end_date = snapshot.node.end
         if node_end_date and (to_datetime(node_end_date) < to_datetime(snapshot_end_date)):
             missing_interval_end_date = node_end_date
 
         intervals = snapshot.missing_intervals(
-            max(
-                to_datetime(snapshot_start_date),
-                to_datetime(start_date(snapshot, snapshots, cache, relative_to=snapshot_end_date)),
-            ),
+            snapshot_start_date,
             missing_interval_end_date,
             execution_time=execution_time,
             deployability_index=deployability_index,
@@ -2295,14 +2299,16 @@ def start_date(
     if not isinstance(snapshots, dict):
         snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
-    earliest = snapshot.node.cron_prev(snapshot.node.cron_floor(relative_to or now()))
-
-    for parent in snapshot.parents:
-        if parent in snapshots:
-            earliest = min(
-                earliest,
-                start_date(snapshots[parent], snapshots, cache=cache, relative_to=relative_to),
-            )
+    parent_starts = [
+        start_date(snapshots[parent], snapshots, cache=cache, relative_to=relative_to)
+        for parent in snapshot.parents
+        if parent in snapshots
+    ]
+    earliest = (
+        min(parent_starts)
+        if parent_starts
+        else snapshot.node.cron_prev(snapshot.node.cron_floor(relative_to or now()))
+    )
 
     cache[key] = earliest
     return earliest
