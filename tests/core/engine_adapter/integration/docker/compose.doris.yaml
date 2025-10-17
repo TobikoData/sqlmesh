@@ -1,0 +1,80 @@
+services:
+  fe-01:
+    image: apache/doris:fe-2.1.10
+    container_name: doris-fe-01
+    hostname: fe-01
+    environment:
+      - FE_SERVERS=fe1:172.20.80.2:9030
+      - FE_ID=1
+    ports:
+      - "8030:8030"
+      - "9030:9030"
+    volumes:
+      - ./fe-meta:/opt/apache-doris/fe/doris-meta
+      - ./fe-log:/opt/apache-doris/fe/log
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.2
+
+  be-01:
+    image: apache/doris:be-2.1.10
+    container_name: doris-be-01
+    hostname: be-01
+    depends_on:
+      - fe-01
+    environment:
+      - FE_SERVERS=fe1:172.20.80.2:9030
+      - BE_ADDR=172.20.80.3:9050
+    ports:
+      - "8040:8040"
+      - "9050:9050"
+    volumes:
+      - ./be01-storage:/opt/apache-doris/be/storage
+      - ./be01-log:/opt/apache-doris/be/log
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.3
+
+  be-02:
+    image: apache/doris:be-2.1.10
+    container_name: doris-be-02
+    hostname: be-02
+    depends_on:
+      - fe-01
+    environment:
+      - FE_SERVERS=fe1:172.20.80.2:9030
+      - BE_ADDR=172.20.80.4:9050
+    ports:
+      - "8041:8040"
+      - "9051:9050"
+    volumes:
+      - ./be02-storage:/opt/apache-doris/be/storage
+      - ./be02-log:/opt/apache-doris/be/log
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.4
+
+  be-03:
+    image: apache/doris:be-2.1.10
+    container_name: doris-be-03
+    hostname: be-03
+    depends_on:
+      - fe-01
+    environment:
+      - FE_SERVERS=fe1:172.20.80.2:9030
+      - BE_ADDR=172.20.80.5:9050
+    ports:
+      - "8042:8040"
+      - "9052:9050"
+    volumes:
+      - ./be03-storage:/opt/apache-doris/be/storage
+      - ./be03-log:/opt/apache-doris/be/log
+    networks:
+      doris_net:
+        ipv4_address: 172.20.80.5
+
+networks:
+  doris_net:
+    ipam:
+      config:
+        - subnet: 172.20.80.0/24
