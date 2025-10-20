@@ -414,3 +414,65 @@ def my_signal(batch):
         day_delta=3,
         was_evaluated=False,
     )
+
+
+@use_terminal_console
+def test_registered_and_unregistered_external_models(
+    ctx: TestContext, tmp_path: pathlib.Path, mocker: MockerFixture
+):
+    """
+    Scenario: Ensure that external models are queried for their last modified timestamp
+    regardless of whether they are present in the "external_models.yaml" file (registered) or not (unregistered)
+    """
+
+    adapter = ctx.engine_adapter
+    context, schema, (registered_external_table,) = initialize_context(
+        ctx, tmp_path, num_external_models=1
+    )
+
+    current_catalog = ctx.engine_adapter.get_current_catalog()
+
+    def normalize_external_table_name(external_table_name) -> str:
+        from sqlglot import exp
+
+        normalized = exp.normalize_table_name(
+            f"{current_catalog}.{external_table_name}", dialect=ctx.dialect
+        )
+        return exp.table_name(normalized, dialect=ctx.dialect, identify=True)
+
+    unregistered_external_table = f"{schema}.unregistered_external_table"
+
+    adapter.execute(
+        f"CREATE TABLE {unregistered_external_table} AS (SELECT 1 AS col)",
+        quote_identifiers=False,
+    )
+
+    create_model(
+        "new_model",
+        schema,
+        f"SELECT * FROM {unregistered_external_table}, {registered_external_table}",
+        tmp_path,
+    )
+
+    context.load()
+    context.plan(auto_apply=True, no_prompts=True)
+
+    spy = mocker.spy(
+        sqlmesh.core.engine_adapter.SnowflakeEngineAdapter, "get_table_last_modified_ts"
+    )
+    assert_model_evaluation(
+        lambda: context.run(),
+        day_delta=1,
+        was_evaluated=False,
+    )
+
+    assert spy.call_args_list
+
+    # The first argument of "get_table_last_modified_ts" is a list of external table names in normalized form
+    # Ensure that this contains both external tables (registered and unregistered)
+    assert sorted(spy.call_args[0][1]) == sorted(
+        [
+            normalize_external_table_name(registered_external_table),
+            normalize_external_table_name(unregistered_external_table),
+        ]
+    )
