@@ -85,7 +85,9 @@ def assert_model_evaluation(
     return timestamp, plan_or_run_result
 
 
-def create_freshness_model(name: str, schema: str, query: str, path: pathlib.Path):
+def create_model(
+    name: str, schema: str, query: str, path: pathlib.Path, signals: str = "freshness()"
+):
     """
     Create a freshness model with the given name, path, and query.
     """
@@ -99,7 +101,7 @@ def create_freshness_model(name: str, schema: str, query: str, path: pathlib.Pat
             start '2024-01-01',
             kind FULL,
             signals (
-              freshness(),
+              {signals},
             )
         );
 
@@ -167,7 +169,7 @@ def test_external_model_freshness(ctx: TestContext, tmp_path: pathlib.Path, mock
     )
 
     # Create model that depends on external models
-    model_name, model_path = create_freshness_model(
+    model_name, model_path = create_model(
         "new_model",
         schema,
         f"SELECT col1 * col2 AS col FROM {external_table1}, {external_table2}",
@@ -237,7 +239,7 @@ def test_mixed_model_freshness(ctx: TestContext, tmp_path: pathlib.Path):
     context, schema, (external_table,) = initialize_context(ctx, tmp_path, num_external_models=1)
 
     # Create parent model that depends on the external model
-    parent_model_name, _ = create_freshness_model(
+    parent_model_name, _ = create_model(
         "parent_model",
         schema,
         f"SELECT col1 AS new_col FROM {external_table}",
@@ -245,7 +247,7 @@ def test_mixed_model_freshness(ctx: TestContext, tmp_path: pathlib.Path):
     )
 
     # First child model depends only on the parent model
-    create_freshness_model(
+    create_model(
         "child_model1",
         schema,
         f"SELECT new_col FROM {parent_model_name}",
@@ -253,7 +255,7 @@ def test_mixed_model_freshness(ctx: TestContext, tmp_path: pathlib.Path):
     )
 
     # Second child model depends on the parent model and the external table
-    create_freshness_model(
+    create_model(
         "child_model2",
         schema,
         f"SELECT col1 + new_col FROM {parent_model_name}, {external_table}",
@@ -261,7 +263,7 @@ def test_mixed_model_freshness(ctx: TestContext, tmp_path: pathlib.Path):
     )
 
     # Third model does not depend on any models, so it should only be evaluated once
-    create_freshness_model(
+    create_model(
         "child_model3",
         schema,
         f"SELECT 1 AS col",
@@ -287,7 +289,7 @@ def test_mixed_model_freshness(ctx: TestContext, tmp_path: pathlib.Path):
     )
 
     # Case 3: Mixed models are still evaluated if breaking changes are introduced
-    create_freshness_model(
+    create_model(
         "child_model2",
         schema,
         f"SELECT col1 * new_col FROM {parent_model_name}, {external_table}",
@@ -317,7 +319,7 @@ def test_missing_external_model_freshness(ctx: TestContext, tmp_path: pathlib.Pa
     context, schema, (external_table,) = initialize_context(ctx, tmp_path)
 
     # Create model that depends on the external model
-    create_freshness_model(
+    create_model(
         "new_model",
         schema,
         f"SELECT * FROM {external_table}",
@@ -334,3 +336,81 @@ def test_missing_external_model_freshness(ctx: TestContext, tmp_path: pathlib.Pa
     with time_machine.travel(now() + timedelta(days=1)):
         with pytest.raises(SignalEvalError):
             context.run()
+
+
+@use_terminal_console
+def test_check_ready_intervals(ctx: TestContext, tmp_path: pathlib.Path):
+    """
+    Scenario: Ensure that freshness evaluates the "ready" intervals of the parent snapshots i.e their
+    missing intervals plus their signals applied.
+
+    """
+
+    def _write_user_signal(signal: str, tmp_path: pathlib.Path):
+        signal_code = f"""
+import typing as t
+from sqlmesh import signal
+
+@signal()
+{signal}
+      """
+
+        test_signals = tmp_path / "signals/test_signals.py"
+        test_signals.parent.mkdir(parents=True, exist_ok=True)
+        test_signals.write_text(signal_code)
+
+    context, schema, _ = initialize_context(ctx, tmp_path, num_external_models=0)
+
+    _write_user_signal(
+        """
+def my_signal(batch): 
+  return True
+    """,
+        tmp_path,
+    )
+
+    # Parent model depends on a custom signal
+    parent_model, _ = create_model(
+        "parent_model",
+        schema,
+        f"SELECT 1 AS col",
+        tmp_path,
+        signals="my_signal()",
+    )
+
+    # Create a new model that depends on the parent model
+    create_model(
+        "child_model",
+        schema,
+        f"SELECT * FROM {parent_model}",
+        tmp_path,
+    )
+
+    # Case 1: Both models are evaluated when introduced in a plan and subsequent runs,
+    # given that `my_signal()` always returns True.
+    context.load()
+    context.plan(auto_apply=True, no_prompts=True)
+
+    assert_model_evaluation(
+        lambda: context.run(),
+        day_delta=2,
+        model_evaluations=2,
+    )
+
+    # Case 2: By changing the signal to return False, both models should not be evaluated.
+    _write_user_signal(
+        """
+def my_signal(batch): 
+  return False
+    """,
+        tmp_path,
+    )
+
+    context.load()
+    context.plan(auto_apply=True, no_prompts=True)
+
+    assert_model_evaluation(
+        lambda: context.run(),
+        day_delta=3,
+        was_evaluated=False,
+    )
