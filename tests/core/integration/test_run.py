@@ -109,6 +109,7 @@ def test_run_respects_excluded_transitive_dependencies(init_and_plan_context: t.
             kind FULL,
             allow_partials true,
             cron '@hourly',
+            start '2023-01-01',
         );
 
         SELECT @execution_ts AS execution_ts
