@@ -17,6 +17,9 @@ import {
 } from '../utilities/errors'
 import { CustomLSPMethods } from './custom'
 import { resolveProjectPath } from '../utilities/config'
+import * as path from 'path'
+import * as os from 'os'
+import * as crypto from 'crypto'
 
 type SupportedMethodsState =
   | { type: 'not-fetched' }
@@ -96,18 +99,23 @@ export class LSPClient implements Disposable {
     }
 
     const workspacePath = sqlmesh.value.workspacePath
+
+    // Add --socket argument to the LSP server
+    const socketPath = socketAddressForWorkspace(workspacePath)
+    const argsWithSocket = [...sqlmesh.value.args]
+      // '--socket', socketPath]
     const serverOptions: ServerOptions = {
       run: {
         command: sqlmesh.value.bin,
-        transport: TransportKind.stdio,
+        transport: TransportKind.pipe,
         options: { cwd: workspacePath, env: sqlmesh.value.env },
-        args: sqlmesh.value.args,
+        args: argsWithSocket,
       },
       debug: {
         command: sqlmesh.value.bin,
-        transport: TransportKind.stdio,
+        transport: TransportKind.pipe,
         options: { cwd: workspacePath, env: sqlmesh.value.env },
-        args: sqlmesh.value.args,
+        args: argsWithSocket,
       },
     }
     const paths = resolveProjectPath(getWorkspaceFolders()[0])
@@ -266,4 +274,18 @@ export class LSPClient implements Disposable {
       return err(JSON.stringify(error))
     }
   }
+}
+
+function socketAddressForWorkspace(workspacePath: string) {
+  const hash = crypto.createHash('md5').update(workspacePath).digest('hex').slice(0, 8)
+  const base = `sqlmesh_${hash}`
+
+  if (process.platform === 'win32') {
+    // Windows wants a Named Pipe path, not a filesystem .sock file
+    // NOTE: double backslashes are required in JS strings
+    return `\\\\.\\pipe\\${base}`
+  }
+
+  // POSIX: use a short dir (tmp) to avoid the ~108 byte sun_path limit
+  return path.join(os.tmpdir(), `${base}.sock`)
 }
