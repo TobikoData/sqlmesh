@@ -26,32 +26,38 @@ export function LineageLayout<
   TEdgeData extends LineageEdgeData = LineageEdgeData,
   TNodeID extends string = NodeId,
   TEdgeID extends string = EdgeId,
-  TPortID extends string = PortId,
+  TSourceID extends string = TNodeID,
+  TTargetID extends string = TNodeID,
+  TSourceHandleID extends string = PortId,
+  TTargetHandleID extends string = PortId,
 >({
   nodeTypes,
   edgeTypes,
   className,
   controls,
-  nodesDraggable,
-  nodesConnectable,
   isBuildingLayout,
   useLineage,
   onNodeClick,
   onNodeDoubleClick,
+  showControlOnlySelectedNodes,
+  showControlZoomToSelectedNode,
 }: {
   useLineage: LineageContextHook<
     TNodeData,
     TEdgeData,
     TNodeID,
     TEdgeID,
-    TPortID
+    TSourceID,
+    TTargetID,
+    TSourceHandleID,
+    TTargetHandleID
   >
   isBuildingLayout?: boolean
   nodeTypes?: NodeTypes
   edgeTypes?: EdgeTypes
   className?: string
-  nodesDraggable?: boolean
-  nodesConnectable?: boolean
+  showControlOnlySelectedNodes?: boolean
+  showControlZoomToSelectedNode?: boolean
   controls?:
     | React.ReactNode
     | (({ setCenter }: { setCenter: SetCenter }) => React.ReactNode)
@@ -73,12 +79,12 @@ export function LineageLayout<
         <LineageLayoutBase
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          nodesDraggable={nodesDraggable}
-          nodesConnectable={nodesConnectable}
           controls={controls}
           useLineage={useLineage}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          showControlOnlySelectedNodes={showControlOnlySelectedNodes}
+          showControlZoomToSelectedNode={showControlZoomToSelectedNode}
         />
       </LineageLayoutContainer>
     </ReactFlowProvider>

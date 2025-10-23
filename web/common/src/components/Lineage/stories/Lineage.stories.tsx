@@ -1,11 +1,122 @@
-import type { LineageAdjacencyList, LineageDetails } from '../utils'
-
 import { ModelLineage } from './ModelLineage'
-import type { ModelLineageNodeDetails, ModelName } from './ModelLineageContext'
+import type {
+  BrandedLineageAdjacencyList,
+  BrandedLineageDetails,
+  ModelLineageNodeDetails,
+  ModelName,
+} from './ModelLineageContext'
 
 export default {
   title: 'Components/Lineage',
 }
+
+const adjacencyList = {
+  'sqlmesh.sushi.raw_orders': ['sqlmesh.sushi.orders'],
+  'sqlmesh.sushi.orders': [],
+} as Record<ModelName, ModelName[]>
+
+const lineageDetails = {
+  'sqlmesh.sushi.raw_orders': {
+    name: 'sqlmesh.sushi.raw_orders',
+    display_name: 'sushi.raw_orders',
+    identifier: '123456789',
+    version: '123456789',
+    dialect: 'bigquery',
+    cron: '0 0 * * *',
+    owner: 'admin',
+    kind: 'INCREMENTAL_BY_TIME',
+    model_type: 'python',
+    tags: ['test', 'tag', 'another tag'],
+    columns: {
+      user_id: {
+        data_type: 'STRING',
+        description: 'node',
+      },
+      event_id: {
+        data_type: 'STRING',
+        description: 'node',
+      },
+      created_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+    },
+  },
+  'sqlmesh.sushi.orders': {
+    name: 'sqlmesh.sushi.orders',
+    display_name: 'sushi.orders',
+    identifier: '123456789',
+    version: '123456789',
+    dialect: 'bigquery',
+    cron: '0 0 * * *',
+    owner: 'admin',
+    kind: 'INCREMENTAL_BY_TIME',
+    model_type: 'sql',
+    tags: ['test', 'tag', 'another tag'],
+    columns: {
+      user_id: {
+        data_type: 'STRING',
+        description: 'node',
+        columnLineageData: {
+          'sqlmesh.sushi.orders': {
+            user_id: {
+              source: 'sqlmesh.sushi.raw_orders',
+              expression: 'select user_id from sqlmesh.sushi.raw_orders',
+              models: {
+                'sqlmesh.sushi.raw_orders': ['user_id'],
+              },
+            },
+          },
+        },
+      },
+      event_id: {
+        data_type: 'STRING',
+        description: 'node',
+        columnLineageData: {
+          'sqlmesh.sushi.orders': {
+            event_id: {
+              models: {
+                'sqlmesh.sushi.raw_orders': ['event_id'],
+              },
+            },
+          },
+        },
+      },
+      product_id: {
+        data_type: 'STRING',
+        description: 'node',
+      },
+      customer_id: {
+        data_type: 'STRING',
+        description: 'node',
+      },
+      updated_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+      deleted_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+      expired_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+      start_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+      end_at: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+      created_ts: {
+        data_type: 'TIMESTAMP',
+        description: 'node',
+      },
+    },
+  },
+} as Record<ModelName, ModelLineageNodeDetails>
 
 export const LineageModel = () => {
   return (
@@ -16,7 +127,7 @@ export const LineageModel = () => {
       }}
     >
       <style>{`
-        :root {
+        :where(:root) {
           --color-metadata-label: rgba(100, 100, 100, 1);
           --color-metadata-value: rgba(10, 10, 10, 1);
 
@@ -105,117 +216,8 @@ export const LineageModel = () => {
       `}</style>
       <ModelLineage
         selectedModelName={'sqlmesh.sushi.orders' as ModelName}
-        adjacencyList={
-          {
-            'sqlmesh.sushi.raw_orders': ['sqlmesh.sushi.orders'],
-            'sqlmesh.sushi.orders': [],
-          } as LineageAdjacencyList<ModelName>
-        }
-        lineageDetails={
-          {
-            'sqlmesh.sushi.raw_orders': {
-              name: 'sqlmesh.sushi.raw_orders',
-              display_name: 'sushi.raw_orders',
-              identifier: '123456789',
-              version: '123456789',
-              dialect: 'bigquery',
-              cron: '0 0 * * *',
-              owner: 'admin',
-              kind: 'INCREMENTAL_BY_TIME',
-              model_type: 'python',
-              tags: ['test', 'tag', 'another tag'],
-              columns: {
-                user_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                },
-                event_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                },
-                created_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-              },
-            },
-            'sqlmesh.sushi.orders': {
-              name: 'sqlmesh.sushi.orders',
-              display_name: 'sushi.orders',
-              identifier: '123456789',
-              version: '123456789',
-              dialect: 'bigquery',
-              cron: '0 0 * * *',
-              owner: 'admin',
-              kind: 'INCREMENTAL_BY_TIME',
-              model_type: 'sql',
-              tags: ['test', 'tag', 'another tag'],
-              columns: {
-                user_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                  columnLineageData: {
-                    'sqlmesh.sushi.orders': {
-                      user_id: {
-                        source: 'sqlmesh.sushi.raw_orders',
-                        expression:
-                          'select user_id from sqlmesh.sushi.raw_orders',
-                        models: {
-                          'sqlmesh.sushi.raw_orders': ['user_id'],
-                        },
-                      },
-                    },
-                  },
-                },
-                event_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                  columnLineageData: {
-                    'sqlmesh.sushi.orders': {
-                      event_id: {
-                        models: {
-                          'sqlmesh.sushi.raw_orders': ['event_id'],
-                        },
-                      },
-                    },
-                  },
-                },
-                product_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                },
-                customer_id: {
-                  data_type: 'STRING',
-                  description: 'node',
-                },
-                updated_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-                deleted_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-                expired_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-                start_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-                end_at: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-                created_ts: {
-                  data_type: 'TIMESTAMP',
-                  description: 'node',
-                },
-              },
-            },
-          } as LineageDetails<ModelName, ModelLineageNodeDetails>
-        }
+        adjacencyList={adjacencyList as BrandedLineageAdjacencyList}
+        lineageDetails={lineageDetails as BrandedLineageDetails}
         className="rounded-2xl"
       />
     </div>

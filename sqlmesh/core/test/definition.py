@@ -454,6 +454,9 @@ class ModelTest(unittest.TestCase):
         query = outputs.get("query")
         partial = outputs.pop("partial", None)
 
+        if ctes is None and query is None:
+            _raise_error("Incomplete test, outputs must contain 'query' or 'ctes'", self.path)
+
         def _normalize_rows(
             values: t.List[Row] | t.Dict,
             name: str,
@@ -922,8 +925,7 @@ def generate_test(
                 cte_output = test._execute(cte_query)
                 ctes[cte.alias] = (
                     pandas_timestamp_to_pydatetime(
-                        cte_output.apply(lambda col: col.map(_normalize_df_value)),
-                        cte_query.named_selects,
+                        df=cte_output.apply(lambda col: col.map(_normalize_df_value)),
                     )
                     .replace({np.nan: None})
                     .to_dict(orient="records")

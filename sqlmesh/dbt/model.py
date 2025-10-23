@@ -567,6 +567,12 @@ class ModelConfig(BaseModelConfig):
                     self.name,
                     "views" if isinstance(kind, ViewKind) else "ephemeral models",
                 )
+            elif context.target.dialect == "snowflake":
+                logger.warning(
+                    "Ignoring partition_by config for model '%s' targeting %s. The partition_by config is not supported for Snowflake.",
+                    self.name,
+                    context.target.dialect,
+                )
             else:
                 partitioned_by = []
                 if isinstance(self.partition_by, list):
@@ -601,7 +607,13 @@ class ModelConfig(BaseModelConfig):
                 clustered_by = []
                 for c in self.cluster_by:
                     try:
-                        clustered_by.append(d.parse_one(c, dialect=model_dialect))
+                        cluster_expr = exp.maybe_parse(
+                            c, into=exp.Cluster, prefix="CLUSTER BY", dialect=model_dialect
+                        )
+                        for expr in cluster_expr.expressions:
+                            clustered_by.append(
+                                expr.this if isinstance(expr, exp.Ordered) else expr
+                            )
                     except SqlglotError as e:
                         raise ConfigError(
                             f"Failed to parse model '{self.canonical_name(context)}' cluster_by field '{c}' in '{self.path}': {e}"

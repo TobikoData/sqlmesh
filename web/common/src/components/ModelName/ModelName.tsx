@@ -1,8 +1,8 @@
 import { Box, Check, Copy } from 'lucide-react'
 import { useMemo } from 'react'
 
-import { cn, truncate } from '@/utils'
-import { Tooltip } from '@/components/Tooltip/Tooltip'
+import { cn, truncate } from '@sqlmesh-common/utils'
+import { Tooltip } from '@sqlmesh-common/components/Tooltip/Tooltip'
 import React from 'react'
 
 import './ModelName.css'

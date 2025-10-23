@@ -601,12 +601,17 @@ class BigQueryConfig(TargetConfig):
         if not isinstance(data, dict):
             return data
 
-        data["schema"] = data.get("schema") or data.get("dataset")
-        if not data["schema"]:
+        # dbt treats schema and dataset interchangeably
+        schema = data.get("schema") or data.get("dataset")
+        if not schema:
             raise ConfigError("Either schema or dataset must be set")
-        data["database"] = data.get("database") or data.get("project")
-        if not data["database"]:
+        data["dataset"] = data["schema"] = schema
+
+        # dbt treats database and project interchangeably
+        database = data.get("database") or data.get("project")
+        if not database:
             raise ConfigError("Either database or project must be set")
+        data["database"] = data["project"] = database
 
         return data
 

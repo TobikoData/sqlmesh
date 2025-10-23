@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { Side } from '@/types'
+import type { Side } from '@sqlmesh-common/types'
 import { LoadingContainer } from './LoadingContainer'
 import { expect, within } from 'storybook/test'
 

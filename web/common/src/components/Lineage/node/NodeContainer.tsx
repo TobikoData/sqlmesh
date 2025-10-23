@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { cn } from '@/utils'
-import { VerticalContainer } from '@/components/VerticalContainer/VerticalContainer'
+import { cn } from '@sqlmesh-common/utils'
+import { VerticalContainer } from '@sqlmesh-common/components/VerticalContainer/VerticalContainer'
 
 export const NodeContainer = React.forwardRef<
   HTMLDivElement,

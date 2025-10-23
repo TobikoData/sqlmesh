@@ -1,6 +1,6 @@
 import { type HTMLAttributes, forwardRef } from 'react'
 
-import { cn } from '@/utils'
+import { cn } from '@sqlmesh-common/utils'
 
 export const BaseNode = forwardRef<
   HTMLDivElement,

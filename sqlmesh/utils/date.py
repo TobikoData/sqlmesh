@@ -444,7 +444,7 @@ def to_time_column(
 
 
 def pandas_timestamp_to_pydatetime(
-    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]]
+    df: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
 ) -> pd.DataFrame:
     import pandas as pd
     from pandas.api.types import is_datetime64_any_dtype  # type: ignore

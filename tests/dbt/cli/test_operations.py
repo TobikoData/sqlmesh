@@ -9,6 +9,7 @@ import time_machine
 from sqlmesh.core.plan import PlanBuilder
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from tests.dbt.conftest import EmptyProjectCreator
+import logging
 
 pytestmark = pytest.mark.slow
 
@@ -363,3 +364,13 @@ def test_create_sets_concurrent_tasks_based_on_threads(create_empty_project: Emp
         g.connection and g.connection.concurrent_tasks == 16
         for g in operations.context.config.gateways.values()
     )
+
+
+def test_create_configures_log_level(create_empty_project: EmptyProjectCreator):
+    project_dir, _ = create_empty_project()
+
+    create(project_dir=project_dir, log_level="info")
+    assert logging.getLogger("sqlmesh").getEffectiveLevel() == logging.INFO
+
+    create(project_dir=project_dir, log_level="error")
+    assert logging.getLogger("sqlmesh").getEffectiveLevel() == logging.ERROR

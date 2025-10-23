@@ -139,6 +139,7 @@ from sqlmesh.utils.errors import (
 )
 from sqlmesh.utils.config import print_config
 from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.windows import IS_WINDOWS, fix_windows_path
 
 if t.TYPE_CHECKING:
     import pandas as pd
@@ -152,6 +153,8 @@ if t.TYPE_CHECKING:
         SnowparkSession,
     )
     from sqlmesh.core.snapshot import Node
+
+    from sqlmesh.core.snapshot.definition import Intervals
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
@@ -275,6 +278,7 @@ class ExecutionContext(BaseContext):
         default_dialect: t.Optional[str] = None,
         default_catalog: t.Optional[str] = None,
         is_restatement: t.Optional[bool] = None,
+        parent_intervals: t.Optional[Intervals] = None,
         variables: t.Optional[t.Dict[str, t.Any]] = None,
         blueprint_variables: t.Optional[t.Dict[str, t.Any]] = None,
     ):
@@ -286,6 +290,7 @@ class ExecutionContext(BaseContext):
         self._variables = variables or {}
         self._blueprint_variables = blueprint_variables or {}
         self._is_restatement = is_restatement
+        self._parent_intervals = parent_intervals
 
     @property
     def default_dialect(self) -> t.Optional[str]:
@@ -313,6 +318,10 @@ class ExecutionContext(BaseContext):
     @property
     def is_restatement(self) -> t.Optional[bool]:
         return self._is_restatement
+
+    @property
+    def parent_intervals(self) -> t.Optional[Intervals]:
+        return self._parent_intervals
 
     def var(self, var_name: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
         """Returns a variable value."""
@@ -2590,12 +2599,15 @@ class GenericContext(BaseContext, t.Generic[C]):
         )
 
     def clear_caches(self) -> None:
-        for path in self.configs:
-            cache_path = path / c.CACHE
-            if cache_path.exists():
-                rmtree(cache_path)
-        if self.cache_dir.exists():
-            rmtree(self.cache_dir)
+        paths_to_remove = [path / c.CACHE for path in self.configs]
+        paths_to_remove.append(self.cache_dir)
+
+        if IS_WINDOWS:
+            paths_to_remove = [fix_windows_path(path) for path in paths_to_remove]
+
+        for path in paths_to_remove:
+            if path.exists():
+                rmtree(path)
 
         if isinstance(self._state_sync, CachingStateSync):
             self._state_sync.clear_cache()

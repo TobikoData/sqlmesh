@@ -30,3 +30,19 @@ select * from {{ source('streaming', 'items') }}
 select * from {{ source('streaming', 'items') }}
 
 {% endsnapshot %}
+
+{% snapshot items_check_with_cast_snapshot %}
+
+{{
+    config(
+      target_schema='snapshots',
+      unique_key='id',
+      strategy='check',
+      check_cols=['ds::DATE'],
+      invalidate_hard_deletes=True,
+    )
+}}
+
+select * from {{ source('streaming', 'items') }}
+
+{% endsnapshot %}

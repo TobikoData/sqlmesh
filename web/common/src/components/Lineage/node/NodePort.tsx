@@ -1,13 +1,15 @@
-import { useNodeConnections, useUpdateNodeInternals } from '@xyflow/react'
+import { useNodeConnections } from '@xyflow/react'
 import React from 'react'
 
-import { cn } from '@/utils'
-import { type NodeId, type PortId } from '../utils'
+import { cn } from '@sqlmesh-common/utils'
+import { type NodeId, type PortHandleId } from '../utils'
 import { NodeHandles } from './NodeHandles'
 
-export const NodePort = React.memo(function NodePort<
-  TPortId extends string = PortId,
+export function NodePort<
+  TPortId extends string = PortHandleId,
   TNodeID extends string = NodeId,
+  TLeftPortHandleId extends string = PortHandleId,
+  TRightPortHandleId extends string = PortHandleId,
 >({
   id,
   nodeId,
@@ -19,8 +21,6 @@ export const NodePort = React.memo(function NodePort<
   className?: string
   children: React.ReactNode
 }) {
-  const updateNodeInternals = useUpdateNodeInternals()
-
   const sources = useNodeConnections({
     id: nodeId,
     handleType: 'source',
@@ -32,17 +32,19 @@ export const NodePort = React.memo(function NodePort<
     handleId: id,
   })
 
-  const leftId = targets.length > 0 ? id : undefined
-  const rightId = sources.length > 0 ? id : undefined
+  const isLeftHandleId = (id: TPortId): id is TPortId & TLeftPortHandleId => {
+    return id && targets.length > 0
+  }
 
-  React.useEffect(() => {
-    if (leftId || rightId) {
-      updateNodeInternals(nodeId)
-    }
-  }, [updateNodeInternals, nodeId, leftId, rightId])
+  const isRightHandleId = (id: TPortId): id is TPortId & TRightPortHandleId => {
+    return id && sources.length > 0
+  }
+
+  const leftId = isLeftHandleId(id) ? id : undefined
+  const rightId = isRightHandleId(id) ? id : undefined
 
   return (
-    <NodeHandles
+    <NodeHandles<TLeftPortHandleId, TRightPortHandleId>
       data-component="NodePort"
       leftIcon={
         <span className="flex-shrink-0 p-1.5 rounded-full bg-lineage-node-port-handle-target"></span>
@@ -61,4 +63,4 @@ export const NodePort = React.memo(function NodePort<
       {children}
     </NodeHandles>
   )
-})
+}

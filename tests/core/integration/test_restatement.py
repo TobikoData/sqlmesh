@@ -1880,3 +1880,56 @@ def entrypoint(evaluator: MacroEvaluator) -> str:
     assert len(model_a.intervals)
 
     set_console(orig_console)
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_restatement_plan_outside_parent_date_range(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    context.upsert_model("sushi.items", start="2023-01-06")
+    context.upsert_model("sushi.orders", start="2023-01-06")
+    # One of the parents should derive the start from its own parents for the issue
+    # to reproduce
+    context.upsert_model("sushi.order_items", start=None)
+    context.upsert_model("sushi.waiter_revenue_by_day", start="2023-01-01", audits=[])
+
+    context.plan("prod", auto_apply=True, no_prompts=True, skip_tests=True)
+
+    restated_snapshot = context.get_snapshot("sushi.waiter_revenue_by_day")
+    downstream_snapshot = context.get_snapshot("sushi.top_waiters")
+
+    plan = context.plan_builder(
+        restate_models=["sushi.waiter_revenue_by_day"],
+        start="2023-01-01",
+        end="2023-01-01",
+        min_intervals=0,
+    ).build()
+    assert plan.snapshots != context.snapshots
+
+    assert plan.requires_backfill
+    assert plan.restatements == {
+        restated_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        downstream_snapshot.snapshot_id: (to_timestamp("2023-01-01"), to_timestamp("2023-01-09")),
+    }
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_id=downstream_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_id=restated_snapshot.snapshot_id,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)

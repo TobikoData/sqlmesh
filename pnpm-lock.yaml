@@ -435,9 +435,6 @@ importers:
       '@types/dagre':
         specifier: 0.7.53
         version: 0.7.53
-      '@types/lodash':
-        specifier: 4.17.20
-        version: 4.17.20
       '@types/node':
         specifier: 20.11.25
         version: 20.11.25
@@ -495,9 +492,6 @@ importers:
       globals:
         specifier: 16.3.0
         version: 16.3.0
-      lodash:
-        specifier: 4.17.21
-        version: 4.17.21
       lucide-react:
         specifier: 0.542.0
         version: 0.542.0(react@18.3.1)
@@ -2661,9 +2655,6 @@ packages:
 
   '@types/jsonfile@6.1.4':
     resolution: {integrity: sha512-D5qGUYwjvnNNextdU59/+fI+spnwtTFmyQP0h+PfIOSkNfpU6AOICUOkm4i0OnSk+NyjdPJrxCDro0sJsWlRpQ==}
-
-  '@types/lodash@4.17.20':
-    resolution: {integrity: sha512-H3MHACvFUEiujabxhaI/ImO6gUrd8oOurg7LQtS7mbwIXA/cUqWrvBsaeJ23aZEPk1TAYkurjfMbSELfoCXlGA==}
 
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
@@ -7064,7 +7055,7 @@ snapshots:
       '@babel/traverse': 7.28.0
       '@babel/types': 7.28.1
       convert-source-map: 2.0.0
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -7232,7 +7223,7 @@ snapshots:
       '@babel/parser': 7.28.0
       '@babel/template': 7.27.2
       '@babel/types': 7.28.1
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -7489,7 +7480,7 @@ snapshots:
   '@eslint/config-array@0.21.0':
     dependencies:
       '@eslint/object-schema': 2.1.6
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       minimatch: 3.1.2
     transitivePeerDependencies:
       - supports-color
@@ -7503,7 +7494,7 @@ snapshots:
   '@eslint/eslintrc@3.3.1':
     dependencies:
       ajv: 6.12.6
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       espree: 10.4.0
       globals: 14.0.0
       ignore: 5.3.2
@@ -9425,8 +9416,6 @@ snapshots:
     dependencies:
       '@types/node': 20.11.25
 
-  '@types/lodash@4.17.20': {}
-
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -9502,7 +9491,7 @@ snapshots:
       '@typescript-eslint/types': 8.38.0
       '@typescript-eslint/typescript-estree': 8.38.0(typescript@5.8.3)
       '@typescript-eslint/visitor-keys': 8.38.0
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       eslint: 9.31.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
@@ -9512,7 +9501,7 @@ snapshots:
     dependencies:
       '@typescript-eslint/tsconfig-utils': 8.38.0(typescript@5.8.3)
       '@typescript-eslint/types': 8.38.0
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
@@ -9531,7 +9520,7 @@ snapshots:
       '@typescript-eslint/types': 8.38.0
       '@typescript-eslint/typescript-estree': 8.38.0(typescript@5.8.3)
       '@typescript-eslint/utils': 8.38.0(eslint@9.31.0(jiti@2.4.2))(typescript@5.8.3)
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       eslint: 9.31.0(jiti@2.4.2)
       ts-api-utils: 2.1.0(typescript@5.8.3)
       typescript: 5.8.3
@@ -9546,7 +9535,7 @@ snapshots:
       '@typescript-eslint/tsconfig-utils': 8.38.0(typescript@5.8.3)
       '@typescript-eslint/types': 8.38.0
       '@typescript-eslint/visitor-keys': 8.38.0
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       fast-glob: 3.3.3
       is-glob: 4.0.3
       minimatch: 9.0.5
@@ -10644,6 +10633,10 @@ snapshots:
 
   de-indent@1.0.2: {}
 
+  debug@4.4.1:
+    dependencies:
+      ms: 2.1.3
+
   debug@4.4.1(supports-color@8.1.1):
     dependencies:
       ms: 2.1.3
@@ -10916,7 +10909,7 @@ snapshots:
 
   esbuild-register@3.6.0(esbuild@0.25.8):
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       esbuild: 0.25.8
     transitivePeerDependencies:
       - supports-color
@@ -10999,7 +10992,7 @@ snapshots:
       ajv: 6.12.6
       chalk: 4.1.2
       cross-spawn: 7.0.6
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       escape-string-regexp: 4.0.0
       eslint-scope: 8.4.0
       eslint-visitor-keys: 4.2.1
@@ -11410,7 +11403,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -11419,7 +11412,7 @@ snapshots:
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -13992,7 +13985,7 @@ snapshots:
   vite-node@3.2.4(@types/node@20.11.25)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 6.3.5(@types/node@20.11.25)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.0)
@@ -14042,7 +14035,7 @@ snapshots:
       '@volar/typescript': 2.4.23
       '@vue/language-core': 2.2.0(typescript@5.8.3)
       compare-versions: 6.1.1
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       kolorist: 1.8.0
       local-pkg: 1.1.1
       magic-string: 0.30.17
@@ -14108,7 +14101,7 @@ snapshots:
       '@vitest/spy': 3.2.4
       '@vitest/utils': 3.2.4
       chai: 5.2.1
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.1
       expect-type: 1.2.2
       magic-string: 0.30.17
       pathe: 2.0.3

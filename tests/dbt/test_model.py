@@ -1,4 +1,6 @@
 import datetime
+import logging
+
 import pytest
 
 from pathlib import Path
@@ -6,8 +8,9 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.errors import SchemaError
 from sqlmesh import Context
+from sqlmesh.core.console import NoopConsole, get_console
 from sqlmesh.core.model import TimeColumn, IncrementalByTimeRangeKind
-from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange
+from sqlmesh.core.model.kind import OnDestructiveChange, OnAdditiveChange, SCDType2ByColumnKind
 from sqlmesh.core.state_sync.db.snapshot import _snapshot_to_json
 from sqlmesh.core.config.common import VirtualEnvironmentMode
 from sqlmesh.core.model.meta import GrantsTargetLayer
@@ -273,7 +276,9 @@ def test_load_invalid_ref_audit_constraints(
     with open(model_schema_file, "w", encoding="utf-8") as f:
         yaml.dump(model_schema, f)
 
-    context = Context(paths=project_dir)
+    assert isinstance(get_console(), NoopConsole)
+    with caplog.at_level(logging.DEBUG):
+        context = Context(paths=project_dir)
     assert (
         "Skipping audit 'relationships_full_model_cola__cola__ref_not_real_model_' because model 'not_real_model' is not a valid ref"
         in caplog.text
@@ -537,7 +542,9 @@ def test_load_deprecated_incremental_time_column(
         f.write(incremental_time_range_contents)
 
     snapshot_fqn = '"local"."main"."incremental_time_range"'
-    context = Context(paths=project_dir)
+    assert isinstance(get_console(), NoopConsole)
+    with caplog.at_level(logging.DEBUG):
+        context = Context(paths=project_dir)
     model = context.snapshots[snapshot_fqn].model
     # Validate model-level attributes
     assert to_ds(model.start or "") == "2025-01-01"
@@ -703,6 +710,29 @@ def test_load_multiple_snapshots_defined_in_same_file(sushi_test_dbt_context: Co
     context.load()
     assert context.get_model("snapshots.items_snapshot")
     assert context.get_model("snapshots.items_check_snapshot")
+
+
+@pytest.mark.slow
+def test_dbt_snapshot_with_check_cols_expressions(sushi_test_dbt_context: Context) -> None:
+    context = sushi_test_dbt_context
+    model = context.get_model("snapshots.items_check_with_cast_snapshot")
+    assert model is not None
+    assert isinstance(model.kind, SCDType2ByColumnKind)
+
+    columns = model.kind.columns
+    assert isinstance(columns, list)
+    assert len(columns) == 1
+
+    # expression in check_cols is: ds::DATE
+    assert isinstance(columns[0], exp.Cast)
+    assert columns[0].sql() == 'CAST("ds" AS DATE)'
+
+    context.load()
+    cached_model = context.get_model("snapshots.items_check_with_cast_snapshot")
+    assert cached_model is not None
+    assert isinstance(cached_model.kind, SCDType2ByColumnKind)
+    assert isinstance(cached_model.kind.columns, list)
+    assert len(cached_model.kind.columns) == 1
 
 
 @pytest.mark.slow

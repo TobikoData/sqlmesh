@@ -4,17 +4,14 @@ import {
   useNodeConnections,
 } from '@xyflow/react'
 
-import { type LineageNode, type LineageNodeData, type NodeId } from '../utils'
+import { type LineageNodeData, type NodeId } from '../utils'
 
 export type NodeProps<TNodeData extends LineageNodeData = LineageNodeData> =
   ReactFlowNodeProps<Node<TNodeData>>
 
-export function useNodeMetadata<
-  TNodeData extends LineageNodeData = LineageNodeData,
-  TNodeID extends string = NodeId,
->(
+export function useNodeMetadata<TNodeID extends string = NodeId>(
   nodeId: TNodeID,
-  currentNode: LineageNode<TNodeData, TNodeID> | null,
+  currentNodeId: TNodeID | null,
   selectedNodeId: TNodeID | null,
   selectedNodes: Set<TNodeID>,
 ) {
@@ -29,7 +26,7 @@ export function useNodeMetadata<
 
   const leftId = targets.length > 0 ? nodeId : undefined
   const rightId = sources.length > 0 ? nodeId : undefined
-  const isCurrent = currentNode?.id === nodeId
+  const isCurrent = currentNodeId === nodeId
   const isSelected = selectedNodeId === nodeId
   const isActive = selectedNodes.has(nodeId)
 

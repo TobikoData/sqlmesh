@@ -56,6 +56,7 @@ class MSSQLEngineAdapter(
     COMMENT_CREATION_TABLE = CommentCreationTable.UNSUPPORTED
     COMMENT_CREATION_VIEW = CommentCreationView.UNSUPPORTED
     SUPPORTS_REPLACE_TABLE = False
+    MAX_IDENTIFIER_LENGTH = 128
     SUPPORTS_QUERY_EXECUTION_TRACKING = True
     SCHEMA_DIFFER_KWARGS = {
         "parameterized_type_defaults": {
@@ -422,7 +423,9 @@ class MSSQLEngineAdapter(
         insert_overwrite_strategy_override: t.Optional[InsertOverwriteStrategy] = None,
         **kwargs: t.Any,
     ) -> None:
-        if not where or where == exp.true():
+        # note that this is passed as table_properties here rather than physical_properties
+        use_merge_strategy = kwargs.get("table_properties", {}).get("mssql_merge_exists")
+        if (not where or where == exp.true()) and not use_merge_strategy:
             # this is a full table replacement, call the base strategy to do DELETE+INSERT
             # which will result in TRUNCATE+INSERT due to how we have overridden self.delete_from()
             return EngineAdapter._insert_overwrite_by_condition(
@@ -435,7 +438,7 @@ class MSSQLEngineAdapter(
                 **kwargs,
             )
 
-        # For actual conditional overwrites, use MERGE from InsertOverwriteWithMergeMixin
+        # For conditional overwrites or when mssql_merge_exists is set use MERGE
         return super()._insert_overwrite_by_condition(
             table_name=table_name,
             source_queries=source_queries,

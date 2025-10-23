@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { Size } from '@/types'
+import type { Size } from '@sqlmesh-common/types'
 import { Button, type ButtonVariant } from './Button'
 import { fn, expect, userEvent, within } from 'storybook/test'
 
