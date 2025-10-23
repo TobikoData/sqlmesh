@@ -89,6 +89,7 @@ def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
         "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
     ]
 
+
 def test_alter_table_column_type_workaround(adapter: FabricEngineAdapter, mocker: MockerFixture):
     """
     Tests the alter_table method's workaround for changing a column's data type.
