@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import FabricEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
+from sqlmesh.core.engine_adapter.shared import DataObject
 
 pytestmark = [pytest.mark.engine, pytest.mark.fabric]
 
@@ -70,6 +71,16 @@ def test_insert_overwrite_by_time_partition(adapter: FabricEngineAdapter):
         """DELETE FROM [test_table] WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';""",
         """INSERT INTO [test_table] ([a], [b]) SELECT [a], [b] FROM (SELECT [a] AS [a], [b] AS [b] FROM [tbl]) AS [_subquery] WHERE [b] BETWEEN '2022-01-01' AND '2022-01-02';""",
     ]
+
+
+def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
+    mocker.patch.object(
+        adapter,
+        "_get_data_objects",
+        return_value=[DataObject(schema="", name="test_table", type="table")],
+    )
+    adapter.replace_query(
+        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("int")}
 
 
 def test_alter_table_column_type_workaround(adapter: FabricEngineAdapter, mocker: MockerFixture):
