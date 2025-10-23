@@ -232,15 +232,20 @@ def configure_logging(
         logger.addHandler(file_handler)
 
     if debug:
-        import faulthandler
+        import faulthandler, io
 
         enable_debug_mode()
 
         # Enable threadumps.
-        faulthandler.enable()
+        try:
+            faulthandler.enable()
 
-        # Windows doesn't support register so we check for it here
-        if hasattr(faulthandler, "register"):
-            from signal import SIGUSR1
+            # Windows doesn't support register so we check for it here
+            if hasattr(faulthandler, "register"):
+                from signal import SIGUSR1
 
-            faulthandler.register(SIGUSR1.value)
+                faulthandler.register(SIGUSR1.value)
+        except io.UnsupportedOperation as e:
+            # this can fail if sys.stderr isnt a proper file handle, which can happen in unit test / notebook environments
+            # rather than prevent SQLMesh from working because we couldnt register the faulthandler, we just log a warning and carry on
+            logger.warning("Unable to enable faulthandler for thread dumps", exc_info=e)
