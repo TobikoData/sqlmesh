@@ -81,7 +81,13 @@ def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
     )
     adapter.replace_query(
         "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("int")}
+    )
 
+    # This behavior is inherited from MSSQLEngineAdapter and should be TRUNCATE + INSERT
+    assert to_sql_calls(adapter) == [
+        "TRUNCATE TABLE [test_table];",
+        "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
+    ]
 
 def test_alter_table_column_type_workaround(adapter: FabricEngineAdapter, mocker: MockerFixture):
     """
