@@ -8,7 +8,6 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import FabricEngineAdapter
 from tests.core.engine_adapter import to_sql_calls
-from sqlmesh.core.engine_adapter.shared import DataObject
 
 pytestmark = [pytest.mark.engine, pytest.mark.fabric]
 
@@ -73,41 +72,56 @@ def test_insert_overwrite_by_time_partition(adapter: FabricEngineAdapter):
     ]
 
 
-def test_replace_query(adapter: FabricEngineAdapter, mocker: MockerFixture):
-    mocker.patch.object(
-        adapter,
-        "_get_data_objects",
-        return_value=[DataObject(schema="", name="test_table", type="table")],
-    )
-    adapter.replace_query(
-        "test_table", parse_one("SELECT a FROM tbl"), {"a": exp.DataType.build("int")}
-    )
-
-    # This behavior is inherited from MSSQLEngineAdapter and should be TRUNCATE + INSERT
-    assert to_sql_calls(adapter) == [
-        "TRUNCATE TABLE [test_table];",
-        "INSERT INTO [test_table] ([a]) SELECT [a] FROM [tbl];",
-    ]
-
-
-def test_alter_table_is_noop(adapter: FabricEngineAdapter):
+def test_alter_table_column_type_workaround(adapter: FabricEngineAdapter, mocker: MockerFixture):
     """
-    Tests that alter_table is a no-op for Fabric.
-
-    The adapter should not execute any SQL, signaling to the caller
-    that it should use the fallback strategy (drop/add)
-    to apply schema changes.
+    Tests the alter_table method's workaround for changing a column's data type.
     """
+    # Mock set_current_catalog to avoid connection pool side effects
+    set_catalog_mock = mocker.patch.object(adapter, "set_current_catalog")
+    # Mock random_id to have a predictable temporary column name
+    mocker.patch("sqlmesh.core.engine_adapter.fabric.random_id", return_value="abcdef")
+
     alter_expression = exp.Alter(
-        this=exp.to_table("test_table"),
+        this=exp.to_table("my_db.my_schema.my_table"),
         actions=[
-            exp.ColumnDef(
-                this=exp.to_column("new_col"),
-                kind=exp.DataType(this=exp.DataType.Type.INT),
+            exp.AlterColumn(
+                this=exp.to_column("col_a"),
+                dtype=exp.DataType.build("BIGINT"),
             )
         ],
     )
 
     adapter.alter_table([alter_expression])
 
-    adapter.cursor.execute.assert_not_called()
+    set_catalog_mock.assert_called_once_with("my_db")
+
+    expected_calls = [
+        "ALTER TABLE [my_schema].[my_table] ADD [col_a__abcdef] BIGINT;",
+        "UPDATE [my_schema].[my_table] SET [col_a__abcdef] = CAST([col_a] AS BIGINT);",
+        "ALTER TABLE [my_schema].[my_table] DROP COLUMN [col_a];",
+        "EXEC sp_rename 'my_schema.my_table.col_a__abcdef', 'col_a', 'COLUMN'",
+    ]
+
+    assert to_sql_calls(adapter) == expected_calls
+
+
+def test_alter_table_direct_alteration(adapter: FabricEngineAdapter, mocker: MockerFixture):
+    """
+    Tests the alter_table method for direct alterations like adding a column.
+    """
+    set_catalog_mock = mocker.patch.object(adapter, "set_current_catalog")
+
+    alter_expression = exp.Alter(
+        this=exp.to_table("my_db.my_schema.my_table"),
+        actions=[exp.ColumnDef(this=exp.to_column("new_col"), kind=exp.DataType.build("INT"))],
+    )
+
+    adapter.alter_table([alter_expression])
+
+    set_catalog_mock.assert_called_once_with("my_db")
+
+    expected_calls = [
+        "ALTER TABLE [my_schema].[my_table] ADD [new_col] INT;",
+    ]
+
+    assert to_sql_calls(adapter) == expected_calls
