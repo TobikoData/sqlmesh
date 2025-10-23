@@ -63,7 +63,7 @@ class Plan(PydanticModel, frozen=True):
     restatements: t.Dict[SnapshotId, Interval]
     """
     All models being restated, which are typically the explicitly selected ones + their downstream dependencies.
-    
+
     Note that dev previews are also considered restatements, so :selected_models_to_restate can be empty
     while :restatements is still populated with dev previews
     """
@@ -213,8 +213,8 @@ class Plan(PydanticModel, frozen=True):
 
         snapshots_by_name = self.context_diff.snapshots_by_name
         snapshots = [s.table_info for s in self.snapshots.values()]
-        promoted_snapshot_ids = None
-        if self.is_dev and not self.include_unmodified:
+        promotable_snapshot_ids = None
+        if self.is_dev:
             if self.selected_models_to_backfill is not None:
                 # Only promote models that have been explicitly selected for backfill.
                 promotable_snapshot_ids = {
@@ -225,12 +225,14 @@ class Plan(PydanticModel, frozen=True):
                         if m in snapshots_by_name
                     ],
                 }
-            else:
+            elif not self.include_unmodified:
                 promotable_snapshot_ids = self.context_diff.promotable_snapshot_ids.copy()
 
-            promoted_snapshot_ids = [
-                s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids
-            ]
+        promoted_snapshot_ids = (
+            [s.snapshot_id for s in snapshots if s.snapshot_id in promotable_snapshot_ids]
+            if promotable_snapshot_ids is not None
+            else None
+        )
 
         previous_finalized_snapshots = (
             self.context_diff.environment_snapshots

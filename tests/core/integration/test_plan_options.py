@@ -476,3 +476,54 @@ def test_create_environment_no_changes_with_selector(init_and_plan_context: t.Ca
 
     schema_objects = context.engine_adapter.get_data_objects("sushi__dev")
     assert {o.name for o in schema_objects} == {"top_waiters"}
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_include_unmodified(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    plan = context.plan_builder(
+        "dev",
+        include_unmodified=True,
+        skip_tests=True,
+    ).build()
+
+    all_snapshots = context.snapshots
+
+    assert len(plan.environment.snapshots) == len(all_snapshots)
+    assert plan.environment.promoted_snapshot_ids is None
+
+    context.apply(plan)
+
+    data_objs = context.engine_adapter.get_data_objects("sushi__dev")
+    assert len(data_objs) == len(
+        [s for s in all_snapshots.values() if s.is_model and not s.is_symbolic]
+    )
+
+
+@time_machine.travel("2023-01-08 15:00:00 UTC")
+def test_select_models_with_include_unmodified(init_and_plan_context: t.Callable):
+    context, plan = init_and_plan_context("examples/sushi")
+    context.apply(plan)
+
+    plan = context.plan_builder(
+        "dev",
+        select_models=["*top_waiters", "*customer_revenue_by_day"],
+        include_unmodified=True,
+        skip_tests=True,
+    ).build()
+
+    assert len(plan.environment.snapshots) == len(context.snapshots)
+
+    promoted_set = {s_id.name for s_id in plan.environment.promoted_snapshot_ids}
+    assert promoted_set == {
+        '"memory"."sushi"."customer_revenue_by_day"',
+        '"memory"."sushi"."top_waiters"',
+    }
+
+    context.apply(plan)
+
+    data_objs = context.engine_adapter.get_data_objects("sushi__dev")
+    assert len(data_objs) == 2
+    assert {o.name for o in data_objs} == {"customer_revenue_by_day", "top_waiters"}
