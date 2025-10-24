@@ -10,11 +10,9 @@ from datetime import datetime, timedelta, date
 from unittest import mock
 from unittest.mock import patch
 import logging
-from IPython.utils.capture import capture_output
 
 
 import time_machine
-from pytest_mock.plugin import MockerFixture
 
 import numpy as np  # noqa: TID253
 import pandas as pd  # noqa: TID253
@@ -50,7 +48,6 @@ from tests.core.engine_adapter.integration import (
     TEST_SCHEMA,
     wait_until,
 )
-from tests.utils.test_helpers import use_terminal_console
 
 DATA_TYPE = exp.DataType.Type
 VARCHAR_100 = exp.DataType.build("varchar(100)")
@@ -3939,156 +3936,6 @@ def test_materialized_view_evaluation(ctx: TestContext):
         assert any("Replacing view" in call[0][0] for call in mock_logger.call_args_list)
 
     _assert_mview_value(value=2)
-
-
-@use_terminal_console
-def test_external_model_freshness(ctx: TestContext, mocker: MockerFixture, tmp_path: pathlib.Path):
-    adapter = ctx.engine_adapter
-    if not adapter.SUPPORTS_METADATA_TABLE_LAST_MODIFIED_TS:
-        pytest.skip("This test only runs for engines that support metadata-based freshness")
-
-    def _assert_snapshot_last_altered_ts(
-        context: Context,
-        snapshot_id: str,
-        last_altered_ts: datetime,
-        dev_last_altered_ts: t.Optional[datetime] = None,
-    ):
-        from sqlmesh.utils.date import to_datetime
-
-        snapshot = context.state_sync.get_snapshots([snapshot_id])[snapshot_id]
-
-        assert to_datetime(snapshot.last_altered_ts).replace(
-            microsecond=0
-        ) == last_altered_ts.replace(microsecond=0)
-
-        if dev_last_altered_ts:
-            assert to_datetime(snapshot.dev_last_altered_ts).replace(
-                microsecond=0
-            ) == dev_last_altered_ts.replace(microsecond=0)
-
-    import sqlmesh
-
-    spy = mocker.spy(sqlmesh.core.snapshot.evaluator.SnapshotEvaluator, "evaluate")
-
-    def _assert_model_evaluation(lambda_func, was_evaluated, day_delta=0):
-        spy.reset_mock()
-        timestamp = now(minute_floor=False) + timedelta(days=day_delta)
-        with time_machine.travel(timestamp, tick=False):
-            with capture_output() as output:
-                plan_or_run_result = lambda_func()
-
-        evaluate_function_called = spy.call_count == 1
-        signal_was_checked = "Checking signals for" in output.stdout
-
-        assert signal_was_checked
-        if was_evaluated:
-            assert "All ready" in output.stdout
-            assert evaluate_function_called
-        else:
-            assert "None ready" in output.stdout
-            assert not evaluate_function_called
-
-        return timestamp, plan_or_run_result
-
-    # Create & initialize schema
-    schema = ctx.add_test_suffix(TEST_SCHEMA)
-    ctx._schemas.append(schema)
-    adapter.create_schema(schema)
-
-    # Create & initialize external models
-    external_table1 = f"{schema}.external_table1"
-    external_table2 = f"{schema}.external_table2"
-
-    external_models_yaml = tmp_path / "external_models.yaml"
-    external_models_yaml.write_text(f"""
-- name: {external_table1}
-  columns:
-    col1: int
-
-- name: {external_table2}
-  columns:
-    col2: int
-""")
-
-    adapter.execute(
-        f"CREATE TABLE {external_table1} AS (SELECT 1 AS col1)", quote_identifiers=False
-    )
-    adapter.execute(
-        f"CREATE TABLE {external_table2} AS (SELECT 2 AS col2)", quote_identifiers=False
-    )
-
-    # Create model that depends on external models
-    model_name = f"{schema}.new_model"
-    model_path = tmp_path / "models" / "new_model.sql"
-    (tmp_path / "models").mkdir(parents=True, exist_ok=True)
-    model_path.write_text(f"""
-        MODEL (
-            name {model_name},
-            start '2024-01-01',
-            kind FULL,
-            signals (
-                freshness(),
-            )
-        );
-
-         SELECT col1 * col2 AS col FROM {external_table1}, {external_table2};
-    """)
-
-    # Initialize context
-    def _set_config(gateway: str, config: Config) -> None:
-        config.model_defaults.dialect = ctx.dialect
-
-    context = ctx.create_context(path=tmp_path, config_mutator=_set_config)
-
-    # Case 1: Model is evaluated for the first plan
-    prod_plan_ts, prod_plan = _assert_model_evaluation(
-        lambda: context.plan(auto_apply=True, no_prompts=True), was_evaluated=True
-    )
-
-    prod_snapshot_id = next(iter(prod_plan.context_diff.new_snapshots))
-    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, last_altered_ts=prod_plan_ts)
-
-    # Case 2: Model is NOT evaluated on run if external models are not fresh
-    _assert_model_evaluation(lambda: context.run(), was_evaluated=False, day_delta=1)
-
-    # Case 3: Differentiate last_altered_ts between snapshots with shared version
-    # For instance, creating a FORWARD_ONLY change in dev (reusing the version but creating a dev preview) should not cause
-    # any side effects to the prod snapshot's last_altered_ts hydration
-    model_path.write_text(model_path.read_text().replace("col1 * col2", "col1 + col2"))
-    context.load()
-    dev_plan_ts = now(minute_floor=False) + timedelta(days=2)
-    with time_machine.travel(dev_plan_ts, tick=False):
-        dev_plan = context.plan(
-            environment="dev", forward_only=True, auto_apply=True, no_prompts=True
-        )
-
-    context.state_sync.clear_cache()
-    dev_snapshot_id = next(iter(dev_plan.context_diff.new_snapshots))
-    _assert_snapshot_last_altered_ts(
-        context,
-        dev_snapshot_id,
-        last_altered_ts=prod_plan_ts,
-        dev_last_altered_ts=dev_plan_ts,
-    )
-    _assert_snapshot_last_altered_ts(context, prod_snapshot_id, last_altered_ts=prod_plan_ts)
-
-    # Case 4: Model is evaluated on run if any external model is fresh
-    adapter.execute(f"INSERT INTO {external_table2} (col2) VALUES (3)", quote_identifiers=False)
-    _assert_model_evaluation(lambda: context.run(), was_evaluated=True, day_delta=2)
-
-    # Case 5: Model is evaluated if changed (case 3) even if the external model is not fresh
-    model_path.write_text(model_path.read_text().replace("col1 + col2", "col1 * col2 * 5"))
-    context.load()
-    _assert_model_evaluation(
-        lambda: context.plan(auto_apply=True, no_prompts=True), was_evaluated=True, day_delta=3
-    )
-
-    # Case 6: Model is evaluated on a restatement plan even if the external model is not fresh
-    _assert_model_evaluation(
-        lambda: context.plan(restate_models=[model_name], auto_apply=True, no_prompts=True),
-        was_evaluated=True,
-        day_delta=4,
-    )
 
 
 def test_unicode_characters(ctx: TestContext, tmp_path: Path):

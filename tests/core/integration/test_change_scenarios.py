@@ -1482,3 +1482,36 @@ def test_annotated_self_referential_model(init_and_plan_context: t.Callable):
 
     df = context.fetchdf("SELECT one FROM memory.sushi.test_self_ref")
     assert len(df) == 0
+
+
+@time_machine.travel("2023-01-08 00:00:00 UTC")
+def test_creating_stage_for_first_batch_only(init_and_plan_context: t.Callable):
+    context, _ = init_and_plan_context("examples/sushi")
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name memory.sushi.test_batch_size,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key one,
+                batch_size 1,
+            ),
+
+            start '2023-01-01',
+        );
+
+        CREATE SCHEMA IF NOT EXISTS test_schema;
+        CREATE TABLE IF NOT EXISTS test_schema.creating_counter (a INT);
+
+        SELECT 1::INT AS one;
+
+        @IF(@runtime_stage = 'creating', INSERT INTO test_schema.creating_counter (a) VALUES (1));
+        """
+    )
+    model = load_sql_based_model(expressions)
+    context.upsert_model(model)
+
+    context.plan("prod", skip_tests=True, no_prompts=True, auto_apply=True)
+    assert (
+        context.engine_adapter.fetchone("SELECT COUNT(*) FROM test_schema.creating_counter")[0] == 1
+    )

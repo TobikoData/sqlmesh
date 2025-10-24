@@ -25,7 +25,7 @@ from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, debug_mode_enabled, yaml
 from sqlmesh.utils.date import now
-from sqlmesh.utils.errors import ConfigError, MacroEvalError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, MacroReturnVal
 
 logger = logging.getLogger(__name__)
@@ -381,18 +381,16 @@ def do_zip(*args: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]
         return default
 
 
-def as_bool(value: str) -> bool:
-    result = _try_literal_eval(value)
-    if isinstance(result, bool):
-        return result
-    raise MacroEvalError(f"Failed to convert '{value}' into boolean.")
+def as_bool(value: t.Any) -> t.Any:
+    # dbt's jinja TEXT_FILTERS just return the input value as is
+    # https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/jinja.py#L559
+    return value
 
 
 def as_number(value: str) -> t.Any:
-    result = _try_literal_eval(value)
-    if isinstance(value, (int, float)) and not isinstance(result, bool):
-        return result
-    raise MacroEvalError(f"Failed to convert '{value}' into number.")
+    # dbt's jinja TEXT_FILTERS just return the input value as is
+    # https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/jinja.py#L559
+    return value
 
 
 def _try_literal_eval(value: str) -> t.Any:

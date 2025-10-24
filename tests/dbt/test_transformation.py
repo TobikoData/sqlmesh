@@ -65,7 +65,7 @@ from sqlmesh.dbt.target import (
     PostgresConfig,
 )
 from sqlmesh.dbt.test import TestConfig
-from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import MacroReference
 
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
@@ -1751,12 +1751,10 @@ def test_as_filters(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ True | as_bool }}") == "True"
-    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into boolean."):
-        context.render("{{ 'invalid' | as_bool }}")
+    assert context.render("{{ 'valid' | as_bool }}") == "valid"
 
     assert context.render("{{ 123 | as_number }}") == "123"
-    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into number."):
-        context.render("{{ 'invalid' | as_number }}")
+    assert context.render("{{ 'valid' | as_number }}") == "valid"
 
     assert context.render("{{ None | as_text }}") == ""
 
@@ -1885,7 +1883,7 @@ def test_parsetime_adapter_call(
 
 
 @pytest.mark.xdist_group("dbt_manifest")
-def test_partition_by(sushi_test_project: Project):
+def test_partition_by(sushi_test_project: Project, caplog):
     context = sushi_test_project.context
     context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
@@ -1927,6 +1925,15 @@ def test_partition_by(sushi_test_project: Project):
 
     context.target = DuckDbConfig(name="target", schema="foo")
     assert model_config.to_sqlmesh(context).partitioned_by == []
+
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
+    assert model_config.to_sqlmesh(context).partitioned_by == []
+    assert (
+        "Ignoring partition_by config for model 'model' targeting snowflake. The partition_by config is not supported for Snowflake."
+        in caplog.text
+    )
 
     model_config = ModelConfig(
         name="model",
