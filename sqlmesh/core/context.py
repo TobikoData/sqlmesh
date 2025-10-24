@@ -2247,17 +2247,17 @@ class GenericContext(BaseContext, t.Generic[C]):
         self,
         start: TimeLike,
         end: TimeLike,
+        execution_time: t.Optional[TimeLike] = None,
         *,
         models: t.Optional[t.Iterator[str]] = None,
-        execution_time: t.Optional[TimeLike] = None,
     ) -> bool:
         """Audit models.
 
         Args:
             start: The start of the interval to audit.
             end: The end of the interval to audit.
-            models: The models to audit. All models will be audited if not specified.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
+            models: The models to audit. All models will be audited if not specified.
 
         Returns:
             False if any of the audits failed, True otherwise.
