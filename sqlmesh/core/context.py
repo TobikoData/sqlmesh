@@ -2256,8 +2256,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         Args:
             start: The start of the interval to audit.
             end: The end of the interval to audit.
-            execution_time: The date/time time reference to use for execution time. Defaults to now.
             models: The models to audit. All models will be audited if not specified.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
 
         Returns:
             False if any of the audits failed, True otherwise.
