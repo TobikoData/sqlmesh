@@ -2248,8 +2248,8 @@ class GenericContext(BaseContext, t.Generic[C]):
         start: TimeLike,
         end: TimeLike,
         *,
-        execution_time: t.Optional[TimeLike] = None,
         models: t.Optional[t.Iterator[str]] = None,
+        execution_time: t.Optional[TimeLike] = None,
     ) -> bool:
         """Audit models.
 
