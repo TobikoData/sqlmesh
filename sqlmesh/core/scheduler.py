@@ -730,8 +730,9 @@ class Scheduler:
         parent_sid: SnapshotId,
         intervals_per_snapshot: t.Dict[str, Intervals],
         snapshots_to_create: t.Set[SnapshotId],
-        cache: t.Dict[SnapshotId, t.Set[SchedulingUnit]] = {},
+        cache: t.Optional[t.Dict[SnapshotId, t.Set[SchedulingUnit]]] = None,
     ) -> t.Set[SchedulingUnit]:
+        cache = cache or {}
         if parent_sid not in self.snapshots:
             return set()
         if parent_sid in cache:
