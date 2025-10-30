@@ -12175,4 +12175,4 @@ def test_model_macro_using_locals_called_from_jinja(assert_exp_eq) -> None:
         """
     )
     model = load_sql_based_model(expressions)
-    assert_exp_eq(model.render_query(variables={"default": 42}), '''SELECT '1970-01-01' AS "col"''')
+    assert_exp_eq(model.render_query(), '''SELECT '1970-01-01' AS "col"''')
