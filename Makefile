@@ -248,4 +248,5 @@ vscode-generate-openapi:
 	cd vscode/react && pnpm run generate:api
 
 benchmark-ci:
-	python benchmarks/lsp_render_model_bench.py --debug-single-value
+	# Use --processes=1 to avoid Python 3.9 asyncio subprocess deadlock in multiprocessing
+	python benchmarks/lsp_render_model_bench.py --debug-single-value --processes=1
