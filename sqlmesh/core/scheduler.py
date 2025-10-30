@@ -659,6 +659,7 @@ class Scheduler:
         }
         snapshots_to_create = snapshots_to_create or set()
         original_snapshots_to_create = snapshots_to_create.copy()
+        upstream_dependencies_cache: t.Dict[SnapshotId, t.Set[SchedulingUnit]] = {}
 
         snapshot_dag = snapshot_dag or snapshots_to_dag(batches)
         dag = DAG[SchedulingUnit]()
@@ -670,12 +671,15 @@ class Scheduler:
             snapshot = self.snapshots_by_name[snapshot_id.name]
             intervals = intervals_per_snapshot.get(snapshot.name, [])
 
-            upstream_dependencies: t.List[SchedulingUnit] = []
+            upstream_dependencies: t.Set[SchedulingUnit] = set()
 
             for p_sid in snapshot.parents:
-                upstream_dependencies.extend(
+                upstream_dependencies.update(
                     self._find_upstream_dependencies(
-                        p_sid, intervals_per_snapshot, original_snapshots_to_create
+                        p_sid,
+                        intervals_per_snapshot,
+                        original_snapshots_to_create,
+                        upstream_dependencies_cache,
                     )
                 )
 
@@ -726,29 +730,42 @@ class Scheduler:
         parent_sid: SnapshotId,
         intervals_per_snapshot: t.Dict[str, Intervals],
         snapshots_to_create: t.Set[SnapshotId],
-    ) -> t.List[SchedulingUnit]:
+        cache: t.Dict[SnapshotId, t.Set[SchedulingUnit]] = {},
+    ) -> t.Set[SchedulingUnit]:
         if parent_sid not in self.snapshots:
-            return []
+            return set()
+        if parent_sid in cache:
+            return cache[parent_sid]
 
         p_intervals = intervals_per_snapshot.get(parent_sid.name, [])
 
+        parent_node: t.Optional[SchedulingUnit] = None
         if p_intervals:
             if len(p_intervals) > 1:
-                return [DummyNode(snapshot_name=parent_sid.name)]
-            interval = p_intervals[0]
-            return [EvaluateNode(snapshot_name=parent_sid.name, interval=interval, batch_index=0)]
-        if parent_sid in snapshots_to_create:
-            return [CreateNode(snapshot_name=parent_sid.name)]
+                parent_node = DummyNode(snapshot_name=parent_sid.name)
+            else:
+                interval = p_intervals[0]
+                parent_node = EvaluateNode(
+                    snapshot_name=parent_sid.name, interval=interval, batch_index=0
+                )
+        elif parent_sid in snapshots_to_create:
+            parent_node = CreateNode(snapshot_name=parent_sid.name)
+
+        if parent_node is not None:
+            cache[parent_sid] = {parent_node}
+            return {parent_node}
+
         # This snapshot has no intervals and doesn't need creation which means
         # that it can be a transitive dependency
-        transitive_deps: t.List[SchedulingUnit] = []
+        transitive_deps: t.Set[SchedulingUnit] = set()
         parent_snapshot = self.snapshots[parent_sid]
         for grandparent_sid in parent_snapshot.parents:
-            transitive_deps.extend(
+            transitive_deps.update(
                 self._find_upstream_dependencies(
-                    grandparent_sid, intervals_per_snapshot, snapshots_to_create
+                    grandparent_sid, intervals_per_snapshot, snapshots_to_create, cache
                 )
             )
+        cache[parent_sid] = transitive_deps
         return transitive_deps
 
     def _run_or_audit(
