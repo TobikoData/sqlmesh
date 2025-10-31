@@ -822,6 +822,37 @@ def test_ducklake_attach_add_ducklake_prefix():
     )
 
 
+def test_ducklake_metadata_schema():
+    # Test that metadata_schema parameter is included when specified
+    options = DuckDBAttachOptions(
+        type="ducklake", path="catalog.ducklake", metadata_schema="custom_schema"
+    )
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake (METADATA_SCHEMA 'custom_schema')"
+    )
+
+    # Test that metadata_schema is not included when not specified (default behavior)
+    options = DuckDBAttachOptions(type="ducklake", path="catalog.ducklake")
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake"
+    )
+
+    # Test metadata_schema with other ducklake options
+    options = DuckDBAttachOptions(
+        type="ducklake",
+        path="catalog.ducklake",
+        data_path="/path/to/data",
+        encrypted=True,
+        metadata_schema="workspace_schema",
+    )
+    assert (
+        options.to_sql(alias="my_ducklake")
+        == "ATTACH IF NOT EXISTS 'ducklake:catalog.ducklake' AS my_ducklake (DATA_PATH '/path/to/data', ENCRYPTED, METADATA_SCHEMA 'workspace_schema')"
+    )
+
+
 def test_duckdb_config_json_strings(make_config):
     config = make_config(
         type="duckdb",
