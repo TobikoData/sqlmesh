@@ -62,7 +62,7 @@ jobs:
         run: |
           source ../../.venv/bin/activate
           pnpm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
