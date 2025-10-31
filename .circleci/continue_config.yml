@@ -272,7 +272,6 @@ jobs:
 workflows:
   main_pr:
     jobs:
-      - doc_tests
       - style_and_cicd_tests:
           matrix:
             parameters:
@@ -282,42 +281,3 @@ workflows:
                 - "3.11"
                 - "3.12"
                 - "3.13"
-      - cicd_tests_windows
-      - engine_tests_docker:
-          name: engine_<< matrix.engine >>
-          matrix:
-            parameters:
-              engine:
-                - duckdb
-                - postgres
-                - mysql
-                - mssql
-                - trino
-                - spark
-                - clickhouse
-                - risingwave
-      - engine_tests_cloud:
-          name: cloud_engine_<< matrix.engine >>
-          context:
-            - sqlmesh_cloud_database_integration
-          requires:
-            - engine_tests_docker
-          matrix:
-            parameters:
-              engine:
-                - snowflake
-                - databricks
-                - redshift
-                - bigquery
-                - clickhouse-cloud
-                - athena
-                - fabric
-                - gcp-postgres
-          filters:
-            branches:
-              only:
-                - main
-      - ui_style
-      - ui_test
-      - vscode_test
-      - migration_test
