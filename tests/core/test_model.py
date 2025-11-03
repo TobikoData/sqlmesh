@@ -12158,3 +12158,21 @@ def test_grants_empty_values():
 def test_grants_table_type(kind: t.Union[str, _ModelKind], expected: DataObjectType):
     model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind=kind)
     assert model.grants_table_type == expected
+
+
+def test_model_macro_using_locals_called_from_jinja(assert_exp_eq) -> None:
+    @macro()
+    def execution_date(evaluator):
+        return f"""'{evaluator.locals.get("execution_date")}'"""
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        JINJA_QUERY_BEGIN;
+        SELECT {{ execution_date() }} AS col;
+        JINJA_END;
+        """
+    )
+    model = load_sql_based_model(expressions)
+    assert_exp_eq(model.render_query(), '''SELECT '1970-01-01' AS "col"''')

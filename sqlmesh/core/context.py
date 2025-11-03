@@ -2279,6 +2279,7 @@ class GenericContext(BaseContext, t.Generic[C]):
                 snapshot=snapshot,
                 start=start,
                 end=end,
+                execution_time=execution_time,
                 snapshots=self.snapshots,
             ):
                 audit_id = f"{audit_result.audit.name}"
