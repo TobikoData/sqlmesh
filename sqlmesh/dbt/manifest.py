@@ -11,7 +11,7 @@ from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
 
-from dbt import constants as dbt_constants, flags
+from dbt import flags
 
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.conversions import make_serializable
@@ -19,6 +19,8 @@ from sqlmesh.utils.conversions import make_serializable
 # Override the file name to prevent dbt commands from invalidating the cache.
 
 if DBT_VERSION >= (1, 6, 0):
+    from dbt import constants as dbt_constants
+
     dbt_constants.PARTIAL_PARSE_FILE_NAME = "sqlmesh_partial_parse.msgpack"  # type: ignore
 else:
     from dbt.parser import manifest as dbt_manifest  # type: ignore

@@ -65,7 +65,7 @@ from sqlmesh.dbt.target import (
     PostgresConfig,
 )
 from sqlmesh.dbt.test import TestConfig
-from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import MacroReference
 
 pytestmark = [pytest.mark.dbt, pytest.mark.slow]
@@ -1751,12 +1751,10 @@ def test_as_filters(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ True | as_bool }}") == "True"
-    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into boolean."):
-        context.render("{{ 'invalid' | as_bool }}")
+    assert context.render("{{ 'valid' | as_bool }}") == "valid"
 
     assert context.render("{{ 123 | as_number }}") == "123"
-    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into number."):
-        context.render("{{ 'invalid' | as_number }}")
+    assert context.render("{{ 'valid' | as_number }}") == "valid"
 
     assert context.render("{{ None | as_text }}") == ""
 

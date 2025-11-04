@@ -551,11 +551,13 @@ class EngineAdapter:
                     target_table,
                     source_queries,
                     target_columns_to_types,
+                    **kwargs,
                 )
         return self._insert_overwrite_by_condition(
             target_table,
             source_queries,
             target_columns_to_types,
+            **kwargs,
         )
 
     def create_index(
@@ -1614,7 +1616,7 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         return self._insert_overwrite_by_condition(
-            table_name, source_queries, target_columns_to_types, where
+            table_name, source_queries, target_columns_to_types, where, **kwargs
         )
 
     def _values_to_sql(

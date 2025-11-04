@@ -3367,6 +3367,56 @@ test_default_vars:
     _check_successful_or_raise(test_default_vars.run())
 
 
+def test_python_model_sorting(tmp_path: Path) -> None:
+    py_model = tmp_path / "models" / "test_sort_model.py"
+    py_model.parent.mkdir(parents=True, exist_ok=True)
+    py_model.write_text(
+        """
+import pandas as pd  # noqa: TID253
+from sqlmesh import model, ExecutionContext
+import typing as t
+
+@model(
+  name="test_sort_model",
+  columns={"id": "int", "value": "varchar"},
+)
+def execute(context: ExecutionContext, **kwargs: t.Any) -> pd.DataFrame:
+  # Return rows in a potentially non-deterministic order
+  # (simulating a model that doesn't guarantee order)
+  return pd.DataFrame([
+      {"id": 3, "value": "c"},
+      {"id": 1, "value": "a"},
+      {"id": 2, "value": "b"},
+  ])"""
+    )
+
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+    context = Context(config=config, paths=tmp_path)
+
+    python_model = context.models['"test_sort_model"']
+
+    _check_successful_or_raise(
+        _create_test(
+            body=load_yaml("""
+    test_without_sort:
+      model: test_sort_model
+      outputs:
+        query:
+          rows:
+            - id: 1
+              value: "a"
+            - id: 2
+              value: "b"
+            - id: 3
+              value: "c"
+            """),
+            test_name="test_without_sort",
+            model=python_model,
+            context=context,
+        ).run()
+    )
+
+
 @use_terminal_console
 def test_cte_failure(tmp_path: Path) -> None:
     models_dir = tmp_path / "models"
