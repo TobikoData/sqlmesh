@@ -807,7 +807,7 @@ class PythonModelTest(ModelTest):
             actual_df.reset_index(drop=True, inplace=True)
             expected = self._create_df(values, columns=self.model.columns_to_types, partial=partial)
 
-            self.assert_equal(expected, actual_df, sort=False, partial=partial)
+            self.assert_equal(expected, actual_df, sort=True, partial=partial)
 
     def _execute_model(self) -> pd.DataFrame:
         """Executes the python model and returns a DataFrame."""
