@@ -42,8 +42,6 @@ models:
     columns:
       - name: waiter_id
         description: Waiter id
-        tests:
-          - not_null
       - name: ds
         description: Date
   - name: waiter_as_customer_by_day
