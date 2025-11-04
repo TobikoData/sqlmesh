@@ -12158,3 +12158,19 @@ def test_grants_empty_values():
 def test_grants_table_type(kind: t.Union[str, _ModelKind], expected: DataObjectType):
     model = create_sql_model("test_table", parse_one("SELECT 1 as id"), kind=kind)
     assert model.grants_table_type == expected
+
+
+def test_audits_in_embedded_model():
+    expression = d.parse(
+        """
+        MODEL (
+            name test.embedded_with_audits,
+            kind EMBEDDED,
+            audits (not_null (columns := (id)))
+        );
+
+        SELECT 1 AS id, 'A' as value
+        """
+    )
+    with pytest.raises(ConfigError, match="Audits are not supported for embedded models"):
+        load_sql_based_model(expression).validate_definition()
