@@ -405,8 +405,6 @@ class DatabricksEngineAdapter(SparkEngineAdapter, GrantsFromInfoSchemaMixin):
         # in CREATE MATERIALIZED VIEW statements. Override is_view to False to force
         # column types to be included when comments are present.
         if is_view and column_descriptions:
-            engine_supports_schema_comments = self.COMMENT_CREATION_VIEW.supports_schema_def
-            if engine_supports_schema_comments and self.comments_enabled:
-                is_view = False
+            is_view = False
 
         return super()._build_column_defs(target_columns_to_types, column_descriptions, is_view)
