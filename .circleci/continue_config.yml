@@ -314,8 +314,8 @@ workflows:
                 #- redshift
                 #- bigquery
                 #- clickhouse-cloud
-                - athena
-                #- fabric
+                #- athena
+                - fabric
                 #- gcp-postgres
           #filters:
           #  branches:
