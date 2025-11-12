@@ -460,6 +460,21 @@ def test_deploy_to_prod_merge_error(github_client, make_controller):
         controller.deploy_to_prod()
 
 
+def test_deploy_to_prod_blocked_pr(github_client, make_controller):
+    mock_pull_request = github_client.get_repo().get_pull()
+    mock_pull_request.merged = False
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        merge_state_status=MergeStateStatus.BLOCKED,
+    )
+    with pytest.raises(
+        Exception,
+        match=r"^Merge commit cannot be cleanly created. Likely missing CODEOWNERS approval.*",
+    ):
+        controller.deploy_to_prod()
+
+
 def test_deploy_to_prod_dirty_pr(github_client, make_controller):
     mock_pull_request = github_client.get_repo().get_pull()
     mock_pull_request.merged = False
@@ -468,7 +483,10 @@ def test_deploy_to_prod_dirty_pr(github_client, make_controller):
         github_client,
         merge_state_status=MergeStateStatus.DIRTY,
     )
-    with pytest.raises(Exception, match=r"^Merge commit cannot be cleanly created.*"):
+    with pytest.raises(
+        Exception,
+        match=r"^Merge commit cannot be cleanly created. Likely from a merge conflict.*",
+    ):
         controller.deploy_to_prod()
 
 
